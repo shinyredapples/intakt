@@ -92,9 +92,13 @@ final readonly class HighlightFragments
         $findings = $this->nameFindings($names);
         $rows = [];
 
+        $mergeStatus = new HighlightMergeStatus($this->runner);
+        $merged = $mergeStatus->fragmentsOnMain($root, self::DIRECTORY);
+
         foreach ($this->fragmentsInOrder($names, $history) as $name) {
             [$fragmentRows, $fragmentFindings] = $this->rowsOf($root, $name, $layout);
             $findings = [...$findings, ...$fragmentFindings];
+            $fragmentRows = isset($merged[$name]) ? $mergeStatus->settled($fragmentRows, $layout) : $fragmentRows;
             $rows = $this->withReplacedRows($rows, $fragmentRows);
         }
 

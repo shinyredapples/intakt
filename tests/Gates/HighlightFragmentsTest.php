@@ -8,6 +8,7 @@ use Intakt\Gates\HighlightAssembly;
 use Intakt\Gates\HighlightFragment;
 use Intakt\Gates\HighlightFragments;
 use Intakt\Gates\HighlightLayout;
+use Intakt\Gates\HighlightMergeStatus;
 use Intakt\Gates\HighlightRowKind;
 use Intakt\Gates\RepositoryAttributesRefused;
 use Override;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(HighlightRowKind::class)]
 #[CoversClass(HighlightFragment::class)]
 #[CoversClass(HighlightLayout::class)]
+#[CoversClass(HighlightMergeStatus::class)]
 final class HighlightFragmentsTest extends SandboxTestCase
 {
     private const string LAYOUT = "# Highlights\n\nIntro.\n\n## Tooling\n\n| Feature | Status | Where |\n|---|---|---|\n\n## PHP 8.5 in use\n";
@@ -217,6 +219,63 @@ final class HighlightFragmentsTest extends SandboxTestCase
         $this->sandbox->write('docs/highlights.d/1-pipe.md', "## PHP 8.5 in use\n- The pipe operator: `a.php` (planned).\n- The pipe operator: `a.php` (done, T1).\n");
 
         self::assertSame(['docs/highlights.d/1-pipe.md:3: row "- The pipe operator: `a.php`" appears twice in this fragment'], $this->assembled()->findings);
+    }
+
+    public function testARowInProgressFromAFragmentOnMainShowsAsDone(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('5-clock.md', "## Tooling\n| Clock | in progress | T2 (#5) |\n| Gates | planned | T1 (#5) |\n");
+
+        $text = $this->assembled()->text;
+
+        self::assertStringContainsString("| Clock | done | T2 (#5) |\n| Gates | planned | T1 (#5) |\n", $text);
+        self::assertStringNotContainsString('in progress', $text);
+    }
+
+    public function testAListItemInProgressFromAFragmentOnMainShowsAsDone(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('6-pipe.md', "## PHP 8.5 in use\n- The pipe operator (in progress, T6 (#6))\n");
+
+        self::assertStringContainsString("- The pipe operator (done, T6 (#6))\n", $this->assembled()->text);
+    }
+
+    public function testARowInProgressFromABranchNotYetOnMainStaysInProgress(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('checkout', '--quiet', '-b', 'feature');
+        $this->commitFragment('7-clock.md', "## Tooling\n| Clock | in progress | T2 (#7) |\n");
+
+        self::assertStringContainsString("| Clock | in progress | T2 (#7) |\n", $this->assembled()->text);
+    }
+
+    public function testAnUncommittedRowInProgressStaysInProgress(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->write('docs/highlights.d/8-clock.md', "## Tooling\n| Clock | in progress | T2 (#8) |\n");
+
+        self::assertStringContainsString("| Clock | in progress | T2 (#8) |\n", $this->assembled()->text);
+    }
+
+    public function testTheRemoteMainDecidesWhatIsMergedWhenTheCheckoutHasOne(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+        $this->commitFragment('9-clock.md', "## Tooling\n| Clock | in progress | T2 (#9) |\n");
+
+        self::assertStringContainsString("| Clock | in progress | T2 (#9) |\n", $this->assembled()->text);
+    }
+
+    public function testWithoutAMainBranchStatusesStayAsWritten(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->git('checkout', '--quiet', '-b', 'feature');
+        $this->commitFragment('3-clock.md', "## Tooling\n| Clock | in progress | T2 (#3) |\n");
+
+        self::assertStringContainsString("| Clock | in progress | T2 (#3) |\n", $this->assembled()->text);
     }
 
     public function testASectionWithoutRowsKeepsItsHeader(): void
