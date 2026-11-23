@@ -51,11 +51,11 @@ The `tests` gate also guards the [parity record](parity.md): `tests/Application/
 
 ## The docs gate and its ratchet list
 
-`DocsGate` keeps the documentation readable. A paragraph has at most 80 words. A list item counts as a paragraph; headings, fenced or indented code and tables do not. A table is a header line and a delimiter row, with the lines after it up to the next blank line. A line between outer pipes without a delimiter row next to it is a table row too, but only that line (a `docs/highlights.d/` fragment holds just one row). The `>` of a quote is no word.
+`DocsGate` keeps the documentation readable. A paragraph has at most 80 words. A list item counts as a paragraph; headings, fenced or indented code and tables do not. A table is a header line and a delimiter row, with the lines after it up to the next blank line, heading or list item. Every line between outer pipes counts as its own table row, even without a delimiter row next to it (a `docs/highlights.d/` fragment holds just one row), so prose framed in pipes is not measured. The `>` of a quote is no word.
 
 The reader is not a full CommonMark parser. It does not handle fenced code inside a blockquote, which it counts as prose, or setext titles (a line underlined with `=` or `-`), which it counts as part of a paragraph.
 
-A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs/architecture/` over 1,500 words opens with an "In short" section: only blank lines stand between the title and its heading, it is not empty, and it has at most 120 words, its subsections included. Only the first "In short" of a page counts.
+A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs/architecture/` over 1,500 words opens with an "In short" section: only blank lines stand between the title and its heading, it is not empty, and it has at most 120 words, its subsections included. Only the first "In short" of a page counts, and one inside a quote (`> ## In short`) does not.
 
 A paragraph finding names the file, the line and the limit. A page or summary finding names the file and the limit. Each says how to fix it.
 
