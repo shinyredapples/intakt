@@ -382,11 +382,6 @@ final class RunCheckJobDependenciesTest extends TestCase
         return $this->checks->runCheckJob($this->runner(), $gate)->run($job);
     }
 
-    private function blobOf(string $content): string
-    {
-        return sha1('blob '.strlen($content)."\0".$content);
-    }
-
     private function runner(): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
@@ -457,17 +452,17 @@ final class RunCheckJobDependenciesTest extends TestCase
         return true;
     }
 
-    private function key(string $lock): DependencySnapshotKey
-    {
-        return new LockInputs(['composer.json' => self::MANIFEST, 'composer.lock' => $lock], self::PLATFORM)->key();
-    }
-
     /**
      * @return list<string>
      */
     private function jobsThatRan(): array
     {
         return array_map(static fn (JobSpec $spec): string => explode('-', $spec->id->value)[0], $this->ran);
+    }
+
+    private function key(string $lock): DependencySnapshotKey
+    {
+        return new LockInputs(['composer.json' => self::MANIFEST, 'composer.lock' => $lock], self::PLATFORM)->key();
     }
 
     private function checkSpec(): JobSpec
@@ -477,5 +472,10 @@ final class RunCheckJobDependenciesTest extends TestCase
         self::assertStringStartsWith('check-', $check->id->value);
 
         return $check;
+    }
+
+    private function blobOf(string $content): string
+    {
+        return sha1('blob '.strlen($content)."\0".$content);
     }
 }

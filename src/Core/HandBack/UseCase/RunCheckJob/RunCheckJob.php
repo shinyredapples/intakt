@@ -114,16 +114,6 @@ final readonly class RunCheckJob implements CheckJobs
         return $absolute;
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
-    {
-        try {
-            return $this->jobs->run($spec);
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read, which says nothing for the change.
-            return null;
-        }
-    }
-
     private function specOf(CheckJob $job, AcceptedHandBack $accepted, ?CheckSnapshot $dependencies): JobSpec
     {
         $script = $this->filesystem->readFile($this->checkScript);
@@ -160,6 +150,16 @@ final readonly class RunCheckJob implements CheckJobs
         $hosts = $this->gate->registryHosts();
 
         return [] === $hosts ? JobEgress::none() : JobEgress::to($hosts);
+    }
+
+    private function ranJob(JobSpec $spec): ?JobResult
+    {
+        try {
+            return $this->jobs->run($spec);
+        } catch (JobOutputRefused) {
+            // No result, because the job wrote what the runner refuses to read, which says nothing for the change.
+            return null;
+        }
     }
 
     private function outcomeOf(?JobResult $result): CheckJobOutcome
