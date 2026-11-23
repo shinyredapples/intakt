@@ -40,7 +40,11 @@ final class ReviewFindingGroupsTest extends DashboardPageTestCase
 
         $row = $this->browser->request('GET', '/reviews/round-1')->filter('#review-to-fix .fix-row');
 
-        self::assertSame(['The total is off by one.', 'src/A.php:7', 0], [$row->filter('.fix-title')->text(), $row->filter('.fix-place')->text(), $row->filter('.fix-more')->count()]);
+        self::assertSame(
+            ['The total is off by one.', 'src/A.php:7', 'The total is off by one. src/A.php:7'],
+            [$row->filter('.fix-title')->text(), $row->filter('.fix-place')->text(), $row->text()],
+            'A row holds only the headline and the place, so the sentence after the headline is not on the overview.',
+        );
     }
 
     public function testARowKeepsTheSeverityInItsTooltip(): void
