@@ -134,6 +134,14 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*flex:\s*1 1 280px;\s*$/', $rules['.page-head:has(> .task-actions) > div:first-child'] ?? '');
     }
 
+    // It must start at the top, because the browser's own top margin of the title put Stop about 25 px above the title text at 1440 wide.
+    public function testTheTitleBesideTheTaskActionsHasNoTopMarginSoStopSitsOnTheTitlesRow(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*margin-top:\s*0;\s*$/', $rules['.page-head:has(> .task-actions) h1'] ?? '');
+    }
+
     // It must shrink, because at 390 wide a long change name moved to a line of its own and left its "/" alone at the end of the line before.
     public function testThePagesOwnCrumbShrinksOnTheTrailsLineSoALongChangeNameWrapsThere(): void
     {
