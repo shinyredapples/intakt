@@ -8,6 +8,8 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
+use Intakt\Core\Watchdog\Contract\MainNotRead;
+use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -27,6 +29,11 @@ final readonly class MainHistory implements CommitHistory
     // One header per object format, because git names the signature header after the hash the repository uses.
     private const array SIGNATURE_HEADERS = ['sha1' => 'gpgsig', 'sha256' => 'gpgsig-sha256'];
 
+    private const array NAME_LENGTHS = ['sha1' => 40, 'sha256' => 64];
+
+    // An empty shallow file is git's own way to read no shallow entries, so git follows the real parents and fails on one that is missing.
+    private const array NO_SHALLOW_ENTRIES = ['--shallow-file', ''];
+
     private const string SSH_ARMOR = '-----BEGIN SSH SIGNATURE-----';
     private const string NAMESPACE = 'git';
     private const string PRINCIPAL = 'owner';
@@ -45,46 +52,73 @@ final readonly class MainHistory implements CommitHistory
         private string $repository,
         array $ownerKeys,
         private Filesystem $filesystem,
+        // Main's head read once for a whole check, because every read of one check must see the same main.
+        private ?string $pinnedTip = null,
     ) {
         $this->ownerKeys = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys));
     }
 
     /**
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      */
     public function contains(string $commit): bool
     {
-        return $this->holds(['merge-base', '--is-ancestor', $commit, $this->tip()]);
+        $this->mustBeReadable();
+
+        $contained = $this->holds(['merge-base', '--is-ancestor', $commit, $this->tip()]);
+        // Checked again for a "no", because a repository cut shallow after the first check lacks the commits that would answer yes.
+        if (!$contained) {
+            $this->mustBeComplete();
+        }
+
+        return $contained;
     }
 
     /**
      * @return list<string>
      *
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      * @throws MainHistoryRewritten
      */
     public function firstParentsSince(string $commit): array
     {
+        $this->mustBeReadable();
         // One pinned tip for the ancestry check and the walk, because a force push between two reads of the ref would walk a history that dropped the commit.
         $tip = $this->tip();
         if (!$this->holds(['merge-base', '--is-ancestor', $commit, $tip])) {
+            // Checked again, because a repository cut shallow after the first check would read as a force push.
+            $this->mustBeComplete();
+
             throw MainHistoryRewritten::dropped($commit, $tip);
         }
 
-        $commits = trim($this->read(['rev-list', '--first-parent', '--reverse', $commit.'..'.$tip]));
+        // The full id, because the walk's own parent ids are compared with it.
+        $since = trim($this->read(['rev-parse', '--verify', $commit.'^{commit}']));
+        $walk = trim($this->read(['rev-list', '--first-parent', '--reverse', '--parents', $since.'..'.$tip]));
 
-        return '' === $commits ? [] : explode("\n", $commits);
+        $chain = FirstParentChain::fromWalk('' === $walk ? [] : explode("\n", $walk), $since, $tip);
+        if (null === $chain->foot) {
+            return [];
+        }
+
+        // The foot must be an ancestor of the commit (a cut can hide ancestry but never invent it, so a yes is true), and the oldest commit must not be one, asked with no shallow entries, because a cut during the walk can hide that main already held it; a pruned commit then fails the read instead of answering no.
+        if (!$this->holds(['merge-base', '--is-ancestor', $chain->foot, $since]) || $this->holds(['merge-base', '--is-ancestor', $chain->commits[0], $since], self::NO_SHALLOW_ENTRIES)) {
+            throw MainNotRead::brokenWalk($since, $tip);
+        }
+
+        return $chain->commits;
     }
 
     /**
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      * @throws IOException
      */
     public function signatureOf(string $commit): SignatureStatus
     {
+        $this->mustBeReadable();
         $header = self::SIGNATURE_HEADERS[trim($this->read(['rev-parse', '--show-object-format']))] ?? null;
         // A format git adds later has a header this class does not know, so its commits fail closed instead of reading as unsigned.
         if (null === $header) {
@@ -100,24 +134,94 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function head(): string
+    {
+        $this->mustBeReadable();
+
+        return $this->tip();
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function commitNameLength(): int
+    {
+        $this->mustBeReadable();
+        $format = trim($this->read(['rev-parse', '--show-object-format']));
+
+        return self::NAME_LENGTHS[$format] ?? throw MainNotRead::because(sprintf('the repository uses the object format "%s", which the watchdog does not know', $format));
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function broughtInBy(RecordedMerge $merge): array
+    {
+        $this->mustBeReadable();
+        // Read with no shallow entries, because a cut during the read would hide what the base already held and pass it as brought in; a pruned commit then fails the read. The trailing -- keeps a file named like the base from making it ambiguous.
+        $brought = trim($this->read(['rev-list', $merge->head, '--not', $merge->base, '--'], self::NO_SHALLOW_ENTRIES));
+
+        return '' === $brought ? [] : explode("\n", $brought);
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function mustBeReadable(): void
+    {
+        $this->mustBeTheRepository();
+        $this->mustBeComplete();
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function mustBeTheRepository(): void
+    {
+        $directory = $this->directory();
+        $bare = 'true' === $this->discovered(['rev-parse', '--is-bare-repository']);
+        $gitDirectory = $this->discovered(['rev-parse', '--absolute-git-dir']);
+        // A bare repository is named by its git directory; anything else must be the top of its work tree, so a folder inside a work tree, or its .git, is refused.
+        $found = $bare ? $gitDirectory : $this->discovered(['rev-parse', '--show-toplevel']);
+        if ($found !== $directory) {
+            throw MainNotRead::notTheRepository($directory, $found);
+        }
+
+        // The enclosing repository's core.worktree can name any folder as its top, so the folder must also hold the git directory git found.
+        if (!$bare && $gitDirectory !== $this->ownGitDirectory($directory)) {
+            throw MainNotRead::notTheRepository($directory, $gitDirectory);
+        }
+    }
+
+    /**
+     * @throws MainNotRead
      * @throws RuntimeException
      */
     private function tip(): string
     {
         // show-ref --verify takes the exact ref only, because rev-parse would fall back to a tag named refs/heads/main once the branch is gone.
-        return trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
+        return $this->pinnedTip ?? trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
     }
 
     /**
      * @param list<string> $arguments
+     * @param list<string> $options
      *
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function holds(array $arguments): bool
+    private function holds(array $arguments, array $options = []): bool
     {
-        $answer = $this->run($arguments);
+        $answer = $this->run($arguments, options: $options);
 
         return match ($answer->getExitCode()) {
             0 => true,
@@ -128,33 +232,106 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @param list<string> $arguments
-     *
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function read(array $arguments): string
+    private function mustBeComplete(): void
     {
-        $answer = $this->run($arguments);
+        $answer = $this->run(['rev-parse', '--is-shallow-repository']);
+        // A failed answer is refused too, because damaged shallow metadata makes git exit before it prints.
+        if (!$answer->isSuccessful() || 'false' !== trim($answer->getOutput())) {
+            throw MainNotRead::shallow($this->directory());
+        }
+    }
+
+    /**
+     * @param list<string> $arguments
+     * @param list<string> $options
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function read(array $arguments, array $options = []): string
+    {
+        $answer = $this->run($arguments, options: $options);
 
         return $answer->isSuccessful() ? $answer->getOutput() : throw new ProcessFailedException($answer);
     }
 
     /**
-     * @param list<string> $arguments
-     *
-     * @throws RepositoryAttributesRefused
-     * @throws RuntimeException
+     * @throws MainNotRead
      */
-    private function run(array $arguments): Process
+    private function directory(): string
     {
         // Resolved here, because a relative path would otherwise be read against wherever the process happens to run.
         $directory = realpath($this->repository);
-        $call = $this->git->call($arguments, false === $directory ? $this->repository : $directory);
-        $process = new Process($call->command, $call->directory, $call->environment, null, self::TIMEOUT_SECONDS);
+
+        // A file is no repository, because git cannot run inside it.
+        return false === $directory || !is_dir($directory) ? throw MainNotRead::missing($this->repository) : $directory;
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function discovered(array $arguments): string
+    {
+        // Without the pinned work tree, because HardenedGit names the folder itself as the work tree, and git would then call any folder inside a repository its top.
+        $answer = $this->run($arguments, ['GIT_WORK_TREE' => false]);
+        if (!$answer->isSuccessful()) {
+            throw MainNotRead::notTheRepository($this->directory(), '');
+        }
+
+        return $this->withoutLineBreak($answer->getOutput());
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function ownGitDirectory(string $directory): string
+    {
+        // Asked of git, because a linked work tree or a submodule has a .git file that names its git directory, and only git reads that file the way git does (a path in it may hold a line break).
+        $answer = $this->run(['rev-parse', '--resolve-git-dir', $directory.'/.git'], ['GIT_WORK_TREE' => false]);
+        $resolved = $answer->isSuccessful() ? realpath($this->withoutLineBreak($answer->getOutput())) : false;
+
+        return false === $resolved ? '' : $resolved;
+    }
+
+    /**
+     * @param list<string>                $arguments
+     * @param array<string, string|false> $overrides
+     * @param list<string>                $options
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function run(array $arguments, array $overrides = [], array $options = []): Process
+    {
+        $directory = $this->directory();
+
+        try {
+            $call = $this->git->call($arguments, $directory);
+        } catch (RepositoryAttributesRefused $refused) {
+            throw MainNotRead::because($refused->getMessage());
+        } catch (RuntimeException $failed) {
+            // Because HardenedGit first asks git for the repository's object format, and that call can be stopped or fail to start.
+            throw MainNotRead::because(sprintf('git %s could not be prepared: %s', $arguments[0], $failed->getMessage()));
+        }
+
+        // Options go right after the program, because git reads its global options only before the command.
+        $process = new Process([$call->command[0], ...$options, ...array_slice($call->command, 1)], $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
         $process->run();
 
         return $process;
+    }
+
+    // Only git's one line break is removed, because a folder name may end in a space.
+    private function withoutLineBreak(string $output): string
+    {
+        return str_ends_with($output, "\n") ? substr($output, 0, -1) : $output;
     }
 
     // Only the lines up to the first empty line, because a signature header in the message is not a header.

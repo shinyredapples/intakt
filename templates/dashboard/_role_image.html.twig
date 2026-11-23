@@ -1,0 +1,4 @@
+{#- A role character from images/characters in both themes, because CSS shows the one of the nearest [data-theme]; alt names the role and the step it stands on. -#}
+{%- for theme in ['light', 'dark'] -%}
+<img class="character character-{{ theme }} role-image" src="{{ asset('images/characters/' ~ stem ~ '-' ~ theme ~ '.webp') }}" alt="{{ alt }}" width="{{ size }}" height="{{ size }}" loading="lazy">
+{%- endfor -%}

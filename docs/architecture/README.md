@@ -2,81 +2,123 @@
 
 How Intakt works, for developers and agents. Each user-visible feature has a page here (how it works, the data it keeps, its limits, a Mermaid diagram where the flow is not obvious), written in the same change as the code. Each topic has its own page, so a change updates the page of the topic it touches and adds a page, with a line in this index, for a new topic.
 
-Code and conventions:
-- [Module layout](module-layout.md)
-- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's, Composer's or the import map's)
-- [Sample repository](sample-repository.md): the demo's sample change and the review bench (`intakt:bench:review`, `intakt:bench --repeat`, the result file under `var/bench/`, agreement of repeated runs, failure causes printed before the figures)
-- [Retried network git calls](network-git.md)
-- [Bare mirror](mirror.md)
-- [Build clone](build-clone.md)
-- [Branch push](branch-push.md)
-- [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
-- [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
-- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head passes before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
-- [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
-- [Work intake from GitHub issues](work-intake.md): the work source contract, the `eligibility_label` watch key and the stored state of the GitHub work source
-- [Upstream reproductions](upstream-reproductions.md)
-- [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
-- [Development diagnostics (Mate)](development-diagnostics.md): Mate's tools, and the Symfony profiler in `dev` and `test` with its allow-list of collectors
+## How Intakt works
 
-Checks, CI and releases:
-- [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline; an inline `# zizmor: ignore[<audit>]` without a reason on the same line fails it; the `phpstan` gate refuses a model message built outside `PromptAssembly` and judges `src/`, `bin/` and `config/`; a message built under `tests/` is not judged
-- [The journey page](journey-page.md): `bin/journey` regenerates the At a glance table, the milestone table and the chart regions of `docs/journey.md` from the GitHub API and `docs/journey/usage.jsonl`, writing only between marker comments, and draws the charts and the Mermaid timeline as SVG files in `docs/journey/`
-- [Journeys](journeys.md): the harness, the test vendor, the recording hub, the live round driver, the dashboard of the journey's own, the watcher start, the round stream check and the concurrent consumer support the journeys use, and each journey (first install and setup, live review progress on the dashboard); a failing journey names itself and its step, and the live review progress journey has a forced-break proof; `bin/journey-alarm` files or updates one urgent task for a red run
-- [CI](ci.md): also the journeys, on every push to main, on a pull request that needs the app image or touches the journeys' test code, and on main nightly and on demand. Dependabot updates every image CI and the app use weekly, once a release is 3 days old, except images on GHCR, such as gitleaks (no wait). Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
-- [Releases](releases.md)
-- [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors
+Intakt reviews code changes with a panel of AI models and can build changes from tasks. Reviews and builds are recorded as events in one append-only ledger, and the dashboard reads from it.
 
-Running Intakt:
-- [Instance and probes](instance-and-probes.md)
-- [Connectivity check and outage state](outage.md): offline only when the forge's DNS lookup and every HTTPS probe of the forge and the vendors in use fail; any HTTP status counts as an answer; no credential is sent
-- [Container image](container-image.md)
-- [The demo with docker compose](demo-with-docker-compose.md)
-- [The demo recording](demo-recording.md): `intakt:demo:record` writes the ledger events and the captured live updates of a change's review rounds into one file, with the date, the models and the Intakt version, `intakt:demo:replay` writes its ledger events into the demo project and publishes its live updates at the recorded pace, and `intakt:demo:remove` deletes the demo project with its replayed ledger rows
-- [Persistence](persistence.md)
-- [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the start check and its reduced mode, the memory-kill cause, and the cleanup after a crash
-- [Job images](job-images.md): a project's job image from its devcontainer, its Dockerfile or one generated from `composer.json`, and the probe that checks its PHP and extensions
-- [Differences from the existing loop](differences-from-the-existing-loop.md): what Intakt deliberately does another way than the loop it replaces, and why
-- [MCP server for the owner](mcp-server.md)
+### The parts
 
-Forges and identity:
-- [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
-- [GitHub App identity](github-app-identity.md)
-- [Pull requests handed to Intakt](handed-to-intakt.md): an open pull request whose `change_opened` line says Intakt's App created it gets one `change_handed_to_intakt` line; when no opening record decides, the author GitHub sets does, and an answer that it is someone else gets a `change_not_handed_to_intakt` line. A recorded answer, either way, means the forge is not asked again; title, labels and branch never decide
-- [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`; the changed paths that are part of the CI definition; the head's, main's and the merged workflows of a change and whether its push waits for the owner; holding a risky CI change until the owner's `approve <sha>`, with its complete diff on the issue
+- **Review panel:** the reviewers of a change, each a model on a capability tier. Each reviewer reads the change with read-only tools and returns a verdict: `approve`, `changes` or `blocked`, with findings rated P1 to P3.
+- **Judge:** one more model call that sorts the panel's findings into the act list (what to fix now) and follow-ups. Before it runs, plain code drops a finding that quotes code when none of its quoted code fragments is in the change; a finding without a checkable quote goes to the judge.
+- **Rounds and passes:** a round is one review of one head of a change. A change can have several rounds, for example one for each new head. The dashboard calls a round a "Review pass".
+- **Quorum policy:** decides the outcome from the votes: `all`, `majority` or `one-strong-plus-one`.
+- **Dashboard:** server-rendered web pages that show the board, each review, what waits on you, and Trends. Running reviews update the open page live.
+- **MCP:** an MCP server, so your own agent can list projects, start a review and read its status, verdicts and act list.
+- **Forge and GitHub:** the forge is where changes live. A local git repository works as a forge, and so does GitHub through Intakt's GitHub App. Without a GitHub App, Intakt publishes nothing to GitHub.
+- **Quality gates:** `bin/check` runs the checks of this repository (coding standards, static analysis, tests, secret scans and more); the journeys run separately, with `bin/check --journeys`. CI runs the same command, with the pull request's arguments.
+- **Build side:** `intakt:build:task` turns a task into a branch. A builder runs in a fresh job container, Intakt checks what it hands back, runs the checks again itself, and pushes the branch signed.
 
-Models and budget:
-- [AI providers](ai-providers.md)
-- [Capability tiers per project](capability-tiers.md): the mode per project (live or reviewer-for-loop)
-- [Model choice](model-choice.md): the routing rules that pick the build tier
-- [Vendor](vendor.md): the judge
-- [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
-- [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`
-- [Provider failure cases](provider-failure-cases.md): the scripted runs of plan T25 and how each round ends
+### One review, start to verdict
 
-Builds:
-- [The build lane's review cap and in-flight limit](lanes.md): `ReviewCap` admits a build while fewer heads than the cap wait for a reviewer or are in review; heads waiting for CI, a runner or landing do not count; `HeadsInFlightLimit` admits a build while fewer heads than the limit (twice the cap by default) are in flight, counting every pushed, unmerged head
-- [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
-- [Build task](build-task.md): `intakt:build:task` reads the task, updates the mirror, makes the build clone, runs the build job, checks its hand-back, runs the pre-push check and pushes the branch signed, recording each step in the ledger
-- [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns, or the structured question it ends with instead
+1. A review starts from `intakt:review`, the MCP tool `start_review` or the button on the dashboard.
+2. Intakt checks that every tier the panel needs has a model. If not, it refuses and opens no round.
+3. It opens a round and queues one job per reviewer, so the reviewers work in parallel.
+4. Each reviewer reads the change and returns a verdict with its findings.
+5. When every reviewer is in, the round is complete and its findings join the change's finding list.
+6. The quote check drops a finding that quotes code when none of its quoted code fragments is in the change. A finding without a checkable quote is kept. The judge marks the rest act, defer or reject.
+7. The quorum policy decides the outcome, and the act list holds every kept P1 and P2 plus the P3s marked act.
+8. `intakt:review` prints the outcome and the act list. The dashboard shows the same review. A round in reviewer-for-loop mode, or of a pull request handed to Intakt, also publishes its status and a comment on GitHub, when a GitHub App is set.
 
-Reviews:
-- [Review flow](review-flow.md)
-- [Review job](review-job.md): `ReviewJob`, which runs one reviewer's CLI in a job container in the project's review image with only its vendor's host allowed and reads its answer, and the job's script, `docker/job/review.sh`, which refuses a checkout that is writable, carries settings a clone does not write, or is not exactly the head, and a job without its proxy, before it runs the CLI
-- [Boot step](boot-step.md): a commit booted once with `bin/instance` (main's for a head), its outcome booted, failed or crashed, never an exception
-- [Review rounds](review-rounds.md)
-- [Review verdicts](review-verdicts.md)
-- [Quorum policies](quorum-policies.md)
-- [Finding ledger](finding-ledger.md)
-- [Reviewer repository tools](reviewer-repository-tools.md)
-- [Reviewer agent](reviewer-agent.md)
-- [Prompt assembly](prompt-assembly.md): `PromptAssembly` is the only class that builds a model message, with literals and `FencedText` only, the role prompt only through `systemWithRole()`, enforced by the `phpstan` gate on code under `src/`, `bin/` and `config/`
-- [Project memory](project-memory.md)
-- [Ledger](ledger.md)
-- [The weekly report: the loop's reviews and Intakt's](weekly-report.md)
+[Review flow](review-flow.md) draws the whole flow as a diagram.
 
-Dashboard:
-- [Dashboard](dashboard.md)
-- [Status read model](status.md): the status JSON per project and its schema, read with no queued message (only Review's replay-mark queries on the synchronous query bus)
-- [Server status](server-status.md)
-- [Live updates](live-updates.md)
+## Detailed reference
+
+The pages below are detailed reference for contributors. Each one describes its part exactly, with the classes, the data it keeps and its limits. Start with the overview above and open a page when you work on that part.
+
+### Code and conventions
+
+- [How it is built](how-it-is-built.md): the stack (PHP 8.5, Symfony 8.2, Symfony AI, FrankenPHP) and the interfaces.
+- [Module layout](module-layout.md): which folder under `src/` holds what.
+- [Conventions](conventions.md): logging, Doctrine mapping, message handlers and the dependency policy.
+- [Sample repository](sample-repository.md): the demo's sample change and the review bench.
+- [Development diagnostics (Mate)](development-diagnostics.md): Mate's tools and the Symfony profiler in development.
+- [Upstream reproductions](upstream-reproductions.md): small programs that check bugs in the projects Intakt depends on.
+- [The published highlights page](highlights-page.md): where `docs/highlights.md` is published.
+
+### Reviews
+
+- [Review flow](review-flow.md): how one review goes from its start to the act list, as a diagram.
+- [Review rounds](review-rounds.md): how a round runs its reviewers in parallel and survives a restarted worker.
+- [Review verdicts](review-verdicts.md): what a reviewer returns and how its answer is read.
+- [Quorum policies](quorum-policies.md): how the votes decide the outcome.
+- [Finding ledger](finding-ledger.md): how a finding keeps its id across the rounds of one change.
+- [Review job](review-job.md): how one reviewer's CLI runs in a job container.
+- [Reviewer agent](reviewer-agent.md): the reviewer that runs through Symfony AI.
+- [Reviewer repository tools](reviewer-repository-tools.md): the three read-only tools a reviewer reads the change with.
+- [Prompt assembly](prompt-assembly.md): the one class that builds every message sent to a model.
+- [Boot step](boot-step.md): booting a commit once to see whether it starts.
+- [Project memory](project-memory.md): what Intakt learned about a project, handed to reviewers.
+- [Ledger](ledger.md): the append-only event log that everything else reads.
+- [The weekly report: the loop's reviews and Intakt's](weekly-report.md): a weekly comparison of review results.
+
+### Dashboard
+
+- [Dashboard](dashboard.md): the web pages and the few buttons that act.
+- [Live updates](live-updates.md): how a running review reaches the open page without a reload.
+- [Status read model](status.md): the status JSON per project.
+- [Server status](server-status.md): reading the web server's own state from inside the container.
+
+### Models and budget
+
+- [AI providers](ai-providers.md): which model providers Intakt can use and how keys are found.
+- [Vendor](vendor.md): the layer that calls the models, and the judge.
+- [Capability tiers per project](capability-tiers.md): the mode of each project.
+- [Model choice](model-choice.md): the rules that pick the tier a build starts on.
+- [Measured use](measured-use.md): how Intakt measures and paces its use of subscription windows, with cooldowns and holds.
+- [Round cost](round-cost.md): the price per model and the cost of a round.
+- [Provider failure cases](provider-failure-cases.md): how a round ends when a provider fails.
+
+### Forges and identity
+
+- [Forge contract and the local git forge](forge-contract.md): how Intakt reads and writes changes on a forge.
+- [GitHub App identity](github-app-identity.md): how Intakt acts on GitHub as its App.
+- [Pull requests handed to Intakt](handed-to-intakt.md): how Intakt decides which pull requests are its own to review and publish on.
+- [Work intake from GitHub issues](work-intake.md): how labeled issues become tasks.
+- [Workflow risk scan](workflow-risk-scan.md): how a change to the CI workflows is checked, and held for the owner when risky.
+
+### Builds
+
+- [Build task](build-task.md): `intakt:build:task`, every step from the task to the pushed branch.
+- [Build job](build-job.md): the builder's CLI in a job container and what it returns.
+- [Builder prompt](builder-prompt.md): what a builder is told, with every untrusted input fenced.
+- [Hand-back checks](hand-back.md): the checks on what a build returns before anything is pushed.
+- [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone.
+- [The build lane's review cap and in-flight limit](lanes.md): when a new build may start.
+- [Bare mirror](mirror.md): the local copy of each project's repository.
+- [Build clone](build-clone.md): the fresh clone a build works in.
+- [Retried network git calls](network-git.md): how a failed network git call is tried again.
+- [Branch push](branch-push.md): signing, pushing and opening the pull request.
+- [Protected paths of a head](protected-paths.md): the paths that need the owner's approval.
+- [Watchdog over main](watchdog.md): the rules that check every new commit on main.
+
+### Checks, CI and releases
+
+- [Quality gates](quality-gates.md): every gate `bin/check` runs.
+- [CI](ci.md): what runs on GitHub Actions and when. Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
+- [Journeys](journeys.md): end-to-end tests of what a user does in a fresh install.
+- [The journey page](journey-page.md): how `docs/journey.md` and its charts are regenerated.
+- [Releases](releases.md): the labels each pull request gets from its title type, for the release notes.
+- [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors.
+
+### Running Intakt
+
+- [The demo with docker compose](demo-with-docker-compose.md): the one-command demo.
+- [The demo recording](demo-recording.md): recording a real review and playing it back in the demo.
+- [Container image](container-image.md): the image and its smoke test.
+- [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
+- [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
+- [Persistence](persistence.md): the supported databases.
+- [Job containers](job-containers.md): a fresh container per job, with a network allowlist.
+- [Job images](job-images.md): how a project's job image is made and checked.
+- [MCP server for the owner](mcp-server.md): the MCP tools and how they are secured.
+- [Differences from the earlier loop](differences-from-the-earlier-loop.md): what Intakt does differently from the build loop that developed it, and why.

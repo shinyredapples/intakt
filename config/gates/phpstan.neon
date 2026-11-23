@@ -29,6 +29,7 @@ rules:
     - Intakt\Gates\PhpStan\ContainerUnknownParameterRule
     - Intakt\Gates\PhpStan\ContainerUnknownGetIdRule
     - Intakt\Gates\PhpStan\BareSerializerFormatRule
+    - Intakt\Gates\PhpStan\HelperOrderRule
 
 services:
     -

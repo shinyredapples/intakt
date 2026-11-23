@@ -1,4 +1,0 @@
-heading: Round 1 | chip: <span class="chip on-page strong">Changes requested</span>
-outcome: #round-01a1e62c-bf8f-7874-9251-e33c427cea33-outcome: Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.
-reviewer cell round-01a1e62c-bf8f-7874-9251-e33c427cea33-reviewer-01a1e62c-bf90-7545-aaa0-60b0af1f197f-state: <span class="chip on-page strong">Changes requested
-reviewer cell round-01a1e62c-bf8f-7874-9251-e33c427cea33-reviewer-01a1e62c-bf90-7741-aaa0-60b0af5850d1-state: <span class="chip on-page strong approved">Approved

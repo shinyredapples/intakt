@@ -19,6 +19,8 @@ use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\PanelNotConfigured;
+use Intakt\Core\Review\Contract\PanelWithoutReviewers;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\StartReview;
@@ -53,13 +55,6 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(RoundLock::class)]
 final class StartReviewControllerTest extends DashboardPageTestCase
 {
-    // The container keeps the ledger double and the bus mock across the page that hands out the token and the post that uses it.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->browser->disableReboot();
-    }
-
     public function testTheButtonStartsTheNextRoundOfTheListedChangeAndRedirectsBackWithAToastNamingItsNumber(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
@@ -165,15 +160,6 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertSame(['Start round 2'], $crawler->filter('.task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
     }
 
-    // The start form stays rendered for the judged round's stream, so the in-review marker is what keeps it from showing beside Stop.
-    private function assertOnlyStopIsOffered(Crawler $crawler): void
-    {
-        self::assertSame(['round-round-1-now-runs', 'round-round-1-now-stop', 'start-review'], $crawler->filter('.task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
-        self::assertSame(['stop-round'], $crawler->filter('#round-round-1-now-stop > *')->each(static fn (Crawler $child): string => (string) $child->attr('class')));
-        self::assertSame('Stop', trim($crawler->filter('form.stop-round button')->text()));
-        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
-    }
-
     // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.
     public function testAStalePageAsksForTheNumberItShowedAndNotTheNextOneInTheLedger(): void
     {
@@ -235,6 +221,30 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-error', 'Round 2 was asked for');
         self::assertStringNotContainsString('Stack trace', (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testAProjectWithoutAReviewPanelIsAnsweredInPlainWords(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(new PanelNotConfigured('alpha'));
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+
+        self::assertResponseStatusCodeSame(303);
+        $this->browser->followRedirect();
+        self::assertSelectorTextSame('.flash-error', 'This project has no reviewers set up yet, so nothing was started.');
+        self::assertSelectorNotExists('.toast');
+    }
+
+    public function testAnotherPanelFailureKeepsItsOwnMessage(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(new PanelWithoutReviewers());
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+
+        $this->browser->followRedirect();
+        self::assertSelectorTextSame('.flash-error', new PanelWithoutReviewers()->getMessage());
     }
 
     public function testAFailureThatIsNotAReportableOneIsAServerErrorAndNotAnErrorLine(): void
@@ -455,28 +465,28 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('form.start-review'));
     }
 
+    // The container keeps the ledger double and the bus mock across the page that hands out the token and the post that uses it.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->browser->disableReboot();
+    }
+
+    // The start form stays rendered for the judged round's stream, so the in-review marker is what keeps it from showing beside Stop.
+    private function assertOnlyStopIsOffered(Crawler $crawler): void
+    {
+        self::assertSame(['round-round-1-now-runs', 'round-round-1-now-stop', 'start-review'], $crawler->filter('.task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
+        self::assertSame(['stop-round'], $crawler->filter('#round-round-1-now-stop > *')->each(static fn (Crawler $child): string => (string) $child->attr('class')));
+        self::assertSame('Stop', trim($crawler->filter('form.stop-round button')->text()));
+        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+    }
+
     private function commandBus(): MessageBusInterface&MockObject
     {
         $commands = $this->createMock(MessageBusInterface::class);
         self::getContainer()->set('command.bus', $commands);
 
         return $commands;
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function numbersStartedFor(string $change): array
-    {
-        $numbers = [];
-        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewStarted) as $row) {
-            $payload = json_decode($row->event->payload, true);
-            if (is_array($payload) && $change === ($payload['change'] ?? null) && is_int($payload['number'] ?? null)) {
-                $numbers[] = $payload['number'];
-            }
-        }
-
-        return $numbers;
     }
 
     /**
@@ -503,6 +513,22 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         } finally {
             $kernel->shutdown();
         }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function numbersStartedFor(string $change): array
+    {
+        $numbers = [];
+        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewStarted) as $row) {
+            $payload = json_decode($row->event->payload, true);
+            if (is_array($payload) && $change === ($payload['change'] ?? null) && is_int($payload['number'] ?? null)) {
+                $numbers[] = $payload['number'];
+            }
+        }
+
+        return $numbers;
     }
 
     // Read from a page's form, because the token belongs to the browser's session.

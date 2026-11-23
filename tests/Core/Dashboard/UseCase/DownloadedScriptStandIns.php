@@ -50,6 +50,12 @@ trait DownloadedScriptStandIns
         $this->browser->disableReboot();
     }
 
+    // Outside the folders every worker's asset mapper lists, since one worker removing its stand-ins between another's listing and loading fails that request; named after the process, because runs started by hand share the system temp directory where gate workers each have their own TMPDIR.
+    private function standInFolder(): string
+    {
+        return sys_get_temp_dir().'/'.self::STAND_INS_NAMESPACE.'_'.getmypid();
+    }
+
     // The repository is the asset mapper's own, so only its folders change; its service cannot be replaced once read, so the mapper that holds it is.
     private function assetMapperThatAlsoMapsTheStandIns(): AssetMapper
     {
@@ -70,11 +76,5 @@ trait DownloadedScriptStandIns
     private function removeTheStandIns(): void
     {
         new Filesystem()->remove($this->standInFolder());
-    }
-
-    // Outside the folders every worker's asset mapper lists, since one worker removing its stand-ins between another's listing and loading fails that request; named after the process, because runs started by hand share the system temp directory where gate workers each have their own TMPDIR.
-    private function standInFolder(): string
-    {
-        return sys_get_temp_dir().'/'.self::STAND_INS_NAMESPACE.'_'.getmypid();
     }
 }

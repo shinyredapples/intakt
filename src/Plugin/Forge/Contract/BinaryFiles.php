@@ -80,20 +80,6 @@ final readonly class BinaryFiles
     }
 
     /**
-     * @param Closure(string): string $shown
-     */
-    private function eachFile(string $patch, Closure $shown): string
-    {
-        $files = preg_split(self::FILE_START, $patch);
-
-        if (false === $files) {
-            throw new ForgeReadFailed('The diff could not be split into its files.');
-        }
-
-        return implode('', array_map($shown, $files));
-    }
-
-    /**
      * @param Closure(string): string $blob
      */
     private function binaryNamed(string $file, Closure $blob): ?string
@@ -124,6 +110,14 @@ final readonly class BinaryFiles
     }
 
     /**
+     * @return ?array{0: string, 1: string, 2: string}
+     */
+    private function blobHeader(string $file): ?array
+    {
+        return 1 === preg_match(self::HEADER, $file, $header) && 1 !== preg_match(self::SUBMODULE, $file) ? $header : null;
+    }
+
+    /**
      * @param array{0: string, 1: string, 2: string} $header
      * @param Closure(string): string                $blob
      * @param Closure(string): bool                  $eachBlob
@@ -139,17 +133,23 @@ final readonly class BinaryFiles
             : null;
     }
 
-    /**
-     * @return ?array{0: string, 1: string, 2: string}
-     */
-    private function blobHeader(string $file): ?array
-    {
-        return 1 === preg_match(self::HEADER, $file, $header) && 1 !== preg_match(self::SUBMODULE, $file) ? $header : null;
-    }
-
     private function textShown(string $file): string
     {
         return null === $this->blobHeader($file) ? $this->withoutBlobs($file) : $this->escaped($file);
+    }
+
+    /**
+     * @param Closure(string): string $shown
+     */
+    private function eachFile(string $patch, Closure $shown): string
+    {
+        $files = preg_split(self::FILE_START, $patch);
+
+        if (false === $files) {
+            throw new ForgeReadFailed('The diff could not be split into its files.');
+        }
+
+        return implode('', array_map($shown, $files));
     }
 
     private function withoutBlobs(string $file): string

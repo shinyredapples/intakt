@@ -65,6 +65,31 @@ final readonly class UsageLedger
     }
 
     /**
+     * @throws UsageNotRecorded
+     */
+    public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
+    {
+        ['usages' => $usages, 'unreadable' => $unreadable] = $this->readRounds($reservation, ...$rounds);
+        if ($unreadable instanceof Throwable) {
+            // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
+            $this->record(new UsageUnsettled($reservation->call, 'unsettled', $unreadable::class, $usages), $unreadable);
+
+            return;
+        }
+
+        $this->record(new UsageSettled($reservation->call, 'settled', $usages));
+    }
+
+    /**
+     * @throws UsageNotRecorded
+     */
+    public function leaveUnsettled(UsageReservation $reservation, Throwable $failure, DeferredResult ...$rounds): void
+    {
+        $usages = $this->readRounds($reservation, ...$rounds)['usages'];
+        $this->record(new UsageUnsettled($reservation->call, 'unsettled', $failure::class, $usages), $failure);
+    }
+
+    /**
      * @param Closure(string): UsageStarted $row
      *
      * @throws UsageNotRecorded
@@ -78,68 +103,24 @@ final readonly class UsageLedger
     }
 
     /**
-     * @throws UsageNotRecorded
+     * @return array{usages: list<TokenUsageRow>, unreadable: ?Throwable}
      */
-    public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
-    {
-        try {
-            $usages = $this->usagesOfRounds(...$rounds);
-            // Boundary: the catch below records the call as unsettled with the failure, because unreadable usage must not lose the call from the ledger.
-        } catch (Throwable $unreadable) {
-            $this->leaveUnreadableUnsettled($reservation, $unreadable, ...$rounds);
-
-            return;
-        }
-
-        $this->record(new UsageSettled($reservation->call, 'settled', $usages));
-    }
-
-    /**
-     * @throws UsageNotRecorded
-     */
-    public function leaveUnsettled(UsageReservation $reservation, Throwable $failure, DeferredResult ...$rounds): void
-    {
-        $usages = $this->usagesBeforeFailure($reservation, array_values($rounds));
-        $this->record(new UsageUnsettled($reservation->call, 'unsettled', $failure::class, $usages), $failure);
-    }
-
-    /**
-     * @param list<DeferredResult> $rounds
-     *
-     * @return list<TokenUsageRow>
-     */
-    // The rounds that answered spent their tokens, so the row keeps them; a round that cannot be read is logged and left out on its own, so it neither hides the others nor replaces the call's failure.
-    private function usagesBeforeFailure(UsageReservation $reservation, array $rounds): array
+    // Each round is read once, because reading can run the provider's extractor again; the rounds that answered spent their tokens, so the row keeps them, and a round that cannot be read is logged and left out on its own, so it does not hide the others.
+    private function readRounds(UsageReservation $reservation, DeferredResult ...$rounds): array
     {
         $usages = [];
-        foreach ($rounds as $index => $round) {
+        $firstUnreadable = null;
+        foreach (array_values($rounds) as $index => $round) {
             try {
                 $usages[] = $this->usagesOf($round);
-                // Boundary: the catch below logs the unreadable round and goes on with the others, because the call already failed and its own failure must not be replaced.
+                // Boundary: the catch below logs the unreadable round and goes on with the others, because unreadable usage must not lose the call or its other rounds from the ledger.
             } catch (Throwable $unreadable) {
                 $this->logger->warning('Token usage of a round could not be read.', ['call' => $reservation->call, 'round' => $index, 'exception' => $unreadable]);
+                $firstUnreadable ??= $unreadable;
             }
         }
 
-        return array_merge(...$usages);
-    }
-
-    /**
-     * @throws UsageNotRecorded
-     */
-    private function leaveUnreadableUnsettled(UsageReservation $reservation, Throwable $unreadable, DeferredResult ...$rounds): void
-    {
-        // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
-        $this->logger->warning('Token usage of an answered call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
-        $this->leaveUnsettled($reservation, $unreadable, ...$rounds);
-    }
-
-    /**
-     * @return list<TokenUsageRow>
-     */
-    private function usagesOfRounds(DeferredResult ...$rounds): array
-    {
-        return array_merge(...array_map($this->usagesOf(...), $rounds));
+        return ['usages' => array_merge(...$usages), 'unreadable' => $firstUnreadable];
     }
 
     /**
@@ -158,14 +139,6 @@ final readonly class UsageLedger
         return array_values(array_map(fn (TokenUsageInterface $part): TokenUsageRow => $this->asRow($part, $account), $usages));
     }
 
-    // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
-    private function accountOf(DeferredResult $result): ?string
-    {
-        $account = $result->getMetadata()->get(Account::METADATA);
-
-        return is_string($account) ? $account : null;
-    }
-
     // An answer that fails to map leaves no metadata on the deferred result, yet its tokens were spent, so they are read from the raw answer.
     private function tokenUsageOf(DeferredResult $result): ?TokenUsageInterface
     {
@@ -175,6 +148,14 @@ final readonly class UsageLedger
             ?? $this->convertedUsageOf($result->getRawResult());
 
         return $usage instanceof TokenUsageInterface ? $usage : null;
+    }
+
+    // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
+    private function accountOf(DeferredResult $result): ?string
+    {
+        $account = $result->getMetadata()->get(Account::METADATA);
+
+        return is_string($account) ? $account : null;
     }
 
     // A stream carries the last usage it reported on its own metadata, which the deferred result and the extractor do not see, so it is read first; a result that fails to convert has no stream.

@@ -16,6 +16,8 @@ use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\EscalationReviewFailed;
+use Intakt\Core\Review\Contract\EscalationVerdictKept;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
@@ -166,6 +168,35 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::EscalationVerdictReused, $reused);
     }
 
+    public function escalationReviewed(EscalationVerdictKept $reviewed): void
+    {
+        $this->append(LedgerEventKind::EscalationReviewed, $reviewed);
+    }
+
+    public function escalationFailed(EscalationReviewFailed $failed): void
+    {
+        $this->append(LedgerEventKind::EscalationFailed, $failed);
+    }
+
+    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids, each with its own judge's note, because the act list read back (StoredFindings::actListOf()) gives an entry its own note or else the first of a finding it merged.
+    /**
+     * @param list<string> $act
+     *
+     * @return list<JudgeDoneFinding>
+     */
+    private function recordedFindings(JudgedFindings $judged, array $act): array
+    {
+        $findings = $judged->findings;
+        $entries = [];
+        foreach (new OnePerPlace()->actList($findings, $act, iterator_to_array($judged->sameCause)) as $entry) {
+            $entries[$entry->id] = $entry;
+        }
+
+        $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
+
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes->noteOf($finding->id)), $finding->gate_gap), $shown);
+    }
+
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
     /**
      * @return array<string, ?string>
@@ -183,25 +214,6 @@ final readonly class RoundLedger
         return $keys;
     }
 
-    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
-    /**
-     * @param list<string> $act
-     *
-     * @return list<JudgeDoneFinding>
-     */
-    private function recordedFindings(JudgedFindings $judged, array $act): array
-    {
-        $findings = $judged->findings;
-        $entries = [];
-        foreach (new OnePerPlace()->actList($findings, $act, iterator_to_array($judged->sameCause)) as $entry) {
-            $entries[$entry->id] = $entry;
-        }
-
-        $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
-
-        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes[$finding->id] ?? null)), $shown);
-    }
-
     // Redacted and then trimmed, because the note is model text that may quote a held credential, and a credential held with edge whitespace leaves that whitespace behind.
     private function storedNote(?string $note): ?string
     {
@@ -212,16 +224,6 @@ final readonly class RoundLedger
         $stored = trim($this->redactor->redact($note));
 
         return '' === $stored ? null : $stored;
-    }
-
-    // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
-    private function modelOf(RoundReviewer $reviewer): ?string
-    {
-        try {
-            return $this->tiers->resolve($reviewer->round()->project(), $reviewer->tier())->model;
-        } catch (TierResolutionFailure) {
-            return null;
-        }
     }
 
     // The first substitute on that provider, because the vendor tries the tier's substitutes in order and an outage takes a whole provider out.
@@ -244,7 +246,17 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused $payload): void
+    // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
+    private function modelOf(RoundReviewer $reviewer): ?string
+    {
+        try {
+            return $this->tiers->resolve($reviewer->round()->project(), $reviewer->tier())->model;
+        } catch (TierResolutionFailure) {
+            return null;
+        }
+    }
+
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused|EscalationVerdictKept|EscalationReviewFailed $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

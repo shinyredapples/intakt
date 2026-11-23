@@ -1,0 +1,6 @@
+{#- A card's title is the finding's headline (RoundFinding::headline()), because a card shows one short line; the whole text follows it only when it goes on, so nothing the reviewer wrote is lost. -#}
+{%- set headline = finding.headline -%}
+<p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span></p>
+{%- if finding.goesOnAfterItsHeadline %}
+<p class="fc-detail">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: ''}, with_context = false) }}</p>
+{%- endif %}

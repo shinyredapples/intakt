@@ -232,6 +232,16 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => 'Match -test.php and build-old.', 'code' => false]], new FindingText('Match *-test.php and build*-old.')->spans());
     }
 
+    public function testACommaSeparatedListWhoseLastGlobEndsInAStarLosesBothStars(): void
+    {
+        self::assertSame([['text' => 'Copy .php,build', 'code' => false]], new FindingText('Copy *.php,build*')->spans());
+    }
+
+    public function testACommaSeparatedListInBackticksKeepsBothStars(): void
+    {
+        self::assertSame([['text' => 'Copy ', 'code' => false], ['text' => '*.php,build*', 'code' => true]], new FindingText('Copy `*.php,build*`')->spans());
+    }
+
     public function testStarsInSeparateParagraphsNeverPair(): void
     {
         $written = "Copy *test.php.\n\nKeep files named build*.";

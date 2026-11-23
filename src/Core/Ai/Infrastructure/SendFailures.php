@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use NoDiscard;
 use Symfony\AI\Platform\Exception\AuthenticationException;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 use WeakMap;
@@ -66,6 +67,17 @@ final class SendFailures
     public function tried(Account $account): void
     {
         $this->tried[$account->key()] = true;
+    }
+
+    public function wasTried(Account $account): bool
+    {
+        return isset($this->tried[$account->key()]);
+    }
+
+    // True when every account the call was sent to failed with a limit, so none of them failed for a reason a retry would not fix.
+    public function isEveryTriedLimited(): bool
+    {
+        return array_all(array_keys($this->tried), fn ($key) => is_a($this->failures[$key] ?? '', RateLimitExceededException::class, true));
     }
 
     // Kept apart from the account errors, because a transport error cools no account down.

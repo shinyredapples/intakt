@@ -90,6 +90,15 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*display:\s*inline-block;\s*min-height:\s*44px;\s*$/', $rules['.page-head .lead .headline-setup'] ?? '');
     }
 
+    // The running headline is a link alone in its line too, since the line no longer goes on to what waits (UX2 home, #3326).
+    public function testOnAPhoneTheRunningHeadlineLinkIsAtLeast44PxTall(): void
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
+        $rules = $this->rulesOf(implode("\n", $blocks[1]));
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*inline-block;\s*min-height:\s*44px;\s*$/', $rules['.page-head .lead .headline-run'] ?? '');
+    }
+
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void
     {
         $rules = $this->rulesOf($this->mediaBlock('min-width: 1700px'));
@@ -168,6 +177,14 @@ final class BoardStylesTest extends TestCase
 
         self::assertMatchesRegularExpression('/^\s*min-width:\s*0;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;\s*white-space:\s*nowrap;\s*$/', $rules['.card .top .num'] ?? '');
         self::assertMatchesRegularExpression('/flex:\s*none;/', $rules['.card .top .pname'] ?? '');
+    }
+
+    // Because a Replay chip beside the change and project squeezed the change to zero width in a 176 px phone column.
+    public function testACardWrapsItsReplayChipBelowTheChangeInsteadOfSqueezingTheChange(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/display:\s*flex;\s*flex-wrap:\s*wrap;/', $rules['.card .top'] ?? '');
     }
 
     public function testACardPastAColumnsPageLimitIsNotShown(): void

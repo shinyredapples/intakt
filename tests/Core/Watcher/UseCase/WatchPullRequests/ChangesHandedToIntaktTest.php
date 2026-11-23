@@ -16,6 +16,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
+use Intakt\Core\Review\Contract\PublishHandedOverChange;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangesHandedToIntakt;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
@@ -37,6 +38,7 @@ use Symfony\Component\Clock\MockClock;
 #[Group('persistence')]
 #[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatcherLedger::class)]
+#[UsesClass(PublishHandedOverChange::class)]
 #[UsesClass(WatcherEventNotRecorded::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(RecordedEvent::class)]
@@ -52,19 +54,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     private DoctrineLedger $ledger;
     private ChangeAuthorship $authorship;
     private RecordingLogger $logger;
-
-    protected function setUp(): void
-    {
-        $registry = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $registry);
-        $entities = $registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
-        $this->authorship = self::createStub(ChangeAuthorship::class);
-        $this->logger = new RecordingLogger();
-    }
+    private RecordingCommandBus $commands;
 
     public function testAPullRequestIntaktOpenedIsRecordedAsHandedToIntakt(): void
     {
@@ -73,6 +63,64 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $this->recognize('alpha', $this->change(self::PULL));
 
         self::assertSame([['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]], $this->handedToIntakt());
+    }
+
+    public function testAPullRequestRecordedAsHandedToIntaktIsSentForPublicationOnce(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+        $this->recognize('alpha', $this->change(self::PULL, 'b'));
+
+        self::assertEquals([new PublishHandedOverChange('alpha', self::PULL, str_repeat('a', 40))], $this->commands->handedOver);
+    }
+
+    public function testAPullRequestHandedOverBeforePublicationsWereQueuedIsSentForPublicationAtItsListedHead(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertEquals([new PublishHandedOverChange('alpha', self::PULL, str_repeat('a', 40))], $this->commands->handedOver);
+    }
+
+    public function testAPullRequestHandedOverBeforePublicationsWereQueuedIsSentForPublicationOnce(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertCount(1, $this->commands->handedOver);
+    }
+
+    public function testAPullRequestWhosePublicationWasQueuedInAnotherCaseIsNotSentAgain(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+        $this->record(LedgerEventKind::HandOverPublicationQueued, ['project' => 'alpha', 'change' => 'https://github.com/Acme/Widgets/pull/7', 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([], $this->commands->handedOver);
+    }
+
+    public function testAHandOverOfAnotherProjectSendsNoPullRequestOfTheSameAddressForPublication(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'beta', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+        $this->record(LedgerEventKind::ChangeNotHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([], $this->commands->handedOver);
+    }
+
+    public function testAPullRequestNotHandedToIntaktIsNotSentForPublication(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL, 'opening' => 'updated']);
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([], $this->commands->handedOver);
     }
 
     public function testAPullRequestWithoutAnOpeningRecordOfIntaktIsNotRecordedAsHandedToIntakt(): void
@@ -391,7 +439,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     {
         $authorship = self::createStub(ChangeAuthorship::class);
         $authorship->method('isCreatedByIntakt')->willReturn(false);
-        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $authorship, $this->logger);
+        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $authorship, $this->logger, $this->commands);
 
         $this->expectException(WatcherEventNotRecorded::class);
 
@@ -403,7 +451,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $ledger = self::createMock(Ledger::class);
         $ledger->expects(self::never())->method('readOfKind');
 
-        new ChangesHandedToIntakt($ledger, new WatcherLedger(new InMemoryLedger()), $this->authorship, $this->logger)->recognizeAmong('alpha', []);
+        new ChangesHandedToIntakt($ledger, new WatcherLedger(new InMemoryLedger()), $this->authorship, $this->logger, $this->commands)->recognizeAmong('alpha', []);
     }
 
     public function testAnOpeningRecordOfAnotherProjectHandsNoPullRequestOfTheSameAddressToIntakt(): void
@@ -456,11 +504,25 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     public function testARecordTheLedgerRefusesFailsTheRecognition(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
-        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $this->authorship, $this->logger);
+        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $this->authorship, $this->logger, $this->commands);
 
         $this->expectException(WatcherEventNotRecorded::class);
 
         $recognizer->recognizeAmong('alpha', [$this->change(self::PULL)]);
+    }
+
+    protected function setUp(): void
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        $entities = $registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
+        $this->authorship = self::createStub(ChangeAuthorship::class);
+        $this->logger = new RecordingLogger();
+        $this->commands = new RecordingCommandBus();
     }
 
     /**
@@ -471,14 +533,14 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertTrue($this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
     }
 
-    private function recognize(string $project, OpenChange ...$changed): void
-    {
-        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger), $this->authorship, $this->logger)->recognizeAmong($project, array_values($changed));
-    }
-
     private function change(string $id, string $head = 'a'): OpenChange
     {
         return RecordedForge::change($id, $head, '2026-11-20T09:00:00Z');
+    }
+
+    private function recognize(string $project, OpenChange ...$changed): void
+    {
+        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger), $this->authorship, $this->logger, $this->commands)->recognizeAmong($project, array_values($changed));
     }
 
     /**

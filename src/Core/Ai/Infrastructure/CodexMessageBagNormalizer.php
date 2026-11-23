@@ -31,13 +31,6 @@ final class CodexMessageBagNormalizer extends ModelContractNormalizer
         return $system instanceof SystemMessage ? [...$prompt, 'system_prompt' => (string) $system->getContent()] : $prompt;
     }
 
-    private function userTextOf(MessageBag $bag): string
-    {
-        $users = array_filter($bag->getMessages(), static fn (object $message): bool => $message instanceof UserMessage);
-
-        return implode(self::SEPARATOR, array_map(static fn (UserMessage $message): string => (string) $message->asText(), $users));
-    }
-
     #[Override]
     protected function supportedDataClass(): string
     {
@@ -48,5 +41,12 @@ final class CodexMessageBagNormalizer extends ModelContractNormalizer
     protected function supportsModel(Model $model): bool
     {
         return $model instanceof Codex;
+    }
+
+    private function userTextOf(MessageBag $bag): string
+    {
+        $users = array_filter($bag->getMessages(), static fn (object $message): bool => $message instanceof UserMessage);
+
+        return implode(self::SEPARATOR, array_map(static fn (UserMessage $message): string => (string) $message->asText(), $users));
     }
 }

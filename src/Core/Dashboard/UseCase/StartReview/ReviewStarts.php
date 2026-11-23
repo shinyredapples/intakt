@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
@@ -72,6 +73,9 @@ final readonly class ReviewStarts
     {
         try {
             $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
+        } catch (PanelNotConfigured) {
+            // The panel's own message names a configuration term a newcomer does not know yet; the CLI and MCP keep it.
+            return new StartAnswer([self::FLASH_ERROR, 'This project has no reviewers set up yet, so nothing was started.']);
         } catch (ReportableFailure $refusal) {
             return new StartAnswer([self::FLASH_ERROR, $refusal->getMessage()]);
         }

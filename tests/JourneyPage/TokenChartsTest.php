@@ -70,17 +70,6 @@ final class TokenChartsTest extends TestCase
         self::assertSame([], $charts[0]->series);
     }
 
-    /**
-     * @param list<TokenUsage>   $rows
-     * @param array<string, int> $mergesPerDay
-     *
-     * @return list<DailyChart>
-     */
-    private function charts(array $rows, array $mergesPerDay = []): array
-    {
-        return new TokenCharts()->charts(new Usage($rows), $mergesPerDay);
-    }
-
     private function row(UsageAccount $account, UsageLane $lane, int $tokens): TokenUsage
     {
         $vendor = UsageAccount::GptSubscription === $account ? UsageVendor::Gpt : UsageVendor::Claude;
@@ -94,5 +83,16 @@ final class TokenChartsTest extends TestCase
         self::assertInstanceOf(DateTimeImmutable::class, $date);
 
         return new TokenUsage($date, UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, $tokens, $reserved);
+    }
+
+    /**
+     * @param list<TokenUsage>   $rows
+     * @param array<string, int> $mergesPerDay
+     *
+     * @return list<DailyChart>
+     */
+    private function charts(array $rows, array $mergesPerDay = []): array
+    {
+        return new TokenCharts()->charts(new Usage($rows), $mergesPerDay);
     }
 }

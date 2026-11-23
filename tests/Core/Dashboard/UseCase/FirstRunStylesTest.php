@@ -77,16 +77,39 @@ final class FirstRunStylesTest extends TestCase
         self::assertMatchesRegularExpression('/min-width:\s*0;/', $this->rule('.setup .page-head > div', $this->desktopRules()));
     }
 
+    public function testTheDashboardLoadsTheDemoSheetAsItsFifthStylesheet(): void
+    {
+        preg_match_all('~<link rel="stylesheet" href="\{\{ asset\(\'styles/([a-z]+)\.css\'\) \}\}">~', $this->file('templates/dashboard/base.html.twig'), $sheets);
+
+        self::assertSame(['fonts', 'tokens', 'base', 'components', 'demo'], $sheets[1]);
+    }
+
+    public function testTheReviewStripKeepsItsFourStepsInOneRowOnAPhone(): void
+    {
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/', $this->rule('.review-strip', $this->demoSheet()));
+        self::assertDoesNotMatchRegularExpression('/grid-template-columns/', $this->rule('.review-strip', $this->phoneBlockOf($this->demoSheet())));
+    }
+
+    public function testTheDemoSheetUsesOnlyTokensForColors(): void
+    {
+        self::assertDoesNotMatchRegularExpression('/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i', $this->demoSheet());
+    }
+
+    private function demoSheet(): string
+    {
+        return (string) preg_replace('~/\*.*?\*/~s', '', $this->file('assets/styles/demo.css'));
+    }
+
+    private function phoneBlockOf(string $css): string
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $css, $blocks);
+
+        return implode("\n", $blocks[1]);
+    }
+
     private function zIndex(string $selector): int
     {
         return 1 === preg_match('/z-index:\s*(\d+);/', $this->rule($selector, $this->phoneBlock()), $found) ? (int) $found[1] : self::fail($selector);
-    }
-
-    private function pageLiftsTheContentCap(): bool
-    {
-        $wide = str_contains($this->file('templates/dashboard/first_run.html.twig'), '{% block content_width %} wide{% endblock %}');
-
-        return $wide && 1 === preg_match('/max-width:\s*none;/', $this->rule('.content.wide', $this->desktopRules()));
     }
 
     // Top, side and bottom in px, counting spacing steps only, because the tab bar's height and the safe-area inset in a phone's bottom padding clear the bar and are no gap.
@@ -107,16 +130,6 @@ final class FirstRunStylesTest extends TestCase
         return (int) array_sum($steps[1]);
     }
 
-    private function pixels(string $pattern, string $text): int
-    {
-        return 1 === preg_match($pattern, $text, $found) ? (int) $found[1] : self::fail($pattern);
-    }
-
-    private function sheet(): string
-    {
-        return (string) preg_replace('~/\*.*?\*/~s', '', $this->file('assets/styles/components.css'));
-    }
-
     private function file(string $path): string
     {
         $text = file_get_contents(__DIR__.'/../../../../'.$path);
@@ -125,10 +138,27 @@ final class FirstRunStylesTest extends TestCase
         return $text;
     }
 
+    private function pixels(string $pattern, string $text): int
+    {
+        return 1 === preg_match($pattern, $text, $found) ? (int) $found[1] : self::fail($pattern);
+    }
+
     // The rules that hold at every width: a media block's rules would otherwise be read as the page's own.
     private function desktopRules(): string
     {
         return (string) preg_replace('/@media[^{]+\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/', '', $this->sheet());
+    }
+
+    private function pageLiftsTheContentCap(): bool
+    {
+        $wide = str_contains($this->file('templates/dashboard/first_run.html.twig'), '{% block content_width %} wide{% endblock %}');
+
+        return $wide && 1 === preg_match('/max-width:\s*none;/', $this->rule('.content.wide', $this->desktopRules()));
+    }
+
+    private function sheet(): string
+    {
+        return (string) preg_replace('~/\*.*?\*/~s', '', $this->file('assets/styles/components.css'));
     }
 
     private function phoneBlock(): string

@@ -35,6 +35,27 @@ final class BoardComingNextTemplateTest extends DashboardPageTestCase
         self::assertStringNotContainsString('Building,', $html);
     }
 
+    // No install can put a card in Planned yet (#3155, decision 2), so the template is handed the lists a board with a Planned task would give it; the count is the empty board's own, and the test pins the column's place, head and count.
+    public function testAShownPlannedColumnRendersInItsPlaceWithItsHeadAndCountAndLeavesTheComingNextLine(): void
+    {
+        $html = $this->board(
+            [BoardColumn::WaitingOnYou, BoardColumn::Planned, BoardColumn::InReview, BoardColumn::Done],
+            [BoardColumn::Backlog, BoardColumn::Ready, BoardColumn::Building, BoardColumn::Checking, BoardColumn::Merging],
+        );
+
+        $waiting = strpos($html, 'id="col-waiting-on-you"');
+        $planned = strpos($html, '<section class="col" id="col-planned" aria-label="Planned">');
+        $review = strpos($html, 'id="col-in-review"');
+        self::assertIsInt($waiting);
+        self::assertIsInt($planned);
+        self::assertIsInt($review);
+        self::assertTrue($waiting < $planned && $planned < $review, 'Planned renders between Waiting on you and In review.');
+        self::assertMatchesRegularExpression('~id="col-planned"[^>]*>\s*<div class="col-head"><h3>Planned</h3><span class="count[^"]*"[^>]*>0</span>~', $html);
+        self::assertStringContainsString('<span>Backlog, Ready, Building, Checking and Merging show here once a task is in one of them</span>', $html);
+        self::assertStringNotContainsString('Planned,', $html);
+        self::assertStringNotContainsString('Planned show', $html);
+    }
+
     public function testTheComingNextLineUsesTheSingularWordingForOneFoldedColumn(): void
     {
         $shown = array_values(array_filter(BoardColumn::cases(), static fn (BoardColumn $column): bool => BoardColumn::Building !== $column));
@@ -62,6 +83,7 @@ final class BoardComingNextTemplateTest extends DashboardPageTestCase
             'failing' => [],
             'failing_mains' => [],
             'working' => $board->whoIsWorking(),
+            'waiting' => [],
             'columns' => $columns,
             'coming_next' => $comingNext,
         ]);

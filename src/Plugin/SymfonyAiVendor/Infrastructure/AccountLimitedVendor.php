@@ -6,6 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -21,6 +22,7 @@ use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Throwable;
 
 #[AsAlias(Vendor::class)]
 final readonly class AccountLimitedVendor implements Vendor
@@ -76,9 +78,21 @@ final readonly class AccountLimitedVendor implements Vendor
             return new VendorAccountOut($out);
         }
 
-        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
+        $wait = $this->carriedWait($out) ?? $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
 
         return 0 === $wait ? new VendorAccountOut($out) : new ProviderRateLimited($wait, $out);
+    }
+
+    // The account failover read its wait from the account and the pinned provider windows in the same read that found no account free, so it is used as it is; the account cooldowns alone know nothing of a pinned provider and could read 0 while it still cools.
+    private function carriedWait(Throwable $out): ?int
+    {
+        for ($cause = $out->getPrevious(); $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            if ($cause instanceof EveryAccountCoolingDown) {
+                return $cause->secondsUntilAnAccountIsFree;
+            }
+        }
+
+        return null;
     }
 
     // A rejected key ends the reviewer unless there is another account or a substitute to try, because it is the only failure that no wait overcomes. Only KeyRejected, which the account failover throws while another account is free, proves that another account of the provider is free; a cooldown reading is not that proof, so the rejected key is never called again at once.

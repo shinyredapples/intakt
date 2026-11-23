@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
@@ -57,6 +58,7 @@ use Throwable;
 #[UsesClass(Account::class)]
 #[UsesClass(KeyRejected::class)]
 #[UsesClass(EveryKeyRejected::class)]
+#[UsesClass(EveryAccountCoolingDown::class)]
 final class AccountLimitedVendorTest extends TestCase
 {
     public function testAReviewOnAnAccountWithAFreePlaceReturnsTheVendorsVerdict(): void
@@ -117,6 +119,16 @@ final class AccountLimitedVendorTest extends TestCase
 
         self::assertInstanceOf(ProviderRateLimited::class, $out);
         self::assertSame(45, $out->retryAfterSeconds);
+    }
+
+    public function testARateLimitCarryingTheFailoversWaitWaitsThatLongEvenWhenTheAccountCooldownsReadZero(): void
+    {
+        $limited = new ProviderRateLimited(300, new EveryAccountCoolingDown(Provider::OpenAiCompatible, 42));
+
+        $out = $this->failureOf($this->vendor($this->failing($limited), $this->cooldowns(0)));
+
+        self::assertInstanceOf(ProviderRateLimited::class, $out);
+        self::assertSame(42, $out->retryAfterSeconds);
     }
 
     public function testATransientFailureWhileAnotherAccountOfTheVendorIsFreeMovesTheReviewThereAtOnce(): void
@@ -205,17 +217,6 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertInstanceOf(VendorAccountOut::class, $rejected);
     }
 
-    private function failureOf(AccountLimitedVendor $vendor): Throwable
-    {
-        try {
-            $_ = $vendor->review('intakt', Tier::Standard, $this->request());
-        } catch (Throwable $failure) {
-            return $failure;
-        }
-
-        self::fail('The review was expected to fail.');
-    }
-
     private function failing(Throwable $failure): Vendor
     {
         $vendor = self::createStub(Vendor::class);
@@ -235,6 +236,17 @@ final class AccountLimitedVendorTest extends TestCase
         $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn($secondsUntilAnAccountIsFree);
 
         return $cooldowns;
+    }
+
+    private function failureOf(AccountLimitedVendor $vendor): Throwable
+    {
+        try {
+            $_ = $vendor->review('intakt', Tier::Standard, $this->request());
+        } catch (Throwable $failure) {
+            return $failure;
+        }
+
+        self::fail('The review was expected to fail.');
     }
 
     private function tier(): TierResolver

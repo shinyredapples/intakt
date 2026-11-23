@@ -11,6 +11,7 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -22,6 +23,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -69,6 +71,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewChange::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(ChangeReview::class)]
+#[UsesClass(ModelNames::class)]
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
@@ -85,6 +88,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(IgnoredProgress::class)]
 #[UsesClass(ChangeReviewRequest::class)]
+#[UsesClass(BlockReasons::class)]
 #[UsesClass(FlagProjectAsReplayHandler::class)]
 #[UsesClass(FlagProjectAsReplay::class)]
 #[UsesClass(ReplayProject::class)]
@@ -100,12 +104,6 @@ final class ReviewChangeTest extends KernelTestCase
      * @var list<Envelope>
      */
     private array $parked = [];
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->tiers = new VerdictPerRole([]);
-    }
 
     public function testATwoReviewerRoundWhereBothApproveIsApproved(): void
     {
@@ -123,7 +121,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole([]));
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([RoundEndReasons::REPLAY], $review->reasons);
+        self::assertSame([RoundEndReasons::REPLAY], [...$review->reasons]);
     }
 
     public function testARoundOfALiveProjectIsApprovedBesideAReplayProject(): void
@@ -133,7 +131,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole([]));
 
         self::assertSame(Decision::Approve, $review->decision);
-        self::assertSame([], $review->reasons);
+        self::assertSame([], [...$review->reasons]);
     }
 
     public function testARoundWithAChangesVerdictBelowQuorumAsksForChanges(): void
@@ -155,14 +153,14 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.'));
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], [...$review->reasons]);
     }
 
     public function testAReviewerThatCouldNotReachItsEndpointIsNamedWithThatCauseInPlainWords(): void
     {
         $review = $this->reviewWith(new UnreachableForRole('Look at part 1.'));
 
-        self::assertSame(['role-1 reviewer failed, the model endpoint could not be reached'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, the model endpoint could not be reached'], [...$review->reasons]);
     }
 
     public function testAReviewerBlockedBecauseNoProviderIsLeftIsNamedBlockedWithItsReason(): void
@@ -170,14 +168,14 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new OutOfProvidersForRole('Look at part 1.'));
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame(['role-1 reviewer blocked, '.OutOfProvidersForRole::REASON], $review->reasons);
+        self::assertSame(['role-1 reviewer blocked, '.OutOfProvidersForRole::REASON], [...$review->reasons]);
     }
 
     public function testAReviewerWithABlockedVerdictIntaktGaveIsNamedBlockedWithItsReason(): void
     {
         $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => Verdict::noTools()]));
 
-        self::assertSame(['role-1 reviewer blocked, '.Verdict::noTools()->findings[0]->text], $review->reasons);
+        self::assertSame(['role-1 reviewer blocked, '.Verdict::noTools()->findings[0]->text], [...$review->reasons]);
     }
 
     public function testAFailedReviewerBesideOneAskingForChangesGivesChangesAndStillNamesTheFailure(): void
@@ -187,7 +185,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.', ['Look at part 2.' => $changes]));
 
         self::assertSame(Decision::Changes, $review->decision);
-        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], [...$review->reasons]);
     }
 
     public function testTheActListHoldsOnlyTheFindingsTheJudgeMarkedAct(): void
@@ -323,7 +321,7 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertSame(RoundEnds::NoOutcomeInTime, $review->end);
         self::assertSame([], $review->actList);
-        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', $review->reasons[0]);
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', [...$review->reasons][0]);
         self::assertSame('2026-10-30 12:00:05', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
     }
 
@@ -346,7 +344,7 @@ final class ReviewChangeTest extends KernelTestCase
 
         $review = $this->reviewChange($work, $this->shortUpperWait())->review($this->request());
 
-        self::assertSame([Decision::Approve, [], RoundEnds::Judged], [$review->decision, $review->reasons, $review->end]);
+        self::assertSame([Decision::Approve, [], RoundEnds::Judged], [$review->decision, [...$review->reasons], $review->end]);
     }
 
     public function testARoundWhoseJudgingFailedForGoodIsBlockedForTheFailedJudgingBeforeTheCeiling(): void
@@ -354,7 +352,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(fn (): string => $this->openRoundId()))->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([RoundEndReasons::JUDGING_FAILED], $review->reasons);
+        self::assertSame([RoundEndReasons::JUDGING_FAILED], [...$review->reasons]);
         self::assertSame(RoundEnds::JudgingFailed, $review->end);
         self::assertSame([], $review->actList);
         self::assertSame('2026-10-30 12:00:01', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
@@ -365,7 +363,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), $this->shortUpperWait())->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME, $review->reasons[0]);
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME, [...$review->reasons][0]);
     }
 
     public function testEachPollReportsTheProgressOfTheRound(): void
@@ -511,6 +509,12 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertCount(1, $this->fixture->storedRounds());
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->tiers = new VerdictPerRole([]);
+    }
+
     private function mapping(Tier ...$mapped): Vendor
     {
         $vendor = self::createStub(Vendor::class);
@@ -540,23 +544,6 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
-    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
-    /**
-     * @param Closure(): string $round
-     */
-    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
-    {
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
-
-        return function () use ($vendor, $round): void {
-            foreach ($this->fixture->bus->messages as $message) {
-                $this->fixture->deliver($message, $vendor);
-            }
-
-            $this->parked = [new Envelope(new JudgeRound($round()))];
-        };
-    }
-
     // Two seconds a reviewer and one for the judge, so the two-reviewer panel's upper wait is 5 seconds.
     private function shortUpperWait(): UpperWait
     {
@@ -583,14 +570,6 @@ final class ReviewChangeTest extends KernelTestCase
         );
     }
 
-    private function failureTransport(): ListableReceiverInterface
-    {
-        $transport = self::createStub(ListableReceiverInterface::class);
-        $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
-
-        return $transport;
-    }
-
     // Messenger's own handling, so a refusal reaches the caller unwrapped as the application's command bus unwraps it; the reviewers' messages go to the test's workers.
     private function commandBus(): MessageBusInterface
     {
@@ -602,6 +581,14 @@ final class ReviewChangeTest extends KernelTestCase
     private function serializer(): SerializerInterface
     {
         return self::getContainer()->get('serializer.stored');
+    }
+
+    private function failureTransport(): ListableReceiverInterface
+    {
+        $transport = self::createStub(ListableReceiverInterface::class);
+        $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
+
+        return $transport;
     }
 
     private function request(?int $round = null): ChangeReviewRequest
@@ -628,6 +615,23 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertInstanceOf(ReviewRound::class, $round);
 
         return $round->id()->toRfc4122();
+    }
+
+    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
+    /**
+     * @param Closure(): string $round
+     */
+    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
+    {
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+
+        return function () use ($vendor, $round): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, $vendor);
+            }
+
+            $this->parked = [new Envelope(new JudgeRound($round()))];
+        };
     }
 
     // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.

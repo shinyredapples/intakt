@@ -69,6 +69,24 @@ final class StreamedAnswer extends AbstractStreamListener
         yield $this->answer = new TextDelta($text);
     }
 
+    #[Override]
+    public function onDelta(DeltaEvent $event): void
+    {
+        $delta = $event->getDelta();
+
+        // Skipped, because its text already streamed piece by piece.
+        if ($delta === $this->answer) {
+            $event->skipDelta();
+
+            return;
+        }
+
+        if ($delta instanceof TextDelta) {
+            // Wrapped in a generator, because the listeners after this one then see no text delta and take only the answer, while the stream still yields the text as written.
+            $event->setDelta($this->passedOn($delta));
+        }
+    }
+
     // A transient failure once the answer has started streaming is a cut answer, because the provider cannot resume it and asking again would start the review over; before the first answer delta it stays the provider's failure, so another account or a substitute can take the call. Usage and metadata do not start the answer, because a provider reports them on opening the message, often right before an overload error.
     /**
      * @return Generator<DeltaInterface>
@@ -89,24 +107,6 @@ final class StreamedAnswer extends AbstractStreamListener
         } catch (IncompleteStreamException $cut) {
             // Raised again with the platform's message and cause, so the retry rules and the account's cooldown read it as before.
             throw $this->tally->cut(StreamCutBy::Platform, $cut->getMessage(), $cut->getPrevious());
-        }
-    }
-
-    #[Override]
-    public function onDelta(DeltaEvent $event): void
-    {
-        $delta = $event->getDelta();
-
-        // Skipped, because its text already streamed piece by piece.
-        if ($delta === $this->answer) {
-            $event->skipDelta();
-
-            return;
-        }
-
-        if ($delta instanceof TextDelta) {
-            // Wrapped in a generator, because the listeners after this one then see no text delta and take only the answer, while the stream still yields the text as written.
-            $event->setDelta($this->passedOn($delta));
         }
     }
 

@@ -6,9 +6,10 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\StreamChunks;
 use Intakt\Core\Review\Contract\StreamCutBy;
 use Intakt\Core\Review\Contract\StreamEndedEarly;
-use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict;
 use Intakt\Core\Review\Infrastructure\StreamTally;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -25,6 +26,7 @@ use Symfony\AI\Platform\TokenUsage\TokenUsage;
 #[CoversClass(StreamTally::class)]
 #[CoversClass(StreamEndedEarly::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(StreamChunks::class)]
 final class StrictVerdictStreamListenerTest extends TestCase
 {
     private StreamTally $tally;
@@ -34,11 +36,6 @@ final class StrictVerdictStreamListenerTest extends TestCase
      */
     private array $read = [];
 
-    protected function setUp(): void
-    {
-        $this->tally = new StreamTally();
-    }
-
     public function testAStreamThatGaveOnlyThinkingIsCutAsAnUnfinishedAnswerWithTheChunksItCounted(): void
     {
         $cut = $this->completedAfter(new TokenUsage(promptTokens: 100), new ThinkingDelta('The diff adds a cart.'));
@@ -46,7 +43,7 @@ final class StrictVerdictStreamListenerTest extends TestCase
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
         self::assertSame('The reviewer stream ended before its answer was complete.', $cut->getMessage());
         self::assertSame([StreamCutBy::UnfinishedAnswer, 2], [$cut->by, $cut->chunks]);
-        self::assertSame(['TokenUsage', 'ThinkingDelta "The diff adds a cart."'], $cut->lastChunks);
+        self::assertSame(['TokenUsage', 'ThinkingDelta "The diff adds a cart."'], [...$cut->lastChunks]);
     }
 
     public function testAStreamThatGaveAWholeAnswerIsNotCut(): void
@@ -55,6 +52,11 @@ final class StrictVerdictStreamListenerTest extends TestCase
 
         self::assertNull($this->completedAfter(new TextDelta($answer)));
         self::assertSame([$answer], $this->read);
+    }
+
+    protected function setUp(): void
+    {
+        $this->tally = new StreamTally();
     }
 
     private function completedAfter(TokenUsage|ThinkingDelta|TextDelta ...$deltas): ?StreamEndedEarly

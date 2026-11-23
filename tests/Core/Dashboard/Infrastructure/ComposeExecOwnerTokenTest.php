@@ -16,17 +16,6 @@ final class ComposeExecOwnerTokenTest extends TestCase
 {
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-compose-exec-token-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testACommandStartedApartFromTheEntrypointPrintsTheTokenTheEntrypointMade(): void
     {
         $made = $this->tokenTheEntrypointMade();
@@ -40,6 +29,17 @@ final class ComposeExecOwnerTokenTest extends TestCase
 
         self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $made);
         self::assertStringContainsString('--header "Authorization: Bearer '.$made.'"', $show->getOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-compose-exec-token-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     // The entrypoint runs with a stand-in php whose seed step fails, so the start ends right after it has made the token, without a server.

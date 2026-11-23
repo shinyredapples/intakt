@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
+use RuntimeException;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Clock\MockClock;
@@ -33,23 +34,32 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
     private LockFactory $locks;
     private ?string $directory = null;
 
-    protected function setUp(): void
-    {
-        $this->pool = new ArrayAdapter();
-        $this->clock = new MockClock('2026-11-19T12:00:00Z');
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
-    protected function tearDown(): void
-    {
-        if (null !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
     public function testAPinnedProviderThatWasNeverCooledDownIsUsable(): void
     {
         self::assertFalse($this->cooldowns()->isCoolingDown($this->deepinfra()));
+    }
+
+    public function testThePinsWaitIsRoundedUpToAWholeSecondAndIsZeroOnceItsWindowHasEnded(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 3);
+
+        $this->clock->sleep(1.8);
+        $whileCooling = $cooldowns->secondsUntilFree($this->deepinfra());
+        $this->clock->sleep(1.2);
+
+        self::assertSame([2, 0], [$whileCooling, $cooldowns->secondsUntilFree($this->deepinfra())]);
+    }
+
+    public function testAPinCooledForADayOrLongerAtAFractionalSecondReadsBackAtMostADay(): void
+    {
+        $this->clock->sleep(0.4);
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 86400);
+        $cooledADay = $cooldowns->secondsUntilFree($this->deepinfra());
+        $cooldowns->coolDown($this->deepinfra(), 200000);
+
+        self::assertSame([86400, 86400], [$cooledADay, $cooldowns->secondsUntilFree($this->deepinfra())]);
     }
 
     public function testAPinnedProviderIsCoolingDownWhileItsWindowLasts(): void
@@ -229,6 +239,36 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         }
 
         self::assertTrue($this->locks->createLock('pinned-provider-cooldown-'.hash('xxh128', $this->deepinfra()->key()))->acquire());
+    }
+
+    public function testACacheThatFailsWhileSavingIsReportedAsAWindowNotSavedWithItsCause(): void
+    {
+        $pool = $this->pool;
+        $failing = self::createStub(CacheItemPoolInterface::class);
+        $failing->method('getItem')->willReturnCallback($pool->getItem(...));
+        $cause = new RuntimeException('The disk is full.');
+        $failing->method('save')->willThrowException($cause);
+
+        try {
+            new PinnedProviderCooldownWindows($failing, $this->clock, $this->locks)->coolDown($this->deepinfra(), 60);
+            self::fail('The window was expected not to be saved.');
+        } catch (PinnedProviderCooldownNotSaved $notSaved) {
+            self::assertSame($cause, $notSaved->getPrevious());
+        }
+    }
+
+    protected function setUp(): void
+    {
+        $this->pool = new ArrayAdapter();
+        $this->clock = new MockClock('2026-11-19T12:00:00Z');
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
     }
 
     private function cooldowns(): PinnedProviderCooldownWindows

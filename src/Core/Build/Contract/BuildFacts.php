@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Build\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 
 // Only facts the loop knows about the build; nothing here comes from the builder's output, so a job cannot pick its own model.
 final readonly class BuildFacts
@@ -18,6 +19,8 @@ final readonly class BuildFacts
         public ?Tier $labelledTier,
         public array $paths,
         public ?Setback $setback = null,
+        // The escalation outcome of the change's latest review round, read from the ledger, because a confirmed escalation sends the next build to the strong tier.
+        public ?EscalationOutcome $escalation = null,
     ) {
     }
 
@@ -43,5 +46,10 @@ final readonly class BuildFacts
         }
 
         return new self(array_last($tiers), $paths, $setback);
+    }
+
+    public function afterEscalation(?EscalationOutcome $escalation): self
+    {
+        return clone ($this, ['escalation' => $escalation]);
     }
 }

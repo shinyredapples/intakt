@@ -26,6 +26,7 @@ use Intakt\Core\Ai\Infrastructure\CompletedCodexTurn;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedCodexClient;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
@@ -40,6 +41,7 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -74,6 +76,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\CodexLoginTest;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
@@ -113,6 +116,7 @@ use Throwable;
 #[UsesClass(CodexEffort::class)]
 #[UsesClass(CodexTokenRefresh::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(AccountErrorReported::class)]
@@ -171,24 +175,6 @@ final class CodexReviewerTest extends KernelTestCase
 
     private MockHttpClient $tokenEndpoint;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-codex-reviewer-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
-        $this->path = (string) getenv('PATH');
-        putenv('PATH='.$this->root.'/bin:'.$this->path);
-        $this->ledger = new InMemoryLedger();
-        $this->tokenEndpoint = new MockHttpClient();
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), ['codex' => ['team']]);
-    }
-
-    protected function tearDown(): void
-    {
-        putenv('PATH='.$this->path);
-        new Filesystem()->remove($this->root);
-        parent::tearDown();
-    }
-
     public function testACompleteRecordedStreamYieldsATypedVerdict(): void
     {
         $this->replaying('complete');
@@ -196,7 +182,7 @@ final class CodexReviewerTest extends KernelTestCase
         $verdict = $this->review()->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertSame(['F3', Severity::P1], [$verdict->findings[0]->id, $verdict->findings[0]->severity]);
     }
 
@@ -586,6 +572,24 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame(IncompleteStreamException::class, $this->ledger->payloads()[1]['failure']);
     }
 
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-codex-reviewer-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
+        $this->path = (string) getenv('PATH');
+        putenv('PATH='.$this->root.'/bin:'.$this->path);
+        $this->ledger = new InMemoryLedger();
+        $this->tokenEndpoint = new MockHttpClient();
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), ['codex' => ['team']]);
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('PATH='.$this->path);
+        new Filesystem()->remove($this->root);
+        parent::tearDown();
+    }
+
     // Replays a recording as the codex CLI on PATH, so the call goes through the login handoff and the bridge's own process result as a live run would.
     private function replaying(string $recording, int $exitCode = 0): void
     {
@@ -634,21 +638,11 @@ final class CodexReviewerTest extends KernelTestCase
         return $this->vendor($servers)->review('alpha', Tier::Strong, $request ?? $this->request());
     }
 
-    private function request(): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
     private function requestInRound(): ReviewRequest
     {
         $request = $this->request();
 
         return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
-    }
-
-    private function openFinding(string $id): Finding
-    {
-        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     private function vendor(?ReviewServerAccesses $servers): SymfonyAiVendor
@@ -658,11 +652,21 @@ final class CodexReviewerTest extends KernelTestCase
         $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh($this->tokenEndpoint, $clock), new LockFactory(new InMemoryStore()));
         $cli = new IsolatedCodexCli($logins, new CodexSettings(self::MODEL, CodexEffort::High), 'team');
         $codex = new CodexPlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, new ProjectModelCatalog(self::PROJECTS)->models(Provider::Codex));
-        $accounts = new AccountFailoverPlatform(Provider::Codex, ['team' => $codex], $this->cooldowns, $clock, new NullLogger());
+        $accounts = new AccountFailoverPlatform(Provider::Codex, ['team' => $codex], $this->cooldowns, $clock, new NullLogger(), new NoPinnedProviderCooldowns());
         $platforms = new ServiceLocator([Provider::Codex->value => static fn (): PlatformInterface => $accounts]);
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers ?? $this->servers());
+    }
+
+    private function request(): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
+    }
+
+    private function openFinding(string $id): Finding
+    {
+        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 }

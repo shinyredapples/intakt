@@ -63,25 +63,6 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
         return false;
     }
 
-    /**
-     * @param array<mixed> $item
-     */
-    private function readOf(array $item, ReviewServerAccess $access): bool
-    {
-        return 'mcp_tool_call' === ($item[self::TYPE] ?? null)
-            && $access->name === ($item['server'] ?? null)
-            && in_array($item['tool'] ?? null, $access->tools, true)
-            && 'completed' === ($item['status'] ?? null)
-            && null === ($item['error'] ?? null)
-            && $this->answered($item['result'] ?? null);
-    }
-
-    // A tool refusal (a judged round, a path outside the change) still completes the call, so only a result that is not marked as an error showed the reviewer anything.
-    private function answered(mixed $result): bool
-    {
-        return is_array($result) && false === ($result['isError'] ?? false);
-    }
-
     #[Override]
     public function getDataStream(): iterable
     {
@@ -92,6 +73,24 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     public function getObject(): object
     {
         return $this->inner->getObject();
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException
+     */
+    // The bridge throws on a non-zero exit before it reads the output, so the usage of a turn the CLI completed and then failed on would be lost though the account spent it; an error message keeps the conversion failing the reviewer while the extractor reads the usage.
+    private function failedWithReportedUsage(RuntimeException $processFailed): array
+    {
+        $usage = $this->reportedUsage();
+        if (null === $usage) {
+            $this->failForAnAccountFailure();
+
+            throw $processFailed;
+        }
+
+        return [self::TYPE => 'error', self::MESSAGE => $processFailed->getMessage(), self::USAGE => $usage];
     }
 
     /**
@@ -127,21 +126,18 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     }
 
     /**
-     * @return array<string, mixed>
-     *
-     * @throws RuntimeException
+     * @return array<mixed>|null
      */
-    // The bridge throws on a non-zero exit before it reads the output, so the usage of a turn the CLI completed and then failed on would be lost though the account spent it; an error message keeps the conversion failing the reviewer while the extractor reads the usage.
-    private function failedWithReportedUsage(RuntimeException $processFailed): array
+    private function reportedUsage(): ?array
     {
-        $usage = $this->reportedUsage();
-        if (null === $usage) {
-            $this->failForAnAccountFailure();
-
-            throw $processFailed;
+        $usage = null;
+        foreach ($this->events() as $event) {
+            if ('turn.completed' === ($event[self::TYPE] ?? null) && is_array($event[self::USAGE] ?? null)) {
+                $usage = $event[self::USAGE];
+            }
         }
 
-        return [self::TYPE => 'error', self::MESSAGE => $processFailed->getMessage(), self::USAGE => $usage];
+        return $usage;
     }
 
     /**
@@ -173,21 +169,6 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     }
 
     /**
-     * @return array<mixed>|null
-     */
-    private function reportedUsage(): ?array
-    {
-        $usage = null;
-        foreach ($this->events() as $event) {
-            if ('turn.completed' === ($event[self::TYPE] ?? null) && is_array($event[self::USAGE] ?? null)) {
-                $usage = $event[self::USAGE];
-            }
-        }
-
-        return $usage;
-    }
-
-    /**
      * @return list<array<mixed>>
      */
     private function events(): array
@@ -200,5 +181,24 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
         $events = array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput()));
 
         return array_values(array_filter($events, is_array(...)));
+    }
+
+    /**
+     * @param array<mixed> $item
+     */
+    private function readOf(array $item, ReviewServerAccess $access): bool
+    {
+        return 'mcp_tool_call' === ($item[self::TYPE] ?? null)
+            && $access->name === ($item['server'] ?? null)
+            && in_array($item['tool'] ?? null, $access->tools, true)
+            && 'completed' === ($item['status'] ?? null)
+            && null === ($item['error'] ?? null)
+            && $this->answered($item['result'] ?? null);
+    }
+
+    // A tool refusal (a judged round, a path outside the change) still completes the call, so only a result that is not marked as an error showed the reviewer anything.
+    private function answered(mixed $result): bool
+    {
+        return is_array($result) && false === ($result['isError'] ?? false);
     }
 }

@@ -80,6 +80,24 @@ final readonly class Options
     }
 
     /**
+     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
+     *
+     * @return array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string}
+     */
+    private static function withValue(array $values, string $argument): array
+    {
+        foreach (array_keys($values) as $name) {
+            if (str_starts_with($argument, '--'.$name.'=')) {
+                $values[$name] = substr($argument, strlen($name) + 3);
+
+                return $values;
+            }
+        }
+
+        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--reuse] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>], or bin/check --static-gates');
+    }
+
+    /**
      * @param list<Mode>                                                                               $modes
      * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
      * @param list<string>                                                                             $flags
@@ -99,24 +117,6 @@ final readonly class Options
         }
 
         return $options;
-    }
-
-    /**
-     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
-     *
-     * @return array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string}
-     */
-    private static function withValue(array $values, string $argument): array
-    {
-        foreach (array_keys($values) as $name) {
-            if (str_starts_with($argument, '--'.$name.'=')) {
-                $values[$name] = substr($argument, strlen($name) + 3);
-
-                return $values;
-            }
-        }
-
-        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--reuse] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>], or bin/check --static-gates');
     }
 
     /**

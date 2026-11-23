@@ -61,18 +61,18 @@ final readonly class LiveProgress
         }
     }
 
+    // The ledger's reviewer id when there is one, because the dashboard places a reviewer by it and a retry runs under a new conversation id.
+    private function nameOf(ReviewerConversation $reviewer): string
+    {
+        return ($reviewer->reviewerId ?? $reviewer->id)->toRfc4122();
+    }
+
     // The prefix is dropped, because over MCP the tools carry the server's prefix (review_read_file) and the live log names neither.
     private function inWords(ToolCall $call): string
     {
         $name = $call->getName();
         $tool = ReviewTool::tryFrom(str_starts_with($name, ReviewerMcpToolboxFactory::TOOL_PREFIX) ? substr($name, strlen(ReviewerMcpToolboxFactory::TOOL_PREFIX)) : $name);
 
-        return $tool?->callInWords($call->getArguments()) ?? 'used a tool';
-    }
-
-    // The ledger's reviewer id when there is one, because the dashboard places a reviewer by it and a retry runs under a new conversation id.
-    private function nameOf(ReviewerConversation $reviewer): string
-    {
-        return ($reviewer->reviewerId ?? $reviewer->id)->toRfc4122();
+        return $tool?->callInWords($call) ?? 'used a tool';
     }
 }
