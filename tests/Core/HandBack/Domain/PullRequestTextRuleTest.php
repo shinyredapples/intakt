@@ -110,6 +110,12 @@ final class PullRequestTextRuleTest extends TestCase
         self::assertSame([1], PullRequestTextRule::judge("## Evidence\n-\tE1. output", 'Done')->missingItems);
     }
 
+    public function testABodyMissingAnItemWhoseMarkerLineHoldsOnlyACommentIsRefused(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\nIntroductory paragraph.\n- <!-- note -->\n  Show the result.", 'Done')->missingItems);
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\nIntroductory paragraph.\n1. <!-- note -->\n   Show the result.", 'Done')->missingItems);
+    }
+
     public function testABodyMissingTheItemAfterAnUnclosedFenceInAnItemIsRefused(): void
     {
         self::assertSame([2], PullRequestTextRule::judge("## Evidence\n- E1. output\n\n  ```\n  example\n- E2. second result", 'E1: done')->missingItems);
