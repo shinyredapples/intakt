@@ -28,7 +28,7 @@ Then open `http://localhost:8000/design/mocks/review-scoreboard/index.html`. Its
 
 ## Technical writer sketches
 
-`technical-writer-sketches/index.html` offers the owner three animals for the Technical writer's character (#3563): an otter, a heron and a red panda, each with a notebook and a pen, on the light and the dark background. `technical-writer-sketches/sketches.png` is the same three rendered as one picture, for viewing without a browser. None of them is in the team strip yet: the owner's choice decides which one joins it after the Maintainer. The page is standalone, with its own styles and no fonts to load; serve it from `docs/` as above so its picture of the current cast loads, then open `http://localhost:8000/design/mocks/technical-writer-sketches/index.html`.
+`technical-writer-sketches.html` offers the owner three candidate animals for the Technical writer's character (#3563): an otter, a heron and a red panda, drawn as inline SVG. Each stands beside the Maintainer (`assets/maintainer-light.webp` and `assets/maintainer-dark.webp`, copied from `assets/images/characters/` so that a server rooted in this folder can serve them), in the light and the dark variant at once, whatever the page theme. None of them is in the team strip yet: the owner's choice decides which one joins it after the Maintainer (#3588). Serve this folder as above and open `http://localhost:8000/technical-writer-sketches.html`; the rail does not link to it.
 
 ## Fonts
 
