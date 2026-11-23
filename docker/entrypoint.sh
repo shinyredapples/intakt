@@ -252,7 +252,7 @@ address_shown=
 show_dashboard_address_once() {
     [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} && -z $address_shown ]] || return 0
     as_job curl --fail --silent --max-time 2 --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics" || return 0
-    as_job curl --fail --silent --max-time 2 --output /dev/null "http://localhost:${DASHBOARD_PORT}/" || return 0
+    as_job curl --fail --silent --max-time 2 --output /dev/null -H "Host: localhost:${DASHBOARD_PORT}" "http://localhost:${SERVER_PORT:-7781}/" || return 0
     address_shown=1
     echo "intakt: the dashboard is ready at http://localhost:${DASHBOARD_PORT}"
 }

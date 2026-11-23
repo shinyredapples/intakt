@@ -1,8 +1,8 @@
-{#- The answer of the latest pass in plain words, with the owl that judged it (its 48 px images shown at 96 px by the stylesheet, from their double), because an older pass's verdict was given on an older head; the count is of the last judged pass's findings to fix, which the To fix cards below show one card each. The judged round's live update replaces it by its id. -#}
+{#- The scoreboard of the latest pass: the owl that judged it (its 48 px images shown at 96 px by the stylesheet), the verdict, the number to fix with one bar segment per finding, and a meerkat per reviewer, because an older pass's verdict was given on an older head; the count is of the last judged pass's findings to fix, which the To fix cards below show one card each. The judged round's live update replaces it by its id. -#}
 {%- set outcomes = enum('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome') -%}
 {%- set outcome = latest.reviewOutcome -%}
 {%- set needs = outcome is same as(outcomes.ChangesRequested) -%}
-{%- set urgent = open|filter(f => f.urgency is same as(enum('Intakt\\Core\\Dashboard\\Domain\\FindingUrgency').Urgent))|length -%}
+{%- set urgencies = enum_cases('Intakt\\Core\\Dashboard\\Domain\\FindingUrgency') -%}
 <section class="verdict-card{% if needs %} needs{% elseif outcome is same as(outcomes.Approved) %} good{% endif %}" id="review-verdict" data-round="{{ latest.round }}" aria-labelledby="verdict-title">
     {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}
     <div class="verdict-text">
@@ -22,9 +22,48 @@
             Checked, but the outcome was not recorded
             {%- endif -%}
         </h2>
-        {#- Both numbers on every judged pass, zeros included, so an Approved pass reads 0 to fix; a pass that ended without a verdict has no count to give. #}
+        {#- The count on every judged pass, zeros included, so an Approved pass reads 0 to fix; a pass that ended without a verdict has no count to give. The bar has one segment per finding, grouped in the legend's order, and the legend's shapes and counts in words carry the meaning, because color alone must not; a finding without a recorded urgency gets its own segment and line, so the words add up to the count. #}
         {% if latest.isJudged %}
-        <p class="verdict-count"><span class="figure">{{ open|length }} to fix</span> · {{ urgent }} urgent</p>
+        {%- set unranked = open|filter(f => f.urgency is null)|length -%}
+        <p class="verdict-count"><span class="figure">{{ open|length }}</span> to fix</p>
+        <div class="urgency-bar" style="--n:{{ open|length }}" aria-hidden="true">
+            {%- for urgency in urgencies -%}
+            {%- for finding in open|filter(f => f.urgency is same as(urgency)) -%}
+            <span class="seg {{ urgency.value }}"></span>
+            {%- endfor -%}
+            {%- endfor -%}
+            {%- if unranked > 0 -%}
+            {%- for i in 1..unranked -%}
+            <span class="seg unranked"></span>
+            {%- endfor -%}
+            {%- endif -%}
+        </div>
+        <ul class="urgency-counts">
+            {%- for urgency in urgencies -%}
+            <li class="{{ urgency.value }}">{{ include('dashboard/_urgency_shape.html.twig', {urgency: urgency.value}, with_context = false) }}<b>{{ open|filter(f => f.urgency is same as(urgency))|length }}</b> {{ urgency.words|lower }}</li>
+            {%- endfor -%}
+            {%- if unranked > 0 -%}
+            <li class="unranked">{{ include('dashboard/_urgency_shape.html.twig', {urgency: 'unranked'}, with_context = false) }}<b>{{ unranked }}</b> urgency not recorded</li>
+            {%- endif -%}
+        </ul>
         {% endif %}
     </div>
+    {#- One meerkat per reviewer, always the code reviewer, because the role is the same and the lab is what tells the two apart. #}
+    {% if latest.isJudged and latest.outcomes is not empty %}
+    <div class="verdict-reviewers">
+        <ul class="reviewer-faces">
+            {%- for reviewer in latest.outcomes -%}
+            {%- set given = reviewer.outcome -%}
+            <li class="face {{ given is same as(outcomes.Approved) ? 'ok' : (given is same as(outcomes.ChangesRequested) ? 'no' : 'none') }}">
+                {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 48}, with_context = false) }}
+                <span class="face-lab">{{ reviewer.faceLabel }}</span>
+                <span class="face-mark"><span class="glyph" aria-hidden="true">{{ given is same as(outcomes.Approved) ? '✓' : (given is same as(outcomes.ChangesRequested) ? '✗' : '–') }}</span> {{ reviewer.verdictInWords }}</span>
+            </li>
+            {%- endfor -%}
+        </ul>
+        {%- if latest.agreement is not empty %}
+        <p class="agreement">{{ latest.agreement }}</p>
+        {%- endif %}
+    </div>
+    {% endif %}
 </section>

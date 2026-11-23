@@ -160,6 +160,11 @@ final class StoredIssue
         return $this->instant($this->updatedAt);
     }
 
+    public function isPullRequest(): bool
+    {
+        return $this->pullRequest;
+    }
+
     // In any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.
     /**
      * @param list<string> $labels

@@ -12,6 +12,7 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -35,6 +36,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(TaskNotParked::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(BuildQuestion::class)]
+#[UsesClass(BuildRun::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
 final class ParkedTasksOnSqliteTest extends KernelTestCase
@@ -47,14 +49,14 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     public function testAParkedTaskIsStoredWithItsQuestionChoicesAndRecommendationAndAnAskedStep(): void
     {
-        $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
 
         self::assertSame(
             [['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00']],
             $this->parkedRows(),
         );
         self::assertSame(
-            [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","step":"build_job","outcome":"asked","failure":null}']],
+            [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null}']],
             $this->ledgerRows(),
         );
     }
@@ -62,9 +64,9 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     public function testATaskParkedAgainKeepsOneRowWithTheNewerQuestion(): void
     {
         $parked = $this->parkedTasks();
-        $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
 
-        $parked->park('sample', 42, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'));
 
         self::assertSame(
             [['question' => 'Which name?', 'recommendation' => 'a']],
@@ -74,7 +76,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     public function testAQuestionWithANulCharacterInsideItsTextsIsStoredWhole(): void
     {
-        $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack('{"question":"Keep a\u0000b?","choices":["a\u0000b","c"],"recommendation":"a\u0000b"}'));
+        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Keep a\u0000b?","choices":["a\u0000b","c"],"recommendation":"a\u0000b"}'));
 
         self::assertSame(
             [['question' => "Keep a\0b?", 'choices' => ["a\0b", 'c'], 'recommendation' => "a\0b"]],
@@ -102,7 +104,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         }
 
         $parked = $this->parkedTasks();
-        $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
         $this->connection()->executeStatement("CREATE TRIGGER refuse_event BEFORE INSERT ON ledger_event BEGIN SELECT RAISE(ROLLBACK, 'refused'); END");
 
         $failure = $this->failureOfParking($parked);
@@ -266,7 +268,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     private function failureOfParking(ParkedTasks $parked): string
     {
         try {
-            $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+            $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
         } catch (TaskNotParked $notParked) {
             self::assertNull($notParked->getPrevious());
 

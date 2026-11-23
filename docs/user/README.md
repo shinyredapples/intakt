@@ -46,6 +46,8 @@ When Intakt builds a task, these inputs decide its tier, the first that applies 
 
 `intakt:build:tier <project> --change=<change>` shows the choice and its reason; no build lane passes the change yet ([details](../reference/user-manual.md#which-tier-a-build-starts-on)).
 
+Before a build's pull request goes out, you can check its text yourself: `intakt:check:pull-request-text` takes the task and the pull request text, and says which Evidence items the text does not name and whether the body is too long ([the command and an example](../reference/user-manual.md#the-check-before-a-push)).
+
 One thing to know about booting: Intakt can start a change in a scratch copy to see that it boots. A change that takes too long to install or to start counts as a failed boot, not as a fault of Intakt, so when main boots fine, the change can be sent back. Details are in the [complete reference](../reference/user-manual.md).
 
 The helper-order check of `bin/check` does not recognize a call from a property hook, a `[$this, 'helper']` callable array or a `$this::helper()` call, so a private helper reached only that way is never reported ([the method-order rules](../reference/user-manual.md#when-bincheck-reports-the-order-of-methods)).

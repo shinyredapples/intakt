@@ -12,6 +12,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'ledger_event')]
 #[ORM\UniqueConstraint(name: 'ledger_event_id', columns: ['id'])]
+#[ORM\Index(name: 'ledger_event_subject', columns: ['kind', 'subject', 'position'])]
 final class EventRecord
 {
     // The database counts appends, because ids from a clock that steps back or from two processes in one millisecond do not sort in append order.
@@ -29,6 +30,8 @@ final class EventRecord
         private readonly string $payload,
         #[ORM\Column(type: 'utc_datetime_immutable')]
         private readonly DateTimeImmutable $recordedAt,
+        #[ORM\Column(length: 255, nullable: true)]
+        private readonly ?string $subject = null,
     ) {
     }
 
@@ -51,5 +54,10 @@ final class EventRecord
     public function recordedAt(): DateTimeImmutable
     {
         return $this->recordedAt;
+    }
+
+    public function subject(): ?string
+    {
+        return $this->subject;
     }
 }
