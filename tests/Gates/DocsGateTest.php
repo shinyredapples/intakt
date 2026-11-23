@@ -131,6 +131,13 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/guide/page.md:4: paragraph of 82 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
+    public function testAQuotedLineDirectlyAfterATableEndsTheTable(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => "One | Two\n--- | ---\nx | y\n> ".$this->words(81)."\n"]);
+
+        self::assertStringContainsString('docs/guide/page.md:4: paragraph of 81 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
     public function testAnIndentedCodeBlockIsNotAParagraph(): void
     {
         $sandbox = $this->changeWith(['docs/guide/page.md' => "Code:\n\n    ".$this->words(90)."\n    ".$this->words(10)."\n"]);
@@ -382,6 +389,13 @@ final class DocsGateTest extends SandboxTestCase
         $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n> ## In short\n> A quotation.\n\n## Detail\n\n".$this->chapters(1600)]);
 
         self::assertStringContainsString('docs/architecture/big.md: a page over 1500 words opens with an "In short" section', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testAHeadingInsideAQuoteDoesNotEndTheInShortSection(): void
+    {
+        $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n## In short\n\nFirst.\n\n> ## Citation\n> Quote.\n\n".$this->words(60)."\n\n".$this->words(60)."\n\n## Detail\n\n".$this->chapters(1600)]);
+
+        self::assertStringContainsString('docs/architecture/big.md: the "In short" section has 123 words, the limit is 120', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
     public function testAShortArchitecturePageNeedsNoSummary(): void

@@ -113,10 +113,11 @@ final readonly class MarkdownPage
         $level = $this->levelOf($this->lines[$summary]);
         $text = [];
 
-        foreach (array_slice($this->lines, $summary + 1) as $line) {
+        foreach (array_slice($this->lines, $summary + 1, preserve_keys: true) as $index => $line) {
             $inner = $this->levelOf($line);
 
-            if (null !== $inner && $inner <= $level) {
+            // Because a quoted heading belongs to the quotation, it does not close the page's section.
+            if (null !== $inner && $inner <= $level && !isset($this->quoted[$index])) {
                 break;
             }
 
@@ -144,15 +145,19 @@ final readonly class MarkdownPage
     {
         $rows = [];
         $inside = false;
+        $quoted = false;
 
         foreach ($this->lines as $index => $line) {
-            // https://github.github.com/gfm/#tables-extension-: a blank line or another block, such as a heading or a list, ends the table.
-            if ('' === trim($line) || 1 === preg_match(self::HEADING, $line) || 1 === preg_match(self::LIST_ITEM, $line)) {
+            // https://github.github.com/gfm/#tables-extension-: a blank line or another block, such as a heading, a list or a quote, ends the table.
+            if ('' === trim($line) || 1 === preg_match(self::HEADING, $line) || 1 === preg_match(self::LIST_ITEM, $line) || ($inside && $quoted !== isset($this->quoted[$index]))) {
                 $inside = false;
                 continue;
             }
 
-            $inside = $inside || $this->startsTable($index);
+            if (!$inside && $this->startsTable($index)) {
+                $inside = true;
+                $quoted = isset($this->quoted[$index]);
+            }
 
             // Because a fragment of docs/highlights.d/ holds one row without its header, a line between outer pipes is a row too, but only that line.
             if ($inside || 1 === preg_match(self::FRAMED_ROW, $line)) {

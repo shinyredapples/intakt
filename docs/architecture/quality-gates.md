@@ -41,7 +41,17 @@ Each selected gate runs in a child process of its own (`GateChildren`, started t
 
 The gates start `git` only through `Workspace::git()` (and `HighlightFragments`, which `bin/highlights` also uses without a workspace, through `ProcessRunner::git()`, the same call), which runs the [hardened call](requirements.md#the-hardened-git-call) built by their own protected copy, `config/gates/src/HardenedGitCall.php`; the gitleaks gates start gitleaks with the hardened `git` environment. When the repository's `.git/info/attributes` exists, the call refuses it and `CheckCommand::runGate()` reports every gate that reads git as failed with that reason.
 
-Tests of the gates that start no tool besides `git` (`commits`, `dashes`, `highlights`, `reproductions`, `left-undone`) run the gate in the test process through `Sandbox::runGate()`, which runs it on a `Workspace` of the full run and reads its result as the line `bin/check` prints for it, since starting `bin/check` costs more than such a gate. Each of their test classes keeps one `bin/check --only=<gate>` case for the wiring; `GateChildrenTest` and `GateChildSelectionTest` cover the child process. The tests of the two gitleaks gates (`secrets`, `secrets-history`) run their gate in the test process the same way where a case reads only the gate's line (`Sandbox::runGate()` takes the base, as `--base` does), and keep `bin/check` for the exit code and printed output, the scanner it finds on the path or through `INTAKT_GITLEAKS`, a file the scan cannot copy (its PHP warning would fail the test) and the run of both history gates (`secrets-history`, `commits`) in a tree without git history; a case that reads both secrets gates runs each in the test process. The cases that only ask whether a secret at a path is caught share one tree and one scan per gate (`WorkingTreeSecretsGateTest`: one tree with a secret at every catalogued path; `HistorySecretsGateTest`: one change for the files gitleaks' defaults skip, and one for the folders it skips, since a commit in a skipped folder stops the gate before it scans): a test returns the scan's findings, read whole through `Sandbox::gateResult()` because the printed line shows only the first ten, and each case depends on it and asserts its own finding (its path, or for a skipped folder the commit that added its file).
+Tests of the gates that start no tool besides `git` (`commits`, `dashes`, `docs`, `highlights`, `reproductions`, `left-undone`) run the gate in the test process through `Sandbox::runGate()`, which runs it on a `Workspace` of the full run and reads its result as the line `bin/check` prints for it, since starting `bin/check` costs more than such a gate.
+
+Each of their test classes keeps one `bin/check --only=<gate>` case for the wiring, except `DocsGateTest`: `StaticGatesListTest` covers the wiring of `docs`. `GateChildrenTest` and `GateChildSelectionTest` cover the child process.
+
+The tests of the two gitleaks gates (`secrets`, `secrets-history`) run their gate in the test process the same way where a case reads only the gate's line (`Sandbox::runGate()` takes the base, as `--base` does). A case that reads both secrets gates runs each in the test process.
+
+They keep `bin/check` for the exit code and printed output, the scanner it finds on the path or through `INTAKT_GITLEAKS`, a file the scan cannot copy (its PHP warning would fail the test) and the run of both history gates (`secrets-history`, `commits`) in a tree without git history.
+
+The cases that only ask whether a secret at a path is caught share one tree and one scan per gate. `WorkingTreeSecretsGateTest` has one tree with a secret at every catalogued path. `HistorySecretsGateTest` has one change for the files gitleaks' defaults skip, and one for the folders it skips, since a commit in a skipped folder stops the gate before it scans.
+
+A test returns the scan's findings, read whole through `Sandbox::gateResult()` because the printed line shows only the first ten. Each case depends on it and asserts its own finding (its path, or for a skipped folder the commit that added its file).
 
 Options: `--fast` (changed PHP files only; every PHP file when the change touches the gate definitions or what builds the container: `config/`, `src/Kernel.php` or a `services.yaml` under `tests/`, since a service removed in configuration alone leaves its callers unchanged), `--journeys` (see [Journeys](journeys.md)), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
 
@@ -53,11 +63,15 @@ The `tests` gate also guards the [parity record](parity.md): `tests/Application/
 
 `DocsGate` keeps the documentation readable. A paragraph has at most 80 words. A list item counts as a paragraph; headings, fenced or indented code and tables do not.
 
-A table is a header line and a delimiter row, with the lines after it up to the next blank line, heading or list item. Every line between outer pipes counts as its own table row, even without a delimiter row next to it (a `docs/highlights.d/` fragment holds just one row), so prose framed in pipes is not measured. The `>` of a quote is no word.
+A table is a header line and a delimiter row, with the lines after it up to the next blank line, heading, list item or line that enters or leaves a quote.
+
+Every line between outer pipes counts as its own table row, even without a delimiter row next to it (a `docs/highlights.d/` fragment holds just one row), so prose framed in pipes is not measured. The `>` of a quote is no word.
 
 The reader is not a full CommonMark parser. It does not handle fenced code inside a blockquote, which it counts as prose, or setext titles (a line underlined with `=` or `-`), which it counts as part of a paragraph.
 
 A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs/architecture/` over 1,500 words opens with an "In short" section: only blank lines stand between the title and its heading, it is not empty, and it has at most 120 words, its subsections included. Only the first "In short" of a page counts, and one inside a quote (`> ## In short`) does not.
+
+The section ends at the next heading of its level or higher outside a quote; a heading inside a quote counts as words of the section.
 
 A paragraph finding names the file, the line and the limit. A page or summary finding names the file and the limit. Each says how to fix it.
 
