@@ -230,6 +230,11 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('ratchet/docs.json is not valid', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
+    private function words(int $count): string
+    {
+        return trim(str_repeat('word ', $count));
+    }
+
     /**
      * @param array<string, string> $files
      */
@@ -266,7 +271,7 @@ final class DocsGateTest extends SandboxTestCase
     }
 
     /**
-     * @param array<string, list<string>> $paragraphs paragraph text by page
+     * @param array<string, list<string>> $paragraphs
      * @param array<string, int>          $pages
      * @param list<string>                $summaries
      */
@@ -279,11 +284,6 @@ final class DocsGateTest extends SandboxTestCase
         }
 
         return json_encode(['paragraphs' => $keys, 'pages' => $pages, 'summaries' => $summaries], JSON_THROW_ON_ERROR);
-    }
-
-    private function words(int $count): string
-    {
-        return trim(str_repeat('word ', $count));
     }
 
     // Because the page limit counts the title word too, a page of this many words plus "Long" stays under the paragraph limit in every chapter.

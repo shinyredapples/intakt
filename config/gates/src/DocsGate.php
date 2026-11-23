@@ -39,6 +39,17 @@ final readonly class DocsGate implements Gate
         return $workspace->hasGit() ? GateResult::passed($this->name()) : GateResult::passedBecause($this->name(), 'ratchet shrink check skipped, no git history in this tree');
     }
 
+    private function listAt(string $file): ?DocsRatchetList
+    {
+        if (!is_file($file)) {
+            return DocsRatchetList::empty();
+        }
+
+        $json = file_get_contents($file);
+
+        return false === $json ? null : DocsRatchetList::fromJson($json);
+    }
+
     /**
      * @return list<string>
      */
@@ -163,16 +174,5 @@ final readonly class DocsGate implements Gate
         }
 
         return $list->growthOver($base);
-    }
-
-    private function listAt(string $file): ?DocsRatchetList
-    {
-        if (!is_file($file)) {
-            return DocsRatchetList::empty();
-        }
-
-        $json = file_get_contents($file);
-
-        return false === $json ? null : DocsRatchetList::fromJson($json);
     }
 }

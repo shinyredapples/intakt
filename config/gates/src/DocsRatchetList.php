@@ -9,9 +9,9 @@ final readonly class DocsRatchetList
     public const string PATH = 'ratchet/docs.json';
 
     /**
-     * @param array<string, list<string>> $paragraphs paragraph keys by page
-     * @param array<string, int>          $pages      word ceiling by page
-     * @param list<string>                $summaries  pages excused from the "In short" rule
+     * @param array<string, list<string>> $paragraphs
+     * @param array<string, int>          $pages
+     * @param list<string>                $summaries
      */
     public function __construct(
         public array $paragraphs,
@@ -29,12 +29,15 @@ final readonly class DocsRatchetList
     {
         $data = json_decode($json, true);
 
-        if (!is_array($data) || !self::isWellFormed($data)) {
+        if (!is_array($data)) {
             return null;
         }
 
-        /** @var array{paragraphs: array<string, list<string>>, pages: array<string, int>, summaries: list<string>} $data */
-        return new self($data['paragraphs'], $data['pages'], $data['summaries']);
+        $paragraphs = self::paragraphsOf($data['paragraphs'] ?? null);
+        $pages = self::ceilingsOf($data['pages'] ?? null);
+        $summaries = self::stringsOf($data['summaries'] ?? null);
+
+        return in_array(null, [$paragraphs, $pages, $summaries], true) ? null : new self($paragraphs, $pages, $summaries);
     }
 
     public function excusesParagraph(string $page, string $key): bool
@@ -57,6 +60,14 @@ final readonly class DocsRatchetList
      */
     public function growthOver(self $base): array
     {
+        return [...$this->addedParagraphs($base), ...$this->raisedCeilings($base), ...$this->addedExcuses($base)];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function addedParagraphs(self $base): array
+    {
         $findings = [];
 
         foreach ($this->paragraphs as $page => $keys) {
@@ -67,6 +78,16 @@ final readonly class DocsRatchetList
             }
         }
 
+        return $findings;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function raisedCeilings(self $base): array
+    {
+        $findings = [];
+
         foreach ($this->pages as $page => $ceiling) {
             $before = $base->pages[$page] ?? null;
 
@@ -75,22 +96,85 @@ final readonly class DocsRatchetList
             }
         }
 
-        foreach (array_diff($this->summaries, $base->summaries) as $page) {
-            $findings[] = self::PATH.': '.$page.' added to the pages excused from "In short"; the list only shrinks, so write the summary instead';
-        }
-
         return $findings;
     }
 
     /**
-     * @param array<mixed> $data
+     * @return list<string>
      */
-    private static function isWellFormed(array $data): bool
+    private function addedExcuses(self $base): array
     {
-        return isset($data['paragraphs'], $data['pages'], $data['summaries'])
-            && is_array($data['paragraphs']) && is_array($data['pages']) && is_array($data['summaries'])
-            && array_all($data['paragraphs'], static fn (mixed $keys): bool => is_array($keys) && array_is_list($keys) && array_all($keys, static fn (mixed $key): bool => is_string($key)))
-            && array_all($data['pages'], static fn (mixed $ceiling): bool => is_int($ceiling))
-            && array_is_list($data['summaries']) && array_all($data['summaries'], static fn (mixed $page): bool => is_string($page));
+        return array_values(array_map(
+            static fn (string $page): string => self::PATH.': '.$page.' added to the pages excused from "In short"; the list only shrinks, so write the summary instead',
+            array_diff($this->summaries, $base->summaries),
+        ));
+    }
+
+    /**
+     * @return array<string, list<string>>|null
+     */
+    private static function paragraphsOf(mixed $value): ?array
+    {
+        if (!is_array($value)) {
+            return null;
+        }
+
+        $paragraphs = [];
+
+        foreach ($value as $page => $keys) {
+            $strings = self::stringsOf($keys);
+
+            if (null === $strings) {
+                return null;
+            }
+
+            $paragraphs[(string) $page] = $strings;
+        }
+
+        return $paragraphs;
+    }
+
+    /**
+     * @return array<string, int>|null
+     */
+    private static function ceilingsOf(mixed $value): ?array
+    {
+        if (!is_array($value)) {
+            return null;
+        }
+
+        $ceilings = [];
+
+        foreach ($value as $page => $ceiling) {
+            if (!is_int($ceiling)) {
+                return null;
+            }
+
+            $ceilings[(string) $page] = $ceiling;
+        }
+
+        return $ceilings;
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private static function stringsOf(mixed $value): ?array
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            return null;
+        }
+
+        $strings = [];
+
+        foreach ($value as $string) {
+            if (!is_string($string)) {
+                return null;
+            }
+
+            $strings[] = $string;
+        }
+
+        return $strings;
     }
 }

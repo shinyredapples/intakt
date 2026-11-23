@@ -21,11 +21,19 @@ final readonly class MarkdownPage
         $this->lines = new FencedCodeBlocks()->blanked(explode("\n", str_replace("\r\n", "\n", $text)));
     }
 
-    public static function wordsIn(string $text): int
+    /**
+     * @return list<string>
+     */
+    public static function wordsOf(string $text): array
     {
         $words = preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY);
 
-        return false === $words ? 0 : count($words);
+        return false === $words ? [] : $words;
+    }
+
+    public static function wordsIn(string $text): int
+    {
+        return count(self::wordsOf($text));
     }
 
     /**
