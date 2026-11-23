@@ -120,6 +120,8 @@ flowchart TD
 
 If either Security engineer session cannot run, the decision waits, whichever row applies and whether or not automatic approval is on, until it runs. The known bad changes Intakt tries on a schedule resume after an outage too, and each must still reach you, or automatic approval turns off (before it is switched on, it stays off).
 
+A risky change to the CI setup (one that could reach more than GitHub's throwaway machines, or a secret) is never sent to GitHub first. It waits on Intakt's machine, the Code reviewers check it (planned), then you approve that exact version before GitHub runs it. Approving it does not approve the merge: you are asked again.
+
 You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the Code reviewers have approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
 ## Updates from a dependency bot
