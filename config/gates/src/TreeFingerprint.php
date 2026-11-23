@@ -123,8 +123,14 @@ final readonly class TreeFingerprint
         $root = $this->real($this->root);
         $found = [new TreeWalk([self::GIT_FOLDER, ...self::WRITTEN_BY_THE_CHECK], $settledBefore)->entries($root, '', [$root])];
 
+        $walk = new TreeWalk([], $settledBefore);
+
         foreach ($this->gateInputsAmongWhatTheCheckWrites($root) as $path) {
-            $found[] = new TreeWalk([], $settledBefore)->entries($root.'/'.$path, $path, [$root]);
+            $found[] = $walk->entries($root.'/'.$path, $path, [$root]);
+
+            foreach ($this->foldersAbove($path) as $folder) {
+                $found[] = $walk->folderAlone($root.'/'.$folder, $folder);
+            }
         }
 
         return $this->sealed($found);
@@ -166,6 +172,21 @@ final readonly class TreeFingerprint
         }
 
         return $inputs;
+    }
+
+    /**
+     * @return list<string>
+     */
+    // Because the walk skips the folders the check writes, a tracked file under them would not show that its folder was moved away and back while the gates ran; a folder the walk already counts gives the same entry again.
+    private function foldersAbove(string $path): array
+    {
+        $folders = [];
+
+        for ($folder = dirname($path); '.' !== $folder; $folder = dirname($folder)) {
+            $folders[] = $folder;
+        }
+
+        return $folders;
     }
 
     /**

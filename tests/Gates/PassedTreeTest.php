@@ -305,6 +305,34 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
     }
 
+    // Because the walk skips the ignored var/, only the folders above a tracked file there tell that the gates may have read the tree while that folder was away.
+    public function testAFolderAboveATrackedFileUnderAnIgnoredVarMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('var/notes/example.md', "clean\n");
+        $root->git('add', '--force', 'var/notes/example.md');
+        $root->commitAll('docs: track a note under var');
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        rename($root->root.'/var/notes', $root->root.'/var/aside');
+        rename($root->root.'/var/aside', $root->root.'/var/notes');
+
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testATrackedFileUnderAnIgnoredVarLeftAloneWhileTheGatesRanRecordsAPass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('var/notes/example.md', "clean\n");
+        $root->git('add', '--force', 'var/notes/example.md');
+        $root->commitAll('docs: track a note under var');
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        self::assertTrue($tree->recordPass());
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testAFileThatCameAndWentWhileTheGatesRanRecordsNoPass(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();

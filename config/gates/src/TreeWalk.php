@@ -47,6 +47,17 @@ final readonly class TreeWalk
     }
 
     /**
+     * @return iterable<string, string>
+     *
+     * @throws UnexpectedValueException
+     */
+    // Because a folder the walk skips still tells by its own times and inode that it was moved away and back, it counts without what it holds.
+    public function folderAlone(string $path, string $key): iterable
+    {
+        yield $key => $this->settledStatusOf($path);
+    }
+
+    /**
      * @throws UnexpectedValueException
      */
     // Because a change within the second a run started leaves no trace in the times, anything changed at or after that second gives no fingerprint.
