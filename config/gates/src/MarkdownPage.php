@@ -13,9 +13,6 @@ final readonly class MarkdownPage
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
-    private const array OUTER_PIPES = ['/^\s*\|/', '/(?<!\\\\)\|\s*$/'];
-
-    private const string DELIMITER_CELL = '/^:?-+:?$/';
 
     private const string FRAMED_LINE = '/^[ \t]*\|.*(?<!\\\\)\|[ \t]*$/';
 
@@ -206,26 +203,7 @@ final readonly class MarkdownPage
             && !$this->startsABlock($this->contents[$header])
             && 0 === preg_match(MarkdownLineKinds::INDENTED_CODE, $this->contents[$header])
             && 1 === preg_match(self::CELL_BORDER, $this->contents[$delimiter])
-            && $this->delimits($this->contents[$header], $this->contents[$delimiter]);
-    }
-
-    private function delimits(string $header, string $delimiter): bool
-    {
-        $cells = $this->cells($delimiter);
-
-        // A row with a missing column or a cell without a hyphen is no delimiter in GFM, so the prose below it must stay measured.
-        return count($cells) === count($this->cells($header))
-            && [] === array_filter($cells, static fn (string $cell): bool => 0 === preg_match(self::DELIMITER_CELL, $cell));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function cells(string $row): array
-    {
-        $inner = preg_replace(self::OUTER_PIPES, '', $row) ?? $row;
-
-        return array_map(trim(...), preg_split(self::CELL_BORDER, $inner) ?: []);
+            && new MarkdownDelimiterRow()->delimits($this->contents[$header], $this->contents[$delimiter]);
     }
 
     /**

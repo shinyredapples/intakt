@@ -41,7 +41,8 @@ final readonly class MarkdownLineKinds
                 1 === preg_match(self::LIST_ITEM, $content) => MarkdownLineKind::ListItem,
                 default => MarkdownLineKind::Prose,
             };
-            $lists = $this->openLists($kind, $previous, $content, $lists);
+            // A line that continues a paragraph is lazy in CommonMark, so its indentation closes no list item.
+            $lists = MarkdownLineKind::Prose === $kind && MarkdownLineKind::Blank !== $previous ? $lists : $this->openLists($kind, $content, $lists);
             $kinds[] = $kind;
         }
 
@@ -79,12 +80,12 @@ final readonly class MarkdownLineKinds
      *
      * @return list<int>
      */
-    private function openLists(MarkdownLineKind $kind, MarkdownLineKind $previous, string $content, array $lists): array
+    private function openLists(MarkdownLineKind $kind, string $content, array $lists): array
     {
         return match ($kind) {
             MarkdownLineKind::ListItem => [...$this->indents->within($lists, $this->indents->indent($content)), $this->indents->contentIndent($content)],
             MarkdownLineKind::Heading, MarkdownLineKind::Break, MarkdownLineKind::Table => [],
-            MarkdownLineKind::Prose => MarkdownLineKind::Blank === $previous ? $this->indents->within($lists, $this->indents->indent($content)) : $lists,
+            MarkdownLineKind::Prose => $this->indents->within($lists, $this->indents->indent($content)),
             default => $lists,
         };
     }

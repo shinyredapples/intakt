@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\MarkdownCodeBlocks;
+use Intakt\Gates\MarkdownDelimiterRow;
 use Intakt\Gates\MarkdownLineKind;
 use Intakt\Gates\MarkdownLineKinds;
 use Intakt\Gates\MarkdownListIndents;
@@ -22,6 +23,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(MarkdownReadFailure::class)]
 #[CoversClass(MarkdownCodeBlocks::class)]
 #[UsesClass(MarkdownListIndents::class)]
+#[UsesClass(MarkdownDelimiterRow::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(MarkdownPage::class)]
 #[UsesClass(MarkdownParagraph::class)]
