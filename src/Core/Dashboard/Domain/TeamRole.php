@@ -31,7 +31,7 @@ final readonly class TeamRole
         }
 
         return array_map(
-            static fn (string|int $name, array $names): self => new self((string) $name, $names),
+            static fn (string $name, array $names): self => new self($name, $names),
             array_keys($byRole),
             $byRole,
         );
