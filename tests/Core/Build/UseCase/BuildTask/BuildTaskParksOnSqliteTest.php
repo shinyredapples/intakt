@@ -23,6 +23,7 @@ use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
@@ -68,6 +69,8 @@ use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 // On the install's own database, because the parked row and the asked step share its transaction while the earlier steps go through the same ledger.
 #[Group('persistence')]
@@ -76,6 +79,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuildTaskCommand::class)]
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTaskRequest::class)]
+#[UsesClass(BuildRun::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
@@ -128,14 +132,16 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
             [['project' => 'alpha', 'task' => 7, 'question' => '"PLANT-question: keep the old flag?"', 'recommendation' => '"drop it"']],
             array_map(static fn (array $row): array => [...$row, 'task' => is_numeric($row['task']) ? (int) $row['task'] : $row['task']], $this->connection()->fetchAllAssociative('SELECT project, task, question, recommendation FROM build_parked_task')),
         );
+        $payloads = array_map(static fn (mixed $payload): string => is_string($payload) ? $payload : '', $this->connection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'));
+        $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
-                '{"project":"alpha","task":"7","step":"task","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","step":"mirror","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","step":"clone","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","step":"build_job","outcome":"asked","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null}',
             ],
-            $this->connection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'),
+            $payloads,
         );
         self::assertSame([], glob($this->folder.'/hand-backs/*'));
     }
@@ -188,7 +194,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)));
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
     }
 
     private function ledger(): Ledger
