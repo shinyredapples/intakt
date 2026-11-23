@@ -46,4 +46,9 @@ final readonly class AppendRefusingLedger implements Ledger
     {
         return $this->reads->readMentioning($texts);
     }
+
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        return $this->reads->readOfKindsMentioning($texts, ...$kinds);
+    }
 }

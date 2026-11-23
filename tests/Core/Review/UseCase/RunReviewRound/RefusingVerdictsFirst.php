@@ -62,4 +62,10 @@ final class RefusingVerdictsFirst implements Ledger
     {
         return $this->inner->readMentioning($texts);
     }
+
+    #[Override]
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        return $this->inner->readOfKindsMentioning($texts, ...$kinds);
+    }
 }

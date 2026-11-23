@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Memory\Contract\MemoryEntry;
@@ -26,6 +28,7 @@ use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMemory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -59,6 +62,7 @@ use Symfony\Component\Uid\UuidV7;
 
 // Runs a whole review through the agent, so what reaches the model is what the platform is really sent, not what the prompt builder returns.
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[UsesClass(ReviewerRuns::class)]
 #[UsesClass(PromptCut::class)]
 #[UsesClass(ReviewerPrompt::class)]
@@ -162,7 +166,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
         $prompt = new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser(), new ReviewerMemory($memory, new Fence(), new DiffPaths()));
         $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 
-        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
+        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, new ResolvedModel(Provider::Anthropic, 'reviewer-model'));
     }
 
     private function systemSent(): string

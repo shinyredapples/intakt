@@ -17,9 +17,9 @@ use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
@@ -59,7 +59,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(HeldCredentials::class)]
 #[UsesClass(Redaction::class)]
 #[UsesClass(LedgerFailingHeads::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
 #[UsesClass(DoctrineInstallWideFailures::class)]
