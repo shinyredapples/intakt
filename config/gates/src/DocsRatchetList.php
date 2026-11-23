@@ -40,9 +40,51 @@ final readonly class DocsRatchetList
         return in_array(null, [$paragraphs, $pages, $summaries], true) ? null : new self($paragraphs, $pages, $summaries);
     }
 
-    public function excusesParagraph(string $page, string $key): bool
+    // Because a key listed once excuses one paragraph: a copy of a listed wall is a new wall.
+    public function allowanceOf(string $page, string $key): int
     {
-        return in_array($key, $this->paragraphs[$page] ?? [], true);
+        return count(array_keys($this->paragraphs[$page] ?? [], $key, true));
+    }
+
+    /**
+     * @param array<string, MarkdownPage>      $documents
+     * @param array<string, array<string,int>> $oversized the keys of each page's oversized paragraphs, with their counts
+     *
+     * @return list<string>
+     */
+    public function staleEntries(array $documents, array $oversized, int $pageWords, int $summaryThreshold): array
+    {
+        $findings = [];
+
+        foreach ($this->paragraphs as $page => $keys) {
+            foreach (array_count_values($keys) as $key => $listed) {
+                $unused = $listed - ($oversized[$page][(string) $key] ?? 0);
+
+                if ($unused > 0) {
+                    $findings[] = self::PATH.': '.$unused.' paragraph key'.(1 === $unused ? '' : 's').' of '.$page.' no longer match an oversized paragraph; remove '.(1 === $unused ? 'it' : 'them').' from the list';
+                }
+            }
+        }
+
+        foreach ($this->pages as $page => $ceiling) {
+            $words = isset($documents[$page]) ? $documents[$page]->words() : 0;
+
+            if ($words <= $pageWords) {
+                $findings[] = self::PATH.': '.$page.' is within the page limit now; remove its ceiling from the list';
+            } elseif ($words < $ceiling) {
+                $findings[] = self::PATH.': '.$page.' has '.$words.' words now; lower its ceiling from '.$ceiling.' to '.$words;
+            }
+        }
+
+        foreach ($this->summaries as $page) {
+            $document = $documents[$page] ?? null;
+
+            if (!$document instanceof MarkdownPage || $document->words() <= $summaryThreshold || $document->hasSummaryFirst()) {
+                $findings[] = self::PATH.': '.$page.' no longer needs its "In short" excuse; remove it from the list';
+            }
+        }
+
+        return $findings;
     }
 
     public function ceilingOf(string $page): ?int
@@ -71,7 +113,11 @@ final readonly class DocsRatchetList
         $findings = [];
 
         foreach ($this->paragraphs as $page => $keys) {
-            $added = count(array_diff($keys, $base->paragraphs[$page] ?? []));
+            $added = 0;
+
+            foreach (array_count_values($keys) as $key => $listed) {
+                $added += max(0, $listed - $base->allowanceOf($page, (string) $key));
+            }
 
             if ($added > 0) {
                 $findings[] = self::PATH.': '.$added.' paragraph'.(1 === $added ? '' : 's').' of '.$page.' added to the list; the list only shrinks, so shorten the paragraph instead';

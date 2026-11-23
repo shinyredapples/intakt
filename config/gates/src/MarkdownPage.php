@@ -6,10 +6,12 @@ namespace Intakt\Gates;
 
 final readonly class MarkdownPage
 {
-    private const string HEADING = '/^ {0,3}#{1,6}(\s|$)/';
+    private const string HEADING = '/^ {0,3}(#{1,6})(\s|$)/';
     private const string SUMMARY_HEADING = '/^ {0,3}#{1,6}\s+In short\s*#*\s*$/i';
     private const string LIST_ITEM = '/^\s*([-*+]|\d+[.)])\s/';
-    private const string TABLE_ROW = '/^\s*\|/';
+    private const string QUOTE_MARKERS = '/^ {0,3}(?:> ?)+/';
+    private const string FRAMED_ROW = '/^ {0,3}\|.*\|\s*$/';
+    private const string TABLE_DELIMITER = '/^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/';
 
     /**
      * @var list<string>
@@ -18,7 +20,8 @@ final readonly class MarkdownPage
 
     public function __construct(string $text)
     {
-        $this->lines = new FencedCodeBlocks()->blanked(explode("\n", str_replace("\r\n", "\n", $text)));
+        $lines = new FencedCodeBlocks()->blanked(explode("\n", str_replace("\r\n", "\n", $text)));
+        $this->lines = $this->withoutIndentedCode(array_map(static fn (string $line): string => preg_replace(self::QUOTE_MARKERS, '', $line) ?? $line, $lines));
     }
 
     /**
@@ -44,15 +47,18 @@ final readonly class MarkdownPage
         $paragraphs = [];
         $start = null;
         $block = [];
+        $tableRows = $this->tableRows();
 
         foreach ([...$this->lines, ''] as $index => $line) {
-            if (null !== $start && $this->endsBlockBefore($line)) {
+            $prose = $this->isProse($line) && !isset($tableRows[$index]);
+
+            if (null !== $start && (!$prose || 1 === preg_match(self::LIST_ITEM, $line))) {
                 $paragraphs[] = new MarkdownParagraph($start + 1, implode(' ', $block));
                 $start = null;
                 $block = [];
             }
 
-            if ($this->isProse($line)) {
+            if ($prose) {
                 $start ??= $index;
                 $block[] = trim($line);
             }
@@ -66,45 +72,142 @@ final readonly class MarkdownPage
         return self::wordsIn(preg_replace('/^ {0,3}#{1,6}(?=\s)/m', '', implode("\n", $this->lines)) ?? '');
     }
 
+    // Because a summary only helps when the reader meets it first: nothing but blank lines may stand between the title and it.
     public function hasSummaryFirst(): bool
     {
-        return 1 === preg_match(self::SUMMARY_HEADING, $this->headings()[1] ?? '') || 1 === preg_match(self::SUMMARY_HEADING, $this->headings()[0] ?? '');
+        $summary = $this->summaryLine();
+
+        if (null === $summary) {
+            return false;
+        }
+
+        $before = array_slice($this->lines, 0, $summary);
+        $title = array_find_key($before, static fn (string $line): bool => '' !== trim($line));
+
+        if (null !== $title && 1 !== preg_match(self::HEADING, $before[$title])) {
+            return false;
+        }
+
+        return [] === array_filter(array_slice($before, (int) $title + 1), static fn (string $line): bool => '' !== trim($line)) && $this->summaryWords() > 0;
     }
 
     public function summaryWords(): int
     {
-        $inside = false;
+        $summary = $this->summaryLine();
+
+        if (null === $summary) {
+            return 0;
+        }
+
+        $level = $this->levelOf($this->lines[$summary]);
         $text = [];
 
-        foreach ($this->lines as $line) {
-            if (1 === preg_match(self::HEADING, $line)) {
-                $inside = 1 === preg_match(self::SUMMARY_HEADING, $line);
-                continue;
+        foreach (array_slice($this->lines, $summary + 1) as $line) {
+            $inner = $this->levelOf($line);
+
+            if (null !== $inner && $inner <= $level) {
+                break;
             }
 
-            if ($inside) {
-                $text[] = $line;
-            }
+            $text[] = null === $inner ? $line : ltrim($line, " #\t");
         }
 
         return self::wordsIn(implode("\n", $text));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function headings(): array
+    private function summaryLine(): ?int
     {
-        return array_values(array_filter($this->lines, static fn (string $line): bool => 1 === preg_match(self::HEADING, $line)));
+        return array_find_key($this->lines, static fn (string $line): bool => 1 === preg_match(self::SUMMARY_HEADING, $line));
     }
 
-    private function endsBlockBefore(string $line): bool
+    private function levelOf(string $line): ?int
     {
-        return '' === trim($line) || !$this->isProse($line) || 1 === preg_match(self::LIST_ITEM, $line);
+        return 1 === preg_match(self::HEADING, $line, $marker) ? strlen($marker[1]) : null;
+    }
+
+    /**
+     * @return array<int, true>
+     */
+    private function tableRows(): array
+    {
+        $rows = [];
+        $inside = false;
+
+        foreach ($this->lines as $index => $line) {
+            if ('' === trim($line)) {
+                $inside = false;
+                continue;
+            }
+
+            // A line between outer pipes is a row even without its header: a fragment of docs/highlights.d/ holds just one.
+            $inside = $inside || $this->startsTable($index) || 1 === preg_match(self::FRAMED_ROW, $line);
+
+            if ($inside) {
+                $rows[$index] = true;
+            }
+        }
+
+        return $rows;
+    }
+
+    // GFM: a table is a header line with a pipe followed by a delimiter row, with or without outer pipes.
+    private function startsTable(int $index): bool
+    {
+        $next = $this->lines[$index + 1] ?? '';
+
+        return str_contains($this->lines[$index], '|') && str_contains($next, '|') && 1 === preg_match(self::TABLE_DELIMITER, $next);
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function withoutIndentedCode(array $lines): array
+    {
+        $canStart = true;
+        $inList = false;
+        $inCode = false;
+
+        foreach ($lines as $index => $line) {
+            $blank = '' === trim($line);
+            $indent = $this->indentOf($line);
+
+            if ($inCode && ($blank || $indent >= 4)) {
+                $lines[$index] = '';
+                continue;
+            }
+
+            $inCode = false;
+
+            // CommonMark: indented code cannot interrupt a paragraph, and inside a list item the indentation continues the item.
+            if (!$blank && $indent >= 4 && $canStart && !$inList) {
+                $inCode = true;
+                $lines[$index] = '';
+                continue;
+            }
+
+            if (1 === preg_match(self::LIST_ITEM, $line)) {
+                $inList = true;
+            } elseif (!$blank && 0 === $indent && $canStart) {
+                $inList = false;
+            }
+
+            $canStart = $blank || 1 === preg_match(self::HEADING, $line);
+        }
+
+        return $lines;
     }
 
     private function isProse(string $line): bool
     {
-        return '' !== trim($line) && 1 !== preg_match(self::HEADING, $line) && 1 !== preg_match(self::TABLE_ROW, $line);
+        return '' !== trim($line) && 1 !== preg_match(self::HEADING, $line);
+    }
+
+    private function indentOf(string $line): int
+    {
+        $leading = strspn($line, " \t");
+
+        return strlen(str_replace("\t", '    ', substr($line, 0, $leading)));
     }
 }

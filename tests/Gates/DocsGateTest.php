@@ -81,6 +81,48 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'));
     }
 
+    public function testATableWithoutOuterPipesIsNotAParagraph(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => "One | Two\n--- | ---\n".$this->words(90)." | cell\n"]);
+
+        self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'));
+    }
+
+    public function testProseBeginningWithAPipeWithoutADelimiterRowIsAParagraph(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => '| '.$this->words(81)."\n"]);
+
+        self::assertStringContainsString('docs/guide/page.md:1: paragraph of 82 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testARowBetweenOuterPipesWithoutItsHeaderIsNotAParagraph(): void
+    {
+        $sandbox = $this->changeWith(['docs/highlights.d/1-row.md' => "## Section\n\n| ".$this->words(90)." | done |\n"]);
+
+        self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'));
+    }
+
+    public function testAnIndentedCodeBlockIsNotAParagraph(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => "Code:\n\n    ".$this->words(90)."\n    ".$this->words(10)."\n"]);
+
+        self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'));
+    }
+
+    public function testIndentedTextInsideAListItemIsStillProse(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => '- '.$this->words(5)."\n\n    ".$this->words(81)."\n"]);
+
+        self::assertStringContainsString('docs/guide/page.md:3: paragraph of 81 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testBlockquoteMarkersAreNotCountedAsWords(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => '> '.$this->words(40)."\n> ".$this->words(40)."\n"]);
+
+        self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'));
+    }
+
     public function testAnUnchangedOversizedParagraphOnTheListPasses(): void
     {
         $paragraph = $this->words(120);
@@ -95,6 +137,26 @@ final class DocsGateTest extends SandboxTestCase
         $sandbox = $this->changeWith(['docs/user/start.md' => "# Start\n\n".$paragraph." and one more.\n", DocsRatchetList::PATH => $this->listOf(['docs/user/start.md' => [$paragraph]])]);
 
         self::assertTrue($sandbox->runGate(new DocsGate())->failed('docs'));
+    }
+
+    public function testACopyOfAListedParagraphInTheSamePageFails(): void
+    {
+        $paragraph = $this->words(81);
+        $sandbox = $this->startedChange(['docs/user/start.md' => $paragraph."\n", DocsRatchetList::PATH => $this->listOf(['docs/user/start.md' => [$paragraph]])]);
+        $sandbox->write('docs/user/start.md', $paragraph."\n\n".$paragraph."\n");
+        $sandbox->commitAll('docs: copy the paragraph');
+
+        self::assertStringContainsString('docs/user/start.md:3: paragraph of 81 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testAListedKeyThatNoLongerMatchesAParagraphMustBeRemoved(): void
+    {
+        $paragraph = $this->words(81);
+        $sandbox = $this->startedChange(['docs/user/start.md' => $paragraph."\n", DocsRatchetList::PATH => $this->listOf(['docs/user/start.md' => [$paragraph]])]);
+        $sandbox->write('docs/user/start.md', "Short.\n");
+        $sandbox->commitAll('docs: shorten the paragraph');
+
+        self::assertStringContainsString('ratchet/docs.json: 1 paragraph key of docs/user/start.md no longer match an oversized paragraph; remove it', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
     public function testAnEntryAddedToTheListFails(): void
@@ -129,6 +191,24 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('the page ceiling of docs/guide/big.md is new', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
+    public function testAPageCeilingAboveThePageWordsMustBeLowered(): void
+    {
+        $sandbox = $this->startedChange(['docs/guide/big.md' => "# Big\n\n".$this->chapters(2000), DocsRatchetList::PATH => $this->listOf([], ['docs/guide/big.md' => 2002])]);
+        $sandbox->write('docs/guide/big.md', "# Big\n\n".$this->chapters(1800));
+        $sandbox->commitAll('docs: shorten the page');
+
+        self::assertStringContainsString('docs/guide/big.md has 1802 words now; lower its ceiling from 2002 to 1802', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testAPageCeilingOfAPageWithinTheLimitMustBeRemoved(): void
+    {
+        $sandbox = $this->startedChange(['docs/guide/big.md' => "# Big\n\n".$this->chapters(2000), DocsRatchetList::PATH => $this->listOf([], ['docs/guide/big.md' => 2002])]);
+        $sandbox->write('docs/guide/big.md', "# Big\n\nShort.\n");
+        $sandbox->commitAll('docs: shorten the page');
+
+        self::assertStringContainsString('docs/guide/big.md is within the page limit now; remove its ceiling', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
     public function testAnExcusedSummaryAddedToTheListFails(): void
     {
         $sandbox = $this->startedChange([DocsRatchetList::PATH => $this->listOf([])]);
@@ -138,18 +218,54 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/architecture/big.md added to the pages excused', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
+    public function testASummaryExcuseThatIsNoLongerNeededMustBeRemoved(): void
+    {
+        $sandbox = $this->startedChange(['docs/architecture/big.md' => "## Big\n\n".$this->chapters(1600), DocsRatchetList::PATH => $this->listOf([], [], ['docs/architecture/big.md'])]);
+        $sandbox->write('docs/architecture/big.md', "## Big\n\n## In short\n\n".$this->words(50)."\n\n## Detail\n\n".$this->chapters(1600));
+        $sandbox->commitAll('docs: add the summary');
+
+        self::assertStringContainsString('docs/architecture/big.md no longer needs its "In short" excuse; remove it', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
     public function testRemovedAndLoweredEntriesPass(): void
     {
         $paragraph = $this->words(120);
         $sandbox = $this->startedChange([
-            DocsRatchetList::PATH => $this->listOf(['docs/user/a.md' => [$paragraph, 'b'], 'docs/user/b.md' => ['c']], ['docs/guide/big.md' => 2000], ['docs/architecture/big.md']),
-            'docs/user/a.md' => "# A\n\n".$paragraph."\n",
-            'docs/guide/big.md' => "# Big\n\n".$this->words(10)."\n",
+            DocsRatchetList::PATH => $this->listOf(['docs/user/a.md' => [$paragraph, $this->words(90)]], ['docs/guide/big.md' => 2002], ['docs/architecture/big.md']),
+            'docs/user/a.md' => "# A\n\n".$paragraph."\n\n".$this->words(90)."\n",
+            'docs/guide/big.md' => "# Big\n\n".$this->chapters(2000),
         ]);
-        $sandbox->write(DocsRatchetList::PATH, $this->listOf(['docs/user/a.md' => [$paragraph]], ['docs/guide/big.md' => 1800]));
+        $sandbox->write('docs/user/a.md', "# A\n\n".$paragraph."\n");
+        $sandbox->write('docs/guide/big.md', "# Big\n\n".$this->chapters(1800));
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf(['docs/user/a.md' => [$paragraph]], ['docs/guide/big.md' => 1802]));
         $sandbox->commitAll('docs: shrink the list');
 
         self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'), $sandbox->runGate(new DocsGate())->output());
+    }
+
+    public function testDeletingTheListFails(): void
+    {
+        $sandbox = $this->startedChange([DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->git('rm', '--quiet', DocsRatchetList::PATH);
+        $sandbox->commitAll('chore: remove the empty list');
+
+        self::assertStringContainsString('ratchet/docs.json is missing; keep it in place', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testATargetBranchThatRunsTheGateWithoutTheListFails(): void
+    {
+        $sandbox = $this->startedChange([DocsGate::SOURCE => "<?php\n"]);
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf([]));
+        $sandbox->commitAll('docs: bring the list back');
+
+        self::assertStringContainsString('ratchet/docs.json is missing on the target branch, which runs the docs gate', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testATargetBranchWithoutTheGateSkipsTheRatchetChecks(): void
+    {
+        $sandbox = $this->changeWith(['docs/user/start.md' => "# Start\n\nShort.\n"]);
+
+        self::assertStringContainsString('ratchet checks skipped, the target branch has no docs gate yet', $sandbox->runGate(new DocsGate())->noteOf('docs'));
     }
 
     public function testAUserPageOverThePageLimitFails(): void
@@ -187,11 +303,39 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/architecture/big.md: a page over 1500 words opens with an "In short" section of at most 120 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
+    public function testProseBetweenTheTitleAndInShortFails(): void
+    {
+        $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n".$this->words(60)."\n\n## In short\n\n".$this->words(10)."\n\n## Detail\n\n".$this->chapters(1600)]);
+
+        self::assertStringContainsString('opens with an "In short" section', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testAnEmptyInShortFails(): void
+    {
+        $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n## In short\n\n## Detail\n\n".$this->chapters(1600)]);
+
+        self::assertStringContainsString('opens with an "In short" section', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
     public function testAnInShortSectionOverTheLimitFails(): void
     {
         $sandbox = $this->changeWith(['docs/architecture/big.md' => "## Big\n\n### In short\n\n".$this->words(60)."\n\n".$this->words(61)."\n\n## Detail\n\n".$this->chapters(1600)]);
 
         self::assertStringContainsString('the "In short" section has 121 words, the limit is 120', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testTheSubsectionsOfInShortCountTowardItsLimit(): void
+    {
+        $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n## In short\n\n".$this->words(70)."\n\n### Part\n\n".$this->words(70)."\n\n## Detail\n\n".$this->chapters(1600)]);
+
+        self::assertStringContainsString('the "In short" section has 141 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testOnlyTheFirstInShortIsTheSummary(): void
+    {
+        $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n## In short\n\n".$this->words(70)."\n\n## Detail\n\n".$this->chapters(1600)."\n## In short\n\n".$this->words(70)."\n"]);
+
+        self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'), $sandbox->runGate(new DocsGate())->output());
     }
 
     public function testAShortArchitecturePageNeedsNoSummary(): void
@@ -208,19 +352,22 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'));
     }
 
-    public function testWithoutGitHistoryTheLimitsStillApplyAndTheShrinkCheckIsSkipped(): void
+    public function testWithoutGitHistoryTheLimitsStillApply(): void
     {
         $sandbox = $this->emptySandbox();
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf([]));
         $sandbox->write('docs/user/start.md', "# Start\n\n".$this->words(81)."\n");
 
         self::assertTrue($sandbox->runGate(new DocsGate())->failed('docs'));
+    }
 
+    public function testWithoutGitHistoryTheRatchetChecksAreSkipped(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf([]));
         $sandbox->write('docs/user/start.md', "# Start\n\n".$this->words(10)."\n");
 
-        $run = $sandbox->runGate(new DocsGate());
-
-        self::assertTrue($run->passed('docs'), $run->output());
-        self::assertStringContainsString('shrink check skipped', $run->noteOf('docs'));
+        self::assertStringContainsString('ratchet checks skipped, no git history', $sandbox->runGate(new DocsGate())->noteOf('docs'));
     }
 
     public function testAListThatIsNotValidFailsTheGate(): void
@@ -242,7 +389,7 @@ final class DocsGateTest extends SandboxTestCase
     {
         $sandbox = $this->startedChange([]);
 
-        foreach ($files as $path => $contents) {
+        foreach ([DocsRatchetList::PATH => $this->listOf([]), ...$files] as $path => $contents) {
             $sandbox->write($path, $contents);
         }
 
@@ -280,7 +427,7 @@ final class DocsGateTest extends SandboxTestCase
         $keys = [];
 
         foreach ($paragraphs as $page => $texts) {
-            $keys[$page] = array_map(static fn (string $text): string => 1 === preg_match('/^[a-f0-9]{64}$/', $text) ? $text : new MarkdownParagraph(1, $text)->key(), $texts);
+            $keys[$page] = array_map(static fn (string $text): string => new MarkdownParagraph(1, $text)->key(), $texts);
         }
 
         return json_encode(['paragraphs' => $keys, 'pages' => $pages, 'summaries' => $summaries], JSON_THROW_ON_ERROR);

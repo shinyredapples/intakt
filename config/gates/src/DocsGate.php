@@ -11,6 +11,9 @@ final readonly class DocsGate implements Gate
     public const int SUMMARY_WORDS = 120;
     public const int SUMMARY_THRESHOLD_WORDS = 1500;
 
+    // Because a target branch with this file runs the gate, a list missing there was deleted, not yet to come.
+    public const string SOURCE = 'config/gates/src/DocsGate.php';
+
     private const array PAGE_LIMITED_FOLDERS = ['docs/user/', 'docs/guide/'];
 
     public function name(): string
@@ -20,42 +23,49 @@ final readonly class DocsGate implements Gate
 
     public function run(Workspace $workspace): GateResult
     {
-        $list = $this->listAt($workspace->root.'/'.DocsRatchetList::PATH);
+        $file = $workspace->root.'/'.DocsRatchetList::PATH;
+
+        if (!is_file($file)) {
+            return GateResult::failedBecause($this->name(), DocsRatchetList::PATH.' is missing; keep it in place, with empty lists when nothing is listed');
+        }
+
+        $json = file_get_contents($file);
+        $list = false === $json ? null : DocsRatchetList::fromJson($json);
 
         if (!$list instanceof DocsRatchetList) {
             return GateResult::failedBecause($this->name(), DocsRatchetList::PATH.' is not valid: it needs "paragraphs", "pages" and "summaries"');
         }
 
         try {
-            $findings = [...$this->pageFindings($workspace, $list), ...$this->growthFindings($workspace, $list)];
+            $documents = $this->documentsOf($workspace);
+            $base = $this->baseListOf($workspace);
         } catch (ScopeFailure $failure) {
             return GateResult::failedBecause($this->name(), $failure->getMessage());
+        }
+
+        $findings = $this->limitFindings($documents, $list);
+
+        if ($base instanceof DocsRatchetList) {
+            array_push($findings, ...$list->growthOver($base), ...$list->staleEntries($documents, $this->oversizedKeysOf($documents), self::PAGE_WORDS, self::SUMMARY_THRESHOLD_WORDS));
         }
 
         if ([] !== $findings) {
             return GateResult::withFindings($this->name(), $findings);
         }
 
-        return $workspace->hasGit() ? GateResult::passed($this->name()) : GateResult::passedBecause($this->name(), 'ratchet shrink check skipped, no git history in this tree');
-    }
-
-    private function listAt(string $file): ?DocsRatchetList
-    {
-        if (!is_file($file)) {
-            return DocsRatchetList::empty();
-        }
-
-        $json = file_get_contents($file);
-
-        return false === $json ? null : DocsRatchetList::fromJson($json);
+        return match (true) {
+            $base instanceof DocsRatchetList => GateResult::passed($this->name()),
+            $workspace->hasGit() => GateResult::passedBecause($this->name(), 'ratchet checks skipped, the target branch has no docs gate yet'),
+            default => GateResult::passedBecause($this->name(), 'ratchet checks skipped, no git history in this tree'),
+        };
     }
 
     /**
-     * @return list<string>
+     * @return array<string, MarkdownPage>
      */
-    private function pageFindings(Workspace $workspace, DocsRatchetList $list): array
+    private function documentsOf(Workspace $workspace): array
     {
-        $findings = [];
+        $documents = [];
 
         foreach ($workspace->repositoryFiles() as $path) {
             if (!$this->isDocument($path) || !is_file($workspace->root.'/'.$path)) {
@@ -68,10 +78,10 @@ final readonly class DocsGate implements Gate
                 throw new ScopeFailure('cannot read '.$path);
             }
 
-            array_push($findings, ...$this->findingsOf($path, new MarkdownPage($text), $list));
+            $documents[$path] = new MarkdownPage($text);
         }
 
-        return $findings;
+        return $documents;
     }
 
     private function isDocument(string $path): bool
@@ -80,15 +90,24 @@ final readonly class DocsGate implements Gate
     }
 
     /**
+     * @param array<string, MarkdownPage> $documents
+     *
      * @return list<string>
      */
-    private function findingsOf(string $path, MarkdownPage $page, DocsRatchetList $list): array
+    private function limitFindings(array $documents, DocsRatchetList $list): array
     {
-        return [
-            ...$this->paragraphFindings($path, $page, $list),
-            ...$this->pageLengthFindings($path, $page, $list),
-            ...$this->summaryFindings($path, $page, $list),
-        ];
+        $findings = [];
+
+        foreach ($documents as $path => $page) {
+            array_push(
+                $findings,
+                ...$this->paragraphFindings($path, $page, $list),
+                ...$this->pageLengthFindings($path, $page, $list),
+                ...$this->summaryFindings($path, $page, $list),
+            );
+        }
+
+        return $findings;
     }
 
     /**
@@ -97,14 +116,44 @@ final readonly class DocsGate implements Gate
     private function paragraphFindings(string $path, MarkdownPage $page, DocsRatchetList $list): array
     {
         $findings = [];
+        $seen = [];
 
-        foreach ($page->paragraphs() as $paragraph) {
-            if ($paragraph->words() > self::PARAGRAPH_WORDS && !$list->excusesParagraph($path, $paragraph->key())) {
+        foreach ($this->oversizedParagraphsOf($page) as $paragraph) {
+            $key = $paragraph->key();
+            $seen[$key] = ($seen[$key] ?? 0) + 1;
+
+            if ($seen[$key] > $list->allowanceOf($path, $key)) {
                 $findings[] = $path.':'.$paragraph->line.': paragraph of '.$paragraph->words().' words, the limit is '.self::PARAGRAPH_WORDS.'; split it into short paragraphs or move the detail to docs/reference/';
             }
         }
 
         return $findings;
+    }
+
+    /**
+     * @param array<string, MarkdownPage> $documents
+     *
+     * @return array<string, array<string, int>>
+     */
+    private function oversizedKeysOf(array $documents): array
+    {
+        $keys = [];
+
+        foreach ($documents as $path => $page) {
+            foreach ($this->oversizedParagraphsOf($page) as $paragraph) {
+                $keys[$path][$paragraph->key()] = ($keys[$path][$paragraph->key()] ?? 0) + 1;
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * @return list<MarkdownParagraph>
+     */
+    private function oversizedParagraphsOf(MarkdownPage $page): array
+    {
+        return array_values(array_filter($page->paragraphs(), static fn (MarkdownParagraph $paragraph): bool => $paragraph->words() > self::PARAGRAPH_WORDS));
     }
 
     /**
@@ -135,7 +184,7 @@ final readonly class DocsGate implements Gate
         }
 
         if (!$page->hasSummaryFirst()) {
-            return [$path.': a page over '.self::SUMMARY_THRESHOLD_WORDS.' words opens with an "In short" section of at most '.self::SUMMARY_WORDS.' words; add it right after the title'];
+            return [$path.': a page over '.self::SUMMARY_THRESHOLD_WORDS.' words opens with an "In short" section of at most '.self::SUMMARY_WORDS.' words; add it right after the title, with no text between'];
         }
 
         if ($page->summaryWords() > self::SUMMARY_WORDS) {
@@ -145,13 +194,10 @@ final readonly class DocsGate implements Gate
         return [];
     }
 
-    /**
-     * @return list<string>
-     */
-    private function growthFindings(Workspace $workspace, DocsRatchetList $list): array
+    private function baseListOf(Workspace $workspace): ?DocsRatchetList
     {
         if (!$workspace->hasGit()) {
-            return [];
+            return null;
         }
 
         $mergeBase = $workspace->mergeBase();
@@ -162,9 +208,12 @@ final readonly class DocsGate implements Gate
 
         $shown = $workspace->git(['show', $mergeBase.':'.DocsRatchetList::PATH]);
 
-        // Because the list arrives with the change that switches the gate on, there is nothing to compare it with yet.
         if (!$shown->succeeded()) {
-            return [];
+            if ($workspace->git(['cat-file', '-e', $mergeBase.':'.self::SOURCE])->succeeded()) {
+                throw new ScopeFailure(DocsRatchetList::PATH.' is missing on the target branch, which runs the docs gate; restore it there first');
+            }
+
+            return null;
         }
 
         $base = DocsRatchetList::fromJson($shown->output);
@@ -173,6 +222,6 @@ final readonly class DocsGate implements Gate
             throw new ScopeFailure(DocsRatchetList::PATH.' on the target branch is not valid');
         }
 
-        return $list->growthOver($base);
+        return $base;
     }
 }
