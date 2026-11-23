@@ -33,7 +33,7 @@ final readonly class MarkdownListIndents
     {
         preg_match(self::LIST_MARKER, $this->expanded($listItem), $parts);
 
-        // A gap of five or more columns after the marker makes the item's first line indented code (CommonMark 5.2).
+        // CommonMark 5.2 reads a gap of five or more columns after the marker as indented code, so such a first line is no prose.
         return strlen($parts[3] ?? '') > 4 && '' !== trim($this->afterMarker($listItem));
     }
 
