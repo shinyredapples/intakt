@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\HandBack\UseCase\CheckPullRequestText;
 
+use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
@@ -17,9 +20,6 @@ use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\CheckPullRequestTextCommand;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\CheckPullRequestTextInput;
-use Intakt\Core\HandBack\Contract\FailedPullRequestText;
-use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
-use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextTask;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
