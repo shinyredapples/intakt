@@ -18,8 +18,6 @@ final class CiMainJobTest extends TestCase
 {
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/ci.yml';
 
-    private const string ACTION = __DIR__.'/../../.github/actions/ci-image/action.yml';
-
     private const string INTO_MAIN = "github.event_name == 'pull_request' && github.base_ref == 'main'";
 
     private const string GUARD = "(github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push')";
@@ -72,17 +70,6 @@ final class CiMainJobTest extends TestCase
         self::assertMatchesRegularExpression('/^actions\/upload-artifact@[0-9a-f]{40}$/', $upload['uses'] ?? '');
         self::assertSame('main-tested-tree-${{ steps.tested-tree.outputs.tree }}', $upload['with']['name'] ?? null);
         self::assertTrue($upload['with']['overwrite'] ?? null);
-    }
-
-    public function testARunOnMainSavesTheCiImageWhenTheCacheLacksItEvenIfTheRunnerHadIt(): void
-    {
-        /** @var array{runs: array{steps: list<Step>}} $action */
-        $action = Yaml::parseFile(self::ACTION);
-        $steps = array_column($action['runs']['steps'], null, 'id');
-
-        self::assertArrayNotHasKey('if', $steps['restore'] ?? []);
-        self::assertSame("\${{ steps.name.outputs.present == 'true' }}", $steps['restore']['with']['lookup-only'] ?? null);
-        self::assertSame("github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.restore.outputs.cache-hit != 'true'", $steps['export']['if'] ?? null);
     }
 
     /**

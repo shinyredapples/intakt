@@ -2,7 +2,7 @@ name: CI image
 description: >-
   Makes the CI image available as CI_IMAGE: reuses one already on the runner, else loads the copy a run on main cached
   for the same inputs, else builds it (after a failed Docker Hub login it fails instead of building); a run on main
-  caches the image for later runs when the cache has none for its inputs. Pull requests never save.
+  caches a newly built image for later runs. Pull requests never save.
 runs:
   using: composite
   steps:
@@ -15,13 +15,12 @@ runs:
         hash=$(.github/ci/build-image.sh --print-hash)
         echo "key=intakt-ci-image-$hash" >> "$GITHUB_OUTPUT"
         if docker image inspect "intakt-ci:$hash" > /dev/null 2>&1; then echo "present=true" >> "$GITHUB_OUTPUT"; fi
-    # With the image already on the runner it only looks the key up, so a run on main still saves an image the cache lacks.
     - id: restore
+      if: steps.name.outputs.present != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/intakt-ci-image.tar
         key: ${{ steps.name.outputs.key }}
-        lookup-only: ${{ steps.name.outputs.present == 'true' }}
     # After a failed Docker Hub login the image must be on the runner already or come from the cache tar with its expected
     # tag; a tar that loads without that tag would otherwise lead to a pull or a build, so the step fails instead.
     - shell: bash
@@ -43,7 +42,8 @@ runs:
     # request's saves out of main's scope; this keeps pull requests from saving at all.
     - id: export
       if: >-
-        github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.restore.outputs.cache-hit != 'true'
+        github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        && steps.name.outputs.present != 'true' && steps.restore.outputs.cache-hit != 'true'
       shell: bash
       run: docker save --output "$RUNNER_TEMP/intakt-ci-image.tar" "$CI_IMAGE"
     - if: steps.export.outcome == 'success'
