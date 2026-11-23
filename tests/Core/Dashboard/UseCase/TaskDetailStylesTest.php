@@ -159,6 +159,14 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*white-space:\s*nowrap;\s*overflow-wrap:\s*normal;\s*$/', $rules['.page-head .meta .figure-kind'] ?? '');
     }
 
+    // As a flex row, the figure, its kind label and the price date each shrank to a narrow column of its own at 390 wide; as one text they wrap between words.
+    public function testTheCostInTheHeadsFactsFlowsAsOneTextInsteadOfAColumnPerPart(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*inline;\s*$/', $rules['.page-head .meta #review-summary-cost'] ?? '');
+    }
+
     // At 390 wide `anywhere` let the reviewer table shrink until "correctness" broke into three lines; `break-word` keeps words whole and the scroll box takes the width.
     public function testACellOfARoundTableKeepsItsWordsWholeAndTheTableScrolls(): void
     {
