@@ -59,11 +59,11 @@ Building Intakt led to 12 fixes (11 pull requests) merged upstream in Symfony, S
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark.webp" width="760" height="116">
-    <img src="docs/assets/team-light.webp" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, each drawn as an animal with its tool" width="760" height="113" loading="lazy">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark.webp" width="760" height="104">
+    <img src="docs/assets/team-light.webp" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer, Maintainer and Technical writer, each drawn as an animal with its tool" width="760" height="101" loading="lazy">
   </picture>
   <br>
-  The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order.
+  The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer, Maintainer and Technical writer, in that order.
 </p>
 
 ## Status
