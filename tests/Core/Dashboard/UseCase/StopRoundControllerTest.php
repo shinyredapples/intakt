@@ -11,7 +11,6 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -19,6 +18,7 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
 use Intakt\Core\Dashboard\UseCase\StopReview\StopRoundController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
@@ -30,7 +30,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(FormPress::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]

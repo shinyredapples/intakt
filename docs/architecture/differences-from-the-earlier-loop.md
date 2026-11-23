@@ -10,6 +10,12 @@ Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replac
 - **Intakt:** `Waits for` lines are read from the task text only, and only when the task was written and last edited by an account with write access; comments are never read for them. A line may sit in a blockquote or a list and carry emphasis around the words (`> - **Waits for:** #9`); a note after the `#n` list may hold no digit of any script, a line whose list cannot be read (`Waits for #9 then 10`) holds the task as an unreadable wait, and a line inside an `<!-- external -->` block counts for nothing. The rules are listed in [Work intake](work-intake.md#wait-lines-domainissuereferences). Built in `Plugin/GitHubWorkSource` (`IssueReferences`, `IntakeRules`).
 - **Why:** the task text is the one place a wait is written and kept, so what a task waits for is read from one place and changes only when the task is edited.
 
+## Finish before start in the build lane
+
+- **The loop:** an `urgent` task goes before work on an open pull request (its `test_priority.py`, [Parity](parity.md)), and a pull request whose task lost `ready` left the queue: on 2026-11-13 three pull requests, one of them approved, were orphaned this way.
+- **Intakt:** by the design, work that finishes an open pull request goes before an `urgent` new task, what an approved head still needs goes first in every lane, oldest approval first, and a pull request whose task lost `ready` is held in its place with its reviews ([Choosing work](../design/05-architecture/03-choosing-work.md), step 5; [Merge](../design/05-architecture/08-merge.md)). Not built yet: the build lane (T56) builds this order; the intake rules built today (`IntakeRules`) still put an `urgent` task first.
+- **Why:** with about 30 `urgent` tasks queued, five builders started urgent first builds for three hours while approved pull requests waited, and the open pull requests grew from 5 to 12.
+
 ## Job containers instead of system users and sandboxes
 
 - **The loop:** builders share a Unix user and a long-lived worktree, so every piece of state they leave (dotfiles, git config, caches and the like) has to be reset by hand, and each reset found by review became one more denylist item ([principles](../design/02-principles.md)).

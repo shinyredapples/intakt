@@ -10,6 +10,7 @@ use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
@@ -91,6 +92,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ChangesHandedToIntakt::class)]
 #[UsesClass(WatcherLedger::class)]
 #[UsesClass(HandedOverChanges::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(ProtectedChanges::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[UsesClass(PublishedVerdict::class)]
