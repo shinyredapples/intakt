@@ -54,7 +54,7 @@ final class InfrastructureRowTest extends TestCase
         $row = InfrastructureRow::of(new ServerReading(new WorkerThreads(0, 2), new EndpointDown('/metrics answered 500'), HubHealth::Healthy), $this->unchanged(...));
 
         self::assertSame(['Threads busy', 'Threads idle', 'Server metrics', 'Hub'], array_map(static fn (InfrastructureFigure $figure): string => $figure->label, $row->figures));
-        self::assertSame([FigureState::Fine, FigureState::Fine, FigureState::Down, FigureState::Fine],array_map(static fn (InfrastructureFigure $figure): FigureState => $figure->state, $row->figures));
+        self::assertSame([FigureState::Fine, FigureState::Fine, FigureState::Down, FigureState::Fine], array_map(static fn (InfrastructureFigure $figure): FigureState => $figure->state, $row->figures));
     }
 
     public function testAnUnhealthyHubIsMarkedUnhealthyAndNotDown(): void
