@@ -52,7 +52,7 @@ The `tests` gate also guards the [parity record](parity.md): `tests/Application/
 
 A paragraph (`MarkdownParagraph`) carries its word count and a key, the first 16 hex characters of the SHA-256 hash of its text with whitespace runs made one space. A word is a token between whitespace that holds a letter or a digit; code, fenced or indented, has none. The summary (`MarkdownSummary`) holds the words of the "In short" section and whether it opens the page, with only a title above it.
 
-Tables count as words but not as paragraphs. A line framed by outer pipes is a table row by itself; with a delimiter row below its first line, a table runs until a blank line, a heading, a list item or a quoted line. Only an unquoted heading of the same or a higher level ends the "In short" section. The reader is not a full CommonMark parser: it does not handle fenced code inside a blockquote, or setext titles (a title underlined with `===` or `---`).
+Tables count as words but not as paragraphs. A line framed by outer pipes is a table row by itself; with a delimiter row below its first line, a table runs until a blank line, a heading, a list item, a thematic break or a change of quote depth, so a quoted line after a table is measured. Only an unquoted heading of the same or a higher level ends the "In short" section. The reader is not a full CommonMark parser: it does not handle fenced code inside a blockquote, or setext titles (a title underlined with `===` or `---`).
 
 ## The test time budget (planned)
 
