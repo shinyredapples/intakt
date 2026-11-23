@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\MarkdownLineKind;
+use Intakt\Gates\MarkdownLineKinds;
 use Intakt\Gates\MarkdownPage;
 use Intakt\Gates\MarkdownParagraph;
 use Intakt\Gates\MarkdownReader;
@@ -21,6 +22,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(MarkdownPage::class)]
 #[UsesClass(MarkdownParagraph::class)]
 #[UsesClass(MarkdownLineKind::class)]
+#[UsesClass(MarkdownLineKinds::class)]
 final class MarkdownReaderTest extends TestCase
 {
     private string $root;

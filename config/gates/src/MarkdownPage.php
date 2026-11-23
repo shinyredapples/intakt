@@ -8,15 +8,7 @@ final readonly class MarkdownPage
 {
     private const string QUOTE_MARKER = '/^ {0,3}> ?/';
 
-    private const string HEADING = '/^ {0,3}(#{1,6})(?:[ \t]|$)/';
-
     private const string SUMMARY_HEADING = '/^ {0,3}#{1,6}[ \t]+In short[ \t]*#*[ \t]*$/i';
-
-    private const string THEMATIC_BREAK = '/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/';
-
-    private const string LIST_ITEM = '/^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$)/';
-
-    private const string INDENTED_CODE = '/^(?: {4}| {0,3}\t)/';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
@@ -51,7 +43,7 @@ final readonly class MarkdownPage
 
         $this->depths = $depths;
         $this->contents = $contents;
-        $this->kinds = $this->kindsOf($this->tableRows());
+        $this->kinds = new MarkdownLineKinds()->of($depths, $contents, $this->tableRows());
     }
 
     /**
@@ -64,7 +56,7 @@ final readonly class MarkdownPage
         $openDepth = 0;
 
         foreach ($this->kinds as $index => $kind) {
-            // A prose line right after a paragraph continues it, also as CommonMark's lazy continuation of a quoted paragraph.
+            // CommonMark keeps a prose line right after a paragraph in it, also as the lazy continuation of a quoted paragraph.
             if (MarkdownLineKind::Prose === $kind && [] !== $lines && $this->depths[$index] <= $openDepth) {
                 $lines[] = $this->contents[$index];
 
@@ -135,40 +127,12 @@ final readonly class MarkdownPage
             }
 
             // A framed line without a delimiter row marks only itself, so the prose after a one-row highlights fragment still counts.
-            if (1 === preg_match(self::FRAMED_LINE, $this->contents[$index]) && 0 === preg_match(self::INDENTED_CODE, $this->contents[$index])) {
+            if (1 === preg_match(self::FRAMED_LINE, $this->contents[$index]) && 0 === preg_match(MarkdownLineKinds::INDENTED_CODE, $this->contents[$index])) {
                 $rows[$index] = true;
             }
         }
 
         return $rows;
-    }
-
-    /**
-     * @param array<int, true> $tableRows
-     *
-     * @return list<MarkdownLineKind>
-     */
-    private function kindsOf(array $tableRows): array
-    {
-        $kinds = [];
-        $inList = false;
-
-        foreach ($this->contents as $index => $content) {
-            $previous = $this->previousKind($kinds, $index);
-            $kind = match (true) {
-                '' === trim($content) => MarkdownLineKind::Blank,
-                isset($tableRows[$index]) => MarkdownLineKind::Table,
-                $this->isIndentedCode($content, $previous, $inList) => MarkdownLineKind::Code,
-                1 === preg_match(self::HEADING, $content) => MarkdownLineKind::Heading,
-                1 === preg_match(self::THEMATIC_BREAK, $content) => MarkdownLineKind::Break,
-                1 === preg_match(self::LIST_ITEM, $content) => MarkdownLineKind::ListItem,
-                default => MarkdownLineKind::Prose,
-            };
-            $inList = $this->staysInList($kind, $previous, $content) ?? $inList;
-            $kinds[] = $kind;
-        }
-
-        return $kinds;
     }
 
     /**
@@ -192,7 +156,7 @@ final readonly class MarkdownPage
     {
         $content = $this->contents[$index];
 
-        return MarkdownLineKind::ListItem === $this->kinds[$index] ? (preg_replace(self::LIST_ITEM, '', $content) ?? $content) : $content;
+        return MarkdownLineKind::ListItem === $this->kinds[$index] ? (preg_replace(MarkdownLineKinds::LIST_ITEM, '', $content) ?? $content) : $content;
     }
 
     private function wordsOfLine(int $index): int
@@ -237,7 +201,7 @@ final readonly class MarkdownPage
 
         return 1 === preg_match(self::CELL_BORDER, $this->contents[$header])
             && !$this->startsABlock($this->contents[$header])
-            && 0 === preg_match(self::INDENTED_CODE, $this->contents[$header])
+            && 0 === preg_match(MarkdownLineKinds::INDENTED_CODE, $this->contents[$header])
             && 1 === preg_match(self::CELL_BORDER, $this->contents[$delimiter])
             && 1 === preg_match(self::DELIMITER_ROW, $this->contents[$delimiter]);
     }
@@ -256,37 +220,6 @@ final readonly class MarkdownPage
         return $rows;
     }
 
-    /**
-     * @param list<MarkdownLineKind> $kinds
-     */
-    private function previousKind(array $kinds, int $index): MarkdownLineKind
-    {
-        // A line in another quote depth starts a fresh block, as after a blank line.
-        if (0 === $index || $this->depths[$index - 1] !== $this->depths[$index]) {
-            return MarkdownLineKind::Blank;
-        }
-
-        return $kinds[$index - 1];
-    }
-
-    private function isIndentedCode(string $content, MarkdownLineKind $previous, bool $inList): bool
-    {
-        // CommonMark: indented code cannot interrupt a paragraph, and indentation inside a list is the item's own content.
-        return 1 === preg_match(self::INDENTED_CODE, $content)
-            && !$inList
-            && !in_array($previous, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true);
-    }
-
-    private function staysInList(MarkdownLineKind $kind, MarkdownLineKind $previous, string $content): ?bool
-    {
-        return match ($kind) {
-            MarkdownLineKind::ListItem => true,
-            MarkdownLineKind::Heading, MarkdownLineKind::Break, MarkdownLineKind::Table => false,
-            MarkdownLineKind::Prose => MarkdownLineKind::Blank === $previous && 0 === preg_match(self::INDENTED_CODE, $content) ? false : null,
-            default => null,
-        };
-    }
-
     private function wordsIn(string $text): int
     {
         $tokens = preg_split('/\s+/u', trim($text), flags: PREG_SPLIT_NO_EMPTY);
@@ -296,12 +229,12 @@ final readonly class MarkdownPage
 
     private function headingLevel(int $index): int
     {
-        return 1 === preg_match(self::HEADING, $this->contents[$index], $marks) ? strlen($marks[1]) : 0;
+        return 1 === preg_match(MarkdownLineKinds::HEADING, $this->contents[$index], $marks) ? strlen($marks[1]) : 0;
     }
 
     private function startsABlock(string $content): bool
     {
-        return 1 === preg_match(self::HEADING, $content) || 1 === preg_match(self::LIST_ITEM, $content);
+        return 1 === preg_match(MarkdownLineKinds::HEADING, $content) || 1 === preg_match(MarkdownLineKinds::LIST_ITEM, $content);
     }
 
     private function continuesTable(int $header, int $row): bool
@@ -315,6 +248,6 @@ final readonly class MarkdownPage
             return false;
         }
 
-        return !$this->startsABlock($this->contents[$row]) && 0 === preg_match(self::THEMATIC_BREAK, $this->contents[$row]);
+        return !$this->startsABlock($this->contents[$row]) && 0 === preg_match(MarkdownLineKinds::THEMATIC_BREAK, $this->contents[$row]);
     }
 }
