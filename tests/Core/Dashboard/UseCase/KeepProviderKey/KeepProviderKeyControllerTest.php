@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeepProviderKey;
@@ -38,7 +39,6 @@ use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 #[CoversClass(KeepProviderKeyController::class)]
@@ -74,7 +74,7 @@ final class KeepProviderKeyControllerTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(400);
         self::assertFileDoesNotExist($this->directory.'/provider-key.json');
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so no key was kept."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so no key was kept."', FormIsRefused::class));
     }
 
     public function testASecondKeyIsRefusedWhileAKeptKeyIsConfiguredAndTheKeptKeyStaysUnchanged(): void
