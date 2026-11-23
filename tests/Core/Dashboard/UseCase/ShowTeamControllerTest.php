@@ -32,6 +32,9 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(RefuseForeignHost::class)]
 final class ShowTeamControllerTest extends DashboardPageTestCase
 {
+    /** @var array<string, list<Provider>> */
+    private array $roles = [];
+
     public function testTheTeamPageListsEachAccountOnceWithItsNameAndKind(): void
     {
         $this->serve([new Account(Provider::ClaudeCode, 'work_subscription'), new Account(Provider::Anthropic, 'overflow_key')]);
@@ -87,7 +90,8 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
     public function testEachRoleListsTheAccountsOfTheProvidersItUses(): void
     {
-        $this->serve([new Account(Provider::ClaudeCode, 'work'), new Account(Provider::Anthropic, 'overflow')], [], [], ['correctness' => [Provider::ClaudeCode, Provider::Anthropic], 'security' => [Provider::Anthropic]]);
+        $this->roles = ['correctness' => [Provider::ClaudeCode, Provider::Anthropic], 'security' => [Provider::Anthropic]];
+        $this->serve([new Account(Provider::ClaudeCode, 'work'), new Account(Provider::Anthropic, 'overflow')]);
 
         $roles = $this->browser->request('GET', '/team')->filter('.side .role');
 
@@ -128,12 +132,11 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
     }
 
     /**
-     * @param list<Account> $accounts
-     * @param array<string, float> $used
+     * @param list<Account>         $accounts
+     * @param array<string, float>  $used
      * @param array<string, string> $states
-     * @param array<string, list<Provider>> $roles
      */
-    private function serve(array $accounts, array $used = [], array $states = [], array $roles = []): void
+    private function serve(array $accounts, array $used = [], array $states = []): void
     {
         $container = self::getContainer();
         $enabled = self::createStub(EnabledAccounts::class);
@@ -152,6 +155,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
         $container->set(MeasuredUse::class, $use);
 
         $served = self::createStub(ReviewerRoles::class);
+        $roles = $this->roles;
         $served->method('servedBy')->willReturnCallback(static fn (Provider $provider): array => array_keys(array_filter($roles, static fn (array $providers): bool => in_array($provider, $providers, true))));
         $container->set(ReviewerRoles::class, $served);
     }

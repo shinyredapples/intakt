@@ -30,12 +30,10 @@ final readonly class TeamRole
             }
         }
 
-        $roles = [];
-
-        foreach ($byRole as $name => $names) {
-            $roles[] = new self((string) $name, $names);
-        }
-
-        return $roles;
+        return array_map(
+            static fn (string|int $name, array $names): self => new self((string) $name, $names),
+            array_keys($byRole),
+            $byRole,
+        );
     }
 }

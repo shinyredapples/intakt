@@ -24,16 +24,26 @@ final readonly class ConfiguredReviewerRoles implements ReviewerRoles
     {
         $roles = [];
 
-        foreach ($this->panels as $panel) {
-            foreach ([$panel['reviewers'], ...array_column($panel['rules'] ?? [], 'reviewers')] as $reviewers) {
-                foreach ($reviewers as $reviewer) {
-                    if ($reviewer['provider'] === $provider->value) {
-                        $roles[$reviewer['role']] = true;
-                    }
-                }
+        foreach ($this->everyReviewer() as $reviewer) {
+            if ($reviewer['provider'] === $provider->value) {
+                $roles[$reviewer['role']] = true;
             }
         }
 
         return array_map(strval(...), array_keys($roles));
+    }
+
+    /**
+     * @return list<array{role: non-empty-string, provider: string}>
+     */
+    private function everyReviewer(): array
+    {
+        $reviewers = [];
+
+        foreach ($this->panels as $panel) {
+            $reviewers = [...$reviewers, ...$panel['reviewers'], ...array_merge(...array_column($panel['rules'] ?? [], 'reviewers'))];
+        }
+
+        return $reviewers;
     }
 }

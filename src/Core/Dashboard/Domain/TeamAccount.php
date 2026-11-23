@@ -11,7 +11,7 @@ final readonly class TeamAccount
 {
     /**
      * @param list<TeamWindow> $windows
-     * @param list<string> $roles
+     * @param list<string>     $roles
      */
     public function __construct(
         public Account $account,

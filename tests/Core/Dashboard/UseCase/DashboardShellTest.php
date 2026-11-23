@@ -25,7 +25,7 @@ final class DashboardShellTest extends DashboardPageTestCase
     public static function pages(): iterable
     {
         yield 'the board' => ['/'];
-        yield 'the project list' => ['/projects', '/team'];
+        yield 'the project list' => ['/projects'];
         yield 'the review list' => ['/reviews'];
         yield 'a review' => ['/reviews/round-1'];
         yield 'the components page' => ['/components'];
