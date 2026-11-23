@@ -55,7 +55,7 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         $updated = $this->streamedTo($page, $round);
 
         self::assertSame($round, $updated->filter('section#review-verdict')->attr('data-round'));
-        self::assertSame(['Changes needed', '5 to fix · 2 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '5 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
     public function testThePageOpenWhileTheShippedRecordingPlaysGetsOneToFixCardPerFindingToFix(): void
