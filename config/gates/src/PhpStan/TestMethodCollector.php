@@ -104,7 +104,7 @@ final readonly class TestMethodCollector implements Collector
         return $method->isPublic() && $isTest && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && ($this->isMarkedTest($method) || !$this->isNamedProvider($name, $class));
     }
 
-    // PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
+    // because PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
     private function isMarkedTest(ReflectionMethod $method): bool
     {
         return [] !== $method->getAttributes(Test::class);
@@ -121,9 +121,7 @@ final readonly class TestMethodCollector implements Collector
         return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method), $this->isMarkedTest($method)];
     }
 
-    // PHPUnit wants a provider static and returning an iterable.
-    // A static method declared to return a type that cannot be iterated, such as void, can only be a test.
-    // A method marked #[Test] is always a test.
+    // because PHPUnit wants a provider static and iterable, a static method returning void can only be a test
     private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
     {
         return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
