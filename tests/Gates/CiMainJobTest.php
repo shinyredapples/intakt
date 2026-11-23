@@ -38,6 +38,30 @@ final class CiMainJobTest extends TestCase
         self::assertStringContainsString('.github/ci/pr-run-passed.sh "$GITHUB_SHA" "$(git rev-parse "$GITHUB_SHA^{tree}")"', $step['run'] ?? '');
     }
 
+    public function testASkippedPushFillsAndSavesOnlyTheCacheThatIsMissing(): void
+    {
+        $skipped = "steps.passed.outputs.full == 'false'";
+        $noComposer = "steps.composer-cache.outputs.cache-hit != 'true'";
+        // The image is built or loaded when either cache misses: to save it, or to run Composer in it.
+        $eitherMisses = $skipped." && (steps.image-cache.outputs.cache-hit != 'true' || ".$noComposer.')';
+        $conditions = [];
+        foreach ($this->job('main')['steps'] ?? [] as $step) {
+            if (isset($step['name'], $step['if'])) {
+                $conditions[$step['name']] = $step['if'];
+            }
+        }
+
+        self::assertSame([
+            'Name the CI image cache' => $skipped,
+            'Look up the CI image cache' => $skipped,
+            "Restore Composer's cache" => $skipped,
+            'Log in to Docker Hub' => $eitherMisses,
+            'Build or restore the CI image' => $eitherMisses,
+            "Fill Composer's cache" => $skipped.' && '.$noComposer,
+            "Save Composer's cache" => $skipped.' && '.$noComposer,
+        ], $conditions);
+    }
+
     public function testThePersistenceJobRunsBehindAStatusCheckOnASucceededChangesJob(): void
     {
         $job = $this->job('persistence');

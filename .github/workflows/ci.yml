@@ -1,5 +1,6 @@
 name: ci
-# Every gate on each pull request (on GitHub's test merge of it) and on main; a newer run of the same ref cancels the one it replaces.
+# Every gate on each pull request (on GitHub's test merge of it) and on main, where a push that reuses a pull request's
+# result skips them (the main job); a newer run of the same ref cancels the one it replaces.
 # Never pull_request_target: pull-request code must not run with the base repository's secrets or write token.
 on:
   pull_request:
