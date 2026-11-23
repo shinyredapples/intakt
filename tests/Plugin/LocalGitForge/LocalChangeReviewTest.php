@@ -52,24 +52,6 @@ final class LocalChangeReviewTest extends TestCase
     private BufferingLogger $log;
     private string $snapshot = '';
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-        $this->log = new BufferingLogger();
-    }
-
-    protected function tearDown(): void
-    {
-        if ('' !== $this->snapshot && is_dir($this->snapshot)) {
-            rmdir($this->snapshot);
-        }
-
-        $this->repository->remove();
-    }
-
     // Forces the overlap: RemoveKeptSnapshot removes the snapshot once the round is judged, and the directory is back before this call's own removal, so git fails while it still exists.
     public function testAReviewWhoseSnapshotCannotBeRemovedAfterTheRoundWasJudgedStillReturnsItsVerdict(): void
     {
@@ -94,6 +76,29 @@ final class LocalChangeReviewTest extends TestCase
         }
 
         self::assertSame(['warning'], array_column($this->log->cleanLogs(), 0));
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+        $this->log = new BufferingLogger();
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->snapshot && is_dir($this->snapshot)) {
+            rmdir($this->snapshot);
+        }
+
+        $this->repository->remove();
+    }
+
+    private function approved(): ChangeReview
+    {
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Approve, [], [], RoundTokens::of(1, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.0001), new BlockReasons());
     }
 
     /**
@@ -122,11 +127,6 @@ final class LocalChangeReviewTest extends TestCase
         $input->repository = $this->repository->path;
 
         return $input;
-    }
-
-    private function approved(): ChangeReview
-    {
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Approve, [], [], RoundTokens::of(1, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.0001), new BlockReasons());
     }
 
     private function onePanel(): Panels

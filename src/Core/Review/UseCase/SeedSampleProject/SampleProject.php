@@ -126,19 +126,6 @@ final readonly class SampleProject
         return $models;
     }
 
-    // A substitute on the tier's own provider, so it reviews at once while the first router provider is rate-limited and owes no catch-up (issue #2816).
-    /**
-     * @param array{provider: string, model: string} $mapping
-     *
-     * @return array{provider: string, model: string, substitutes?: list<array{provider: string, model: string}>}
-     */
-    private function withFallback(array $mapping): array
-    {
-        $fallback = $this->data->fallbackOf($mapping['model']);
-
-        return null === $fallback ? $mapping : $mapping + ['substitutes' => [['provider' => $mapping['provider'], 'model' => $fallback]]];
-    }
-
     /**
      * @param array<string, Provider> $tiers
      */
@@ -151,6 +138,19 @@ final readonly class SampleProject
         }
 
         return $this->data->model($provider, Tier::from($tier));
+    }
+
+    // A substitute on the tier's own provider, so it reviews at once while the first router provider is rate-limited and owes no catch-up (issue #2816).
+    /**
+     * @param array{provider: string, model: string} $mapping
+     *
+     * @return array{provider: string, model: string, substitutes?: list<array{provider: string, model: string}>}
+     */
+    private function withFallback(array $mapping): array
+    {
+        $fallback = $this->data->fallbackOf($mapping['model']);
+
+        return null === $fallback ? $mapping : $mapping + ['substitutes' => [['provider' => $mapping['provider'], 'model' => $fallback]]];
     }
 
     /**

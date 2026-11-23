@@ -229,12 +229,6 @@ final class ReviewRound implements HasPlace
         return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started, $awaited, $this->hasFindingsToJudge());
     }
 
-    // Unknown (true) until the round completed and kept what the panel reported, because only then does the judge read them.
-    private function hasFindingsToJudge(): bool
-    {
-        return null === $this->reportedFindings || [] !== json_decode($this->reportedFindings, true);
-    }
-
     public function state(): RoundState
     {
         return $this->state;
@@ -248,5 +242,11 @@ final class ReviewRound implements HasPlace
     public function moveTo(string $place): void
     {
         $this->state = RoundState::from($place);
+    }
+
+    // Unknown (true) until the round completed and kept what the panel reported, because only then does the judge read them.
+    private function hasFindingsToJudge(): bool
+    {
+        return null === $this->reportedFindings || [] !== json_decode($this->reportedFindings, true);
     }
 }

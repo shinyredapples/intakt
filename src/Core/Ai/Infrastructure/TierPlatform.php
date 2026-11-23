@@ -71,6 +71,30 @@ final readonly class TierPlatform implements TierInvoker
         throw new EveryProviderOut($out);
     }
 
+    // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.
+    #[Override]
+    #[NoDiscard('the answer is only in the result')]
+    public function invoke(ResolvedModel $model, TierRequest $request): DeferredResult
+    {
+        return $this->platforms->get($model->provider->value)->invoke($model->model, $request->input, $this->withOutputLimit($model, $request->options));
+    }
+
+    // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked, but not for keys that were all rejected, because no wait brings them back.
+    private function ownWithoutSubstitutes(string $project, Tier $tier): ResolvedModel
+    {
+        $own = $this->resolver->resolve($project, $tier);
+        if ($this->cooldowns->isEveryAccountRejected($own->provider)) {
+            throw new EveryKeyRejected($own->provider);
+        }
+
+        $wait = $this->secondsUntilFree($own);
+        if (0 < $wait) {
+            throw new EveryAccountCoolingDown($own->provider, $wait);
+        }
+
+        return $own;
+    }
+
     // The own model first, then its pinned fallbacks (same model on the own provider, another router provider), then every other substitute in the order listed, because a fallback that serves the same model owes no catch-up and a free one beats a substitute listed earlier.
     /**
      * @param list<ResolvedModel> $substitutes
@@ -91,24 +115,6 @@ final readonly class TierPlatform implements TierInvoker
         return $model !== $own && $model->isTheSameModelAs($own);
     }
 
-    // The shortest wait, because the call may go on as soon as any one of the provider's pins frees.
-    private function shorter(?ProviderOutage $kept, ProviderOutage $outage): ProviderOutage
-    {
-        if (!$kept instanceof ProviderOutage || null === $kept->secondsUntilFree || null === $outage->secondsUntilFree) {
-            return $kept ?? $outage;
-        }
-
-        return $outage->secondsUntilFree < $kept->secondsUntilFree ? $outage : $kept;
-    }
-
-    // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.
-    #[Override]
-    #[NoDiscard('the answer is only in the result')]
-    public function invoke(ResolvedModel $model, TierRequest $request): DeferredResult
-    {
-        return $this->platforms->get($model->provider->value)->invoke($model->model, $request->input, $this->withOutputLimit($model, $request->options));
-    }
-
     /**
      * @param array<string, mixed> $options
      *
@@ -121,22 +127,6 @@ final readonly class TierPlatform implements TierInvoker
         }
 
         return $options + [PlatformOptions::MAX_OUTPUT_TOKENS => $model->maxOutput];
-    }
-
-    // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked, but not for keys that were all rejected, because no wait brings them back.
-    private function ownWithoutSubstitutes(string $project, Tier $tier): ResolvedModel
-    {
-        $own = $this->resolver->resolve($project, $tier);
-        if ($this->cooldowns->isEveryAccountRejected($own->provider)) {
-            throw new EveryKeyRejected($own->provider);
-        }
-
-        $wait = $this->secondsUntilFree($own);
-        if (0 < $wait) {
-            throw new EveryAccountCoolingDown($own->provider, $wait);
-        }
-
-        return $own;
     }
 
     // One read of the cooldowns decides both whether the provider answers and the reason it does not, so a cooldown that ends in between never gives a wait of 0 s. Ends blocked even when every substitute is disabled, because the owner named a way around the outage.
@@ -177,5 +167,15 @@ final readonly class TierPlatform implements TierInvoker
         }
 
         $this->logger->info('Provider {own} is out, so the review goes to the substitute {substitute}.', ['own' => $own->provider->value, 'substitute' => $answering->provider === $own->provider ? $answering->model : $answering->provider->value]);
+    }
+
+    // The shortest wait, because the call may go on as soon as any one of the provider's pins frees.
+    private function shorter(?ProviderOutage $kept, ProviderOutage $outage): ProviderOutage
+    {
+        if (!$kept instanceof ProviderOutage || null === $kept->secondsUntilFree || null === $outage->secondsUntilFree) {
+            return $kept ?? $outage;
+        }
+
+        return $outage->secondsUntilFree < $kept->secondsUntilFree ? $outage : $kept;
     }
 }

@@ -99,17 +99,6 @@ final readonly class LocalChangeReview
         $this->onStop->stop();
     }
 
-    // Logged, never thrown, because RemoveKeptSnapshot removes the same snapshot once the round is judged and the two git runs may overlap; a throw here would replace the review's own result or failure.
-    private function removeKeptSnapshotOf(LocalGitForge $forge, string $snapshot): void
-    {
-        try {
-            $forge->removeSnapshot($snapshot);
-            // Boundary: logs the failed removal and goes on, because the review is settled already and RemoveKeptSnapshot removes what is left.
-        } catch (ForgeReadFailed $failure) {
-            $this->logger->warning('The kept snapshot of a review could not be removed; delete it and run "git worktree prune" in its repository.', ['snapshot' => $snapshot, 'failure' => $failure->getMessage()]);
-        }
-    }
-
     private function forgeFor(ReviewChangeInput $input): LocalGitForge
     {
         return new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
@@ -141,6 +130,17 @@ final readonly class LocalChangeReview
         $round = new RequestedRound($input->change, $input->round, new ChangeSource($this->absolute($input->repository), $input->base));
 
         return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $change->diff->patch, $round, $identity, $panel);
+    }
+
+    // Logged, never thrown, because RemoveKeptSnapshot removes the same snapshot once the round is judged and the two git runs may overlap; a throw here would replace the review's own result or failure.
+    private function removeKeptSnapshotOf(LocalGitForge $forge, string $snapshot): void
+    {
+        try {
+            $forge->removeSnapshot($snapshot);
+            // Boundary: logs the failed removal and goes on, because the review is settled already and RemoveKeptSnapshot removes what is left.
+        } catch (ForgeReadFailed $failure) {
+            $this->logger->warning('The kept snapshot of a review could not be removed; delete it and run "git worktree prune" in its repository.', ['snapshot' => $snapshot, 'failure' => $failure->getMessage()]);
+        }
     }
 
     private function panelFor(ReviewChangeInput $input, Change $change): Panel

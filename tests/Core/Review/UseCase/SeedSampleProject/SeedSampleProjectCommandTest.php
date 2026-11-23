@@ -430,19 +430,19 @@ final class SeedSampleProjectCommandTest extends TestCase
     }
 
     /**
-     * @return list<string>
-     */
-    private function writtenSubstituteModels(): array
-    {
-        return array_merge(...array_map(static fn (array $tier): array => array_column($tier['substitutes'] ?? [], 'model'), array_values($this->writtenProject()['tiers'])));
-    }
-
-    /**
      * @return array{tiers: array<string, array{provider: string, model: string, substitutes?: list<array{provider: string, model: string}>}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}
      */
     private function writtenProject(): array
     {
         return $this->written()['projects']['sample'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function writtenSubstituteModels(): array
+    {
+        return array_merge(...array_map(static fn (array $tier): array => array_column($tier['substitutes'] ?? [], 'model'), array_values($this->writtenProject()['tiers'])));
     }
 
     /**

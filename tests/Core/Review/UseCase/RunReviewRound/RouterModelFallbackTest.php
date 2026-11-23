@@ -115,14 +115,6 @@ final class RouterModelFallbackTest extends KernelTestCase
      */
     private array $sent = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        // The fixture's stopped clock, because a slow database engine could otherwise let a second pass before the pin's wait is read.
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory($this->fixture->clock), new ArrayAdapter(), new LockFactory(new InMemoryStore()), $this->fixture->clock, $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
-        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->fixture->clock, new LockFactory(new InMemoryStore()));
-    }
-
     public function testARouter429MovesTheReviewerAtOnceToThePinnedFallbackWhichCompletesTheRound(): void
     {
         $round = $this->fixture->start(1);
@@ -168,6 +160,14 @@ final class RouterModelFallbackTest extends KernelTestCase
         self::assertSame([self::PINNED, self::OTHER_MODEL], $this->sent);
         self::assertSame([Provider::OpenAiCompatible, true], [$reviewer->substitute(), $reviewer->owesCatchUp()]);
         self::assertSame([self::OTHER_MODEL], $this->catchUpModels());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        // The fixture's stopped clock, because a slow database engine could otherwise let a second pass before the pin's wait is read.
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory($this->fixture->clock), new ArrayAdapter(), new LockFactory(new InMemoryStore()), $this->fixture->clock, $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
+        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->fixture->clock, new LockFactory(new InMemoryStore()));
     }
 
     /**

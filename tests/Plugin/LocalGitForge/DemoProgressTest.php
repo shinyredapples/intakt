@@ -43,12 +43,6 @@ final class DemoProgressTest extends TestCase
 
     private BufferedOutput $output;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-20T12:00:00+00:00');
-        $this->output = new BufferedOutput();
-    }
-
     public function testTheFirstPollNamesEveryReviewerItWaitsOnWithTheModelThatAnswers(): void
     {
         $this->progress($this->answering())->reached($this->waitingOnBoth());
@@ -190,9 +184,10 @@ final class DemoProgressTest extends TestCase
         self::assertSame(['Waiting on the correctness reviewer and the security reviewer ('.self::DEEPSEEK.').'], $this->lines());
     }
 
-    private function progress(TierInvoker $tiers): DemoProgress
+    protected function setUp(): void
     {
-        return new DemoProgress($this->output, $tiers, $this->clock);
+        $this->clock = new MockClock('2026-11-20T12:00:00+00:00');
+        $this->output = new BufferedOutput();
     }
 
     private function answering(): TierInvoker
@@ -201,6 +196,11 @@ final class DemoProgressTest extends TestCase
         $tiers->method('answering')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel(Provider::OpenAiCompatible, SampleChange::PROJECT === $project && Tier::Standard === $tier ? self::DEEPSEEK : self::KIMI));
 
         return $tiers;
+    }
+
+    private function progress(TierInvoker $tiers): DemoProgress
+    {
+        return new DemoProgress($this->output, $tiers, $this->clock);
     }
 
     // Only the strong tier is out, so the stop names the reviewer whose tier is out.
