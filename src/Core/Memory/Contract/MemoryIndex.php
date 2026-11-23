@@ -8,4 +8,9 @@ namespace Intakt\Core\Memory\Contract;
 interface MemoryIndex
 {
     public function index(MemoryEntry $entry): void;
+
+    // Settling the same finding again replaces it, so a new hash after a code change refreshes the entry instead of adding one.
+    public function settle(SettledFinding $finding): void;
+
+    public function forget(SettledFinding $finding): void;
 }
