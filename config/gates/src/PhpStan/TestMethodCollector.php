@@ -51,10 +51,22 @@ final readonly class TestMethodCollector implements Collector
         }
 
         $method = $class->getNativeReflection()->getMethod($node->getOriginalNode()->name->toString());
-        $providers = [...$this->providersInTheClass($method, $class->getNativeReflection()), ...$this->externalProviders($method)];
+        $providers = $this->runsAsTest($method) ? [...$this->providersInTheClass($method, $class->getNativeReflection()), ...$this->externalProviders($method)] : [];
         $misnamed = $this->isMisnamedTest($node, $method, $class) ? $this->location($node, $scope, $method) : null;
 
         return null === $misnamed && [] === $providers ? null : ['misnamed' => $misnamed, 'providers' => $providers];
+    }
+
+    // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
+    private function runsAsTest(ReflectionMethod $method): bool
+    {
+        return $method->isPublic() && (str_starts_with($method->getName(), 'test') || $this->isMarkedTest($method));
+    }
+
+    // because PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
+    private function isMarkedTest(ReflectionMethod $method): bool
+    {
+        return [] !== $method->getAttributes(Test::class);
     }
 
     /**
@@ -99,15 +111,8 @@ final readonly class TestMethodCollector implements Collector
     private function isMisnamedTest(InClassMethodNode $node, ReflectionMethod $method, ClassReflection $class): bool
     {
         $name = $method->getName();
-        $isTest = str_starts_with($name, 'test') || $this->isMarkedTest($method);
 
-        return $method->isPublic() && $isTest && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && (!$this->mayBeProvider($node, $method) || !$this->isNamedProvider($name, $class));
-    }
-
-    // because PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
-    private function isMarkedTest(ReflectionMethod $method): bool
-    {
-        return [] !== $method->getAttributes(Test::class);
+        return $this->runsAsTest($method) && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && (!$this->mayBeProvider($node, $method) || !$this->isNamedProvider($name, $class));
     }
 
     /**
@@ -135,18 +140,18 @@ final readonly class TestMethodCollector implements Collector
         return 1 === preg_match('~^(?:'.self::WORD.')+$~', $words) && self::SENTENCE_WORDS <= preg_match_all('~'.self::WORD.'~', $words);
     }
 
-    // because PHPUnit runs only a static method returning an iterable as a provider, any other method is a test whatever names it, a static one returning void included
     private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
     {
+        // because PHPUnit calls only a static provider and iterates what it returns
         return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
     }
 
     // checked up the hierarchy because an abstract test case may name a provider that only each subclass implements
     private function isNamedProvider(string $name, ClassReflection $class): bool
     {
-        $declarers = [$class, ...$class->getParents(), ...$class->getInterfaces()];
+        $declarers = [$class, ...$class->getParents()];
 
-        return array_any($declarers, fn (ClassReflection $declarer): bool => array_any($declarer->getNativeReflection()->getMethods(), fn (ReflectionMethod $method): bool => $this->namesProvider($method, $name)));
+        return array_any($declarers, fn (ClassReflection $declarer): bool => array_any($declarer->getNativeReflection()->getMethods(), fn (ReflectionMethod $method): bool => $this->runsAsTest($method) && $this->namesProvider($method, $name)));
     }
 
     private function namesProvider(ReflectionMethod $method, string $name): bool
