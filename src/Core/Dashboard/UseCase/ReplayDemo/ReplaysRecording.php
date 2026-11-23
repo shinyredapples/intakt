@@ -67,14 +67,6 @@ final readonly class ReplaysRecording
         }
     }
 
-    // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.
-    private function refuseADemoProjectThatIsNoReplay(): void
-    {
-        if (ReplayMark::Replay !== $this->marks->ofProject(CreateDemoProjectCommand::NAME)) {
-            throw ReplayIsRefused::becauseTheDemoProjectIsNoReplay(CreateDemoProjectCommand::NAME);
-        }
-    }
-
     // Checked before the first append, because a refusal partway through would leave rows whose round blocks any second attempt.
     private function refuseUpdatesWithoutTopic(Recording $recording): void
     {
@@ -110,6 +102,14 @@ final readonly class ReplaysRecording
             if (null !== $call && in_array($call, $held, true)) {
                 throw ReplayIsRefused::becauseTheLedgerHoldsCall($call);
             }
+        }
+    }
+
+    // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.
+    private function refuseADemoProjectThatIsNoReplay(): void
+    {
+        if (ReplayMark::Replay !== $this->marks->ofProject(CreateDemoProjectCommand::NAME)) {
+            throw ReplayIsRefused::becauseTheDemoProjectIsNoReplay(CreateDemoProjectCommand::NAME);
         }
     }
 

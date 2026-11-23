@@ -66,18 +66,18 @@ final readonly class PlayDemoRunHandler
         }
     }
 
+    private function refuseWithout(PlayDemoRun $run, string $reason): void
+    {
+        $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'reason' => $reason]);
+        $this->captions->publishTheRefusal($run->play, $reason);
+    }
+
     // Play stands for the whole demo, so a demo project removed with intakt:demo:remove comes back instead of refusing the run; run by the replay under its lock, after the recording was accepted, so a Play that loses the lock changes nothing.
     private function recreateAMissingDemoProject(): void
     {
         if (ReplayMark::Replay !== $this->marks->ofProject(CreateDemoProjectCommand::NAME)) {
             $this->commands->dispatch(new FlagProjectAsReplay(CreateDemoProjectCommand::NAME));
         }
-    }
-
-    private function refuseWithout(PlayDemoRun $run, string $reason): void
-    {
-        $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'reason' => $reason]);
-        $this->captions->publishTheRefusal($run->play, $reason);
     }
 
     // Logged and not thrown, because a retry would meet the same file and the same ledger and refuse again; shown on the page of this Play, because the person who pressed Play reads no log, with a fixed sentence because the exception can name the recording's path.
