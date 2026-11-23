@@ -39,9 +39,9 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
 
     public function testTheLiveLookupReadsOnlyTheStartsOfTheRequestedRound(): void
     {
-        $this->startReviewer('r1', 'first');
-        $this->startReviewer('r10', 'other');
-        $this->startReviewer('r1', 'retry');
+        $this->startReviewer('r1', 'first', 'r1');
+        $this->startReviewer('r10', 'other', 'r10');
+        $this->startReviewer('r1', 'retry', 'r1');
         $this->selects->clear();
 
         self::assertSame('retry', $this->pages()->startedReviewerOf('r1', 'reviewer')?->model);
@@ -54,8 +54,8 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
 
     public function testTheLiveLookupSearchesTheSubjectIndexInsteadOfScanningTheLedger(): void
     {
-        $this->startReviewer('r1', 'first');
-        $this->startReviewer('r10', 'other');
+        $this->startReviewer('r1', 'first', 'r1');
+        $this->startReviewer('r10', 'other', 'r10');
         $this->selects->clear();
 
         self::assertSame('first', $this->pages()->startedReviewerOf('r1', 'reviewer')?->model);
@@ -71,15 +71,15 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
 
     public function testARoundIdThatIsAPrefixOfAStartedRoundFindsNoStartedReviewer(): void
     {
-        $this->startReviewer('r1', 'first');
+        $this->startReviewer('r1', 'first', 'r1');
 
         self::assertNull($this->pages()->startedReviewerOf('r', 'reviewer'));
     }
 
     public function testAStartStoredWithoutASubjectIsStillTheStartedReviewer(): void
     {
-        $this->startReviewer('r1', 'before the upgrade', withSubject: false);
-        $this->startReviewer('r10', 'other');
+        $this->startReviewer('r1', 'before the upgrade', null);
+        $this->startReviewer('r10', 'other', 'r10');
 
         $started = $this->pages()->startedReviewerOf('r1', 'reviewer');
 
@@ -89,16 +89,16 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
 
     public function testAStartWithASubjectWinsOverALaterStartWithoutOne(): void
     {
-        $this->startReviewer('r1', 'with subject');
-        $this->startReviewer('r1', 'without subject', withSubject: false);
+        $this->startReviewer('r1', 'with subject', 'r1');
+        $this->startReviewer('r1', 'without subject', null);
 
         self::assertSame('with subject', $this->pages()->startedReviewerOf('r1', 'reviewer')?->model);
     }
 
     public function testTheLookupOfStartsWithoutASubjectSearchesTheSubjectIndexInsteadOfScanningTheLedger(): void
     {
-        $this->startReviewer('r1', 'before the upgrade', withSubject: false);
-        $this->startReviewer('r10', 'other');
+        $this->startReviewer('r1', 'before the upgrade', null);
+        $this->startReviewer('r10', 'other', 'r10');
         $this->selects->clear();
 
         self::assertSame('before the upgrade', $this->pages()->startedReviewerOf('r1', 'reviewer')?->model);
@@ -132,11 +132,11 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
         self::getContainer()->set(Ledger::class, $this->ledger);
     }
 
-    private function startReviewer(string $round, string $model, bool $withSubject = true): void
+    private function startReviewer(string $round, string $model, ?string $subject): void
     {
         $payload = json_encode(['round' => $round, 'reviewer' => 'reviewer', 'role' => 'correctness', 'tier' => 'standard', 'model' => $model], JSON_THROW_ON_ERROR);
 
-        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, $payload, $withSubject ? $round : null))->succeeded());
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, $payload, $subject))->succeeded());
     }
 
     private function pages(): LedgerReviewPages
