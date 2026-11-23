@@ -35,7 +35,7 @@ final readonly class TestMethodSentenceRule implements Rule
         $findings = [];
 
         foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method]) {
-            // a trait's method is collected once for every test case that uses it, but is one name to fix
+            // keyed by place because a trait's method is collected once for every test case that uses it, but is one name to fix
             if (str_starts_with($file, $this->root.'/tests/') && !$this->isExternalProvider($class, $method, $external)) {
                 $findings[$file.':'.$line] = $this->finding($owner, $method)->file($file)->line($line)->build();
             }

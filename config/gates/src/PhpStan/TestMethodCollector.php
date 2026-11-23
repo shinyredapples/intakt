@@ -93,7 +93,7 @@ final readonly class TestMethodCollector implements Collector
         return 1 === preg_match('~^(?:'.self::WORD.')+$~', $words) && self::SENTENCE_WORDS <= preg_match_all('~'.self::WORD.'~', $words);
     }
 
-    // a provider may be named by a parent, an interface or a trait and implemented here, as an abstract test case leaves its cases to each subclass
+    // checked up the hierarchy because an abstract test case may name a provider that only each subclass implements
     private function isNamedProvider(string $name, ClassReflection $class): bool
     {
         $declarers = [$class, ...$class->getParents(), ...$class->getInterfaces()];
