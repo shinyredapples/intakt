@@ -128,6 +128,21 @@ final class MemoryDocumentsTest extends TestCase
         self::assertEquals($first->getId(), $second->getId());
     }
 
+    public function testASettledDocumentMissingItsHashIsMalformed(): void
+    {
+        $this->expectException(StoredMemoryIsMalformed::class);
+
+        new MemoryDocuments()->toSettledFinding($this->document(['kind' => 'settled', 'project' => 'alpha', 'entry' => 'A.', 'reason' => 'R.', 'file' => 'a.php', 'symbol' => '']));
+    }
+
+    public function testADocumentWithoutAKindCountsAsResolvedAndNotSettled(): void
+    {
+        $metadata = ['project' => 'alpha', 'entry' => 'A note.', 'files' => []];
+
+        self::assertTrue(new MemoryDocuments()->ofProject('alpha')($this->document($metadata)));
+        self::assertFalse(new MemoryDocuments()->settledOfProject('alpha')($this->document($metadata)));
+    }
+
     /**
      * @param array<string, mixed> $metadata
      */

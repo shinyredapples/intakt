@@ -47,6 +47,14 @@ final readonly class BuildHistory
         return $this->commit($message);
     }
 
+    public function commitLink(string $path, string $target, string $message): string
+    {
+        new Filesystem()->symlink($target, $this->work.'/'.$path);
+        $this->git('add', $path);
+
+        return $this->commit($message);
+    }
+
     public function removeFile(string $path, string $message): string
     {
         $this->git('rm', '--quiet', '--cached', '--', $path);

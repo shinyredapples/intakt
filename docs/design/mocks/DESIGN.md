@@ -172,7 +172,7 @@ Use the plain wording in UI copy. Where the term must stay, mark it with `.term`
 | round | round (review round in running text) | One build, its checks and its review. Sending work back starts the next round. |
 | protected path | protected files | Files that always need your approval to change, such as secret handling or CI. You choose them per project. |
 | floor | reserve | The smallest part of the week's capacity kept for this project, even when other projects are busy. |
-| act list | to fix | The act list: every P1 and P2 finding that passed the quote check, whatever the judge marked, and each P3 finding the judge kept, to fix before approval. |
+| act list | to fix | The act list: every P1 and P2 finding that passed the quote check, whatever the judge marked, and each P3 finding the judge kept, to fix before approval; a P3 gate gap goes to the follow-ups instead. |
 | judged | checked | Judged: the judge weighed every reviewer's findings and gave the verdict. |
 | round (on the review page) | review pass | A round: one review of the change, by its reviewers and then the judge. |
 

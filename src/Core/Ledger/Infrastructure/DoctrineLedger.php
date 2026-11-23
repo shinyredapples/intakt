@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ledger\Infrastructure;
 
+use Closure;
 use DateTimeZone;
 use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Exception\EntityManagerClosed;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -65,11 +67,46 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf(['kind' => $kind->value]);
     }
 
+    // The index finds the rows, and the comparison here keeps only the exact subject, because a database collation may ignore case (MySQL's default does).
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->eventsOf(array_filter($this->recordsOf(['kind' => $kind->value, 'subject' => $subject]), static fn (EventRecord $record): bool => $record->subject() === $subject));
+    }
+
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->recordedEventsOf(['kind' => $kind->value, 'subject' => null]);
+    }
+
     public function readMentioning(Mentions $texts): RecordedEvents
+    {
+        return $this->eventsMentioning($texts, static fn (QueryBuilder $query): QueryBuilder => $query);
+    }
+
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        if ([] === $kinds) {
+            return new RecordedEvents([]);
+        }
+
+        // A caller that repeats a kind must not push the query past SQLite's parameter limit: at most one bound value per case.
+        $values = array_values(array_unique(array_map(static fn (LedgerEventKind $kind): string => $kind->value, $kinds)));
+
+        return $this->eventsMentioning($texts, static fn (QueryBuilder $query): QueryBuilder => $query->andWhere('event.kind IN (:kinds)')->setParameter('kinds', $values));
+    }
+
+    // Both mention reads share the chunking and the append order, so an event named in two chunks is kept once and the reads cannot drift apart.
+    /**
+     * @param Closure(QueryBuilder): QueryBuilder $narrowed
+     */
+    private function eventsMentioning(Mentions $texts, Closure $narrowed): RecordedEvents
     {
         $records = [];
         foreach (array_chunk([...$texts], self::TEXTS_PER_QUERY) as $chunk) {
-            foreach ($this->recordsMentioningAnyOf($chunk) as $record) {
+            /** @var list<EventRecord> $found */
+            $found = $narrowed($this->queryMentioningAnyOf($chunk))->getQuery()->getResult();
+
+            foreach ($found as $record) {
                 $records[$record->position] = $record;
             }
         }
@@ -81,31 +118,38 @@ final readonly class DoctrineLedger implements Ledger
 
     /**
      * @param list<string> $texts
-     *
-     * @return list<EventRecord>
      */
-    private function recordsMentioningAnyOf(array $texts): array
+    private function queryMentioningAnyOf(array $texts): QueryBuilder
     {
         $manager = $this->registry->getManager();
         assert($manager instanceof EntityManagerInterface);
         $query = $manager->createQueryBuilder()->select('event')->from(EventRecord::class, 'event');
+        $mentions = [];
 
         foreach ($texts as $index => $text) {
-            $query->orWhere("event.payload LIKE :text{$index} ESCAPE '!'")->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
+            $mentions[] = "event.payload LIKE :text{$index} ESCAPE '!'";
+            $query->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
         }
 
-        /** @var list<EventRecord> $records */
-        $records = $query->getQuery()->getResult();
-
-        return $records;
+        return $query->where($query->expr()->orX(...$mentions));
     }
 
     /**
-     * @param array<string, string> $criteria
+     * @param array<string, string|null> $criteria
      */
     private function recordedEventsOf(array $criteria): RecordedEvents
     {
-        return $this->eventsOf($this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']));
+        return $this->eventsOf($this->recordsOf($criteria));
+    }
+
+    /**
+     * @param array<string, string|null> $criteria
+     *
+     * @return list<EventRecord>
+     */
+    private function recordsOf(array $criteria): array
+    {
+        return $this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']);
     }
 
     /**
@@ -120,7 +164,7 @@ final readonly class DoctrineLedger implements Ledger
                 continue;
             }
 
-            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload()), $record->recordedAt());
+            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload(), $record->subject()), $record->recordedAt());
         }
 
         return new RecordedEvents($events);
@@ -131,6 +175,6 @@ final readonly class DoctrineLedger implements Ledger
     {
         $now = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
 
-        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind->value, $event->payload, $now);
+        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind->value, $event->payload, $now, $event->subject);
     }
 }

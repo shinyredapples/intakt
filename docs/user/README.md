@@ -46,6 +46,8 @@ When Intakt builds a task, these inputs decide its tier, the first that applies 
 
 `intakt:build:tier <project> --change=<change>` shows the choice and its reason; no build lane passes the change yet ([details](../reference/user-manual.md#which-tier-a-build-starts-on)).
 
+Before a build's pull request goes out, you can check its text yourself: `intakt:check:pull-request-text` takes the task and the pull request text, and says which Evidence items the text does not name and whether the body is too long; it records nothing. A build runs the same check before its push: a first miss stops the build before its push, with nothing pushed and the commits kept in the build folder, and a second in a row goes on to the reviewers. Planned: the build lane hands a first miss back to the builder to redo only the text ([the command and an example](../reference/user-manual.md#the-check-before-a-push)).
+
 One thing to know about booting: Intakt can start a change in a scratch copy to see that it boots. A change that takes too long to install or to start counts as a failed boot, not as a fault of Intakt, so when main boots fine, the change can be sent back. Details are in the [complete reference](../reference/user-manual.md).
 
 The helper-order check of `bin/check` does not recognize a call from a property hook, a `[$this, 'helper']` callable array or a `$this::helper()` call, so a private helper reached only that way is never reported ([the method-order rules](../reference/user-manual.md#when-bincheck-reports-the-order-of-methods)).
@@ -55,6 +57,8 @@ Looking for a setting, a command option or an exact rule? The [complete referenc
 The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig and JavaScript lines a change adds. The same words inside a JavaScript string, template literal or regular expression do not count, and a comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
+
+When Intakt picks a task from a project's GitHub issues, it reads the issue once more right before. If the issue changed since the listing in a way that steers the queue, nothing is picked that round, and the next round reads the issue again from scratch: its labels changed, someone without write access applied a label last, priority labels were applied in another order (the one applied last counts), or the issues its text waits for or closes changed. A change to the wording alone, the same references in another order, or two other labels applied again in the other order does not stop the pick.
 
 The [plain-words guides](../guide/README.md) explain how Intakt works inside.
 

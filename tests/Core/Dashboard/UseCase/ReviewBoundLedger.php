@@ -39,8 +39,23 @@ final readonly class ReviewBoundLedger implements Ledger
         return $this->ledger->readOfKind($kind);
     }
 
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->ledger->readOfKindAbout($kind, $subject);
+    }
+
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->ledger->readOfKindWithoutSubject($kind);
+    }
+
     public function readMentioning(Mentions $texts): RecordedEvents
     {
         return $this->ledger->readMentioning($texts);
+    }
+
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        return $this->ledger->readOfKindsMentioning($texts, ...$kinds);
     }
 }
