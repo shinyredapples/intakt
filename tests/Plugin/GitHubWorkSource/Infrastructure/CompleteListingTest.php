@@ -8,6 +8,8 @@ use Closure;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\RetryableException;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
@@ -55,6 +57,8 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[CoversClass(CompleteListing::class)]
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeStore::class)]
+#[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(GitHubIssueReads::class)]
 #[UsesClass(IssueFields::class)]
 #[UsesClass(GitHubIssueHistories::class)]
@@ -705,6 +709,6 @@ final class CompleteListingTest extends KernelTestCase
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
 
-        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, $watches, new IssueReferences(), $this->logger);
+        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, new EligibilityLabels($watches), new IssueReferences(), $this->logger);
     }
 }

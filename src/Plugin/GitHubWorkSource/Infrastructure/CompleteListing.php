@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
-use Intakt\Core\Watcher\Contract\WatcherServices;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -27,21 +28,16 @@ use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use NoDiscard;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 // One complete listing per tick, every page read before anything is sorted (owner decision of 2026-11-11), and waits answered from its rows, because a read per waited-for reference would cost a call each and a short listing would pick the wrong task and close open waits.
 final readonly class CompleteListing
 {
-    /**
-     * @param array<string, array{eligibility_label?: string}> $watches
-     */
     public function __construct(
         private IssueReads $reads,
         private IssueHistories $histories,
         private SteeringAccounts $accounts,
         private IntakeStore $store,
-        #[Autowire(param: WatcherServices::PROJECTS)]
-        private array $watches,
+        private EligibilityLabels $labels,
         private IssueReferences $references,
         private LoggerInterface $logger,
     ) {
@@ -67,7 +63,7 @@ final readonly class CompleteListing
             $listing = $this->reads->listOpen($project, $readBefore->validator);
             $rows = $this->rowsOf($project, $listing);
             $vouched = $this->vouchWhatSteers($project, $rows, $rules);
-        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectNamesNoEligibilityLabel $short) {
             return $this->shortListing($project, $short);
         }
 
@@ -83,7 +79,7 @@ final readonly class CompleteListing
     // Each project names its own eligibility label, so a project beside another loop builds only what carries its label; a project without a watch section has no label to build by, so nothing is listed for it.
     private function rulesOf(string $project): IntakeRules
     {
-        return new IntakeRules($this->watches[$project]['eligibility_label'] ?? throw new ForgeReadFailed(sprintf('Project "%s" has no watch section, so it names no eligibility label.', $project)));
+        return new IntakeRules($this->labels->of($project));
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
@@ -149,7 +145,7 @@ final readonly class CompleteListing
         return $history;
     }
 
-    private function shortListing(string $project, ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectHeldByAnotherWriter|ListingReplacedMeanwhile $short): null
+    private function shortListing(string $project, ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectNamesNoEligibilityLabel|ProjectHeldByAnotherWriter|ListingReplacedMeanwhile $short): null
     {
         $this->logger->warning('The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}', ['project' => $project, 'reason' => $short->getMessage(), 'exception' => $short]);
 

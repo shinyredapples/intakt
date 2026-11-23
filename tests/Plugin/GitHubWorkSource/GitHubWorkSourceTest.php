@@ -12,6 +12,7 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
@@ -56,6 +57,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[Group('persistence')]
 #[CoversClass(GitHubWorkSource::class)]
 #[UsesClass(CompleteListing::class)]
+#[UsesClass(EligibilityLabels::class)]
 #[UsesClass(IntakeStore::class)]
 #[UsesClass(StoredIssue::class)]
 #[UsesClass(TaskFailure::class)]
@@ -708,7 +710,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             return in_array($account, $this->writers, true);
         });
-        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, ['alpha' => ['eligibility_label' => $this->eligibilityLabel]], new IssueReferences(), $this->logger);
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(['alpha' => ['eligibility_label' => $this->eligibilityLabel]]), new IssueReferences(), $this->logger);
 
         return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, $this->logger);
     }
