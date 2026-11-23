@@ -13,7 +13,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
-// The main view's findings to fix below the verdict card: one group per urgency, one row per finding (owner decision of 2026-11-22, #3573).
+// Its own file, because the owner asked for findings readable at a glance below the verdict card (#3573).
 #[CoversClass(ShowReviewController::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
