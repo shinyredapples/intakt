@@ -82,20 +82,12 @@ final readonly class LedgerReviewPages
         return array_merge([], ...array_map(static fn (Review $review): array => $review->rounds, $this->rounds($this->ledger->readInOrder())->reviews()));
     }
 
-    // Read from the rows that name the round alone, because a live update goes out for each streamed text and must not read every start the ledger holds; the latest start wins, as on the page, and null means the reviewer has not started in that round.
+    // Read from the round's own reviewer starts (the subject index), because a live update goes out for each streamed text and must not read the starts of every other round; the latest start wins, as on the page, and null means the reviewer has not started in that round.
     public function startedReviewerOf(string $round, string $reviewer): ?ReviewerOutcome
     {
-        $started = null;
-
-        foreach ($this->ledger->readMentioning(new Mentions($round)) as $recorded) {
-            $row = $this->payloads->reviewerRowOf($recorded);
-
-            if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
-                $started = new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt, $row->model);
-            }
-        }
-
-        return $started;
+        return $this->latestStartIn($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, $round), $round, $reviewer)
+            // Only starts stored before the ledger had a subject lack one, so this set stops growing at the upgrade and a reviewer running across it keeps its heading.
+            ?? $this->latestStartIn($this->ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted), $round, $reviewer);
     }
 
     /**
@@ -114,6 +106,21 @@ final readonly class LedgerReviewPages
     public function boardOf(RecordedEvents $events): Board
     {
         return new Board($this->rounds($events)->reviews(), $this->tasks($events));
+    }
+
+    private function latestStartIn(RecordedEvents $starts, string $round, string $reviewer): ?ReviewerOutcome
+    {
+        $started = null;
+
+        foreach ($starts as $recorded) {
+            $row = $this->payloads->reviewerRowOf($recorded);
+
+            if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
+                $started = new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt, $row->model);
+            }
+        }
+
+        return $started;
     }
 
     // A task is in flight while its latest step passed short of the push, because a build run stops at its first failed step and ends with its push, so either leaves the task at rest (#2732).

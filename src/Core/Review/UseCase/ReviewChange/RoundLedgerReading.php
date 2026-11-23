@@ -10,10 +10,12 @@ use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
@@ -87,49 +89,36 @@ final readonly class RoundLedgerReading implements RoundCosts
     public function tokensOf(string $roundId): RoundTokens
     {
         $recorded = $this->usageRows();
-        $calls = array_keys($this->callsStartedFor($roundId, $recorded));
 
-        $figures = $this->figuresOf($this->usagesOf($calls, $recorded));
+        $starts = $this->startsFor($roundId, $recorded);
 
-        return RoundTokens::of(count($calls), $figures);
-    }
-
-    // Only the calls the reviewer made, because the started row names the reviewer and the rows that carry the tokens are tied to it by their call id.
-    public function tokensOfReviewer(string $roundId, string $reviewerId): RoundTokens
-    {
-        $recorded = $this->usageRows();
-        $calls = array_keys($this->callsStartedFor($roundId, $recorded, $reviewerId));
-
-        return RoundTokens::of(count($calls), $this->figuresOf($this->usagesOf($calls, $recorded)));
+        return $this->tokensOfCalls($starts, $this->usagesByCall($recorded, $starts));
     }
 
     /**
-     * @return list<string>
+     * @param list<string> $reviewerIds
+     *
+     * @return array<string, ReviewerFigures>
      */
-    // Each model once, in the order the reviewer's calls started, because a substitute provider may answer some of its calls; a call started before the model was kept names none.
-    public function modelsOfReviewer(string $roundId, string $reviewerId): array
+    // One read of the usage rows and one of the round's rows for all of its reviewers, because a read per reviewer scanned the ledger again for each.
+    public function figuresOfReviewers(string $roundId, array $reviewerIds): array
     {
-        $models = array_filter($this->callsStartedFor($roundId, $this->usageRows(), $reviewerId), static fn (?string $model): bool => null !== $model);
+        $recorded = $this->usageRows();
+        $starts = $this->startsFor($roundId, $recorded);
+        $usages = $this->usagesByCall($recorded, $starts);
+        $moments = $this->momentsOfReviewers($roundId);
+        $figures = [];
 
-        return array_values(array_unique($models));
-    }
-
-    // From the reviewer's first start to its last end in the ledger, in milliseconds, because the ledger's clock is the one the workers share; null while it has no end.
-    public function millisecondsOfReviewer(string $reviewerId): ?int
-    {
-        $started = $this->momentsOf(LedgerEventKind::ReviewerStarted, ReviewerStarted::class, $reviewerId);
-        $ended = [
-            ...$this->momentsOf(LedgerEventKind::VerdictReceived, VerdictReceived::class, $reviewerId),
-            ...$this->momentsOf(LedgerEventKind::ReviewerFailed, ReviewerFailed::class, $reviewerId),
-            ...$this->momentsOf(LedgerEventKind::ReviewerStopped, ReviewerStopped::class, $reviewerId),
-            ...$this->momentsOf(LedgerEventKind::ReviewerBlocked, ReviewerBlocked::class, $reviewerId),
-        ];
-
-        if ([] === $started || [] === $ended) {
-            return null;
+        foreach ($reviewerIds as $reviewerId) {
+            $calls = array_filter($starts, static fn (UsageStarted $started): bool => $reviewerId === $started->reviewer);
+            $figures[$reviewerId] = new ReviewerFigures(
+                $this->tokensOfCalls($calls, $usages),
+                $this->millisecondsOf($moments[$reviewerId] ?? ['started' => [], 'ended' => []]),
+                $this->modelsOfCalls($calls),
+            );
         }
 
-        return (int) max($ended)->format('Uv') - (int) min($started)->format('Uv');
+        return $figures;
     }
 
     // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
@@ -150,21 +139,24 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped|ReviewerBlocked> $payload
+     * @param list<RecordedEvent> $recorded
      *
-     * @return list<DateTimeImmutable>
+     * @return array<string, UsageStarted>
      */
-    private function momentsOf(LedgerEventKind $kind, string $payload, string $reviewerId): array
+    // Keyed by call id, because only the started row names the round, the reviewer and the model, so the settled or unsettled row that carries the tokens is tied to it by its call id.
+    private function startsFor(string $roundId, array $recorded): array
     {
-        $moments = [];
+        $starts = [];
 
-        foreach ($this->ledger->readOfKind($kind) as $recorded) {
-            if ($reviewerId === $this->payloads->of($recorded, $payload)?->reviewer) {
-                $moments[] = $recorded->recordedAt;
+        foreach ($recorded as $row) {
+            $started = $this->payloads->of($row, UsageStarted::class);
+
+            if ('started' === $started?->phase && $roundId === $started->round) {
+                $starts[$started->call] = $started;
             }
         }
 
-        return $moments;
+        return $starts;
     }
 
     /**
@@ -172,20 +164,108 @@ final readonly class RoundLedgerReading implements RoundCosts
      *
      * @return array<string, string|null>
      */
-    // Keyed by call id with the model as value, because only the started row names the round and the model, so the settled or unsettled row that carries the tokens is tied to it by its call id.
-    private function callsStartedFor(string $roundId, array $recorded, ?string $reviewerId = null): array
+    private function callsStartedFor(string $roundId, array $recorded): array
     {
-        $calls = [];
+        return array_map(static fn (UsageStarted $started): ?string => $started->model, $this->startsFor($roundId, $recorded));
+    }
+
+    /**
+     * @param list<RecordedEvent>         $recorded
+     * @param array<string, UsageStarted> $calls
+     *
+     * @return array<string, list<TokenUsageRow>>
+     */
+    // Only the round's calls are kept, because the ledger holds the usage of every round and the rest would only be held in memory.
+    private function usagesByCall(array $recorded, array $calls): array
+    {
+        $usages = [];
 
         foreach ($recorded as $row) {
-            $started = $this->payloads->of($row, UsageStarted::class);
+            $ended = $this->endingOf($row);
 
-            if ('started' === $started?->phase && $roundId === $started->round && (null === $reviewerId || $reviewerId === $started->reviewer)) {
-                $calls[$started->call] = $started->model;
+            if (null !== $ended && array_key_exists($ended->call, $calls)) {
+                $usages[$ended->call] = [...$usages[$ended->call] ?? [], ...$ended->usages];
             }
         }
 
-        return $calls;
+        return $usages;
+    }
+
+    /**
+     * @param array<string, UsageStarted>        $calls
+     * @param array<string, list<TokenUsageRow>> $usages
+     */
+    private function tokensOfCalls(array $calls, array $usages): RoundTokens
+    {
+        return RoundTokens::of(count($calls), $this->figuresOf(array_merge([], ...array_values(array_intersect_key($usages, $calls)))));
+    }
+
+    /**
+     * @return array<string, array{started: list<DateTimeImmutable>, ended: list<DateTimeImmutable>}>
+     */
+    // Read once from the rows that name the round, because every reviewer row carries its round; the round is checked again, because the match is on the payload text.
+    private function momentsOfReviewers(string $roundId): array
+    {
+        $moments = [];
+
+        foreach ($this->ledger->readOfKindsMentioning(
+            new Mentions($roundId),
+            LedgerEventKind::ReviewerStarted,
+            LedgerEventKind::VerdictReceived,
+            LedgerEventKind::ReviewerFailed,
+            LedgerEventKind::ReviewerStopped,
+            LedgerEventKind::ReviewerBlocked,
+        ) as $recorded) {
+            $row = $this->reviewerRowOf($recorded);
+
+            if (null === $row || $roundId !== $row->round) {
+                continue;
+            }
+
+            $moments[$row->reviewer] ??= ['started' => [], 'ended' => []];
+            $moments[$row->reviewer][$row instanceof ReviewerStarted ? 'started' : 'ended'][] = $recorded->recordedAt;
+        }
+
+        return $moments;
+    }
+
+    // A blocked reviewer has ended too, whatever blocked it, because it will answer no more.
+    private function reviewerRowOf(RecordedEvent $recorded): ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped|ReviewerBlocked|null
+    {
+        $payload = match ($recorded->event->kind) {
+            LedgerEventKind::ReviewerStarted => ReviewerStarted::class,
+            LedgerEventKind::VerdictReceived => VerdictReceived::class,
+            LedgerEventKind::ReviewerFailed => ReviewerFailed::class,
+            LedgerEventKind::ReviewerStopped => ReviewerStopped::class,
+            LedgerEventKind::ReviewerBlocked => ReviewerBlocked::class,
+            default => null,
+        };
+
+        return null === $payload ? null : $this->payloads->of($recorded, $payload);
+    }
+
+    /**
+     * @param array{started: list<DateTimeImmutable>, ended: list<DateTimeImmutable>} $moments
+     */
+    // From the reviewer's first start to its last end in the ledger, in milliseconds, because the ledger's clock is the one the workers share; null while it has no end.
+    private function millisecondsOf(array $moments): ?int
+    {
+        if ([] === $moments['started'] || [] === $moments['ended']) {
+            return null;
+        }
+
+        return (int) max($moments['ended'])->format('Uv') - (int) min($moments['started'])->format('Uv');
+    }
+
+    /**
+     * @param array<string, UsageStarted> $calls
+     */
+    // Each model once, in the order the reviewer's calls started, because a substitute provider may answer some of its calls; a call started before the model was kept names none.
+    private function modelsOfCalls(array $calls): ModelNames
+    {
+        $models = array_filter(array_map(static fn (UsageStarted $started): ?string => $started->model, $calls), static fn (?string $model): bool => null !== $model);
+
+        return new ModelNames(...array_values(array_unique($models)));
     }
 
     /**
@@ -205,34 +285,11 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param list<string>        $calls
-     * @param list<RecordedEvent> $recorded
-     *
-     * @return list<TokenUsageRow>
-     */
-    private function usagesOf(array $calls, array $recorded): array
-    {
-        return array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
-    }
-
-    /**
      * @param list<TokenUsageRow> $usages
      */
     private function figuresOf(array $usages): TokenFigures
     {
         return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
-    }
-
-    /**
-     * @param list<string> $calls
-     *
-     * @return list<TokenUsageRow>
-     */
-    private function usagesEndingOneOf(array $calls, RecordedEvent $row): array
-    {
-        $ended = $this->endingOf($row);
-
-        return null !== $ended && in_array($ended->call, $calls, true) ? $ended->usages : [];
     }
 
     // Tried as settled first, because an unsettled row also reads into UsageSettled and only its phase tells the two apart.

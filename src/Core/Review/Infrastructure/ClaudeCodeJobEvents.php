@@ -94,8 +94,8 @@ final readonly class ClaudeCodeJobEvents
      */
     private function succeeded(array $block): bool
     {
-        // Only a missing or false error flag, because a flag of another type (the string "true") is no answer the CLI gives for a read that worked.
-        return 'tool_result' === ($block[self::TYPE] ?? null) && false === ($block['is_error'] ?? false);
+        // Only a missing or false error flag, because a flag of another type (null or the string "true") is no answer the CLI gives for a read that worked.
+        return 'tool_result' === ($block[self::TYPE] ?? null) && (!array_key_exists('is_error', $block) || false === $block['is_error']);
     }
 
     /**

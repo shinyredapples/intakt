@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // The latest watcher line of a pull request decides, as in LedgerFailingHeads, so a head read again after a failure waits again and a queued round or a closed pull request ends the wait.
@@ -35,16 +36,16 @@ final readonly class LedgerWaitingHeads
                 continue;
             }
 
-            $payload = LedgerPayload::of($recorded);
-            $project = $payload['project'] ?? null;
-            $change = $payload['change'] ?? null;
+            $payload = PayloadFields::of($recorded);
+            $project = $payload->text('project');
+            $change = $payload->text('change');
 
-            if (!is_string($project) || !is_string($change)) {
+            if (null === $project || null === $change) {
                 continue;
             }
 
             // Keyed by project, then pull request, so no name either side sends can make two keys meet.
-            $latest[$project][$change] = $this->waitOf($kind, $payload['read_again_at'] ?? null);
+            $latest[$project][$change] = $this->waitOf($kind, $payload->text('read_again_at'));
         }
 
         return $this->waiting($latest);
@@ -53,7 +54,7 @@ final readonly class LedgerWaitingHeads
     /**
      * @return array{decision: 'pending'|'red', read_again_at: ?string}|null
      */
-    private function waitOf(LedgerEventKind $kind, mixed $readAgainAt): ?array
+    private function waitOf(LedgerEventKind $kind, ?string $readAgainAt): ?array
     {
         $decision = match ($kind) {
             LedgerEventKind::HeadPending => 'pending',
@@ -83,11 +84,13 @@ final readonly class LedgerWaitingHeads
         return $waiting;
     }
 
-    // Read and written again, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
-    private function momentOf(mixed $moment): ?string
+    // Parsed before it is passed on, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
+    private function momentOf(?string $moment): ?string
     {
-        $parsed = is_string($moment) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC')) : false;
+        // The parser throws on a NUL byte instead of refusing it, so such a moment is malformed before it is parsed.
+        $parsed = null === $moment || str_contains($moment, "\0") ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
-        return false === $parsed ? null : $parsed->format(DATE_ATOM);
+        // The parser rolls an impossible calendar date over into the next month, so only a moment that formats back to the stored text counts.
+        return false === $parsed || $parsed->format(DATE_ATOM) !== $moment ? null : $moment;
     }
 }
