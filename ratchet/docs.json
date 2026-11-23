@@ -65,25 +65,34 @@
         ],
         "docs/architecture/build-job.md": [
             "0310d7ac2f176544",
+            "079840fd562c59be",
             "10706fa6c3960acf",
             "14cc238c6b1764b3",
             "4063adcd9a69c8cf",
             "57e4c0688620633e",
+            "5d3f8e4e9066bffd",
             "766a9d8f8640ff5c",
             "8e8d5e8e882158a8",
-            "c144c51cbeaf10d9"
+            "a26e8d34f060b4c4",
+            "c144c51cbeaf10d9",
+            "f5cc6ff326523d23"
         ],
         "docs/architecture/build-task.md": [
             "001501caa2aebf3b",
+            "0b6c8f290dd10c34",
+            "2002e164c041c918",
+            "439983781f5ad2f9",
             "55fa6c2c3ee4a71d",
             "5df588f99d9140fb",
             "6ecd366c9dd268de",
             "8186856dd3c9c8b7",
             "8619f0931eec4511",
             "9d52cfdd81f302e3",
+            "a845c605bff04ea4",
             "b59832eaf74cb91f",
             "bc37d9d331bb959d",
             "c174f3c79bef2762",
+            "cdbeb51e7da91ece",
             "f172c23fce719caf",
             "f50a23e85fe6fc8c"
         ],
@@ -105,6 +114,9 @@
         ],
         "docs/architecture/check-job.md": [
             "051febec714f46fa",
+            "0d786fbd16442da8",
+            "1607dd033e8a3a1b",
+            "18b07bed04bb2c3a",
             "2972996b1aaf5187",
             "3e00d03cacc19d30",
             "472c5a7479b6e77b",
@@ -116,6 +128,8 @@
             "94e2c19097138b1e",
             "964a5ad7b642f283",
             "98ff5c388ecbed37",
+            "9be40e331433b290",
+            "a2ee2663b1db149a",
             "af9a2fe0e0053dfd",
             "d62a22404ca1a5fb",
             "df5c5b82924c5d90",
@@ -151,6 +165,7 @@
             "0753b77dbb923579",
             "1ba5a9a90ead962a",
             "218dcc829707a479",
+            "392cdc19cad4696a",
             "4037fee783b10737",
             "60cc008465b9fca8",
             "7913c11d0429b806",
@@ -172,10 +187,15 @@
             "ef957588c3be2e22"
         ],
         "docs/architecture/dashboard.md": [
+            "017042a050755d63",
+            "05042761f5a28d02",
+            "0725ba7400628c16",
             "0746da1cd3c00c10",
+            "0bb1277c99f0e72c",
             "0ce3c31c9e4753fb",
             "1538e17522378850",
             "1920776c725f0bfa",
+            "1cd01ec6ce73d6ee",
             "237c706a07b0820c",
             "23fdf5580d6e6b09",
             "24d0d4187be80b85",
@@ -189,12 +209,14 @@
             "489ec7c86623a1a3",
             "4c08417b6d7efc97",
             "4edc439a74a62925",
+            "56d50303ced748df",
             "5b0ea0a251ebba52",
             "5c9da6f63518d3a1",
             "61dde547d3f19f83",
             "63a88af27cdf0ad9",
             "646d53f6f31d0b97",
             "666c0c0822179fd3",
+            "6a4e33993db72767",
             "6a50eee0b39d5fa4",
             "6bed8ce72c93ee74",
             "717901edba375c2d",
@@ -203,10 +225,13 @@
             "79dbe3aeb0637780",
             "7d8997ce3d442f6a",
             "7edbeeed969e1aaf",
+            "85ddad10bed7c034",
             "885cd744e02c7601",
             "88c3474dde7a7abf",
             "9148bbd93d6d478a",
             "9441c89d0300b335",
+            "94f654f2d53d4299",
+            "990aac9ca3bacc27",
             "9a1f2bc95662df6c",
             "a4e7c12f58f47934",
             "a50ce36fe5f26609",
@@ -216,25 +241,32 @@
             "b2297e58efa54f94",
             "b8d0f2dcba64d667",
             "c1c2c00e74f09c7c",
+            "c5a435ecbc199370",
             "cd5b063f5f35d386",
             "d0f0c8b382979fd7",
             "dca3c3a758ccbaf5",
             "e0c7ac4388bf305b",
             "e3b5a852908fd857",
             "e91cb13d10952149",
-            "e9f29cbcee9ab14f",
-            "f53978175e37515b"
+            "e9f29cbcee9ab14f"
         ],
         "docs/architecture/demo-recording.md": [
+            "004e1851df374feb",
             "0d3c9c24b35a3a81",
+            "36f639dd17419f32",
+            "4100e766a054c333",
             "538d942311c53917",
             "681d8f17ef2c0cfa",
+            "89a263fe87cc9dec",
             "89ec6de419d3cf76",
             "8b8b2258658b7b2b",
             "91f884164f6a2a34",
             "9b7694d333ea6b80",
             "9dcf44ec474aa410",
+            "aa65cd549480136a",
             "ae851615ae0f00be",
+            "c05b69165fef4150",
+            "c3cfd971f6254d86",
             "d1eb7d07e9cab4a2",
             "d41e24c4b4eddea4",
             "d9bee6b2b088b985",
@@ -245,6 +277,7 @@
         ],
         "docs/architecture/demo-with-docker-compose.md": [
             "0ebab594c920dc04",
+            "58bd15cb465ac243",
             "5fafc59bbe177c08",
             "7f3d5d6b6f86b1c4",
             "858caee8aa47ecd3",
@@ -256,6 +289,7 @@
             "f4e98c5c5344d938"
         ],
         "docs/architecture/development-diagnostics.md": [
+            "8ecacd5f4e8f1244",
             "a89cfd2b69adddc9",
             "cfddc02753eb65cc",
             "d064326c93fc7a53"
@@ -272,21 +306,27 @@
         ],
         "docs/architecture/forge-contract.md": [
             "004c89e4463dd7f5",
+            "07299bf1fe905ddb",
+            "073e8fdad43c9ea1",
             "12c080339295e176",
             "181929d7b1ae5fc8",
             "2eeae478ff022034",
             "3ad7499c3acbb038",
             "46b4f984d2f0ca16",
             "47d8b364c6e7b8a0",
+            "6e585796f26e874b",
             "7a63dcf4ce8479a9",
+            "8a9a4b30099679f1",
             "9741dbf7319668c6",
             "9f811725298487d7",
             "a229a94bb25148a2",
+            "a4417e50c2e72dc8",
             "a5698212ffac7f66",
+            "aa1a6dba7244a8d2",
             "aaa02a16fd5af812",
-            "bec23ef768dc73ca",
             "c2ca9a81ad7cf140",
             "cc0f9581d7866bad",
+            "d629caa6be33f801",
             "e164e2e855d83f89",
             "e2a4061654911e9d",
             "fba23fdbb1c99322"
@@ -386,14 +426,14 @@
         "docs/architecture/journeys.md": [
             "0453dec4bbffade0",
             "052e0a89ecf26113",
-            "199acf90aac2bf67",
-            "1ea97b8d7775fa76",
             "23afe3770e68b5b4",
             "37623eeb42f890ca",
             "40f7f06f459a9f7f",
+            "5110491a3fe6fd5c",
             "53849410af43b3ae",
             "64011eb227b7407b",
             "760cb62cc4bd75d4",
+            "7f39df3436563988",
             "88494e78a3dcc72a",
             "a14220a6d9953875",
             "a846443c768583ce",
@@ -412,20 +452,23 @@
             "1a9668999878d5f6",
             "4bb5b5a92ff4d23a",
             "b6f411cc5377d2be",
-            "e7729cd8e521b9ac"
+            "bb16f1b0474935be",
+            "da34d108c3bbd243",
+            "e7729cd8e521b9ac",
+            "f431826068292531"
         ],
         "docs/architecture/live-updates.md": [
             "0953d9f9db66678e",
             "1264b671447455ee",
             "14816ecc00d8b98f",
             "2b5ed612a8c1863f",
-            "61079aeff0be9c83",
             "649d2cad7b5bb82e",
             "684eeca025143910",
             "68b125c97cdb920d",
             "7648bbf5f8c303e9",
             "b7f690c717bfd3cc",
             "bcd5e5accce52f45",
+            "c1592601345b48c2",
             "ddb1553aea1e0532",
             "e84271fd3945561a",
             "f953d14354ea31aa"
@@ -476,7 +519,7 @@
             "fda861f97bef6e34"
         ],
         "docs/architecture/module-layout.md": [
-            "0aaf52050012c400"
+            "f8a933e04c9fee85"
         ],
         "docs/architecture/network-git.md": [
             "bbd750490ba3f48f"
@@ -500,10 +543,14 @@
         ],
         "docs/architecture/project-memory.md": [
             "0059758e35010640",
+            "0826cbcba9f16473",
             "2acf4f5aaee43edb",
             "55ec412a8bb706ab",
             "7e0b8ef82a8ba3c5",
-            "bb65cc8a4e25979c"
+            "8456495ff8454349",
+            "af1f67276f3b2041",
+            "bb65cc8a4e25979c",
+            "d0aa90720e32fad4"
         ],
         "docs/architecture/prompt-assembly.md": [
             "5348d6beee321abe",
@@ -522,7 +569,6 @@
             "cde29c5b5583816d"
         ],
         "docs/architecture/quality-gates.md": [
-            "3f2beffdc2f69c8d",
             "544ba2ee697c32e6",
             "86afe449a3522629",
             "a96d22ffc930fea0",
@@ -550,11 +596,14 @@
         "docs/architecture/review-flow.md": [
             "0581ad99dfd46d3f",
             "0b70d1feaa2c9b84",
+            "157e7872bd1a993a",
             "17609cfa4bfbdc10",
             "1e9cd2bd330f322f",
             "24822047cf2e959e",
             "2e90445c1b16e805",
+            "33f0877afa7bf7c6",
             "51d49eb145b3bbdd",
+            "5c4ba22ff0e26861",
             "69f3c603816f63b4",
             "751b30690acf1b4f",
             "7f2e4ceabfedb97b",
@@ -596,8 +645,10 @@
         ],
         "docs/architecture/review-verdicts.md": [
             "067e7529507db42d",
+            "16994ce14f004e4a",
             "2dd749198a260c24",
             "406784c3879cdc7b",
+            "74761a22f22756ca",
             "756f468bfa447582",
             "7b08f38bc356e70f",
             "86de4ae383a9918b",
@@ -616,7 +667,8 @@
             "6225d80f82bc19a7",
             "b6571a4e76c656bd",
             "d0551583d7b97706",
-            "d0fecd3af21d0a48"
+            "d0fecd3af21d0a48",
+            "e51f2c00b4eaf347"
         ],
         "docs/architecture/reviewer-repository-tools.md": [
             "0c337b83972adb06",
@@ -635,6 +687,7 @@
         ],
         "docs/architecture/sample-repository.md": [
             "047bd68cc32678a9",
+            "3dd537c5ed8d0e2b",
             "4b246e6fb0c2e977",
             "4e637f757055a7d7",
             "5148ad222b32d98b",
@@ -642,7 +695,7 @@
             "71df2674e8915ab2",
             "8af1b13367129e5b",
             "8c927fc013241562",
-            "9de28d6eb1cb8b39",
+            "9e38c06707cebc2d",
             "d3a75408c60e9e47",
             "e61d497d3cf2b506",
             "ef1c4010fb47b4cc"
@@ -655,7 +708,8 @@
             "5ace899eb8bb4684",
             "6b9cac681a683864",
             "890b67fe3da13dbb",
-            "b2dd61c27c295f1b"
+            "b2dd61c27c295f1b",
+            "e339daf953743e56"
         ],
         "docs/architecture/upstream-reproductions.md": [
             "0ba6eb955fd3ac58",
@@ -665,8 +719,10 @@
             "9e45232bb83e8174"
         ],
         "docs/architecture/vendor.md": [
+            "0addaacfc577afbe",
             "1a33671f258f39a4",
             "37794fcd92c46a54",
+            "66a08323d79bd6a9",
             "6fd698633855cecf",
             "cb2262316e81483c",
             "d458d17c77a38845"
@@ -701,16 +757,20 @@
         ],
         "docs/architecture/work-intake.md": [
             "094e47381ee91d08",
+            "11a2ee04826ecc67",
             "1ca8d76854aa675b",
             "4dbfae73838a7c4d",
-            "9009b441ff5f564b",
+            "53ae36f1e0c216a9",
+            "668431db6f30e0b0",
             "903b8d8694ae2a98",
             "bccfe16e5ca0487e",
             "bde87408e2e2bd13",
             "d4b50a605e9adbfb",
+            "dcf4a1c11d8224d6",
+            "dfadc3d5df2042ac",
+            "dfddba362aca05bb",
             "eb443caed29d48d3",
-            "f4e75ed77a865988",
-            "f7e7f6525c638850"
+            "f4e75ed77a865988"
         ],
         "docs/architecture/workflow-risk-scan.md": [
             "36a2c6ccebdfc860",
@@ -796,9 +856,13 @@
             "51d617064494fb0b",
             "5c174f095eccb512",
             "68d09a3fc1c69c7b",
+            "86ede7a877f7fd85",
             "95a3ce42b0b9b3cb",
             "9bd6c0da63198702",
+            "a2d1c5d038520cb8",
+            "a6215b293933c826",
             "d0bb74a87cae0d67",
+            "d1ec80e05ad73fca",
             "e058d0e330cca606"
         ],
         "docs/design/05-architecture/04-labels.md": [
@@ -904,6 +968,7 @@
             "82118b5eeab8e6b1",
             "8fbff5cfc3580b84",
             "9626c96443e0d60f",
+            "97cde44bc232727d",
             "9e99164220e9b622",
             "acf67e755cacca48",
             "b1560156ef2ccc5a",
@@ -988,6 +1053,7 @@
             "331529079be46e73",
             "33af69ff41ea36a1",
             "3a531a3621ee9f54",
+            "3bf1a8f4bc902763",
             "4cd438b13c0eb01d",
             "4df1d2406682247e",
             "4ed09154dfd63de8",
@@ -1009,11 +1075,13 @@
         ],
         "docs/design/05-architecture/10-shared-project-memory.md": [
             "31ecd93d34b48410",
-            "935cb3d54c7e8518"
+            "935cb3d54c7e8518",
+            "c23a92f48c23b259"
         ],
         "docs/design/05-architecture/11-setup.md": [
             "0b68bff3b7c49a84",
             "0b93dc0c74655189",
+            "31b247bfd42ca355",
             "72c546ba20b68a63",
             "8f9a795fc771118b",
             "91fa1392a9bfaba9",
@@ -1031,6 +1099,7 @@
             "0986faf692eedf4b",
             "0c2a49af160eb232",
             "0f6ee1984fac292b",
+            "280c3768d139e5a2",
             "332a76d1472da992",
             "3553b7d54cf485ab",
             "3f4847fcbb6bf08c",
@@ -1105,6 +1174,7 @@
             "903c1aaa8ff2cc47",
             "933f314f7d062544",
             "95efaff2d40e4901",
+            "9a60f5e3e61e8dd0",
             "9a90ded49707d3b0",
             "9b8addbb5424d2fa",
             "9d017100b94b66dd",
@@ -1122,6 +1192,7 @@
             "bd60bd169ce1b9b3",
             "c47f844dd75ab271",
             "c7905e2aaf12acc4",
+            "cb27212c5e030914",
             "cbc7e0023cd9898c",
             "d0eb94906d2ef572",
             "d64c3ed30b063036",
@@ -1129,6 +1200,8 @@
             "df0559c87def5527",
             "dfe2e40007c91b58",
             "e1f3f4d45224b4fb",
+            "e524d29d7da5b920",
+            "ec0e402295b4d7ae",
             "ec8a627f8b35fb2d",
             "efe5f2e57c7c50a9",
             "f66959d0aea5b03d",
@@ -1169,6 +1242,7 @@
             "f7c883d5909fefcc"
         ],
         "docs/design/mocks/README.md": [
+            "5aa96111177dc662",
             "6e08d87bf26e1b57",
             "dd5f4c724cc8dbce"
         ],
@@ -1179,11 +1253,13 @@
             "094323ab816603da",
             "0bf9fda34dd3804f",
             "0f4a5d42ed73ec88",
+            "0fa455d5b19bb242",
             "140253b4dbe36f5b",
             "180472b9c2ed9498",
             "19fd49b5b25a8d4a",
             "1f639b7c123e393c",
             "2147c11a4b734ae7",
+            "3fa3e40bf7970ba7",
             "419a719e20c44d61",
             "4909323edccfe91a",
             "511ab63e06c15896",
@@ -1193,7 +1269,6 @@
             "6688193cdf0ffad7",
             "6d72207c86efb855",
             "7a4ae525a004ce40",
-            "8601c5db5e5d3d65",
             "9d37696add0372d1",
             "ac9aa20fea6875bc",
             "bb38829a1ec463e6",
@@ -1244,6 +1319,7 @@
             "2d88da1bce4240a2",
             "3d02ede054f2b419",
             "5a9d2cad19ace1fe",
+            "7718fe697c42bc18",
             "af850c99180502f7",
             "bf1700276aeb2b7b"
         ],
@@ -1261,6 +1337,7 @@
             "7c2a4f8d01ab3973"
         ],
         "docs/guide/project-memory.md": [
+            "8ad87a2e90395fd5",
             "c9c17d78e797b87d",
             "d6ad91dd4e54143c"
         ],
@@ -1269,6 +1346,7 @@
             "e0c812bd9a4b2819"
         ],
         "docs/guide/running-one-task.md": [
+            "035f21e408200609",
             "268e4aeaae367087"
         ],
         "docs/guide/setting-up-intakt.md": [
@@ -1325,6 +1403,7 @@
             "1179fc02de043bba",
             "27890938517950f5",
             "3a86db1346433b95",
+            "3fd2ca27be1aa56d",
             "4c8e532a5b286685",
             "57bccea06bac162b",
             "5c127db01f605b05",
@@ -1375,7 +1454,9 @@
             "f9303fb8c25170b7"
         ],
         "docs/guide/writing-a-good-task.md": [
-            "02e5704dba4a78f8"
+            "02e5704dba4a78f8",
+            "4962f868c1c59e85",
+            "56a47edb269f9c04"
         ],
         "docs/guide/your-data.md": [
             "3c91852ba3ccae79",
@@ -1444,6 +1525,7 @@
             "60505f1aa1bdd4ec",
             "647cc5d76067f9ea",
             "664a79b3b1111b21",
+            "6902652cc348c8ff",
             "6e37090e7608aa21",
             "74bc953acd9a8b5a",
             "75cb29fedf315081",
@@ -1463,6 +1545,7 @@
             "a10cd4165e87d647",
             "a3fb5f050fc25bb3",
             "a4c82b88990ec95b",
+            "a60572c263db5deb",
             "acf2b18db6df0670",
             "ad0a22b91ebead69",
             "b2256f02650a074c",
@@ -1499,6 +1582,7 @@
             "ee30b6ebfdf7861b",
             "f2e2ac183cdee068",
             "f3b59ed35efe09ee",
+            "f5d4daa6df63e8b5",
             "f5ef79bb20166050",
             "fc31efabb53755c1",
             "fc52a2ff5729253b",
@@ -1509,7 +1593,9 @@
         "docs/reference/mcp.md": [
             "03f37f2ef52ee42a",
             "23fff635ed325d64",
+            "45481a860953a3a3",
             "8099885dbbf51886",
+            "9a93ae00eb10160d",
             "ebc50d5a4b511a8f",
             "f2bdbabb29d6522d",
             "fb4926e8359482b6"
@@ -1540,6 +1626,8 @@
             "053d56d177ace639",
             "055624a86aab1eeb",
             "05c663ba82d4b309",
+            "0762ed128451408f",
+            "07b349edc69eaf9d",
             "07bd57d15e32aa61",
             "08c1e8cc8d62629f",
             "09352df9853d3a58",
@@ -1548,6 +1636,7 @@
             "0cf37b325661c787",
             "0dfc9ce4d244bbd0",
             "117d9c7fb608c3d0",
+            "120cac74951926bd",
             "129b4a3167fa2e7c",
             "131984910a477a0c",
             "15bf8059d0047f7c",
@@ -1556,8 +1645,10 @@
             "16db64af22de8ca5",
             "17936b5be99efe96",
             "183b72e9f27a780c",
+            "1866847d0642a2b0",
             "18e53291e825a25c",
             "1900c70c6ee6fb1f",
+            "19623a2444ba45d2",
             "19aa76121259e054",
             "1a6e01e24293f149",
             "1b66bb3d8e38214c",
@@ -1614,7 +1705,6 @@
             "4254dbd53848b285",
             "4272c1bb07bebe42",
             "445f9ddbf63d426d",
-            "4681c69397a9c1a4",
             "48b75e3c848400d6",
             "4bc84a081b5a027d",
             "4bca897213c32913",
@@ -1678,9 +1768,11 @@
             "860cc15db4afd341",
             "869bc0c5cde14bf4",
             "881710156e8d08e0",
+            "8be6ce664c5b771b",
             "8c1ad045567a30dc",
             "8c9451b1405a6218",
             "8d82a8e81ccba9ed",
+            "8e6415d27cb74b45",
             "8eac6d064166cb4f",
             "8f2277317579dee2",
             "8f447b746e32ee89",
@@ -1715,6 +1807,7 @@
             "adf2c6d173fe75f8",
             "ae42fd8256d0d949",
             "b082556cb303e94e",
+            "b1e43497d4fd9bbe",
             "b8dbc4259c1f3f4d",
             "b9005911931a2595",
             "ba11f68161074134",
@@ -1734,14 +1827,17 @@
             "ce1ccf0d9e57013f",
             "ce87ce69db65047e",
             "cea79ba92dba5673",
+            "cf649e80f36634be",
             "d0bc01a61c500db0",
             "d25e05f1168b8edb",
+            "d27b2a9e8ade23dd",
             "d45476395200206f",
             "d5996c31f46e117f",
             "d81b1748a3aae8da",
             "d8aa08227e731aca",
             "d8eee25f5aeda14c",
             "dab71d31eddae887",
+            "db24aef71e96472a",
             "db4f0e30433c5625",
             "dc39eb14c98d7b57",
             "dca7592588a05d12",
@@ -1765,8 +1861,9 @@
             "efbc124f3d98aa27",
             "efda262317a5bb73",
             "f010d1a8972763c4",
+            "f1450a3511c9640a",
+            "f2199be652e5b06b",
             "f358c3e785ec6d4b",
-            "f4ea90ce2ee9aa98",
             "f563dd58d6e10076",
             "f5a8eaf71f5235e7",
             "f77872cc4357d662",
@@ -1775,6 +1872,7 @@
             "faecfd390be48cf3",
             "fcfd3936d5b98268",
             "fe6651f0ada099c3",
+            "ff77d7ca1e452ef8",
             "ffc5a1cb5d160615",
             "ffd6c7966790a883"
         ],
@@ -1790,7 +1888,16 @@
         ],
         "docs/spec.md": [
             "1d157058f48ef2b6",
+            "221ff1ff356a9446",
             "3a3a1398b3bd159a"
+        ],
+        "docs/user/04-reading-the-verdict.md": [
+            "40bbfe70eb4b45bf",
+            "910666a4fc5f8702"
+        ],
+        "docs/user/08-when-something-goes-wrong.md": [
+            "7611894d8201bb04",
+            "a6537912d4db616a"
         ],
         "docs/video.md": [
             "03f2f317b91a6202",
@@ -1799,18 +1906,18 @@
         ]
     },
     "pages": {
-        "docs/guide/a-tour-of-the-dashboard.md": 12110,
+        "docs/guide/a-tour-of-the-dashboard.md": 12234,
         "docs/guide/accounts-and-costs.md": 2706,
-        "docs/guide/demo-walkthrough.md": 1950,
+        "docs/guide/demo-walkthrough.md": 1969,
         "docs/guide/glossary.md": 2463,
         "docs/guide/how-intakt-works.md": 4456,
         "docs/guide/steering-intakt.md": 1799,
         "docs/guide/symfony-in-intakt.md": 2680,
         "docs/guide/the-engine-room.md": 5218,
-        "docs/guide/the-journey-of-a-task.md": 4780,
+        "docs/guide/the-journey-of-a-task.md": 4900,
         "docs/guide/why-isnt-anything-happening.md": 2733,
         "docs/guide/why-the-ai-cant-wreck-your-project.md": 4998,
-        "docs/guide/writing-a-good-task.md": 1797
+        "docs/guide/writing-a-good-task.md": 2095
     },
     "summaries": [
         "docs/architecture/README.md",
@@ -1836,10 +1943,12 @@
         "docs/architecture/job-images.md",
         "docs/architecture/journey-page.md",
         "docs/architecture/journeys.md",
+        "docs/architecture/ledger.md",
         "docs/architecture/live-updates.md",
         "docs/architecture/mcp-server.md",
         "docs/architecture/measured-use.md",
         "docs/architecture/parity.md",
+        "docs/architecture/project-memory.md",
         "docs/architecture/quality-gates.md",
         "docs/architecture/requirements.md",
         "docs/architecture/review-flow.md",
