@@ -158,6 +158,17 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame(['{"call":"'.$calls[1099].'"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'], $payloads);
     }
 
+    public function testAReadByOneKindRepeatedAThousandTimesReturnsTheMatchingEventOnce(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"r-1"}'))->succeeded());
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning(new Mentions('r-1'), ...array_fill(0, 1000, LedgerEventKind::JudgeDone))));
+
+        self::assertSame(['{"round":"r-1"}'], $payloads);
+    }
+
     public function testAReadByNoKindOrNoTextReadsNothing(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');

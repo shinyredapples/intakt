@@ -78,7 +78,8 @@ final readonly class DoctrineLedger implements Ledger
             return new RecordedEvents([]);
         }
 
-        $values = array_map(static fn (LedgerEventKind $kind): string => $kind->value, $kinds);
+        // A caller that repeats a kind must not push the query past SQLite's parameter limit: at most one bound value per case.
+        $values = array_values(array_unique(array_map(static fn (LedgerEventKind $kind): string => $kind->value, $kinds)));
 
         return $this->eventsMentioning($texts, static fn (QueryBuilder $query): QueryBuilder => $query->andWhere('event.kind IN (:kinds)')->setParameter('kinds', $values));
     }
