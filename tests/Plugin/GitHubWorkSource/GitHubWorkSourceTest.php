@@ -271,9 +271,10 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->historyFailure = new ForgeReadFailed('GitHub answered 502 to a read.');
         $this->reads->listsUnchanged();
 
-        (void) $source->nextWork('alpha', WorkerState::Free);
+        $pick = $source->nextWork('alpha', WorkerState::Free);
 
         $this->logger->cleanLogs();
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
         self::assertSame('W/"issues-1"', $this->store->syncStateOf('alpha')->validator);
         self::assertTrue(array_first($this->store->issuesOf('alpha'))?->isVouched());
     }
