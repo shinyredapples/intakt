@@ -30,11 +30,20 @@ system_command() {
         /*) ;;
         *) return 1 ;;
     esac
+    # The final target too, because a link in a system folder can point at a file the builder may rewrite.
+    target="$(PATH="$system_path"; readlink -f -- "$found" 2>/dev/null)" || return 1
+    case "$target" in
+        /*) ;;
+        *) return 1 ;;
+    esac
     for writable in "$clone" "${TMPDIR:-/work}" "${HOME:-}"; do
         writable="${writable%/}"
         # Empty for the root folder, which holds every system folder and so is never the job's work area.
         [ -n "$writable" ] || continue
         case "$found" in
+            "$writable"/*) return 1 ;;
+        esac
+        case "$target" in
             "$writable"/*) return 1 ;;
         esac
     done

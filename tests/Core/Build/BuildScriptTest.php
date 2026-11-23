@@ -958,6 +958,25 @@ final class BuildScriptTest extends TestCase
         $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
     }
 
+    public function testATimeoutThatIsALinkInTheSystemFoldersToAFileInTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
+    {
+        $timeout = (string) new ExecutableFinder()->find('timeout');
+        mkdir($this->work.'/bin');
+        mkdir($this->work.'/system');
+        file_put_contents($this->work.'/bin/timeout', "#!/bin/sh\nexec '{$timeout}' \"\$@\"\n");
+        chmod($this->work.'/bin/timeout', 0o755);
+        symlink($this->work.'/bin/timeout', $this->work.'/system/timeout');
+        $this->givenTheCli(<<<'SH'
+            touch "$RECORD/ran"
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            SH);
+        $this->systemHead = $this->work.'/system';
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
     public function testAGitTheSystemFoldersNameInsideTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
     {
         // A git that does nothing, because the refusal comes before any use of it.
@@ -981,6 +1000,7 @@ final class BuildScriptTest extends TestCase
     {
         // A folder that does not exist replaces the system folders, so that only the fixture folder, which holds a timeout and no git, is searched.
         $this->givenTheTimeout("shift 3\nexec \"\$@\"");
+        symlink((string) new ExecutableFinder()->find('readlink'), $this->bin.'/readlink');
         $this->givenTheCli('touch "$RECORD/ran"');
         $this->systemPath = $this->history->folder.'/no-such-folder';
 
