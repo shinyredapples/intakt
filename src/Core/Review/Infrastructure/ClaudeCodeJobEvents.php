@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Provider;
 use Symfony\AI\Platform\Bridge\ClaudeCode\TokenUsageExtractor;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 
@@ -20,6 +21,8 @@ final readonly class ClaudeCodeJobEvents
      */
     public function __construct(
         private array $events,
+        // The host folder the job mounted as its checkout, still there while the answer is read, so a path is resolved where the CLI read it.
+        private string $checkout,
     ) {
     }
 
@@ -35,7 +38,7 @@ final readonly class ClaudeCodeJobEvents
         return is_string($result['result'] ?? null) ? $result['result'] : null;
     }
 
-    // A Read call of a file under the checkout that the CLI answered without a tool error, because a call that failed or read elsewhere showed the reviewer nothing of the change.
+    // A Read call of a file of the checkout that the CLI answered without a tool error, because a call that failed or read elsewhere (git's metadata, a file a link leads out to) showed the reviewer nothing of the change.
     public function readACheckoutFile(): bool
     {
         $reads = array_map(static fn (array $block): mixed => $block['id'] ?? null, array_filter($this->blocksOf('assistant'), $this->readsInTheCheckout(...)));
@@ -47,12 +50,14 @@ final readonly class ClaudeCodeJobEvents
     // The usage of the final result, read by the same extractor as for the CLI in the app's own process, because that result covers every turn of the run.
     /**
      * @return list<TokenUsageInterface>
+     *
+     * @throws ReviewJobFailure
      */
     public function usage(): array
     {
         $result = $this->lastResult();
 
-        return ReportedUsage::in(new TokenUsageExtractor(), null === $result ? [] : [$result]);
+        return ReportedUsage::in(Provider::ClaudeCode, new TokenUsageExtractor(), null === $result ? [] : [$result]);
     }
 
     /**
@@ -92,7 +97,8 @@ final readonly class ClaudeCodeJobEvents
      */
     private function succeeded(array $block): bool
     {
-        return 'tool_result' === ($block[self::TYPE] ?? null) && true !== ($block['is_error'] ?? false);
+        // Only a missing or false error flag, because a flag of another type (the string "true") is no answer the CLI gives for a read that worked.
+        return 'tool_result' === ($block[self::TYPE] ?? null) && false === ($block['is_error'] ?? false);
     }
 
     /**
@@ -105,9 +111,16 @@ final readonly class ClaudeCodeJobEvents
         return is_array($content) ? array_values(array_filter($content, is_array(...))) : [];
     }
 
-    // Under the mount point and without a step up, because the CLI resolves a dotted path itself and could leave the checkout.
+    // A regular file under the host folder once every link and step up is resolved, outside git's own folder, because the CLI resolves both itself, and a link of the head can lead anywhere.
     private function inTheCheckout(string $path): bool
     {
-        return str_starts_with($path, ReviewJob::CHECKOUT.'/') && !in_array('..', explode('/', $path), true);
+        if (!str_starts_with($path, ReviewJob::CHECKOUT.'/')) {
+            return false;
+        }
+
+        $file = realpath($this->checkout.substr($path, strlen(ReviewJob::CHECKOUT)));
+        $metadata = $this->checkout.'/.git';
+
+        return false !== $file && is_file($file) && str_starts_with($file, $this->checkout.'/') && $metadata !== $file && !str_starts_with($file, $metadata.'/');
     }
 }
