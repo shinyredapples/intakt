@@ -37,7 +37,7 @@ final readonly class TestMethodSentenceRule implements Rule
 
         foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method, $static]) {
             // keyed by place because a trait's method is collected once for every test case that uses it, but is one name to fix
-            if (str_starts_with($file, $this->root.'/tests/') && !$this->isNamedProvider($class, $method, $providers) && !$this->mayBeProviderOfUnanalyzedTest($static)) {
+            if (str_starts_with($file, $this->root.'/tests/') && !$this->isNamedProvider($class, $method, $providers) && !($static && $this->isChangedFilesRun())) {
                 $findings[$file.':'.$line] = $this->finding($owner, $method)->file($file)->line($line)->build();
             }
         }
@@ -54,9 +54,9 @@ final readonly class TestMethodSentenceRule implements Rule
     }
 
     // PHPUnit wants a provider static, and a changed-files run may leave out the test that names it, so only a run with every test judges a static method; only the gate's explicit signal turns this on, as for trait setters
-    private function mayBeProviderOfUnanalyzedTest(bool $static): bool
+    private function isChangedFilesRun(): bool
     {
-        return $static && '1' === getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        return '1' === getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
     }
 
     /**

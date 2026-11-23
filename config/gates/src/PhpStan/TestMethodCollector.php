@@ -51,7 +51,7 @@ final readonly class TestMethodCollector implements Collector
         }
 
         $method = $class->getNativeReflection()->getMethod($node->getOriginalNode()->name->toString());
-        $providers = $this->providersNamedBy($method, $class->getNativeReflection());
+        $providers = [...$this->providersInTheClass($method, $class->getNativeReflection()), ...$this->externalProviders($method)];
         $misnamed = $this->isMisnamedTest($method, $class) ? $this->location($node, $scope, $method) : null;
 
         return null === $misnamed && [] === $providers ? null : ['misnamed' => $misnamed, 'providers' => $providers];
@@ -60,7 +60,7 @@ final readonly class TestMethodCollector implements Collector
     /**
      * @return list<array{string, string}>
      */
-    private function providersNamedBy(ReflectionMethod $method, ReflectionClass|ReflectionEnum $class): array
+    private function providersInTheClass(ReflectionMethod $method, ReflectionClass|ReflectionEnum $class): array
     {
         $providers = [];
 
@@ -72,6 +72,16 @@ final readonly class TestMethodCollector implements Collector
                 $providers[] = $this->declaration($class, $methodName);
             }
         }
+
+        return $providers;
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function externalProviders(ReflectionMethod $method): array
+    {
+        $providers = [];
 
         foreach ($method->getAttributes(DataProviderExternal::class) as $attribute) {
             $arguments = $attribute->getArguments();
