@@ -27,12 +27,11 @@ final readonly class InfrastructureRow
     }
 
     /**
-     * Redacted as well, because the reason of a down source is free text the board does not control.
-     *
      * @param Closure(string): string $redact
      */
     public static function of(ServerReading $reading, Closure $redact): self
     {
+        // Redacted as well, because the reason of a down source is free text the board does not control.
         return new self([
             ...self::threadsOf($reading->threads, $redact),
             ...self::metricsOf($reading->metrics, $redact),
