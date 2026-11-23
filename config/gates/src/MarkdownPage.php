@@ -213,7 +213,7 @@ final readonly class MarkdownPage
     {
         $cells = $this->cells($delimiter);
 
-        // GFM: the delimiter row matches the header's cell count and each of its cells holds one or more hyphens, else no table starts.
+        // A row with a missing column or a cell without a hyphen is no delimiter in GFM, so the prose below it must stay measured.
         return count($cells) === count($this->cells($header))
             && [] === array_filter($cells, static fn (string $cell): bool => 0 === preg_match(self::DELIMITER_CELL, $cell));
     }

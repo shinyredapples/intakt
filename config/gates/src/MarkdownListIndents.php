@@ -20,12 +20,12 @@ final readonly class MarkdownListIndents
         preg_match(self::LIST_MARKER, $this->expanded($listItem), $parts);
         $gap = strlen($parts[3] ?? '');
 
-        // CommonMark: after a gap of five or more columns the item's content starts one column after its marker, the rest is indented code.
+        // A gap of five or more columns starts indented code in the item, so its content starts one column after the marker (CommonMark 5.2).
         return strlen($parts[1] ?? '') + strlen($parts[2] ?? '') + (0 === $gap || $gap > 4 ? 1 : $gap);
     }
 
     /**
-     * @param list<int> $lists the content indents of the open list items, outermost first
+     * @param list<int> $lists
      *
      * @return list<int>
      */
