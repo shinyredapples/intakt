@@ -114,7 +114,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $container = $this->bootedContainer();
 
-        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.']], $container->getParameter(WatcherServices::PROJECTS));
+        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.', 'eligibility_label' => 'intakt']], $container->getParameter(WatcherServices::PROJECTS));
         self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
     }
 

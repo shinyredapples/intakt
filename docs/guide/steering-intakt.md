@@ -8,7 +8,7 @@ You steer Intakt from GitHub (labels and comments on issues and pull requests, f
 
 ```mermaid
 flowchart LR
-  issue[An issue] -- "intakt (and no idea)" --> eligible[Intakt may build it]
+  issue[An issue] -- "the eligibility label (and no idea)" --> eligible[Intakt may build it]
   issue -- idea --> discussion[For discussion only]
   eligible -- "priority:" --> order[Its place in the queue]
   eligible -- "model:" --> tier[Which AI model starts]
@@ -18,8 +18,8 @@ flowchart LR
 
 | Label | What it does |
 |---|---|
-| `intakt` | Intakt may build this task |
-| `idea` | for discussion only: Intakt never builds or plans it, even if `intakt` is also set |
+| the project's eligibility label (`intakt` by default) | Intakt may build this task |
+| `idea` | for discussion only: Intakt never builds or plans it, even if the eligibility label is also set |
 | `priority:urgent`, `high`, `normal`, `low` | its place in the queue; no label means `normal`. An urgent task may start even when the builders are paused for review |
 | `class:core`, `feature`, `tooling`, `process` | what kind of work it is; Intakt proposes one when it is missing |
 | `model:strong`, `standard`, `light` | the AI model it starts on; Intakt can still move it up if it struggles |
@@ -30,7 +30,7 @@ flowchart LR
 | `hands-off` | you work on this issue or pull request yourself: Intakt stays off it |
 | `take-over` | Intakt works on an issue or pull request it did not create |
 
-To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add `intakt`.
+To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add the project's eligibility label (`intakt` unless the project names another).
 
 Intakt also writes `status:` labels (`queued`, `building`, `in-review`, `waiting-on-you`, ...) so the issue list shows where each task stands. Those are for reading only: changing one does nothing, and Intakt puts it back.
 
