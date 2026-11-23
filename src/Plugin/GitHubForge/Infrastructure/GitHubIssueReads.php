@@ -192,7 +192,7 @@ final readonly class GitHubIssueReads implements IssueReads
     {
         $query = $options['query'] ?? null;
 
-        return is_array($query) && [] !== $query ? $path.'?'.http_build_query($query) : $path;
+        return is_array($query) && [] !== $query ? $path.'?'.http_build_query($query, '', '&') : $path;
     }
 
     /**

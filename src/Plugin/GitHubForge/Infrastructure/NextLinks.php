@@ -84,6 +84,7 @@ final readonly class NextLinks
         return $parameter[3] ?? (string) preg_replace('/\\\\(.)/s', '$1', substr((string) $parameter[2], 1, -1));
     }
 
+    // Control characters and spaces fail, because `parse_url` turns them into `_` and the anchor could then match another repository.
     // Only the empty reference, or a relative one of the same path (or none) and the same raw query pairs, counts, because anything looser may name another resource.
     private function namesThisRequest(string $reference, string $target): bool
     {
@@ -93,7 +94,7 @@ final readonly class NextLinks
 
         $request = parse_url($target);
         $given = parse_url($reference);
-        if (false === $request || false === $given || str_contains($reference, '#') || [] !== array_diff(array_keys($given), ['path', 'query'])) {
+        if (1 === preg_match('/[\\x00-\\x20\\x7f]/', $reference) || false === $request || false === $given || str_contains($reference, '#') || [] !== array_diff(array_keys($given), ['path', 'query'])) {
             return false;
         }
 

@@ -9,6 +9,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 #[CoversClass(NextLinks::class)]
 final class NextLinksTest extends TestCase
@@ -69,7 +70,7 @@ final class NextLinksTest extends TestCase
         new NextLinks()->namesNext(['<?page=2>; rel=next', '<?page=9>; rel=next; anchor="#other"'], self::TARGET);
     }
 
-    public function testAPcreFailureWhileReadingALinkFailsTheReadInsteadOfNamingNoNextPage(): void
+    public function testAPcreFailureWhileReadingLinkParametersFailsTheReadInsteadOfNamingNoNextPage(): void
     {
         $jit = ini_set('pcre.jit', '0');
         $limit = ini_set('pcre.backtrack_limit', '1');
@@ -77,11 +78,19 @@ final class NextLinksTest extends TestCase
         try {
             $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a Link header this forge cannot read.'));
 
-            new NextLinks()->namesNext(['<?page=2>; title="a b c d"; rel=next'], self::TARGET);
+            // The parameter matcher is called alone, because the whole-header match fails first through namesNext().
+            new ReflectionMethod(NextLinks::class, 'relationsIn')->invoke(new NextLinks(), '; title="a b c d"; rel=next', self::TARGET);
         } finally {
             ini_set('pcre.jit', (string) $jit);
             ini_set('pcre.backtrack_limit', (string) $limit);
         }
+    }
+
+    public function testAnAnchorWithAControlCharacterInItsPathFailsTheRead(): void
+    {
+        $this->expectException(ForgeReadFailed::class);
+
+        new NextLinks()->namesNext(["<?page=2>; rel=next; anchor=\"/repos/a/b\tissues?state=open&per_page=100&page=1\""], '/repos/a/b_issues?state=open&per_page=100&page=1');
     }
 
     public function testAnAnchorWithoutAValueFailsAsAnUnreadableLink(): void

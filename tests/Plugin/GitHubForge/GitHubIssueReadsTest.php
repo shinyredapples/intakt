@@ -385,6 +385,17 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor="?page=1&state=open&per_page=100"'));
     }
 
+    public function testTheRequestedQueryIsJoinedWithAmpersandsWhateverArgSeparatorOutputIsSet(): void
+    {
+        $separator = ini_set('arg_separator.output', ';');
+
+        try {
+            self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor="?state=open&per_page=100&page=1"'));
+        } finally {
+            ini_set('arg_separator.output', (string) $separator);
+        }
+    }
+
     public function testANextRelationWithAnEmptyAnchorBelongsToTheCurrentPageAndReadsTheNextPage(): void
     {
         self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor=""'));
