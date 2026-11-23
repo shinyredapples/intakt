@@ -92,7 +92,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Build job](build-job.md): the builder's CLI in a job container and what it returns.
 - [Builder prompt](builder-prompt.md): what a builder is told, with every untrusted input fenced.
 - [Hand-back checks](hand-back.md): the checks on what a build returns before anything is pushed.
-- [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone.
+- [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone, and the pull request text rule (Evidence references, body cap).
 - [The build lane's review cap and in-flight limit](lanes.md): when a new build may start.
 - [Bare mirror](mirror.md): the local copy of each project's repository.
 - [Build clone](build-clone.md): the fresh clone a build works in.
