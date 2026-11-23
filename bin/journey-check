@@ -1,21 +1,26 @@
 #!/usr/bin/env node
 // Walks user journeys through a running dashboard in a headless browser, as a person would, and reports each one as passed or failed.
-// A failed journey names the step where it broke and saves a screenshot of the page there as var/journey-check/<journey>-step-<n>.png.
-// Usage: bin/journey-check [address of a running dashboard, default http://localhost:7780]
+// A failed journey names the step where it broke and saves a screenshot of the page there as var/journey-check/<run>/<journey>-step-<n>.png.
+// Usage: bin/journey-check [address of a running dashboard, default http://localhost:7781, the compose demo's]
 // Needs Node.js 22 and Playwright (NODE_PATH names where it is installed); CHROME_PATH names a system Chrome or Chromium.
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_ADDRESS = 'http://localhost:7780';
+const DEFAULT_ADDRESS = 'http://localhost:7781';
 const OUT = path.resolve(__dirname, '..', 'var', 'journey-check');
 const STEP_TIMEOUT_MS = 15_000;
 // The recorded demo run takes about a minute from Play to its verdict, so its steps wait far longer than a click does.
 const RUN_TIMEOUT_MS = 180_000;
-const VERDICT = /^(Approved|Changes needed|Blocked:|Failed:)/;
+// The shipped recording (fixtures/demo/sample-change-review.json) ends with the judge asking for changes, and its first finding to fix is the changed discount check,
+// so a replay that failed or was blocked, or a To fix list that shows something else, fails the journey instead of passing it.
+const OUTCOME = /^(Approved|Changes needed|Blocked:|Failed:)/;
+const RECORDED_VERDICT = 'Changes needed';
+const RECORDED_FINDING = /^The check changed from\W*amount >= 100\W*to\W*amount > 100\W/;
 
-// Controls are found by role and visible text only, so a redesign keeps the journeys while a renamed button fails the journey a person would miss it in.
+// Controls are found by role and exact visible text only, so a redesign keeps the journeys while a renamed button fails the journey a person would miss it in,
+// also when the new name still contains the old one (Playwright matches a name as a substring unless it is exact).
 const JOURNEYS = [
   {
     name: 'first run without a key',
@@ -24,34 +29,36 @@ const JOURNEYS = [
         name: '/setup shows See a real review',
         run: async (page, address) => {
           await page.goto(address + '/setup');
-          await page.getByRole('heading', { name: 'See a real review', level: 1 }).waitFor();
+          await page.getByRole('heading', { name: 'See a real review', exact: true, level: 1 }).waitFor();
         },
       },
       {
         name: 'Play the demo run under See a real review leads to /demo',
         run: async (page) => {
-          await page.getByRole('region', { name: 'See a real review' }).getByRole('button', { name: 'Play the demo run' }).click();
+          await page.getByRole('region', { name: 'See a real review', exact: true }).getByRole('button', { name: 'Play the demo run', exact: true }).click();
           await page.waitForURL(/\/demo(\?|$)/);
-          await page.getByRole('heading', { name: 'The demo run', level: 1 }).waitFor();
+          await page.getByRole('heading', { name: 'The demo run', exact: true, level: 1 }).waitFor();
         },
       },
       {
         name: 'the recording plays onto the dashboard',
         run: async (page) => {
           await page.waitForURL(/\/reviews\/[^/?#]+$/, { timeout: RUN_TIMEOUT_MS });
-          await page.getByRole('complementary', { name: 'Demo tour' }).waitFor();
+          await page.getByRole('complementary', { name: 'Demo tour', exact: true }).waitFor();
         },
       },
       {
-        name: 'the run reaches its verdict',
+        name: 'the run reaches its verdict, Changes needed',
         run: async (page) => {
-          await page.getByRole('region', { name: VERDICT }).waitFor({ timeout: RUN_TIMEOUT_MS });
+          // Any outcome ends the wait for the run, so a replay that failed or was blocked fails here after a click's wait, not after the run's.
+          await page.getByRole('region', { name: OUTCOME }).waitFor({ timeout: RUN_TIMEOUT_MS });
+          await page.getByRole('region', { name: RECORDED_VERDICT, exact: true }).waitFor();
         },
       },
       {
-        name: 'the review page shows the findings',
+        name: 'the review page shows the recorded finding to fix',
         run: async (page) => {
-          await page.getByRole('region', { name: 'To fix' }).getByRole('link').first().waitFor();
+          await page.getByRole('region', { name: 'To fix', exact: true }).getByRole('link', { name: RECORDED_FINDING }).waitFor();
         },
       },
     ],
@@ -63,11 +70,11 @@ async function main(argv) {
   const address = (argv[0] ?? DEFAULT_ADDRESS).replace(/\/+$/, '');
 
   await expectAnswer(address);
-  clearScreenshots();
+  const out = runFolder(new Date(), process.pid);
   const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   try {
     const results = [];
-    for (const journey of JOURNEYS) results.push(await runJourney(browser, address, journey));
+    for (const journey of JOURNEYS) results.push(await runJourney(browser, address, journey, out));
     console.log(report(results));
 
     return exitCode(results);
@@ -85,9 +92,10 @@ async function expectAnswer(address) {
   }
 }
 
-function clearScreenshots() {
-  fs.mkdirSync(OUT, { recursive: true });
-  for (const file of fs.readdirSync(OUT)) if (file.endsWith('.png')) fs.unlinkSync(path.join(OUT, file));
+// Each run gets its own folder, named by its start time and process id, so two runs at once never remove or overwrite a screenshot the other one reports.
+// It is created only when a step fails, and no run removes another run's folder.
+function runFolder(startedAt, pid, root = OUT) {
+  return path.join(root, `${startedAt.toISOString().replace(/[-:]|\.\d+/g, '')}-${pid}`);
 }
 
 // A fresh context per journey, so no cookie, storage or open page of one journey changes what the next one sees.
@@ -157,7 +165,7 @@ function exitCode(results) {
   return results.some((result) => result.failure !== null) ? 1 : 0;
 }
 
-module.exports = { JOURNEYS, runJourney, report, exitCode };
+module.exports = { JOURNEYS, runJourney, runFolder, report, exitCode };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(

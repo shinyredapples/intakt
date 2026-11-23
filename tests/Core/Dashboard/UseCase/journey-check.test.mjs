@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 
-const { JOURNEYS, runJourney, report, exitCode } = createRequire(import.meta.url)('../../../../bin/journey-check');
+const { JOURNEYS, runJourney, runFolder, report, exitCode } = createRequire(import.meta.url)('../../../../bin/journey-check');
 
-const ADDRESS = 'http://localhost:7780';
+const ADDRESS = 'http://localhost:7781';
 
 class FakePage {
     constructor() {
@@ -150,9 +150,37 @@ test('the first journey is the first run without a key, in the five steps a visi
         '/setup shows See a real review',
         'Play the demo run under See a real review leads to /demo',
         'the recording plays onto the dashboard',
-        'the run reaches its verdict',
-        'the review page shows the findings',
+        'the run reaches its verdict, Changes needed',
+        'the review page shows the recorded finding to fix',
     ]);
+});
+
+test('every name a journey looks for is matched exactly, so a renamed control that keeps the old words still fails', async () => {
+    for (const journey of JOURNEYS) {
+        const calls = [];
+        const page = recordingPage(calls);
+        for (const step of journey.steps) await step.run(page, ADDRESS);
+
+        const loose = calls.filter((call) => call.name === 'getByRole' && typeof call.args[1]?.name === 'string' && call.args[1].exact !== true);
+        assert.deepEqual(loose, [], journey.name);
+    }
+});
+
+test('a name a journey matches by pattern is anchored at its start', async () => {
+    const calls = [];
+    const page = recordingPage(calls);
+    for (const step of JOURNEYS[0].steps) await step.run(page, ADDRESS);
+
+    const patterns = calls.filter((call) => call.args[1]?.name instanceof RegExp).map((call) => call.args[1].name);
+    assert.ok(patterns.length > 0);
+    assert.ok(patterns.every((pattern) => pattern.source.startsWith('^')));
+});
+
+test('each run writes its screenshots into its own folder, named by its start time and process id', () => {
+    const at = new Date('2026-11-23T10:15:00.123Z');
+
+    assert.equal(runFolder(at, 4242, '/out'), join('/out', '20261123T101500Z-4242'));
+    assert.notEqual(runFolder(at, 4242, '/out'), runFolder(at, 4243, '/out'));
 });
 
 test('every journey finds its controls by role and visible text, never by a CSS selector', async () => {

@@ -143,17 +143,17 @@ The address defaults to `http://localhost:7780`. `CHROME_PATH` names a Chrome or
 
 ### Walking user journeys with the journey check
 
-`bin/journey-check` walks user journeys through a running dashboard in a headless browser, each from a fresh page, finding buttons and headings by their role and visible text. It prints one line per journey: passed, or the number and name of the step where it failed, the reason and a screenshot saved as `var/journey-check/<journey>-step-<n>.png`. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run (nothing answering at the address, no Playwright, or no browser).
+`bin/journey-check` walks user journeys through a dashboard that is already running (it starts no Intakt of its own, unlike `bin/check --journeys`) in a headless browser, each from a fresh page, finding buttons and headings by their role and exact visible text. It prints one line per journey: passed, or the number and name of the step where it failed, the reason and a screenshot saved as `var/journey-check/<run>/<journey>-step-<n>.png`, where `<run>` is the run's start time and process id, so two runs at once keep their own screenshots. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run (nothing answering at the address, no Playwright, or no browser).
 
-Its one journey for now, **first run without a key**, opens `/setup`, presses **Play the demo run** under **See a real review**, follows the run from `/demo` to its review page, waits for the verdict and checks that the findings to fix are listed. It needs a compose demo whose demo run has not been played yet. [Journey check](../architecture/journey-check.md) lists each step.
+Its one journey for now, **first run without a key**, opens `/setup`, presses **Play the demo run** under **See a real review**, follows the run from `/demo` to its review page, waits for the recording's verdict **Changes needed** and checks that its first finding to fix (the changed discount check) is listed. It needs a compose demo whose demo run has not been played yet. [Journey check](../architecture/journey-check.md) lists each step.
 
 ```sh
 npm install --global playwright
 npx playwright install chromium
-NODE_PATH="$(npm root --global)" bin/journey-check http://localhost:7780
+NODE_PATH="$(npm root --global)" bin/journey-check http://localhost:7781
 ```
 
-The address defaults to `http://localhost:7780`, and `CHROME_PATH` works as for the UI check.
+The address defaults to `http://localhost:7781`, the compose demo's, and `CHROME_PATH` works as for the UI check.
 
 ## Running the container image
 
