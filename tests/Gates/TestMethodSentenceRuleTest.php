@@ -177,6 +177,17 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         self::assertSame('tests/RunsTest.php:12 intakt.testMethodSentence Test method Intakt\Sample\RunsTest::testRuns() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-instance-test-named-as-provider'));
     }
 
+    public function testAFullRunReportsAStaticTestMethodThatOnlyAPrivateHelperNamesAsProvider(): void
+    {
+        $finding = ' is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().';
+
+        self::assertSame(
+            'tests/HelperTest.php:14 intakt.testMethodSentence Test method Intakt\Sample\HelperTest::testRuns()'.$finding."\n"
+            .'tests/HelperTest.php:22 intakt.testMethodSentence Test method Intakt\Sample\HelperTest::testWorks()'.$finding,
+            $this->ruleFindingsOf('test-method-static-test-named-by-helper'),
+        );
+    }
+
     public function testAShortTestMethodOfAnAnonymousTestCasePassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-anonymous-class');
