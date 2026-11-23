@@ -25,6 +25,8 @@ final class HelperOrderRuleTest extends PhpStanRuleTestCase
         return self::casesOfOnePhpstanRun([
             'APrivateHelperAboveItsCallerFailsStaticAnalysis' => ['helper-above-its-caller', 'src/Report.php:14 intakt.helperOrder Private helper framed() sits above render(), its first caller: move it below render().'],
             'HelpersBelowTheirCallerInCallOrderPassStaticAnalysis' => ['helpers-in-call-order'],
+            'APrivateHelperAboveItsCallerInATraitFailsStaticAnalysis' => ['helper-above-its-caller-in-a-trait', 'src/Greets.php:14 intakt.helperOrder Private helper exclaimed() sits above greet(), its first caller: move it below greet().'],
+            'HelpersInCallOrderInATraitPassStaticAnalysis' => ['helpers-in-call-order-in-a-trait'],
         ]);
     }
 
@@ -39,6 +41,35 @@ final class HelperOrderRuleTest extends PhpStanRuleTestCase
         self::assertSame(
             'src/Report.php:14 intakt.helperOrder Private helper framed() sits above render(), its first caller: move it below render(). Helpers sit below the method that first calls them, in the order it first calls them.',
             $this->ruleFindingsOf('helper-above-its-caller'),
+        );
+    }
+
+    public function testAPrivateHelperAboveItsCallerInATraitIsReportedOnceInTheTraitAndNotInTheClassThatUsesIt(): void
+    {
+        self::assertSame(
+            'src/Greets.php:14 intakt.helperOrder Private helper exclaimed() sits above greet(), its first caller: move it below greet(). Helpers sit below the method that first calls them, in the order it first calls them.',
+            $this->ruleFindingsOf('helper-above-its-caller-in-a-trait'),
+        );
+    }
+
+    public function testAPrivateHelperAboveItsCallerInAnAnonymousClassFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('helper-above-its-caller-in-an-anonymous-class', 'src/Labels.php:12 intakt.helperOrder Private helper trimmed() sits above render(), its first caller: move it below render().');
+    }
+
+    public function testAPrivateHelperAboveItsCallerInAnAnonymousClassInATraitUsedTwiceIsReportedOnce(): void
+    {
+        self::assertSame(
+            'src/Labels.php:12 intakt.helperOrder Private helper trimmed() sits above render(), its first caller: move it below render(). Helpers sit below the method that first calls them, in the order it first calls them.',
+            $this->ruleFindingsOf('helper-above-its-caller-in-an-anonymous-class-in-a-trait'),
+        );
+    }
+
+    public function testAPrivateHelperAboveItsCallerTwoAnonymousClassesDeepInATraitUsedTwiceIsReportedOnce(): void
+    {
+        self::assertSame(
+            'src/Wraps.php:15 intakt.helperOrder Private helper hidden() sits above caller(), its first caller: move it below caller(). Helpers sit below the method that first calls them, in the order it first calls them.',
+            $this->ruleFindingsOf('helper-above-its-caller-two-anonymous-classes-deep-in-a-trait'),
         );
     }
 
