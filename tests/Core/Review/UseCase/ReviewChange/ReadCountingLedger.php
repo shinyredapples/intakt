@@ -66,4 +66,12 @@ final class ReadCountingLedger implements Ledger
 
         return $this->ledger->readMentioning($texts);
     }
+
+    #[Override]
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        ++$this->reads;
+
+        return $this->ledger->readOfKindsMentioning($texts, ...$kinds);
+    }
 }

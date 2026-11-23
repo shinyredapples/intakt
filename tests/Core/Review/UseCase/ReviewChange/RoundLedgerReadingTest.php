@@ -326,6 +326,21 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(0, $reading->tokensOf(self::ROUND)->calls);
     }
 
+    public function testUsageRowsOfAnotherRoundChangeNeitherTheRoundsTokensNorAReviewersTokens(): void
+    {
+        $this->recordReviewerCall('r1', 100);
+        $before = $this->reading()->figuresOfReviewers(self::ROUND, ['r1'])['r1']->tokens;
+        $tokensBefore = $this->reading()->tokensOf(self::ROUND);
+
+        $this->recordReviewerCall('r1', 1000, self::OTHER_ROUND);
+        $this->recordReviewerCall('r2', 500, self::OTHER_ROUND);
+
+        self::assertEquals(
+            [$tokensBefore, $before],
+            [$this->reading()->tokensOf(self::ROUND), $this->reading()->figuresOfReviewers(self::ROUND, ['r1'])['r1']->tokens],
+        );
+    }
+
     public function testReadingTheFiguresOfARoundsReviewersReadsTheLedgerTwiceHoweverManyReviewersItHas(): void
     {
         foreach (['r1', 'r2', 'r3'] as $reviewer) {

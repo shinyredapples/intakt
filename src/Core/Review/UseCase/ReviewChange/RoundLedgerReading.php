@@ -208,7 +208,14 @@ final readonly class RoundLedgerReading implements RoundCosts
     {
         $moments = [];
 
-        foreach ($this->ledger->readMentioning(new Mentions($roundId)) as $recorded) {
+        foreach ($this->ledger->readOfKindsMentioning(
+            new Mentions($roundId),
+            LedgerEventKind::ReviewerStarted,
+            LedgerEventKind::VerdictReceived,
+            LedgerEventKind::ReviewerFailed,
+            LedgerEventKind::ReviewerStopped,
+            LedgerEventKind::ReviewerBlocked,
+        ) as $recorded) {
             $row = $this->reviewerRowOf($recorded);
 
             if (null === $row || $roundId !== $row->round) {
