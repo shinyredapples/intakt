@@ -19,7 +19,7 @@ enum DemoReadiness: string
             self::NotComposeDemo => 'The demo run plays only on the compose demo, and INTAKT_COMPOSE_SERVICE is empty on this install.',
             self::NoRecording => 'No demo recording is installed: set INTAKT_DEMO_RECORDING to a file written by intakt:demo:record.',
             self::Ready => 'Press the button to play the recorded run; the caption at the bottom of each page names the stage it is in.',
-            self::Played => 'The demo run is in the ledger. To play it again, remove it with intakt:demo:remove and start the compose demo again.',
+            self::Played => 'The demo run is in the ledger. To play it again, remove it with intakt:demo:remove, then press Play: it creates the demo project again.',
         };
     }
 

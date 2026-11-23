@@ -83,6 +83,16 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
         self::assertStringNotContainsString('private-project', (string) $this->browser->getResponse()->getContent());
     }
 
+    public function testTheRefusalNamesTheAddressTheDashboardAnswersAndHowToReachItFromAnotherDevice(): void
+    {
+        $page = $this->browser->request('GET', '/projects', server: ['HTTP_HOST' => '192.0.2.10:7780']);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame('Open the dashboard on localhost', $page->filter('h1')->text());
+        self::assertStringContainsString('Intakt answers only http://localhost:7780, on the machine it runs on.', $page->filter('.lead')->text());
+        self::assertSame('ssh -L 7780:localhost:7780 you@your-server', $page->filter('pre code')->text());
+    }
+
     #[DataProvider('loopbackHosts')]
     public function testADashboardPageAnswersALoopbackNameWithTheConfiguredPort(string $page, string $host): void
     {

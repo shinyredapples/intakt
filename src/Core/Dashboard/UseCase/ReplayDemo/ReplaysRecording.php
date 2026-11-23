@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 
+use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -44,7 +45,7 @@ final readonly class ReplaysRecording
      * @throws ReplayIsRefused
      * @throws ReplayStopped
      */
-    public function replay(Recording $recording, float $factor): void
+    public function replay(Recording $recording, float $factor, ?Closure $whenAccepted = null): void
     {
         // Without a lease, because a replay at the recorded pace can outlast any lease and the lock is released when it ends.
         $lock = $this->locks->createLock(self::LOCK, ttl: null);
@@ -54,10 +55,12 @@ final readonly class ReplaysRecording
         }
 
         try {
-            $this->refuseADemoProjectThatIsNoReplay();
             $this->refuseUpdatesWithoutTopic($recording);
             $this->refuseRoundsTheLedgerHolds($recording);
             $this->refuseCallsTheLedgerHolds($recording);
+            // After every refusal of the recording and under the lock, because it may write the demo project's replay mark and a refused or locked-out replay must write nothing.
+            $whenAccepted?->__invoke();
+            $this->refuseADemoProjectThatIsNoReplay();
             $this->playAtTheRecordedPace($recording, $factor);
         } finally {
             $lock->release();

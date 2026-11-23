@@ -14,6 +14,7 @@ use Twig\Environment;
 final readonly class TourCaptionUpdates
 {
     public const string TEMPLATE = 'dashboard/stream/tour_caption.stream.html.twig';
+    public const string REFUSAL_TEMPLATE = 'dashboard/stream/demo_refused.stream.html.twig';
 
     public function __construct(
         private DemoTour $tour,
@@ -31,5 +32,12 @@ final readonly class TourCaptionUpdates
         }
 
         $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::TEMPLATE, ['caption' => $caption])));
+    }
+
+    // On the shell topic too, because the demo page that pressed Play listens on it and a replay refused in the worker has no response to carry the reason.
+    // Aimed at the box of one Play, because a refusal of a later Play must not replace the start line of a run that is playing.
+    public function publishTheRefusal(string $play, string $reason): void
+    {
+        $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::REFUSAL_TEMPLATE, ['play' => $play, 'reason' => $reason])));
     }
 }

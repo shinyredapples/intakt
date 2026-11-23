@@ -13,6 +13,9 @@ use Intakt\Core\Dashboard\Infrastructure\DemoTour;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
+use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
+use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoRefusal;
+use Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoRun;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoRunHandler;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
@@ -39,6 +42,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(PlayDemoRunHandler::class)]
 #[CoversClass(TourCaptionUpdates::class)]
+#[CoversClass(DemoRefusal::class)]
 #[UsesClass(ReplaysRecording::class)]
 #[UsesClass(RecordingFormat::class)]
 #[UsesClass(Recording::class)]
@@ -55,6 +59,8 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     private const string START = '2026-11-16T08:00:00+00:00';
 
+    private const string PLAY = '0123456789abcdef0123456789abcdef';
+
     private string $directory;
 
     private DashboardLedger $ledger;
@@ -63,17 +69,69 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     private MockClock $clock;
 
+    private ReplayMarkBus $marks;
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-play-demo-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->ledger = new DashboardLedger();
+        $this->updates = new PublishedLiveEvents();
+        $this->clock = new MockClock(self::START);
+        $this->marks = new ReplayMarkBus([CreateDemoProjectCommand::NAME]);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
     public function testAPlayedDemoRunReplaysTheConfiguredRecordingIntoTheDemoProject(): void
     {
-        $this->handler($this->recordingFile())();
+        $this->handler($this->recordingFile())(self::play());
 
         self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::JudgeDone], array_map(static fn (RecordedEvent $row): LedgerEventKind => $row->event->kind, $this->rows()));
         self::assertStringContainsString('"project":"'.CreateDemoProjectCommand::NAME.'"', $this->rows()[0]->event->payload);
     }
 
+    public function testAPlayAfterTheDemoProjectWasRemovedCreatesItAgainAndPlaysTheRun(): void
+    {
+        $this->marks = new ReplayMarkBus();
+
+        $this->handler($this->recordingFile())(self::play());
+
+        self::assertSame([CreateDemoProjectCommand::NAME], $this->marks->replays());
+        self::assertCount(4, $this->rows());
+        self::assertStringContainsString('"project":"'.CreateDemoProjectCommand::NAME.'"', $this->rows()[0]->event->payload);
+    }
+
+    public function testASecondPlayRefusedBecauseTheFirstIsInTheLedgerKeepsItsReasonOffThePages(): void
+    {
+        $handler = $this->handler($this->recordingFile());
+        $handler(self::play());
+        $played = count($this->shellStreams());
+
+        $handler(self::play());
+
+        self::assertSame([], array_slice($this->shellStreams(), $played));
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testARefusedPlayShowsItsReasonOnTheDemoPage(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/broken.json', '{"events": "no"}');
+
+        $this->handler($this->directory.'/broken.json')(self::play());
+
+        $streams = $this->shellStreams();
+        self::assertCount(1, $streams);
+        self::assertStringStartsWith('<turbo-stream action="update" target="demo-play-'.self::PLAY.'"><template><p class="flash flash-error" role="alert">The demo run did not play. '.DemoRefusal::Malformed->sentence(), trim($streams[0]));
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
     public function testThePlayedRunGoesAtOneAndAHalfTimesTheRecordedPace(): void
     {
-        $this->handler($this->recordingFile())();
+        $this->handler($this->recordingFile())(self::play());
 
         self::assertStringContainsString('"replay_factor":1.5', $this->rows()[0]->event->payload);
         self::assertEquals(new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify('+80 seconds'), $this->clock->now());
@@ -81,7 +139,7 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     public function testEachReplayedRowPublishesTheCaptionOfItsStageOnTheShellTopic(): void
     {
-        $this->handler($this->recordingFile())();
+        $this->handler($this->recordingFile())(self::play());
 
         $captions = array_values(array_filter($this->updates->events, static fn (LiveEvent $event): bool => DashboardTopics::SHELL === $event->topic));
         self::assertSame(
@@ -92,27 +150,27 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertStringContainsString('href="/reviews/round-1"', $captions[0]->turboStream);
     }
 
-    public function testAQueuedPlayOnAnInstallNoLongerOnTheComposeDemoAppendsNothingAndIsLoggedAsAnError(): void
+    public function testAQueuedPlayOnAnInstallNoLongerOnTheComposeDemoAppendsNothingAndShowsItsReasonOnThePage(): void
     {
-        $this->handler($this->recordingFile(), '')();
+        $this->handler($this->recordingFile(), '')(self::play());
 
         self::assertSame([], $this->rows());
-        self::assertSame([], $this->updates->events);
+        self::assertSame([DemoReadiness::NotComposeDemo->sentence()], $this->refusalReasons());
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
-    public function testAQueuedPlayOnAnInstallWhoseRecordingSettingWasClearedAppendsNothingAndIsLoggedAsAnError(): void
+    public function testAQueuedPlayOnAnInstallWhoseRecordingSettingWasClearedAppendsNothingAndShowsItsReasonOnThePage(): void
     {
-        $this->handler('')();
+        $this->handler('')(self::play());
 
         self::assertSame([], $this->rows());
-        self::assertSame([], $this->updates->events);
+        self::assertSame([DemoReadiness::NoRecording->sentence()], $this->refusalReasons());
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
     public function testAMissingRecordingIsLoggedAsAnErrorAndAppendsNothing(): void
     {
-        $this->handler($this->directory.'/missing.json')();
+        $this->handler($this->directory.'/missing.json')(self::play());
 
         self::assertSame([], $this->rows());
         self::assertLoggedError('error', 'The demo run was not played.');
@@ -122,7 +180,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     {
         new Filesystem()->dumpFile($this->directory.'/broken.json', '{"events": "no"}');
 
-        $this->handler($this->directory.'/broken.json')();
+        $this->handler($this->directory.'/broken.json')(self::play());
 
         self::assertSame([], $this->rows());
         self::assertLoggedError('error', 'The demo run was not played.');
@@ -131,26 +189,91 @@ final class PlayDemoRunHandlerTest extends TestCase
     public function testASecondPlayOfTheSameRunIsRefusedAndLoggedAsAnError(): void
     {
         $handler = $this->handler($this->recordingFile());
-        $handler();
+        $handler(self::play());
 
-        $handler();
+        $handler(self::play());
 
         self::assertCount(4, $this->rows());
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
-    protected function setUp(): void
+    private function handler(string $recording, string $composeService = 'intakt', ?LockFactory $locks = null): PlayDemoRunHandler
     {
-        $this->directory = sys_get_temp_dir().'/intakt-play-demo-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->ledger = new DashboardLedger();
-        $this->updates = new PublishedLiveEvents();
-        $this->clock = new MockClock(self::START);
+        $marks = new ReplayMarks($this->marks);
+        $captions = TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, $locks ?? new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks));
+
+        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $marks, $this->marks, $captions, $recording, $composeService);
     }
 
-    protected function tearDown(): void
+    public function testAPlayThatLosesTheReplayLockIsRefusedAndWritesNoReplayMark(): void
     {
-        new Filesystem()->remove($this->directory);
+        $this->marks = new ReplayMarkBus();
+        $store = new InMemoryStore();
+        $held = new LockFactory($store)->createLock(ReplaysRecording::LOCK, ttl: null);
+        self::assertTrue($held->acquire());
+
+        $this->handler($this->recordingFile(), 'intakt', new LockFactory($store))(self::play());
+
+        self::assertSame([], $this->marks->replays());
+        self::assertSame([], $this->rows());
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testAnUnreadableRecordingShowsAFixedSentenceThatNamesNoPath(): void
+    {
+        $this->handler($this->directory.'/missing.json')(self::play());
+
+        self::assertSame([DemoRefusal::Unreadable->sentence()], $this->refusalReasons());
+        self::assertStringNotContainsString($this->directory, $this->shellStreams()[0]);
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testARefusedReplayShowsAFixedSentence(): void
+    {
+        $this->marks = new ReplayMarkBus();
+        $handler = $this->handler($this->recordingWithATopiclessUpdate());
+
+        $handler(self::play());
+
+        self::assertSame([DemoRefusal::Refused->sentence()], $this->refusalReasons());
+        self::assertSame([], $this->marks->replays());
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testAStoppedReplayShowsAFixedSentence(): void
+    {
+        $this->ledger->failNextAppend();
+
+        $this->handler($this->recordingFile())(self::play());
+
+        self::assertSame([DemoRefusal::Stopped->sentence()], $this->refusalReasons());
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testARefusalUpdatesOnlyTheBoxOfThePlayItBelongsTo(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/broken.json', '{"events": "no"}');
+        $other = str_repeat('f', 32);
+
+        $this->handler($this->directory.'/broken.json')(new PlayDemoRun($other));
+
+        self::assertStringContainsString('target="demo-play-'.$other.'"', $this->shellStreams()[0]);
+        self::assertStringNotContainsString(self::PLAY, $this->shellStreams()[0]);
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    private static function play(): PlayDemoRun
+    {
+        return new PlayDemoRun(self::PLAY);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function refusalReasons(): array
+    {
+        return array_map(static fn (string $stream): string => 1 === preg_match('~The demo run did not play\. (.*?)</p>~s', $stream, $match) ? $match[1] : self::fail('Not a refusal.'), $this->shellStreams());
     }
 
     private function recordingFile(): string
@@ -166,12 +289,22 @@ final class PlayDemoRunHandlerTest extends TestCase
         return $file;
     }
 
-    private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
+    /**
+     * @return list<string>
+     */
+    private function shellStreams(): array
     {
-        $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::judged($this->ledger, $marks));
+        return array_values(array_map(static fn (LiveEvent $event): string => $event->turboStream, array_filter($this->updates->events, static fn (LiveEvent $event): bool => DashboardTopics::SHELL === $event->topic)));
+    }
 
-        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
+    private function recordingWithATopiclessUpdate(): string
+    {
+        $file = $this->directory.'/topicless.json';
+        new Filesystem()->dumpFile($file, $this->format()->write(new Recording(new DateTimeImmutable(self::START), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', [
+            $this->row(LedgerEventKind::ReviewStarted, '{"round":"round-1","project":"sample","reviewers":1,"change":"sample-change","number":1}', 0),
+        ], [new CapturedUpdate(new DateTimeImmutable(self::START), ' ', '<turbo-stream></turbo-stream>')])));
+
+        return $file;
     }
 
     private function format(): RecordingFormat

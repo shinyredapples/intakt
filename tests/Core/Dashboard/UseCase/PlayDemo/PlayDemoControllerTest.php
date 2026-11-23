@@ -137,8 +137,10 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
 
         self::assertResponseStatusCodeSame(303);
         self::assertMatchesRegularExpression('~^/demo\?play=[0-9a-f]{32}$~', (string) $this->browser->getResponse()->headers->get('Location'));
-        self::assertEquals([new PlayDemoRun()], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $this->queued()));
-        $this->browser->followRedirect();
+        $play = substr((string) $this->browser->getResponse()->headers->get('Location'), -32);
+        self::assertEquals([new PlayDemoRun($play)], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $this->queued()));
+        $page = $this->browser->followRedirect();
+        self::assertCount(1, $page->filter('#demo-play-'.$play.' .flash-success'));
         self::assertSelectorTextContains('.flash-success', 'The demo run is starting');
     }
 
