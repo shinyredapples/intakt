@@ -5,5 +5,5 @@
     {%- elseif progress == 'Interrupted' %}<span class="muted">Waiting for the network</span><span class="muted">{{ outcome.interruptions }} {{ outcome.interruptions == 1 ? 'interruption' : 'interruptions' }}</span>
     {%- elseif progress == 'Stopped' %}<span class="muted">stopped</span>
     {%- elseif outcome.outcome is null %}<span class="muted">answered</span>
-    {%- else %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome.outcome, on_page: true}, with_context = false) }}{% if outcome.note is not empty %}<span class="muted">{{ outcome.note }}</span>{% endif %}{% endif -%}
+    {%- else %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome.outcome, on_page: true, plain: true}, with_context = false) }}{% if outcome.note is not empty %}<span class="muted">{{ outcome.note }}</span>{% endif %}{% endif -%}
 </span>{% if outcome.substitute is not null %}; answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>

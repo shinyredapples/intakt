@@ -19,23 +19,6 @@ final class JourneyCommandTest extends TestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-journey-'.bin2hex(random_bytes(6));
-        $files = new Filesystem();
-        $files->mkdir($this->root.'/bin');
-        $files->mkdir($this->root.'/docs/journey');
-        $files->copy(self::COMMAND, $this->root.'/bin/journey');
-        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
-        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
-        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheJourneyCommandIsExecutable(): void
     {
         self::assertTrue(is_executable(self::COMMAND));
@@ -160,6 +143,23 @@ final class JourneyCommandTest extends TestCase
         self::assertStringContainsString('usage:', $run->getErrorOutput());
     }
 
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-journey-'.bin2hex(random_bytes(6));
+        $files = new Filesystem();
+        $files->mkdir($this->root.'/bin');
+        $files->mkdir($this->root.'/docs/journey');
+        $files->copy(self::COMMAND, $this->root.'/bin/journey');
+        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
+        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
+        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
+    }
+
     private function runJourney(string $recorded = self::FIXTURES.'/api'): Process
     {
         $process = new Process([PHP_BINARY, 'bin/journey', '--recorded='.realpath($recorded)], $this->root);
@@ -173,11 +173,6 @@ final class JourneyCommandTest extends TestCase
         return (string) file_get_contents($this->root.'/docs/journey.md');
     }
 
-    private function drawing(string $name): string
-    {
-        return (string) file_get_contents($this->root.'/docs/journey/'.$name.'.svg');
-    }
-
     private function region(string $name): string
     {
         preg_match('/<!-- journey:begin '.$name.' -->\n(.*?)<!-- journey:end '.$name.' -->/s', $this->page(), $region);
@@ -188,6 +183,11 @@ final class JourneyCommandTest extends TestCase
     private function expected(string $name): string
     {
         return (string) file_get_contents(self::FIXTURES.'/expected/'.$name.'.svg');
+    }
+
+    private function drawing(string $name): string
+    {
+        return (string) file_get_contents($this->root.'/docs/journey/'.$name.'.svg');
     }
 
     private function outsideMarkers(string $page): string

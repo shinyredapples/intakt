@@ -56,6 +56,18 @@ final readonly class ConfiguredProbes
     }
 
     /**
+     * @return list<ProviderDescriptor>
+     */
+    private function vendorsInUse(): array
+    {
+        // A descriptor's id matches an account key only for a hosted vendor; an OpenAI-compatible account names no descriptor, so its own base URL is probed instead.
+        return array_values(array_filter(
+            $this->catalog->descriptors(),
+            fn (ProviderDescriptor $vendor): bool => [] !== ($this->accounts[$vendor->id()] ?? []),
+        ));
+    }
+
+    /**
      * @return list<Uri>
      */
     private function compatibleUrls(): array
@@ -83,17 +95,5 @@ final readonly class ConfiguredProbes
         }
 
         return Uri::parse('https://'.$host.(null === $url->getPort() ? '' : ':'.$url->getPort()));
-    }
-
-    /**
-     * @return list<ProviderDescriptor>
-     */
-    private function vendorsInUse(): array
-    {
-        // A descriptor's id matches an account key only for a hosted vendor; an OpenAI-compatible account names no descriptor, so its own base URL is probed instead.
-        return array_values(array_filter(
-            $this->catalog->descriptors(),
-            fn (ProviderDescriptor $vendor): bool => [] !== ($this->accounts[$vendor->id()] ?? []),
-        ));
     }
 }

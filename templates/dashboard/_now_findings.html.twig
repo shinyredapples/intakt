@@ -3,7 +3,7 @@
 <p class="muted">No finding is open.</p>
 {% else %}
 {% for finding in open %}
-<a class="sb-finding" href="#round-{{ judged }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span><span class="mono">{{ finding.id }}</span> {{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></a>
+<a class="sb-finding" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW_RECORD'), {round: judged}) }}#round-{{ judged }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span><span class="mono">{{ finding.id }}</span> {{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></a>
 {% endfor %}
 {% endif %}
 </div>

@@ -18,16 +18,6 @@ final class PathOnlyProfilerStorageTest extends TestCase
 {
     private string $folder;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-path-only-profiles-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testASavedProfileKeepsThePathOfItsUrlWithoutTheQuery(): void
     {
         $storage = new PathOnlyProfilerStorage(new FileProfilerStorage('file:'.$this->folder));
@@ -57,7 +47,64 @@ final class PathOnlyProfilerStorageTest extends TestCase
         self::assertStringNotContainsString('192.0.2.17', $this->everythingSaved());
     }
 
-    private function profile(string $token, string $url): Profile
+    public function testASavedProfileKeepsThePathOfItsUrlWithoutTheFragment(): void
+    {
+        $storage = new PathOnlyProfilerStorage(new FileProfilerStorage('file:'.$this->folder));
+
+        $storage->write($this->profile('b1c2d3', 'http://localhost/reviews/12?x=1#part'));
+
+        self::assertSame('http://localhost/reviews/12', $storage->read('b1c2d3')?->getUrl());
+    }
+
+    public function testASavedProfileDropsAQueryHiddenInsideTheFragment(): void
+    {
+        $storage = new PathOnlyProfilerStorage(new FileProfilerStorage('file:'.$this->folder));
+
+        $storage->write($this->profile('f1a2b3', 'http://localhost/a#f?access_token=canary-frag-3c1d'));
+
+        self::assertSame('http://localhost/a', $storage->read('f1a2b3')?->getUrl());
+        self::assertStringNotContainsString('canary-frag-3c1d', $this->everythingSaved());
+    }
+
+    public function testASavedProfileKeepsThePathOfAUrlWithAFragmentAndNoQuery(): void
+    {
+        $storage = new PathOnlyProfilerStorage(new FileProfilerStorage('file:'.$this->folder));
+
+        $storage->write($this->profile('a9b8c7', 'http://localhost/reviews/12#part'));
+
+        self::assertSame('http://localhost/reviews/12', $storage->read('a9b8c7')?->getUrl());
+    }
+
+    public function testASavedProfileWithoutAUrlKeepsNoUrl(): void
+    {
+        $storage = new PathOnlyProfilerStorage(new FileProfilerStorage('file:'.$this->folder));
+
+        $storage->write($this->profile('c1d2e3', null));
+
+        self::assertNull($storage->read('c1d2e3')?->getUrl());
+    }
+
+    public function testASavedProfileWithAnUnreadableUrlKeepsNoUrl(): void
+    {
+        $storage = new PathOnlyProfilerStorage(new FileProfilerStorage('file:'.$this->folder));
+
+        $storage->write($this->profile('e1f2a3', 'http://[bad/x?access_token=canary-bad-7f2a'));
+
+        self::assertNull($storage->read('e1f2a3')?->getUrl());
+        self::assertStringNotContainsString('canary-bad-7f2a', $this->everythingSaved());
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-path-only-profiles-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
+
+    private function profile(string $token, ?string $url): Profile
     {
         $profile = new Profile($token);
         $profile->setUrl($url);

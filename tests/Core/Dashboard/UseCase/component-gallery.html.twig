@@ -36,10 +36,10 @@
     {{ include(c ~ 'card.html.twig', {href: '#', number: 612, project: 'intakt', title: 'Hover', forced: 'hover', meta: [{text: 'Size M'}]}) }}
     {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Hover', ask: 'Approve', forced: 'hover', meta: [{text: 'Size M'}]}) }}
     {{ include(c ~ 'input.html.twig', {id: 'forced-focus', name: 'focus', value: 'Focus', aria_label: 'Focus', forced: 'focus'}) }}
-    {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Rotate the forge token without a restart', ask: 'Approve this version: it touches secret handling', meta: [{icon: 'clock', text: '1 h 05 min'}]}) }}
+    {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Rotate the forge token without a restart', ask: 'Approve this version: secrets limit, ForgeTokenStore.php changed', meta: [{icon: 'clock', text: '1 h 05 min'}]}) }}
     {{ include(c ~ 'card.html.twig', {href: '#', number: 205, project: 'acme-shop', title: 'Refund emails include the order number', emphasis: {icon: 'broken', text: 'Waiting for CI: image build failing', broken: true}, meta: [{icon: 'clock', text: '1 h 50 min'}]}) }}
     {{ include(c ~ 'skeleton.html.twig') }}
-    {{ include(c ~ 'column_empty.html.twig') }}
+    {{ include(c ~ 'column_empty.html.twig', {text: 'Tasks appear here when Intakt takes in an issue'}) }}
 
     <h2>List rows</h2>
     <div class="list">

@@ -116,14 +116,6 @@ final class ProviderKeyTest extends TestCase
         self::assertStringNotContainsString('tracedvalue', (string) $caught?->getTraceAsString());
     }
 
-    private function catalog(ProviderDescriptor ...$descriptors): ProviderCatalog
-    {
-        $catalog = self::createStub(ProviderCatalog::class);
-        $catalog->method('descriptors')->willReturn([] === $descriptors ? [$this->descriptor('alpha', '/^a_\w{8,}$/D'), $this->descriptor('beta', '/^b_\w{8,}$/D')] : array_values($descriptors));
-
-        return $catalog;
-    }
-
     /**
      * @param non-empty-string $id
      * @param non-empty-string $pattern
@@ -141,5 +133,13 @@ final class ProviderKeyTest extends TestCase
     private function body(string $tail = '1234'): string
     {
         return str_repeat('0', 24).$tail;
+    }
+
+    private function catalog(ProviderDescriptor ...$descriptors): ProviderCatalog
+    {
+        $catalog = self::createStub(ProviderCatalog::class);
+        $catalog->method('descriptors')->willReturn([] === $descriptors ? [$this->descriptor('alpha', '/^a_\w{8,}$/D'), $this->descriptor('beta', '/^b_\w{8,}$/D')] : array_values($descriptors));
+
+        return $catalog;
     }
 }

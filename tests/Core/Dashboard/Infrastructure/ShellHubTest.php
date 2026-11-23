@@ -89,44 +89,6 @@ final class ShellHubTest extends TestCase
 
     private BufferingLogger $logger;
 
-    protected function setUp(): void
-    {
-        $frankenphp = new ExecutableFinder()->find('frankenphp');
-
-        if (null === $frankenphp) {
-            self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
-        }
-
-        $ports = WorkerPorts::ofThisWorker();
-        $port = $ports->next();
-        $this->storage = sys_get_temp_dir().'/intakt-hub-'.bin2hex(random_bytes(6));
-        mkdir($this->storage);
-        $this->issuer = 'http://localhost:'.$port;
-        $this->url = $this->issuer.'/.well-known/mercure';
-        $this->hub = new Process([$frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), [
-            'SERVER_PORT' => (string) $port,
-            'CADDY_ADMIN' => 'localhost:'.$ports->next(),
-            'MERCURE_JWT_SECRET' => self::SECRET,
-            'MERCURE_JWT_ISSUER' => $this->issuer,
-            'MERCURE_BOLT_PATH' => $this->storage.'/hub.db',
-        ]);
-        $this->hub->start();
-        $this->waitForTheHub($port);
-        $this->client = HttpClient::create();
-        $this->logger = new BufferingLogger();
-    }
-
-    protected function tearDown(): void
-    {
-        if (isset($this->hub)) {
-            $this->hub->stop(5);
-        }
-
-        if (isset($this->storage)) {
-            new Filesystem()->remove($this->storage);
-        }
-    }
-
     public function testAnEventPublishedForTheShellTopicReachesASubscriberOfTheShellTopic(): void
     {
         $stream = $this->subscribeToTheShell();
@@ -210,11 +172,42 @@ final class ShellHubTest extends TestCase
         self::assertStringNotContainsString('round progress', $this->receivedWithin($stream, 'round progress', 2));
     }
 
-    private function updates(): MercureLiveUpdates
+    protected function setUp(): void
     {
-        $hub = new Hub($this->url, new StaticTokenProvider($this->token(Grant::ACTION_PUBLISH, '*')), httpClient: $this->client);
+        $frankenphp = new ExecutableFinder()->find('frankenphp');
 
-        return new MercureLiveUpdates($hub, $this->logger);
+        if (null === $frankenphp) {
+            self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
+        }
+
+        $ports = WorkerPorts::ofThisWorker();
+        $port = $ports->next();
+        $this->storage = sys_get_temp_dir().'/intakt-hub-'.bin2hex(random_bytes(6));
+        mkdir($this->storage);
+        $this->issuer = 'http://localhost:'.$port;
+        $this->url = $this->issuer.'/.well-known/mercure';
+        $this->hub = new Process([$frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), [
+            'SERVER_PORT' => (string) $port,
+            'CADDY_ADMIN' => 'localhost:'.$ports->next(),
+            'MERCURE_JWT_SECRET' => self::SECRET,
+            'MERCURE_JWT_ISSUER' => $this->issuer,
+            'MERCURE_BOLT_PATH' => $this->storage.'/hub.db',
+        ]);
+        $this->hub->start();
+        $this->waitForTheHub($port);
+        $this->client = HttpClient::create();
+        $this->logger = new BufferingLogger();
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->hub)) {
+            $this->hub->stop(5);
+        }
+
+        if (isset($this->storage)) {
+            new Filesystem()->remove($this->storage);
+        }
     }
 
     private function subscribeToTheShell(): ResponseInterface
@@ -227,6 +220,13 @@ final class ShellHubTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
 
         return $response;
+    }
+
+    private function updates(): MercureLiveUpdates
+    {
+        $hub = new Hub($this->url, new StaticTokenProvider($this->token(Grant::ACTION_PUBLISH, '*')), httpClient: $this->client);
+
+        return new MercureLiveUpdates($hub, $this->logger);
     }
 
     /**

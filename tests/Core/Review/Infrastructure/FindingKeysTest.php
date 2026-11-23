@@ -33,22 +33,6 @@ final class FindingKeysTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('src/A.php', "<?php // a\n");
-        $this->repository->commitFile('src/B.php', "<?php // b\n");
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_file($this->repository->path.'/src/Locked.php')) {
-            chmod($this->repository->path.'/src/Locked.php', 0o644);
-        }
-
-        $this->repository->remove();
-    }
-
     public function testAFindingNamingAFileGetsAKeyThatChangesWhenTheFileIsEdited(): void
     {
         $this->assertKeyFollowsEditsOf('src/A.php', 'The lock in src/A.php is released too early.');
@@ -471,6 +455,22 @@ final class FindingKeysTest extends TestCase
         }
     }
 
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('src/A.php', "<?php // a\n");
+        $this->repository->commitFile('src/B.php', "<?php // b\n");
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->repository->path.'/src/Locked.php')) {
+            chmod($this->repository->path.'/src/Locked.php', 0o644);
+        }
+
+        $this->repository->remove();
+    }
+
     private function assertKeyFollowsEditsOf(string $path, string $text): void
     {
         $this->write($path, "first\n");
@@ -484,6 +484,11 @@ final class FindingKeysTest extends TestCase
         self::assertNotEquals($before, $after);
     }
 
+    private function keyOf(Finding $finding): ?FindingKey
+    {
+        return new FindingKeys()->of($finding, $this->repository->path);
+    }
+
     private function write(string $path, string $content): void
     {
         $full = $this->repository->path.'/'.$path;
@@ -493,11 +498,6 @@ final class FindingKeysTest extends TestCase
         }
 
         file_put_contents($full, $content);
-    }
-
-    private function keyOf(Finding $finding): ?FindingKey
-    {
-        return new FindingKeys()->of($finding, $this->repository->path);
     }
 
     private function finding(string $text): Finding

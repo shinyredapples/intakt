@@ -99,6 +99,80 @@ final readonly class ReviewerLeases
         });
     }
 
+    /**
+     * @template T
+     *
+     * @param Closure(RoundReviewer): T        $move
+     * @param (Closure(RoundReviewer): T)|null $afterTheCeiling
+     *
+     * @return T|null
+     */
+    private function record(RoundReviewer $reviewer, Closure $move, ?Closure $afterTheCeiling = null): mixed
+    {
+        $attempts = 0;
+
+        while (true) {
+            try {
+                return $this->recordOnce($reviewer, $move, $afterTheCeiling ?? $this->failAtTheCeiling(...));
+            } catch (ReviewEventNotRecorded $refused) {
+                // A new transaction, because the result is already in hand and only a fresh snapshot can write after another reviewer committed.
+                if (++$attempts < self::STORE_ATTEMPTS && $this->entities->isOpen()) {
+                    continue;
+                }
+
+                // Left running rather than handed back, because a retry of a queued reviewer would call the vendor, and pay, again.
+                throw ResultNotStored::after($attempts, $refused);
+            }
+        }
+    }
+
+    // Failed rather than recorded, because a result after the ceiling lands on a reviewer a redelivery may already treat as stopped; an outage passes its own move instead, since it stays a wait.
+    private function failAtTheCeiling(RoundReviewer $stored): null
+    {
+        $this->moves->fail($stored, self::CEILING_PASSED);
+
+        return null;
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(RoundReviewer): T        $move
+     * @param Closure(RoundReviewer): (T|null) $afterTheCeiling
+     *
+     * @return T|null
+     */
+    private function recordOnce(RoundReviewer $reviewer, Closure $move, Closure $afterTheCeiling): mixed
+    {
+        $now = $this->clock->now();
+
+        return $this->inOneTransaction(function () use ($reviewer, $move, $afterTheCeiling, $now): mixed {
+            $stored = $this->lockedRow($reviewer->id());
+
+            // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
+            if (!$this->isStillHeldBy($reviewer, $stored)) {
+                return null;
+            }
+
+            return $this->withinTheHold($stored, $now) ? $move($stored) : $afterTheCeiling($stored);
+        });
+    }
+
+    // The attempt too, because after the hold another worker may have started the reviewer again, and the row is then running for that worker.
+    private function isStillHeldBy(RoundReviewer $taken, RoundReviewer $stored): bool
+    {
+        return ReviewerState::Running === $stored->state() && $stored->isSameAttemptAs($taken);
+    }
+
+    // Loaded fresh under the lock, because another worker may have changed the row since this worker loaded it; cleared first, since refreshing a loaded row would set its readonly columns again.
+    private function lockedRow(Uuid $reviewerId): RoundReviewer
+    {
+        $this->entities->clear();
+        $reviewer = $this->entities->find(RoundReviewer::class, $reviewerId, LockMode::PESSIMISTIC_WRITE);
+
+        return $reviewer ?? throw ReviewerNotFound::for($reviewerId->toRfc4122());
+    }
+
     private function decide(RoundReviewer $reviewer, DateTimeImmutable $now): void
     {
         if ($reviewer->isFinished()) {
@@ -128,86 +202,12 @@ final readonly class ReviewerLeases
         $reviewer->hasRestarted() ? $this->moves->block($reviewer, self::WORKER_STOPPED) : $this->moves->restart($reviewer, $now);
     }
 
-    /**
-     * @template T
-     *
-     * @param Closure(RoundReviewer): T        $move
-     * @param (Closure(RoundReviewer): T)|null $afterTheCeiling
-     *
-     * @return T|null
-     */
-    private function record(RoundReviewer $reviewer, Closure $move, ?Closure $afterTheCeiling = null): mixed
-    {
-        $attempts = 0;
-
-        while (true) {
-            try {
-                return $this->recordOnce($reviewer, $move, $afterTheCeiling ?? $this->failAtTheCeiling(...));
-            } catch (ReviewEventNotRecorded $refused) {
-                // A new transaction, because the result is already in hand and only a fresh snapshot can write after another reviewer committed.
-                if (++$attempts < self::STORE_ATTEMPTS && $this->entities->isOpen()) {
-                    continue;
-                }
-
-                // Left running rather than handed back, because a retry of a queued reviewer would call the vendor, and pay, again.
-                throw ResultNotStored::after($attempts, $refused);
-            }
-        }
-    }
-
-    /**
-     * @template T
-     *
-     * @param Closure(RoundReviewer): T        $move
-     * @param Closure(RoundReviewer): (T|null) $afterTheCeiling
-     *
-     * @return T|null
-     */
-    private function recordOnce(RoundReviewer $reviewer, Closure $move, Closure $afterTheCeiling): mixed
-    {
-        $now = $this->clock->now();
-
-        return $this->inOneTransaction(function () use ($reviewer, $move, $afterTheCeiling, $now): mixed {
-            $stored = $this->lockedRow($reviewer->id());
-
-            // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
-            if (!$this->isStillHeldBy($reviewer, $stored)) {
-                return null;
-            }
-
-            return $this->withinTheHold($stored, $now) ? $move($stored) : $afterTheCeiling($stored);
-        });
-    }
-
-    // Failed rather than recorded, because a result after the ceiling lands on a reviewer a redelivery may already treat as stopped; an outage passes its own move instead, since it stays a wait.
-    private function failAtTheCeiling(RoundReviewer $stored): null
-    {
-        $this->moves->fail($stored, self::CEILING_PASSED);
-
-        return null;
-    }
-
-    // The attempt too, because after the hold another worker may have started the reviewer again, and the row is then running for that worker.
-    private function isStillHeldBy(RoundReviewer $taken, RoundReviewer $stored): bool
-    {
-        return ReviewerState::Running === $stored->state() && $stored->isSameAttemptAs($taken);
-    }
-
     // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.
     private function withinTheHold(RoundReviewer $reviewer, DateTimeImmutable $now): bool
     {
         $heldUntil = $reviewer->heldUntil();
 
         return $heldUntil instanceof DateTimeImmutable && $heldUntil > $now;
-    }
-
-    // Loaded fresh under the lock, because another worker may have changed the row since this worker loaded it; cleared first, since refreshing a loaded row would set its readonly columns again.
-    private function lockedRow(Uuid $reviewerId): RoundReviewer
-    {
-        $this->entities->clear();
-        $reviewer = $this->entities->find(RoundReviewer::class, $reviewerId, LockMode::PESSIMISTIC_WRITE);
-
-        return $reviewer ?? throw ReviewerNotFound::for($reviewerId->toRfc4122());
     }
 
     /**

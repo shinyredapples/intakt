@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\PlayDemo;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
-use Intakt\Core\Dashboard\Domain\TourStage;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,8 +23,7 @@ final readonly class ShowDemoController
     {
         return new Response($this->pages->render($request, 'dashboard/demo.html.twig', [
             'readiness' => $this->runs->readiness(),
-            'stages' => TourStage::cases(),
-            'factor' => PlayDemoRunHandler::FACTOR,
+            'started_flash' => DemoRuns::startedFlash($request->query->getString(DemoRuns::PLAY)),
         ]));
     }
 }

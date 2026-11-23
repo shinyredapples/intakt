@@ -97,16 +97,6 @@ final class DashboardMocksTest extends TestCase
     /**
      * @return list<string>
      */
-    private function assetLinksIn(string $file): array
-    {
-        preg_match_all('/(?:href|src)="((?:\.\.\/)*assets\/[^"]+)"/', (string) file_get_contents($file), $matches);
-
-        return $matches[1];
-    }
-
-    /**
-     * @return list<string>
-     */
     private function filesMatching(string $pattern): array
     {
         $files = glob($pattern);
@@ -114,6 +104,16 @@ final class DashboardMocksTest extends TestCase
         self::assertNotSame([], $files);
 
         return $files;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function assetLinksIn(string $file): array
+    {
+        preg_match_all('/(?:href|src)="((?:\.\.\/)*assets\/[^"]+)"/', (string) file_get_contents($file), $matches);
+
+        return $matches[1];
     }
 
     private function freePort(): int

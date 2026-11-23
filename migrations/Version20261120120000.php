@@ -5,43 +5,65 @@ declare(strict_types=1);
 namespace DoctrineMigrations;
 
 use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\Name\UnqualifiedName;
+use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
 use Doctrine\DBAL\Schema\Schema;
-use Doctrine\DBAL\Schema\TableDiff;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\Migrations\AbstractMigration;
 
+// Both shapes of the table are written out instead of read from the database, so a dry run that also plans the migration creating the table can plan this one.
 final class Version20261120120000 extends AbstractMigration
 {
-    private const array COLUMNS = ['agent_session_id', 'interruptions', 'panel_position'];
-
     public function getDescription(): string
     {
-        return 'Add the agent session id, the interruptions and the panel position of a reviewer to round_reviewer; the interrupted state needs no schema change';
+        return 'Keep the work intake sync generation per project, also when the forge sent no validator';
     }
 
-    // A stored reviewer keeps position 0, so its round falls back to the id order it was read in before.
     public function up(Schema $schema): void
     {
-        $columns = [
-            Column::editor()->setUnquotedName('agent_session_id')->setTypeName(Types::STRING)->setLength(255)->setNotNull(false)->create(),
-            Column::editor()->setUnquotedName('interruptions')->setTypeName(Types::INTEGER)->setDefaultValue(0)->create(),
-            Column::editor()->setUnquotedName('panel_position')->setTypeName(Types::INTEGER)->setDefaultValue(0)->create(),
-        ];
-
-        foreach ($this->platform->getAlterTableSQL(new TableDiff($schema->getTable('round_reviewer'), addedColumns: $columns)) as $sql) {
-            $this->addSql($sql);
-        }
+        $this->alter($this->withoutGeneration(), $this->withGeneration());
     }
 
-    // Back to running, the state it was interrupted from, because the previous release has no interrupted case and cannot hydrate such a row.
     public function down(Schema $schema): void
     {
-        $this->addSql("UPDATE round_reviewer SET state = 'running' WHERE state = 'interrupted'");
+        // A row without a validator held only a generation, which the table no longer keeps.
+        $this->addSql('DELETE FROM work_source_validator WHERE validator IS NULL');
+        $this->alter($this->withGeneration(), $this->withoutGeneration());
+    }
 
-        $table = $schema->getTable('round_reviewer');
-        $columns = array_map($table->getColumn(...), self::COLUMNS);
+    private function withoutGeneration(): Table
+    {
+        return $this->table(
+            Column::editor()->setUnquotedName('validator')->setTypeName(Types::TEXT)->create(),
+        );
+    }
 
-        foreach ($this->platform->getAlterTableSQL(new TableDiff($table, droppedColumns: $columns)) as $sql) {
+    private function withGeneration(): Table
+    {
+        return $this->table(
+            Column::editor()->setUnquotedName('validator')->setTypeName(Types::TEXT)->setNotNull(false)->create(),
+            Column::editor()->setUnquotedName('generation')->setTypeName(Types::INTEGER)->setDefaultValue(1)->create(),
+        );
+    }
+
+    private function table(Column ...$columns): Table
+    {
+        return Table::editor()
+            ->setUnquotedName('work_source_validator')
+            ->setColumns(
+                Column::editor()->setUnquotedName('project')->setTypeName(Types::STRING)->setLength(255)->create(),
+                ...$columns,
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'))->create(),
+            )
+            ->create();
+    }
+
+    private function alter(Table $from, Table $to): void
+    {
+        foreach ($this->platform->getAlterTableSQL($this->connection->createSchemaManager()->createComparator()->compareTables($from, $to)) as $sql) {
             $this->addSql($sql);
         }
     }

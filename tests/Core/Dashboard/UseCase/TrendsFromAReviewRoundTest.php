@@ -38,17 +38,6 @@ final class TrendsFromAReviewRoundTest extends DashboardPageTestCase
 
     private RoundFixture $fixture;
 
-    // The application's own ledger on the test database, so the page reads what RoundLedger wrote.
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->fixture = new RoundFixture(self::getContainer());
-        self::getContainer()->set(Ledger::class, $this->fixture->ledger());
-        self::getContainer()->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
-        $this->givenTheDownloadedScriptsExist();
-    }
-
     public function testBothChartsReadTheRowsARoundAndItsJudgeWrote(): void
     {
         $this->judged($this->reviewed(), new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Reject), new JudgedFinding('F3', Mark::Defer)]));
@@ -63,7 +52,7 @@ final class TrendsFromAReviewRoundTest extends DashboardPageTestCase
             ['Role-1', 'P1', '1', '1'], ['Role-1', 'P2', '0', '0'], ['Role-1', 'P3', '1', '1'],
             ['Role-2', 'P1', '0', '0'], ['Role-2', 'P2', '0', '0'], ['Role-2', 'P3', '1', '1'],
         ], $this->rowsOf($page, '#chart-catches'));
-        self::assertSame([['Kept on the act list', '1'], ['Merged as duplicate', '0'], ['Deferred to a follow-up issue', '1'], ['Rejected', '1']], $this->rowsOf($page, '#chart-judge'));
+        self::assertSame([['Kept to fix', '1'], ['Merged as duplicate', '0'], ['Deferred to a follow-up issue', '1'], ['Rejected', '1']], $this->rowsOf($page, '#chart-judge'));
     }
 
     public function testARoundTheJudgeCouldNotAnswerAddsNothingToTheJudgeChart(): void
@@ -74,6 +63,17 @@ final class TrendsFromAReviewRoundTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertSame('The judge kept 1 of 3 findings and rejected 1.', $page->filter('#chart-judge .takeaway')->text());
+    }
+
+    // The application's own ledger on the test database, so the page reads what RoundLedger wrote.
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->fixture = new RoundFixture(self::getContainer());
+        self::getContainer()->set(Ledger::class, $this->fixture->ledger());
+        self::getContainer()->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
+        $this->givenTheDownloadedScriptsExist();
     }
 
     private function reviewed(): string

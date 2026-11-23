@@ -6,14 +6,14 @@ namespace Intakt\Tests\Core\Review\Stored;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
-use DoctrineMigrations\Version20261120120000;
+use DoctrineMigrations\Version20261123100000;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 #[Group('persistence')]
-#[CoversClass(Version20261120120000::class)]
+#[CoversClass(Version20261123100000::class)]
 final class InterruptedReviewerRollbackTest extends TestCase
 {
     public function testRollingBackPutsAnInterruptedReviewerBackToRunningForThePreviousRelease(): void
@@ -68,7 +68,7 @@ final class InterruptedReviewerRollbackTest extends TestCase
         $db->executeStatement('CREATE TABLE round_reviewer (id INTEGER PRIMARY KEY, state VARCHAR(16) NOT NULL)');
         $db->insert('round_reviewer', ['id' => 1, 'state' => 'running']);
 
-        $migration = new Version20261120120000($db, new NullLogger());
+        $migration = new Version20261123100000($db, new NullLogger());
         $migration->up($db->createSchemaManager()->introspectSchema());
         $this->apply($db, $migration);
 
@@ -77,12 +77,12 @@ final class InterruptedReviewerRollbackTest extends TestCase
 
     private function rollBack(Connection $db): void
     {
-        $migration = new Version20261120120000($db, new NullLogger());
+        $migration = new Version20261123100000($db, new NullLogger());
         $migration->down($db->createSchemaManager()->introspectSchema());
         $this->apply($db, $migration);
     }
 
-    private function apply(Connection $db, Version20261120120000 $migration): void
+    private function apply(Connection $db, Version20261123100000 $migration): void
     {
         foreach ($migration->getSql() as $query) {
             $db->executeStatement($query->getStatement());

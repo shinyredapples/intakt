@@ -84,6 +84,10 @@ test('the first-run page at /setup is checked', () => {
     assert.ok(PAGES.some((page) => page.name === 'setup' && page.path === '/setup'));
 });
 
+test('the Status page at /lanes is checked', () => {
+    assert.ok(PAGES.some((page) => page.name === 'status' && page.path === '/lanes'));
+});
+
 test('the Waiting on you page at /waiting is checked', () => {
     assert.ok(PAGES.some((page) => page.name === 'waiting' && page.path === '/waiting'));
 });

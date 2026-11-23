@@ -29,7 +29,7 @@ final class HighlightsWorkflowTest extends TestCase
         $workflow = $this->workflow();
 
         self::assertSame(['push', 'schedule', 'workflow_dispatch'], array_keys($workflow['on']));
-        self::assertSame(['branches' => ['main'], 'paths' => ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/Highlight*.php', '.github/workflows/highlights.yml']], $workflow['on']['push']);
+        self::assertSame(['branches' => ['main'], 'paths' => ['docs/highlights.d/**', 'docs/pages/**', 'bin/highlights', 'config/gates/src/Highlight*.php', '.github/workflows/highlights.yml']], $workflow['on']['push']);
         self::assertSame([['cron' => '17 4 * * *']], $workflow['on']['schedule']);
     }
 
@@ -73,14 +73,14 @@ final class HighlightsWorkflowTest extends TestCase
     {
         $escaped = "# Highlights\n\nA code span `{{ \"{{\" }} x }}`, `{{ \"{%\" }} if y %}` and `{{ \"{{\" }}{{ \"{%\" }}`.\n";
 
-        self::assertSame(['index.md' => $escaped, 'journey/index.md' => $escaped], $this->assembledPages("# Highlights\n\nA code span `{{ x }}`, `{% if y %}` and `{{{%`.\n"));
+        self::assertSame(['highlights/index.md' => $escaped, 'journey/index.md' => $escaped], $this->assembledPages("# Highlights\n\nA code span `{{ x }}`, `{% if y %}` and `{{{%`.\n"));
     }
 
     public function testTheAssembledPageIsTheHighlightsUnchangedWhenTheyHoldNoLiquidOpening(): void
     {
         $highlights = "# Highlights\n\nBraces `{ x }`, closings `}}` and `%}`, a percent `%{`.";
 
-        self::assertSame(['index.md' => $highlights, 'journey/index.md' => $highlights], $this->assembledPages($highlights));
+        self::assertSame(['highlights/index.md' => $highlights, 'journey/index.md' => $highlights], $this->assembledPages($highlights));
     }
 
     public function testTheAssembledPageRunsBinPagesOnTheRecordedAnswersBeforeItEscapesThePages(): void
@@ -140,16 +140,16 @@ final class HighlightsWorkflowTest extends TestCase
     {
         $workspace = sys_get_temp_dir().'/intakt highlights '.bin2hex(random_bytes(6));
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($workspace.'/page/index.md', $highlights);
+        $filesystem->dumpFile($workspace.'/page/highlights/index.md', $highlights);
         $filesystem->dumpFile($workspace.'/page/journey/index.md', $highlights);
 
         try {
             $write = substr($this->pageCommand(), strlen(self::PAGES.' && '));
-            $process = new Process(['sh', '-c', $prelude.str_replace([' /page/index.md', ' /page/journey/index.md'], [' '.escapeshellarg($workspace.'/page/index.md'), ' '.escapeshellarg($workspace.'/page/journey/index.md')], $write)], $workspace);
+            $process = new Process(['sh', '-c', $prelude.str_replace([' /page/highlights/index.md', ' /page/journey/index.md'], [' '.escapeshellarg($workspace.'/page/highlights/index.md'), ' '.escapeshellarg($workspace.'/page/journey/index.md')], $write)], $workspace);
             $process->run();
 
             $pages = [];
-            foreach (['index.md', 'journey/index.md'] as $page) {
+            foreach (['highlights/index.md', 'journey/index.md'] as $page) {
                 $pages[$page] = is_file($workspace.'/page/'.$page) ? (string) file_get_contents($workspace.'/page/'.$page) : '';
             }
 

@@ -10,13 +10,10 @@ final readonly class HeldCredentialSpans
 {
     private const array JSON_SHORT_ESCAPES = ["\x08" => 'b', "\f" => 'f', "\n" => 'n', "\r" => 'r', "\t" => 't'];
 
-    /**
-     * @param list<string> $credentials
-     */
-    public function in(string $text, #[SensitiveParameter] array $credentials): ?RedactedSpans
+    public function in(string $text, #[SensitiveParameter] string ...$credentials): ?RedactedSpans
     {
         $spans = new RedactedSpans();
-        foreach ($this->withTrimmedForms($credentials) as $credential) {
+        foreach ($this->withTrimmedForms(array_values($credentials)) as $credential) {
             $pattern = $this->pattern($credential);
             // One match at a time, because collecting every match of a short credential in a long text first would cost far more memory than the parts.
             $offset = 0;

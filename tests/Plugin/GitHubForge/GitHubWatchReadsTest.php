@@ -103,11 +103,6 @@ final class GitHubWatchReadsTest extends TestCase
     // Close after the recorded runs' creation, because a queued suite past the ceiling is left out.
     private string $ciNow = '2026-11-02 09:10:00 UTC';
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
-
     public function testBelowTheReserveASecondListingInOneTickMakesNoRequestAndWaitsForTheReset(): void
     {
         $this->remaining = 999;
@@ -755,6 +750,11 @@ final class GitHubWatchReadsTest extends TestCase
         }
     }
 
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+    }
+
     /**
      * @return list<CiRunState>
      */
@@ -766,14 +766,6 @@ final class GitHubWatchReadsTest extends TestCase
     private function state(): CiState
     {
         return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function listingRequests(): array
-    {
-        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
     }
 
     private function reads(): GitHubWatchReads
@@ -795,6 +787,14 @@ final class GitHubWatchReadsTest extends TestCase
         return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments(), new MockClock($this->ciNow)), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
+    /**
+     * @return list<string>
+     */
+    private function listingRequests(): array
+    {
+        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
+    }
+
     private function answer(string $url): ResponseInterface
     {
         if ($this->failWith > 0) {
@@ -810,18 +810,6 @@ final class GitHubWatchReadsTest extends TestCase
             str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->runs), ['response_headers' => $this->budget()]),
             default => new MockResponse($this->fixture($this->suites), ['response_headers' => $this->budget()]),
         };
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function budget(): array
-    {
-        return null === $this->remaining ? [] : [
-            'x-ratelimit-limit' => '5000',
-            'x-ratelimit-remaining' => (string) $this->remaining,
-            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
-        ];
     }
 
     private function listingPage(string $url): MockResponse
@@ -866,5 +854,17 @@ final class GitHubWatchReadsTest extends TestCase
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
 
         return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function budget(): array
+    {
+        return null === $this->remaining ? [] : [
+            'x-ratelimit-limit' => '5000',
+            'x-ratelimit-remaining' => (string) $this->remaining,
+            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
+        ];
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Domain\FindingUrgency;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
@@ -25,6 +26,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(ReviewOutcome::class)]
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(RoundEnding::class)]
+#[UsesClass(FindingUrgency::class)]
 final class ReviewVerdictCardTest extends DashboardPageTestCase
 {
     public function testAnApprovedReviewShowsApprovedInTheCardRightUnderTheTitle(): void
@@ -33,40 +35,59 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Approved', $crawler->filter('.page-head h1 + .verdict-card .verdict-words')->text());
-        self::assertCount(0, $crawler->filter('.verdict-card .verdict-findings'));
+        self::assertSame('Approved', $crawler->filter('.page-head .verdict-card .verdict-words')->text());
+        self::assertCount(0, $crawler->filter('.to-fix'));
     }
 
-    public function testAReviewWithFindingsToFixSaysHowManyThingsNeedFixing(): void
+    public function testAReviewWithFindingsToFixSaysChangesNeededAndHowManyToFix(): void
     {
         $this->givenAChangesRoundWith(['F1' => 'act', 'F2' => 'act', 'F3' => 'act', 'F4' => 'defer']);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Changes needed: 3 things to fix', $crawler->filter('.verdict-card .verdict-words')->text());
-        self::assertSame('To fix', $crawler->filter('.verdict-card .verdict-to-fix')->text());
+        self::assertSame(['Changes needed', '3 to fix · 0 urgent'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
+        self::assertSame('To fix', $crawler->filter('.to-fix h2')->text());
     }
 
-    public function testOneFindingToFixIsCountedInTheSingular(): void
+    public function testOneFindingToFixIsCountedAsOneToFix(): void
     {
         $this->givenAChangesRoundWith(['F1' => 'act']);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Changes needed: 1 thing to fix', $crawler->filter('.verdict-card .verdict-words')->text());
+        self::assertSame('1 to fix · 0 urgent', $crawler->filter('.verdict-card .verdict-count')->text());
     }
 
-    public function testChangesWithNothingToFixNowNamesNoCountAndListsNothing(): void
+    public function testChangesWithNothingToFixNowCountsZeroAndListsNothing(): void
     {
         $this->givenAChangesRoundWith(['F1' => 'defer']);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Changes needed', $crawler->filter('.verdict-card .verdict-words')->text());
-        self::assertCount(0, $crawler->filter('.verdict-card .verdict-findings'));
+        self::assertSame(['Changes needed', '0 to fix · 0 urgent'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
+        self::assertCount(0, $crawler->filter('.to-fix'));
     }
 
-    public function testEachFindingToFixIsOneLineWithItsSeverityTextAndPlace(): void
+    public function testAnApprovedPassCountsZeroToFixAndZeroUrgent(): void
+    {
+        $this->givenAnApprovedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('0 to fix · 0 urgent', $crawler->filter('.verdict-card .verdict-count')->text());
+    }
+
+    public function testAPassThatEndedWithoutAVerdictShowsNoCountLine(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([1, 0], [$crawler->filter('.verdict-card')->count(), $crawler->filter('.verdict-card .verdict-count')->count()]);
+    }
+
+    public function testEachFindingToFixIsOneCardWithItsUrgencyTitleAndPlace(): void
     {
         $this->givenAChangesRound();
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one.');
@@ -74,32 +95,21 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['P1', 'The total is off by one.', 'src/A.php:7']],
-            $crawler->filter('.verdict-findings li')->each(static fn (Crawler $line): array => [$line->filter('.sev')->text(), $line->filter('.vf-title')->text(), $line->filter('.vf-place')->text()]),
+            [['Urgent', 'The total is off by one.', 'src/A.php:7']],
+            $crawler->filter('.to-fix .fix-card')->each(static fn (Crawler $card): array => [$card->filter('.urgency')->text(), $card->filter('.fix-title')->text(), $card->filter('.fix-place')->text()]),
         );
     }
 
-    public function testEachFindingLineLinksToItsFullFindingFurtherDown(): void
+    public function testEachFindingCardOpensTheFindingInTheFullRecord(): void
     {
         $this->givenAChangesRoundWith(['F1' => 'act', 'F2' => 'act']);
+        $this->browser->disableReboot();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $targets = $this->browser->request('GET', '/reviews/round-1')->filter('.to-fix a.fix-card')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
 
-        $targets = $crawler->filter('.verdict-findings a')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
-        self::assertSame(['#round-round-1-finding-F1', '#round-round-1-finding-F2'], $targets);
-        foreach ($targets as $target) {
-            self::assertCount(1, $crawler->filter('li.finding-card'.$target));
-        }
-    }
-
-    public function testTheLineOfAPlaceIsKeptApartFromItsPathSoACutPathStillShowsIt(): void
-    {
-        $this->givenAChangesRound();
-        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one.');
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        self::assertSame(['src/A.php', ':7'], [$crawler->filter('.vf-place .vf-path')->text(), $crawler->filter('.vf-place .vf-line')->text()]);
+        self::assertSame(['/reviews/round-1/record#round-round-1-finding-F1', '/reviews/round-1/record#round-round-1-finding-F2'], $targets);
+        $record = $this->browser->request('GET', '/reviews/round-1/record');
+        self::assertCount(2, $record->filter('li.finding-card#round-round-1-finding-F1, li.finding-card#round-round-1-finding-F2'));
     }
 
     public function testAFileWhoseNameEndsInAColonAndDigitsIsShownWholeWithoutAnInventedLine(): void
@@ -109,18 +119,56 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('src/report:2026', $crawler->filter('.vf-place .vf-path')->text());
-        self::assertCount(0, $crawler->filter('.vf-place .vf-line'));
+        self::assertSame('src/report:2026', $crawler->filter('.fix-card .fix-place')->text());
     }
 
-    public function testAPathHoldingAColonKeepsItsRecordedLineApart(): void
+    public function testAPathHoldingAColonKeepsItsRecordedLine(): void
     {
         $this->givenAChangesRound();
         $this->ledger->judgeToFixIn('round-1', 'src/long:folder/<draft>.php', 1234);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['src/long:folder/<draft>.php', ':1234'], [$crawler->filter('.vf-place .vf-path')->text(), $crawler->filter('.vf-place .vf-line')->text()]);
+        self::assertSame('src/long:folder/<draft>.php:1234', $crawler->filter('.fix-card .fix-place')->text());
+    }
+
+    public function testAnUrgentFindingIsCountedBesideTheFindingsToFix(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one. It drops the last item.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('1 to fix · 1 urgent', $crawler->filter('.verdict-card .verdict-count')->text());
+    }
+
+    public function testACardShowsTheHeadlineAsItsTitleAndTheRestOfTheTextAsItsExplanation(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one. It drops the last item.');
+
+        $card = $this->browser->request('GET', '/reviews/round-1')->filter('.fix-card');
+
+        self::assertSame(['The total is off by one.', 'It drops the last item.'], [$card->filter('.fix-title')->text(), $card->filter('.fix-more')->text()]);
+    }
+
+    public function testACardOfOneSentenceHasNoExplanationLine(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.fix-card .fix-more'));
+    }
+
+    public function testAJudgedPassIsNamedCheckedAboveTheVerdict(): void
+    {
+        $this->givenAnApprovedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Pass 1 · Checked', $crawler->filter('.verdict-card .kicker')->text());
     }
 
     public function testAnApprovedRoundWhoseJudgeRejectedAFindingListsNothingToFix(): void
@@ -133,7 +181,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('Approved', $crawler->filter('.verdict-card .verdict-words')->text());
-        self::assertCount(0, $crawler->filter('.verdict-card .verdict-findings'));
+        self::assertCount(0, $crawler->filter('.to-fix'));
     }
 
     public function testABlockedRoundWithoutAnEndingSaysTheReviewersCouldNotGiveAVerdict(): void
@@ -154,7 +202,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(0, $crawler->filter('.verdict-findings .vf-place'));
+        self::assertCount(0, $crawler->filter('.to-fix .fix-place'));
     }
 
     public function testAChangesNeededCardIsMarkedAsNeedingYou(): void
@@ -245,7 +293,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Judged, but the outcome was not recorded', $crawler->filter('.verdict-card .verdict-words')->text());
+        self::assertSame('Checked, but the outcome was not recorded', $crawler->filter('.verdict-card .verdict-words')->text());
     }
 
     private function givenAnApprovedRound(): void

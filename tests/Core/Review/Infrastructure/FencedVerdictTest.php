@@ -7,9 +7,11 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\AnswerForm;
 use Intakt\Core\Review\Infrastructure\FenceLine;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -36,6 +38,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[UsesClass(AnswerForm::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(ReviewerAnswer::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 final class FencedVerdictTest extends TestCase
@@ -48,7 +51,7 @@ final class FencedVerdictTest extends TestCase
         $verdict = $this->answered($model, "I read the change and found it fine.\n\n```json\n".self::VERDICT."\n```\n\nThat is my verdict.");
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1')], $verdict->resolved);
     }
 
     #[DataProvider('subscriptionModels')]
@@ -294,7 +297,7 @@ final class FencedVerdictTest extends TestCase
     private function answered(Model $model, string $text): Verdict
     {
         $formats = new ResponseFormatFactory();
-        $options = [PlatformSubscriber::RESPONSE_FORMAT => $formats->create(Verdict::class)];
+        $options = [PlatformSubscriber::RESPONSE_FORMAT => $formats->create(ReviewerAnswer::class)];
         $converter = self::createStub(ResultConverterInterface::class);
         $converter->method('convert')->willReturn(new TextResult($text));
         $deferred = new DeferredResult($converter, new InMemoryRawResult(), $options);
@@ -305,8 +308,8 @@ final class FencedVerdictTest extends TestCase
         $result = $event->getDeferredResult()->getResult();
         self::assertInstanceOf(ObjectResult::class, $result);
         $verdict = $result->getContent();
-        self::assertInstanceOf(Verdict::class, $verdict);
+        self::assertInstanceOf(ReviewerAnswer::class, $verdict);
 
-        return $verdict;
+        return $verdict->toVerdict();
     }
 }

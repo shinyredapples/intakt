@@ -15,7 +15,7 @@
         <li class="finding-card" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">
             <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
             <div class="fc-body">
-                <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
+                {{ include('dashboard/_finding_card_text.html.twig', {finding: finding}, with_context = false) }}
                 <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
                 {% if finding.merged is not empty %}
                 <p class="fc-merged">Also reported as <span class="mono">{{ finding.merged|join(', ') }}</span></p>
@@ -32,9 +32,31 @@
         <li class="finding-card" id="round-{{ reviewed.round }}-dropped-{{ finding.id }}" data-finding="{{ finding.id }}" data-dropped="{{ finding.id }}">
             <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
             <div class="fc-body">
-                <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
+                {{ include('dashboard/_finding_card_text.html.twig', {finding: finding}, with_context = false) }}
                 <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
-                <p class="fc-call">Dropped before the judge: {{ finding.droppedBecause }}</p>
+                <p class="fc-call">Quote not found in the code</p>
+                {#- The quotes are the ones the quote check counted (RoundFinding::$quotes), never read again from the text here, so the list matches the count in the reason. -#}
+                <details class="fc-quotes">
+                    <summary>Quoted code{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+                    {% if finding.quotes|length > 0 %}
+                    <ul class="fc-quote-list">
+                        {% for quote in finding.quotes %}
+                        <li><code>{{ quote }}</code>
+                            {%- set near = finding.nearLinesOf(quote) -%}
+                            {%- if near is not empty %}
+                            <ul class="fc-near-lines" aria-label="Changed lines closest to this quote">
+                                {% for changed in near %}
+                                <li><span class="mono fc-near-place">{{ changed.file }}:{{ changed.line }}</span> <code>{{ changed.text }}</code></li>
+                                {% endfor %}
+                            </ul>
+                            {%- endif -%}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <p class="fc-unchecked">File names, numbers and suggested-fix blocks are not checked.</p>
+                    {% endif %}
+                    <p class="fc-reason">Dropped before the judge: {{ finding.droppedBecause }}</p>
+                </details>
             </div>
         </li>
         {% endfor %}

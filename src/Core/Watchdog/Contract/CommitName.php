@@ -17,4 +17,14 @@ final readonly class CommitName
 
         return $name;
     }
+
+    // Measured against the repository's own name length, because git reads a SHA-256 name cut to 40 characters as an abbreviation.
+    public static function fullOfLength(string $name, string $role, int $length): string
+    {
+        if (strlen(self::full($name, $role)) !== $length) {
+            throw new CommitNameNotFull(sprintf('The %s "%s" is not a full commit name of this repository (%d characters).', $role, $name, $length));
+        }
+
+        return $name;
+    }
 }

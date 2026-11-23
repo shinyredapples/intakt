@@ -36,6 +36,24 @@ final readonly class PostedComments
         return [] === $comments || $this->holdsMarker($address, $marker) ? [] : $comments;
     }
 
+    // Each marker read before the first post, which the caller's verdict lock allows, because no other delivery of the round posts meanwhile.
+    /**
+     * @param array<string, list<string>> $byMarker
+     *
+     * @return list<string>
+     */
+    public function bodiesNotYetPosted(PullRequestAddress $address, array $byMarker): array
+    {
+        $bodies = [];
+        foreach ($byMarker as $marker => $comments) {
+            foreach ($this->notYetPosted($address, $marker, $comments) as $comment) {
+                $bodies[] = $comment."\n\n".$marker;
+            }
+        }
+
+        return $bodies;
+    }
+
     private function holdsMarker(PullRequestAddress $address, string $marker): bool
     {
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
@@ -50,19 +68,6 @@ final readonly class PostedComments
         }
 
         throw new ForgeWriteFailed('The pull request holds more comments than this forge reads before a post.');
-    }
-
-    // Posted through this App, which GitHub alone sets, because anyone who learns the round's id can write its marker into a comment of their own; the marker only at the end, where the post puts it, so a finding that quotes another round's marker never counts.
-    private function isOwnCommentWith(mixed $comment, string $marker): bool
-    {
-        if (!is_array($comment) || !is_string($comment['body'] ?? null) || !str_ends_with(rtrim($comment['body']), $marker)) {
-            return false;
-        }
-
-        $app = $comment['performed_via_github_app'] ?? null;
-        $id = is_array($app) ? ($app['id'] ?? null) : null;
-
-        return is_int($id) && (string) $id === $this->appId;
     }
 
     /**
@@ -87,6 +92,34 @@ final readonly class PostedComments
         return $this->listIn($body);
     }
 
+    // Posted through this App, which GitHub alone sets, because anyone who learns the round's id can write its marker into a comment of their own; the marker only at the end, where the post puts it, so a finding that quotes another round's marker never counts.
+    private function isOwnCommentWith(mixed $comment, string $marker): bool
+    {
+        if (!is_array($comment) || !is_string($comment['body'] ?? null) || !str_ends_with(rtrim($comment['body']), $marker)) {
+            return false;
+        }
+
+        $app = $comment['performed_via_github_app'] ?? null;
+        $id = is_array($app) ? ($app['id'] ?? null) : null;
+
+        return is_int($id) && (string) $id === $this->appId;
+    }
+
+    private function bearer(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+            throw new ForgeWriteFailed('No GitHub read of the comments before a post: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+        }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached to read the comments before a post (%s).', $failure));
+    }
+
     /**
      * @return list<mixed>
      */
@@ -100,20 +133,5 @@ final readonly class PostedComments
 
         // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
         return is_array($comments) && array_is_list($comments) && str_starts_with(ltrim($body), '[') ? $comments : throw new ForgeWriteFailed('GitHub answered a comment listing that is not a list.');
-    }
-
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeWriteFailed
-    {
-        return new ForgeWriteFailed(sprintf('GitHub could not be reached to read the comments before a post (%s).', $failure));
-    }
-
-    private function bearer(): string
-    {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeWriteFailed('No GitHub read of the comments before a post: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
-        }
     }
 }

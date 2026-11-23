@@ -82,7 +82,7 @@ final class RoundReviewer implements HasPlace
         $this->tier = $member->model->tier;
     }
 
-    // The id breaks a tie, because every reviewer stored before migration Version20261120120000 is at position 0.
+    // The id breaks a tie, because every reviewer stored before migration Version20261123100000 is at position 0.
     public function panelOrder(self $other): int
     {
         return [$this->position, $this->id->toBinary()] <=> [$other->position, $other->id->toBinary()];

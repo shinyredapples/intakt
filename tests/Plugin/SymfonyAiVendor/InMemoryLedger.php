@@ -8,6 +8,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
 use Symfony\Component\Uid\Uuid;
@@ -45,11 +46,8 @@ final class InMemoryLedger implements Ledger
         return new RecordedEvents([]);
     }
 
-    /**
-     * @param list<string> $texts
-     */
     #[Override]
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
         return new RecordedEvents([]);
     }

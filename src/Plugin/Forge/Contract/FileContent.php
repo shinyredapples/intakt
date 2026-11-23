@@ -17,6 +17,6 @@ final readonly class FileContent
     // Named by its size instead of carrying its bytes, because what is read about a change reaches prompts and payloads that must be UTF-8.
     public static function binary(string $path, CommitId $commit, int $bytes): self
     {
-        return new self($path, $commit, sprintf('Binary file, not shown: %d bytes', $bytes), $bytes);
+        return new self($path, $commit, 'Binary file, not shown: '.(1 === $bytes ? '1 byte' : $bytes.' bytes'), $bytes);
     }
 }

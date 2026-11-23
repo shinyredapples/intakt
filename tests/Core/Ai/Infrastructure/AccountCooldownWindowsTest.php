@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountErrorReported;
+use Intakt\Core\Ai\Infrastructure\PoolRememberingItsSave;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
@@ -30,6 +33,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 // On the native clock, because the RateLimiter reads the system time itself (symfony/rate-limiter has no clock option), so a mocked moment would not match its windows.
 #[CoversClass(AccountCooldownWindows::class)]
+#[CoversClass(PoolRememberingItsSave::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(AccountErrorReported::class)]
@@ -42,13 +46,6 @@ final class AccountCooldownWindowsTest extends TestCase
     private ArrayAdapter $pool;
     private InMemoryLedger $ledger;
     private ReadingsInMemory $readings;
-
-    protected function setUp(): void
-    {
-        $this->pool = new ArrayAdapter();
-        $this->ledger = new InMemoryLedger();
-        $this->readings = new ReadingsInMemory(new NativeClock());
-    }
 
     public function testAnAccountThatWasNeverLimitedIsFree(): void
     {
@@ -305,6 +302,19 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertIsString($payload['until']);
     }
 
+    // Decision 73 of #2860: the limiter dates its windows by the system time, so a clock set to a past date must not make a saved window read as refused.
+    public function testACooldownUnderAClockAtAPastDateIsRecordedAndLogsNoWarning(): void
+    {
+        $logger = new BufferingLogger();
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new MockClock('2026-11-02 12:00:00.000 UTC'), $this->ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+
+        $cooldowns->coolDown($this->default(), 300);
+
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+        self::assertSame('2026-11-02T12:05:00+00:00', $this->ledger->payloads()[0]['until']);
+        self::assertSame([], $logger->cleanLogs());
+    }
+
     public function testASecondLimitWhileTheAccountCoolsDownKeepsTheFirstCooldownAndRecordsNothing(): void
     {
         $cooldowns = $this->cooldowns();
@@ -327,6 +337,43 @@ final class AccountCooldownWindowsTest extends TestCase
         /** @var list<array{0: string, 1: string}> $logs */
         $logs = $logger->cleanLogs();
         self::assertSame('error', $logs[0][0]);
+    }
+
+    // Forced order (decision 67 of #2860): the first worker's save is refused and a second worker cools the account for 60 s before the first learns its save was refused, so only the other worker's window is kept and recorded.
+    public function testARefusedSaveFollowedByAnotherWorkersCooldownRecordsOnlyTheOtherCooldownAndIsLogged(): void
+    {
+        $pool = new RefusingASaveAfterAStep();
+        $logger = new BufferingLogger();
+        $other = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $first = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = fn () => $other->coolDown($this->default(), 60);
+
+        $first->coolDown($this->default(), 120);
+
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+        $until = $this->ledger->payloads()[0]['until'];
+        self::assertIsString($until);
+        $end = DateTimeImmutable::createFromFormat(DATE_ATOM, $until, new DateTimeZone('UTC'));
+        self::assertInstanceOf(DateTimeImmutable::class, $end);
+        self::assertEqualsWithDelta(60, $end->getTimestamp() - new NativeClock()->now()->getTimestamp(), 1);
+        self::assertEqualsWithDelta(60, $other->secondsUntilFree($this->default()), 1);
+        self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
+    }
+
+    // Forced order (decision 77 of #2860): the first worker's save is refused while a second worker saves a window with the same end, so only the cache's own result can tell the two apart.
+    public function testARefusedSaveBesideAnotherWorkersWindowWithTheSameEndRecordsOneCooldownAndIsLoggedOnce(): void
+    {
+        $pool = new RefusingASaveAfterAStep();
+        $logger = new BufferingLogger();
+        $other = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $first = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = fn () => $other->coolDown($this->default(), 120);
+
+        $first->coolDown($this->default(), 120);
+
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+        self::assertEqualsWithDelta(120, $other->secondsUntilFree($this->default()), 1);
+        self::assertSame(['The cooldown of account {account} could not be saved.'], array_column($logger->cleanLogs(), 1));
     }
 
     public function testARejectionIsReportedToTheOwnerWithItsAccount(): void
@@ -490,6 +537,13 @@ final class AccountCooldownWindowsTest extends TestCase
     public function testAProviderWithoutAccountsHasNothingToWaitFor(): void
     {
         self::assertSame(0, $this->cooldowns()->secondsUntilAnAccountIsFree(Provider::ClaudeCode));
+    }
+
+    protected function setUp(): void
+    {
+        $this->pool = new ArrayAdapter();
+        $this->ledger = new InMemoryLedger();
+        $this->readings = new ReadingsInMemory(new NativeClock());
     }
 
     private function measured(UsageWindow $window, float $usedPercent, int $resetInSeconds): void

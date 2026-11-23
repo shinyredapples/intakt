@@ -9,22 +9,23 @@ use Intakt\Core\Review\Contract\ToolCallCount;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\AI\Platform\Result\ToolCall;
 
 #[CoversClass(ReviewTool::class)]
 #[CoversClass(ToolCallCount::class)]
 final class ReviewToolTest extends TestCase
 {
     /**
-     * @param array<mixed> $arguments
+     * @param array<string, mixed> $arguments
      */
     #[DataProvider('calls')]
     public function testACallReadsInPlainWords(ReviewTool $tool, array $arguments, string $words): void
     {
-        self::assertSame($words, $tool->callInWords($arguments));
+        self::assertSame($words, $tool->callInWords(new ToolCall('call-1', $tool->value, $arguments)));
     }
 
     /**
-     * @return iterable<string, array{ReviewTool, array<mixed>, string}>
+     * @return iterable<string, array{ReviewTool, array<string, mixed>, string}>
      */
     public static function calls(): iterable
     {
@@ -41,16 +42,16 @@ final class ReviewToolTest extends TestCase
 
     // The model writes the arguments, so a malformed one must still give a line and never the raw value.
     /**
-     * @param array<mixed> $arguments
+     * @param array<string, mixed> $arguments
      */
     #[DataProvider('malformedCalls')]
     public function testACallWithAMalformedArgumentReadsAsTheCallWithoutIt(ReviewTool $tool, array $arguments, string $words): void
     {
-        self::assertSame($words, $tool->callInWords($arguments));
+        self::assertSame($words, $tool->callInWords(new ToolCall('call-1', $tool->value, $arguments)));
     }
 
     /**
-     * @return iterable<string, array{ReviewTool, array<mixed>, string}>
+     * @return iterable<string, array{ReviewTool, array<string, mixed>, string}>
      */
     public static function malformedCalls(): iterable
     {

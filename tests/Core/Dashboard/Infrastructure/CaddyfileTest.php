@@ -11,7 +11,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-// The Caddyfile as FrankenPHP reads it for the setup docs/user/README.md describes, because FrankenPHP takes its values from the process and the env files it is given, never from Symfony's .env loading.
+// The Caddyfile as FrankenPHP reads it for the setup docs/reference/user-manual.md describes, because FrankenPHP takes its values from the process and the env files it is given, never from Symfony's .env loading.
 #[Group('hub')]
 #[CoversNothing]
 final class CaddyfileTest extends TestCase
@@ -23,30 +23,6 @@ final class CaddyfileTest extends TestCase
     private string $frankenphp;
 
     private string $directory;
-
-    protected function setUp(): void
-    {
-        $frankenphp = new ExecutableFinder()->find('frankenphp');
-
-        if (null === $frankenphp) {
-            self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
-        }
-
-        $this->frankenphp = $frankenphp;
-        $this->directory = sys_get_temp_dir().'/intakt-caddyfile-'.bin2hex(random_bytes(6));
-        $filesystem = new Filesystem();
-        $filesystem->mkdir($this->directory);
-        $filesystem->copy(dirname(__DIR__, 4).'/Caddyfile', $this->directory.'/Caddyfile');
-        $filesystem->copy(dirname(__DIR__, 4).'/.env', $this->directory.'/.env');
-        $filesystem->dumpFile($this->directory.'/.env.local', sprintf("MERCURE_JWT_SECRET=%s\nMERCURE_JWT_ISSUER=%s\n", self::SECRET, self::ISSUER));
-    }
-
-    protected function tearDown(): void
-    {
-        if (isset($this->directory)) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
 
     public function testTheHubTakesItsIssuerAndKeyFromEnvLocalWhenItIsTheFirstEnvFile(): void
     {
@@ -95,6 +71,30 @@ final class CaddyfileTest extends TestCase
     public function testRequestsWaitForAWorkerForAtMostThirtySeconds(): void
     {
         self::assertSame(30_000_000_000, $this->at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'apps', 'frankenphp', 'max_wait_time'));
+    }
+
+    protected function setUp(): void
+    {
+        $frankenphp = new ExecutableFinder()->find('frankenphp');
+
+        if (null === $frankenphp) {
+            self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
+        }
+
+        $this->frankenphp = $frankenphp;
+        $this->directory = sys_get_temp_dir().'/intakt-caddyfile-'.bin2hex(random_bytes(6));
+        $filesystem = new Filesystem();
+        $filesystem->mkdir($this->directory);
+        $filesystem->copy(dirname(__DIR__, 4).'/Caddyfile', $this->directory.'/Caddyfile');
+        $filesystem->copy(dirname(__DIR__, 4).'/.env', $this->directory.'/.env');
+        $filesystem->dumpFile($this->directory.'/.env.local', sprintf("MERCURE_JWT_SECRET=%s\nMERCURE_JWT_ISSUER=%s\n", self::SECRET, self::ISSUER));
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->directory)) {
+            new Filesystem()->remove($this->directory);
+        }
     }
 
     /**

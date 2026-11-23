@@ -1,0 +1,40 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Tree
+{
+    private function unused(int $left): string
+    {
+        return 0 === $left ? 'never called' : $this->echoed($left - 1);
+    }
+
+    /**
+     * @param array<mixed> $branches
+     */
+    public function depth(array $branches): int
+    {
+        return $this->walk($branches);
+    }
+
+    /**
+     * @param array<mixed> $branches
+     */
+    private function walk(array $branches): int
+    {
+        $deepest = 0;
+
+        foreach ($branches as $branch) {
+            $deepest = max($deepest, is_array($branch) ? $this->walk($branch) : 0);
+        }
+
+        return $deepest + 1;
+    }
+
+    private function echoed(int $left): string
+    {
+        return $this->unused($left);
+    }
+}

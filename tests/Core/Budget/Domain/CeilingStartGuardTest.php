@@ -33,13 +33,6 @@ final class CeilingStartGuardTest extends TestCase
     // Six days ahead puts the start one day into the week, so the weekly pace is 90 * (24 + 5) / 168 percent, about 15.5.
     private DateTimeImmutable $weekResets;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->readings = new ReadingsInMemory($this->clock);
-        $this->weekResets = $this->clock->now()->modify('+6 days');
-    }
-
     public function testAStartIsAdmittedBelowTheFiveHourCeiling(): void
     {
         $this->read(89.9, 10.0);
@@ -198,20 +191,11 @@ final class CeilingStartGuardTest extends TestCase
         self::assertSame([StartDecision::Start], array_values($admitting));
     }
 
-    /**
-     * @param array<string, float> $ceilings
-     */
-    private function decide(int $callsRunning, array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): StartDecision
+    protected function setUp(): void
     {
-        return $this->guard($ceilings)->decide($this->account(), $callsRunning);
-    }
-
-    /**
-     * @param array<string, float> $ceilings
-     */
-    private function guard(array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): CeilingStartGuard
-    {
-        return new CeilingStartGuard($this->readings, $this->clock, $ceilings);
+        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $this->readings = new ReadingsInMemory($this->clock);
+        $this->weekResets = $this->clock->now()->modify('+6 days');
     }
 
     private function read(float $fiveHour, float $weekly): void
@@ -220,11 +204,27 @@ final class CeilingStartGuardTest extends TestCase
         $this->readWindow(UsageWindow::Weekly, $weekly, $this->weekResets);
     }
 
+    /**
+     * @param array<string, float> $ceilings
+     */
+    private function decide(int $callsRunning, array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): StartDecision
+    {
+        return $this->guard($ceilings)->decide($this->account(), $callsRunning);
+    }
+
     private function readFor(Account $account, float $percent): void
     {
         foreach (UsageWindow::cases() as $window) {
             $this->readings->record(new WindowReading($account, $window, new Usage($percent, $this->fiveHourReset())));
         }
+    }
+
+    /**
+     * @param array<string, float> $ceilings
+     */
+    private function guard(array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): CeilingStartGuard
+    {
+        return new CeilingStartGuard($this->readings, $this->clock, $ceilings);
     }
 
     private function readWindow(UsageWindow $window, float $percent, ?DateTimeImmutable $resetsAt): void

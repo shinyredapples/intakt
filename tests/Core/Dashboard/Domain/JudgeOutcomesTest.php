@@ -112,18 +112,10 @@ final class JudgeOutcomesTest extends TestCase
         $outcomes = JudgeOutcomes::of([$this->judged([$this->finding('F1', JudgeCall::Act), $this->finding('F2', JudgeCall::NotActedOn), $this->finding('F3', JudgeCall::NotActedOn)])]);
 
         self::assertSame(
-            ['1 finding, Kept on the act list', '0 findings, Merged as duplicate', '0 findings, Deferred to a follow-up issue', '2 findings, Rejected'],
+            ['1 finding, Kept to fix', '0 findings, Merged as duplicate', '0 findings, Deferred to a follow-up issue', '2 findings, Rejected'],
             array_map(static fn (ChartBar $bar): string => $bar->inWords(), $outcomes?->bars() ?? []),
         );
         self::assertSame(2, $outcomes?->scaleTop());
-    }
-
-    /**
-     * @param list<RoundFinding> $findings
-     */
-    private function judged(array $findings): ReviewedRound
-    {
-        return $this->round()->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'))->judgedOnItsOwnMarks();
     }
 
     private function round(): ReviewedRound
@@ -137,5 +129,13 @@ final class JudgeOutcomesTest extends TestCase
     private function finding(string $id, JudgeCall $call, array $merged = []): RoundFinding
     {
         return new RoundFinding($id, 'P2', 'Text of '.$id.'.', $merged)->calledBy($call);
+    }
+
+    /**
+     * @param list<RoundFinding> $findings
+     */
+    private function judged(array $findings): ReviewedRound
+    {
+        return $this->round()->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'))->judgedOnItsOwnMarks();
     }
 }

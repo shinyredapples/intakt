@@ -17,18 +17,6 @@ final class PathGlobTest extends TestCase
 
     private string|false $jit;
 
-    protected function setUp(): void
-    {
-        $this->backtrackLimit = ini_get('pcre.backtrack_limit');
-        $this->jit = ini_get('pcre.jit');
-    }
-
-    protected function tearDown(): void
-    {
-        ini_set('pcre.backtrack_limit', (string) $this->backtrackLimit);
-        ini_set('pcre.jit', (string) $this->jit);
-    }
-
     public function testAGlobThatMatchesReportsAMatch(): void
     {
         self::assertTrue(new PathGlob('src/**/*.php')->matches('src/a/b.php'));
@@ -52,5 +40,17 @@ final class PathGlobTest extends TestCase
             self::assertStringContainsString($glob, $failure->getMessage());
             self::assertStringContainsString('Backtrack limit exhausted', $failure->getMessage());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->backtrackLimit = ini_get('pcre.backtrack_limit');
+        $this->jit = ini_get('pcre.jit');
+    }
+
+    protected function tearDown(): void
+    {
+        ini_set('pcre.backtrack_limit', (string) $this->backtrackLimit);
+        ini_set('pcre.jit', (string) $this->jit);
     }
 }
