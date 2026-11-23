@@ -8,8 +8,8 @@ Worth knowing:
 
 - A round is refused before it opens when a tier it needs is not mapped.
 - A finding that quotes code is dropped before judging when none of its quoted code fragments is in the change (the quote check). A finding without a checkable quote, or with at least one quote that is in the change, is kept.
-- Every kept P1 and P2 reaches the act list, whatever the judge marked it, unless it is a gate gap.
-- A gate gap never reaches the act list: marked `act` or `defer` it is a follow-up, marked `reject` it is rejected.
+- Every kept P1 and P2 reaches the act list, whatever the judge marked it, a gate gap too.
+- A gate-gap P3 never reaches the act list: marked `act` or `defer` it is a follow-up, marked `reject` it is rejected.
 - A P1 that recurs on another head gets an escalation review, and its verdict is kept and reused.
 
 The rest of this page is the detailed reference.

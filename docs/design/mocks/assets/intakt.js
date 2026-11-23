@@ -479,7 +479,7 @@
     round: "One build, its checks and its review. Sending work back starts the next round.",
     protected: "Files that always need your approval to change, such as secret handling or CI. You choose them per project.",
     reserve: "The smallest part of the week's capacity kept for this project, even when other projects are busy.",
-    fix: "The act list: every P1 and P2 finding that passed the quote check, whatever the judge marked, and each P3 finding the judge kept, to fix before approval; a gate gap goes to the follow-ups instead.",
+    fix: "The act list: every P1 and P2 finding that passed the quote check, whatever the judge marked, and each P3 finding the judge kept, to fix before approval; a P3 gate gap goes to the follow-ups instead.",
     checked: "Judged: the judge weighed every reviewer's findings and gave the verdict.",
     pass: "A round: one review of the change, by its reviewers and then the judge.",
   };

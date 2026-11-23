@@ -34,7 +34,7 @@ The verdict itself comes from plain code, never from a reviewer's wording. Your 
 
 Reviewers like to talk. The owl's job is to keep only what matters for this change:
 
-- **P1** must be fixed, **P2** should be. Every P1 and P2 finding that passed the quote check stays on the list, whatever the owl thinks of it, unless a reviewer marked it as a gap in a `bin/check` gate: that goes to the follow-ups instead.
+- **P1** must be fixed, **P2** should be. Every P1 and P2 finding that passed the quote check stays on the list, whatever the owl thinks of it, also when a reviewer marked it as a gap in a `bin/check` gate. A P3 marked that way goes to the follow-ups instead.
 - **P3** is a small remark. It stays only when the owl marks it to fix now.
 - When two reviewers report the same problem at the same place, the list shows it once.
 
