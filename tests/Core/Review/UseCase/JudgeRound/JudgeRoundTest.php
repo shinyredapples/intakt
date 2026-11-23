@@ -225,7 +225,10 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
-        $entry = $this->judgeDonePayloads()[0]['findings'][0];
+        $findings = $this->judgeDonePayloads()[0]['findings'];
+        self::assertIsArray($findings);
+        $entry = $findings[0];
+        self::assertIsArray($entry);
         self::assertSame(['P1', ['F2'], 'First discount calculation fails', 'logic'], [$entry['severity'], $entry['merged'], $entry['title'], $entry['kind']]);
     }
 

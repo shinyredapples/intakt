@@ -409,8 +409,8 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $recorded = $ledger->payloads()[0]['findings'];
         self::assertIsArray($recorded);
         self::assertSame(
-            [['F1', 'P1', ['F2'], 'A full cart loses discount', 'logic'], ['F2', 'P1', [], 'The discount leaks a secret', 'security']],
-            array_map(static fn (array $entry): array => [$entry['id'], $entry['severity'], $entry['merged'], $entry['title'], $entry['kind']], $recorded),
+            [['F1', 'F2'], ['P1', 'P1'], [['F2'], []], ['A full cart loses discount', 'The discount leaks a secret'], ['logic', 'security']],
+            [array_column($recorded, 'id'), array_column($recorded, 'severity'), array_column($recorded, 'merged'), array_column($recorded, 'title'), array_column($recorded, 'kind')],
         );
     }
 
