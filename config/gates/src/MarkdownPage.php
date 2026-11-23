@@ -139,7 +139,7 @@ final readonly class MarkdownPage
                 continue;
             }
 
-            // A line between outer pipes is a row even without its header: a fragment of docs/highlights.d/ holds just one.
+            // Because a fragment of docs/highlights.d/ holds one row without its header, a line between outer pipes is a row too.
             $inside = $inside || $this->startsTable($index) || 1 === preg_match(self::FRAMED_ROW, $line);
 
             if ($inside) {
@@ -150,7 +150,7 @@ final readonly class MarkdownPage
         return $rows;
     }
 
-    // GFM: a table is a header line with a pipe followed by a delimiter row, with or without outer pipes.
+    // https://github.github.com/gfm/#tables-extension-: a header row and a delimiter row, outer pipes optional.
     private function startsTable(int $index): bool
     {
         $next = $this->lines[$index + 1] ?? '';

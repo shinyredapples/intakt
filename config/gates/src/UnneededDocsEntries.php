@@ -26,13 +26,8 @@ final readonly class UnneededDocsEntries
     {
         $findings = [];
 
-        foreach ($list->paragraphs as $page => $keys) {
-            $oversized = $this->oversizedKeysOf($documents[$page] ?? null);
-            $unused = 0;
-
-            foreach (array_unique($keys) as $key) {
-                $unused += max(0, $list->allowanceOf($page, $key) - count(array_keys($oversized, $key, true)));
-            }
+        foreach (array_keys($list->paragraphs) as $page) {
+            $unused = $this->unusedKeysOf($list, $page, $documents[$page] ?? null);
 
             if ($unused > 0) {
                 $findings[] = DocsRatchetList::PATH.': '.$unused.' paragraph key'.(1 === $unused ? '' : 's').' of '.$page.' no longer match an oversized paragraph; remove '.(1 === $unused ? 'it' : 'them').' from the list';
@@ -40,6 +35,18 @@ final readonly class UnneededDocsEntries
         }
 
         return $findings;
+    }
+
+    private function unusedKeysOf(DocsRatchetList $list, string $page, ?MarkdownPage $document): int
+    {
+        $oversized = $this->oversizedKeysOf($document);
+        $unused = 0;
+
+        foreach (array_unique($list->paragraphs[$page]) as $key) {
+            $unused += max(0, $list->allowanceOf($page, $key) - count(array_keys($oversized, $key, true)));
+        }
+
+        return $unused;
     }
 
     /**

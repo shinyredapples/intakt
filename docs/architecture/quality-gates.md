@@ -61,7 +61,9 @@ Compared with its copy on the target branch, the list fails the gate when an ent
 
 An edited paragraph gets a new key, so it must meet the limit. The ratchet checks are skipped without git history, and when the target branch has neither the list nor `config/gates/src/DocsGate.php` (the change that brings the gate). A target branch with the gate but without the list fails. Like the other gates that start only `git`, its tests run it in the test process through `Sandbox::runGate()`.
 
-The limits come from a replay over the 202 merges of main from 2026-11-09 to 2026-11-23 that changed these pages, each judged against its parent. At 80 words, 191 merges added or grew a wall and 2 only edited a wall without growing it; at 60 words it was 196 and 3. 173 merges grew a user or guide page beyond both 1,500 words and its earlier size. In 20, an architecture page over 1,500 words lacked a summary its parent did not already lack.
+The limits come from a replay over the 202 merges of main from 2026-11-09 to 2026-11-23 that changed these pages, each judged against its parent.
+
+At 80 words, 191 merges added or grew a wall and 2 only edited a wall without growing it; at 60 words it was 196 and 3. 173 merges grew a user or guide page beyond both 1,500 words and its earlier size. In 20, an architecture page over 1,500 words lacked a summary its parent did not already lack.
 
 ## The test time budget (planned)
 

@@ -13,43 +13,49 @@ final readonly class IndentedCodeBlocks
      */
     public function blanked(array $lines): array
     {
-        $canStart = true;
-        $inList = false;
-        $inCode = false;
+        $context = IndentedContext::Text;
+        $previous = '';
 
         foreach ($lines as $index => $line) {
-            // CommonMark: indented code cannot interrupt a paragraph, and inside a list item the indentation continues the item.
-            $inCode = $inCode ? $this->continuesCode($line) : $canStart && !$inList && $this->startsCode($line);
+            $context = $this->contextOf($line, $context, $previous);
+            $previous = IndentedContext::Code === $context ? '' : $line;
 
-            if ($inCode) {
+            if (IndentedContext::Code === $context) {
                 $lines[$index] = '';
-                continue;
             }
-
-            $inList = $this->inListAfter($line, $inList, $canStart);
-            $canStart = '' === trim($line) || 1 === preg_match(MarkdownPage::HEADING, $line);
         }
 
         return $lines;
     }
 
-    private function continuesCode(string $line): bool
+    // CommonMark: indented code cannot interrupt a paragraph, and inside a list item the indentation continues the item.
+    private function contextOf(string $line, IndentedContext $context, string $previous): IndentedContext
     {
-        return '' === trim($line) || $this->indentOf($line) >= 4;
-    }
-
-    private function startsCode(string $line): bool
-    {
-        return '' !== trim($line) && $this->indentOf($line) >= 4;
-    }
-
-    private function inListAfter(string $line, bool $inList, bool $canStart): bool
-    {
-        if (1 === preg_match(MarkdownPage::LIST_ITEM, $line)) {
-            return true;
+        if (IndentedContext::Code === $context && ('' === trim($line) || $this->indentOf($line) >= 4)) {
+            return IndentedContext::Code;
         }
 
-        return $inList && !($canStart && '' !== trim($line) && 0 === $this->indentOf($line));
+        if (IndentedContext::ListItem !== $context && $this->opensBlock($previous) && '' !== trim($line) && $this->indentOf($line) >= 4) {
+            return IndentedContext::Code;
+        }
+
+        return $this->listContextOf($line, $context, $previous);
+    }
+
+    private function listContextOf(string $line, IndentedContext $context, string $previous): IndentedContext
+    {
+        if (1 === preg_match(MarkdownPage::LIST_ITEM, $line)) {
+            return IndentedContext::ListItem;
+        }
+
+        $leavesList = $this->opensBlock($previous) && '' !== trim($line) && 0 === $this->indentOf($line);
+
+        return IndentedContext::ListItem === $context && !$leavesList ? IndentedContext::ListItem : IndentedContext::Text;
+    }
+
+    private function opensBlock(string $previous): bool
+    {
+        return '' === trim($previous) || 1 === preg_match(MarkdownPage::HEADING, $previous);
     }
 
     private function indentOf(string $line): int
