@@ -10,13 +10,15 @@
 <style>
   /* Both variants show in either theme, so the owner compares them side by side. */
   .sketch { margin: 0 0 32px; }
-  .variants { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+  .variants { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 16px; }
   .variant { border: 1px solid var(--hairline); border-radius: var(--r-card); padding: 12px 16px 16px; }
   .variant.on-light { background: #F7FAF9; color: #0A2B23; }
   .variant.on-dark { background: #121816; color: #E6ECEA; }
   .variant p { margin: 0 0 8px; font-size: var(--t13); }
   .pair { display: flex; align-items: flex-end; gap: 8px; }
-  .pair img, .pair svg { display: block; width: 186px; height: 180px; }
+  .variant { min-width: 0; }
+  /* At most the Maintainer's half size, and smaller together on a narrow phone. */
+  .pair img, .pair svg { display: block; flex: 0 1 186px; min-width: 0; max-width: 186px; height: auto; aspect-ratio: 373 / 360; }
   .sketch figcaption { margin-top: 10px; }
   .sketch figcaption strong { display: block; font-size: var(--t17); }
 </style>
