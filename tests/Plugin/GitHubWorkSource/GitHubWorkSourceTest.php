@@ -628,7 +628,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
      */
     private function reasonsLogged(): array
     {
-        return array_map(static fn (mixed $record): mixed => is_array($record) && is_array($record[2] ?? null) ? $record[2]['reason'] ?? null : null, $this->logger->cleanLogs());
+        return array_values(array_map(static fn (mixed $record): mixed => is_array($record) && is_array($record[2] ?? null) ? $record[2]['reason'] ?? null : null, $this->logger->cleanLogs()));
     }
 
     private function storeOnAFileInWalMode(string $file, EventManager $events): IntakeStore

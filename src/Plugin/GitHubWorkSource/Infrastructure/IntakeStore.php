@@ -103,14 +103,12 @@ final readonly class IntakeStore
     // The validator goes too, because with it the forge answers the next listing as unchanged and the row would never be read again; the generation moves, so a listing read before this loses its write instead of storing the forgotten vouching again.
     public function forgetVouchingOf(string $project, int $number): void
     {
-        try {
-            $this->underTheListingLock($project, static function (EntityManagerInterface $manager) use ($project, $number): void {
-                $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number])?->forgetVouching();
-                $manager->find(IntakeValidator::class, $project)?->advance(null);
-            });
-        } catch (RetryableException $refusal) {
-            throw ProjectHeldByAnotherWriter::of($project, $refusal);
-        }
+        $this->readOf($project, fn (): mixed => $this->underTheListingLock($project, static function (EntityManagerInterface $manager) use ($project, $number): null {
+            $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number])?->forgetVouching();
+            $manager->find(IntakeValidator::class, $project)?->advance(null);
+
+            return null;
+        }));
     }
 
     /**
