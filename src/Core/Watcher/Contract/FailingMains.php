@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Watcher\Contract;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
-use JsonException;
 
 // The one reading of main's boot lines, because the board shows its banner from it and the watcher compares a stored result with it: two readings would let the banner and the gate disagree.
 final readonly class FailingMains
@@ -37,7 +37,7 @@ final readonly class FailingMains
      */
     private function settled(array $failing, array $seen, RecordedEvent $recorded): array
     {
-        $payload = $this->payloadOf($recorded);
+        $payload = PayloadFields::of($recorded);
         $pair = $this->pairOf($payload);
         $reason = $this->failureReasonOf($recorded, $payload);
         $state = $this->computedStateOf($recorded, $payload);
@@ -61,64 +61,38 @@ final readonly class FailingMains
         return [$failing, $seen];
     }
 
-    // An unreadable payload decodes to nothing, so one bad row neither takes the board down nor stops the watcher.
     /**
-     * @return array<array-key, mixed>
-     */
-    private function payloadOf(RecordedEvent $recorded): array
-    {
-        try {
-            $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return [];
-        }
-
-        return is_array($payload) ? $payload : [];
-    }
-
-    /**
-     * @param array<array-key, mixed> $payload
-     *
      * @return array{string, string, string}|null
      */
-    private function pairOf(array $payload): ?array
+    private function pairOf(PayloadFields $payload): ?array
     {
-        $project = $payload['project'] ?? null;
-        $main = $payload['main'] ?? null;
-        $tools = $payload['tool_fingerprint'] ?? null;
+        $project = $payload->text('project');
+        $main = $payload->text('main');
+        $tools = $payload->text('tool_fingerprint');
 
-        if (!is_string($project) || !is_string($main) || !is_string($tools)) {
+        if (in_array(null, [$project, $main, $tools], true)) {
             return null;
         }
 
         return [$project, $main, $tools];
     }
 
-    /**
-     * @param array<array-key, mixed> $payload
-     */
-    private function failureReasonOf(RecordedEvent $recorded, array $payload): ?string
+    private function failureReasonOf(RecordedEvent $recorded, PayloadFields $payload): ?string
     {
-        $reason = $payload['reason'] ?? null;
-        $failedFromStore = LedgerEventKind::BootResultComputed === $recorded->event->kind && $this->readFromStore($payload) && 'failed' === ($payload['state'] ?? null);
+        $reason = $payload->text('reason');
+        $failedFromStore = LedgerEventKind::BootResultComputed === $recorded->event->kind && $this->readFromStore($payload) && 'failed' === $payload->text('state');
 
-        return is_string($reason) && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
+        return null !== $reason && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
     }
 
-    /**
-     * @param array<array-key, mixed> $payload
-     */
-    private function computedStateOf(RecordedEvent $recorded, array $payload): mixed
+    private function computedStateOf(RecordedEvent $recorded, PayloadFields $payload): ?string
     {
-        return LedgerEventKind::BootResultComputed === $recorded->event->kind ? $payload['state'] ?? null : null;
+        return LedgerEventKind::BootResultComputed === $recorded->event->kind ? $payload->text('state') : null;
     }
 
     // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when it differs from what this reading shows.
-    /**
-     * @param array<array-key, mixed> $payload
-     */
-    private function readFromStore(array $payload): bool
+    private function readFromStore(PayloadFields $payload): bool
     {
-        return 'store' === ($payload['read_from'] ?? null);
+        return 'store' === $payload->text('read_from');
     }
 }

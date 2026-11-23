@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
@@ -43,25 +44,25 @@ final class StoredRoundEndingsTest extends TestCase
 {
     public function testARoundWithinItsUpperWaitHasNotEnded(): void
     {
-        $endings = $this->endingsAt('2026-10-28T12:00:09+00:00');
+        $endings = $this->endingsAt('2026-10-28T14:59:59+00:00');
 
         self::assertNull($endings->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00')));
     }
 
     public function testARoundPastItsUpperWaitEndedWithNoOutcomeInTime(): void
     {
-        $ending = $this->endingsAt('2026-10-28T12:00:10+00:00')->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        $ending = $this->endingsAt('2026-10-28T15:00:00+00:00')->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
         self::assertInstanceOf(RoundEnding::class, $ending);
         self::assertSame(RoundEnds::NoOutcomeInTime, $ending->end);
-        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 10 seconds', $ending->reason);
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within '.(2 * RoundReviewer::REVIEW_CEILING_SECONDS + UpperWait::JUDGE_SECONDS).' seconds', $ending->reason);
     }
 
     public function testARoundWithNoOutcomeInTimeEndedWhenItsUpperWaitRanOut(): void
     {
-        $ending = $this->endingsAt('2026-10-28T12:05:00+00:00')->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        $ending = $this->endingsAt('2026-10-28T15:05:00+00:00')->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
-        self::assertEquals(new DateTimeImmutable('2026-10-28T12:00:10+00:00'), $ending?->endedAt);
+        self::assertEquals(new DateTimeImmutable('2026-10-28T15:00:00+00:00'), $ending?->endedAt);
     }
 
     public function testAJudgingFailureRecordedInTheLedgerEndedTheRoundWhenItWasRecorded(): void
@@ -187,6 +188,6 @@ final class StoredRoundEndingsTest extends TestCase
 
     private function lookupOn(ListableReceiverInterface $transport, Ledger $ledger, string $now): RoundEndingLookup
     {
-        return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(StoredSerializerFactory::create())), new MockClock($now), new UpperWait(4, 2))->lookup();
+        return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(StoredSerializerFactory::create())), new MockClock($now), new UpperWait())->lookup();
     }
 }
