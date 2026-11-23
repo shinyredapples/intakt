@@ -19,5 +19,6 @@ final readonly class AiServices
     public const string COMPATIBLE_BASE_URLS = 'intakt.ai.compatible_base_urls';
     public const string PROJECTS = 'intakt.projects';
     public const string KEPT_KEY_DIRECTORY = 'intakt.ai.kept_key_directory';
+    public const string SECRETS_DIRECTORY = 'intakt.ai.secrets_directory';
     public const string CODEX_LOGIN_LOCK_PREFIX = 'intakt.codex.login.';
 }

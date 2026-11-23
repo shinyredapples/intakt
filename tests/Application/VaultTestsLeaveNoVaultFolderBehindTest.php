@@ -10,14 +10,15 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// Serial because the AI providers test it runs creates config/secrets/, which the workers share.
+// Serial because it compares the times of config/, which a test another worker runs could change meanwhile.
 #[CoversNothing]
 #[Group('serial')]
 final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
 {
     private string $scratch;
 
-    private bool $vaultsBefore;
+    /** @var array{exists: bool, modified: int|false, changed: int|false} */
+    private array $before;
 
     // Forces the order a check that sorts by recorded durations put in one worker, because that order failed on main (#2434).
     public function testTheKeptKeyWiringTestPassesRightAfterTheAiProvidersTestInOneProcess(): void
@@ -27,40 +28,48 @@ final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
         self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
     }
 
-    public function testTheAiProvidersTestLeavesNoVaultsFolderBehind(): void
+    // The quality check records a pass only for a tree nothing changed in while it ran, so a vault made and removed in config/ would keep it from ever recording one.
+    public function testTheAiProvidersTestLeavesTheConfigFolderAsItFoundIt(): void
     {
-        $this->runInOneProcess('tests/Application/AiProvidersTest.php');
+        $process = $this->runInOneProcess('tests/Application/AiProvidersTest.php');
 
-        self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
+        self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        self::assertSame($this->before, $this->configFolder());
     }
 
-    public function testTheKeptKeyBuildWarningTestLeavesNoVaultsFolderBehind(): void
+    public function testTheKeptKeyBuildWarningTestLeavesTheConfigFolderAsItFoundIt(): void
     {
         $process = $this->runInOneProcess('tests/Application/KeptKeyBuildWarningTest.php');
 
         self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
-        self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
+        self::assertSame($this->before, $this->configFolder());
     }
 
     protected function setUp(): void
     {
         $this->scratch = sys_get_temp_dir().'/vault-order-'.bin2hex(random_bytes(4));
         mkdir($this->scratch);
-        $this->vaultsBefore = is_dir($this->vaults());
+        $this->before = $this->configFolder();
     }
 
     // Removes a folder the run left behind, so one test that finds the leak does not hide it from the next.
     protected function tearDown(): void
     {
         new Filesystem()->remove($this->scratch);
-        if (!$this->vaultsBefore && is_dir($this->vaults()) && [] === array_diff((array) scandir($this->vaults()), ['.', '..'])) {
-            rmdir($this->vaults());
+        $vaults = dirname(__DIR__, 2).'/config/secrets';
+        if (!$this->before['exists'] && is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
+            rmdir($vaults);
         }
     }
 
-    private function vaults(): string
+    // Whole seconds, but every run here lasts longer than one, so a folder made and removed during it moves the times.
+    /** @return array{exists: bool, modified: int|false, changed: int|false} */
+    private function configFolder(): array
     {
-        return dirname(__DIR__, 2).'/config/secrets';
+        $config = dirname(__DIR__, 2).'/config';
+        clearstatcache();
+
+        return ['exists' => is_dir($config.'/secrets'), 'modified' => filemtime($config), 'changed' => filectime($config)];
     }
 
     private function runInOneProcess(string ...$files): Process

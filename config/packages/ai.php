@@ -69,8 +69,12 @@ return static function (ContainerConfigurator $container): void {
         return is_string($value) && '' !== $value ? $value : null;
     };
 
-    // The framework's default vault directory and decryption key (SYMFONY_DECRYPTION_SECRET when set, else the vault's own private key file), which config/packages/framework.yaml keeps.
-    $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
+    // Only the test environment reads a variable for it, so a test's vault lives outside the checkout the quality check fingerprints, and no other install can be pointed away from config/secrets/.
+    $secretsDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_SECRETS_DIR') : null) ?? dirname(__DIR__).'/secrets';
+    // config/packages/framework.yaml points the test environment's vault at it, so the build and the vault's env loader read one folder.
+    $container->parameters()->set(AiServices::SECRETS_DIRECTORY, $secretsDirectory);
+    // The framework's default vault directory and decryption key (SYMFONY_DECRYPTION_SECRET when set, else the vault's own private key file), which config/packages/framework.yaml keeps outside the test environment.
+    $vaultDirectory = $secretsDirectory.'/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
     // Decoded by the framework's own base64: env processor (lenient, either alphabet), so a key the framework accepts is not missing here.
     $decryptionSecret = $environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '';
     $decryptionKey = new EnvVarProcessor(new Container())->getEnv('base64', 'SYMFONY_DECRYPTION_SECRET', static fn (): string => $decryptionSecret);
