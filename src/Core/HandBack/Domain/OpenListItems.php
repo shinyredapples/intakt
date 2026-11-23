@@ -79,6 +79,14 @@ final readonly class OpenListItems
         return new self($this->text, $read->columns, max($read->nextLine, MarkdownText::lineEndAt($this->text, $end) + 1), $isABlock ? '' : $read->lineAbove);
     }
 
+    public function opensAnHtmlBlock(int $start): bool
+    {
+        $lineStart = MarkdownText::lineStartAt($this->text, $start);
+        $indent = MarkdownText::withSpacesForTabs(substr($this->text, $lineStart, $start - $lineStart));
+
+        return '' === trim($indent) && strlen($indent) <= ($this->columnFor(strlen($indent)) ?? 0) + self::MOST_INDENT;
+    }
+
     // A blank line ends nothing, and a marker starts an item only up to three columns past the content of the item it is in (https://spec.commonmark.org/0.31.2/#list-items). Outside a list, an item that cannot interrupt a paragraph (an empty marker line, an ordered item not numbered 1) continues the paragraph above it.
     /**
      * @param list<int> $columns
@@ -122,13 +130,5 @@ final readonly class OpenListItems
     private function continuesTheParagraph(array $columns, string $lineAbove, string $line): bool
     {
         return [] === $columns && MarkdownText::continuesAParagraph($lineAbove, $line);
-    }
-
-    public function opensAnHtmlBlock(int $start): bool
-    {
-        $lineStart = MarkdownText::lineStartAt($this->text, $start);
-        $indent = MarkdownText::withSpacesForTabs(substr($this->text, $lineStart, $start - $lineStart));
-
-        return '' === trim($indent) && strlen($indent) <= ($this->columnFor(strlen($indent)) ?? 0) + self::MOST_INDENT;
     }
 }

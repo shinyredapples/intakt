@@ -63,6 +63,16 @@ final readonly class FencedBlock
         return null !== $column && $indent - $column <= self::MOST_INDENT;
     }
 
+    // A fence opened right after a list marker is the first content of that marker's item, so the item's content column is where the fence starts; a fence on a line of its own is in the open item whose content column its indent reaches.
+    private static function columnOfItsListItem(string $text, int $start, OpenListItems $items): ?int
+    {
+        $lineStart = MarkdownText::lineStartAt($text, $start);
+
+        return $lineStart === $start
+            ? $items->readUpTo($start)->columnFor(self::indentColumnsAt($text, $start))
+            : strlen(MarkdownText::withSpacesForTabs(substr($text, $lineStart, $start - $lineStart)));
+    }
+
     private static function isLeftOf(?int $column, string $text, int $line): bool
     {
         $isBlank = "\n" === ($text[$line + strspn($text, self::BLANK, $line)] ?? "\n");
@@ -89,15 +99,5 @@ final readonly class FencedBlock
         }
 
         return $columns;
-    }
-
-    // A fence opened right after a list marker is the first content of that marker's item, so the item's content column is where the fence starts; a fence on a line of its own is in the open item whose content column its indent reaches.
-    private static function columnOfItsListItem(string $text, int $start, OpenListItems $items): ?int
-    {
-        $lineStart = MarkdownText::lineStartAt($text, $start);
-
-        return $lineStart === $start
-            ? $items->readUpTo($start)->columnFor(self::indentColumnsAt($text, $start))
-            : strlen(MarkdownText::withSpacesForTabs(substr($text, $lineStart, $start - $lineStart)));
     }
 }

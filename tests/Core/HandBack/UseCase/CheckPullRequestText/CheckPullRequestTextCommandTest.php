@@ -44,17 +44,6 @@ final class CheckPullRequestTextCommandTest extends TestCase
 
     private string $folder;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-pr-text-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testATextThatReferencesEveryItemPrintsPassed(): void
     {
         $tester = $this->executed(self::TASK, "feat: check it\n\n## Evidence\n- E1: red\n- E2: green\n");
@@ -110,6 +99,17 @@ final class CheckPullRequestTextCommandTest extends TestCase
         self::assertStringContainsString('missing: E2, E3', $tester->getDisplay());
     }
 
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-pr-text-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
+
     private function executed(string $task, string $pullRequestText): CommandTester
     {
         new Filesystem()->dumpFile($this->folder.'/task.md', $task);
@@ -120,16 +120,16 @@ final class CheckPullRequestTextCommandTest extends TestCase
         return $tester;
     }
 
+    private function flat(CommandTester $tester): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
+    }
+
     private function application(): Application
     {
         $application = new Application();
         $application->addCommand(new CheckPullRequestTextCommand(new Filesystem()));
 
         return $application;
-    }
-
-    private function flat(CommandTester $tester): string
-    {
-        return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 }

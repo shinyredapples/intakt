@@ -84,6 +84,14 @@ final readonly class MarkdownText
         return $position + strcspn($text, "\n", $position);
     }
 
+    // `<!-->` and `<!--->` are whole comments, so the end is searched from the second character of `<!--` (https://spec.commonmark.org/0.31.2/#html-comment).
+    private static function commentAt(string $text, int $start): string
+    {
+        $end = strpos($text, self::COMMENT_END, $start + strlen('<!'));
+
+        return false === $end ? substr($text, $start) : substr($text, $start, $end + strlen(self::COMMENT_END) - $start);
+    }
+
     /**
      * @param callable(string): string                     $fenced
      * @param callable(string, int, OpenListItems): string $comment
@@ -116,6 +124,26 @@ final readonly class MarkdownText
         }
 
         return $read.substr($text, $offset);
+    }
+
+    // Hidden and fenced text keeps its line breaks, because the lines around it keep their place.
+    private static function lineBreaksOf(string $text): string
+    {
+        return str_repeat("\n", substr_count($text, "\n"));
+    }
+
+    private static function taskCommentAt(string $text, int $start, OpenListItems $items): string
+    {
+        return $items->readUpTo(self::lineStartAt($text, $start) + 1)->opensAnHtmlBlock($start) ? self::htmlBlockAt($text, $start) : self::commentAt($text, $start);
+    }
+
+    private static function atTabStops(string $prefix): string
+    {
+        return array_reduce(
+            str_split($prefix),
+            static fn (string $expanded, string $character): string => $expanded.("\t" === $character ? str_repeat(' ', self::TAB_STOP - strlen($expanded) % self::TAB_STOP) : $character),
+            '',
+        );
     }
 
     // An unreadable text must stop the check, because reading it as empty would pass a task's Evidence list unseen.
@@ -166,38 +194,10 @@ final readonly class MarkdownText
         };
     }
 
-    private static function taskCommentAt(string $text, int $start, OpenListItems $items): string
-    {
-        return $items->readUpTo(self::lineStartAt($text, $start) + 1)->opensAnHtmlBlock($start) ? self::htmlBlockAt($text, $start) : self::commentAt($text, $start);
-    }
-
-    // `<!-->` and `<!--->` are whole comments, so the end is searched from the second character of `<!--` (https://spec.commonmark.org/0.31.2/#html-comment).
-    private static function commentAt(string $text, int $start): string
-    {
-        $end = strpos($text, self::COMMENT_END, $start + strlen('<!'));
-
-        return false === $end ? substr($text, $start) : substr($text, $start, $end + strlen(self::COMMENT_END) - $start);
-    }
-
     // In a task, a comment whose `<!--` opens its line is an HTML block up to the end of the line holding its `-->`, so the text after it on that line is no paragraph line and the next line continues no paragraph (https://spec.commonmark.org/0.31.2/#html-blocks, kind 2). In a body that text is shown, so a reference there still counts.
     private static function htmlBlockAt(string $text, int $start): string
     {
         return substr($text, $start, self::lineEndAt($text, $start + strlen(self::commentAt($text, $start))) - $start);
-    }
-
-    private static function atTabStops(string $prefix): string
-    {
-        return array_reduce(
-            str_split($prefix),
-            static fn (string $expanded, string $character): string => $expanded.("\t" === $character ? str_repeat(' ', self::TAB_STOP - strlen($expanded) % self::TAB_STOP) : $character),
-            '',
-        );
-    }
-
-    // Hidden and fenced text keeps its line breaks, because the lines around it keep their place.
-    private static function lineBreaksOf(string $text): string
-    {
-        return str_repeat("\n", substr_count($text, "\n"));
     }
 
     // The opening line of a fence after a list marker stays, because the marker still starts an item.

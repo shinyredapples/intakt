@@ -33,6 +33,21 @@ final readonly class ParagraphEnd
         return $lineEnd;
     }
 
+    private static function afterTheListMarker(string $text, int $line): int
+    {
+        $at = $line + strspn($text, self::BLANK, $line);
+        $at += self::markerLengthAt($text, $at);
+
+        return $at + strspn($text, self::BLANK, $at);
+    }
+
+    private static function isAtxHeading(string $text, int $at): bool
+    {
+        $run = strspn($text, '#', $at);
+
+        return $run >= 1 && $run <= self::LONGEST_HEADING_RUN && self::isBlankOrLineEnd($text, $at + $run);
+    }
+
     private static function startsABlock(string $text, int $line): bool
     {
         $at = $line + strspn($text, self::BLANK, $line);
@@ -50,19 +65,22 @@ final readonly class ParagraphEnd
         };
     }
 
-    private static function afterTheListMarker(string $text, int $line): int
+    private static function markerLengthAt(string $text, int $at): int
     {
-        $at = $line + strspn($text, self::BLANK, $line);
-        $at += self::markerLengthAt($text, $at);
+        $digits = strspn($text, '0123456789', $at);
+        $marker = $text[$at + $digits] ?? '';
+        $length = match (true) {
+            0 === $digits && in_array($marker, ['-', '*', '+'], true) => 1,
+            $digits >= 1 && $digits <= self::LONGEST_ITEM_NUMBER && in_array($marker, ['.', ')'], true) => $digits + 1,
+            default => 0,
+        };
 
-        return $at + strspn($text, self::BLANK, $at);
+        return $length > 0 && self::isBlankOrLineEnd($text, $at + $length) ? $length : 0;
     }
 
-    private static function isAtxHeading(string $text, int $at): bool
+    private static function isBlankOrLineEnd(string $text, int $at): bool
     {
-        $run = strspn($text, '#', $at);
-
-        return $run >= 1 && $run <= self::LONGEST_HEADING_RUN && self::isBlankOrLineEnd($text, $at + $run);
+        return in_array($text[$at] ?? "\n", [' ', "\t", "\n"], true);
     }
 
     // A backtick fence has no backtick after its run, or the line would be inline code.
@@ -87,23 +105,5 @@ final readonly class ParagraphEnd
         } while ($run > 0);
 
         return $count >= $shortest && "\n" === ($text[$at] ?? "\n");
-    }
-
-    private static function markerLengthAt(string $text, int $at): int
-    {
-        $digits = strspn($text, '0123456789', $at);
-        $marker = $text[$at + $digits] ?? '';
-        $length = match (true) {
-            0 === $digits && in_array($marker, ['-', '*', '+'], true) => 1,
-            $digits >= 1 && $digits <= self::LONGEST_ITEM_NUMBER && in_array($marker, ['.', ')'], true) => $digits + 1,
-            default => 0,
-        };
-
-        return $length > 0 && self::isBlankOrLineEnd($text, $at + $length) ? $length : 0;
-    }
-
-    private static function isBlankOrLineEnd(string $text, int $at): bool
-    {
-        return in_array($text[$at] ?? "\n", [' ', "\t", "\n"], true);
     }
 }
