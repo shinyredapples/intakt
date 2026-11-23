@@ -96,7 +96,16 @@ final readonly class RunCheckJob implements CheckJobs
 
         // Held until the job is gone, because a released pin lets an eviction remove the mounted snapshot.
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $accepted, $repository, $dependencies)));
+            $spec = new JobSpec(
+                new JobId('check-'.substr($accepted->head, 0, 40)),
+                $job->image,
+                $this->commandOf($job, $dependencies),
+                $this->inputsOf($job, $repository, $dependencies),
+                new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
+                $this->egress(),
+            );
+
+            return $this->outcomeOf($this->ranJob($spec));
         } finally {
             $dependencies?->release();
         }
@@ -114,15 +123,15 @@ final readonly class RunCheckJob implements CheckJobs
         return $absolute;
     }
 
-    private function specOf(CheckJob $job, AcceptedHandBack $accepted, string $repository, ?CheckSnapshot $dependencies): JobSpec
+    /**
+     * @return list<string>
+     */
+    private function commandOf(CheckJob $job, ?CheckSnapshot $dependencies): array
     {
         $script = $this->filesystem->readFile($this->checkScript);
-        $steps = $this->gate->checkSteps($job->configuredCommand);
-        $inputs = [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
         $options = [];
 
         if ($dependencies instanceof CheckSnapshot) {
-            $inputs[] = new JobInput($dependencies->lease->folder, self::DEPENDENCIES);
             // The script probes the platform again and swaps the install for the generate step only once it copied the snapshot, so a check that cannot use it still installs.
             $options = [
                 '--dependencies',
@@ -135,14 +144,21 @@ final readonly class RunCheckJob implements CheckJobs
             ];
         }
 
-        return new JobSpec(
-            new JobId('check-'.substr($accepted->head, 0, 40)),
-            $job->image,
-            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...$options, '--', ...$steps],
-            $inputs,
-            new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
-            $this->egress(),
-        );
+        return ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...$options, '--', ...$this->gate->checkSteps($job->configuredCommand)];
+    }
+
+    /**
+     * @return list<JobInput>
+     */
+    private function inputsOf(CheckJob $job, string $repository, ?CheckSnapshot $dependencies): array
+    {
+        $inputs = [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
+
+        if ($dependencies instanceof CheckSnapshot) {
+            $inputs[] = new JobInput($dependencies->lease->folder, self::DEPENDENCIES);
+        }
+
+        return $inputs;
     }
 
     private function egress(): JobEgress
