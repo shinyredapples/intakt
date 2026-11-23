@@ -391,6 +391,19 @@ final class OnePerPlaceTest extends TestCase
 
     private function titled(string $id, int $line, string $title, FindingKind $kind): Finding
     {
-        return new Finding($id, Severity::P2, 'src/A.php', $line, null, 'Broken.', FixableBy::Builder, false, null, null, title: $title, kind: $kind);
+        return new Finding(
+            $id,
+            Severity::P2,
+            'src/A.php',
+            $line,
+            null,
+            'Broken.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: $title,
+            kind: $kind,
+        );
     }
 }

@@ -182,7 +182,20 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingWithATitleAndAKindReadsBackWithBoth(): void
     {
-        $finding = new Finding('a', Severity::P2, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, title: 'A cart loses its discount', kind: FindingKind::MissingTest);
+        $finding = new Finding(
+            'a',
+            Severity::P2,
+            'src/A.php',
+            7,
+            null,
+            'Broken.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'A cart loses its discount',
+            kind: FindingKind::MissingTest,
+        );
 
         $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], JsonEncoder::FORMAT), Finding::class.'[]', JsonEncoder::FORMAT);
 
@@ -191,7 +204,20 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingIsWrittenWithItsTitleAndTheValueOfItsKind(): void
     {
-        $finding = new Finding('a', Severity::P2, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, title: 'A cart loses its discount', kind: FindingKind::TidyUp);
+        $finding = new Finding(
+            'a',
+            Severity::P2,
+            'src/A.php',
+            7,
+            null,
+            'Broken.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'A cart loses its discount',
+            kind: FindingKind::TidyUp,
+        );
 
         self::assertStringContainsString('"title":"A cart loses its discount","kind":"tidy-up"', $this->serializer()->serialize($finding, JsonEncoder::FORMAT));
     }

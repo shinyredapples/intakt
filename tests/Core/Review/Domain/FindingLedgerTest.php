@@ -340,7 +340,20 @@ final class FindingLedgerTest extends TestCase
     public function testAnOpenFindingKeepsItsTitleAndKindUnderItsLedgerId(): void
     {
         $ledger = new FindingLedger();
-        $titled = new Finding('x', Severity::P2, 'src/A.php', 3, null, 'Broken.', FixableBy::Builder, false, null, null, title: 'The discount is added', kind: FindingKind::Logic);
+        $titled = new Finding(
+            'x',
+            Severity::P2,
+            'src/A.php',
+            3,
+            null,
+            'Broken.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'The discount is added',
+            kind: FindingKind::Logic,
+        );
         $ledger->recordRound(1, [$titled, $this->finding('y')]);
 
         $open = $ledger->openForReviewers();
