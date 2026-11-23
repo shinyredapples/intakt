@@ -4,7 +4,7 @@
 
 ## The owl has spoken
 
-The review page stops moving. The owl's card reads "Changes needed", with "5 to fix" in large type, an urgency bar and the counts in words under it (for example "2 urgent, 2 should fix, 1 nice to have"), and one meerkat per reviewer marked with a check (approved) or a cross (changes needed); a reviewer without a verdict shows a dash and its status in words. Below it are the To fix cards. You have a list, and you want to know which item to open first and whether each one is real. This chapter reads the verdict with you, top to bottom.
+The review page stops moving. The owl's card reads "Changes needed", with "5 to fix" in large type, an urgency bar and the counts in words under it (for example "2 urgent, 2 should fix, 1 nice to have"), and one meerkat per reviewer marked with a check (approved) or a cross (changes needed); a reviewer without a verdict shows a dash and its status in words. A line under the faces says whether the reviewers agree; it appears only when at least one reviewer gave a verdict. Below it are the To fix cards. You have a list, and you want to know which item to open first and whether each one is real. This chapter reads the verdict with you, top to bottom.
 
 ## The judge's call
 

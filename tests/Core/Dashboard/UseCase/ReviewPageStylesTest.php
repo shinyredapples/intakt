@@ -46,13 +46,23 @@ final class ReviewPageStylesTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/gap:\s*\d+px;/', $rules['.urgency-bar'] ?? '');
     }
 
-    // A zero basis let a long reviewer label take the whole row on a desktop, so the verdict column reserves its width and the faces wrap in what is left.
-    public function testOnADesktopTheVerdictColumnKeepsAWidthTheReviewerFacesCannotSqueeze(): void
+    // A zero basis let a long reviewer label take the whole row on a desktop, so the verdict column asks for 14rem and the reviewers wrap to their own row when both do not fit.
+    public function testOnADesktopTheVerdictColumnAsksForAWidthTheReviewerFacesCannotSqueeze(): void
     {
         $rules = $this->rulesOf($this->outsideMediaQueries($this->sheet('review.css')));
 
-        self::assertMatchesRegularExpression('/flex:\s*1 0 14rem;/', $rules['.verdict-card .verdict-text'] ?? '');
+        self::assertMatchesRegularExpression('/flex:\s*1 1 14rem;/', $rules['.verdict-card .verdict-text'] ?? '');
+        self::assertMatchesRegularExpression('/min-width:\s*0;/', $rules['.verdict-card .verdict-text'] ?? '');
         self::assertMatchesRegularExpression('/min-width:\s*0;/', $rules['.verdict-reviewers'] ?? '');
+    }
+
+    // Media queries in px do not follow the browser's font size: at a 32 px default font 14rem is 448 px, more than the card has at an 800 px viewport with the rail expanded, so the card wraps at every width and the column can shrink.
+    public function testAtLargerTextTheVerdictCardWrapsAndItsVerdictColumnShrinksInsteadOfOverflowing(): void
+    {
+        $rules = $this->rulesOf($this->outsideMediaQueries($this->sheet('review.css')));
+
+        self::assertMatchesRegularExpression('/flex-wrap:\s*wrap;/', $rules['.verdict-card'] ?? '');
+        self::assertDoesNotMatchRegularExpression('/flex:\s*\d+ 0 /', $rules['.verdict-card .verdict-text'] ?? '');
     }
 
     // Below 600 px the reviewers sit on their own row, so the verdict column there shares the row with the owl alone as before.
