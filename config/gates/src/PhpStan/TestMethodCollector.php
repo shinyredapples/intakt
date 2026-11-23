@@ -20,7 +20,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<InClassMethodNode, array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}>
+ * @implements Collector<InClassMethodNode, array{misnamed: array{string, int, string, string, string, bool, bool}|null, providers: list<array{string, string}>}>
  */
 final readonly class TestMethodCollector implements Collector
 {
@@ -39,7 +39,7 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
-     * @return array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}|null
+     * @return array{misnamed: array{string, int, string, string, string, bool, bool}|null, providers: list<array{string, string}>}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -99,26 +99,34 @@ final readonly class TestMethodCollector implements Collector
     private function isMisnamedTest(ReflectionMethod $method, ClassReflection $class): bool
     {
         $name = $method->getName();
-        $isTest = str_starts_with($name, 'test') || [] !== $method->getAttributes(Test::class);
+        $isTest = str_starts_with($name, 'test') || $this->isMarkedTest($method);
 
-        return $method->isPublic() && $isTest && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && !$this->isNamedProvider($name, $class);
+        return $method->isPublic() && $isTest && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && ($this->isMarkedTest($method) || !$this->isNamedProvider($name, $class));
+    }
+
+    // PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
+    private function isMarkedTest(ReflectionMethod $method): bool
+    {
+        return [] !== $method->getAttributes(Test::class);
     }
 
     /**
-     * @return array{string, int, string, string, string, bool}
+     * @return array{string, int, string, string, string, bool, bool}
      */
     private function location(InClassMethodNode $node, Scope $scope, ReflectionMethod $method): array
     {
         $trait = $scope->getTraitReflection();
         $file = $trait?->getFileName() ?? $scope->getFile();
 
-        return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method)];
+        return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method), $this->isMarkedTest($method)];
     }
 
-    // PHPUnit wants a provider static and returning an iterable, so a static method declared to return a type that cannot be iterated, such as void, can only be a test; PHPUnit runs a method marked #[Test] as a test, so it is never a provider either
+    // PHPUnit wants a provider static and returning an iterable.
+    // A static method declared to return a type that cannot be iterated, such as void, can only be a test.
+    // A method marked #[Test] is always a test.
     private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
     {
-        return $method->isStatic() && [] === $method->getAttributes(Test::class) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
+        return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
     }
 
     // the class that declares the named method, because a provider a parent class or a trait declares is one declaration however many subclasses name it
