@@ -19,6 +19,17 @@ final class ProfilerOutsideProdTest extends TestCase
 
     private ?Kernel $kernel = null;
 
+    public function testTheProductionContainerHasNoProfilerService(): void
+    {
+        $this->kernel = new Kernel('prod', false);
+        $this->kernel->boot();
+        $container = $this->kernel->getContainer();
+
+        self::assertTrue($container->has('router'));
+        self::assertFalse($container->has('profiler'));
+        self::assertFalse($container->has('profiler_listener'));
+    }
+
     protected function setUp(): void
     {
         $this->sharedCache = $_SERVER['APP_CACHE_DIR'] ?? null;
@@ -34,16 +45,5 @@ final class ProfilerOutsideProdTest extends TestCase
             $_SERVER['APP_CACHE_DIR'] = $this->sharedCache;
         }
         new Filesystem()->remove($this->cache);
-    }
-
-    public function testTheProductionContainerHasNoProfilerService(): void
-    {
-        $this->kernel = new Kernel('prod', false);
-        $this->kernel->boot();
-        $container = $this->kernel->getContainer();
-
-        self::assertTrue($container->has('router'));
-        self::assertFalse($container->has('profiler'));
-        self::assertFalse($container->has('profiler_listener'));
     }
 }

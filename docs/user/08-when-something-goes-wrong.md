@@ -40,6 +40,7 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 
 - **What you see:** the review ends blocked with the reason "no outcome in time".
 - **Why:** the round did not end within its upper wait. Most often no background worker was running to do the work.
+  Rarely, its judging failed and was parked among more than 500 parked messages, so Intakt did not see it among the ones it reads and waited for the upper wait instead of reporting "the judging failed".
 - **What to do:** the container runs its workers for you. Outside it, start one with `php bin/console messenger:consume async`, then review again.
 
 ## The cost reads "unknown"

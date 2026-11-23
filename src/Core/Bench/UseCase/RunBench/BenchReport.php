@@ -148,6 +148,18 @@ final readonly class BenchReport
         );
     }
 
+    /**
+     * @param list<RepeatedChange> $changes
+     *
+     * @return list<BenchReviewerResult>
+     */
+    private function everyReviewerResult(array $changes): array
+    {
+        $runs = array_merge(...array_map(static fn (RepeatedChange $change): array => $change->runs, $changes));
+
+        return array_merge(...array_map(static fn (BenchReview $run): array => $run->reviewers, $runs));
+    }
+
     // A reviewer that failed before any call recorded a model joins the one model line of its role and tier, so its harness failure is not apart from the rest.
     /**
      * @param list<BenchReviewerResult> $results
@@ -166,18 +178,6 @@ final readonly class BenchReport
         }
 
         return 1 === count($names) ? array_key_first($names) : $reviewer->name();
-    }
-
-    /**
-     * @param list<RepeatedChange> $changes
-     *
-     * @return list<BenchReviewerResult>
-     */
-    private function everyReviewerResult(array $changes): array
-    {
-        $runs = array_merge(...array_map(static fn (RepeatedChange $change): array => $change->runs, $changes));
-
-        return array_merge(...array_map(static fn (BenchReview $run): array => $run->reviewers, $runs));
     }
 
     /**

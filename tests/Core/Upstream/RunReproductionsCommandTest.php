@@ -26,19 +26,6 @@ final class RunReproductionsCommandTest extends TestCase
 
     private string $folder = '';
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-upstream-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->folder);
-    }
-
-    protected function tearDown(): void
-    {
-        // The unreadable and unsearchable folder tests take the mode away, and remove() cannot list a folder without it.
-        new Filesystem()->chmod($this->folder, 0o755);
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testAPassingAndAFailingReproductionAreReportedApart(): void
     {
         $this->givenReproduction('fixed-bug', '$this->assertTrue(true);');
@@ -218,6 +205,19 @@ final class RunReproductionsCommandTest extends TestCase
         $display = $this->whenTheCommandRuns()->getDisplay();
 
         self::assertMatchesRegularExpression('/^still fails\s+empty-bug$/m', $display);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-upstream-'.bin2hex(random_bytes(4));
+        new Filesystem()->mkdir($this->folder);
+    }
+
+    protected function tearDown(): void
+    {
+        // The unreadable and unsearchable folder tests take the mode away, and remove() cannot list a folder without it.
+        new Filesystem()->chmod($this->folder, 0o755);
+        new Filesystem()->remove($this->folder);
     }
 
     private function givenReproduction(string $slug, string $body): void

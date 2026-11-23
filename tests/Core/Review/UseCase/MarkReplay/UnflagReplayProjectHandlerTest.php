@@ -33,15 +33,6 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(ReplayProject::class)]
 final class UnflagReplayProjectHandlerTest extends KernelTestCase
 {
-    protected function setUp(): void
-    {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $entities = $container->get('doctrine')->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-    }
-
     public function testAnUnflaggedProjectIsLiveAgain(): void
     {
         $this->command(new FlagProjectAsReplay('demo-replay'));
@@ -66,6 +57,15 @@ final class UnflagReplayProjectHandlerTest extends KernelTestCase
         $this->command(new UnflagReplayProject('demo-replay'));
 
         self::assertSame(ReplayMark::Live, $this->markOf('demo-replay'));
+    }
+
+    protected function setUp(): void
+    {
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $entities = $container->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
     private function command(object $command): void

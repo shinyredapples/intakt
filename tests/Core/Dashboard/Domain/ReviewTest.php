@@ -149,13 +149,13 @@ final class ReviewTest extends TestCase
         self::assertNull(new Review([$this->round('round-a', 1), $this->round('round-b', 2)], Timeline::HistoryOnly)->nextNumber());
     }
 
-    private function judged(string $id, int $number): ReviewedRound
-    {
-        return $this->round($id, $number)->judgedWith([], new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
-    }
-
     private function round(string $id, ?int $number): ReviewedRound
     {
         return new ReviewedRound(new RoundStart($id, 'alpha', 2), new RoundPlace('feat/thing', $number), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+    }
+
+    private function judged(string $id, int $number): ReviewedRound
+    {
+        return $this->round($id, $number)->judgedWith([], new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 }

@@ -56,6 +56,20 @@ final readonly class TwigComments implements CommentLanguage
     }
 
     /**
+     * @return array<array{string, int}>|null
+     */
+    private function matchIn(string $pattern, string $source, int $offset): ?array
+    {
+        $result = preg_match($pattern, $source, $match, PREG_OFFSET_CAPTURE, $offset);
+
+        if (false === $result) {
+            throw new ScopeFailure('cannot read a template: '.preg_last_error_msg());
+        }
+
+        return 1 === $result ? $match : null;
+    }
+
+    /**
      * @return Generator<int, array{int, string}, mixed, int>
      */
     private function comment(string $source, int $inside): Generator
@@ -158,19 +172,5 @@ final readonly class TwigComments implements CommentLanguage
         }
 
         return str_contains(self::CLOSING_BRACKETS, $char) ? max(0, $depth - 1) : $depth;
-    }
-
-    /**
-     * @return array<array{string, int}>|null
-     */
-    private function matchIn(string $pattern, string $source, int $offset): ?array
-    {
-        $result = preg_match($pattern, $source, $match, PREG_OFFSET_CAPTURE, $offset);
-
-        if (false === $result) {
-            throw new ScopeFailure('cannot read a template: '.preg_last_error_msg());
-        }
-
-        return 1 === $result ? $match : null;
     }
 }

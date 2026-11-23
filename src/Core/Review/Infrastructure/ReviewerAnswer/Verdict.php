@@ -6,6 +6,8 @@ namespace Intakt\Core\Review\Infrastructure\ReviewerAnswer;
 
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict as ContractVerdict;
 use Symfony\Component\Validator\Constraints\Valid;
 
@@ -28,6 +30,21 @@ final readonly class Verdict
 
     public function toVerdict(): ContractVerdict
     {
-        return new ContractVerdict($this->verdict, $this->findings, $this->resolved, $this->follow_ups);
+        return new ContractVerdict(
+            $this->verdict,
+            $this->findings,
+            array_map(static fn (string $id): ResolvedFinding => new ResolvedFinding($id), $this->resolved),
+            array_map(static fn (string $text): FollowUpNote => new FollowUpNote($text), $this->follow_ups),
+        );
+    }
+
+    public static function fromVerdict(ContractVerdict $verdict): self
+    {
+        return new self(
+            $verdict->verdict,
+            $verdict->findings,
+            array_map(static fn (ResolvedFinding $resolved): string => $resolved->id, $verdict->resolved),
+            array_map(static fn (FollowUpNote $note): string => $note->text, $verdict->follow_ups),
+        );
     }
 }

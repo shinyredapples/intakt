@@ -20,6 +20,69 @@ tool_time_limit="$8"
 output="${INTAKT_JOB_OUTPUT:-/output}"
 clone="${TMPDIR:-/work}/clone"
 log="$output/build.log"
+# The only folders commands are looked up in after the session, because the builder can change files in any folder of the PATH the job starts with that it can write, such as a relative entry or one in HOME.
+system_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Prints the command's absolute path in the system folders, and fails when it is missing there or when any part of the way to its file is, or lies in, a folder the builder can write (the clone, TMPDIR, HOME and the output folder), because the builder could change that part during the session.
+# The way is walked one name at a time, as the kernel resolves it, so every link on it is seen: one in the middle of a chain, and one that stands for a folder of a later link's target, not only the path found and the file at the end.
+# The path found is printed and not the file at the end, because a binary that serves several commands (such as BusyBox) picks the command by the name it is called with.
+system_command() {
+    found="$(PATH="$system_path"; command -v "$1" 2>/dev/null)" || return 1
+    case "$found" in
+        /*) ;;
+        *) return 1 ;;
+    esac
+    # The names still to walk, and the real path walked so far, which holds no link.
+    rest="${found#/}"
+    at=''
+    links=0
+    while [ -n "$rest" ]; do
+        part="${rest%%/*}"
+        case "$rest" in
+            */*) rest="${rest#*/}" ;;
+            *) rest='' ;;
+        esac
+        case "$part" in
+            '' | .) continue ;;
+            ..)
+                at="${at%/*}"
+                continue
+                ;;
+        esac
+        at="$at/$part"
+        for writable in "$clone" "${TMPDIR:-/work}" "${HOME:-}" "$output"; do
+            [ -n "$writable" ] || continue
+            # Each folder as it is named and as its real path, because the walk compares real paths and a folder may be named through a link.
+            for named in "$writable" "$(CDPATH='' cd -P -- "$writable" 2>/dev/null && pwd -P)"; do
+                named="${named%/}"
+                # Empty for the root folder, which holds every system folder and so is never the job's work area.
+                [ -n "$named" ] || continue
+                case "$at" in
+                    "$named" | "$named"/*) return 1 ;;
+                esac
+            done
+        done
+        [ -L "$at" ] || continue
+        # The kernel's own bound for the links of one path, so a chain it would refuse is refused here too.
+        links=$((links + 1))
+        [ "$links" -le 40 ] || return 1
+        # A sentinel after the target, because command substitution drops trailing newlines and a target may end in one.
+        link="$(PATH="$system_path"; readlink -- "$at" 2>/dev/null && printf x)" || return 1
+        # Drop the sentinel and the one newline readlink prints, and no more.
+        link="${link%x}"
+        link="${link%?}"
+        [ -n "$link" ] || return 1
+        case "$link" in
+            /*) at='' ;;
+            *) at="${at%/*}" ;;
+        esac
+        rest="$link${rest:+/$rest}"
+    done
+    if [ ! -f "$at" ] || [ ! -x "$at" ]; then
+        return 1
+    fi
+    printf '%s\n' "$found"
+}
 
 # Init and fetch instead of a clone, so the clone holds the build clone's branches and source refs and no remote.
 prepare() {
@@ -43,15 +106,13 @@ bundle_time_limit=30
 # The form the bundle step uses, tried before the session: an image whose timeout is missing or rejects it would otherwise spend the session and then lose its commits.
 # Never an unbounded bundle instead, which would let the builder hold the slot again.
 cd "$clone" || exit 1
-# Resolved from inside the clone and kept as an absolute path, because a relative PATH entry names another file here than at the bundle step.
-bundle_timeout="$(command -v timeout 2>/dev/null)"
-case "$bundle_timeout" in
-    /*) ;;
-    '') bundle_timeout='' ;;
-    *) bundle_timeout="$PWD/$bundle_timeout" ;;
-esac
-if [ -z "$bundle_timeout" ] || ! "$bundle_timeout" -k 5 "$bundle_time_limit" true >> "$log" 2>&1; then
+# Both from the system folders and resolved before the session, because the bundle step runs them with the job's rights after the builder had the clone, TMPDIR, HOME and the output folder.
+if ! bundle_timeout="$(system_command timeout)" || ! "$bundle_timeout" -k 5 "$bundle_time_limit" true >> "$log" 2>&1; then
     echo 'the image'"'"'s timeout cannot bound the bundle step' >> "$log"
+    exit 1
+fi
+if ! bundle_git="$(system_command git)"; then
+    echo 'the image'"'"'s git is not in its system folders' >> "$log"
     exit 1
 fi
 
@@ -88,17 +149,30 @@ setsid claude -p --model "$model" --max-turns "$turns" --output-format json --da
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
 # It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.
-setsid sh -c 'sleep "$1" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
+# A TERM ends it without a cut only before it sends the kill: it then ends its own group, its sleep and itself, with a status that is no cut;
+# it ignores TERM from before it sends the kill, so a watchdog that has cut still reports the cut when the TERM below reaches it.
+# Its sleep runs in the background, because the shell runs a trap only once a command in the foreground has ended.
+# It cuts only a session whose leader is alive and not a zombie (state Z in /proc, which kill -0 does not tell apart): a leader killed from elsewhere stays a zombie until the wait below reaps it,
+# so a watchdog that wakes in between does not take a surviving child of that session for a cut. Without /proc the state cannot be read and the leader counts as alive.
+# The state is read from the State line of /proc status and not from /proc stat, because the builder can give the leader a name with a line break and a state of its own after it,
+# which status writes escaped on its Name line and stat writes as it is, ahead of the real state.
+# A leader thread that ended while another thread of its process still runs shows state Z too, so the leader counts as a zombie only when its Threads line, which follows State, also says 1.
+setsid sh -c 'zombie() { z=; while read -r key value; do case "$key" in State:) case "$value" in Z*) z=1;; *) return 1;; esac;; Threads:) [ -n "$z" ] && [ "$value" = 1 ]; return;; esac; done < "/proc/$1/status"; return 1; }; trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap "" TERM && kill -0 "$2" && ! zombie "$2" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
 watchdog=$!
 wait "$session"
 status=$?
-# A session ended by SIGKILL may be the watchdog's cut, which ending the watchdog now would hide; waiting for it ends at the allowance at the latest.
+# Every command from here on is looked up in the system folders only, because the builder may have planted one of the same name in a folder of the PATH the job started with.
+PATH="$system_path"
+export PATH
 if [ "$status" -ne 137 ]; then
-    # Its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
+    # The watchdog's kill always ends the session with 137, so any other status rules out a cut; its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
         kill -s KILL -- "-$watchdog" 2>/dev/null && break
         sleep 0.1
     done
+else
+    # Status 137 does not rule out a cut (the watchdog's own kill gives it), but a SIGKILL from elsewhere (such as the out-of-memory killer) gives it too, so the watchdog is asked to stop instead of waited out for the rest of the allowance; one that has already cut ignores the TERM.
+    kill -s TERM "$watchdog" 2>/dev/null
 fi
 wait "$watchdog" 2>/dev/null
 cut=$?
@@ -209,7 +283,7 @@ fi
 
 # The kill follows the TERM, so a git that does not end on TERM is still ended; the short option, because a project's image may carry a timeout (such as BusyBox's) that has no long one.
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.
-"$bundle_timeout" -k 5 "$bundle_time_limit" git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
+"$bundle_timeout" -k 5 "$bundle_time_limit" "$bundle_git" bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
 bundled=$?
 # 124 is timeout's status for a cut, 137 its status once the kill was needed, and 143 that of a timeout that reports the status of the git its TERM ended instead of its own;
 # the builder's processes are gone by now, so only the limit sends git these signals.

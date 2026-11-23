@@ -20,11 +20,6 @@ use Symfony\Component\Process\Process;
 #[UsesClass(StaticAnalysisGate::class)]
 final class FinalClassRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): FinalClassRule
-    {
-        return new FinalClassRule($root);
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -137,5 +132,10 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
     public function testANonFinalClassOutsideTheRepositoryCodeFoldersPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('non-final-migration');
+    }
+
+    protected function ruleFor(string $root): FinalClassRule
+    {
+        return new FinalClassRule($root);
     }
 }

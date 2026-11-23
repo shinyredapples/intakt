@@ -35,9 +35,9 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
-        self::assertSame(['h2', 'div', 'section'], $crawler->filter('aside.log-pane')->children()->each(static fn (Crawler $part): string => $part->nodeName()));
-        self::assertCount(1, $crawler->filter('aside.log-pane > .log-main #round-round-2-live'));
-        self::assertSame('Session summary', $crawler->filter('aside.log-pane > section.log-summary')->attr('aria-label'));
+        self::assertSame(['h2', 'div', 'section'], $crawler->filter('section.log-pane')->children()->each(static fn (Crawler $part): string => $part->nodeName()));
+        self::assertCount(1, $crawler->filter('section.log-pane > .log-main #round-round-2-live'));
+        self::assertSame('Session summary', $crawler->filter('section.log-pane > section.log-summary')->attr('aria-label'));
     }
 
     public function testTheSummaryCountsTheToolCallsByKindWithTheirTotal(): void
@@ -199,18 +199,6 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none; min-width: 4ch;[^}]*white-space: nowrap;/', $sheet);
     }
 
-    private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
-    {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'act']);
-        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
-        $this->ledger->startReviewer('round-2', 'correctness');
-
-        $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturnMap([['round-2', $summary]]);
-        self::getContainer()->set(SessionSummaries::class, $summaries);
-    }
-
     /**
      * @param list<Finding>|null $reported
      */
@@ -228,6 +216,18 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
             [$checked],
             false,
         );
+    }
+
+    private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'act']);
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'correctness');
+
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturnMap([['round-2', $summary]]);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
     }
 
     private function finding(string $id, Severity $severity, string $text): Finding

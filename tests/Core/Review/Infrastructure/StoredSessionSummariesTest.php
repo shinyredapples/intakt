@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummary;
@@ -58,17 +59,6 @@ final class StoredSessionSummariesTest extends KernelTestCase
     private RoundFixture $fixture;
 
     private ReviewCredential $credential;
-
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $this->app = $kernel;
-        $this->fixture = new RoundFixture(self::getContainer());
-        $credential = self::getContainer()->get(ReviewCredential::class);
-        self::assertInstanceOf(ReviewCredential::class, $credential);
-        $this->credential = $credential;
-    }
 
     public function testToolCallsAreCountedByKind(): void
     {
@@ -202,7 +192,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testOnceTheRoundCompletesItListsWhatItReportedAndWhatItResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [$this->finding('b')], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [$this->finding('b')], [new ResolvedFinding('F1')], []));
 
         $summary = $this->summaryOf($round);
 
@@ -214,7 +204,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testAnOpenFindingTheRoundLeftUnresolvedIsNotListedAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a'), $this->finding('b')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F2'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F2')], []));
 
         $summary = $this->summaryOf($round);
 
@@ -225,7 +215,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testOnlyTheResolvedOfTwoOpenFindingsThatReadAlikeIsListedAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Same text'), $this->finding('b', 'Same text')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
 
         $summary = $this->summaryOf($round);
 
@@ -236,7 +226,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testALegacyRoundThatResolvedOneOfTwoFindingsThatReadAlikeUnderAReviewerIdNamingTheOtherListsNoneAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Same text'), $this->finding('b', 'Same text')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
         $this->completedBeforeLedgerIds($round, $this->finding('F2', 'Same text'));
 
         $summary = $this->summaryOf($round);
@@ -248,7 +238,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testALegacyRoundThatResolvedOneOfTwoFindingsThatReadDifferentlyUnderAReviewerIdNamingTheOtherListsNoneAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'First'), $this->finding('b', 'Second')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
         $this->completedBeforeLedgerIds($round, $this->finding('F2', 'First'));
 
         $summary = $this->summaryOf($round);
@@ -264,7 +254,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $later = $this->startedRound();
 
         $this->finish($earlier, new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, 'src/A.php', 3, null, 'New text', FixableBy::Builder, true, null, null)], [], []));
-        $this->finish($later, new Verdict(Decision::Changes, [], ['F1'], []));
+        $this->finish($later, new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
 
         $resolved = $this->summaryOf($later['round'])->resolved;
         self::assertSame(['F1'], $this->ids($resolved));
@@ -278,7 +268,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $later = $this->startedRound();
 
         $this->finish($later, new Verdict(Decision::Changes, [], [], []));
-        $this->finish($earlier, new Verdict(Decision::Changes, [], ['F1'], []));
+        $this->finish($earlier, new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
 
         self::assertSame([], $this->summaryOf($earlier['round'])->resolved);
     }
@@ -308,12 +298,15 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertNull($this->summaries()->ofRound('round-1'));
     }
 
-    private function summaryOf(string $roundId, ?Cost $cost = null): SessionSummary
+    protected function setUp(): void
     {
-        $summary = $this->summaries($cost)->ofRound($roundId);
-        self::assertInstanceOf(SessionSummary::class, $summary);
-
-        return $summary;
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $this->app = $kernel;
+        $this->fixture = new RoundFixture(self::getContainer());
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
     }
 
     private function summaries(?Cost $cost = null): StoredSessionSummaries
@@ -322,14 +315,6 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $costs->method('costOf')->willReturn($cost ?? Cost::none());
 
         return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, new RoundToolCalls($this->fixture->entities, new NullLogger()));
-    }
-
-    private function completedRound(Verdict $verdict): string
-    {
-        $started = $this->startedRound();
-        $this->finish($started, $verdict);
-
-        return $started['round'];
     }
 
     /**
@@ -389,6 +374,20 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
     }
 
+    private function summaryOf(string $roundId, ?Cost $cost = null): SessionSummary
+    {
+        $summary = $this->summaries($cost)->ofRound($roundId);
+        self::assertInstanceOf(SessionSummary::class, $summary);
+
+        return $summary;
+    }
+
+    // The table is dropped, because then the insert fails in the database itself, as it would when the database refuses it.
+    private function recordingFails(): void
+    {
+        $this->fixture->entities->getConnection()->executeStatement('DROP TABLE round_tool_call');
+    }
+
     /**
      * @param array<string, string> $arguments
      *
@@ -402,15 +401,17 @@ final class StoredSessionSummariesTest extends KernelTestCase
         return ['isError' => $response['result']['isError'] ?? false, 'text' => $response['result']['content'][0]['text']];
     }
 
-    // The table is dropped, because then the insert fails in the database itself, as it would when the database refuses it.
-    private function recordingFails(): void
-    {
-        $this->fixture->entities->getConnection()->executeStatement('DROP TABLE round_tool_call');
-    }
-
     private function finding(string $id, ?string $text = null): Finding
     {
         return new Finding($id, Severity::P2, 'src/A.php', 3, null, $text ?? 'Text '.$id, FixableBy::Builder, false, null, null);
+    }
+
+    private function completedRound(Verdict $verdict): string
+    {
+        $started = $this->startedRound();
+        $this->finish($started, $verdict);
+
+        return $started['round'];
     }
 
     /**

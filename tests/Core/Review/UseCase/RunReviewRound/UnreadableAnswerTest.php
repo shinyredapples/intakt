@@ -42,11 +42,6 @@ final class UnreadableAnswerTest extends KernelTestCase
 
     private ScriptedRound $run;
 
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
-    }
-
     public function testOneUnreadableAnswerThenAReadableOneGivesTheVerdict(): void
     {
         $review = $this->reviewedBy(1, 1, 'approve');
@@ -96,6 +91,11 @@ final class UnreadableAnswerTest extends KernelTestCase
         self::assertSame(Decision::Changes, $review->decision);
         self::assertSame([self::FAILED], [...$review->reasons]);
         self::assertCount(1, $review->verdicts);
+    }
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     // The reviewers are delivered one after the other, so the unreadable answers all go to the first reviewer and its retry.

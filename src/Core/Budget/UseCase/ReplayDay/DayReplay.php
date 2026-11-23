@@ -41,19 +41,6 @@ final readonly class DayReplay
         };
     }
 
-    /**
-     * @return list<string>
-     */
-    private function arguments(ScriptedStep $step, int $count): array
-    {
-        $arguments = array_slice($step->words, 1);
-        if (count($arguments) !== $count) {
-            throw ScriptLineNotUnderstood::because($step->line, sprintf('%s takes %d arguments', $step->words[0], $count));
-        }
-
-        return $arguments;
-    }
-
     private function read(ScriptedStep $step): string
     {
         [$account, $window, $percent, $resetsAt] = $this->arguments($step, 4);
@@ -65,6 +52,19 @@ final readonly class DayReplay
         $usage = new Usage((float) $percent, ScriptedStep::momentOf($resetsAt, $step->line));
 
         return $this->measured->record(new WindowReading($this->accountOf($step, $account), $usageWindow, $usage))->value;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function arguments(ScriptedStep $step, int $count): array
+    {
+        $arguments = array_slice($step->words, 1);
+        if (count($arguments) !== $count) {
+            throw ScriptLineNotUnderstood::because($step->line, sprintf('%s takes %d arguments', $step->words[0], $count));
+        }
+
+        return $arguments;
     }
 
     private function limit(ScriptedStep $step): string

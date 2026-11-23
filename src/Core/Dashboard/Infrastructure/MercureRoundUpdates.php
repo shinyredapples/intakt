@@ -92,18 +92,18 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->stoppedReviewerOf($round, $reviewer)]);
     }
 
+    // Nothing on the round's topic, because the review page places a reviewer from its first tool call or text (stream/_reviewer_placed).
+    #[Override]
+    public function reviewerStarted(Uuid $round, string $reviewer): void
+    {
+    }
+
     // Read from the whole round, because a reviewer can be stopped after it answered and its row must keep the verdict and findings a reload shows; a stop is rare, unlike streamed text. Marked stopped here too, because this stream announces the stop whatever the read saw.
     private function stoppedReviewerOf(Uuid $round, string $reviewer): ?ReviewerOutcome
     {
         $recorded = array_find($this->outcomesOf($round), static fn (ReviewerOutcome $outcome): bool => $outcome->id === $reviewer);
 
         return ($recorded ?? $this->startedReviewerOf($round, $reviewer))?->stopped();
-    }
-
-    // Nothing on the round's topic, because the review page places a reviewer from its first tool call or text (stream/_reviewer_placed).
-    #[Override]
-    public function reviewerStarted(Uuid $round, string $reviewer): void
-    {
     }
 
     // Waited for, because a judged round's state must stay the last update of its topic: a worker publishing a tool call's summary finishes first, and the final summary goes out under the same lock, right before the state.
@@ -126,29 +126,6 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         }
     }
 
-    private function doneOrLogged(Uuid $round, Closure $step, string $failureMessage = 'A live session summary was not published.'): bool
-    {
-        try {
-            $step();
-
-            return true;
-            // Boundary: logs a failed summary step and swallows it, because the summary is a view and its loss must not touch the round.
-        } catch (Throwable $failure) {
-            $this->logger->warning($failureMessage, ['round' => $round->toRfc4122(), 'exception' => $failure]);
-
-            return false;
-        }
-    }
-
-    private function publishFinalSummary(Uuid $round): void
-    {
-        $summary = $this->summaries->ofRound($round->toRfc4122());
-
-        if ($summary instanceof SessionSummary) {
-            $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $this->summaryStreamOf($round, $summary)));
-        }
-    }
-
     // One worker at a time reads a round's summary and publishes it, because a worker whose older read was published last would leave the page showing fewer calls than were made.
     private function publishLatestSummary(Uuid $round): void
     {
@@ -168,6 +145,20 @@ final readonly class MercureRoundUpdates implements RoundUpdates
             if (null === $latest || $latest === $seen) {
                 return;
             }
+        }
+    }
+
+    private function doneOrLogged(Uuid $round, Closure $step, string $failureMessage = 'A live session summary was not published.'): bool
+    {
+        try {
+            $step();
+
+            return true;
+            // Boundary: logs a failed summary step and swallows it, because the summary is a view and its loss must not touch the round.
+        } catch (Throwable $failure) {
+            $this->logger->warning($failureMessage, ['round' => $round->toRfc4122(), 'exception' => $failure]);
+
+            return false;
         }
     }
 
@@ -194,12 +185,6 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         return $this->summaryStreamOf($round, $summary);
     }
 
-    // Compared as the rendered stream, because that is exactly what the page would change to.
-    private function summaryStreamOf(Uuid $round, SessionSummary $summary): string
-    {
-        return $this->twig->render(RoundStream::SummaryChanged->template(), ['round' => $round->toRfc4122(), 'summary' => $summary]);
-    }
-
     private function summaryLockOf(Uuid $round): LockInterface
     {
         return $this->locks->createLock('dashboard-session-summary-'.$round->toRfc4122());
@@ -219,6 +204,21 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $reviewed = $this->roundIn($review, $round->toRfc4122());
 
         $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'review' => $review, 'outcomes' => $reviewed->outcomes ?? []]);
+    }
+
+    private function publishFinalSummary(Uuid $round): void
+    {
+        $summary = $this->summaries->ofRound($round->toRfc4122());
+
+        if ($summary instanceof SessionSummary) {
+            $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $this->summaryStreamOf($round, $summary)));
+        }
+    }
+
+    // Compared as the rendered stream, because that is exactly what the page would change to.
+    private function summaryStreamOf(Uuid $round, SessionSummary $summary): string
+    {
+        return $this->twig->render(RoundStream::SummaryChanged->template(), ['round' => $round->toRfc4122(), 'summary' => $summary]);
     }
 
     // Read as the page reads it, because the live findings, tokens and totals must be exactly what a reload shows; null leaves them to that reload.

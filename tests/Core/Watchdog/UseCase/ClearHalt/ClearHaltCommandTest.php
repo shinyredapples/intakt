@@ -57,14 +57,6 @@ final class ClearHaltCommandTest extends TestCase
     private LedgerHalts $halts;
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new HaltLedger();
-        $this->clears = new BeforeTheClear($this->ledger);
-        $this->halts = new LedgerHalts($this->clears, new LedgerPayloads(StoredSerializerFactory::create()));
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testOfTwoClearsOfOneCardOnlyOneIsAppendedAndTheOtherIsRefused(): void
     {
         $card = $this->haltedOn('acme/shop', 'a');
@@ -210,6 +202,14 @@ final class ClearHaltCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('the ledger is down', $tester->getDisplay());
         self::assertCount(1, $this->halts->standing());
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new HaltLedger();
+        $this->clears = new BeforeTheClear($this->ledger);
+        $this->halts = new LedgerHalts($this->clears, new LedgerPayloads(StoredSerializerFactory::create()));
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function haltedOn(string $project, string $digit): string

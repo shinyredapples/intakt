@@ -40,6 +40,14 @@ final readonly class AppJwt
         return $payload.'.'.$this->base64Url($this->signature($payload));
     }
 
+    /**
+     * @param array<string, int|string> $segment
+     */
+    private function encode(array $segment): string
+    {
+        return $this->base64Url(json_encode($segment, JSON_THROW_ON_ERROR));
+    }
+
     private function signature(string $payload): string
     {
         $key = openssl_pkey_get_private($this->privateKey);
@@ -49,14 +57,6 @@ final readonly class AppJwt
         }
 
         return $signature;
-    }
-
-    /**
-     * @param array<string, int|string> $segment
-     */
-    private function encode(array $segment): string
-    {
-        return $this->base64Url(json_encode($segment, JSON_THROW_ON_ERROR));
     }
 
     private function base64Url(string $bytes): string

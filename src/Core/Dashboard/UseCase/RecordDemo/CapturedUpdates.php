@@ -37,23 +37,6 @@ final readonly class CapturedUpdates
         return $updates;
     }
 
-    // Per round, because a capture started late would otherwise record a review missing a whole round's live stream.
-
-    /**
-     * @param list<string>         $rounds
-     * @param list<CapturedUpdate> $updates
-     */
-    private function assertEveryRoundCaptured(array $rounds, array $updates): void
-    {
-        $capturedTopics = array_map(static fn (CapturedUpdate $update): string => $update->topic, $updates);
-
-        foreach ($rounds as $round) {
-            if (!in_array(MercureRoundUpdates::topicOf($round), $capturedTopics, true)) {
-                throw RecordingNeedsCapturedUpdates::noneOfRound($this->capture, $round);
-            }
-        }
-    }
-
     /**
      * @return list<CapturedUpdate>
      */
@@ -70,6 +53,23 @@ final readonly class CapturedUpdates
         }
 
         return $updates;
+    }
+
+    // Per round, because a capture started late would otherwise record a review missing a whole round's live stream.
+
+    /**
+     * @param list<string>         $rounds
+     * @param list<CapturedUpdate> $updates
+     */
+    private function assertEveryRoundCaptured(array $rounds, array $updates): void
+    {
+        $capturedTopics = array_map(static fn (CapturedUpdate $update): string => $update->topic, $updates);
+
+        foreach ($rounds as $round) {
+            if (!in_array(MercureRoundUpdates::topicOf($round), $capturedTopics, true)) {
+                throw RecordingNeedsCapturedUpdates::noneOfRound($this->capture, $round);
+            }
+        }
     }
 
     /**

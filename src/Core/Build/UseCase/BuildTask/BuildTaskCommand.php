@@ -30,7 +30,7 @@ final readonly class BuildTaskCommand
 
         try {
             $outcome = $this->buildTask->run($request);
-        } catch (BuildStepNotRecorded $failure) {
+        } catch (BuildStepNotRecorded|PushRemoteRefused $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

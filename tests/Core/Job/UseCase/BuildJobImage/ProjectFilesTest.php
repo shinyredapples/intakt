@@ -22,11 +22,6 @@ final class ProjectFilesTest extends TestCase
     private string $temporary = '';
     private string $repository = '';
 
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->temporary, $this->repository]);
-    }
-
     public function testTheFolderOfTheAddedFileIsRemovedWhenGitArchiveFails(): void
     {
         $repository = new TemporaryRepository();
@@ -58,5 +53,10 @@ final class ProjectFilesTest extends TestCase
         self::assertStringStartsWith($repository->path.' is not a git checkout with a commit that git can read: ', $process->getOutput());
         self::assertStringContainsString('missing', $process->getOutput());
         self::assertSame([], array_diff((array) scandir($this->temporary), ['.', '..']));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->temporary, $this->repository]);
     }
 }

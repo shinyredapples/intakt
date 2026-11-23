@@ -155,6 +155,11 @@ final readonly class NoPublicSetterRule implements Rule
         return $method->isPublic() && $this->setters->isSetterName($method->getName()) ? $method->getName() : null;
     }
 
+    private function aliasedName(Alias $alias): string
+    {
+        return ($alias->newName ?? $alias->method)->toString();
+    }
+
     // `setTitle as public` on a method the trait already declares public changes nothing, so the trait's declaration stays its only finding
     private function widensToPublic(Alias $alias, TraitUse $use): bool
     {
@@ -167,11 +172,6 @@ final readonly class NoPublicSetterRule implements Rule
         $declaring = array_find($traits, static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($method));
 
         return !$declaring instanceof ClassReflection || !$declaring->getNativeReflection()->getMethod($method)->isPublic();
-    }
-
-    private function aliasedName(Alias $alias): string
-    {
-        return ($alias->newName ?? $alias->method)->toString();
     }
 
     // PHP does not let an implementation rename or hide a method of a vendor interface or parent, so only a setter the repository declares first can be avoided

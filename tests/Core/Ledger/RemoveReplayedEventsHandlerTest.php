@@ -37,17 +37,6 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
 {
     private EntityManagerInterface $manager;
 
-    protected function setUp(): void
-    {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $manager = $container->get('doctrine')->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-        $this->manager = $manager;
-        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
-        AppendOnlyTriggers::in($manager->getConnection());
-    }
-
     public function testOnlyTheNamedEventsAreRemoved(): void
     {
         $replayed = $this->storedEvent('{"round":"replayed"}');
@@ -105,11 +94,15 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
         $this->manager->flush();
     }
 
-    private function remove(Uuid ...$events): void
+    protected function setUp(): void
     {
-        $commands = self::getContainer()->get('command.bus');
-        self::assertInstanceOf(MessageBusInterface::class, $commands);
-        $commands->dispatch(new RemoveReplayedEvents(array_values($events)));
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $manager = $container->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+        $this->manager = $manager;
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        AppendOnlyTriggers::in($manager->getConnection());
     }
 
     private function storedEvent(string $payload): Uuid
@@ -119,6 +112,13 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
         $this->manager->flush();
 
         return $id;
+    }
+
+    private function remove(Uuid ...$events): void
+    {
+        $commands = self::getContainer()->get('command.bus');
+        self::assertInstanceOf(MessageBusInterface::class, $commands);
+        $commands->dispatch(new RemoveReplayedEvents(array_values($events)));
     }
 
     /**

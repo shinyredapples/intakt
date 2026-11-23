@@ -19,22 +19,6 @@ final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
 
     private bool $vaultsBefore;
 
-    protected function setUp(): void
-    {
-        $this->scratch = sys_get_temp_dir().'/vault-order-'.bin2hex(random_bytes(4));
-        mkdir($this->scratch);
-        $this->vaultsBefore = is_dir($this->vaults());
-    }
-
-    // Removes a folder the run left behind, so one test that finds the leak does not hide it from the next.
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->scratch);
-        if (!$this->vaultsBefore && is_dir($this->vaults()) && [] === array_diff((array) scandir($this->vaults()), ['.', '..'])) {
-            rmdir($this->vaults());
-        }
-    }
-
     // Forces the order a check that sorts by recorded durations put in one worker, because that order failed on main (#2434).
     public function testTheKeptKeyWiringTestPassesRightAfterTheAiProvidersTestInOneProcess(): void
     {
@@ -56,6 +40,22 @@ final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
 
         self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
         self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->scratch = sys_get_temp_dir().'/vault-order-'.bin2hex(random_bytes(4));
+        mkdir($this->scratch);
+        $this->vaultsBefore = is_dir($this->vaults());
+    }
+
+    // Removes a folder the run left behind, so one test that finds the leak does not hide it from the next.
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->scratch);
+        if (!$this->vaultsBefore && is_dir($this->vaults()) && [] === array_diff((array) scandir($this->vaults()), ['.', '..'])) {
+            rmdir($this->vaults());
+        }
     }
 
     private function vaults(): string

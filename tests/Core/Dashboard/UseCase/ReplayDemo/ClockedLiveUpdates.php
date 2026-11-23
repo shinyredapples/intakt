@@ -21,7 +21,7 @@ final class ClockedLiveUpdates implements LiveUpdates
     ) {
     }
 
-    public function publish(LiveEvent $event): void
+    public function publish(LiveEvent $event): bool
     {
         $this->published[] = [
             'at' => $this->clock->now()->format('H:i:s.u'),
@@ -29,6 +29,8 @@ final class ClockedLiveUpdates implements LiveUpdates
             'stream' => $event->turboStream,
             'rows' => count(iterator_to_array($this->ledger->readInOrder(), false)),
         ];
+
+        return true;
     }
 
     /**

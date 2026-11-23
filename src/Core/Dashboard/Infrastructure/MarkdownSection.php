@@ -45,30 +45,6 @@ final readonly class MarkdownSection
         return $section;
     }
 
-    // An underline after a heading or a blank line is a thematic break, not a Setext heading, so a nested heading never ends the section.
-    private static function underlinesAParagraph(string $line, string $previous): bool
-    {
-        return 1 === preg_match(self::SETEXT_UNDERLINE, $line)
-            && '' !== trim($previous)
-            && 1 !== preg_match(self::ANY_HEADING, $previous)
-            && 1 !== preg_match(self::THEMATIC_BREAK, $previous);
-    }
-
-    // The paragraph above a Setext underline is the next heading's title, so its lines, such as a run date, are not this section's.
-    /**
-     * @param list<string> $section
-     *
-     * @return list<string>
-     */
-    private static function withoutLastParagraph(array $section): array
-    {
-        while ([] !== $section && '' !== trim(end($section))) {
-            array_pop($section);
-        }
-
-        return $section;
-    }
-
     // Fenced and commented-out lines become blank, so neither an example nor a draft supplies the section, its table or its lines.
     /**
      * @return list<string>
@@ -94,6 +70,35 @@ final readonly class MarkdownSection
         return $lines;
     }
 
+    // An underline after a heading or a blank line is a thematic break, not a Setext heading, so a nested heading never ends the section.
+    private static function underlinesAParagraph(string $line, string $previous): bool
+    {
+        return 1 === preg_match(self::SETEXT_UNDERLINE, $line)
+            && '' !== trim($previous)
+            && 1 !== preg_match(self::ANY_HEADING, $previous)
+            && 1 !== preg_match(self::THEMATIC_BREAK, $previous);
+    }
+
+    // The paragraph above a Setext underline is the next heading's title, so its lines, such as a run date, are not this section's.
+    /**
+     * @param list<string> $section
+     *
+     * @return list<string>
+     */
+    private static function withoutLastParagraph(array $section): array
+    {
+        while ([] !== $section && '' !== trim(end($section))) {
+            array_pop($section);
+        }
+
+        return $section;
+    }
+
+    private static function stillOpen(string $closing, string $line): ?string
+    {
+        return 1 === preg_match($closing, $line) ? null : $closing;
+    }
+
     // A comment left open carries its opening to the next line, so every line up to its close stays unpublished.
     /**
      * @return array{string, string}
@@ -111,10 +116,5 @@ final readonly class MarkdownSection
         return 1 === preg_match(self::FENCE, $line, $fence)
             ? sprintf('/^ {0,3}%s{%d,}[ \t]*$/', preg_quote($fence[1][0], '/'), strlen($fence[1]))
             : null;
-    }
-
-    private static function stillOpen(string $closing, string $line): ?string
-    {
-        return 1 === preg_match($closing, $line) ? null : $closing;
     }
 }

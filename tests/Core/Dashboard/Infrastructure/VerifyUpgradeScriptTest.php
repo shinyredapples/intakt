@@ -40,20 +40,6 @@ final class VerifyUpgradeScriptTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-upgrade-'.bin2hex(random_bytes(6));
-        foreach (['docker' => self::FAKE_DOCKER, 'git' => self::FAKE_GIT, 'openssl' => self::FAKE_OPENSSL] as $command => $script) {
-            new Filesystem()->dumpFile($this->directory.'/'.$command, $script);
-            chmod($this->directory.'/'.$command, 0o755);
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testWithoutAHeadImageAndABaseCommitTheScriptPrintsItsUsageAndExitsWithTwo(): void
     {
         $process = $this->verifyUpgrade('intakt:ci');
@@ -92,6 +78,20 @@ final class VerifyUpgradeScriptTest extends TestCase
         self::assertSame(1, $process->getExitCode());
         self::assertStringContainsString('the upgrade start reads other facts than the base wrote', $process->getErrorOutput());
         self::assertSame(1, preg_match_all('#'.self::BASE_ON_ORIGINAL.'#', $this->calls()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-upgrade-'.bin2hex(random_bytes(6));
+        foreach (['docker' => self::FAKE_DOCKER, 'git' => self::FAKE_GIT, 'openssl' => self::FAKE_OPENSSL] as $command => $script) {
+            new Filesystem()->dumpFile($this->directory.'/'.$command, $script);
+            chmod($this->directory.'/'.$command, 0o755);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function verifyUpgrade(string ...$arguments): Process

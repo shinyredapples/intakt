@@ -69,20 +69,6 @@ final class InstanceBootTest extends TestCase
     private TemporaryRepository $repository;
     private CommitId $main;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('composer.json', '{"name": "intakt-test/boot"}');
-        $this->main = new CommitId($this->repository->commitFile('bin/instance', self::HARNESS));
-        $this->repository->checkoutNewBranch('feature');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->repository->path.'-composer-home', $this->repository->path.'-home']);
-        $this->repository->remove();
-    }
-
     public function testAHeadThatBootsAfterComposerInstallIsReportedAsBooted(): void
     {
         $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
@@ -423,6 +409,20 @@ final class InstanceBootTest extends TestCase
         $this->bootWithMainsHarness($head);
 
         self::assertCount(1, $this->repository->worktrees());
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('composer.json', '{"name": "intakt-test/boot"}');
+        $this->main = new CommitId($this->repository->commitFile('bin/instance', self::HARNESS));
+        $this->repository->checkoutNewBranch('feature');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->repository->path.'-composer-home', $this->repository->path.'-home']);
+        $this->repository->remove();
     }
 
     private function bootWithMainsHarness(string $head): BootOutcome

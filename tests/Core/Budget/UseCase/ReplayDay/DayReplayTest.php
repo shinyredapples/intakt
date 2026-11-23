@@ -44,15 +44,6 @@ final class DayReplayTest extends TestCase
 {
     private DayReplay $replay;
 
-    protected function setUp(): void
-    {
-        $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $readings = new ReadingsInMemory($clock);
-        $holds = new HoldsInMemory($clock);
-        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()), new HaltsInMemory());
-        $this->replay = new DayReplay($readings, $holds, $guard);
-    }
-
     public function testEachStepAnswersWithItsOutcome(): void
     {
         self::assertSame('recorded', $this->play('2026-11-02T08:00 read claude_code.main five-hour 20 2026-11-02T13:00'));
@@ -90,6 +81,15 @@ final class DayReplayTest extends TestCase
         $this->expectExceptionMessageMatches('/'.preg_quote($rule, '/').'/');
 
         $this->play($line);
+    }
+
+    protected function setUp(): void
+    {
+        $clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $readings = new ReadingsInMemory($clock);
+        $holds = new HoldsInMemory($clock);
+        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()), new HaltsInMemory());
+        $this->replay = new DayReplay($readings, $holds, $guard);
     }
 
     private function play(string $line): string

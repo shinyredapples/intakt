@@ -52,27 +52,6 @@ final readonly class HandBackRoutes
     }
 
     /**
-     * @template T
-     *
-     * @param array{repository: string, branch: string} $task
-     * @param Closure(): T                              $step
-     *
-     * @return T
-     */
-    private function locked(array $task, Closure $step): mixed
-    {
-        // Held from the read to the append, because two hand-backs of one task read alike would both be sent back; a list, because a branch or path may hold any separator.
-        $lock = $this->locks->createLock('intakt-hand-back-'.hash('sha256', json_encode([$task['repository'], $task['branch']], JSON_THROW_ON_ERROR)));
-        $lock->acquire(true);
-
-        try {
-            return $step();
-        } finally {
-            $lock->release();
-        }
-    }
-
-    /**
      * @param array{repository: string, branch: string} $task
      */
     private function lastOf(array $task): ?LedgerEventKind
@@ -117,6 +96,27 @@ final readonly class HandBackRoutes
 
         if (!$result->succeeded()) {
             throw HandBackRoundNotRecorded::for($kind->value, (string) $result->failure);
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param array{repository: string, branch: string} $task
+     * @param Closure(): T                              $step
+     *
+     * @return T
+     */
+    private function locked(array $task, Closure $step): mixed
+    {
+        // Held from the read to the append, because two hand-backs of one task read alike would both be sent back; a list, because a branch or path may hold any separator.
+        $lock = $this->locks->createLock('intakt-hand-back-'.hash('sha256', json_encode([$task['repository'], $task['branch']], JSON_THROW_ON_ERROR)));
+        $lock->acquire(true);
+
+        try {
+            return $step();
+        } finally {
+            $lock->release();
         }
     }
 }

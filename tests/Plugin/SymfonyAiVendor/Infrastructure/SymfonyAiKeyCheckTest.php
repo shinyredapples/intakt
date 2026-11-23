@@ -66,11 +66,6 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
     private BufferingLogger $log;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
@@ -363,26 +358,17 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertSame([], $this->log->cleanLogs());
     }
 
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+    }
+
     /**
      * @param array<string, mixed> $body
      */
     private static function answer(int $status, array $body): MockResponse
     {
         return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
-    }
-
-    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
-    /**
-     * @param array<string, Provider>|null $lightTiers
-     */
-    private function tiers(?array $lightTiers = null): TierResolver
-    {
-        $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
-        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
-
-        return $tiers;
     }
 
     /**
@@ -453,5 +439,19 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
             return $answer($request);
         });
+    }
+
+    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
+    /**
+     * @param array<string, Provider>|null $lightTiers
+     */
+    private function tiers(?array $lightTiers = null): TierResolver
+    {
+        $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
+        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
+
+        return $tiers;
     }
 }

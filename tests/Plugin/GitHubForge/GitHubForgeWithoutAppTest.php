@@ -64,11 +64,6 @@ final class GitHubForgeWithoutAppTest extends TestCase
 
     private BufferingLogger $log;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     public function testAVerdictIsNotPublishedAndNoRequestReachesGitHubWithoutAnApp(): void
     {
         $published = $this->forge('')->publishVerdict('alpha', new ChangeId(self::PULL), $this->verdict());
@@ -108,9 +103,9 @@ final class GitHubForgeWithoutAppTest extends TestCase
         self::assertSame([], $this->log->cleanLogs());
     }
 
-    private function verdict(): PublishedVerdict
+    protected function setUp(): void
     {
-        return new PublishedVerdict(new CommitId(str_repeat('1', 40)), HeadStatus::Success, 'Intakt approves this head.', 'The comment.', new ReviewToken('round-token-0001'));
+        $this->log = new BufferingLogger();
     }
 
     // Every request is recorded and refused, so a forge that reaches GitHub at all leaves a trace in the list.
@@ -130,5 +125,10 @@ final class GitHubForgeWithoutAppTest extends TestCase
         $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, $calls), $expected, new NullLogger()), $tokens);
 
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())), new GitHubAppSetting($appId, $this->log));
+    }
+
+    private function verdict(): PublishedVerdict
+    {
+        return new PublishedVerdict(new CommitId(str_repeat('1', 40)), HeadStatus::Success, 'Intakt approves this head.', 'The comment.', new ReviewToken('round-token-0001'));
     }
 }

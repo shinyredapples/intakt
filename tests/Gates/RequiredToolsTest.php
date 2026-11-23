@@ -28,28 +28,6 @@ final class RequiredToolsTest extends TestCase
 
     private string $caller;
 
-    protected function setUp(): void
-    {
-        $this->path = getenv('PATH');
-        $this->scanner = getenv('INTAKT_GITLEAKS');
-        $cwd = getcwd();
-        $this->cwd = false === $cwd ? '.' : $cwd;
-        putenv('INTAKT_GITLEAKS');
-        $this->base = sys_get_temp_dir().'/intakt-required-tools-'.bin2hex(random_bytes(6));
-        $this->root = $this->base.'/workspace';
-        $this->caller = $this->base.'/caller';
-        mkdir($this->root, 0o700, true);
-        mkdir($this->caller, 0o700, true);
-    }
-
-    protected function tearDown(): void
-    {
-        chdir($this->cwd);
-        putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
-        putenv(false === $this->scanner ? 'INTAKT_GITLEAKS' : 'INTAKT_GITLEAKS='.$this->scanner);
-        $this->remove($this->base);
-    }
-
     public function testEveryMissingToolOfTheSelectedGatesIsListedOnce(): void
     {
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
@@ -228,6 +206,28 @@ final class RequiredToolsTest extends TestCase
         $child->run();
 
         self::assertSame(json_encode([RequiredTools::notFound('composer')]), $child->getOutput(), $child->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->path = getenv('PATH');
+        $this->scanner = getenv('INTAKT_GITLEAKS');
+        $cwd = getcwd();
+        $this->cwd = false === $cwd ? '.' : $cwd;
+        putenv('INTAKT_GITLEAKS');
+        $this->base = sys_get_temp_dir().'/intakt-required-tools-'.bin2hex(random_bytes(6));
+        $this->root = $this->base.'/workspace';
+        $this->caller = $this->base.'/caller';
+        mkdir($this->root, 0o700, true);
+        mkdir($this->caller, 0o700, true);
+    }
+
+    protected function tearDown(): void
+    {
+        chdir($this->cwd);
+        putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
+        putenv(false === $this->scanner ? 'INTAKT_GITLEAKS' : 'INTAKT_GITLEAKS='.$this->scanner);
+        $this->remove($this->base);
     }
 
     private function tools(): RequiredTools

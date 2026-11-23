@@ -101,12 +101,6 @@ final readonly class BareSerializerFormatRule implements Rule
         };
     }
 
-    // only the literal itself, because JsonEncoder::FORMAT has the same constant value and is the spelling the rule asks for
-    private function isBareFormat(?Expr $value): bool
-    {
-        return $value instanceof String_ && self::BARE_FORMAT === $value->value;
-    }
-
     // every class the receiver may be, so a nullable or a union receiver still counts while an unrelated class with a method of the same name does not; null is removed first, because PHPStan gives no class for a union that holds null, as the receiver $holder?->serializer has
     /**
      * @param list<class-string> $contracts
@@ -139,6 +133,12 @@ final readonly class BareSerializerFormatRule implements Rule
         $names = $this->parameterNamesOf($class, $method, $position);
 
         return [] === $names ? [self::CONTRACT_PARAMETER] : array_values(array_unique($names));
+    }
+
+    // only the literal itself, because JsonEncoder::FORMAT has the same constant value and is the spelling the rule asks for
+    private function isBareFormat(?Expr $value): bool
+    {
+        return $value instanceof String_ && self::BARE_FORMAT === $value->value;
     }
 
     /**

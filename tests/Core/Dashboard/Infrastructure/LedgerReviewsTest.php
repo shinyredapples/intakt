@@ -74,11 +74,6 @@ final class LedgerReviewsTest extends TestCase
 {
     private DashboardLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testEventsOfKindsTheDashboardDoesNotReadAreIgnored(): void
     {
         $reviews = $this->reviewsOf(
@@ -311,6 +306,11 @@ final class LedgerReviewsTest extends TestCase
         self::assertSame([ReviewState::InProgress, ReviewOutcome::Failed], [$reviews[0]->state, $reviews[0]->outcome]);
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+    }
+
     /**
      * @return list<ReviewSummary>
      */
@@ -319,17 +319,6 @@ final class LedgerReviewsTest extends TestCase
         $pages = new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
 
         return new LedgerReviews($pages)->newestFirst();
-    }
-
-    /**
-     * @return list<ReviewSummary>
-     */
-    private function reviewsOf(RecordedEvent ...$events): array
-    {
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willReturn(new RecordedEvents(array_values($events)));
-
-        return $this->listOf($ledger);
     }
 
     /**
@@ -349,5 +338,16 @@ final class LedgerReviewsTest extends TestCase
     private function event(LedgerEventKind $kind, string $payload): RecordedEvent
     {
         return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+    }
+
+    /**
+     * @return list<ReviewSummary>
+     */
+    private function reviewsOf(RecordedEvent ...$events): array
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn(new RecordedEvents(array_values($events)));
+
+        return $this->listOf($ledger);
     }
 }

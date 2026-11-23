@@ -79,6 +79,12 @@ final class AnthropicUsageTest extends TestCase
         self::assertSame([['prompt' => null, 'completion' => 908, 'cache_creation' => null, 'cache_read' => null]], $this->figuresOf($ledger));
     }
 
+    // Consumed like the agent consumes a round, so the stream's listeners have run when the call settles.
+    private function streamedRound(string $fixture): DeferredResult
+    {
+        return $this->streamedRoundOf($this->recorded($fixture));
+    }
+
     private function settle(InMemoryLedger $ledger, DeferredResult ...$rounds): void
     {
         new UsageLedger($ledger, new MockClock('2026-11-09T00:00:00+00:00'), new NullLogger(), StoredSerializerFactory::create())->settle(new UsageReservation('a call'), ...$rounds);
@@ -95,10 +101,23 @@ final class AnthropicUsageTest extends TestCase
         return array_map(static fn (array $usage): array => array_intersect_key($usage, array_flip(self::FIGURES)), $usages);
     }
 
-    // Consumed like the agent consumes a round, so the stream's listeners have run when the call settles.
-    private function streamedRound(string $fixture): DeferredResult
+    /**
+     * @param array<string, mixed> $content
+     * @param array<string, int>   $usage
+     */
+    private function unstreamedRound(array $content, array $usage): DeferredResult
     {
-        return $this->streamedRoundOf($this->recorded($fixture));
+        $answer = ['id' => 'msg_01', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-opus-5-5', 'content' => [$content], 'stop_reason' => 'end_turn', 'usage' => $usage];
+        $response = new MockHttpClient(new MockResponse(json_encode($answer, JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]))->request('POST', 'https://api.anthropic.com/v1/messages');
+        $round = $this->roundOf(new RawHttpResult($response), []);
+        $round->getResult();
+
+        return $round;
+    }
+
+    private function recorded(string $fixture): string
+    {
+        return (string) file_get_contents(__DIR__.'/Fixtures/anthropic/'.$fixture);
     }
 
     private function streamedRoundOf(string $events): DeferredResult
@@ -114,29 +133,10 @@ final class AnthropicUsageTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $content
-     * @param array<string, int>   $usage
-     */
-    private function unstreamedRound(array $content, array $usage): DeferredResult
-    {
-        $answer = ['id' => 'msg_01', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-opus-5-5', 'content' => [$content], 'stop_reason' => 'end_turn', 'usage' => $usage];
-        $response = new MockHttpClient(new MockResponse(json_encode($answer, JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]))->request('POST', 'https://api.anthropic.com/v1/messages');
-        $round = $this->roundOf(new RawHttpResult($response), []);
-        $round->getResult();
-
-        return $round;
-    }
-
-    /**
      * @param array<string, mixed> $options
      */
     private function roundOf(RawHttpResult $raw, array $options): DeferredResult
     {
         return new DeferredResult(new StrictVerdictConverter(new ResultConverter(), StoredSerializerFactory::create(), self::createStub(ValidatorInterface::class)), $raw, $options);
-    }
-
-    private function recorded(string $fixture): string
-    {
-        return (string) file_get_contents(__DIR__.'/Fixtures/anthropic/'.$fixture);
     }
 }

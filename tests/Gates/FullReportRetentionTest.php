@@ -135,15 +135,6 @@ final class FullReportRetentionTest extends SandboxTestCase
         self::assertCount(25, $this->generatedReportsIn($parent.'/treea'));
     }
 
-    private function writeReportInto(string $root): string
-    {
-        $result = GateResult::passed('dashes');
-        $file = new FullReport($root, [GateReport::fromChild('dashes', new ProcessResult(0, $result->toJson()."\n", ''))])->write();
-        self::assertNotNull($file);
-
-        return $file;
-    }
-
     /**
      * @return list<string>
      */
@@ -157,6 +148,15 @@ final class FullReportRetentionTest extends SandboxTestCase
         }
 
         return $names;
+    }
+
+    private function writeReportInto(string $root): string
+    {
+        $result = GateResult::passed('dashes');
+        $file = new FullReport($root, [GateReport::fromChild('dashes', new ProcessResult(0, $result->toJson()."\n", ''))])->write();
+        self::assertNotNull($file);
+
+        return $file;
     }
 
     private function seedFile(string $root, string $name, int $time): void

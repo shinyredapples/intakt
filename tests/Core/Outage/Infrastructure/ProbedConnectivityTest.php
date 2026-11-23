@@ -50,18 +50,18 @@ final class ProbedConnectivityTest extends TestCase
         new ProbedConnectivity([$this->answering(), $unreached])->reachability();
     }
 
-    private function answering(): Probe
-    {
-        $probe = self::createStub(Probe::class);
-        $probe->method('answers')->willReturn(true);
-
-        return $probe;
-    }
-
     private function failing(): Probe
     {
         $probe = self::createStub(Probe::class);
         $probe->method('answers')->willReturn(false);
+
+        return $probe;
+    }
+
+    private function answering(): Probe
+    {
+        $probe = self::createStub(Probe::class);
+        $probe->method('answers')->willReturn(true);
 
         return $probe;
     }

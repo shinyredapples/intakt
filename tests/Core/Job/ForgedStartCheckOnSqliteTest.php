@@ -78,18 +78,6 @@ final class ForgedStartCheckOnSqliteTest extends KernelTestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-forged-start-check-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->root);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-        parent::tearDown();
-    }
-
     public function testAForgedPassAfterAFailedCheckIsStoredAsTheFailureInTheSqliteLedger(): void
     {
         $engine = new FakeDockerEngine();
@@ -109,6 +97,18 @@ final class ForgedStartCheckOnSqliteTest extends KernelTestCase
             ],
             $this->manager()->getConnection()->fetchAllAssociative('SELECT kind, payload FROM ledger_event ORDER BY position'),
         );
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-forged-start-check-'.bin2hex(random_bytes(4));
+        new Filesystem()->mkdir($this->root);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
+        parent::tearDown();
     }
 
     private function runnerOn(FakeDockerEngine $fake): ContainerJobRunner
