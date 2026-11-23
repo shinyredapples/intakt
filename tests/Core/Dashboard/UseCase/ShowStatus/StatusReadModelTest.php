@@ -43,6 +43,7 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
@@ -680,8 +681,10 @@ final class StatusReadModelTest extends TestCase
         $costs->method('costOf')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
         $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
+        $lookup = self::createStub(RoundEndingLookup::class);
+        $lookup->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
         $endings = self::createStub(RoundEndings::class);
-        $endings->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
+        $endings->method('lookup')->willReturn($lookup);
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
         $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
 

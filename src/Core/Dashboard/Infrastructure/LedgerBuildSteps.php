@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Symfony\Component\Uid\Uuid;
 
 // The latest step of a task decides, because a build run stops at its first failed step and a new run of the task starts again at its first step.
 final readonly class LedgerBuildSteps
@@ -46,23 +47,70 @@ final readonly class LedgerBuildSteps
      */
     public function latestRunOf(RecordedEvents $events, string $project, string $task): array
     {
-        $run = [];
+        return LatestBuildRun::of($this->rowsOf($events, $project, $task));
+    }
+
+    /**
+     * @return list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}>
+     */
+    private function rowsOf(RecordedEvents $events, string $project, string $task): array
+    {
+        $rows = [];
 
         foreach ($events as $recorded) {
-            $step = LedgerEventKind::BuildStepEnded === $recorded->event->kind ? $this->stepOf($recorded) : null;
+            $row = LedgerEventKind::BuildStepEnded === $recorded->event->kind ? $this->rowOf($recorded, $project, $task) : null;
 
-            if (null === $step || $project !== $step['project'] || $task !== $step['task']) {
-                continue;
+            if (null !== $row) {
+                $rows[] = $row;
             }
-
-            if (BuildStep::Task->value === $step['step']) {
-                $run = [];
-            }
-
-            $run[] = $step;
         }
 
-        return $run;
+        return $rows;
+    }
+
+    // A row of the task with its run and step; without its step for a malformed row of a named run or a malformed task row of an unnamed run, because that row is left out but still marks where its run began.
+    /**
+     * @return array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}|null
+     */
+    private function rowOf(RecordedEvent $recorded, string $project, string $task): ?array
+    {
+        $run = $this->runOf($recorded);
+
+        if (false === $run) {
+            return null;
+        }
+
+        $step = $this->stepOf($recorded);
+
+        if (null !== $step && $project === $step['project'] && $task === $step['task']) {
+            return [$run, $step];
+        }
+
+        if (!$this->isRowOf($recorded, $project, $task)) {
+            return null;
+        }
+
+        // Only the task row of an unnamed run, because without a run id only the task step tells that a new run began.
+        return null !== $run || BuildStep::Task->value === (LedgerPayload::of($recorded)['step'] ?? null) ? [$run, null] : null;
+    }
+
+    // Null for a row written before runs were named, and false for a run that is no UUID (an explicit null included): the build never writes one, so the row's run cannot be told and the row is left out.
+    private function runOf(RecordedEvent $recorded): string|false|null
+    {
+        $payload = LedgerPayload::of($recorded);
+
+        if (!array_key_exists('run', $payload)) {
+            return null;
+        }
+
+        return is_string($payload['run']) && Uuid::isValid($payload['run']) ? strtolower($payload['run']) : false;
+    }
+
+    private function isRowOf(RecordedEvent $recorded, string $project, string $task): bool
+    {
+        $payload = LedgerPayload::of($recorded);
+
+        return $project === ($payload['project'] ?? null) && $task === ($payload['task'] ?? null);
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
