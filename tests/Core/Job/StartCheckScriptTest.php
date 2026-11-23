@@ -23,21 +23,6 @@ final class StartCheckScriptTest extends TestCase
     private string $work = '';
     private string $tools = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-start-check-'.bin2hex(random_bytes(4));
-        $this->output = $this->root.'/output';
-        $this->work = $this->root.'/work';
-        $this->tools = $this->root.'/bin';
-        new Filesystem()->mkdir([$this->output, $this->work, $this->tools, $this->root.'/input']);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->chmod([$this->output, $this->work, $this->root.'/input'], 0o700);
-        new Filesystem()->remove($this->root);
-    }
-
     public function testAJobWhoseMountsWorkRunsInFullModeAndLeavesNothingInItsOutput(): void
     {
         $run = $this->whenTheCheckRuns([$this->root.'/input']);
@@ -197,6 +182,21 @@ final class StartCheckScriptTest extends TestCase
         self::assertSame(self::CHECK."output: ok\n".self::CHECK."work: ok\n".self::CHECK.'input: '.$this->root."/input: ok\n".self::CHECK."full mode\n", $run->getErrorOutput());
     }
 
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-start-check-'.bin2hex(random_bytes(4));
+        $this->output = $this->root.'/output';
+        $this->work = $this->root.'/work';
+        $this->tools = $this->root.'/bin';
+        new Filesystem()->mkdir([$this->output, $this->work, $this->tools, $this->root.'/input']);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->chmod([$this->output, $this->work, $this->root.'/input'], 0o700);
+        new Filesystem()->remove($this->root);
+    }
+
     /**
      * @param list<string> $inputs
      */
@@ -206,18 +206,6 @@ final class StartCheckScriptTest extends TestCase
             [...$inputs, '--', '/bin/sh', '-c', 'printf "%s" "${INTAKT_REDUCED_MODE-unset}"'],
             $this->environment($egress, $this->tools.':'.($path ?? (string) getenv('PATH'))),
         );
-    }
-
-    /**
-     * @param list<string>                $arguments
-     * @param array<string, string|false> $environment
-     */
-    private function startCheckWith(array $arguments, array $environment, string $shell = '/bin/sh'): Process
-    {
-        $run = new Process([$shell, '-c', $this->script(), 'intakt-start-check', self::MARK, ...$arguments], null, $environment);
-        $run->run();
-
-        return $run;
     }
 
     /**
@@ -234,6 +222,18 @@ final class StartCheckScriptTest extends TestCase
             'INTAKT_JOB_EGRESS' => $egress ?? false,
             'INTAKT_REDUCED_MODE' => false,
         ];
+    }
+
+    /**
+     * @param list<string>                $arguments
+     * @param array<string, string|false> $environment
+     */
+    private function startCheckWith(array $arguments, array $environment, string $shell = '/bin/sh'): Process
+    {
+        $run = new Process([$shell, '-c', $this->script(), 'intakt-start-check', self::MARK, ...$arguments], null, $environment);
+        $run->run();
+
+        return $run;
     }
 
     // A stand-in on the PATH, because no test may reach a host, and it records how the script called it.

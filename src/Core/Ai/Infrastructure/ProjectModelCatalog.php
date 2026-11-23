@@ -47,6 +47,16 @@ final readonly class ProjectModelCatalog
         return $models;
     }
 
+    private function bridgeCatalog(Provider $provider): ModelCatalogInterface
+    {
+        return match ($provider) {
+            Provider::Anthropic => new AnthropicBridgeCatalog()->catalog(),
+            Provider::OpenAi => new OpenAiBridgeCatalog()->catalog(),
+            // Not the bridge's own catalog: its models lack structured output, which the verdict needs.
+            Provider::OpenAiCompatible, Provider::ClaudeCode, Provider::Codex => new FallbackModelCatalog(),
+        };
+    }
+
     /**
      * @return list<non-empty-string>
      */
@@ -74,16 +84,6 @@ final readonly class ProjectModelCatalog
                 yield from $tier['substitutes'] ?? [];
             }
         }
-    }
-
-    private function bridgeCatalog(Provider $provider): ModelCatalogInterface
-    {
-        return match ($provider) {
-            Provider::Anthropic => new AnthropicBridgeCatalog()->catalog(),
-            Provider::OpenAi => new OpenAiBridgeCatalog()->catalog(),
-            // Not the bridge's own catalog: its models lack structured output, which the verdict needs.
-            Provider::OpenAiCompatible, Provider::ClaudeCode, Provider::Codex => new FallbackModelCatalog(),
-        };
     }
 
     /**

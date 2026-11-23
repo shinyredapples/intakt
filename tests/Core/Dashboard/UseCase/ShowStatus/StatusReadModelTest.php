@@ -43,6 +43,7 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
@@ -112,11 +113,6 @@ final class StatusReadModelTest extends TestCase
 
     /** @var array<string, RoundEnding> */
     private array $endings = [];
-
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
 
     public function testTheStatusValidatesAgainstTheDocumentedSchema(): void
     {
@@ -625,6 +621,11 @@ final class StatusReadModelTest extends TestCase
         self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), [...(array) $this->schemaAt(...$build, ...['outcome', 'enum']), BuildStepOutcome::Asked->value]);
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+    }
+
     private function schemaAt(string ...$path): mixed
     {
         $node = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
@@ -661,6 +662,35 @@ final class StatusReadModelTest extends TestCase
         return $project;
     }
 
+    private function queueHolding(int $messages): ReceiverInterface
+    {
+        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
+        $queue->method('getMessageCount')->willReturn($messages);
+        self::assertInstanceOf(ReceiverInterface::class, $queue);
+
+        return $queue;
+    }
+
+    private function readModel(string $redacting = ''): StatusReadModel
+    {
+        $holds = self::createStub(Holds::class);
+        $holds->method('sharedInEffect')->willReturn($this->holds);
+        $redactor = self::createStub(Redactor::class);
+        $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::none());
+        $ledger = $this->readFrom ?? $this->ledger;
+        $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
+        $lookup = self::createStub(RoundEndingLookup::class);
+        $lookup->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
+        $endings = self::createStub(RoundEndings::class);
+        $endings->method('lookup')->willReturn($lookup);
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
+        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
+
+        return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
+    }
+
     /**
      * @return list<string>
      */
@@ -674,32 +704,5 @@ final class StatusReadModelTest extends TestCase
         $errors = $validator->getErrors();
 
         return array_map(static fn (array $error): string => $error['property'].': '.$error['message'], $errors);
-    }
-
-    private function readModel(string $redacting = ''): StatusReadModel
-    {
-        $holds = self::createStub(Holds::class);
-        $holds->method('sharedInEffect')->willReturn($this->holds);
-        $redactor = self::createStub(Redactor::class);
-        $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-        $ledger = $this->readFrom ?? $this->ledger;
-        $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
-        $endings = self::createStub(RoundEndings::class);
-        $endings->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
-        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
-
-        return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
-    }
-
-    private function queueHolding(int $messages): ReceiverInterface
-    {
-        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
-        $queue->method('getMessageCount')->willReturn($messages);
-        self::assertInstanceOf(ReceiverInterface::class, $queue);
-
-        return $queue;
     }
 }

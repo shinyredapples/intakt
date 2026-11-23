@@ -69,6 +69,32 @@ final readonly class PushBranch implements BranchPush
         return $acquired ? $lock : throw BranchNotPushed::because('another push of this branch is running');
     }
 
+    private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
+    {
+        $this->refuseRewrittenRemote($request);
+        $main = $this->mainOf($request->repository);
+        $head = $this->signed->of($request->repository, $request->accepted, $main);
+        $this->signed->verify($request->repository, $head, $main);
+
+        $notLanded = $this->notLanded($request, $head, $main);
+
+        if (null !== $notLanded) {
+            return $notLanded;
+        }
+
+        return new PushedBranch($head, $this->openedChange($request, $head, $main));
+    }
+
+    // The failure of the push is what its caller needs, and a lock left held expires with its time to live.
+    private function releaseAfter(LockInterface $lock): void
+    {
+        try {
+            $this->release($lock);
+        } catch (BranchNotPushed) {
+            return;
+        }
+    }
+
     // Reported as not pushed even after a push, because the next call finds the recorded push at the remote tip and reports the branch pushed without pushing again.
     private function release(LockInterface $lock): void
     {
@@ -89,29 +115,28 @@ final readonly class PushBranch implements BranchPush
         }
     }
 
-    // The failure of the push is what its caller needs, and a lock left held expires with its time to live.
-    private function releaseAfter(LockInterface $lock): void
+    // Checked by the push itself and not once when the task starts, because git reads the repository's config at the push, and a rewrite can have been written since. An empty prefix matches every remote, as git applies it to every URL. The remote is not named, because it can hold a credential.
+    private function refuseRewrittenRemote(BranchPushRequest $request): void
     {
-        try {
-            $this->release($lock);
-        } catch (BranchNotPushed) {
-            return;
+        $section = 'remote.'.$request->remote.'.';
+
+        foreach ($this->git->addressEntries($request->repository) as [$key, $value]) {
+            // A remote section named exactly like the remote string, because git push takes the string as that remote's name and pushes to its url or pushurl. Git keeps the section's name as written and the key after it has no dot, so a longer name that only starts with the remote is another section.
+            if (str_starts_with($key, $section) && !str_contains(substr($key, strlen($section)), '.')) {
+                throw BranchNotPushed::because('the repository\'s config has a remote section named like the remote, so git would push to that section\'s address instead of the one the forge checks');
+            }
+
+            if (str_starts_with($key, 'url.') && str_starts_with($request->remote, $value)) {
+                throw BranchNotPushed::because('the repository\'s config rewrites the remote\'s address (url.<base>.insteadOf or pushInsteadOf), so git would read and push another repository than the one the forge checks');
+            }
         }
     }
 
-    private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
+    private function mainOf(string $repository): string
     {
-        $main = $this->mainOf($request->repository);
-        $head = $this->signed->of($request->repository, $request->accepted, $main);
-        $this->signed->verify($request->repository, $head, $main);
+        $main = $this->git->lines($repository, ['symbolic-ref', '--quiet', 'HEAD']);
 
-        $notLanded = $this->notLanded($request, $head, $main);
-
-        if (null !== $notLanded) {
-            return $notLanded;
-        }
-
-        return new PushedBranch($head, $this->openedChange($request, $head, $main));
+        return str_starts_with($main, self::BRANCHES) ? $main : throw BranchNotPushed::because('the repository\'s HEAD names no branch, so it has no main');
     }
 
     // Null only when the remote branch is the signed head, because the caller writes the pull request for nothing else.
@@ -138,11 +163,21 @@ final readonly class PushBranch implements BranchPush
         return $this->pushOnce($request, $head, $remoteTip);
     }
 
-    private function mainOf(string $repository): string
+    private function remoteTip(BranchPushRequest $request): ?string
     {
-        $main = $this->git->lines($repository, ['symbolic-ref', '--quiet', 'HEAD']);
+        $ref = self::BRANCHES.$request->branch;
+        $listed = $this->git->outputFromRemote($request->repository, ['ls-remote', '--', $request->remote, $ref]);
 
-        return str_starts_with($main, self::BRANCHES) ? $main : throw BranchNotPushed::because('the repository\'s HEAD names no branch, so it has no main');
+        // Git matches the pattern against the tail of every ref, so "refs/heads/a/refs/heads/task" is listed too and may come first: only the exact ref is the branch.
+        foreach (explode("\n", $listed) as $line) {
+            $fields = explode("\t", $line, 2);
+
+            if ($ref === ($fields[1] ?? null)) {
+                return $fields[0];
+            }
+        }
+
+        return null;
     }
 
     // The merge is tried in the repository's object store only, so a conflict leaves nothing on the remote and no ref anywhere.
@@ -151,6 +186,29 @@ final readonly class PushBranch implements BranchPush
         $paths = $this->git->mergeTree($request->repository, $main, $request->accepted->head);
 
         return null === $paths ? null : new MainConflicts($paths);
+    }
+
+    private function openedChange(BranchPushRequest $request, string $head, string $main): ChangeId
+    {
+        $recorded = $this->records->openedChange($request, $head);
+
+        if (null !== $recorded) {
+            return new ChangeId($recorded);
+        }
+
+        // Recorded before the forge is written to, because a write whose own record is then refused must not leave an earlier text's record as the last word.
+        $this->records->intendChange($request, $head);
+
+        // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one, and a corrected text of the same commits updates the open one.
+        $opened = $this->changes->openOrUpdate($this->proposedChange($request, $main));
+        $this->records->open($request, $head, $opened);
+
+        return $opened->id;
+    }
+
+    private function proposedChange(BranchPushRequest $request, string $main): ProposedChange
+    {
+        return new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text);
     }
 
     private function pushOnce(BranchPushRequest $request, string $head, ?string $remoteTip): ?RefusedPush
@@ -184,45 +242,5 @@ final readonly class PushBranch implements BranchPush
         $this->records->refuse($request, $head, $refused->reason);
 
         return $refused;
-    }
-
-    private function remoteTip(BranchPushRequest $request): ?string
-    {
-        $ref = self::BRANCHES.$request->branch;
-        $listed = $this->git->outputFromRemote($request->repository, ['ls-remote', '--', $request->remote, $ref]);
-
-        // Git matches the pattern against the tail of every ref, so "refs/heads/a/refs/heads/task" is listed too and may come first: only the exact ref is the branch.
-        foreach (explode("\n", $listed) as $line) {
-            $fields = explode("\t", $line, 2);
-
-            if ($ref === ($fields[1] ?? null)) {
-                return $fields[0];
-            }
-        }
-
-        return null;
-    }
-
-    private function openedChange(BranchPushRequest $request, string $head, string $main): ChangeId
-    {
-        $recorded = $this->records->openedChange($request, $head);
-
-        if (null !== $recorded) {
-            return new ChangeId($recorded);
-        }
-
-        // Recorded before the forge is written to, because a write whose own record is then refused must not leave an earlier text's record as the last word.
-        $this->records->intendChange($request, $head);
-
-        // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one, and a corrected text of the same commits updates the open one.
-        $opened = $this->changes->openOrUpdate($this->proposedChange($request, $main));
-        $this->records->open($request, $head, $opened);
-
-        return $opened->id;
-    }
-
-    private function proposedChange(BranchPushRequest $request, string $main): ProposedChange
-    {
-        return new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text);
     }
 }

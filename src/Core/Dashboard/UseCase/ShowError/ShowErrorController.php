@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\ShowError;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\ErrorHandler\ErrorRenderer\ErrorRendererInterface;
@@ -27,6 +28,7 @@ final readonly class ShowErrorController
     private const string DASHBOARD_LOG = 'A dashboard page failed, reference {reference}.';
     private const string PLAIN_LOG = 'A request failed, reference {reference}.';
     private const string REQUEST_MESSAGE = 'This request could not be answered.';
+    private const string REFUSED_FORM_HINT = 'Go back, reload the page and press the button again.';
 
     public function __construct(
         private Environment $twig,
@@ -51,7 +53,7 @@ final readonly class ShowErrorController
             return $this->plainAnswer($exception, $status, $headers);
         }
 
-        $message = $this->messageFor($status);
+        $message = $this->messageFor($exception, $status);
         // A missing route fails before RefuseForeignHost has a route to judge, so the shell and its project names are kept from a foreign host here.
         $page = $this->dashboard->isNamedBy($request) ? $this->render($status, $message, $reference) : $this->plainPage($message, $reference);
 
@@ -66,6 +68,15 @@ final readonly class ShowErrorController
         return is_string($route) && !str_starts_with($route, DashboardRoutes::PREFIX);
     }
 
+    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
+    private function referenceFor(Throwable $exception, string $log): string
+    {
+        $reference = bin2hex(random_bytes(4));
+        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
+
+        return $reference;
+    }
+
     /**
      * @param array<mixed> $headers
      */
@@ -76,22 +87,14 @@ final readonly class ShowErrorController
         return new Response($rendered->getAsString(), $status, [...$rendered->getHeaders(), ...$headers]);
     }
 
-    private function messageFor(int $status): string
+    private function messageFor(Throwable $exception, int $status): string
     {
         return match (true) {
+            $exception instanceof FormIsRefused => $exception->getMessage().' '.self::REFUSED_FORM_HINT,
             Response::HTTP_NOT_FOUND === $status => self::NOT_FOUND_MESSAGE,
             $status >= Response::HTTP_INTERNAL_SERVER_ERROR => self::SERVER_MESSAGE,
             default => self::REQUEST_MESSAGE,
         };
-    }
-
-    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
-    private function referenceFor(Throwable $exception, string $log): string
-    {
-        $reference = bin2hex(random_bytes(4));
-        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
-
-        return $reference;
     }
 
     private function render(int $status, string $message, ?string $reference): string

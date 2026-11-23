@@ -34,10 +34,17 @@ use InvalidArgumentException;
 use LogicException;
 use NoDiscard;
 use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
+use Symfony\Component\Lock\LockFactory;
 
 // Because the build lane calls this for one task at a time, a run stops at the first failed step and never retries it: sending a failure back to the builder is the next task.
 final readonly class BuildTask
 {
+    // Fixed words, because the message of a lock store's failure can name where the store keeps its locks.
+    public const string START_NOT_LOCKED = 'the start of the run could not be locked';
+
+    public const string START_BUSY = 'another run of this task is starting';
+
     public function __construct(
         private IssueReads $issues,
         private BuildCheckout $checkout,
@@ -48,37 +55,97 @@ final readonly class BuildTask
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
+        private PushRemoteCheck $remoteCheck,
+        private LockFactory $locks,
     ) {
     }
 
     /**
      * @throws BuildStepNotRecorded
+     * @throws PushRemoteRefused
      */
     #[NoDiscard('the outcome says which step the run stopped at')]
     public function run(BuildTaskRequest $request): BuildTaskOutcome
     {
-        $task = $this->readTask($request);
+        // Before anything is read, recorded or pushed, because a remote outside the configured repository makes every later step act on two repositories.
+        $refusal = $this->remoteCheck->failureOf($request);
+
+        if (null !== $refusal) {
+            throw PushRemoteRefused::because($refusal);
+        }
+
+        $run = BuildRun::startedFor($request);
+        $task = $this->startInOrder($run, $request);
 
         if (!$task instanceof ListedIssue) {
-            $this->record($request, BuildStep::Task, $task);
-
             return new BuildTaskOutcome(BuildStep::Task, $task, null);
         }
 
-        return $this->runSteps($request, $task);
+        return $this->runSteps($request, $run, $task);
+    }
+
+    // Under a lock of the task from the issue read until its row is recorded, because the task page takes the run whose task row comes last in the ledger as the run started last, so a run that started earlier must not record its task row after a later one; taken without waiting, so a stalled holder never blocks the next run, and a run that cannot take it records its failed task row outside the lock and runs no other step, which is right even when the holder records its task row afterwards, because the page then shows the holder, the run that goes on.
+    /**
+     * @throws BuildStepNotRecorded
+     */
+    private function startInOrder(BuildRun $run, BuildTaskRequest $request): ListedIssue|string
+    {
+        $lock = $this->locks->createLock($run->startLockKey(), ttl: null);
+
+        try {
+            $failure = $lock->acquire(blocking: false) ? null : self::START_BUSY;
+        } catch (ExceptionInterface) {
+            $failure = self::START_NOT_LOCKED;
+        }
+
+        if (null !== $failure) {
+            $this->record($run, BuildStep::Task, $failure);
+
+            return $failure;
+        }
+
+        try {
+            $task = $this->readTask($request);
+            $this->record($run, BuildStep::Task, $task instanceof ListedIssue ? null : $task);
+
+            return $task;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function record(BuildRun $run, BuildStep $step, ?string $failure): void
+    {
+        $payload = $run->stepPayload($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure);
+        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
+
+        if (!$result->succeeded()) {
+            throw BuildStepNotRecorded::for($run, $step, (string) $result->failure);
+        }
+    }
+
+    // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
+    private function readTask(BuildTaskRequest $request): ListedIssue|string
+    {
+        try {
+            $issue = $this->issues->readOpen($request->project, $request->issue);
+        } catch (ForgeReadFailed|ForgeRateLimited $failure) {
+            return $failure->getMessage();
+        }
+
+        return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
     /**
      * @throws BuildStepNotRecorded
      */
-    private function runSteps(BuildTaskRequest $request, ListedIssue $task): BuildTaskOutcome
+    private function runSteps(BuildTaskRequest $request, BuildRun $run, ListedIssue $task): BuildTaskOutcome
     {
         $results = [];
 
-        foreach (BuildStep::cases() as $step) {
+        // From the second step on, because startInOrder() reads and records the first, the task, which the other steps need.
+        foreach (array_slice(BuildStep::cases(), 1) as $step) {
             $result = match ($step) {
-                // Read before the other steps, because they need the task it returns.
-                BuildStep::Task => null,
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
@@ -92,12 +159,12 @@ final readonly class BuildTask
             $results[$step->value] = $result;
 
             if ($result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion) {
-                return $this->park($request, $task, $result->question);
+                return $this->park($run, $task, $result->question);
             }
 
             $failure = $this->failureIn($result);
 
-            $this->record($request, $step, $failure);
+            $this->record($run, $step, $failure);
 
             if (null !== $failure) {
                 return new BuildTaskOutcome($step, $failure, $task);
@@ -105,38 +172,6 @@ final readonly class BuildTask
         }
 
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
-    }
-
-    // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
-    private function park(BuildTaskRequest $request, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
-    {
-        try {
-            $this->parkedTasks->park($request->project, $request->issue, $question);
-        } catch (TaskNotParked $notParked) {
-            $this->record($request, BuildStep::BuildJob, $notParked->getMessage());
-
-            return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
-        }
-
-        return new BuildTaskOutcome(BuildStep::BuildJob, null, $task);
-    }
-
-    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
-    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
-    {
-        return is_string($result) ? $result : null;
-    }
-
-    // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
-    private function readTask(BuildTaskRequest $request): ListedIssue|string
-    {
-        try {
-            $issue = $this->issues->readOpen($request->project, $request->issue);
-        } catch (ForgeReadFailed|ForgeRateLimited $failure) {
-            return $failure->getMessage();
-        }
-
-        return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
     private function updateMirror(BuildTaskRequest $request): ?string
@@ -211,6 +246,26 @@ final readonly class BuildTask
         return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
     }
 
+    // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
+    private function park(BuildRun $run, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
+    {
+        try {
+            $this->parkedTasks->park($run, $question);
+        } catch (TaskNotParked $notParked) {
+            $this->record($run, BuildStep::BuildJob, $notParked->getMessage());
+
+            return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
+        }
+
+        return new BuildTaskOutcome(BuildStep::BuildJob, null, $task);
+    }
+
+    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
+    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
+    {
+        return is_string($result) ? $result : null;
+    }
+
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
     private function changeTextOf(string $text): ChangeText|string
     {
@@ -226,23 +281,5 @@ final readonly class BuildTask
         $brief = new BuildBrief($task->title."\n\n".$task->body, [], null);
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
-    }
-
-    private function record(BuildTaskRequest $request, BuildStep $step, ?string $failure): void
-    {
-        // Because the title and body are untrusted text, the payload names the task by its number only.
-        $payload = json_encode([
-            'project' => $request->project,
-            'task' => (string) $request->issue,
-            'step' => $step->value,
-            'outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value,
-            'failure' => $failure,
-        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
-
-        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
-
-        if (!$result->succeeded()) {
-            throw BuildStepNotRecorded::for($request, $step, (string) $result->failure);
-        }
     }
 }

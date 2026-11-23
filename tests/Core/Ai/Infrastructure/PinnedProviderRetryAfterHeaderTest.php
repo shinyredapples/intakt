@@ -57,13 +57,6 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
 
     private AccountWindowsOnAClock $accounts;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-19T12:00:00.400000+00:00');
-        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
-        $this->accounts = new AccountWindowsOnAClock($this->clock, [self::ROUTER->value => [Account::DEFAULT]]);
-    }
-
     #[DataProvider('retryAfterHeaders')]
     public function testARouter429CoolsThePinAndTheAccountForTheRetryAfterHeaderAndTheNextCallIsSkippedWithoutARequest(string $header, int $seconds, ?string $now = null): void
     {
@@ -129,6 +122,13 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         yield 'delta seconds with a trailing NUL' => ["137\0"];
     }
 
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-19T12:00:00.400000+00:00');
+        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
+        $this->accounts = new AccountWindowsOnAClock($this->clock, [self::ROUTER->value => [Account::DEFAULT]]);
+    }
+
     /**
      * @param list<string> $headers
      */
@@ -158,16 +158,6 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         return new MessageBag(Message::ofUser('Review.'));
     }
 
-    private function account(): Account
-    {
-        return new Account(self::ROUTER, Account::DEFAULT);
-    }
-
-    private function pin(): PinnedProvider
-    {
-        return new PinnedProvider($this->account(), 'router');
-    }
-
     private function failureOf(callable $call): Throwable
     {
         try {
@@ -177,5 +167,15 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         }
 
         self::fail('The call was expected to fail.');
+    }
+
+    private function pin(): PinnedProvider
+    {
+        return new PinnedProvider($this->account(), 'router');
+    }
+
+    private function account(): Account
+    {
+        return new Account(self::ROUTER, Account::DEFAULT);
     }
 }

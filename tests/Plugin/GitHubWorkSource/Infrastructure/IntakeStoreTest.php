@@ -70,16 +70,6 @@ final class IntakeStoreTest extends KernelTestCase
     private EntityManagerInterface $entities;
     private IntakeStore $store;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->store = new IntakeStore($entities);
-    }
-
     public function testAStoredIssueIsReadBackAsTheItemItWasStoredFrom(): void
     {
         $listed = Issues::task(7, ['intakt', 'priority:high'], ['body' => "Waits for #3\nWaits for whatever", 'due' => '2026-12-01T09:30:00Z', 'updatedAt' => '2026-11-10T10:00:00Z']);
@@ -626,6 +616,7 @@ final class IntakeStoreTest extends KernelTestCase
 
         $failures = $this->store->failuresOf('alpha');
         $plan = new IntakeRules('intakt')->planOf(array_map(static fn (StoredIssue $issue): QueuedIssue => $issue->queued(), $this->store->issuesOf('alpha')), $failures);
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
         self::assertSame([7 => 'the build ran out of attempts'], $failures);
         self::assertSame([], $plan->ready);
         self::assertSame(['depends on #7, which failed for good: the build ran out of attempts'], array_map(static fn ($held): string => $held->reason, $plan->held));
@@ -657,6 +648,16 @@ final class IntakeStoreTest extends KernelTestCase
         new IntakeStore(self::createStub(EntityManagerInterface::class))->issuesOf('alpha');
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->store = new IntakeStore($entities);
+    }
+
     private function heldWhileRecording(IntakeStore $loser, SyncState $readBefore): ?ProjectHeldByAnotherWriter
     {
         try {
@@ -666,16 +667,6 @@ final class IntakeStoreTest extends KernelTestCase
         }
 
         return null;
-    }
-
-    /**
-     * @param list<StoredIssue> $issues
-     */
-    private function record(string $project, array $issues, ?string $validator): void
-    {
-        $readBefore = $this->store->syncStateOf($project);
-
-        self::assertTrue($this->store->recordIfStill($project, $readBefore, new ListingRows($issues, $validator)));
     }
 
     private function stored(ListedIssue $listed, string $project = 'alpha'): StoredIssue
@@ -692,5 +683,15 @@ final class IntakeStoreTest extends KernelTestCase
         $issue->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => in_array($account, self::WRITERS, true)));
 
         return $issue;
+    }
+
+    /**
+     * @param list<StoredIssue> $issues
+     */
+    private function record(string $project, array $issues, ?string $validator): void
+    {
+        $readBefore = $this->store->syncStateOf($project);
+
+        self::assertTrue($this->store->recordIfStill($project, $readBefore, new ListingRows($issues, $validator)));
     }
 }

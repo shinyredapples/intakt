@@ -59,6 +59,12 @@ final readonly class EscalateRecurringP1Handler
         }
     }
 
+    // The same lock for the escalation and the record of its failure, so the two never write for one key at once.
+    public static function lockNameOf(string $key): string
+    {
+        return self::LOCK_PREFIX.hash('sha256', $key);
+    }
+
     // Once per round and key: what the ledger holds for them stands, so a redelivery asks no model and records nothing twice, also after a failure.
     private function settle(EscalateRecurringP1 $command): void
     {
@@ -78,6 +84,24 @@ final readonly class EscalateRecurringP1Handler
         }
 
         $this->review($round, $command);
+    }
+
+    private function reuse(EscalateRecurringP1 $command, KeptVerdict $kept): void
+    {
+        $this->ledger->escalationVerdictReused(new EscalationVerdictReused($command->round, $command->finding, $command->key, $kept->outcome, $kept->round));
+    }
+
+    // Asked again under the round's lock, because the key's lock can expire during a long strong-tier call and a redelivery of the same message may then have settled the round and key already.
+    /**
+     * @param Closure(): void $write
+     */
+    private function settleOnce(ReviewRound $round, EscalateRecurringP1 $command, Closure $write): void
+    {
+        $this->rounds->withLockedRound($round->id(), function () use ($command, $write): void {
+            if (null === $this->recorded->recordedFor($command->round, $command->key)) {
+                $write();
+            }
+        });
     }
 
     private function review(ReviewRound $round, EscalateRecurringP1 $command): void
@@ -101,10 +125,11 @@ final readonly class EscalateRecurringP1Handler
         $this->keep($round, $command, $result->verdict);
     }
 
-    // The same lock for the escalation and the record of its failure, so the two never write for one key at once.
-    public static function lockNameOf(string $key): string
+    private function failed(ReviewRound $round, EscalateRecurringP1 $command, string $reason): void
     {
-        return self::LOCK_PREFIX.hash('sha256', $key);
+        $this->settleOnce($round, $command, function () use ($command, $reason): void {
+            $this->ledger->escalationFailed(new EscalationReviewFailed($command->round, $command->finding, $command->key, $reason));
+        });
     }
 
     private function answerOf(ReviewRound $round, EscalateRecurringP1 $command, EscalationRequest $request): EscalationReviewed|EscalationFailed
@@ -120,26 +145,6 @@ final readonly class EscalateRecurringP1Handler
         } catch (Throwable $failure) {
             throw EscalationCallFailed::of($command->key, $failure);
         }
-    }
-
-    private function failed(ReviewRound $round, EscalateRecurringP1 $command, string $reason): void
-    {
-        $this->settleOnce($round, $command, function () use ($command, $reason): void {
-            $this->ledger->escalationFailed(new EscalationReviewFailed($command->round, $command->finding, $command->key, $reason));
-        });
-    }
-
-    // Asked again under the round's lock, because the key's lock can expire during a long strong-tier call and a redelivery of the same message may then have settled the round and key already.
-    /**
-     * @param Closure(): void $write
-     */
-    private function settleOnce(ReviewRound $round, EscalateRecurringP1 $command, Closure $write): void
-    {
-        $this->rounds->withLockedRound($round->id(), function () use ($command, $write): void {
-            if (null === $this->recorded->recordedFor($command->round, $command->key)) {
-                $write();
-            }
-        });
     }
 
     // In one transaction under the round's lock, so a refused event takes the kept verdict back; another writer that kept the key first wins, and this round reuses its verdict.
@@ -158,10 +163,5 @@ final readonly class EscalateRecurringP1Handler
 
             $this->ledger->escalationReviewed(new EscalationVerdictKept($command->round, $command->finding, $command->key, $verdict->outcome, $verdict->reasons));
         });
-    }
-
-    private function reuse(EscalateRecurringP1 $command, KeptVerdict $kept): void
-    {
-        $this->ledger->escalationVerdictReused(new EscalationVerdictReused($command->round, $command->finding, $command->key, $kept->outcome, $kept->round));
     }
 }

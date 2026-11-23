@@ -232,16 +232,6 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
     }
 
     /**
-     * @return array<string, string>
-     */
-    private function phoneRulesOf(string $sheet): array
-    {
-        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $sheet, $blocks);
-
-        return $this->rulesOf(implode("\n", $blocks[1]));
-    }
-
-    /**
      * @return list<string>
      */
     private function sheets(string ...$names): array
@@ -252,6 +242,16 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         $addresses = array_map(static fn (string $name): string => (string) $page->filter('link[rel="stylesheet"][href*="/'.$name.'-"]')->attr('href'), $names);
 
         return array_values(array_map($this->servedAsset(...), $addresses));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function phoneRulesOf(string $sheet): array
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $sheet, $blocks);
+
+        return $this->rulesOf(implode("\n", $blocks[1]));
     }
 
     private function servedAsset(string $address): string

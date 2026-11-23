@@ -40,11 +40,6 @@ final class MercureLiveUpdatesTest extends TestCase
 
     private BufferingLogger $log;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     public function testAnEventIsPostedToTheHubOnItsTopicWithItsTurboStream(): void
     {
         $this->updates($this->hubThatAccepts())->publish(new LiveEvent(self::TOPIC, self::STREAM));
@@ -102,6 +97,24 @@ final class MercureLiveUpdatesTest extends TestCase
 
         self::assertSame([['warning', self::WARNING, self::TOPIC, InvalidArgumentException::class]], $this->loggedWarnings());
         self::assertSame([], $this->posted);
+    }
+
+    public function testAnEventTheHubTookIsReportedAsDelivered(): void
+    {
+        self::assertTrue($this->updates($this->hubThatAccepts())->publish(new LiveEvent(self::TOPIC, self::STREAM)));
+    }
+
+    public function testAnEventTheHubRefusedIsReportedAsNotDelivered(): void
+    {
+        $delivered = $this->updates(new MockHttpClient(new MockResponse('down', ['http_code' => 503])))->publish(new LiveEvent(self::TOPIC, self::STREAM));
+
+        self::assertFalse($delivered);
+        self::assertCount(1, $this->loggedWarnings());
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
     }
 
     private function hubThatAccepts(): MockHttpClient

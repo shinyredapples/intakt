@@ -26,11 +26,6 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
 {
     private const int FIRST_CASE_LINE = 11;
 
-    protected function ruleFor(string $root): BareSerializerFormatRule
-    {
-        return new BareSerializerFormatRule();
-    }
-
     /**
      * @return iterable<string, array{list<string>}>
      */
@@ -208,6 +203,11 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
 
         self::assertStringContainsString('src/JsonShortcut.php:11 intakt.bareSerializerFormat', $findings);
         self::assertStringNotContainsString('src/JsonShortcut.php:16', $findings);
+    }
+
+    protected function ruleFor(string $root): BareSerializerFormatRule
+    {
+        return new BareSerializerFormatRule();
     }
 
     /**

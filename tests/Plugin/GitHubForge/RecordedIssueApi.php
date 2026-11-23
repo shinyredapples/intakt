@@ -69,6 +69,13 @@ final class RecordedIssueApi
         return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments());
     }
 
+    public static function fixture(string $name): string
+    {
+        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+
+        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
     /**
      * @return array{GitHubCalls, CheckedInstallationTokens}
      */
@@ -86,40 +93,6 @@ final class RecordedIssueApi
         $this->reserve = FreshReadings::reserveOf($readings, $tokens, $clock);
 
         return [new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens)];
-    }
-
-    public static function fixture(string $name): string
-    {
-        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
-
-        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function keepConditions(array $options): ?string
-    {
-        $condition = null;
-        $headers = $options['headers'] ?? [];
-        foreach (is_array($headers) ? $headers : [] as $header) {
-            if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
-                $condition = substr($header, strlen('If-None-Match: '));
-                $this->conditions[] = $condition;
-            }
-        }
-
-        return $condition;
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function answerHistory(array $options): ResponseInterface
-    {
-        $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
-
-        return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql, ['response_headers' => $this->graphqlHeaders]);
     }
 
     /**
@@ -151,6 +124,33 @@ final class RecordedIssueApi
         }
 
         return new MockResponse($body, ['response_headers' => $headers]);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function keepConditions(array $options): ?string
+    {
+        $condition = null;
+        $headers = $options['headers'] ?? [];
+        foreach (is_array($headers) ? $headers : [] as $header) {
+            if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
+                $condition = substr($header, strlen('If-None-Match: '));
+                $this->conditions[] = $condition;
+            }
+        }
+
+        return $condition;
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function answerHistory(array $options): ResponseInterface
+    {
+        $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
+
+        return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql, ['response_headers' => $this->graphqlHeaders]);
     }
 
     // A validator of its own for every page after the first, as GitHub sends, so a test sees that each page is asked again with its own.

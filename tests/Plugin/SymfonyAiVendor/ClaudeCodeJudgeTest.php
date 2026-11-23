@@ -136,16 +136,6 @@ final class ClaudeCodeJudgeTest extends KernelTestCase
         self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
     }
 
-    private function request(): JudgeRequest
-    {
-        return new JudgeRequest('Add the judge.', [$this->finding('F1', Severity::P2), $this->finding('F2', Severity::P3)], new UuidV7(), new Paths());
-    }
-
-    private function finding(string $id, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, null, null, null, 'A finding.', FixableBy::Builder, false, null, null);
-    }
-
     private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor
     {
         $projects = ['alpha' => ['tiers' => ['light' => ['provider' => 'claude_code', 'model' => 'haiku']]]];
@@ -157,5 +147,15 @@ final class ClaudeCodeJudgeTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(): JudgeRequest
+    {
+        return new JudgeRequest('Add the judge.', [$this->finding('F1', Severity::P2), $this->finding('F2', Severity::P3)], new UuidV7(), new Paths());
+    }
+
+    private function finding(string $id, Severity $severity): Finding
+    {
+        return new Finding($id, $severity, null, null, null, 'A finding.', FixableBy::Builder, false, null, null);
     }
 }

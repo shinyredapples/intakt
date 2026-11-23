@@ -117,18 +117,6 @@ final class RunBenchCommandTest extends TestCase
 
     private string $results;
 
-    // The checkouts go to a folder of the test, so it can see what the run leaves behind.
-    protected function setUp(): void
-    {
-        $this->workspace = sys_get_temp_dir().'/intakt-bench-run-'.bin2hex(random_bytes(4));
-        $this->results = $this->workspace.'-results';
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->workspace, $this->results]);
-    }
-
     public function testTheBenchCommandWithoutAProjectFailsAndWritesNoFile(): void
     {
         $tester = $this->runCommand([], $this->reviews());
@@ -301,6 +289,18 @@ final class RunBenchCommandTest extends TestCase
         self::assertSame([], glob($this->workspace.'/*'));
     }
 
+    // The checkouts go to a folder of the test, so it can see what the run leaves behind.
+    protected function setUp(): void
+    {
+        $this->workspace = sys_get_temp_dir().'/intakt-bench-run-'.bin2hex(random_bytes(4));
+        $this->results = $this->workspace.'-results';
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->workspace, $this->results]);
+    }
+
     private function checkoutsNow(): int
     {
         $entries = glob($this->workspace.'/*');
@@ -316,25 +316,6 @@ final class RunBenchCommandTest extends TestCase
         $files = glob($this->results.'/*.json');
 
         return false === $files ? [] : $files;
-    }
-
-    /**
-     * @param array<string, string> $input
-     */
-    private function runCommand(array $input, ChangeReviews $reviews): CommandTester
-    {
-        $panel = new Panel([new PanelReviewer(new ReviewerRole('role-1', 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1)], QuorumPolicy::All);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn($panel);
-        $command = new RunBenchCommand(
-            new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($reviews, new RunClassifier(new DefectMatcher())), $this->workspace),
-            new BenchReport(),
-            new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), new MockClock('2026-11-15 10:30:00'), $this->results),
-        );
-        $tester = new CommandTester($command);
-        $tester->execute($input);
-
-        return $tester;
     }
 
     /**
@@ -387,6 +368,25 @@ final class RunBenchCommandTest extends TestCase
         $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), new BlockReasons(), reviewers: [$reviewer]));
 
         return $reviews;
+    }
+
+    /**
+     * @param array<string, string> $input
+     */
+    private function runCommand(array $input, ChangeReviews $reviews): CommandTester
+    {
+        $panel = new Panel([new PanelReviewer(new ReviewerRole('role-1', 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1)], QuorumPolicy::All);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn($panel);
+        $command = new RunBenchCommand(
+            new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($reviews, new RunClassifier(new DefectMatcher())), $this->workspace),
+            new BenchReport(),
+            new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), new MockClock('2026-11-15 10:30:00'), $this->results),
+        );
+        $tester = new CommandTester($command);
+        $tester->execute($input);
+
+        return $tester;
     }
 
     private function plantedLine(): int

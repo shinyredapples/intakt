@@ -19,8 +19,21 @@ final class DashboardLedger implements Ledger
     /** @var list<RecordedEvent> */
     private array $recorded = [];
 
+    private bool $failNextAppend = false;
+
+    public function failNextAppend(): void
+    {
+        $this->failNextAppend = true;
+    }
+
     public function append(LedgerEvent $event): AppendResult
     {
+        if ($this->failNextAppend) {
+            $this->failNextAppend = false;
+
+            return AppendResult::failed('disk full');
+        }
+
         $this->recorded[] = new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
         return AppendResult::appended(Uuid::v7());
@@ -185,14 +198,6 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
-    /**
-     * @return array<string, int|string>
-     */
-    private function inDiscount(string $id, string $severity, int $line): array
-    {
-        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
-    }
-
     public function judgeToFixAtLine7OfA(string $round, string $text): void
     {
         $this->add(LedgerEventKind::JudgeDone, [
@@ -340,6 +345,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason]);
     }
 
+    public function computeMain(string $project, string $main, string $state): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '']);
+    }
+
     public function failHeadWithoutCause(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
@@ -361,6 +371,14 @@ final class DashboardLedger implements Ledger
     public function recordBuildStep(array $payload): void
     {
         $this->add(LedgerEventKind::BuildStepEnded, $payload);
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function inDiscount(string $id, string $severity, int $line): array
+    {
+        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
     }
 
     /**

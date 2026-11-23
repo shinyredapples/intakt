@@ -55,7 +55,7 @@ final readonly class RunBuildJob
 
     private const float CPUS = 2.0;
 
-    // Fixed, because sizing the limits for each task is plan task T60 (#1710); the CLI ends its session after this many turns.
+    // Fixed, because sizing the limits for each task is plan task T60 (#342); the CLI ends its session after this many turns.
     private const int MAX_TURNS = 100;
 
     // Below the job's own limit, because the runner's kill keeps no output, while the script's cut still bundles what the session committed.
@@ -146,16 +146,6 @@ final readonly class RunBuildJob
         return $file;
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
-    {
-        try {
-            return $this->jobs->run($spec);
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
-        }
-    }
-
     /**
      * @param list<JobInput> $inputs
      */
@@ -169,6 +159,16 @@ final readonly class RunBuildJob
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),
         );
+    }
+
+    private function ranJob(JobSpec $spec): ?JobResult
+    {
+        try {
+            return $this->jobs->run($spec);
+        } catch (JobOutputRefused) {
+            // No result, because the job wrote what the runner refuses to read.
+            return null;
+        }
     }
 
     // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.

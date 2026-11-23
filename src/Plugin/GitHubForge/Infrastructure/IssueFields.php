@@ -39,21 +39,6 @@ final readonly class IssueFields
     }
 
     /**
-     * @param array<mixed> $issue
-     *
-     * @return list<string>
-     */
-    private function labelsOf(array $issue): array
-    {
-        $labels = $issue['labels'] ?? [];
-        if (!is_array($labels)) {
-            throw new ForgeReadFailed('GitHub listed an issue with labels this forge cannot read.');
-        }
-
-        return array_values(array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), $labels));
-    }
-
-    /**
      * @param array<mixed> $data
      */
     private function at(array $data, string ...$keys): mixed
@@ -74,5 +59,20 @@ final readonly class IssueFields
         $value = $this->at($data, ...$keys);
 
         return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
+    }
+
+    /**
+     * @param array<mixed> $issue
+     *
+     * @return list<string>
+     */
+    private function labelsOf(array $issue): array
+    {
+        $labels = $issue['labels'] ?? [];
+        if (!is_array($labels)) {
+            throw new ForgeReadFailed('GitHub listed an issue with labels this forge cannot read.');
+        }
+
+        return array_values(array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), $labels));
     }
 }

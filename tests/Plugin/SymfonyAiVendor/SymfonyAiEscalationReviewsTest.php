@@ -186,11 +186,6 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         }
     }
 
-    private function messages(): MessageBag
-    {
-        return new MessageBag(Message::forSystem('Judge the finding.'), Message::ofUser('The finding.'));
-    }
-
     private function reviews(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger(), LoggerInterface $log = new NullLogger()): SymfonyAiEscalationReviews
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => [
@@ -201,6 +196,11 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
 
         return $this->through(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $ledger, $log);
+    }
+
+    private function messages(): MessageBag
+    {
+        return new MessageBag(Message::forSystem('Judge the finding.'), Message::ofUser('The finding.'));
     }
 
     private function through(TierInvoker $tiers, InMemoryLedger $ledger, LoggerInterface $log = new NullLogger()): SymfonyAiEscalationReviews

@@ -93,29 +93,6 @@ final class GuardMainCommandTest extends TestCase
     private BeforeTheLock $store;
     private ?string $path = null;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
-        mkdir($this->keys);
-        $this->ledger = new HaltLedger();
-        $payloads = new LedgerPayloads(StoredSerializerFactory::create());
-        $this->halts = new LedgerHalts($this->ledger, $payloads);
-        $this->notices = new LedgerOwnerPushNotices($this->ledger, $payloads);
-        $this->store = new BeforeTheLock(new InMemoryStore());
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        if (null !== $this->path) {
-            putenv('PATH='.$this->path);
-        }
-        $this->repository->remove();
-        new Filesystem()->remove($this->keys);
-    }
-
     public function testASeededUnsignedCommitHaltsTheProjectWithACardNamingTheCommitAndExitsWithOne(): void
     {
         $seen = $this->repository->commitEmpty('Seen');
@@ -481,34 +458,27 @@ final class GuardMainCommandTest extends TestCase
         self::assertStringContainsString(sprintf('notice <info>demo</info>: commit %s owner_signed', $owner), $tester->getDisplay());
     }
 
-    private function onlyStandingCard(): OwnerCard
+    #[Override]
+    protected function setUp(): void
     {
-        $standing = $this->halts->standing();
-        self::assertCount(1, $standing);
-
-        return $standing[0];
+        $this->repository = new TemporaryRepository();
+        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
+        mkdir($this->keys);
+        $this->ledger = new HaltLedger();
+        $payloads = new LedgerPayloads(StoredSerializerFactory::create());
+        $this->halts = new LedgerHalts($this->ledger, $payloads);
+        $this->notices = new LedgerOwnerPushNotices($this->ledger, $payloads);
+        $this->store = new BeforeTheLock(new InMemoryStore());
     }
 
-    /**
-     * @param array<string, list<string>> $options
-     */
-    private function whenTheGuardRuns(string $seen, array $options): CommandTester
+    #[Override]
+    protected function tearDown(): void
     {
-        return $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $this->repository->path, 'last-seen-head' => $seen, ...$options]);
-    }
-
-    /**
-     * @param array<string, string|list<string>> $input
-     */
-    private function whenTheGuardRunsWith(array $input): CommandTester
-    {
-        $guard = new GuardMain(new CheckMain(new HardenedGit(), new Filesystem()), $this->halts, $this->notices, new LockFactory($this->store));
-        $application = new Application();
-        $application->addCommand(new GuardMainCommand($guard));
-        $tester = new CommandTester($application->find(GuardMainCommand::NAME));
-        $tester->execute($input);
-
-        return $tester;
+        if (null !== $this->path) {
+            putenv('PATH='.$this->path);
+        }
+        $this->repository->remove();
+        new Filesystem()->remove($this->keys);
     }
 
     // Through the application, because a ledger that throws on a read is caught and reported there, as on a real install.
@@ -536,6 +506,20 @@ final class GuardMainCommandTest extends TestCase
         return $clone;
     }
 
+    /**
+     * @param array<string, string|list<string>> $input
+     */
+    private function whenTheGuardRunsWith(array $input): CommandTester
+    {
+        $guard = new GuardMain(new CheckMain(new HardenedGit(), new Filesystem()), $this->halts, $this->notices, new LockFactory($this->store));
+        $application = new Application();
+        $application->addCommand(new GuardMainCommand($guard));
+        $tester = new CommandTester($application->find(GuardMainCommand::NAME));
+        $tester->execute($input);
+
+        return $tester;
+    }
+
     // A git on the PATH that moves main right after the watchdog reads it, because only that forces a push between two of the guard's reads.
     private function gitMovesMainAfterItsFirstRead(string $commit): void
     {
@@ -548,6 +532,11 @@ final class GuardMainCommandTest extends TestCase
         $this->gitMovesMainAfterARead(sprintf('if [ -f %1$s ]; then %2$s update-ref refs/heads/main %3$s; rm %1$s; else %2$s update-ref refs/heads/main %4$s; touch %1$s; fi', $flip, $this->realGit(), $one, $other));
     }
 
+    private function realGit(): string
+    {
+        return escapeshellarg(new ExecutableFinder()->find('git') ?? self::fail('git is not installed'));
+    }
+
     private function gitMovesMainAfterARead(string $move): void
     {
         $bin = $this->keys.'/bin';
@@ -556,11 +545,6 @@ final class GuardMainCommandTest extends TestCase
         chmod($bin.'/git', 0o755);
         $this->path = (string) getenv('PATH');
         putenv('PATH='.$bin.PATH_SEPARATOR.$this->path);
-    }
-
-    private function realGit(): string
-    {
-        return escapeshellarg(new ExecutableFinder()->find('git') ?? self::fail('git is not installed'));
     }
 
     private function privateKey(string $name): string
@@ -578,5 +562,21 @@ final class GuardMainCommandTest extends TestCase
         $parts = explode(' ', trim((string) file_get_contents($this->privateKey($name).'.pub')));
 
         return $parts[0].' '.$parts[1];
+    }
+
+    /**
+     * @param array<string, list<string>> $options
+     */
+    private function whenTheGuardRuns(string $seen, array $options): CommandTester
+    {
+        return $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $this->repository->path, 'last-seen-head' => $seen, ...$options]);
+    }
+
+    private function onlyStandingCard(): OwnerCard
+    {
+        $standing = $this->halts->standing();
+        self::assertCount(1, $standing);
+
+        return $standing[0];
     }
 }

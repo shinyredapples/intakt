@@ -12,8 +12,10 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
+use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -32,7 +34,9 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ParkedTasks::class)]
 #[CoversClass(ParkedTaskRecord::class)]
 #[CoversClass(TaskNotParked::class)]
+#[UsesClass(AppendResult::class)]
 #[UsesClass(BuildQuestion::class)]
+#[UsesClass(BuildRun::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
 final class ParkedTasksOnSqliteTest extends KernelTestCase
@@ -43,29 +47,16 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-parked-tasks-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->root);
-        $this->resetDatabase();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-        parent::tearDown();
-    }
-
     public function testAParkedTaskIsStoredWithItsQuestionChoicesAndRecommendationAndAnAskedStep(): void
     {
-        $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
 
         self::assertSame(
             [['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00']],
             $this->parkedRows(),
         );
         self::assertSame(
-            [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","step":"build_job","outcome":"asked","failure":null}']],
+            [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null}']],
             $this->ledgerRows(),
         );
     }
@@ -73,9 +64,9 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     public function testATaskParkedAgainKeepsOneRowWithTheNewerQuestion(): void
     {
         $parked = $this->parkedTasks();
-        $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
 
-        $parked->park('sample', 42, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'));
 
         self::assertSame(
             [['question' => 'Which name?', 'recommendation' => 'a']],
@@ -85,7 +76,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     public function testAQuestionWithANulCharacterInsideItsTextsIsStoredWhole(): void
     {
-        $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack('{"question":"Keep a\u0000b?","choices":["a\u0000b","c"],"recommendation":"a\u0000b"}'));
+        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Keep a\u0000b?","choices":["a\u0000b","c"],"recommendation":"a\u0000b"}'));
 
         self::assertSame(
             [['question' => "Keep a\0b?", 'choices' => ["a\0b", 'c'], 'recommendation' => "a\0b"]],
@@ -113,7 +104,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         }
 
         $parked = $this->parkedTasks();
-        $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
         $this->connection()->executeStatement("CREATE TRIGGER refuse_event BEFORE INSERT ON ledger_event BEGIN SELECT RAISE(ROLLBACK, 'refused'); END");
 
         $failure = $this->failureOfParking($parked);
@@ -175,6 +166,32 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertSame([], $this->ledgerRows());
     }
 
+    public function testAParkingWhoseLedgerDidNotRecordTheAskedStepLeavesTheTaskUnparkedAndNoTransactionOpen(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturn(AppendResult::failed('the ledger refused the event'));
+
+        $failure = $this->failureOfParking(new ParkedTasks($this->connection(), $ledger, $this->registry(), $this->clock()));
+
+        self::assertSame(self::NOT_PARKED, $failure);
+        self::assertFalse($this->connection()->isTransactionActive());
+        self::assertSame([], $this->parkedRows());
+        self::assertSame([], $this->ledgerRows());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-parked-tasks-'.bin2hex(random_bytes(4));
+        new Filesystem()->mkdir($this->root);
+        $this->resetDatabase();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
+        parent::tearDown();
+    }
+
     // The rollback journal is set, because the database file outlives a test and a review test may have left it in WAL, where a reader does not refuse a commit.
     private function resetDatabase(): void
     {
@@ -187,27 +204,6 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
     }
 
-    private function failureOfParkingWhileTheReaderHolds(): string
-    {
-        // No wait, because SQLite would otherwise wait its busy timeout before it refuses the commit.
-        $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
-
-        return $this->failureOfParking($this->parkedTasks());
-    }
-
-    private function failureOfParking(ParkedTasks $parked): string
-    {
-        try {
-            $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
-        } catch (TaskNotParked $notParked) {
-            self::assertNull($notParked->getPrevious());
-
-            return $notParked->getMessage();
-        }
-
-        self::fail('The task was parked.');
-    }
-
     private function readerHoldingASharedLock(): Connection
     {
         $path = $this->connection()->getParams()['path'] ?? self::fail('The test database is not an SQLite file.');
@@ -218,14 +214,17 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         return $reader;
     }
 
+    private function failureOfParkingWhileTheReaderHolds(): string
+    {
+        // No wait, because SQLite would otherwise wait its busy timeout before it refuses the commit.
+        $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
+
+        return $this->failureOfParking($this->parkedTasks());
+    }
+
     private function parkedTasks(): ParkedTasks
     {
         return new ParkedTasks($this->connection(), $this->ledger(), $this->registry(), $this->clock());
-    }
-
-    private function clock(): MockClock
-    {
-        return new MockClock('2026-11-20 11:00:00', 'Europe/Berlin');
     }
 
     /**
@@ -266,6 +265,19 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         return $this->manager()->getConnection();
     }
 
+    private function failureOfParking(ParkedTasks $parked): string
+    {
+        try {
+            $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
+        } catch (TaskNotParked $notParked) {
+            self::assertNull($notParked->getPrevious());
+
+            return $notParked->getMessage();
+        }
+
+        self::fail('The task was parked.');
+    }
+
     private function manager(): EntityManagerInterface
     {
         $manager = $this->registry()->getManager();
@@ -280,5 +292,10 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $registry);
 
         return $registry;
+    }
+
+    private function clock(): MockClock
+    {
+        return new MockClock('2026-11-20 11:00:00', 'Europe/Berlin');
     }
 }

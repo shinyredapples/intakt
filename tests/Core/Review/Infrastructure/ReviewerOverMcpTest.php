@@ -84,22 +84,6 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     private ?Kernel $server = null;
 
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $this->round = new RoundFixture(self::getContainer())->start(1);
-        $credential = self::getContainer()->get(ReviewCredential::class);
-        self::assertInstanceOf(ReviewCredential::class, $credential);
-        $this->credential = $credential;
-    }
-
-    protected function tearDown(): void
-    {
-        $this->server?->shutdown();
-        parent::tearDown();
-    }
-
     public function testAReviewWithToolsOverMcpReachesTheSameVerdictAsWithTheToolsInProcess(): void
     {
         $inProcess = $this->review(new ReviewerToolboxFactory()->create(...), 'read_file');
@@ -243,15 +227,20 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $client->sendRequest(new Psr18Client()->createRequest('POST', 'http://localhost/mcp/review'));
     }
 
-    // Through the container, so the configured mcp_server entry and its connection are what the test exercises.
-    private function mcpToolboxes(?ClientInterface $http = null): ReviewerMcpToolboxFactory
+    protected function setUp(): void
     {
-        $this->http = new RecordingHttpClient($http ?? new KernelHttpClient($this->server()));
-        self::getContainer()->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($this->credential, $this->http));
-        $factory = self::getContainer()->get(ReviewerMcpToolboxFactory::class);
-        self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $this->round = new RoundFixture(self::getContainer())->start(1);
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
+    }
 
-        return $factory;
+    protected function tearDown(): void
+    {
+        $this->server?->shutdown();
+        parent::tearDown();
     }
 
     // A kernel of its own, as the web server is a process of its own: the kernel under test resets its services before each request it handles, which would end the reviewer's call mid-way.
@@ -277,6 +266,17 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 
         return $reviewer->review($this->request(), $platform, 'reviewer-model');
+    }
+
+    // Through the container, so the configured mcp_server entry and its connection are what the test exercises.
+    private function mcpToolboxes(?ClientInterface $http = null): ReviewerMcpToolboxFactory
+    {
+        $this->http = new RecordingHttpClient($http ?? new KernelHttpClient($this->server()));
+        self::getContainer()->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($this->credential, $this->http));
+        $factory = self::getContainer()->get(ReviewerMcpToolboxFactory::class);
+        self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
+
+        return $factory;
     }
 
     /**

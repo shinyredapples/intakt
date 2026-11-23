@@ -95,20 +95,6 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
     /** @var list<string> */
     private array $calls = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->configuration = sys_get_temp_dir().'/intakt-sample-'.bin2hex(random_bytes(6)).'.yaml';
-        $this->seeded = $this->seedTheSampleProject();
-        $this->fixture->startOnPanel(new ConfiguredPanels(['alpha' => $this->seeded['review']])->panelFor('alpha'));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->configuration);
-        parent::tearDown();
-    }
-
     public function testTheSeededPanelPutsCorrectnessAndSecurityOnTheirOwnTierAndModel(): void
     {
         $this->deliverAll([RecordedAnswer::APPROVE, RecordedAnswer::APPROVE]);
@@ -143,27 +129,18 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
         self::assertSame([['approve', 0], ['approve', 0]], $this->verdicts());
     }
 
-    /**
-     * @return array{tiers: array<string, array{provider: string, model: non-empty-string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}
-     */
-    private function seedTheSampleProject(): array
+    protected function setUp(): void
     {
-        $keyed = [Provider::Anthropic, Provider::OpenAi];
-        $accounts = self::createStub(EnabledAccounts::class);
-        $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
-        $sample = new SampleProject($accounts, null);
-        self::assertSame($keyed, $sample->keyedProviders());
-        $sample->write($this->configuration, $keyed);
-
-        /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}>} $written */
-        $written = Yaml::parseFile($this->configuration);
-
-        return $written['projects'][SampleProject::NAME];
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->configuration = sys_get_temp_dir().'/intakt-sample-'.bin2hex(random_bytes(6)).'.yaml';
+        $this->seeded = $this->seedTheSampleProject();
+        $this->fixture->startOnPanel(new ConfiguredPanels(['alpha' => $this->seeded['review']])->panelFor('alpha'));
     }
 
-    private function modelOf(string $tier): string
+    protected function tearDown(): void
     {
-        return $this->seeded['tiers'][$tier]['provider'].' '.$this->seeded['tiers'][$tier]['model'];
+        new Filesystem()->remove($this->configuration);
+        parent::tearDown();
     }
 
     /**
@@ -212,6 +189,11 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
         );
     }
 
+    private function modelOf(string $tier): string
+    {
+        return $this->seeded['tiers'][$tier]['provider'].' '.$this->seeded['tiers'][$tier]['model'];
+    }
+
     /**
      * @return list<ReviewerState>
      */
@@ -236,5 +218,23 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
         }
 
         return $verdicts;
+    }
+
+    /**
+     * @return array{tiers: array<string, array{provider: string, model: non-empty-string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}
+     */
+    private function seedTheSampleProject(): array
+    {
+        $keyed = [Provider::Anthropic, Provider::OpenAi];
+        $accounts = self::createStub(EnabledAccounts::class);
+        $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
+        $sample = new SampleProject($accounts, null);
+        self::assertSame($keyed, $sample->keyedProviders());
+        $sample->write($this->configuration, $keyed);
+
+        /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}>} $written */
+        $written = Yaml::parseFile($this->configuration);
+
+        return $written['projects'][SampleProject::NAME];
     }
 }

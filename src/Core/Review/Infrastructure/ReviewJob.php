@@ -111,14 +111,6 @@ final readonly class ReviewJob
         return $file;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function commandFor(ReviewJobRequest $request): array
-    {
-        return ['/bin/sh', '-c', $this->filesystem->readFile($this->reviewScript), 'intakt-review', self::CHECKOUT, $request->head, self::PROMPT, $request->model->provider->value, $request->model->model];
-    }
-
     // Length-prefixed, so no project, head and reviewer names another's job; one id each, so the runner refuses a second run of the same reviewer on the same head while one runs.
     private function idOf(ReviewJobRequest $request): JobId
     {
@@ -126,6 +118,14 @@ final readonly class ReviewJob
         $key = implode('', array_map(static fn (string $part): string => strlen($part).':'.$part, $parts));
 
         return new JobId('review-'.substr(hash('sha256', $key), 0, 40));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function commandFor(ReviewJobRequest $request): array
+    {
+        return ['/bin/sh', '-c', $this->filesystem->readFile($this->reviewScript), 'intakt-review', self::CHECKOUT, $request->head, self::PROMPT, $request->model->provider->value, $request->model->model];
     }
 
     private function ranJob(JobSpec $spec): ?JobResult
@@ -154,15 +154,6 @@ final readonly class ReviewJob
         };
     }
 
-    // The script refuses before the CLI runs, so the log holds only its own lines and git's.
-    private function refusalIn(JobOutput $output): ?string
-    {
-        $refusals = array_filter(explode("\n", $output->contents(self::LOG) ?? ''), static fn (string $line): bool => str_starts_with($line, self::REFUSAL));
-        $last = array_last($refusals);
-
-        return null === $last ? null : substr($last, strlen(self::REFUSAL));
-    }
-
     private function answered(Provider $provider, JobOutput $output): ReviewJobAnswer
     {
         $status = $this->cliStatusIn($provider, $output);
@@ -172,6 +163,15 @@ final readonly class ReviewJob
         }
 
         return ReviewJobAnswer::read($provider, $output->contents(self::ANSWER) ?? '');
+    }
+
+    // The script refuses before the CLI runs, so the log holds only its own lines and git's.
+    private function refusalIn(JobOutput $output): ?string
+    {
+        $refusals = array_filter(explode("\n", $output->contents(self::LOG) ?? ''), static fn (string $line): bool => str_starts_with($line, self::REFUSAL));
+        $last = array_last($refusals);
+
+        return null === $last ? null : substr($last, strlen(self::REFUSAL));
     }
 
     // The last such line, because the script writes it after the CLI ended, and the CLI's own errors in the log come before it.

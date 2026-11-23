@@ -14,17 +14,6 @@ final class TestDurationsOutsideRootTest extends TestCase
 {
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-durations-'.bin2hex(random_bytes(6));
-        mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testATestFileOutsideTheRootIsLeftOutOfTheRecordedDurations(): void
     {
         $durations = new TestDurations('/work');
@@ -74,6 +63,17 @@ final class TestDurationsOutsideRootTest extends TestCase
         $durations = new TestDurations('/work/')->read([$this->reportNaming('/work/tests/Gates/GateTest.php')]);
 
         self::assertSame(['tests/Gates/GateTest.php', 'tests/InsideTest.php'], array_keys($durations));
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-durations-'.bin2hex(random_bytes(6));
+        mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function reportNaming(string $file): string

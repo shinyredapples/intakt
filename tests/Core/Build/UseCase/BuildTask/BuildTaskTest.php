@@ -25,6 +25,7 @@ use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
@@ -33,6 +34,8 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
@@ -93,6 +96,8 @@ use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PathGlob;
@@ -104,6 +109,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
@@ -119,19 +125,23 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
+use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(BuildTask::class)]
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskRequest::class)]
+#[CoversClass(BuildRun::class)]
 #[CoversClass(BuildStepNotRecorded::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
@@ -140,6 +150,8 @@ use Symfony\Component\Process\Process;
 #[CoversClass(PrePushCheck::class)]
 #[CoversClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(PushRemoteCheck::class)]
+#[UsesClass(PushRemoteRefused::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(TaskNotParked::class)]
 #[UsesClass(BuildQuestion::class)]
@@ -239,6 +251,7 @@ final class BuildTaskTest extends TestCase
     private string $output;
 
     private TemporaryRepository $remote;
+    private ?string $configuredRepository = null;
 
     private ?ProgramOnPath $programs = null;
 
@@ -248,6 +261,8 @@ final class BuildTaskTest extends TestCase
 
     private JobRunner $runner;
 
+    private LockFactory $locks;
+
     private JobRunner $checkRunner;
 
     private ?JobSpec $checked = null;
@@ -256,30 +271,37 @@ final class BuildTaskTest extends TestCase
 
     private RecordingChangeOpening $changes;
 
-    protected function setUp(): void
+    public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
-        $this->handBackFiles = new Filesystem();
-        $this->changes = new RecordingChangeOpening();
-        $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
-        $this->clone = $this->mirrors.'-clone';
-        $this->output = $this->mirrors.'-output';
-        $this->routing = new ConfiguredBuildRouting(['alpha' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => []]], new ModelRouting());
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $this->tiers = $tiers;
-        $this->runner = new ScriptedJobRunner($this->output);
-        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]);
-        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
+        $this->configuredRepository = 'acme/alpha';
+        $ledger = new InMemoryLedger();
+        $issues = $this->createMock(IssueReads::class);
+        $issues->expects(self::never())->method('readOpen');
+        $issues->expects(self::never())->method('listOpen');
+        $this->changes->checking = static fn () => self::fail('the forge was asked about the change');
+
+        try {
+            (void) $this->buildTask($issues, $this->checkout(), $ledger)->run($this->request(7, 'https://github.com/acme/beta.git'));
+            self::fail('the remote was not refused');
+        } catch (PushRemoteRefused $refused) {
+            self::assertStringContainsString('"https://github.com/acme/beta.git"', $refused->getMessage());
+            self::assertStringContainsString('"acme/alpha"', $refused->getMessage());
+        }
+
+        self::assertSame([], $ledger->payloads());
+        self::assertSame(0, $this->changes->calls);
+        self::assertNull($this->remoteTip());
     }
 
-    protected function tearDown(): void
+    public function testARemoteNamingTheConfiguredRepositoryWithAGitSuffixAndOtherLetterCaseIsAccepted(): void
     {
-        $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
-        $this->remote->remove();
+        $this->configuredRepository = 'acme/alpha';
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [])->run($this->request(7, 'https://GitHub.com/ACME/Alpha.git'));
+
+        self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
+        self::assertSame(['task'], array_column($this->stepsIn($ledger), 'step'));
     }
 
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
@@ -810,6 +832,94 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->mirrors);
     }
 
+    public function testEveryStepRowOfARunCarriesOneRunIdAndAnotherRunOfTheTaskAnother(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "failed 2\n", RunCheckJob::LOG => "tests failed\n"]);
+        $ledger = new InMemoryLedger();
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        (void) $this->taskOf($ledger, [Issues::task(8)])->run($this->request(7, $this->remote->path));
+
+        $runs = array_values(array_filter(array_column($ledger->payloads(), 'run'), is_string(...)));
+        self::assertCount(7, $runs);
+        self::assertCount(1, array_unique(array_slice($runs, 0, 6)));
+        self::assertNotSame($runs[0], $runs[6]);
+    }
+
+    public function testTheIssueReadAndTheTaskRowHappenWhileTheTasksStartLockIsHeld(): void
+    {
+        $held = [];
+        $reads = self::createStub(IssueReads::class);
+        $reads->method('readOpen')->willReturnCallback(function () use (&$held): null {
+            $held['read'] = !$this->startLockOf(7)->acquire(false);
+
+            return null;
+        });
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback(function () use (&$held): AppendResult {
+            $held['row'] = !$this->startLockOf(7)->acquire(false);
+
+            return AppendResult::appended(Uuid::v4());
+        });
+
+        (void) $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+
+        self::assertSame(['read' => true, 'row' => true], $held);
+        self::assertTrue($this->startLockOf(7)->acquire(false));
+    }
+
+    public function testTheStartLockOfAnotherTaskDoesNotHoldTheRunBack(): void
+    {
+        $other = $this->startLockOf(8);
+        self::assertTrue($other->acquire(false));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [])->run($this->request(7, $this->remote->path));
+
+        self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
+        self::assertSame(['task'], array_column($ledger->payloads(), 'step'));
+    }
+
+    public function testAStartLockThatCannotBeTakenFailsTheTaskStepWithFixedWordsAndReadsNoIssue(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('lock folder var/PLANT-locks is not writable'));
+        $this->locks = new LockFactory($store);
+        $reads = $this->createMock(IssueReads::class);
+        $reads->expects(self::never())->method('readOpen');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildTask::START_NOT_LOCKED, $outcome->failure);
+        self::assertSame(BuildStep::Task, $outcome->last);
+        self::assertSame([['task', 'failed', BuildTask::START_NOT_LOCKED]], array_map(static fn (array $row): array => [$row['step'], $row['outcome'], $row['failure']], $ledger->payloads()));
+    }
+
+    public function testAStartLockHeldByAnotherRunOfTheTaskFailsTheTaskStepAtOnceAndRunsNoOtherStep(): void
+    {
+        $other = $this->startLockOf(7);
+        self::assertTrue($other->acquire(false));
+        $reads = $this->createMock(IssueReads::class);
+        $reads->expects(self::never())->method('readOpen');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+
+        self::assertTrue($other->isAcquired());
+        self::assertSame(BuildTask::START_BUSY, $outcome->failure);
+        self::assertSame(BuildStep::Task, $outcome->last);
+        self::assertSame([['task', 'failed', BuildTask::START_BUSY]], array_map(static fn (array $row): array => [$row['step'], $row['outcome'], $row['failure']], $ledger->payloads()));
+        self::assertDirectoryDoesNotExist($this->mirrors);
+    }
+
+    public function testTheStartLockKeyOfOneProjectsTaskIsNotThatOfAnotherProjectWhoseNameRunsOn(): void
+    {
+        self::assertNotSame(new BuildRun('alpha:1', 2, 'a')->startLockKey(), new BuildRun('alpha', 12, 'a')->startLockKey());
+        self::assertNotSame(new BuildRun('alpha', 7, 'a')->startLockKey(), new BuildRun('alpha', 8, 'a')->startLockKey());
+    }
+
     public function testTheTaskIsReadThroughTheSingleIssueReadNeverTheListing(): void
     {
         $reads = $this->createMock(IssueReads::class);
@@ -982,6 +1092,33 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    protected function setUp(): void
+    {
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->handBackFiles = new Filesystem();
+        $this->changes = new RecordingChangeOpening();
+        $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
+        $this->clone = $this->mirrors.'-clone';
+        $this->output = $this->mirrors.'-output';
+        $this->routing = new ConfiguredBuildRouting(['alpha' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => []]], new ModelRouting());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $this->tiers = $tiers;
+        $this->runner = new ScriptedJobRunner($this->output);
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]);
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->programs?->remove();
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
+        $this->remote->remove();
+    }
+
     /**
      * @param list<ListedIssue> $issues
      */
@@ -990,43 +1127,12 @@ final class BuildTaskTest extends TestCase
         return $this->buildTask($this->listing($issues), $this->checkout(), $ledger);
     }
 
-    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
-    {
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
-        $git = new RepositoryGit(new HardenedGit());
-        $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
-        $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
-        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
-
-        // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
-        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
-
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger);
-    }
-
-    // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
-    private function branchPush(InMemoryLedger $ledger): PushBranch
-    {
-        $branches = new BranchGit(new HardenedGit(), new GuardedRun());
-        $file = $this->mirrors.'-key';
-        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem(), new GuardedRun());
-
-        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
-    }
-
     /**
      * @return list<array<string, mixed>>
      */
     private function stepsIn(InMemoryLedger $ledger): array
     {
         return array_values(array_filter($ledger->payloads(), static fn (array $payload): bool => isset($payload['step'])));
-    }
-
-    private function remoteTip(): ?string
-    {
-        $process = new Process(['git', 'rev-parse', '--verify', '--quiet', 'refs/heads/feat/task'], $this->remote->path);
-
-        return 0 === $process->run() ? trim($process->getOutput()) : null;
     }
 
     /**
@@ -1156,6 +1262,37 @@ final class BuildTaskTest extends TestCase
         return $this->checkoutIn($this->mirrors);
     }
 
+    private function startLockOf(int $task): SharedLockInterface
+    {
+        return $this->locks->createLock(new BuildRun('alpha', $task, 'any run')->startLockKey());
+    }
+
+    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, Ledger $ledger): BuildTask
+    {
+        $configured = self::createStub(ConfiguredRepositories::class);
+        $configured->method('nameOf')->willReturn($this->configuredRepository);
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $git = new RepositoryGit(new HardenedGit());
+        $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
+        $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
+        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
+
+        // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+    }
+
+    // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
+    private function branchPush(Ledger $ledger): PushBranch
+    {
+        $branches = new BranchGit(new HardenedGit(), new GuardedRun());
+        $file = $this->mirrors.'-key';
+        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem(), new GuardedRun());
+
+        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
+    }
+
     private function checkoutIn(string $directory): GitBuildCheckout
     {
         return $this->checkoutWith(new Mirrors($directory), new InMemoryStore());
@@ -1176,5 +1313,12 @@ final class BuildTaskTest extends TestCase
     private function request(int $issue, string $remote): BuildTaskRequest
     {
         return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone, self::IMAGE);
+    }
+
+    private function remoteTip(): ?string
+    {
+        $process = new Process(['git', 'rev-parse', '--verify', '--quiet', 'refs/heads/feat/task'], $this->remote->path);
+
+        return 0 === $process->run() ? trim($process->getOutput()) : null;
     }
 }

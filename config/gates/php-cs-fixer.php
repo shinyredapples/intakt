@@ -27,5 +27,9 @@ return new Config()
         'no_useless_else' => true,
         'php_unit_test_annotation' => ['style' => 'prefix'],
         'php_unit_data_provider_static' => true,
+        'ordered_class_elements' => [
+            'order' => ['use_trait', 'case', 'constant', 'property', 'construct', 'method_public', 'method_protected', 'method_private'],
+            'sort_algorithm' => 'none',
+        ],
         'ordered_imports' => ['imports_order' => ['class', 'function', 'const'], 'sort_algorithm' => 'alpha'],
     ]);

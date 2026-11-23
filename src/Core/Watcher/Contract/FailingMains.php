@@ -40,9 +40,10 @@ final readonly class FailingMains
         $payload = $this->payloadOf($recorded);
         $pair = $this->pairOf($payload);
         $reason = $this->failureReasonOf($recorded, $payload);
-        $booted = LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null);
+        $state = $this->computedStateOf($recorded, $payload);
 
-        if (null === $pair || null === $reason && !$booted) {
+        // A crash is no result of the pair, because the boot is tried again after its backoff, so a later booted line of the pair is still its first result.
+        if (null === $pair || null === $reason && !in_array($state, ['booted', 'failed'], true)) {
             return [$failing, $seen];
         }
 
@@ -50,8 +51,8 @@ final readonly class FailingMains
 
         if (null !== $reason) {
             $failing[$project] = new FailingMain($project, $main, $tools, $reason);
-        } elseif ($this->readFromStore($payload) || !isset($seen[$project][$main][$tools])) {
-            // Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
+        } elseif ('booted' === $state && ($this->readFromStore($payload) || !isset($seen[$project][$main][$tools]))) {
+            // A computed booted or failed line marks its pair as seen, but only a booted line can clear. Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
             unset($failing[$project]);
         }
 
@@ -77,26 +78,6 @@ final readonly class FailingMains
 
     /**
      * @param array<array-key, mixed> $payload
-     */
-    private function failureReasonOf(RecordedEvent $recorded, array $payload): ?string
-    {
-        $reason = $payload['reason'] ?? null;
-        $failedFromStore = LedgerEventKind::BootResultComputed === $recorded->event->kind && $this->readFromStore($payload) && 'failed' === ($payload['state'] ?? null);
-
-        return is_string($reason) && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
-    }
-
-    // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when it differs from what this reading shows.
-    /**
-     * @param array<array-key, mixed> $payload
-     */
-    private function readFromStore(array $payload): bool
-    {
-        return 'store' === ($payload['read_from'] ?? null);
-    }
-
-    /**
-     * @param array<array-key, mixed> $payload
      *
      * @return array{string, string, string}|null
      */
@@ -111,5 +92,33 @@ final readonly class FailingMains
         }
 
         return [$project, $main, $tools];
+    }
+
+    /**
+     * @param array<array-key, mixed> $payload
+     */
+    private function failureReasonOf(RecordedEvent $recorded, array $payload): ?string
+    {
+        $reason = $payload['reason'] ?? null;
+        $failedFromStore = LedgerEventKind::BootResultComputed === $recorded->event->kind && $this->readFromStore($payload) && 'failed' === ($payload['state'] ?? null);
+
+        return is_string($reason) && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
+    }
+
+    /**
+     * @param array<array-key, mixed> $payload
+     */
+    private function computedStateOf(RecordedEvent $recorded, array $payload): mixed
+    {
+        return LedgerEventKind::BootResultComputed === $recorded->event->kind ? $payload['state'] ?? null : null;
+    }
+
+    // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when it differs from what this reading shows.
+    /**
+     * @param array<array-key, mixed> $payload
+     */
+    private function readFromStore(array $payload): bool
+    {
+        return 'store' === ($payload['read_from'] ?? null);
     }
 }

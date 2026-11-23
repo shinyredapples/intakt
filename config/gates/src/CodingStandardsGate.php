@@ -17,21 +17,6 @@ final readonly class CodingStandardsGate extends PhpFilesToolGate
         return 'cs';
     }
 
-    protected function tool(): string
-    {
-        return 'php-cs-fixer';
-    }
-
-    protected function arguments(Workspace $workspace, array $files): array
-    {
-        return [
-            'fix', '--dry-run', '-v', '--format=json', '--no-interaction',
-            ...$this->cacheArguments($workspace),
-            '--config='.$workspace->config('php-cs-fixer.php'),
-            ...$files,
-        ];
-    }
-
     // The cache file in the gates cache, named after the code of Intakt's fixers so a changed fixer starts from an empty cache; null when they cannot be read.
     public function cacheFile(string $fixers, string $cacheDirectory): ?string
     {
@@ -55,6 +40,35 @@ final readonly class CodingStandardsGate extends PhpFilesToolGate
         }
 
         return $cacheDirectory.'/php-cs-fixer-'.hash_final($context).'.cache';
+    }
+
+    protected function tool(): string
+    {
+        return 'php-cs-fixer';
+    }
+
+    protected function arguments(Workspace $workspace, array $files): array
+    {
+        return [
+            'fix', '--dry-run', '-v', '--format=json', '--no-interaction',
+            ...$this->cacheArguments($workspace),
+            '--config='.$workspace->config('php-cs-fixer.php'),
+            ...$files,
+        ];
+    }
+
+    protected function findings(ProcessResult $result): array
+    {
+        $report = JsonNode::parse($result->output);
+
+        if (!$report instanceof JsonNode) {
+            return [];
+        }
+
+        return array_map(
+            static fn (JsonNode $file): string => $file->get('name')->text().': '.implode(', ', array_map(static fn (JsonNode $fixer): string => $fixer->text(), $file->get('appliedFixers')->items())),
+            $report->get('files')->items(),
+        );
     }
 
     /**
@@ -81,19 +95,5 @@ final readonly class CodingStandardsGate extends PhpFilesToolGate
         }
 
         return ['--using-cache=yes', '--cache-file='.$file];
-    }
-
-    protected function findings(ProcessResult $result): array
-    {
-        $report = JsonNode::parse($result->output);
-
-        if (!$report instanceof JsonNode) {
-            return [];
-        }
-
-        return array_map(
-            static fn (JsonNode $file): string => $file->get('name')->text().': '.implode(', ', array_map(static fn (JsonNode $fixer): string => $fixer->text(), $file->get('appliedFixers')->items())),
-            $report->get('files')->items(),
-        );
     }
 }

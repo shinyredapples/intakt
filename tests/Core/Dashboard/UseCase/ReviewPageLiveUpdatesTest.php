@@ -54,6 +54,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use stdClass;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
@@ -61,6 +62,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
@@ -105,26 +109,6 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
      * @var list<Update>
      */
     private array $published = [];
-
-    #[Override]
-    protected function setUp(): void
-    {
-        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
-        $this->secretBefore = is_string($before) ? $before : null;
-        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        parent::setUp();
-        $this->givenTheDownloadedScriptsExist();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $secret = $this->secretBefore ?? '';
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        $this->removeTheStandIns();
-        parent::tearDown();
-    }
 
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
     {
@@ -758,6 +742,30 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringNotContainsString('verdict', $updated->filter('#round-'.$id.'-reviewers')->text());
     }
 
+    public function testARoundStartedFromTheDashboardShowsAStartingStateUntilItsFirstReviewerArrives(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $commands = self::createStub(MessageBusInterface::class);
+        $commands->method('dispatch')->willReturnCallback(function (): Envelope {
+            $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+
+            return new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]);
+        });
+        self::getContainer()->set('command.bus', $commands);
+        $form = $this->browser->request('GET', '/reviews/round-1')->filter('form.start-review');
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $form->filter('input[name=_token]')->attr('value'), 'number' => '2']);
+        $page = $this->browser->followRedirect();
+
+        $starting = $page->filter('#round-round-2-now-none');
+        self::assertSame('Starting the review: each reviewer appears here as soon as it begins.', $starting->text());
+        self::assertSame('status', $starting->attr('role'));
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-2', 'reviewer' => 'round-2-correctness', 'text' => 'Looking']));
+        self::assertCount(0, $updated->filter('#round-round-2-now-none'));
+        self::assertCount(1, $updated->filter('#round-round-2-now-reviewer-round-2-correctness-state'));
+    }
+
     public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -1167,7 +1175,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame(['No reviewer has started yet.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['Starting the review: each reviewer appears here as soon as it begins.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testOneListenerAuthorizesEveryUnfinishedRoundOfThePage(): void
@@ -1481,6 +1489,26 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['Stop', 'Stop this reviewer'], $held);
     }
 
+    #[Override]
+    protected function setUp(): void
+    {
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
+        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        parent::setUp();
+        $this->givenTheDownloadedScriptsExist();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $secret = $this->secretBefore ?? '';
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        $this->removeTheStandIns();
+        parent::tearDown();
+    }
+
     private function actionsTheConnectionControllerHolds(): string
     {
         $script = (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
@@ -1562,31 +1590,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return [$round, $id, $page];
     }
 
-    /**
-     * @param array<string, 'act'|'defer'|'reject'> $marks
-     */
-    private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
-    {
-        $this->givenEveryReviewerAnswered($round, count($marks));
-        $this->ledger->judgeFindings($round->toRfc4122(), $marks);
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
-    }
-
     private function givenTheRoundIsJudgedAsOneEntryPerCause(Uuid $round): void
     {
         $this->givenEveryReviewerAnswered($round, 2);
         $this->ledger->judgeOneEntryPerCause($round->toRfc4122());
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
-    }
-
-    private function givenEveryReviewerAnswered(Uuid $round, int $findings): void
-    {
-        $id = $round->toRfc4122();
-        $this->ledger->startReviewer($id, 'security');
-        $this->ledger->startReviewer($id, 'correctness');
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
-        $this->ledger->answer($id, 'security', $findings);
-        $this->ledger->answer($id, 'correctness', $findings);
     }
 
     /**
@@ -1599,6 +1607,26 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
 
         return [$round, $id, $this->bothViews('/reviews/'.$id)];
+    }
+
+    /**
+     * @param array<string, 'act'|'defer'|'reject'> $marks
+     */
+    private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
+    {
+        $this->givenEveryReviewerAnswered($round, count($marks));
+        $this->ledger->judgeFindings($round->toRfc4122(), $marks);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+    }
+
+    private function givenEveryReviewerAnswered(Uuid $round, int $findings): void
+    {
+        $id = $round->toRfc4122();
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->startReviewer($id, 'correctness');
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
+        $this->ledger->answer($id, 'security', $findings);
+        $this->ledger->answer($id, 'correctness', $findings);
     }
 
     private function publishedStreams(): string

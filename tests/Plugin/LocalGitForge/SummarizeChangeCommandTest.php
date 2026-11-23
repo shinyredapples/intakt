@@ -55,18 +55,6 @@ final class SummarizeChangeCommandTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('keep.txt', "one\ntwo\n");
-        $this->repository->commitFile('gone.txt', "bye\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testABranchIsSummarizedWithItsFilesAndChangedLines(): void
     {
         $this->repository->checkoutNewBranch('feature');
@@ -220,6 +208,18 @@ final class SummarizeChangeCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('A change id is not empty.', $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('keep.txt', "one\ntwo\n");
+        $this->repository->commitFile('gone.txt', "bye\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     /**

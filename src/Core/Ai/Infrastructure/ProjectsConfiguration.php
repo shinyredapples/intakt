@@ -37,6 +37,32 @@ final class ProjectsConfiguration implements ConfigurationInterface
         return $tree;
     }
 
+    // A list, not a map, because its order is the order the accounts are tried; a provider not listed keeps its default account so a single key needs no entry.
+    private function addAccounts(TreeBuilder $tree): void
+    {
+        $accounts = $tree->getRootNode()->children()->arrayNode('accounts')->addDefaultsIfNotSet()->children();
+
+        foreach (Provider::cases() as $provider) {
+            $accounts->arrayNode($provider->value)->defaultValue([Account::DEFAULT])->requiresAtLeastOneElement()->stringPrototype()->end()
+                ->validate()->ifTrue(static fn (array $names): bool => [] !== preg_grep(Account::NAME_PATTERN, $names, PREG_GREP_INVERT))->thenInvalid('An account name must start with a lowercase letter and hold only lowercase letters, digits and underscores.')->end()
+                ->validate()->ifTrue(static fn (array $names): bool => count($names) !== count(array_unique($names, SORT_REGULAR)))->thenInvalid('An account must be listed once.')->end();
+        }
+    }
+
+    // Optional, since only a Codex subscription account needs it; once present, both are required so neither falls back to the CLI's default.
+    private function addCodex(TreeBuilder $tree): void
+    {
+        $codex = $tree->getRootNode()->children()->arrayNode(Provider::Codex->configKey())->children();
+        $this->addModel($codex);
+        $codex->enumNode('effort')->isRequired()->values(array_column(CodexEffort::cases(), 'value'));
+    }
+
+    private function addMapping(NodeBuilder $mapping): void
+    {
+        $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
+        $this->addModel($mapping);
+    }
+
     /**
      * @param array{projects?: array<string, array{tiers: array<string, array{provider: string, model: string, substitutes: list<array{provider: string, model: string}>}>}>, codex?: array{model: string}} $intakt
      */
@@ -68,36 +94,10 @@ final class ProjectsConfiguration implements ConfigurationInterface
         return $mappings;
     }
 
-    private function addMapping(NodeBuilder $mapping): void
-    {
-        $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-        $this->addModel($mapping);
-    }
-
-    // Optional, since only a Codex subscription account needs it; once present, both are required so neither falls back to the CLI's default.
-    private function addCodex(TreeBuilder $tree): void
-    {
-        $codex = $tree->getRootNode()->children()->arrayNode(Provider::Codex->configKey())->children();
-        $this->addModel($codex);
-        $codex->enumNode('effort')->isRequired()->values(array_column(CodexEffort::cases(), 'value'));
-    }
-
     private function addModel(NodeBuilder $parent): void
     {
         $parent->stringNode('model')->isRequired()->cannotBeEmpty()
             ->validate()->ifTrue(static fn (string $model): bool => !mb_check_encoding($model, 'UTF-8'))->thenInvalid('The "model" key must be valid UTF-8.')->end()
             ->validate()->ifTrue(static fn (string $model): bool => 1 === preg_match('/^\s*$/u', $model))->thenInvalid('The "model" key must not be blank.')->end();
-    }
-
-    // A list, not a map, because its order is the order the accounts are tried; a provider not listed keeps its default account so a single key needs no entry.
-    private function addAccounts(TreeBuilder $tree): void
-    {
-        $accounts = $tree->getRootNode()->children()->arrayNode('accounts')->addDefaultsIfNotSet()->children();
-
-        foreach (Provider::cases() as $provider) {
-            $accounts->arrayNode($provider->value)->defaultValue([Account::DEFAULT])->requiresAtLeastOneElement()->stringPrototype()->end()
-                ->validate()->ifTrue(static fn (array $names): bool => [] !== preg_grep(Account::NAME_PATTERN, $names, PREG_GREP_INVERT))->thenInvalid('An account name must start with a lowercase letter and hold only lowercase letters, digits and underscores.')->end()
-                ->validate()->ifTrue(static fn (array $names): bool => count($names) !== count(array_unique($names, SORT_REGULAR)))->thenInvalid('An account must be listed once.')->end();
-        }
     }
 }
