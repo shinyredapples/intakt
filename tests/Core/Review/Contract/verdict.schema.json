@@ -101,7 +101,7 @@
                         ],
                         "nullable": false,
                         "minLength": 1,
-                        "description": "The problem in 3 to 6 plain words, for example \"A cart of 100 loses its discount\"."
+                        "description": "The problem in 3 to 6 plain words, for example \"A full cart loses its discount\"."
                     },
                     "kind": {
                         "type": [

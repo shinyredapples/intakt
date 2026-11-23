@@ -23,6 +23,9 @@ final readonly class JudgeDoneFinding
         public ?string $judgeNote = null,
         // False by default, because a judge_done row written before the gate-gap marker was recorded holds none.
         public bool $gateGap = false,
+        // Null by default, because a judge_done row written before reviewers named a title and kind holds neither, and so does a finding stored before then.
+        public ?string $title = null,
+        public ?FindingKind $kind = null,
     ) {
     }
 }

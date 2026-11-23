@@ -178,7 +178,7 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::EscalationFailed, $failed);
     }
 
-    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids, each with its own judge's note, because the act list read back (StoredFindings::actListOf()) gives an entry its own note or else the first of a finding it merged.
+    // An act entry is recorded as the act list holds it (highest severity, merged ids, its first finding's title and kind), so the review page shows it the way the console does; the merged findings stay recorded for their ids, each with its own judge's note, because the act list read back (StoredFindings::actListOf()) gives an entry its own note or else the first of a finding it merged.
     /**
      * @param list<string> $act
      *
@@ -194,7 +194,18 @@ final readonly class RoundLedger
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes->noteOf($finding->id)), $finding->gate_gap), $shown);
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding(
+            $finding->id,
+            $finding->severity,
+            $finding->text,
+            $finding->merged,
+            $finding->file,
+            $finding->line,
+            $this->storedNote($judged->notes->noteOf($finding->id)),
+            $finding->gate_gap,
+            $finding->title,
+            $finding->kind,
+        ), $shown);
     }
 
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.

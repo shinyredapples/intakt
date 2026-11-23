@@ -7,16 +7,21 @@ namespace Intakt\Core\Review\Contract;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\Serializer\Attribute\Ignore;
+use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\NotNull;
 use Symfony\Component\Validator\Constraints\Valid;
 use Symfony\Component\Validator\Constraints\WordCount;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 // Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping; excluded because that output builds it, not the container.
 #[Exclude]
 final readonly class Finding
 {
+    // One home for the example the schema and the reviewer prompt give, so it cannot drift past the title's own rules.
+    public const string TITLE_EXAMPLE = 'A full cart loses its discount';
+
     public function __construct(
         #[NotBlank]
         public string $id,
@@ -41,7 +46,9 @@ final readonly class Finding
         // NotBlank too, because WordCount lets an empty string pass.
         #[NotBlank]
         #[WordCount(min: 3, max: 6)]
-        #[Schema(description: 'The problem in 3 to 6 plain words, for example "A cart of 100 loses its discount".')]
+        // WordCount counts a punctuation mark as a word: upstream/validator-word-count-counts-punctuation
+        #[Callback([self::class, 'refuseAWordWithoutALetterOrDigit'])]
+        #[Schema(description: 'The problem in 3 to 6 plain words, for example "'.self::TITLE_EXAMPLE.'".')]
         public ?string $title = null,
         #[NotNull]
         #[Schema(description: 'What sort of problem this is.')]
@@ -53,6 +60,16 @@ final readonly class Finding
         #[Ignore]
         private ?string $judge_note = null,
     ) {
+    }
+
+    // A word made of punctuation alone is no word, so ". . ." is no title.
+    public static function refuseAWordWithoutALetterOrDigit(?string $title, ExecutionContextInterface $context): void
+    {
+        if (null === $title || 1 !== preg_match('/(?:^|\s)[^\p{L}\p{N}\s]+(?=\s|$)/u', $title)) {
+            return;
+        }
+
+        $context->buildViolation('Every word of the title must hold a letter or a digit.')->addViolation();
     }
 
     public function judgeNote(): ?string
