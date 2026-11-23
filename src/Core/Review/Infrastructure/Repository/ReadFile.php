@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure\Repository;
 
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewTool;
+use Intakt\Plugin\Forge\Contract\FileContent;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
@@ -40,8 +41,8 @@ final readonly class ReadFile
         }
 
         // Named by its size, because the answer reaches the provider as JSON, which carries only valid UTF-8, and a binary file holds nothing to review.
-        if ($this->holdsANulByte($real, $path)) {
-            return sprintf('Binary file, not shown: %d bytes', $this->sizeOf($real, $path));
+        if (str_contains($content, "\0") || $this->holdsANulByte($real, $path)) {
+            return FileContent::binaryText($this->sizeOf($real, $path));
         }
 
         $truncated = strlen($content) > self::MAX_BYTES;
