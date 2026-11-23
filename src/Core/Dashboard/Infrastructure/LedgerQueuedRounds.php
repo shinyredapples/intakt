@@ -39,7 +39,8 @@ final readonly class LedgerQueuedRounds
                 continue;
             }
 
-            $line = $this->watcherLineOf($kind, LedgerPayload::of($recorded), $order);
+            // Only watcher lines are decoded, because the other kinds never decide a wait.
+            $line = in_array($kind, WatcherLines::ALL, true) ? $this->watcherLineOf($kind, LedgerPayload::of($recorded), $order) : null;
 
             if (null !== $line) {
                 // Keyed by project, then pull request, so no name either side sends can make two keys meet.
@@ -50,6 +51,7 @@ final readonly class LedgerQueuedRounds
         return $this->waiting($latest, $started);
     }
 
+    // A queue line without a readable round id is skipped, so it cannot erase the readable queue line before it (decision 2 of #3159's tenth round).
     /**
      * @param array<string, mixed> $payload
      *
@@ -60,14 +62,17 @@ final readonly class LedgerQueuedRounds
         $project = $payload['project'] ?? null;
         $change = $payload['change'] ?? null;
 
-        if (!in_array($kind, WatcherLines::ALL, true) || !is_string($project) || !is_string($change)) {
+        if (!is_string($project) || !is_string($change)) {
             return null;
         }
 
-        $round = $payload['round'] ?? null;
-        $queued = LedgerEventKind::RoundQueued === $kind && is_string($round) && '' !== $round ? ['order' => $order, 'round' => new QueuedRound($round, $project, $change)] : null;
+        if (LedgerEventKind::RoundQueued !== $kind) {
+            return ['project' => $project, 'change' => $change, 'queued' => null];
+        }
 
-        return ['project' => $project, 'change' => $change, 'queued' => $queued];
+        $round = $payload['round'] ?? null;
+
+        return is_string($round) && '' !== $round ? ['project' => $project, 'change' => $change, 'queued' => ['order' => $order, 'round' => new QueuedRound($round, $project, $change)]] : null;
     }
 
     /**

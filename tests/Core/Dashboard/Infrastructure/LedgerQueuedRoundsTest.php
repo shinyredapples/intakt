@@ -32,11 +32,6 @@ final class LedgerQueuedRoundsTest extends TestCase
 {
     private DashboardLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testRoundsTheWatcherQueuedAreListedNewestFirstAndNamedAfterTheirPullRequest(): void
     {
         $first = $this->ledger->queueRoundOf('alpha', '7', 'a');
@@ -92,6 +87,19 @@ final class LedgerQueuedRoundsTest extends TestCase
         $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"project":"alpha","change":"9","head":"a","round":""}'));
 
         self::assertSame([], $this->queued());
+    }
+
+    public function testAQueueLineWithoutARoundIdLeavesTheReadableQueueLineBeforeIt(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'a');
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"project":"alpha","change":"7","head":"a","round":null}'));
+
+        self::assertSame([[$round, 'alpha', 'Pull request 7']], $this->queued());
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     /**

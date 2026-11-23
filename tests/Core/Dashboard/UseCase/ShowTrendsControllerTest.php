@@ -788,6 +788,20 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertCount(0, $upNext->filter('.review-line'));
     }
 
+    // The watcher's normal order: RoundStarts opens the review before it writes the queue line.
+    public function testUpNextLinksARoundWhoseReviewOpenedBeforeItsQueueLineOnceUnderWaitingToStart(): void
+    {
+        $this->ledger->startRoundOf('feat/a', 'r-1', 1);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"project":"alpha","change":"7","head":"abc123","round":"r-1"}'));
+
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['Waiting to start'], $upNext->filter('h3')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame(['/reviews/r-1'], $upNext->filter('a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertCount(0, $upNext->filter('div.review-line'));
+        self::assertCount(0, $upNext->filter('p'));
+    }
+
     public function testUpNextLeavesOutAQueuedRoundOnceANewerWatcherLineReplacedIt(): void
     {
         $this->ledger->queueRoundOf('alpha', '7', 'abc123');

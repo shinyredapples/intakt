@@ -29,6 +29,21 @@
 <div class="chart-tip" data-chart-target="tip" aria-hidden="true" hidden><strong></strong><span></span></div>
 {% endmacro %}
 
+{#- One Up next row; without a link it is a plain line, for a round that has no review page yet. -#}
+{% macro up_next_row(href, project, title, facts) %}
+<li class="review-row" data-project="{{ project }}">
+    {% if href is not null %}<a class="review-link" href="{{ href }}">{% else %}<div class="review-line">{% endif %}
+        <span class="review-title">{{ title }}</span>
+        <span class="review-facts">
+            <span class="pname">{{ project }}</span>
+            {% for fact in facts %}
+            <span>{{ fact }}</span>
+            {% endfor %}
+        </span>
+    {% if href is not null %}</a>{% else %}</div>{% endif %}
+</li>
+{% endmacro %}
+
 {% block body %}
 {% set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_TRENDS') %}
 {% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
@@ -168,31 +183,16 @@
     {% if up_next.emptyLine is not null %}
     <p class="muted">{{ up_next.emptyLine }}</p>
     {% else %}
-    {%- set started = (up_next.inProgress|merge(up_next.waitingToStart))|map(round => {
-        href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round.round}),
-        project: round.project,
-        title: round.change is same as('') ? constant('Intakt\\Core\\Dashboard\\Domain\\ReviewSummary::UNNAMED_CHANGE') : round.change,
-        facts: (round.number is null ? [] : ['Round ' ~ round.number])|merge([round.startedOutcomes is empty ? 'No reviewer has started yet' : round.startedOutcomes|map(outcome => outcome.role|capitalize)|join(', ')]),
-        waiting: round.startedOutcomes is empty,
-    }) -%}
-    {#- A queued round has no link, because its review page answers 404 until the round starts (decision 2 of #3159). -#}
-    {%- set queued = up_next.queued|map(round => {href: null, project: round.project, title: round.title, facts: ['Queued, not started yet'], waiting: true}) -%}
-    {% for group in [{title: 'In progress', rows: started|filter(row => not row.waiting)}, {title: 'Waiting to start', rows: (started|filter(row => row.waiting))|merge(queued)}] %}
-    {% if group.rows is not empty %}
+    {#- Each group renders the rounds UpNext puts in it, so the page never decides a round's group itself; a queued round has no link, because its review page answers 404 until the round starts (decision 2 of #3159). -#}
+    {% for group in [{title: 'In progress', started: up_next.inProgress, queued: []}, {title: 'Waiting to start', started: up_next.waitingToStart, queued: up_next.queued}] %}
+    {% if group.started is not empty or group.queued is not empty %}
     <h3 id="up-next-{{ loop.index }}">{{ group.title }}</h3>
     <ul class="review-rows" aria-labelledby="up-next-{{ loop.index }}">
-        {% for row in group.rows %}
-        <li class="review-row" data-project="{{ row.project }}">
-            {% if row.href is not null %}<a class="review-link" href="{{ row.href }}">{% else %}<div class="review-line">{% endif %}
-                <span class="review-title">{{ row.title }}</span>
-                <span class="review-facts">
-                    <span class="pname">{{ row.project }}</span>
-                    {% for fact in row.facts %}
-                    <span>{{ fact }}</span>
-                    {% endfor %}
-                </span>
-            {% if row.href is not null %}</a>{% else %}</div>{% endif %}
-        </li>
+        {% for round in group.started %}
+        {{ _self.up_next_row(path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round.round}), round.project, round.change is same as('') ? constant('Intakt\\Core\\Dashboard\\Domain\\ReviewSummary::UNNAMED_CHANGE') : round.change, (round.number is null ? [] : ['Round ' ~ round.number])|merge([round.startedOutcomes is empty ? 'No reviewer has started yet' : round.startedOutcomes|map(outcome => outcome.role|capitalize)|join(', ')])) }}
+        {% endfor %}
+        {% for round in group.queued %}
+        {{ _self.up_next_row(null, round.project, round.title, ['Queued, not started yet']) }}
         {% endfor %}
     </ul>
     {% endif %}

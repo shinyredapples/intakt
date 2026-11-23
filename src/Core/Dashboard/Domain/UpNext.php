@@ -15,7 +15,7 @@ final readonly class UpNext
     /** @var list<ReviewedRound> */
     public array $waitingToStart;
 
-    // A round counts as in progress from its first reviewer's recorded start, so a reviewer blocked before it started leaves the round waiting, so a round whose reviewers all answered stays listed until the judge decides it; the reviews come in the board's order, and a round the watcher queued waits after the started ones, because no worker has taken it yet.
+    // A round counts as in progress from its first recorded reviewer start, because a reviewer blocked before it started never ran.
     /**
      * @param list<Review>      $reviews
      * @param list<QueuedRound> $queued
