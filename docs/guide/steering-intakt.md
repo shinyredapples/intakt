@@ -51,6 +51,12 @@ Until a dashboard button exists, the labels are the control.
 
 You can ask Intakt which reviewers a change would get, before any review runs and without spending anything on a model. Run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php`, adding `--label=review:full` to see the full panel. It lists the reviewers and the rule for agreeing. Extra reviewers for big or sensitive changes come from the rules in your configuration file. For now you type the size, paths and labels in yourself: Intakt does not yet read them from a pull request.
 
+## Checking which model tier a build would get
+
+You can also ask which tier (strong, standard or light) a build would start on, without spending anything on a model. Run `php bin/console intakt:build:tier <project> --label=model:light --path=config/gates/phpstan.neon`. It prints the tier and the reason: `default`, `label` or `sensitive-path` (`setback` and `confirmed-escalation` come from `--setback` and `--change`). A sensitive path beats a `model:` label: a build that touches one of the paths your project lists as sensitive gets the strong tier whatever the label says. The full order is in [which tier a build runs on](../user/README.md#which-tier-a-build-runs-on).
+
+Today only a task's first build starts on the chosen tier, picked from its labels. Rebuilding a sent-back change on the chosen tier is still planned.
+
 ## Lines in the task text
 
 | Line | What it does |

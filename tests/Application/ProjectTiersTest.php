@@ -22,6 +22,8 @@ use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
+use Intakt\Core\Build\Contract\BuildServices;
+use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
@@ -173,6 +175,30 @@ final class ProjectTiersTest extends KernelTestCase
         $this->expectExceptionMessageMatches('/"image" under "intakt\.projects\.beta" must be configured/');
 
         $this->bootedContainer();
+    }
+
+    public function testAProjectBuildSectionReachesTheRoutingAndAProjectWithoutOneGetsTheDefaults(): void
+    {
+        file_put_contents($this->file, <<<'YAML'
+            projects:
+                alpha-one:
+                    build:
+                        tier: strong
+                        sensitive_paths: ['config/gates/**']
+                    tiers:
+                        strong: { provider: anthropic, model: big }
+                beta:
+                    tiers:
+                        strong: { provider: openai, model: other }
+            YAML);
+        $escalateOn = array_column(Setback::cases(), 'value');
+
+        $routing = $this->bootedContainer()->getParameter(BuildServices::ROUTING);
+
+        self::assertSame([
+            'alpha-one' => ['tier' => 'strong', 'sensitive_paths' => ['config/gates/**'], 'escalate_on' => $escalateOn],
+            'beta' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => $escalateOn],
+        ], $routing);
     }
 
     public function testAProjectsValueThatIsNoMapStopsTheBoot(): void
