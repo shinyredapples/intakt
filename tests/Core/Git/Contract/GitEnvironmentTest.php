@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Git\Contract;
 
 use Intakt\Core\Git\Contract\GitEnvironment;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -38,5 +39,32 @@ final class GitEnvironmentTest extends TestCase
         $original->with(HOME: '/elsewhere');
 
         self::assertSame(['HOME' => '/nonexistent'], [...$original]);
+    }
+
+    public function testUnsettingAVariableSetEarlierKeepsItInItsOriginalPosition(): void
+    {
+        $environment = GitEnvironment::of(
+            GIT_ALLOW_PROTOCOL: '',
+            GIT_ATTR_SOURCE: 'tree',
+            HOME: '/nonexistent',
+        )->unsetting('GIT_ATTR_SOURCE');
+
+        self::assertSame(['GIT_ALLOW_PROTOCOL' => '', 'GIT_ATTR_SOURCE' => false, 'HOME' => '/nonexistent'], [...$environment]);
+    }
+
+    public function testAnEnvironmentOfAValueWithoutAVariableNameIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        GitEnvironment::of('value');
+    }
+
+    public function testAddingAValueWithoutAVariableNameIsRefused(): void
+    {
+        $environment = GitEnvironment::of(HOME: '/nonexistent');
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $environment->with('value');
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\Contract;
 
 use ArrayIterator;
+use InvalidArgumentException;
 use IteratorAggregate;
 use Traversable;
 
@@ -29,8 +30,14 @@ final readonly class GitEnvironment implements IteratorAggregate
     // In place where the name is already there, because the process gets the variables in this order.
     public function with(string ...$variables): self
     {
-        /** @var array<string, string> $named */
-        $named = $variables;
+        $named = [];
+        foreach ($variables as $name => $value) {
+            if (!is_string($name)) {
+                throw new InvalidArgumentException('A git environment value has no variable name.');
+            }
+
+            $named[$name] = $value;
+        }
 
         return new self([...$this->variables, ...$named]);
     }
