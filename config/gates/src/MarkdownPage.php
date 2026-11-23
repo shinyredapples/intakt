@@ -23,12 +23,12 @@ final readonly class MarkdownPage
     /** @var list<string> */
     private array $contents;
 
-    /** @var list<MarkdownLineKind> */
+    /** @var array<int, MarkdownLineKind> */
     private array $kinds;
 
     /**
      * @param list<string> $blankedLines
-     * @param list<int>    $fencedLines  positions of the non-empty fenced code lines that $blankedLines blanks
+     * @param list<int>    $fencedLines
      */
     public function __construct(
         public string $path,
@@ -47,13 +47,7 @@ final readonly class MarkdownPage
         $kinds = new MarkdownLineKinds(new MarkdownListIndents())->of($depths, $contents, $this->tableRows());
 
         // A blanked fence still holds content, so a fenced block before "In short" means the summary does not open the page.
-        foreach ($fencedLines as $index) {
-            if (isset($kinds[$index])) {
-                $kinds[$index] = MarkdownLineKind::Code;
-            }
-        }
-
-        $this->kinds = $kinds;
+        $this->kinds = array_replace($kinds, array_intersect_key(array_fill_keys($fencedLines, MarkdownLineKind::Code), $kinds));
     }
 
     /**
