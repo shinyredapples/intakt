@@ -95,8 +95,7 @@ final readonly class PullRequestTextRoutes
      */
     private function locked(PullRequestTextTask $task, Closure $step): mixed
     {
-        // Held from the read to the append, because two rounds of one task read alike would both be sent back; a key of its own, so this round never waits on the hand-back round's lock.
-        // No release on destruct, because a failed release would be tried again there, outside the catch, after the line is written.
+        // Held from the read to the append, because two rounds of one task read alike would both be sent back; a key of its own, so this round never waits on the hand-back round's lock; no release on destruct, because a failed release would be tried again there, outside the catch, after the line is written.
         $lock = $this->locks->createLock('intakt-pull-request-text-'.$task->key, autoRelease: false);
 
         try {
