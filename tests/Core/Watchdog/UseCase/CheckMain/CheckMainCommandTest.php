@@ -16,6 +16,7 @@ use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
 use Intakt\Core\Watchdog\Infrastructure\FirstParentChain;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
@@ -46,6 +47,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(CommitClassifier::class)]
 #[UsesClass(MainHistory::class)]
+#[UsesClass(TrustedSignatures::class)]
 #[UsesClass(FirstParentChain::class)]
 #[UsesClass(OwnerKey::class)]
 #[UsesClass(OwnerKeyRefused::class)]

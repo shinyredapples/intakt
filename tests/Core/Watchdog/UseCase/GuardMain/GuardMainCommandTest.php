@@ -28,6 +28,8 @@ use Intakt\Core\Watchdog\Infrastructure\LedgerOwnerPushNotices;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\NoticeNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
+use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\TrustedKeys;
 use Intakt\Core\Watchdog\UseCase\GuardMain\AHaltNamesItsProject;
@@ -57,9 +59,11 @@ use Symfony\Component\Process\Process;
 #[CoversClass(GuardMain::class)]
 #[CoversClass(GuardMainInput::class)]
 #[CoversClass(GuardedMain::class)]
-#[UsesClass(TrustedKeys::class)]
 #[CoversClass(AHaltNamesItsProject::class)]
 #[CoversClass(ConsoleReport::class)]
+#[UsesClass(TrustedKeys::class)]
+#[UsesClass(TrustedSignatures::class)]
+#[UsesClass(OwnerKeyRefused::class)]
 #[UsesClass(LedgerOwnerPushNotices::class)]
 #[UsesClass(OwnerPushNoticePayload::class)]
 #[UsesClass(NoticeNotRecorded::class)]

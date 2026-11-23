@@ -17,14 +17,13 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
-// Signatures are checked with ssh-keygen against the owner's and the peer loop's keys alone, because HardenedGit pins git's own signature programs to /dev/null on purpose.
 final readonly class MainHistory implements CommitHistory
 {
+    // One limit for every git and ssh-keygen call, because a hung call must not hold the watchdog forever.
+    public const float TIMEOUT_SECONDS = 60;
+
     // The full ref, because a tag or a remote branch named main must not stand in for the branch.
     private const string MAIN = 'refs/heads/main';
-
-    // One limit for every git and ssh-keygen call, because a hung call must not hold the watchdog forever.
-    private const float TIMEOUT_SECONDS = 60;
 
     // One header per object format, because git names the signature header after the hash the repository uses.
     private const array SIGNATURE_HEADERS = ['sha1' => 'gpgsig', 'sha256' => 'gpgsig-sha256'];
@@ -34,18 +33,7 @@ final readonly class MainHistory implements CommitHistory
     // An empty shallow file is git's own way to read no shallow entries, so git follows the real parents and fails on one that is missing.
     private const array NO_SHALLOW_ENTRIES = ['--shallow-file', ''];
 
-    private const string SSH_ARMOR = '-----BEGIN SSH SIGNATURE-----';
-    private const string NAMESPACE = 'git';
-    private const string OWNER = 'owner';
-    private const string PEER = 'peer';
-
-    // One principal per signer class, asked owner first, because a peer key must never pass as the owner's (nor the reverse), and a key given as both keeps the owner's notice.
-    private const array SIGNED_AS = [self::OWNER => SignatureStatus::OwnerSigned, self::PEER => SignatureStatus::PeerSigned];
-
-    private const string PROGRAM = 'ssh-keygen';
-
-    /** @var array<string, list<string>> */
-    private array $trustedKeys;
+    private TrustedSignatures $signatures;
 
     /**
      * @param list<string> $ownerKeys
@@ -57,15 +45,12 @@ final readonly class MainHistory implements CommitHistory
         private HardenedGit $git,
         private string $repository,
         array $ownerKeys,
-        private Filesystem $filesystem,
+        Filesystem $filesystem,
         array $peerKeys = [],
         // Main's head read once for a whole check, because every read of one check must see the same main.
         private ?string $pinnedTip = null,
     ) {
-        $this->trustedKeys = [
-            self::OWNER => array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, self::OWNER, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys)),
-            self::PEER => array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, self::PEER, $index + 1)->typeAndKey, $peerKeys, array_keys($peerKeys)),
-        ];
+        $this->signatures = new TrustedSignatures($ownerKeys, $peerKeys, $filesystem);
     }
 
     /**
@@ -140,7 +125,7 @@ final readonly class MainHistory implements CommitHistory
             return SignatureStatus::Unsigned;
         }
 
-        return $this->signer(...$signed);
+        return $this->signatures->signerOf(...$signed);
     }
 
     /**
@@ -390,71 +375,5 @@ final readonly class MainHistory implements CommitHistory
         }
 
         return $lines;
-    }
-
-    /**
-     * @throws IOException
-     */
-    private function signer(string $payload, string $signature): SignatureStatus
-    {
-        if (!str_starts_with($signature, self::SSH_ARMOR."\n") || [] === array_merge(...array_values($this->trustedKeys))) {
-            return SignatureStatus::UnknownKey;
-        }
-
-        $files = [];
-
-        try {
-            // Allocated inside the try, because a failure on the second file must still remove the first.
-            $files[] = $signers = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-trusted-signers-');
-            $files[] = $signatureFile = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-trusted-signature-');
-            $this->filesystem->dumpFile($signers, $this->allowedSigners());
-            $this->filesystem->dumpFile($signatureFile, $signature);
-
-            return $this->verifiedSigner($signers, $signatureFile, $payload);
-        } catch (IOException) {
-            // Fail closed: a check that could not be prepared proves no trusted key signed, so the commit is an unknown key.
-            return SignatureStatus::UnknownKey;
-        } finally {
-            $this->filesystem->remove($files);
-        }
-    }
-
-    private function allowedSigners(): string
-    {
-        $lines = [];
-        foreach ($this->trustedKeys as $principal => $keys) {
-            foreach ($keys as $key) {
-                $lines[] = sprintf('%s namespaces="%s" %s'."\n", $principal, self::NAMESPACE, $key);
-            }
-        }
-
-        return implode('', $lines);
-    }
-
-    private function verifiedSigner(string $signers, string $signatureFile, string $payload): SignatureStatus
-    {
-        foreach (self::SIGNED_AS as $principal => $status) {
-            $command = [self::PROGRAM, '-Y', 'verify', '-f', $signers, '-I', $principal, '-n', self::NAMESPACE, '-s', $signatureFile];
-            if ([] !== $this->trustedKeys[$principal] && $this->verifies($command, $payload)) {
-                return $status;
-            }
-        }
-
-        return SignatureStatus::UnknownKey;
-    }
-
-    /**
-     * @param list<string> $command
-     */
-    private function verifies(array $command, string $payload): bool
-    {
-        $check = new Process($command, null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, self::TIMEOUT_SECONDS);
-
-        try {
-            return 0 === $check->run();
-        } catch (RuntimeException) {
-            // Fail closed: a check that timed out or did not start proves no trusted key signed, so the commit is a violation.
-            return false;
-        }
     }
 }

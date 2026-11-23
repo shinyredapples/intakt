@@ -22,6 +22,7 @@ use Intakt\Core\Watchdog\Infrastructure\FirstParentChain;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -38,6 +39,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(FirstParentChain::class)]
 #[CoversClass(OwnerKey::class)]
 #[CoversClass(OwnerKeyRefused::class)]
+#[CoversClass(TrustedSignatures::class)]
 #[CoversClass(MainHistoryRewritten::class)]
 #[CoversClass(MainNotRead::class)]
 #[UsesClass(HardenedGit::class)]
@@ -147,10 +149,12 @@ final class MainHistoryTest extends TestCase
 
     public function testAMalformedPeerKeyIsRefusedNamingItAsAPeerKeyAndItsPosition(): void
     {
-        $this->expectException(OwnerKeyRefused::class);
-        $this->expectExceptionMessage('Peer key 2 is not one SSH public key');
-
-        $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer'), 'cert-authority ssh-ed25519 A']);
+        try {
+            $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer'), 'cert-authority ssh-ed25519 A']);
+            self::fail('A malformed peer key must be refused.');
+        } catch (OwnerKeyRefused $refused) {
+            self::assertStringStartsWith('Peer key 2 is not one SSH public key', $refused->getMessage());
+        }
     }
 
     public function testACommitSignedByAKeyTheOwnerDidNotRegisterIsAnUnknownKeyViolation(): void
