@@ -35,26 +35,9 @@ final readonly class LedgerQueuedRounds
             }
         }
 
-        return $this->waiting($latest, $this->startedRounds($events));
-    }
+        $started = $this->startedRounds($events);
 
-    // Read as the review page reads a start, so an unreadable start, which has no page, leaves the round queued.
-    /**
-     * @return array<string, true>
-     */
-    private function startedRounds(RecordedEvents $events): array
-    {
-        $started = [];
-
-        foreach ($events as $recorded) {
-            $start = LedgerEventKind::ReviewStarted === $recorded->event->kind ? $this->payloads->startOf($recorded) : null;
-
-            if ($start instanceof ReviewedRound) {
-                $started[$start->round] = true;
-            }
-        }
-
-        return $started;
+        return $this->waiting($latest, $started);
     }
 
     // A queue line without a readable round id is skipped, so it cannot erase the readable queue line before it (decision 2 of #3159's tenth round).
@@ -77,6 +60,25 @@ final readonly class LedgerQueuedRounds
         $round = $payload->text('round') ?? '';
 
         return '' === $round ? null : ['project' => $project, 'change' => $change, 'queued' => ['order' => $order, 'round' => new QueuedRound($round, $project, $change)]];
+    }
+
+    // Read as the review page reads a start, so an unreadable start, which has no page, leaves the round queued.
+    /**
+     * @return array<string, true>
+     */
+    private function startedRounds(RecordedEvents $events): array
+    {
+        $started = [];
+
+        foreach ($events as $recorded) {
+            $start = LedgerEventKind::ReviewStarted === $recorded->event->kind ? $this->payloads->startOf($recorded) : null;
+
+            if ($start instanceof ReviewedRound) {
+                $started[$start->round] = true;
+            }
+        }
+
+        return $started;
     }
 
     /**
