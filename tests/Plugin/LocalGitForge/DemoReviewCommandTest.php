@@ -465,7 +465,7 @@ final class DemoReviewCommandTest extends TestCase
 
     private function waitingOnCorrectness(): RoundProgress
     {
-        return new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]);
+        return new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]);
     }
 
     private function answering(): TierInvoker

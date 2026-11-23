@@ -75,39 +75,14 @@ final class DemoProgress implements ReviewProgress
         }
     }
 
-    // Asked for each reviewer that left the awaited list blocked since the last poll, because the worker may record a reviewer blocked by its cooling pins before the demo polls again, and the demo must still stop with the plain message then; a blocked round without a wait ends as usual.
+    // Asked for each reviewer the last poll awaited and that is blocked now, because the worker may record a reviewer blocked by its cooling pins before the demo polls again, and the demo must still stop with the plain message then. A reviewer that delivered its verdict is never asked, because a tier cooling after its answer keeps nothing waiting; a blocked round without a wait ends as usual.
     private function stopWhenBlockedByAWait(RoundProgress $progress): void
     {
-        if (!in_array(FinishedState::Blocked, $progress->finished, true)) {
-            return;
-        }
-
-        foreach ($this->leftSinceLastPoll($progress->awaited) as $reviewer) {
-            $this->modelOf($reviewer->role.' reviewer', $reviewer->tier);
-        }
-    }
-
-    // Counted one by one, because two reviewers of the same role and tier look alike and only one of them may have left.
-    /**
-     * @param list<AwaitedReviewer> $stillAwaited
-     *
-     * @return list<AwaitedReviewer>
-     */
-    private function leftSinceLastPoll(array $stillAwaited): array
-    {
-        $left = [];
         foreach ($this->awaited as $reviewer) {
-            $kept = array_find_key($stillAwaited, static fn (AwaitedReviewer $awaited): bool => $awaited->role === $reviewer->role && $awaited->tier === $reviewer->tier);
-            if (null === $kept) {
-                $left[] = $reviewer;
-
-                continue;
+            if (FinishedState::Blocked === ($progress->finished[$reviewer->id] ?? null)) {
+                $this->modelOf($reviewer->role.' reviewer', $reviewer->tier);
             }
-
-            unset($stillAwaited[$kept]);
         }
-
-        return $left;
     }
 
     // The judge only once every reviewer is in, because it reads their findings.

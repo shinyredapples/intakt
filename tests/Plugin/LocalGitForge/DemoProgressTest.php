@@ -70,7 +70,7 @@ final class DemoProgressTest extends TestCase
         $progress = $this->progress($this->answering());
 
         $progress->reached($this->waitingOnBoth());
-        $progress->reached(new RoundProgress(1, 2, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]));
+        $progress->reached(new RoundProgress(1, 2, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
         $progress->reached(new RoundProgress(2, 2, false));
         $progress->reached(new RoundProgress(2, 2, true));
 
@@ -101,7 +101,7 @@ final class DemoProgressTest extends TestCase
         $tiers = self::createStub(TierInvoker::class);
         $tiers->method('answering')->willReturnOnConsecutiveCalls(new ResolvedModel(Provider::OpenAiCompatible, self::KIMI), new ResolvedModel(Provider::OpenAiCompatible, 'moonshotai/Kimi-K3.1-Pro:together'));
         $progress = $this->progress($tiers);
-        $correctness = new RoundProgress(0, 1, false, [], 0, [new AwaitedReviewer('correctness', Tier::Strong)]);
+        $correctness = new RoundProgress(0, 1, false, [], 0, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]);
 
         $progress->reached($correctness);
         $progress->reached($correctness);
@@ -143,7 +143,7 @@ final class DemoProgressTest extends TestCase
             self::throwException(new EveryProviderOut([ProviderOutage::coolingDown(Provider::OpenAiCompatible, 60)])),
         );
         $progress = $this->progress($tiers);
-        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]));
+        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
 
         $busy = $this->failureOf(static fn () => $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false)));
 
@@ -154,7 +154,7 @@ final class DemoProgressTest extends TestCase
     public function testAReviewerBlockedWhileItsTierIsFreeEndsTheDemoAsUsual(): void
     {
         $progress = $this->progress($this->answering());
-        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]));
+        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
 
         $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false));
 
@@ -169,11 +169,28 @@ final class DemoProgressTest extends TestCase
             self::throwException(new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60)),
         );
         $progress = $this->progress($tiers);
-        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]));
+        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
 
         $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Verdict], 1, [], false));
 
         self::assertSame(['Waiting on the correctness reviewer ('.self::KIMI.').'], $this->lines());
+    }
+
+    // Forced order: between two polls the correctness reviewer is blocked while its tier is free, and the security reviewer delivers its verdict before its tier starts to cool.
+    public function testAReviewerThatDeliveredItsVerdictDoesNotStopTheDemoWhenItsTierCoolsAfterwards(): void
+    {
+        $cooling = false;
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willReturnCallback(static function (string $project, Tier $tier) use (&$cooling): ResolvedModel {
+            return Tier::Standard === $tier && $cooling ? throw new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60) : new ResolvedModel(Provider::OpenAiCompatible, self::KIMI);
+        });
+        $progress = $this->progress($tiers);
+        $progress->reached($this->waitingOnBoth());
+        $cooling = true;
+
+        $progress->reached(new RoundProgress(2, 2, false, ['reviewer' => FinishedState::Blocked, 'security-reviewer' => FinishedState::Verdict], 2, [], false));
+
+        self::assertCount(1, $this->lines());
     }
 
     // Keys rejected or a disabled provider are no rate limit, so the demo leaves them to the reviewer, which ends with its own reason.
@@ -222,7 +239,7 @@ final class DemoProgressTest extends TestCase
 
     private function waitingOnBoth(): RoundProgress
     {
-        return new RoundProgress(0, 2, false, [], 0, [new AwaitedReviewer('correctness', Tier::Strong), new AwaitedReviewer('security', Tier::Standard)]);
+        return new RoundProgress(0, 2, false, [], 0, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer'), new AwaitedReviewer('security', Tier::Standard, 'security-reviewer')]);
     }
 
     /**

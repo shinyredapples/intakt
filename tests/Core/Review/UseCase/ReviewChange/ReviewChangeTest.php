@@ -380,7 +380,8 @@ final class ReviewChangeTest extends KernelTestCase
 
         // The first read of the round reports too, because the caller should see the start before any wait.
         self::assertCount(4, $progress->reported);
-        self::assertEquals(new RoundProgress(0, 2, false, [], 0, [new AwaitedReviewer('role-1', Tier::Standard), new AwaitedReviewer('role-2', Tier::Standard)]), $progress->reported[3]);
+        $awaited = $progress->reported[3]->awaited;
+        self::assertEquals(new RoundProgress(0, 2, false, [], 0, [new AwaitedReviewer('role-1', Tier::Standard, $awaited[0]->id), new AwaitedReviewer('role-2', Tier::Standard, $awaited[1]->id)]), $progress->reported[3]);
     }
 
     public function testTheLastReportSaysTheRoundIsJudgedWhenTheWorkersFinishIt(): void
