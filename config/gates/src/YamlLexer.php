@@ -161,14 +161,6 @@ final class YamlLexer
         };
     }
 
-    // Because an anchor or a tag belongs to the node after it on its line, as in `- &id key: |`, that node's key keeps the property's column.
-    private function afterNodeProperty(int $end): int
-    {
-        $this->propertyColumn = $this->nodeColumn;
-
-        return $end;
-    }
-
     private function afterSingleQuoted(int $offset): int
     {
         while (false !== $close = strpos($this->source, "'", $offset)) {
@@ -208,6 +200,14 @@ final class YamlLexer
     private function openFlow(int $end): int
     {
         ++$this->flowDepth;
+
+        return $end;
+    }
+
+    // Because an anchor or a tag belongs to the node after it on its line, as in `- &id key: |`, that node's key keeps the property's column.
+    private function afterNodeProperty(int $end): int
+    {
+        $this->propertyColumn = $this->nodeColumn;
 
         return $end;
     }

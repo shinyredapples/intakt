@@ -223,14 +223,6 @@ final class ShellLexer
         return $this->afterWordPart($end);
     }
 
-    // Because the body of `function f` is a command, a `{` or `((` after the name starts one.
-    private function afterFunctionName(int $end): int
-    {
-        $this->functionNameFollows = false;
-
-        return $this->startingACommand($end);
-    }
-
     private function afterCaseSubject(int $end): int
     {
         $this->turnInto(self::CASE_PATTERN);
@@ -242,6 +234,14 @@ final class ShellLexer
     {
         array_pop($this->frames);
         $this->frames[] = $frame;
+    }
+
+    // Because the body of `function f` is a command, a `{` or `((` after the name starts one.
+    private function afterFunctionName(int $end): int
+    {
+        $this->functionNameFollows = false;
+
+        return $this->startingACommand($end);
     }
 
     // Because a command follows a reserved word such as `then`, the command start lasts over it, while after `for` a `((` opens arithmetic.

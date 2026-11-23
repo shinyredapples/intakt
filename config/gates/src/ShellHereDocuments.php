@@ -74,13 +74,7 @@ final class ShellHereDocuments
         $quoted = false;
 
         while ($offset < $this->length && !str_contains(ShellLexer::WORD_BREAKS, $this->source[$offset])) {
-            $end = match ($this->source[$offset]) {
-                "'" => $this->quotes->endOfSingleQuoted($offset + 1),
-                '"' => $this->quotes->endOfEscaped('"', $offset + 1),
-                '\\' => min($offset + 2, $this->length),
-                '$' => "'" === ($this->source[$offset + 1] ?? '') ? $this->quotes->endOfEscaped("'", $offset + 2) : $offset + 1,
-                default => $offset + 1,
-            };
+            $end = $this->endOfDelimiterPart($offset);
             $part = substr($this->source, $offset, $end - $offset);
             $quoted = $quoted || ("\\\n" !== $part && 1 < strlen($part));
             $delimiter .= $this->withoutQuotes($part);
@@ -88,6 +82,17 @@ final class ShellHereDocuments
         }
 
         return [$delimiter, $offset, $quoted];
+    }
+
+    private function endOfDelimiterPart(int $offset): int
+    {
+        return match ($this->source[$offset]) {
+            "'" => $this->quotes->endOfSingleQuoted($offset + 1),
+            '"' => $this->quotes->endOfEscaped('"', $offset + 1),
+            '\\' => min($offset + 2, $this->length),
+            '$' => "'" === ($this->source[$offset + 1] ?? '') ? $this->quotes->endOfEscaped("'", $offset + 2) : $offset + 1,
+            default => $offset + 1,
+        };
     }
 
     // Because inside double quotes a backslash escapes only `$`, a backtick, `"` and itself, any other backslash stays in the delimiter, while a backslash before a line feed joins the lines in both places, and `$'...'` loses its `$` with its quotes.
@@ -108,7 +113,7 @@ final class ShellHereDocuments
     private function afterBody(int $offset, array $hereDocument): int
     {
         while ($offset < $this->length) {
-            [$line, $offset] = $this->bodyLineAt($offset, $hereDocument['quoted']);
+            [$line, $offset] = $hereDocument['quoted'] ? $this->physicalLineAt($offset) : $this->joinedLineAt($offset);
 
             if ($hereDocument['delimiter'] === ($hereDocument['tabsStripped'] ? ltrim($line, "\t") : $line)) {
                 return min($offset, $this->length);
@@ -118,19 +123,27 @@ final class ShellHereDocuments
         return $this->length;
     }
 
+    /**
+     * @return array{string, int}
+     */
+    private function physicalLineAt(int $offset): array
+    {
+        $end = $offset + strcspn($this->source, "\n", $offset);
+
+        return [substr($this->source, $offset, $end - $offset), $end + 1];
+    }
+
     // Because in the body of an unquoted delimiter a backslash before a line feed joins the lines before the delimiter line is matched, so `prefix\` and `EOF` read as `prefixEOF`.
     /**
      * @return array{string, int}
      */
-    private function bodyLineAt(int $offset, bool $quoted): array
+    private function joinedLineAt(int $offset): array
     {
         $line = '';
 
         do {
-            $end = $offset + strcspn($this->source, "\n", $offset);
-            $part = substr($this->source, $offset, $end - $offset);
-            $offset = $end + 1;
-            $joins = !$quoted && $end < $this->length && 1 === strspn(strrev($part), '\\') % 2;
+            [$part, $offset] = $this->physicalLineAt($offset);
+            $joins = $offset <= $this->length && 1 === strspn(strrev($part), '\\') % 2;
             $line .= $joins ? substr($part, 0, -1) : $part;
         } while ($joins);
 
