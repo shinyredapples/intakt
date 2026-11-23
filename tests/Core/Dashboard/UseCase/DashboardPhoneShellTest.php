@@ -27,14 +27,14 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
 
         self::assertSame('Search', $search->filter('.ph-short')->text());
     }
-
+    // A phone's bar holds Now, You and Trends, so Projects and Team are reached through More.
     // A phone's bar holds Now, You and Trends, so Projects is reached through More.
     public function testTheMoreItemOpensTheSheetWithProjects(): void
     {
         $page = $this->browser->request('GET', '/projects');
 
         self::assertCount(1, $page->filter('.rail-in button.nav.more[data-more-toggle]'));
-        self::assertSame(['Projects'], $page->filter('#more.menu[data-more-sheet] nav a')->each(static fn (Crawler $link): string => trim($link->text())));
+        self::assertSame(['Projects', 'Team'], $page->filter('#more.menu[data-more-sheet] nav a')->each(static fn (Crawler $link): string => trim($link->text())));
     }
 
     public function testTheMoreItemOpensTheSheetOfThePagesUnderIt(): void

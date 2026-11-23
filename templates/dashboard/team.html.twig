@@ -1,0 +1,51 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Team and accounts - Intakt{% endblock %}
+
+{% block body %}
+<div class="page-head">
+    <div>
+        <h1>Team and accounts</h1>
+        <p class="lead">Who does what, and which account pays for it. You are the Product owner.</p>
+    </div>
+</div>
+<div class="split">
+<div>
+<section aria-labelledby="acc-h">
+    <h2 id="acc-h">Accounts</h2>
+    {% if accounts is empty %}
+    <p class="none">No account is enabled yet.</p>
+    {% endif %}
+    {% for team_account in accounts %}
+    <article class="acct" data-account="{{ team_account.account.key }}">
+        <div>
+            <h3 class="acct-name">{{ team_account.name }}</h3>
+            <p class="muted small">{{ team_account.kind }}</p>
+            <div class="chips page-chip">{{ include('dashboard/components/chip.html.twig', {label: team_account.state.value, dot: team_account.state.dot}, with_context = false) }}</div>
+        </div>
+        <div>
+            {% for window in team_account.windows %}
+            {{ include('dashboard/components/bar.html.twig', {label: window.label, note: window.note, used: window.used}, with_context = false) }}
+            {% else %}
+            <p class="small muted">Pay per use: no usage window.</p>
+            {% endfor %}
+            {% if team_account.windows is not empty %}{{ include('dashboard/components/bar_legend.html.twig', {}, with_context = false) }}{% endif %}
+        </div>
+    </article>
+    {% endfor %}
+</section>
+</div>
+<aside class="side" aria-labelledby="roles-h">
+    <h2 id="roles-h">Roles</h2>
+    {% if roles is empty %}
+    <p class="none">No role is configured.</p>
+    {% else %}
+    <div class="roles">
+        {% for role in roles %}
+        <div class="role"><h3>{{ role.name }}</h3><p class="meta">{% for name in role.accounts %}<span>{{ name }}</span>{% endfor %}</p></div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</aside>
+</div>
+{% endblock %}

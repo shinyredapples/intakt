@@ -347,7 +347,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
     {
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['Now', 'You', 'Trends', 'Projects'], $page->filter('.rail a.nav')->each(static fn (Crawler $item): string => trim($item->text())));
+        self::assertSame(['Now', 'You', 'Trends', 'Projects', 'Team'], $page->filter('.rail a.nav')->each(static fn (Crawler $item): string => trim($item->text())));
         self::assertSame(['trends'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
     }
 

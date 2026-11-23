@@ -964,3 +964,14 @@ a.lane:hover { background: var(--tint-2); }
 }
 /* The line beside a button the connection controller holds: what it waits for, then why and what to do. */
 .held-note { margin: var(--s8) 0 0; color: var(--muted); font-size: var(--t15); }
+
+/* DESIGN.md, Components "Account names" and Breakpoints: an account is a row of its name and state beside its windows; the roles stand beside the accounts from 1500 px. */
+.acct { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--s32); align-items: start; padding: var(--s24) 0; border-bottom: 1px solid var(--hairline); }
+.acct:first-of-type { border-top: 1px solid var(--hairline); }
+.acct-name { margin: 0; font: 600 var(--t17)/1.3 var(--f-head); }
+.acct .small { margin: var(--s4) 0 var(--s8); }
+.roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s8); }
+.role { padding: 14px var(--s16); border-radius: var(--r-card); background: var(--tint); }
+.role h3 { margin: 0 0 var(--s4); font: 600 var(--t15)/1.3 var(--f-head); }
+@media (min-width: 1500px) { .side .roles { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .acct { grid-template-columns: minmax(0, 1fr); gap: var(--s16); } }

@@ -25,7 +25,7 @@ final class DashboardShellTest extends DashboardPageTestCase
     public static function pages(): iterable
     {
         yield 'the board' => ['/'];
-        yield 'the project list' => ['/projects'];
+        yield 'the project list' => ['/projects', '/team'];
         yield 'the review list' => ['/reviews'];
         yield 'a review' => ['/reviews/round-1'];
         yield 'the components page' => ['/components'];
@@ -56,9 +56,9 @@ final class DashboardShellTest extends DashboardPageTestCase
     {
         $rail = $this->browser->request('GET', '/reviews')->filter('.rail a.nav');
 
-        self::assertSame(['Now', 'You', 'Trends', 'Projects'], $rail->each(static fn (Crawler $item): string => trim($item->text())));
-        self::assertSame(['/?board=1', '/waiting', '/trends', '/projects'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('href')));
-        self::assertSame(['nav', 'nav', 'nav', 'nav in-more'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('class')));
+        self::assertSame(['Now', 'You', 'Trends', 'Projects', 'Team'], $rail->each(static fn (Crawler $item): string => trim($item->text())));
+        self::assertSame(['/?board=1', '/waiting', '/trends', '/projects', '/team'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('href')));
+        self::assertSame(['nav', 'nav', 'nav', 'nav in-more', 'nav in-more'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('class')));
         self::assertCount(0, $rail->filter('.count'));
     }
 
