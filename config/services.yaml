@@ -130,7 +130,7 @@ services:
     logger:
         class: Symfony\Component\HttpKernel\Log\Logger
         arguments:
-            $minLevel: '%env(log_level:default::INTAKT_LOG_LEVEL)%'
+            $minLevel: '%env(log_level:INTAKT_LOG_LEVEL)%'
             $output: 'php://stderr'
             $formatter: '@Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter'
 

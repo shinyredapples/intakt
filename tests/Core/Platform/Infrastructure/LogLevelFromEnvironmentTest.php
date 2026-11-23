@@ -17,6 +17,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use ReflectionClass;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\DependencyInjection\Exception\EnvNotFoundException;
 use Symfony\Component\HttpKernel\Log\Logger;
 
 #[CoversClass(LogLevelFromEnvironment::class)]
@@ -27,7 +28,7 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
 {
     private const string VARIABLE = 'INTAKT_LOG_LEVEL';
 
-    private const string UNKNOWN_LEVEL_MESSAGE = 'INTAKT_LOG_LEVEL is "loud", which is not a log level: use one of emergency, alert, critical, error, warning, notice, info, debug.';
+    private const string UNKNOWN_LEVEL_MESSAGE = 'INTAKT_LOG_LEVEL is set to a value that is not a log level: use one of emergency, alert, critical, error, warning, notice, info, debug.';
 
     /** @var array{server: array<mixed>, env: array<mixed>} */
     private array $previous = ['server' => [], 'env' => []];
@@ -39,11 +40,11 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
         self::assertSame(LogLevel::WARNING, $level);
     }
 
-    public function testAnEmptyLogLevelGivesWarning(): void
+    public function testAnEmptyLogLevelFailsWithAMessageNamingEveryAcceptedLevel(): void
     {
-        $level = $this->levelFrom('');
+        $this->expectExceptionObject(new InvalidArgumentException(self::UNKNOWN_LEVEL_MESSAGE));
 
-        self::assertSame(LogLevel::WARNING, $level);
+        $this->levelFrom('');
     }
 
     #[DataProvider('psrLevels')]
@@ -71,6 +72,16 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
         $this->levelFrom('loud');
     }
 
+    public function testTheFailureMessageLeavesTheRejectedValueOut(): void
+    {
+        try {
+            $this->levelFrom('pasted-by-mistake');
+            self::fail('An unknown level was accepted.');
+        } catch (InvalidArgumentException $failure) {
+            self::assertStringNotContainsString('pasted-by-mistake', $failure->getMessage());
+        }
+    }
+
     public function testALevelInCapitalsIsNotALogLevel(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -92,7 +103,7 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
         self::assertSame('', $output);
     }
 
-    public function testTheContainerBuildsTheLoggerWithALevelFromTheEnvironment(): void
+    public function testTheContainerBuildsTheLoggerWhenTheEnvironmentNamesALevel(): void
     {
         $_SERVER[self::VARIABLE] = $_ENV[self::VARIABLE] = 'info';
 
@@ -124,7 +135,7 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
 
     private function levelFrom(?string $value): string
     {
-        return new LogLevelFromEnvironment()->getEnv('log_level', 'default::'.self::VARIABLE, static fn (): ?string => $value);
+        return new LogLevelFromEnvironment()->getEnv('log_level', self::VARIABLE, static fn (string $name): string => $value ?? throw new EnvNotFoundException(sprintf('Environment variable not found: "%s".', $name)));
     }
 
     private function logInfoAt(string $minLevel): string
