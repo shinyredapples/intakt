@@ -48,7 +48,7 @@ Each reviewer names a tier. So one changed line moves every reviewer on that tie
 
 ## When a provider says "slow down"
 
-When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day. For a router model such as `moonshotai/Kimi-K3.1-Pro:deepinfra`, only that router provider cools, not the account. The reviewer moves on at once to the next free account, or to a fallback of the same model at another router provider. With neither, it is not retried every minute: it waits out the reset time. Substitutes from other providers are used only when its own provider cannot answer.
+When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day. For a router model such as `moonshotai/Kimi-K3.1-Pro:deepinfra`, only that router provider cools, not the account. The reviewer moves on at once to the next free account, or to a fallback of the same model at another router provider. With neither, it moves to the first free substitute, in the order listed: another model on the same provider, or a model from another provider. Without a free substitute, it is not retried every minute: it waits out the reset time.
 
 ## Reading the cost
 

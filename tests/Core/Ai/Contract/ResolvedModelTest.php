@@ -32,6 +32,16 @@ final class ResolvedModelTest extends TestCase
         self::assertTrue(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model')->isTheSameModelAs(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model:one')));
     }
 
+    public function testOptionsDoNotMakeAPinnedAndAnUnpinnedFormTwoModels(): void
+    {
+        self::assertTrue(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model:primary?temperature=0')->isTheSameModelAs(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model?temperature=0')));
+    }
+
+    public function testAnUnpinnedModelWithOptionsIsTheSameModelAsItWithout(): void
+    {
+        self::assertTrue(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model?temperature=0')->isTheSameModelAs(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model')));
+    }
+
     public function testTwoTagsOfAModelWithoutAnOwnerAreNotTheSameModel(): void
     {
         self::assertFalse(new ResolvedModel(Provider::OpenAiCompatible, 'llama3:8b')->isTheSameModelAs(new ResolvedModel(Provider::OpenAiCompatible, 'llama3:70b')));
