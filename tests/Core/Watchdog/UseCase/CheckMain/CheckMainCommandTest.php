@@ -24,6 +24,7 @@ use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeOption;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Support\ConsoleDisplay;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -40,6 +41,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(CheckMainInput::class)]
 #[CoversClass(RecordedMergeOption::class)]
 #[CoversClass(RecordedMergeNotARange::class)]
+#[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(CommitClassifier::class)]
 #[UsesClass(MainHistory::class)]
 #[UsesClass(FirstParentChain::class)]
@@ -219,7 +221,7 @@ final class CheckMainCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringNotContainsString($control, $tester->getDisplay());
-        self::assertStringContainsString('missing'.$escaped.'path', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing'.$escaped.'path'));
     }
 
     public function testAReasonThatIsNotUtf8HasItsHighBytesPrintedEscaped(): void
@@ -228,14 +230,14 @@ final class CheckMainCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringNotContainsString("\xC2", $tester->getDisplay());
-        self::assertStringContainsString('missing\302path', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\302path'));
     }
 
     public function testAPrintableUnicodeCharacterInAReasonIsKept(): void
     {
         $tester = $this->whenTheCommandRunsIn($this->repository->path.'/missing-Ä', str_repeat('a', 40), []);
 
-        self::assertStringContainsString('missing-Ä', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing-Ä'));
     }
 
     /**
@@ -332,12 +334,23 @@ final class CheckMainCommandTest extends TestCase
         self::assertStringNotContainsString('main is clean', $tester->getDisplay());
     }
 
+    public function testAReasonWhosePathIsLongerThan200CharactersIsStillShownEscaped(): void
+    {
+        $path = $this->repository->path.'/'.str_repeat('d', 200)."/missing\u{2028}path";
+
+        $tester = $this->whenTheCommandRunsIn($path, str_repeat('a', 40), []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringNotContainsString("\u{2028}", $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\u{2028}path'));
+    }
+
     public function testAReasonWithALineBreakIsPrintedOnOneEscapedLine(): void
     {
         $tester = $this->whenTheCommandRunsIn($this->repository->path."/missing\nviolation", str_repeat('a', 40), []);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('missing\nviolation', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\nviolation'));
     }
 
     #[Override]
