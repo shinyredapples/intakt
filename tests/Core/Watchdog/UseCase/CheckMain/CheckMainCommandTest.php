@@ -318,8 +318,34 @@ final class CheckMainCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns($seen, []);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('shallow repository', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('shallow repository'));
         self::assertStringNotContainsString('main is clean', $tester->getDisplay());
+    }
+
+    public function testAShallowRepositoryInALongFolderIsStillNamedShallow(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitEmpty('New');
+        $this->repository->cutHistoryBelow($seen);
+        $filesystem = new Filesystem();
+        $path = $this->repository->path;
+        $wrappedAtLeastOnce = false;
+
+        // A block is at most 120 columns wide, so 130 lengths put a line break inside the phrase at least once.
+        foreach (range(1, 130) as $length) {
+            $folder = $this->keys.'/'.str_repeat('d', $length);
+            $filesystem->mkdir($folder);
+            $filesystem->rename($path, $folder.'/repo');
+            $path = $folder.'/repo';
+
+            $tester = $this->whenTheCommandRunsIn($path, $seen, []);
+
+            self::assertSame(Command::FAILURE, $tester->getStatusCode());
+            self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('shallow repository'));
+            $wrappedAtLeastOnce = $wrappedAtLeastOnce || !str_contains($tester->getDisplay(), 'shallow repository');
+        }
+
+        self::assertTrue($wrappedAtLeastOnce);
     }
 
     public function testARecordedHeadTheRepositoryDoesNotHoldExitsWithOne(): void
