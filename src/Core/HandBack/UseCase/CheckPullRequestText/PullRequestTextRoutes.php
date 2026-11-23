@@ -19,6 +19,7 @@ use JsonException;
 use PDOException;
 use Symfony\Component\Lock\Exception\ExceptionInterface;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\SharedLockInterface;
 
 // The task's last pull request text line decides, so a miss right after a sent-back one goes to the reviewers, and a pass or a hand-off to the reviewers starts the count again; the hand-back round's lines are not read, so the two counts stay apart.
 final readonly class PullRequestTextRoutes
@@ -106,11 +107,16 @@ final readonly class PullRequestTextRoutes
         try {
             return $step();
         } finally {
-            try {
-                $lock->release();
-            } catch (ExceptionInterface) {
-                // The round's line is written or refused by now, and the lock's time to live frees the key, so a failed release changes no route.
-            }
+            $this->released($lock);
+        }
+    }
+
+    private function released(SharedLockInterface $lock): void
+    {
+        try {
+            $lock->release();
+        } catch (ExceptionInterface) {
+            // The round's line is written or refused by now, and the lock's time to live frees the key, so a failed release changes no route.
         }
     }
 
