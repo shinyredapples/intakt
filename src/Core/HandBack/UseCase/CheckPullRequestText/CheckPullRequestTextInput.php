@@ -16,4 +16,10 @@ final class CheckPullRequestTextInput
 
     #[Argument('The pull-request.md the build left in its output directory: the title on the first line, then the body')]
     public string $pullRequestText;
+
+    #[Argument('The task\'s repository, such as the project\'s mirror; with the branch it names the task whose misses are counted')]
+    public string $repository;
+
+    #[Argument('The task\'s branch')]
+    public string $branch;
 }
