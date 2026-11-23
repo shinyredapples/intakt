@@ -65,7 +65,7 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 
 - **What you see:** pages take seconds to load.
 - **Why:** the server is busy.
-- **What to do:** inside the container, `php bin/console intakt:server:status` shows how busy it is.
+- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts and the hub. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the same.
 
 ## The dashboard says "Open the dashboard on localhost"
 

@@ -175,6 +175,8 @@ hub: healthy
 
 Run it inside the container, because the admin API answers only there. It reads `FRANKENPHP_ADMIN_URL` (default `http://localhost:2019`), which must be plain `http` on `localhost`, `127.0.0.1` or `[::1]`; any other address is refused before anything is sent. A value that cannot be read shows `down` with the reason (the server did not answer, answered with an error status, or answered something Intakt cannot use), and the command then exits with a non-zero code. A thread that is starting or restarting counts as neither busy nor idle.
 
+The board shows the same reading in a row under its columns, read once each time the board loads (it is not pushed by live updates): **Threads busy**, **Threads idle**, **Queue depth**, **Worker restarts** and **Hub**. A source that cannot be read shows one red `down` figure with the reason in place of its values (**Worker threads** for both thread counts, **Server metrics** for the queue depth and the restarts), and an unhealthy hub shows `unhealthy` in red; the other figures still show. A refused `FRANKENPHP_ADMIN_URL` shows all three sources `down` with the reason instead of failing the board. Any credential in a reason is blanked out.
+
 ## Background work
 
 Intakt has two internal message buses, one for commands and one for questions. Each bus accepts only its own kind of message: a question sent on the command bus, or a command sent on the question bus, is refused before any handler runs. This covers messages Intakt sends itself; a message a worker takes back from the queue is not checked again.
