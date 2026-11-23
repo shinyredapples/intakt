@@ -58,6 +58,8 @@ The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment 
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
+A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+
 When Intakt picks a task from a project's GitHub issues, it reads the issue once more right before. If the issue changed since the listing in a way that steers the queue, nothing is picked that round, and the next round reads the issue again from scratch: its labels changed, someone without write access applied a label last, priority labels were applied in another order (the one applied last counts), or the issues its text waits for or closes changed. A change to the wording alone, the same references in another order, or two other labels applied again in the other order does not stop the pick.
 
 The [plain-words guides](../guide/README.md) explain how Intakt works inside.

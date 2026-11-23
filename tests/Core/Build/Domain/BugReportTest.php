@@ -1,0 +1,178 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Build\Domain;
+
+use Intakt\Core\Build\Contract\TaskKind;
+use Intakt\Core\Build\Domain\BugPart;
+use Intakt\Core\Build\Domain\BugReport;
+use Intakt\Core\Build\Domain\BuildQuestion;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(BugReport::class)]
+#[CoversClass(BugPart::class)]
+#[CoversClass(TaskKind::class)]
+#[CoversClass(BuildQuestion::class)]
+final class BugReportTest extends TestCase
+{
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function completeBodies(): iterable
+    {
+        yield 'bold labels' => ["**When:** open the page\n**Today:** it fails\n**Expected:** it loads\n**Must keep working:** the list"];
+        yield 'headings' => ["## When\nopen the page\n\n## Today\nit fails\n\n## Expected\nit loads\n\n## Must keep working\nthe list"];
+        yield 'bold labels in a list, in any letter case' => ["- **when:** open\n- **TODAY:** fails\n* **Expected:** loads\n- __must keep working__: the list"];
+        yield 'bold label with the colon outside' => ["**When**: a\n**Today**: b\n**Expected**: c\n**Must keep working**: d"];
+        yield 'headings with a colon and closing hashes' => ["### When: ###\na\n## today\nb\n# Expected:\nc\n## Must keep working ##\nd"];
+    }
+
+    public function testAnEmptyLastPartFollowedByAnotherBoldLabelIsMissing(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:**\n**Acceptance:**\n- a test");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testAPartHoldingOnlyAnHtmlCommentIsMissing(): void
+    {
+        $report = BugReport::fromBody("## When\nopen\n## Today\n<!-- describe what happens\nnow -->\n## Expected\nloads\n## Must keep working\nthe list");
+
+        self::assertSame([BugPart::Today], $report->missingParts());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function quotedParts(): iterable
+    {
+        yield 'a backtick fence' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n```\n**Must keep working:** the list\n```"];
+        yield 'a tilde fence with an info string' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n~~~~markdown\n## Must keep working\nthe list\n~~~~"];
+        yield 'an external block' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n<!-- external -->\n**Must keep working:** the list\n<!-- /external -->"];
+    }
+
+    #[DataProvider('quotedParts')]
+    public function testAPartWrittenInsideAFenceOrAnExternalBlockDoesNotCount(string $body): void
+    {
+        self::assertSame([BugPart::MustKeepWorking], BugReport::fromBody($body)->missingParts());
+    }
+
+    public function testAFenceInsideAPartNeitherFillsNorEndsIt(): void
+    {
+        $report = BugReport::fromBody("**When:**\n```\n## Today\nfails\n```\n**Today:** fails\n**Expected:** loads\n**Must keep working:** the list");
+
+        self::assertSame([BugPart::When], $report->missingParts());
+    }
+
+    public function testAnExternalBlockInsideAPartDoesNotEndItSoTheTextAfterItCounts(): void
+    {
+        $report = BugReport::fromBody("**When:**\n<!-- external -->\n## Note\n<!-- /external -->\nopen the page\n**Today:** fails\n**Expected:** loads\n**Must keep working:** the list");
+
+        self::assertSame([], $report->missingParts());
+    }
+
+    public function testAMustKeepWorkingHeadingWithClosingHashesAndNothingUnderItIsMissing(): void
+    {
+        $report = BugReport::fromBody("## When\nopen\n## Today\nfails\n## Expected\nloads\n## Must keep working ##\n");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testAHeadingThatOnlyStartsWithAPartsNameIsNoPart(): void
+    {
+        $report = BugReport::fromBody("## When I open the page\nit fails\n## Today\nfails\n## Expected\nloads\n## Must keep working assumptions\nthe list");
+
+        self::assertSame([BugPart::When, BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testABoldLabelFollowedByTextOnTheSameLineFillsThePart(): void
+    {
+        $report = BugReport::fromBody("**When** I open it\n**Today** it fails\n**Expected** it loads\n**Must keep working** the list");
+
+        self::assertSame([], $report->missingParts());
+    }
+
+    public function testAPlainWordWithAColonInsideAPartDoesNotEndIt(): void
+    {
+        $report = BugReport::fromBody("**When:**\nSteps:\n1. open\n**Today:** fails\n**Expected:** loads\n**Must keep working:**\nToday: the list");
+
+        self::assertSame([], $report->missingParts());
+    }
+
+    public function testAPlainLabelWithAColonStartsNoPart(): void
+    {
+        $report = BugReport::fromBody("When: open\n**Today:** fails\n**Expected:** loads\n**Must keep working:** the list");
+
+        self::assertSame([BugPart::When], $report->missingParts());
+    }
+
+    public function testABoldTextThatIsNoPartsNameEndsThePart(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:**\n- **Note** the list stays");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    #[DataProvider('completeBodies')]
+    public function testABugBodyWithWhenTodayExpectedAndMustKeepWorkingHasNoMissingPart(string $body): void
+    {
+        self::assertSame([], BugReport::fromBody($body)->missingParts());
+    }
+
+    public function testABugBodyWithoutMustKeepWorkingNamesThatPartAsMissing(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testMissingPartsComeInTheOrderTheTaskStatesThem(): void
+    {
+        self::assertSame([BugPart::When, BugPart::Expected], BugReport::fromBody("**Today:** fails\n**Must keep working:** the list")->missingParts());
+    }
+
+    public function testAPartWithAHeadingButNoTextCountsAsMissing(): void
+    {
+        $report = BugReport::fromBody("## When\nopen\n## Today\n\n## Expected\nloads\n## Must keep working\n   \n");
+
+        self::assertSame([BugPart::Today, BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testAnotherHeadingEndsAPartSoItsTextDoesNotCountForIt(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:**\n## Acceptance\n- a test");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testASentenceThatOnlyStartsWithTheWordWhenIsNoPart(): void
+    {
+        self::assertSame(BugPart::cases(), BugReport::fromBody("When I open the page it fails.\nToday it is slow.\n## Whenever\ntext")->missingParts());
+    }
+
+    public function testAnEmptyBodyMissesEveryPart(): void
+    {
+        self::assertSame(BugPart::cases(), BugReport::fromBody('')->missingParts());
+    }
+
+    public function testOnlyTheBugLabelMakesATaskABug(): void
+    {
+        self::assertSame([TaskKind::Bug, TaskKind::Task, TaskKind::Task], [
+            TaskKind::fromLabels(['intakt', 'bug']),
+            TaskKind::fromLabels(['intakt', 'bugfix']),
+            TaskKind::fromLabels([]),
+        ]);
+    }
+
+    public function testTheQuestionForMissingPartsNamesThemAndRecommendsAddingThem(): void
+    {
+        $question = BuildQuestion::forMissingBugParts([BugPart::Today, BugPart::MustKeepWorking]);
+
+        self::assertStringContainsString('missing: Today, Must keep working.', $question->question);
+        self::assertSame(['Add the missing parts to the task', 'Remove the bug label'], $question->choices);
+        self::assertSame('Add the missing parts to the task', $question->recommendation);
+    }
+}
