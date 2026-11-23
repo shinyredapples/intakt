@@ -25,21 +25,6 @@ final class MarkdownReaderTest extends TestCase
 {
     private string $root;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/markdown-reader-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->root.'/README.md', "# Intakt\n\nA loop runner.\n");
-        new Filesystem()->dumpFile($this->root.'/docs/user/guide.md', "Two words.\n");
-        new Filesystem()->dumpFile($this->root.'/docs/notes.txt', "Not Markdown.\n");
-        new Filesystem()->dumpFile($this->root.'/src/README.md', "Not measured.\n");
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->chmod($this->root, 0o755, recursive: true);
-        new Filesystem()->remove($this->root);
-    }
-
     public function testItReadsOnePagePerMarkdownFileUnderDocsAndTheReadmeWithItsWordCount(): void
     {
         $pages = $this->reader()->pages($this->root, ['src/README.md', 'docs/user/guide.md', 'docs/notes.txt', 'README.md']);
@@ -71,6 +56,21 @@ final class MarkdownReaderTest extends TestCase
         $this->expectExceptionObject(new MarkdownReadFailure('cannot read docs/user/guide.md'));
 
         $this->reader()->pages($this->root, ['docs/user/guide.md']);
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/markdown-reader-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->root.'/README.md', "# Intakt\n\nA loop runner.\n");
+        new Filesystem()->dumpFile($this->root.'/docs/user/guide.md', "Two words.\n");
+        new Filesystem()->dumpFile($this->root.'/docs/notes.txt', "Not Markdown.\n");
+        new Filesystem()->dumpFile($this->root.'/src/README.md', "Not measured.\n");
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->chmod($this->root, 0o755, recursive: true);
+        new Filesystem()->remove($this->root);
     }
 
     private function reader(): MarkdownReader
