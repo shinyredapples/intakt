@@ -36,30 +36,18 @@ final readonly class ShellHereDocuments
      */
     private function lineAt(int $offset, array $document): array
     {
-        // Because only whether the line equals the delimiter matters, each joined part is compared with the delimiter where the last one stopped and never copied, so a long chain of joined lines under a long delimiter is read in linear time.
+        // Because only whether the line equals the delimiter matters, each joined part is compared with the delimiter where the last one stopped, never the whole line joined so far, so a long chain of joined lines under a long delimiter is read in linear time.
         $matched = 0;
 
         do {
             $end = $offset + strcspn($this->source, "\n", $offset);
             $start = 0 === $matched && $document['stripsTabs'] ? $offset + strspn($this->source, "\t", $offset, $end - $offset) : $offset;
             $continues = $document['joinsLines'] && $end < $this->length && $this->endsInAnEscape($start, $end);
-            $matched = $this->matchedAfter($document['delimiter'], $matched, $start, $end - $start - ($continues ? 1 : 0));
+            $matched = $this->matchedAfter($document['delimiter'], $matched, substr($this->source, $start, $end - $start - ($continues ? 1 : 0)));
             $offset = $end + 1;
         } while ($continues);
 
         return [strlen($document['delimiter']) === $matched, min($offset, $this->length)];
-    }
-
-    // Because a line that already differs from the delimiter can never equal it, it is no longer compared.
-    private function matchedAfter(string $delimiter, ?int $matched, int $start, int $length): ?int
-    {
-        if (null === $matched || $matched + $length > strlen($delimiter)) {
-            return null;
-        }
-
-        $same = 0 === $length || 0 === substr_compare($this->source, substr($delimiter, $matched, $length), $start, $length);
-
-        return $same ? $matched + $length : null;
     }
 
     // Because a backslash escapes the next one, only an odd run of backslashes before the line end joins the next line.
@@ -68,5 +56,17 @@ final readonly class ShellHereDocuments
         $line = substr($this->source, $start, $end - $start);
 
         return 1 === (strlen($line) - strlen(rtrim($line, '\\'))) % 2;
+    }
+
+    // Because a line that already differs from the delimiter can never equal it, it is no longer compared.
+    private function matchedAfter(string $delimiter, ?int $matched, string $part): ?int
+    {
+        if (null === $matched || $matched + strlen($part) > strlen($delimiter)) {
+            return null;
+        }
+
+        $same = '' === $part || 0 === substr_compare($delimiter, $part, $matched, strlen($part));
+
+        return $same ? $matched + strlen($part) : null;
     }
 }
