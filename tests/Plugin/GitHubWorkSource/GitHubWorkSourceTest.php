@@ -239,6 +239,52 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertNull($source->queue('alpha')->ready()[0]->reworkOf);
     }
 
+    public function testASecondTrustedPullRequestClosingTheTaskMakesItAReworkWhenTheFirstLostWriteAccessSinceTheListing(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7', 'bea'), Issues::pullRequest(13, 'Closes #7', 'ana')]);
+        $source = $this->source();
+        self::assertSame(12, $source->queue('alpha')->ready()[0]->reworkOf);
+        $this->writers = ['ana'];
+        $this->reads->listsUnchanged();
+
+        self::assertSame(13, $source->queue('alpha')->ready()[0]->reworkOf);
+    }
+
+    public function testAPullRequestEditedToCloseAnotherTaskWhileTheBranchesAreReadPicksNothingThisTick(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7', 'bea')]);
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Closes #8';
+        };
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::ListingIncomplete, $pick->nothing);
+        self::assertSame('GitHub holds pull request #12 without the closing reference to #7 it was listed with, so the pull request of that task is not known until the next listing.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testAPullRequestOnTheTaskBranchEditedToCloseAnotherTaskStillMakesTheTaskARework(): void
+    {
+        $this->branches->branchOf = [12 => 'fix/7-intake'];
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7', 'bea')]);
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Closes #8';
+        };
+
+        self::assertEquals(new Task(7, 'Task 7', 12), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    public function testAPullRequestEditedToCloseAnotherTaskByAnAccountWithoutWriteAccessCountsForNothing(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7', 'bea')]);
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Closes #8';
+            $this->editorOf[12] = 'mallory';
+        };
+
+        self::assertEquals(new Task(7, 'Task 7', null), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
     public function testATaskMarkedFailedWhileItsBranchesAreReadIsNeverPicked(): void
     {
         $this->reads->lists([Issues::task(7)]);

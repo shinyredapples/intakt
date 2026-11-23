@@ -36,7 +36,8 @@ final readonly class IntakeRules
     public function planOf(array $items, array $failures): IntakePlan
     {
         $open = $this->byNumber($items);
-        $pullRequests = $this->pullRequestsOf($items);
+        $closingPullRequests = $this->closingPullRequestsOf($items);
+        $pullRequests = array_map(static fn (array $closing): int => $closing[0], $closingPullRequests);
 
         $ready = [];
         $held = [];
@@ -57,7 +58,7 @@ final readonly class IntakeRules
 
         $openPullRequests = array_map(static fn (QueuedIssue $item): int => $item->number(), array_values(array_filter($items, static fn (QueuedIssue $item): bool => $item->isPullRequest())));
 
-        return new IntakePlan($ready, $held, $pullRequests, $dependsOn, $openPullRequests);
+        return new IntakePlan($ready, $held, $pullRequests, $dependsOn, $openPullRequests, $closingPullRequests);
     }
 
     private function isCandidate(QueuedIssue $item): bool
@@ -88,22 +89,26 @@ final readonly class IntakeRules
         return $open;
     }
 
-    // The lowest open pull request that closes each task, and only one whose author and last editor have write access, because anyone can open one that says `Fixes #n` and would move that task ahead.
+    // Every open pull request that closes each task, lowest first, and only those whose author and last editor have write access, because anyone can open one that says `Fixes #n` and would move that task ahead. All of them are kept, because the lowest may lose that access before the task is queued, and the next one is then the task's pull request.
     /**
      * @param list<QueuedIssue> $items
      *
-     * @return array<int, int>
+     * @return array<int, non-empty-list<int>>
      */
-    private function pullRequestsOf(array $items): array
+    private function closingPullRequestsOf(array $items): array
     {
-        $pullRequests = [];
+        $closing = [];
         foreach (array_filter($items, $this->isTrustedPullRequest(...)) as $pullRequest) {
             foreach ($pullRequest->closedBy() as $number) {
-                $pullRequests[$number] = min($pullRequests[$number] ?? $pullRequest->number(), $pullRequest->number());
+                $closing[$number][] = $pullRequest->number();
             }
         }
 
-        return $pullRequests;
+        return array_map(static function (array $numbers): array {
+            sort($numbers);
+
+            return $numbers;
+        }, $closing);
     }
 
     private function isTrustedPullRequest(QueuedIssue $item): bool

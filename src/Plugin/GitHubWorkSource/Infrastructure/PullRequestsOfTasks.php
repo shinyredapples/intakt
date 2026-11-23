@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Contract\PullRequestBranches;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
+use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskBranchName;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
@@ -27,7 +28,7 @@ final readonly class PullRequestsOfTasks
     ) {
     }
 
-    // The lowest open pull request of each task that has one, found by closing keyword (from the plan) or by branch, and only one whose author and last editor have write access now, because anyone can open a pull request on a branch named after a task, and a plan kept from an unchanged listing does not see access withdrawn since.
+    // The lowest open pull request of each task that has one, found by closing keyword (every one the plan holds) or by branch, and only one whose author and last editor have write access now, because anyone can open a pull request on a branch named after a task, and a plan kept from an unchanged listing does not see access withdrawn since.
     /**
      * @param list<QueuedIssue> $tasks
      *
@@ -43,7 +44,7 @@ final readonly class PullRequestsOfTasks
         $steers = $this->accessAskedOncePerAccount($project);
         $reworks = [];
         foreach ($tasks as $task) {
-            $found = array_find($this->candidatesOf($task->number(), $plan, $open), fn (BranchPullRequest $pull): bool => $this->isTrusted($project, $pull, $steers));
+            $found = array_find($this->candidatesOf($task->number(), $plan, $open), fn (BranchPullRequest $pull): bool => $this->countsFor($task->number(), $project, $pull, $steers));
             if ($found instanceof BranchPullRequest) {
                 $reworks[$task->number()] = $found->number;
             }
@@ -80,7 +81,7 @@ final readonly class PullRequestsOfTasks
         };
     }
 
-    // Lowest number first, so the first trusted one is the task's pull request. The closing one is always among the open ones, because the listing's open pull requests were checked against them.
+    // Every pull request the plan holds as closing the task and every one on its branch, lowest number first, so the first that counts is the task's pull request, and a higher one stands in when a lower one lost its trust. The closing ones are always among the open ones, because the listing's open pull requests were checked against them.
     /**
      * @param list<BranchPullRequest> $open
      *
@@ -88,23 +89,32 @@ final readonly class PullRequestsOfTasks
      */
     private function candidatesOf(int $task, IntakePlan $plan, array $open): array
     {
-        $closing = $plan->pullRequests[$task] ?? null;
-        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => $pull->number === $closing || TaskBranchName::names($pull->branch, $task)));
+        $closing = $plan->closingPullRequests[$task] ?? [];
+        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => in_array($pull->number, $closing, true) || TaskBranchName::names($pull->branch, $task)));
         usort($candidates, static fn (BranchPullRequest $a, BranchPullRequest $b): int => $a->number <=> $b->number);
 
         return $candidates;
     }
 
-    // The author is asked first, because a pull request whose author has no write access counts for nothing and its history need not be read; its history is the one it was listed with, so an edit since fails the read instead of passing unchecked.
+    // The author is asked first, because a pull request whose author has no write access counts for nothing and its history need not be read; its history is the one the branch listing showed, so an edit since fails the read instead of passing unchecked. A trusted one that is not on the task's branch must still close the task in that history, because a trusted edit between the tick's listing and the branch read can point it at another task, and the plan would still give it to this one.
     /**
      * @param Closure(string): bool $steers
      */
-    private function isTrusted(string $project, BranchPullRequest $pull, Closure $steers): bool
+    private function countsFor(int $task, string $project, BranchPullRequest $pull, Closure $steers): bool
     {
         if (!$steers($pull->author)) {
             return false;
         }
 
-        return Vouching::of($pull->author, $this->histories->of($project, $pull->number, $pull->updatedAt), $steers)->trusted;
+        $history = $this->histories->of($project, $pull->number, $pull->updatedAt);
+        if (!Vouching::of($pull->author, $history, $steers)->trusted) {
+            return false;
+        }
+
+        if (!TaskBranchName::names($pull->branch, $task) && !in_array($task, new IssueReferences()->closedBy($history->body), true)) {
+            throw new ForgeReadFailed(sprintf('GitHub holds pull request #%d without the closing reference to #%d it was listed with, so the pull request of that task is not known until the next listing.', $pull->number, $task));
+        }
+
+        return true;
     }
 }
