@@ -84,6 +84,10 @@ final class RecordingLedger implements Ledger
     #[Override]
     public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
+        if ($this->onRead instanceof Closure) {
+            ($this->onRead)();
+        }
+
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => in_array($recorded->event->kind, $kinds, true) && array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
     }
 
