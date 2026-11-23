@@ -41,6 +41,8 @@ final class BuildScriptTest extends TestCase
     private int $timeout = 20;
     private ?string $startFolder = null;
     private ?string $pathHead = null;
+    // The name TMPDIR and HOME give the work area, when a test names it through a link; null names it by its own path.
+    private ?string $workName = null;
     // Put ahead of the script's system folders, because the fixtures' scripted commands must still be found once the script fixes its path; null puts the fixture folder there.
     private ?string $systemHead = null;
     private string $systemPath = self::SYSTEM_PATH;
@@ -960,21 +962,89 @@ final class BuildScriptTest extends TestCase
 
     public function testATimeoutThatIsALinkInTheSystemFoldersToAFileInTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
     {
-        $timeout = (string) new ExecutableFinder()->find('timeout');
+        // The link is in the fixture's system folder, outside the work area, so only its target can refuse it.
         mkdir($this->work.'/bin');
-        mkdir($this->work.'/system');
-        file_put_contents($this->work.'/bin/timeout', "#!/bin/sh\nexec '{$timeout}' \"\$@\"\n");
-        chmod($this->work.'/bin/timeout', 0o755);
-        symlink($this->work.'/bin/timeout', $this->work.'/system/timeout');
-        $this->givenTheCli(<<<'SH'
-            touch "$RECORD/ran"
-            git commit --quiet --allow-empty -m 'feat: build the task'
-            SH);
-        $this->systemHead = $this->work.'/system';
+        $this->givenAWorkingTimeoutAt($this->work.'/bin/timeout');
+        symlink($this->work.'/bin/timeout', $this->bin.'/timeout');
+        $this->givenTheCliRecordsThatItRan();
 
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
 
         $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
+    public function testATimeoutWhoseChainOfLinksPassesThroughALinkInTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
+    {
+        // Both ends are outside the work area: the builder could still point the link in the middle at its own program.
+        mkdir($this->history->folder.'/image');
+        $this->givenAWorkingTimeoutAt($this->history->folder.'/image/timeout');
+        symlink($this->history->folder.'/image/timeout', $this->work.'/redirect');
+        symlink($this->work.'/redirect', $this->bin.'/timeout');
+        $this->givenTheCliRecordsThatItRan();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
+    public function testATimeoutReachedThroughAFolderLinkInTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
+    {
+        // No link on the chain itself is in the work area: a folder of the target's path is a link there, which the builder could point at another folder.
+        mkdir($this->history->folder.'/image');
+        $this->givenAWorkingTimeoutAt($this->history->folder.'/image/timeout');
+        symlink($this->history->folder.'/image', $this->work.'/tools');
+        symlink($this->work.'/tools/timeout', $this->bin.'/timeout');
+        $this->givenTheCliRecordsThatItRan();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
+    public function testATimeoutThatIsALinkIntoTheOutputFolderEndsTheJobBeforeTheSession(): void
+    {
+        $this->givenAWorkingTimeoutAt($this->output.'/timeout');
+        symlink($this->output.'/timeout', $this->bin.'/timeout');
+        $this->givenTheCliRecordsThatItRan();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
+    public function testATimeoutInAWorkAreaNamedThroughALinkEndsTheJobBeforeTheSession(): void
+    {
+        // TMPDIR and HOME name the work area through a link, so only the work area's real path matches the timeout's.
+        mkdir($this->work.'/bin');
+        $this->givenAWorkingTimeoutAt($this->work.'/bin/timeout');
+        symlink($this->work.'/bin/timeout', $this->bin.'/timeout');
+        symlink($this->work, $this->history->folder.'/named');
+        $this->workName = $this->history->folder.'/named';
+        $this->givenTheCliRecordsThatItRan();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
+    public function testATimeoutWhoseLinksAllStayOutsideTheFoldersTheBuilderCanWriteIsStillUsed(): void
+    {
+        // The allowed side: a relative link, a folder link and a step back up, none of them in a folder the builder can write.
+        mkdir($this->history->folder.'/image/tools', recursive: true);
+        $this->givenAWorkingTimeoutAt($this->history->folder.'/image/tools/timeout');
+        symlink('tools', $this->history->folder.'/image/current');
+        symlink($this->history->folder.'/image/current/../current/timeout', $this->history->folder.'/image/timeout');
+        symlink('../image/timeout', $this->bin.'/timeout');
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
     }
 
     public function testAGitTheSystemFoldersNameInsideTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
@@ -1370,6 +1440,21 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/timeout', 0o755);
     }
 
+    private function givenAWorkingTimeoutAt(string $path): void
+    {
+        $timeout = (string) new ExecutableFinder()->find('timeout');
+        file_put_contents($path, "#!/bin/sh\nexec '{$timeout}' \"\$@\"\n");
+        chmod($path, 0o755);
+    }
+
+    private function givenTheCliRecordsThatItRan(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            touch "$RECORD/ran"
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            SH);
+    }
+
     private function thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout(Process $run): void
     {
         self::assertSame(1, $run->getExitCode(), $this->outputFile('build.log'));
@@ -1543,8 +1628,8 @@ final class BuildScriptTest extends TestCase
     {
         // As the container sets them, and without the host's git variables, which would point git at another repository.
         $environment = [
-            'HOME' => $this->work,
-            'TMPDIR' => $this->work,
+            'HOME' => $this->workName ?? $this->work,
+            'TMPDIR' => $this->workName ?? $this->work,
             'INTAKT_JOB_OUTPUT' => $this->output,
             'PATH' => ($this->pathHead ?? $this->bin).':'.getenv('PATH'),
             'RECORD' => $this->history->folder,

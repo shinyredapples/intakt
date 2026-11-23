@@ -23,30 +23,60 @@ log="$output/build.log"
 # The only folders commands are looked up in after the session, because the builder can change files in any folder of the PATH the job starts with that it can write, such as a relative entry or one in HOME.
 system_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Prints the command's absolute path in the system folders, and fails when it is missing there or lies in the clone, TMPDIR or HOME, because the builder could rewrite such a file during the session.
+# Prints the command's absolute path in the system folders, and fails when it is missing there or when any part of the way to its file is, or lies in, a folder the builder can write (the clone, TMPDIR, HOME and the output folder), because the builder could change that part during the session.
+# The way is walked one name at a time, as the kernel resolves it, so every link on it is seen: one in the middle of a chain, and one that stands for a folder of a later link's target, not only the path found and the file at the end.
+# The path found is printed and not the file at the end, because a binary that serves several commands (such as BusyBox) picks the command by the name it is called with.
 system_command() {
     found="$(PATH="$system_path"; command -v "$1" 2>/dev/null)" || return 1
     case "$found" in
         /*) ;;
         *) return 1 ;;
     esac
-    # The final target too, because a link in a system folder can point at a file the builder may rewrite.
-    target="$(PATH="$system_path"; readlink -f -- "$found" 2>/dev/null)" || return 1
-    case "$target" in
-        /*) ;;
-        *) return 1 ;;
-    esac
-    for writable in "$clone" "${TMPDIR:-/work}" "${HOME:-}"; do
-        writable="${writable%/}"
-        # Empty for the root folder, which holds every system folder and so is never the job's work area.
-        [ -n "$writable" ] || continue
-        case "$found" in
-            "$writable"/*) return 1 ;;
+    # The names still to walk, and the real path walked so far, which holds no link.
+    rest="${found#/}"
+    at=''
+    links=0
+    while [ -n "$rest" ]; do
+        part="${rest%%/*}"
+        case "$rest" in
+            */*) rest="${rest#*/}" ;;
+            *) rest='' ;;
         esac
-        case "$target" in
-            "$writable"/*) return 1 ;;
+        case "$part" in
+            '' | .) continue ;;
+            ..)
+                at="${at%/*}"
+                continue
+                ;;
         esac
+        at="$at/$part"
+        for writable in "$clone" "${TMPDIR:-/work}" "${HOME:-}" "$output"; do
+            [ -n "$writable" ] || continue
+            # Each folder as it is named and as its real path, because the walk compares real paths and a folder may be named through a link.
+            for named in "$writable" "$(CDPATH='' cd -P -- "$writable" 2>/dev/null && pwd -P)"; do
+                named="${named%/}"
+                # Empty for the root folder, which holds every system folder and so is never the job's work area.
+                [ -n "$named" ] || continue
+                case "$at" in
+                    "$named" | "$named"/*) return 1 ;;
+                esac
+            done
+        done
+        [ -L "$at" ] || continue
+        # The kernel's own bound for the links of one path, so a chain it would refuse is refused here too.
+        links=$((links + 1))
+        [ "$links" -le 40 ] || return 1
+        link="$(PATH="$system_path"; readlink -- "$at" 2>/dev/null)" || return 1
+        [ -n "$link" ] || return 1
+        case "$link" in
+            /*) at='' ;;
+            *) at="${at%/*}" ;;
+        esac
+        rest="$link${rest:+/$rest}"
     done
+    if [ ! -f "$at" ] || [ ! -x "$at" ]; then
+        return 1
+    fi
     printf '%s\n' "$found"
 }
 
@@ -72,7 +102,7 @@ bundle_time_limit=30
 # The form the bundle step uses, tried before the session: an image whose timeout is missing or rejects it would otherwise spend the session and then lose its commits.
 # Never an unbounded bundle instead, which would let the builder hold the slot again.
 cd "$clone" || exit 1
-# Both from the system folders and resolved before the session, because the bundle step runs them with the job's rights after the builder had the clone, TMPDIR and HOME.
+# Both from the system folders and resolved before the session, because the bundle step runs them with the job's rights after the builder had the clone, TMPDIR, HOME and the output folder.
 if ! bundle_timeout="$(system_command timeout)" || ! "$bundle_timeout" -k 5 "$bundle_time_limit" true >> "$log" 2>&1; then
     echo 'the image'"'"'s timeout cannot bound the bundle step' >> "$log"
     exit 1
