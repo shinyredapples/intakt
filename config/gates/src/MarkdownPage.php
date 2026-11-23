@@ -6,9 +6,9 @@ namespace Intakt\Gates;
 
 final readonly class MarkdownPage
 {
-    private const string HEADING = '/^ {0,3}(#{1,6})(\s|$)/';
+    public const string HEADING = '/^ {0,3}(#{1,6})(\s|$)/';
+    public const string LIST_ITEM = '/^\s*([-*+]|\d+[.)])\s/';
     private const string SUMMARY_HEADING = '/^ {0,3}#{1,6}\s+In short\s*#*\s*$/i';
-    private const string LIST_ITEM = '/^\s*([-*+]|\d+[.)])\s/';
     private const string QUOTE_MARKERS = '/^ {0,3}(?:> ?)+/';
     private const string FRAMED_ROW = '/^ {0,3}\|.*\|\s*$/';
     private const string TABLE_DELIMITER = '/^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/';
@@ -21,7 +21,7 @@ final readonly class MarkdownPage
     public function __construct(string $text)
     {
         $lines = new FencedCodeBlocks()->blanked(explode("\n", str_replace("\r\n", "\n", $text)));
-        $this->lines = $this->withoutIndentedCode(array_map(static fn (string $line): string => preg_replace(self::QUOTE_MARKERS, '', $line) ?? $line, $lines));
+        $this->lines = new IndentedCodeBlocks()->blanked(array_map(static fn (string $line): string => preg_replace(self::QUOTE_MARKERS, '', $line) ?? $line, $lines));
     }
 
     /**
@@ -158,56 +158,8 @@ final readonly class MarkdownPage
         return str_contains($this->lines[$index], '|') && str_contains($next, '|') && 1 === preg_match(self::TABLE_DELIMITER, $next);
     }
 
-    /**
-     * @param list<string> $lines
-     *
-     * @return list<string>
-     */
-    private function withoutIndentedCode(array $lines): array
-    {
-        $canStart = true;
-        $inList = false;
-        $inCode = false;
-
-        foreach ($lines as $index => $line) {
-            $blank = '' === trim($line);
-            $indent = $this->indentOf($line);
-
-            if ($inCode && ($blank || $indent >= 4)) {
-                $lines[$index] = '';
-                continue;
-            }
-
-            $inCode = false;
-
-            // CommonMark: indented code cannot interrupt a paragraph, and inside a list item the indentation continues the item.
-            if (!$blank && $indent >= 4 && $canStart && !$inList) {
-                $inCode = true;
-                $lines[$index] = '';
-                continue;
-            }
-
-            if (1 === preg_match(self::LIST_ITEM, $line)) {
-                $inList = true;
-            } elseif (!$blank && 0 === $indent && $canStart) {
-                $inList = false;
-            }
-
-            $canStart = $blank || 1 === preg_match(self::HEADING, $line);
-        }
-
-        return $lines;
-    }
-
     private function isProse(string $line): bool
     {
         return '' !== trim($line) && 1 !== preg_match(self::HEADING, $line);
-    }
-
-    private function indentOf(string $line): int
-    {
-        $leading = strspn($line, " \t");
-
-        return strlen(str_replace("\t", '    ', substr($line, 0, $leading)));
     }
 }

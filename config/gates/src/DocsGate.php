@@ -48,7 +48,7 @@ final readonly class DocsGate implements Gate
         $findings = $this->limitFindings($documents, $list);
 
         if ($base instanceof DocsRatchetList) {
-            array_push($findings, ...$list->growthOver($base), ...$list->staleEntries($documents, $this->oversizedKeysOf($documents), self::PAGE_WORDS, self::SUMMARY_THRESHOLD_WORDS));
+            array_push($findings, ...$list->growthOver($base), ...new UnneededDocsEntries()->in($list, $documents));
         }
 
         if ([] !== $findings) {
@@ -91,6 +91,37 @@ final readonly class DocsGate implements Gate
         return str_ends_with($path, '.md') && ('README.md' === $path || str_starts_with($path, 'docs/'));
     }
 
+    private function baseListOf(Workspace $workspace): ?DocsRatchetList
+    {
+        if (!$workspace->hasGit()) {
+            return null;
+        }
+
+        $mergeBase = $workspace->mergeBase();
+
+        if (null === $mergeBase) {
+            throw new ScopeFailure('no base branch found, pass --base=<ref>');
+        }
+
+        $shown = $workspace->git(['show', $mergeBase.':'.DocsRatchetList::PATH]);
+
+        if (!$shown->succeeded()) {
+            if ($workspace->git(['cat-file', '-e', $mergeBase.':'.self::SOURCE])->succeeded()) {
+                throw new ScopeFailure(DocsRatchetList::PATH.' is missing on the target branch, which runs the docs gate; restore it there first');
+            }
+
+            return null;
+        }
+
+        $base = DocsRatchetList::fromJson($shown->output);
+
+        if (!$base instanceof DocsRatchetList) {
+            throw new ScopeFailure(DocsRatchetList::PATH.' on the target branch is not valid');
+        }
+
+        return $base;
+    }
+
     /**
      * @param array<string, MarkdownPage> $documents
      *
@@ -130,24 +161,6 @@ final readonly class DocsGate implements Gate
         }
 
         return $findings;
-    }
-
-    /**
-     * @param array<string, MarkdownPage> $documents
-     *
-     * @return array<string, array<string, int>>
-     */
-    private function oversizedKeysOf(array $documents): array
-    {
-        $keys = [];
-
-        foreach ($documents as $path => $page) {
-            foreach ($this->oversizedParagraphsOf($page) as $paragraph) {
-                $keys[$path][$paragraph->key()] = ($keys[$path][$paragraph->key()] ?? 0) + 1;
-            }
-        }
-
-        return $keys;
     }
 
     /**
@@ -194,36 +207,5 @@ final readonly class DocsGate implements Gate
         }
 
         return [];
-    }
-
-    private function baseListOf(Workspace $workspace): ?DocsRatchetList
-    {
-        if (!$workspace->hasGit()) {
-            return null;
-        }
-
-        $mergeBase = $workspace->mergeBase();
-
-        if (null === $mergeBase) {
-            throw new ScopeFailure('no base branch found, pass --base=<ref>');
-        }
-
-        $shown = $workspace->git(['show', $mergeBase.':'.DocsRatchetList::PATH]);
-
-        if (!$shown->succeeded()) {
-            if ($workspace->git(['cat-file', '-e', $mergeBase.':'.self::SOURCE])->succeeded()) {
-                throw new ScopeFailure(DocsRatchetList::PATH.' is missing on the target branch, which runs the docs gate; restore it there first');
-            }
-
-            return null;
-        }
-
-        $base = DocsRatchetList::fromJson($shown->output);
-
-        if (!$base instanceof DocsRatchetList) {
-            throw new ScopeFailure(DocsRatchetList::PATH.' on the target branch is not valid');
-        }
-
-        return $base;
     }
 }

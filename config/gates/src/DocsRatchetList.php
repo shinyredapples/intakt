@@ -46,47 +46,6 @@ final readonly class DocsRatchetList
         return count(array_keys($this->paragraphs[$page] ?? [], $key, true));
     }
 
-    /**
-     * @param array<string, MarkdownPage>      $documents
-     * @param array<string, array<string,int>> $oversized the keys of each page's oversized paragraphs, with their counts
-     *
-     * @return list<string>
-     */
-    public function staleEntries(array $documents, array $oversized, int $pageWords, int $summaryThreshold): array
-    {
-        $findings = [];
-
-        foreach ($this->paragraphs as $page => $keys) {
-            foreach (array_count_values($keys) as $key => $listed) {
-                $unused = $listed - ($oversized[$page][(string) $key] ?? 0);
-
-                if ($unused > 0) {
-                    $findings[] = self::PATH.': '.$unused.' paragraph key'.(1 === $unused ? '' : 's').' of '.$page.' no longer match an oversized paragraph; remove '.(1 === $unused ? 'it' : 'them').' from the list';
-                }
-            }
-        }
-
-        foreach ($this->pages as $page => $ceiling) {
-            $words = isset($documents[$page]) ? $documents[$page]->words() : 0;
-
-            if ($words <= $pageWords) {
-                $findings[] = self::PATH.': '.$page.' is within the page limit now; remove its ceiling from the list';
-            } elseif ($words < $ceiling) {
-                $findings[] = self::PATH.': '.$page.' has '.$words.' words now; lower its ceiling from '.$ceiling.' to '.$words;
-            }
-        }
-
-        foreach ($this->summaries as $page) {
-            $document = $documents[$page] ?? null;
-
-            if (!$document instanceof MarkdownPage || $document->words() <= $summaryThreshold || $document->hasSummaryFirst()) {
-                $findings[] = self::PATH.': '.$page.' no longer needs its "In short" excuse; remove it from the list';
-            }
-        }
-
-        return $findings;
-    }
-
     public function ceilingOf(string $page): ?int
     {
         return $this->pages[$page] ?? null;
@@ -115,8 +74,8 @@ final readonly class DocsRatchetList
         foreach ($this->paragraphs as $page => $keys) {
             $added = 0;
 
-            foreach (array_count_values($keys) as $key => $listed) {
-                $added += max(0, $listed - $base->allowanceOf($page, (string) $key));
+            foreach (array_unique($keys) as $key) {
+                $added += max(0, $this->allowanceOf($page, $key) - $base->allowanceOf($page, $key));
             }
 
             if ($added > 0) {

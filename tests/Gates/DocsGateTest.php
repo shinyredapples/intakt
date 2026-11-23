@@ -7,8 +7,10 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\DocsGate;
 use Intakt\Gates\DocsRatchetList;
 use Intakt\Gates\FencedCodeBlocks;
+use Intakt\Gates\IndentedCodeBlocks;
 use Intakt\Gates\MarkdownPage;
 use Intakt\Gates\MarkdownParagraph;
+use Intakt\Gates\UnneededDocsEntries;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -17,6 +19,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(DocsRatchetList::class)]
 #[CoversClass(MarkdownPage::class)]
 #[CoversClass(MarkdownParagraph::class)]
+#[CoversClass(IndentedCodeBlocks::class)]
+#[CoversClass(UnneededDocsEntries::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(Workspace::class)]
 final class DocsGateTest extends SandboxTestCase
@@ -225,6 +229,16 @@ final class DocsGateTest extends SandboxTestCase
         $sandbox->commitAll('docs: add the summary');
 
         self::assertStringContainsString('docs/architecture/big.md no longer needs its "In short" excuse; remove it', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testASummaryExcuseForAPageWhoseSummaryIsTooLongIsStillNeeded(): void
+    {
+        $page = "## Big\n\n## In short\n\n".$this->words(70)."\n\n".$this->words(70)."\n\n## Detail\n\n".$this->chapters(1600);
+        $sandbox = $this->startedChange(['docs/architecture/big.md' => $page, DocsRatchetList::PATH => $this->listOf([], [], ['docs/architecture/big.md'])]);
+        $sandbox->write('docs/architecture/big.md', $page."\nOne more line.\n");
+        $sandbox->commitAll('docs: add a line');
+
+        self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'), $sandbox->runGate(new DocsGate())->output());
     }
 
     public function testRemovedAndLoweredEntriesPass(): void
