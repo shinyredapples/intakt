@@ -17,6 +17,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Platform\Contract\Redactor;
@@ -64,6 +65,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(HeldCredentialRedactor::class)]
 #[UsesClass(FailingMains::class)]
 #[UsesClass(FailingMain::class)]
+#[UsesClass(PayloadFields::class)]
 final class BootResultsTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
