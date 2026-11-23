@@ -360,6 +360,27 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    public function testAFolderOnTheRouteOfATrackedFileLinkMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home, $parent] = $this->trackedFileLinkUnderVar();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        rename($parent, $parent.'-aside');
+        rename($parent.'-aside', $parent);
+
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testATrackedFileLinkLeftAloneWhileTheGatesRanRecordsAPass(): void
+    {
+        [$root, $home] = $this->trackedFileLinkUnderVar();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        self::assertTrue($tree->recordPass());
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testAnAbsoluteLinkPartWayAlongTheRouteToATrackedFolderMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
     {
         [$root, $home, $alias] = $this->trackedNoteUnderVarBehindTwoLinks();
@@ -723,6 +744,20 @@ final class PassedTreeTest extends SandboxTestCase
         $root->symlink('var/notes', 'backing/alias/notes');
 
         return [$root, $home, $root->root.'/var/backing/alias'];
+    }
+
+    /**
+     * @return array{Sandbox, Sandbox, string}
+     */
+    private function trackedFileLinkUnderVar(): array
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('var/backing/parent/notes/example.md', "clean\n");
+        $root->symlink('var/example.md', 'backing/parent/notes/example.md');
+        $root->git('add', '--force', 'var/example.md');
+        $root->commitAll('docs: track a link to a note under var');
+
+        return [$root, $home, $root->root.'/var/backing/parent'];
     }
 
     private function pass(Sandbox $root, Sandbox $home, string ...$arguments): void

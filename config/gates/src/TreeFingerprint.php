@@ -128,6 +128,11 @@ final readonly class TreeFingerprint
         foreach ($this->gateInputsAmongWhatTheCheckWrites($root) as $path) {
             $found[] = $walk->entries($root.'/'.$path, $path, [$root]);
 
+            // Because a link that leads nowhere already shows by the missing entries behind it.
+            if (is_link($root.'/'.$path) && file_exists($root.'/'.$path)) {
+                $found[] = $walk->foldersOnTheRoute($root.'/'.$path, $path, $root);
+            }
+
             foreach ($this->foldersAbove($path) as $folder) {
                 $found[] = $walk->folderAlone($root.'/'.$folder, $folder, $root);
             }

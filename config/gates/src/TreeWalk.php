@@ -64,14 +64,27 @@ final readonly class TreeWalk
             return;
         }
 
-        $target = yield from $this->route($path, $key, $root);
+        $target = yield from $this->foldersOnTheRoute($path, $key, $root);
 
         yield $key."\0" => $this->settledStatusOf($target);
+    }
+
+    /**
+     * @return Generator<string, string, mixed, string>
+     *
+     * @throws UnexpectedValueException
+     */
+    // Because the walk skips the folders the check writes, a link there (to a folder or to a file) shows that a folder on its way was moved away and back only by the folders and links its route passes within $root and the folders above where it leads.
+    public function foldersOnTheRoute(string $link, string $key, string $root): Generator
+    {
+        $target = yield from $this->route($link, $key, $root);
 
         for ($folder = dirname($target); str_starts_with($folder, $root.'/'); $folder = dirname($folder)) {
             // Because the key of the folder a link leads to ends in a zero byte, a relative path after it never passes for that key nor for a path in the tree.
             yield $key."\0".substr($folder, strlen($root) + 1) => $this->settledStatusOf($folder);
         }
+
+        return $target;
     }
 
     /**
