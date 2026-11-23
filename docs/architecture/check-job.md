@@ -2,7 +2,7 @@
 
 ## In short
 
-The check job is the pre-push check: it runs the project's check command on what a build handed back, in a job container of its own, because the builder's own run of the checks is never trusted. It repeats the hand-back checks and stops without a job when a file lost most of its content and the plan does not name that file. The job clones the repository, applies the bundle, merges the branch into current main when it lacks main, and runs the gate's steps. Its script can copy a mounted dependency snapshot before the first step when the merged tree's lock files and platform match; `RunCheckJob` passes one whenever `CheckDependencies::leaseFor()` returns a snapshot. The verdict comes from the `check-result` file, never from the exit code or the log.
+The check job is the pre-push check: it runs the project's check command on what a build handed back, in a job container of its own, because the builder's own run of the checks is never trusted. It repeats the hand-back checks and stops without a job when a file lost most of its content and the plan does not name that file. The job clones the repository, applies the bundle, merges the branch into current main when it lacks main, and runs the gate's steps. A saved install of the same lock files and platform (a dependency snapshot) can replace the install step: `CheckDependencies::leaseFor()` leases one, and the job copies it into its own tree after checking it again. The verdict comes from the `check-result` file, never from the exit code or the log.
 
 Worth knowing:
 
@@ -11,6 +11,17 @@ Worth knowing:
 - The job gets 4 GiB of memory, 2 CPUs and 1800 seconds, and no network beyond the gate's registry hosts.
 - A second check of the same head while one runs is refused as already running.
 - The code under test runs in the same job and can rewrite its result file, and such a result is believed. A result it cannot rewrite is plan task T78.
+
+When a check reuses a dependency snapshot:
+
+- Only for a gate with a dependency step: the PHP gate without a configured command. A configured command, or a language without plugin support, gets no snapshot and installs itself.
+- The key comes from the lock files of the tree the job installs in: the head's, or, for a branch behind main, the head's only where main's blob is the same; otherwise the check does not reuse one. The platform the probe job reports is part of the key, and a failed probe means no reuse.
+- A hit mounts the leased snapshot read-only and the job copies it into the check's own clone. A miss runs the install job, saves its install under the key and leases it; an install that is refused, busy or fails leaves the check to install itself. A changed lock file gives another key, so it misses.
+- Before copying, the job checks the lock files' blobs and runs the platform probe again; a mismatch, or a tree that already holds an entry of the snapshot, copies nothing.
+- The generated files (for Composer the autoloader) are still made per check, from the check's own tree.
+- `RunCheckJob` holds the lease until the check job returns or throws, so no eviction removes a mounted snapshot.
+
+The details are in [the gate plugin](#the-gate-plugin), [In the container](#in-the-container) and [the dependency snapshot store](#the-dependency-snapshot-store).
 
 The rest of this page is the detailed reference.
 

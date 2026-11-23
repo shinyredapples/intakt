@@ -79,6 +79,8 @@ Intakt never trusts the Developer's word that the work passes. First it looks at
 - **Dependencies:** a new package from a trusted publisher (such as `symfony/` or `doctrine/`) is routine; anything else, or a change to how packages are installed, waits for the owner.
 - **The boot check:** does the changed project still start up?
 
+To save time, the fresh container may start with the libraries Intakt itself installed earlier for the same lock files and PHP version. It checks both again before it uses them, and otherwise installs the libraries itself; nothing the Developer downloaded is ever reused. The files made from the project's own code are still made fresh for each check.
+
 ```mermaid
 flowchart LR
   bundle[The Developer's package] --> fresh[Fresh container]
