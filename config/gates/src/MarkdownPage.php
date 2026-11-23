@@ -144,28 +144,35 @@ final readonly class MarkdownPage
     private function tableRows(): array
     {
         $rows = [];
-        $inside = false;
-        $quoted = false;
+        $start = null;
 
         foreach ($this->lines as $index => $line) {
-            // https://github.github.com/gfm/#tables-extension-: a blank line or another block, such as a heading, a list or a quote, ends the table.
-            if ('' === trim($line) || 1 === preg_match(self::HEADING, $line) || 1 === preg_match(self::LIST_ITEM, $line) || ($inside && $quoted !== isset($this->quoted[$index]))) {
-                $inside = false;
-                continue;
-            }
-
-            if (!$inside && $this->startsTable($index)) {
-                $inside = true;
-                $quoted = isset($this->quoted[$index]);
-            }
+            $start = $this->tableStartAt($index, $start);
 
             // Because a fragment of docs/highlights.d/ holds one row without its header, a line between outer pipes is a row too, but only that line.
-            if ($inside || 1 === preg_match(self::FRAMED_ROW, $line)) {
+            if (null !== $start || 1 === preg_match(self::FRAMED_ROW, $line)) {
                 $rows[$index] = true;
             }
         }
 
         return $rows;
+    }
+
+    private function tableStartAt(int $index, ?int $start): ?int
+    {
+        if ($this->endsTable($index) || (null !== $start && isset($this->quoted[$start]) !== isset($this->quoted[$index]))) {
+            return null;
+        }
+
+        return $start ?? ($this->startsTable($index) ? $index : null);
+    }
+
+    // https://github.github.com/gfm/#tables-extension-: a blank line or another block, such as a heading, a list or a quote, ends the table.
+    private function endsTable(int $index): bool
+    {
+        $line = $this->lines[$index];
+
+        return '' === trim($line) || 1 === preg_match(self::HEADING, $line) || 1 === preg_match(self::LIST_ITEM, $line);
     }
 
     // https://github.github.com/gfm/#tables-extension-: a header row and a delimiter row, outer pipes optional.
