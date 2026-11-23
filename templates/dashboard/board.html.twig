@@ -49,4 +49,6 @@
     </div>
     </div>
 </section>
+{# Below the tasks, because the server figures matter to the owner only once something looks slow or stuck. #}
+{{ include('dashboard/_board_infrastructure.html.twig', {row: infrastructure}, with_context = false) }}
 {% endblock %}

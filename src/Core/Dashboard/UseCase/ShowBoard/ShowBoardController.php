@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\InfrastructureRow;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
@@ -15,6 +16,8 @@ use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
+use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
 use Symfony\Component\Clock\ClockInterface;
@@ -39,6 +42,7 @@ final readonly class ShowBoardController
         private UrlGeneratorInterface $urls,
         private WaitingCount $waiting,
         private ClockInterface $clock,
+        private ServerStatus $server,
     ) {
     }
 
@@ -71,7 +75,20 @@ final readonly class ShowBoardController
             'now' => $this->clock->now(),
             'columns' => $board->shownColumns(),
             'coming_next' => $board->comingNext(),
+            'infrastructure' => $this->infrastructureRow(),
         ])));
+    }
+
+    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
+    private function infrastructureRow(): InfrastructureRow
+    {
+        try {
+            $reading = $this->server->read();
+        } catch (AdminApiNotOnLocalhost $refused) {
+            return InfrastructureRow::refused($this->redactor->redact($refused->getMessage()));
+        }
+
+        return InfrastructureRow::of($reading, $this->redactor->redact(...));
     }
 
     /**

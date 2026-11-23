@@ -36,6 +36,18 @@ use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Server\Contract\EndpointDown;
+use Intakt\Core\Server\Contract\HubHealth;
+use Intakt\Core\Server\Contract\ServerMetrics;
+use Intakt\Core\Server\Contract\ServerReading;
+use Intakt\Core\Server\Contract\ServerStatus;
+use Intakt\Core\Server\Contract\WorkerThreads;
+use Intakt\Core\Server\Infrastructure\AdminApi;
+use Intakt\Core\Server\Infrastructure\AdminApiServerStatus;
+use Intakt\Core\Server\Infrastructure\PrometheusSamples;
+use Intakt\Core\Dashboard\Domain\InfrastructureFigure;
+use Intakt\Core\Dashboard\Domain\InfrastructureRow;
+use Intakt\Tests\Core\Server\RecordedAdminApi;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -71,6 +83,15 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(SampleChangeSource::class)]
 #[UsesClass(WaitingCount::class)]
+#[UsesClass(InfrastructureRow::class)]
+#[UsesClass(InfrastructureFigure::class)]
+#[UsesClass(AdminApi::class)]
+#[UsesClass(AdminApiServerStatus::class)]
+#[UsesClass(PrometheusSamples::class)]
+#[UsesClass(ServerReading::class)]
+#[UsesClass(WorkerThreads::class)]
+#[UsesClass(ServerMetrics::class)]
+#[UsesClass(EndpointDown::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     /**
@@ -1084,6 +1105,63 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
     }
 
+    public function testTheBoardRendersTheInfrastructureRowFromRecordedMetricsAndThreadsResponses(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame([
+            ['Threads busy', '0'],
+            ['Threads idle', '2'],
+            ['Queue depth', '0'],
+            ['Worker restarts', '2'],
+            ['Hub', 'healthy'],
+        ], $this->infrastructureIn($page));
+    }
+
+    public function testTheBoardShowsTheInfrastructureRowAsDownWhenTheAdminApiIsUnreachable(): void
+    {
+        $this->server = new RecordedAdminApi()->unreachable()->status();
+
+        $row = $this->browser->request('GET', '/')->filter('#infrastructure');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(['Worker threads', 'Server metrics', 'Hub'], $row->filter('.infra-figure.down dt')->each(static fn (Crawler $label): string => $label->text()));
+        self::assertStringContainsString('/frankenphp/threads did not answer: Failed to connect to localhost port 2019', $row->filter('.infra-figure.down dd')->first()->text());
+    }
+
+    public function testTheBoardShowsTheInfrastructureRowAsDownInsteadOfFailingWhenTheAdminApiUrlIsNotOnLocalhost(): void
+    {
+        $this->server = new RecordedAdminApi()->status('https://admin.example:2019');
+
+        $row = $this->browser->request('GET', '/')->filter('#infrastructure');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(3, $row->filter('.infra-figure.down'));
+        self::assertStringContainsString('must be plain http on localhost, 127.0.0.1 or [::1], not https on admin.example', $row->text());
+    }
+
+    public function testTheBoardMarksAnUnhealthyHubInTheInfrastructureRow(): void
+    {
+        $this->server = new RecordedAdminApi()->answering('/mercure/health/ready', '{"status":"down"}', 503)->status();
+
+        $hub = $this->browser->request('GET', '/')->filter('#infrastructure .infra-figure.unhealthy');
+
+        self::assertSame(['Hub', 'unhealthy'], [$hub->filter('dt')->text(), $hub->filter('dd')->text()]);
+    }
+
+    public function testACredentialInTheReasonOfADownSourceIsRedactedInTheInfrastructureRow(): void
+    {
+        $token = 'ghp_'.str_repeat('a1', 18);
+        $status = self::createStub(ServerStatus::class);
+        $status->method('read')->willReturn(new ServerReading(new EndpointDown('refused for token '.$token), new ServerMetrics(0, 0), HubHealth::Healthy));
+        $this->server = $status;
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertStringContainsString('refused for token [redacted]', $page->filter('#infrastructure .infra-figure.down dd')->text());
+        self::assertStringNotContainsString($token, (string) $this->browser->getResponse()->getContent());
+    }
+
     // Nothing waits unless a test says so, because the board reads the owner notices for its Needs you card on every load and a page test creates no schema.
     protected function setUp(): void
     {
@@ -1132,5 +1210,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     private function noticesAre(OutageNotice ...$notices): void
     {
         $this->notices = array_values($notices);
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function infrastructureIn(Crawler $page): array
+    {
+        return $page->filter('#infrastructure .infra-figure')->each(static fn (Crawler $figure): array => [$figure->filter('dt')->text(), $figure->filter('dd')->text()]);
     }
 }
