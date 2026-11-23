@@ -34,6 +34,7 @@ final readonly class GitHubWorkSource implements WorkSource
         private SteeringAccounts $accounts,
         private IssueReferences $references,
         private IntakeStore $store,
+        private PullRequestsOfTasks $pullRequests,
         private LoggerInterface $logger,
     ) {
     }
@@ -60,9 +61,14 @@ final readonly class GitHubWorkSource implements WorkSource
             return WorkQueue::incomplete();
         }
 
+        $reworks = $this->reworksOrNone($project, $plan);
+        if (null === $reworks) {
+            return WorkQueue::incomplete();
+        }
+
         return WorkQueue::listed(
-            array_map(fn (QueuedIssue $issue): Task => $this->taskOf($issue, $plan), $plan->ready),
-            array_map(fn (HeldIssue $held): HeldTask => new HeldTask($this->taskOf($held->issue, $plan), $held->reason), $plan->held),
+            array_map(fn (QueuedIssue $issue): Task => $this->taskOf($issue, $reworks), $plan->ready),
+            array_map(fn (HeldIssue $held): HeldTask => new HeldTask($this->taskOf($held->issue, $reworks), $held->reason), $plan->held),
         );
     }
 
@@ -159,13 +165,17 @@ final readonly class GitHubWorkSource implements WorkSource
         };
     }
 
-    // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see.
+    // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see, and a pull request may be open that it did not see.
     private function pickUnlessFailed(string $project, QueuedIssue $issue, IntakePlan $plan): ?WorkPick
     {
         try {
-            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($this->taskOf($issue, $plan));
+            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($this->taskOf($issue, $this->pullRequests->reworksOf($project, $plan, [$issue])));
         } catch (ProjectHeldByAnotherWriter $held) {
             $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
+
+            return WorkPick::nothing(NothingPicked::ListingIncomplete);
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+            $this->logger->warning('The open pull request of task #{number} of project {project} could not be read, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
 
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
         }
@@ -179,8 +189,26 @@ final readonly class GitHubWorkSource implements WorkSource
         return isset($failures[$issue->number()]) || array_any($plan->dependsOn[$issue->number()] ?? [], static fn (int $target): bool => isset($failures[$target]));
     }
 
-    private function taskOf(QueuedIssue $issue, IntakePlan $plan): Task
+    // No queue rather than one without its reworks, because a task shown as a fresh build may have a pull request open.
+    /**
+     * @return array<int, int>|null
+     */
+    private function reworksOrNone(string $project, IntakePlan $plan): ?array
     {
-        return new Task($issue->number(), $issue->title(), $plan->pullRequests[$issue->number()] ?? null);
+        try {
+            return $this->pullRequests->reworksOf($project, $plan, [...$plan->ready, ...array_map(static fn (HeldIssue $held): QueuedIssue => $held->issue, $plan->held)]);
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+            $this->logger->warning('The open pull requests of the tasks of project {project} could not be read, so no queue is shown: {reason}', ['project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
+
+            return null;
+        }
+    }
+
+    /**
+     * @param array<int, int> $reworks
+     */
+    private function taskOf(QueuedIssue $issue, array $reworks): Task
+    {
+        return new Task($issue->number(), $issue->title(), $reworks[$issue->number()] ?? null);
     }
 }
