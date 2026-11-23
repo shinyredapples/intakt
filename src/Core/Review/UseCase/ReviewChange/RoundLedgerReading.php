@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
@@ -121,6 +122,7 @@ final readonly class RoundLedgerReading implements RoundCosts
             ...$this->momentsOf(LedgerEventKind::VerdictReceived, VerdictReceived::class, $reviewerId),
             ...$this->momentsOf(LedgerEventKind::ReviewerFailed, ReviewerFailed::class, $reviewerId),
             ...$this->momentsOf(LedgerEventKind::ReviewerStopped, ReviewerStopped::class, $reviewerId),
+            ...$this->momentsOf(LedgerEventKind::ReviewerBlocked, ReviewerBlocked::class, $reviewerId),
         ];
 
         if ([] === $started || [] === $ended) {
@@ -148,7 +150,7 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped> $payload
+     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped|ReviewerBlocked> $payload
      *
      * @return list<DateTimeImmutable>
      */

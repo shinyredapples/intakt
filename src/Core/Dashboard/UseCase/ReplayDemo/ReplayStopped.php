@@ -18,6 +18,6 @@ final class ReplayStopped extends RuntimeException
             return new self($stop.' Nothing was written, so replay this recording again.');
         }
 
-        return new self($stop.' The events it wrote stay in the ledger: remove them with intakt:demo:remove, then run intakt:demo:create, before replaying this recording.');
+        return new self($stop.' The events it wrote stay in the ledger: remove them with intakt:demo:remove, then press Play, which creates the demo project again (a console replay needs intakt:demo:create first).');
     }
 }
