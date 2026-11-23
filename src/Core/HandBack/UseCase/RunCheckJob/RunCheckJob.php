@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
-use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\CheckJobs;
