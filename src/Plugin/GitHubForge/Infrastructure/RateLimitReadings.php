@@ -41,7 +41,7 @@ final readonly class RateLimitReadings
     /**
      * @throws ForgeRateLimited
      */
-    public function refuseWhileLimited(string $installationId, string $pool = self::CORE): void
+    public function refuseWhileLimited(string $installationId, string $pool): void
     {
         $until = $this->storedPause($installationId, $pool);
 
