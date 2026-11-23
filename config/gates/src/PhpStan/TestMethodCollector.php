@@ -60,20 +60,6 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
-     * @return list<string>
-     */
-    private function ancestorMethods(ClassReflection $class, string $name): array
-    {
-        $ancestors = [...$class->getParents(), ...$class->getInterfaces()];
-
-        foreach ([$class, ...$class->getParents()] as $user) {
-            array_push($ancestors, ...array_values($user->getTraits()));
-        }
-
-        return array_values(array_unique(array_map(static fn (ClassReflection $ancestor): string => $ancestor->getName().'::'.$name, $ancestors)));
-    }
-
-    /**
      * @param class-string $attributeClass
      *
      * @return list<Attribute>
@@ -149,5 +135,19 @@ final readonly class TestMethodCollector implements Collector
         }
 
         return $methods;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function ancestorMethods(ClassReflection $class, string $name): array
+    {
+        $ancestors = [...$class->getParents(), ...$class->getInterfaces()];
+
+        foreach ([$class, ...$class->getParents()] as $user) {
+            array_push($ancestors, ...array_values($user->getTraits()));
+        }
+
+        return array_values(array_unique(array_map(static fn (ClassReflection $ancestor): string => $ancestor->getName().'::'.$name, $ancestors)));
     }
 }
