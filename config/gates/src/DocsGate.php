@@ -40,13 +40,12 @@ final readonly class DocsGate implements Gate
         try {
             $documents = $this->documentsOf($workspace);
             $mergeBase = $this->mergeBaseOf($workspace);
-            $base = null === $mergeBase ? null : $this->baseListOf($workspace, $mergeBase);
+            $base = $this->baseListOf($workspace, $mergeBase);
         } catch (ScopeFailure $failure) {
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $target = null === $mergeBase ? null : new DocsTargetBranch($workspace, $mergeBase, $base ?? DocsRatchetList::empty());
-        $findings = $this->limitFindings($documents, $list, $target);
+        $findings = $this->limitFindings($documents, $list, $this->targetBranchOf($workspace, $mergeBase, $base));
 
         if ($base instanceof DocsRatchetList) {
             array_push($findings, ...$list->growthOver($base), ...new UnneededDocsEntries()->in($list, $documents));
@@ -101,8 +100,12 @@ final readonly class DocsGate implements Gate
         return $workspace->mergeBase() ?? throw new ScopeFailure('no base branch found, pass --base=<ref>');
     }
 
-    private function baseListOf(Workspace $workspace, string $mergeBase): ?DocsRatchetList
+    private function baseListOf(Workspace $workspace, ?string $mergeBase): ?DocsRatchetList
     {
+        if (null === $mergeBase) {
+            return null;
+        }
+
         $shown = $workspace->git(['show', $mergeBase.':'.DocsRatchetList::PATH]);
 
         if (!$shown->succeeded()) {
@@ -120,6 +123,11 @@ final readonly class DocsGate implements Gate
         }
 
         return $base;
+    }
+
+    private function targetBranchOf(Workspace $workspace, ?string $mergeBase, ?DocsRatchetList $base): ?DocsTargetBranch
+    {
+        return null === $mergeBase ? null : new DocsTargetBranch($workspace, $mergeBase, $base ?? DocsRatchetList::empty());
     }
 
     /**
