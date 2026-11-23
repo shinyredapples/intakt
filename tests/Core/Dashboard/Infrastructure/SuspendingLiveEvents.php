@@ -20,12 +20,14 @@ final class SuspendingLiveEvents implements LiveUpdates
     }
 
     #[Override]
-    public function publish(LiveEvent $event): void
+    public function publish(LiveEvent $event): bool
     {
         $this->received[] = $event->turboStream;
 
         if ($this->suspendingOn === $event->turboStream) {
             Fiber::suspend();
         }
+
+        return true;
     }
 }
