@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\DependencyInjection\ServiceLocator;
+
+final readonly class Router
+{
+    /**
+     * @param ?ServiceLocator<object> $routes
+     */
+    public function __construct(
+        private ?ServiceLocator $routes = null,
+    ) {
+    }
+
+    public function routes(): int
+    {
+        return $this->routes?->count() ?? 0;
+    }
+}

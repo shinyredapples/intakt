@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Closure;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -11,8 +12,11 @@ use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
+use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemNotAsPlanned;
 use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
 use Intakt\Plugin\WorkSource\Contract\Task;
@@ -28,6 +32,7 @@ final readonly class GitHubWorkSource implements WorkSource
         private CompleteListing $listing,
         private IssueHistories $histories,
         private SteeringAccounts $accounts,
+        private IssueReferences $references,
         private IntakeStore $store,
         private LoggerInterface $logger,
     ) {
@@ -66,16 +71,12 @@ final readonly class GitHubWorkSource implements WorkSource
         $this->store->failForGood($project, $number, $reason);
     }
 
-    // A check that failed ends the tick, because skipping that task would pick one that sorts behind it.
     private function firstStillPickable(string $project, IntakePlan $plan): WorkPick
     {
         foreach ($plan->ready as $issue) {
-            try {
-                $steered = $this->authorAndEditorStillHaveWriteAccess($project, $issue);
-            } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
-                $this->logger->warning('The write-access check of task #{number} of project {project} failed, so nothing is picked: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
-
-                return WorkPick::nothing(NothingPicked::TrustNotChecked);
+            $steered = $this->stillSteeredOrEndOfTick($project, $issue);
+            if ($steered instanceof WorkPick) {
+                return $steered;
             }
 
             if (!$steered) {
@@ -93,16 +94,69 @@ final readonly class GitHubWorkSource implements WorkSource
         return WorkPick::nothing(NothingPicked::NoTaskReady);
     }
 
-    // Asked again before each pick, because access may have been withdrawn since the item was vouched; the author is often the last editor, and each ask is a forge call, so that account is asked once.
-    private function authorAndEditorStillHaveWriteAccess(string $project, QueuedIssue $issue): bool
+    // A check that failed ends the tick, because skipping that task would pick one that sorts behind it.
+    private function stillSteeredOrEndOfTick(string $project, QueuedIssue $issue): bool|WorkPick
     {
-        if (!$this->accounts->steers($project, $issue->author())) {
+        try {
+            return $this->isStillSteered($project, $issue);
+        } catch (ItemNotAsPlanned $changed) {
+            return $this->readAgainOnTheNextListing($project, $issue, $changed);
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+            $this->logger->warning('The write-access check of task #{number} of project {project} failed, so nothing is picked: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
+
+            return WorkPick::nothing(NothingPicked::TrustNotChecked);
+        }
+    }
+
+    // Asked again before each pick, because access may have been withdrawn since the item was vouched. The history must still be of the planned item, because an edit in the second of the listing keeps the update time and may add a wait or change a label the plan does not hold. Its labels are vouched again too, because a label removed and applied again in that second by an account without write access leaves the label set as planned.
+    private function isStillSteered(string $project, QueuedIssue $issue): bool
+    {
+        $steers = $this->accessAskedOncePerAccount($project);
+        if (!$steers($issue->author())) {
             return false;
         }
 
-        $editor = $this->histories->of($project, $issue->number(), $issue->updatedAt())->lastEditor;
+        $history = $this->histories->of($project, $issue->number(), $issue->updatedAt());
+        if (!$issue->isListedAs($history, $this->references)) {
+            throw ItemNotAsPlanned::listedOtherwise($issue->number());
+        }
 
-        return $editor === $issue->author() || $this->accounts->steers($project, $editor);
+        $vouching = Vouching::of($issue->author(), $history, $steers);
+        if (!$vouching->trusted) {
+            return false;
+        }
+
+        if (!$issue->isVouchedAs($vouching)) {
+            throw ItemNotAsPlanned::vouchedOtherwise($issue->number());
+        }
+
+        return true;
+    }
+
+    // Nothing is picked even once the item is forgotten, because a task behind it would be picked out of order; a refused forget is only logged, because the tick is fail-closed either way.
+    private function readAgainOnTheNextListing(string $project, QueuedIssue $issue, ItemNotAsPlanned $changed): WorkPick
+    {
+        $this->logger->warning('Task #{number} of project {project} is not the item it was planned with, so nothing is picked and the next listing reads it again: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $changed->getMessage(), 'exception' => $changed]);
+        try {
+            $this->store->forgetVouchingOf($project, $issue->number());
+        } catch (ProjectHeldByAnotherWriter $held) {
+            $this->logger->warning('Task #{number} of project {project} could not be forgotten, so the next listing may plan it as before: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
+        }
+
+        return WorkPick::nothing(NothingPicked::TrustNotChecked);
+    }
+
+    // Remembered for one pick only, because the author is often the last editor and the one who applied the labels, and each ask is a forge call.
+    /**
+     * @return Closure(string): bool
+     */
+    private function accessAskedOncePerAccount(string $project): Closure
+    {
+        $answers = [];
+
+        return function (string $account) use ($project, &$answers): bool {
+            return $answers[$account] ??= $this->accounts->steers($project, $account);
+        };
     }
 
     // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see.
