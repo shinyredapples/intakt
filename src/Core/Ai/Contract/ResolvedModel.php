@@ -25,7 +25,7 @@ final readonly class ResolvedModel
         return clone ($this, ['maxOutput' => $maxOutput]);
     }
 
-    // Same provider and the same model before the colon, where a router names its pinned provider, so a pinned fallback of the same model is told apart from another model on that provider, which is a substitute.
+    // Same provider and the same model before the pinned router provider, so a pinned fallback of the same model is told apart from another model on that provider, which is a substitute. Only PinnedProvider's `owner/model:provider` form pins, so `llama3:8b` and `llama3:70b`, or two `ft:` models, stay two models.
     public function isTheSameModelAs(self $other): bool
     {
         return $this->provider === $other->provider && $this->modelPart() === $other->modelPart();
@@ -33,6 +33,6 @@ final readonly class ResolvedModel
 
     private function modelPart(): string
     {
-        return explode(':', $this->model, 2)[0];
+        return PinnedProvider::parts($this->model)[0] ?? $this->model;
     }
 }

@@ -31,4 +31,14 @@ final class ResolvedModelTest extends TestCase
     {
         self::assertTrue(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model')->isTheSameModelAs(new ResolvedModel(Provider::OpenAiCompatible, 'owner/model:one')));
     }
+
+    public function testTwoTagsOfAModelWithoutAnOwnerAreNotTheSameModel(): void
+    {
+        self::assertFalse(new ResolvedModel(Provider::OpenAiCompatible, 'llama3:8b')->isTheSameModelAs(new ResolvedModel(Provider::OpenAiCompatible, 'llama3:70b')));
+    }
+
+    public function testTwoFineTunedModelsOfOneBaseAreNotTheSameModel(): void
+    {
+        self::assertFalse(new ResolvedModel(Provider::OpenAi, 'ft:gpt-4o-mini:org::one')->isTheSameModelAs(new ResolvedModel(Provider::OpenAi, 'ft:gpt-4o-mini:org::two')));
+    }
 }

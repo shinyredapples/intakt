@@ -27,12 +27,10 @@ final readonly class ModelWaits
     ) {
     }
 
-    // Read without the options after a question mark, because Symfony AI's catalog takes them from the model name too. Only a router's `owner/model:provider` shape pins (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`): exactly one slash and one colon, each part only visible ASCII other than the slash and the colon, anchored at the very end, so a native id with colons (`ft:gpt-4o-mini:org::id`), a tag without an owner (`llama3:8b`), a nested owner (`owner/group/model:router`) or a name with whitespace, a control character or any non-ASCII character pins nothing.
+    // By PinnedProvider's parse, so a pin is read the one way the tier's same-model check reads it (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`).
     public function routerProviderOf(string|Model $model): ?string
     {
-        $name = explode('?', $model instanceof Model ? $model->getName() : $model, 2)[0];
-
-        return 1 === preg_match('~^[\x21-\x2E\x30-\x39\x3B-\x7E]+/[\x21-\x2E\x30-\x39\x3B-\x7E]+:([\x21-\x2E\x30-\x39\x3B-\x7E]+)\z~', $name, $pin) ? $pin[1] : null;
+        return PinnedProvider::parts($model instanceof Model ? $model->getName() : $model)[1] ?? null;
     }
 
     // Per account the longer of its own window and its pinned provider's, each read once from its store. A wait is 0 only for an account that had neither when read, so a caller that finds no free account always has a wait of at least a second, whatever ended or started between two reads.
