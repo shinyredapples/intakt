@@ -959,3 +959,5 @@ a.lane:hover { background: var(--tint-2); }
   .split > .side li { align-items: center; min-height: 48px; padding: 0; }
   .split > .side li a { display: inline-flex; align-items: center; min-height: 44px; }
 }
+/* The line beside a button the connection controller holds: what it waits for, then why and what to do. */
+.held-note { margin: var(--s8) 0 0; color: var(--muted); font-size: var(--t15); }

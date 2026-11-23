@@ -12,14 +12,14 @@ abstract readonly class Report
     {
     }
 
-    public function render(): string
-    {
-        return $this->framed($this->title());
-    }
-
     public function zone(): string
     {
         return 'UTC';
+    }
+
+    public function render(): string
+    {
+        return $this->framed($this->title());
     }
 
     abstract protected function title(): string;
