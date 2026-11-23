@@ -80,11 +80,12 @@ final readonly class IntakeStore
         }
     }
 
-    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it.
+    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it. A stored pull request is refused like a missing row, because the listing stores a pull request only for the rules to read and never queues one.
     public function failForGood(string $project, int $number, string $reason): void
     {
         $this->underTheListingLock($project, function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
-            if (!$manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
+            $task = $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]);
+            if (!$task instanceof StoredIssue || $task->isPullRequest()) {
                 throw TaskNotQueued::named($project, $number);
             }
 

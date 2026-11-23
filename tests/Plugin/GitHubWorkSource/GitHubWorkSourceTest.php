@@ -381,21 +381,20 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->source()->failedForGood('alpha', 99, 'no such task');
     }
 
-    /**
-     * @return array{level: string, message: string, context: array<mixed>}
-     */
-    private function onlyLog(): array
+    public function testAPullRequestInTheListingCannotBeMarkedFailed(): void
     {
-        $logs = $this->logger->cleanLogs();
-        self::assertCount(1, $logs);
-        $record = $logs[0];
-        self::assertIsArray($record);
-        [$level, $message, $context] = $record;
-        self::assertIsString($level);
-        self::assertIsString($message);
-        self::assertIsArray($context);
+        $this->reads->lists([Issues::task(1), Issues::pullRequest(12, 'Closes #1')]);
+        $source = $this->source();
+        $source->queue('alpha');
 
-        return ['level' => $level, 'message' => $message, 'context' => $context];
+        $refused = null;
+        try {
+            $source->failedForGood('alpha', 12, 'not a task');
+        } catch (TaskNotQueued $refused) {
+        }
+
+        self::assertInstanceOf(TaskNotQueued::class, $refused);
+        self::assertSame([], $this->store->failuresOf('alpha'));
     }
 
     private function source(): GitHubWorkSource
@@ -433,6 +432,23 @@ final class GitHubWorkSourceTest extends KernelTestCase
         return new IntakeStore($manager);
     }
 
+    /**
+     * @return array{level: string, message: string, context: array<mixed>}
+     */
+    private function onlyLog(): array
+    {
+        $logs = $this->logger->cleanLogs();
+        self::assertCount(1, $logs);
+        $record = $logs[0];
+        self::assertIsArray($record);
+        [$level, $message, $context] = $record;
+        self::assertIsString($level);
+        self::assertIsString($message);
+        self::assertIsArray($context);
+
+        return ['level' => $level, 'message' => $message, 'context' => $context];
+    }
+
     private function storeOnAFileInWalMode(string $file, EventManager $events): IntakeStore
     {
         $shared = self::getContainer()->get('doctrine.orm.entity_manager');
@@ -443,20 +459,19 @@ final class GitHubWorkSourceTest extends KernelTestCase
         return new IntakeStore(new EntityManager($connection, $shared->getConfiguration(), $events));
     }
 
-    private function sourceOver(IssueReads $reads, IssueHistories $histories): GitHubWorkSource
+    private function page(int $from, int $count): string
     {
-        $accounts = self::createStub(SteeringAccounts::class);
-        $accounts->method('steers')->willReturnCallback(function (string $project, string $account): bool {
-            $this->asked[] = $account;
-            if ($this->accessFailure instanceof TrustNotChecked) {
-                throw $this->accessFailure;
-            }
+        $issues = array_map(static fn (int $number): array => [
+            'number' => $number,
+            'title' => 'Issue '.$number,
+            'body' => '',
+            'user' => ['login' => 'ana'],
+            'labels' => [['name' => 'intakt']],
+            'milestone' => null,
+            'updated_at' => '2026-11-10T10:00:00Z',
+        ], range($from, $from + $count - 1));
 
-            return in_array($account, $this->writers, true);
-        });
-        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules('intakt'), new IssueReferences(), $this->logger);
-
-        return new GitHubWorkSource($listing, $histories, $accounts, $this->store, $this->logger);
+        return json_encode($issues, JSON_THROW_ON_ERROR);
     }
 
     private function historyAnswer(): string
@@ -474,18 +489,19 @@ final class GitHubWorkSourceTest extends KernelTestCase
         return json_encode(['data' => ['repository' => ['issueOrPullRequest' => $item]]], JSON_THROW_ON_ERROR);
     }
 
-    private function page(int $from, int $count): string
+    private function sourceOver(IssueReads $reads, IssueHistories $histories): GitHubWorkSource
     {
-        $issues = array_map(static fn (int $number): array => [
-            'number' => $number,
-            'title' => 'Issue '.$number,
-            'body' => '',
-            'user' => ['login' => 'ana'],
-            'labels' => [['name' => 'intakt']],
-            'milestone' => null,
-            'updated_at' => '2026-11-10T10:00:00Z',
-        ], range($from, $from + $count - 1));
+        $accounts = self::createStub(SteeringAccounts::class);
+        $accounts->method('steers')->willReturnCallback(function (string $project, string $account): bool {
+            $this->asked[] = $account;
+            if ($this->accessFailure instanceof TrustNotChecked) {
+                throw $this->accessFailure;
+            }
 
-        return json_encode($issues, JSON_THROW_ON_ERROR);
+            return in_array($account, $this->writers, true);
+        });
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules('intakt'), new IssueReferences(), $this->logger);
+
+        return new GitHubWorkSource($listing, $histories, $accounts, $this->store, $this->logger);
     }
 }

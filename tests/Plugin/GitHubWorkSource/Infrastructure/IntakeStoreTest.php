@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use DateTimeZone;
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\DriverManager;
@@ -37,6 +38,7 @@ use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubWorkSource\CommitOnValidatorLoad;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
+use Intakt\Tests\Plugin\GitHubWorkSource\WriteLockOfAServer;
 use Intakt\Tests\Plugin\GitHubWorkSource\WriterBetweenWriteAndCommit;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
@@ -788,6 +790,38 @@ final class IntakeStoreTest extends KernelTestCase
         $this->store->failForGood('alpha', 7, 'reason');
     }
 
+    public function testAListedPullRequestCannotFailForGoodAndLeavesNoFailure(): void
+    {
+        $this->record('alpha', [$this->stored(Issues::task(1)), $this->stored(Issues::pullRequest(12, 'Closes #1'))], null);
+
+        $refused = null;
+        try {
+            $this->store->failForGood('alpha', 12, 'not a task');
+        } catch (TaskNotQueued $refused) {
+        }
+
+        self::assertInstanceOf(TaskNotQueued::class, $refused);
+        self::assertSame([], $this->store->failuresOf('alpha'));
+    }
+
+    public function testRecordingAFailureReadsTheSyncRowWithAWriteLock(): void
+    {
+        $this->onAServerPlatform(static function (IntakeStore $store, WriteLockOfAServer $statements): void {
+            $store->failForGood('alpha', 7, 'reason');
+
+            self::assertCount(1, $statements->writeLockedReadsOf('work_source_validator'));
+        });
+    }
+
+    public function testThePickReadOfTheFailuresReadsTheSyncRowWithAWriteLock(): void
+    {
+        $this->onAServerPlatform(static function (IntakeStore $store, WriteLockOfAServer $statements): void {
+            self::assertSame([], $store->failuresUnderTheListingLock('alpha'));
+
+            self::assertCount(1, $statements->writeLockedReadsOf('work_source_validator'));
+        });
+    }
+
     public function testAnEntityManagerWhoseEventsCannotBeSharedIsRefused(): void
     {
         $this->expectException(LogicException::class);
@@ -803,6 +837,31 @@ final class IntakeStoreTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->store = new IntakeStore($entities);
+    }
+
+    // The statements are counted from the call under test on, because recording the listing reads the same row with the same lock.
+    /**
+     * @param callable(IntakeStore, WriteLockOfAServer): void $scenario
+     */
+    private function onAServerPlatform(callable $scenario): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $schema = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $statements = new WriteLockOfAServer();
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file], new Configuration()->setMiddlewares([$statements]));
+        try {
+            $manager = new EntityManager($schema, $this->entities->getConfiguration(), new EventManager());
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class), $manager->getClassMetadata(TaskFailure::class)]);
+            $store = new IntakeStore(new EntityManager($connection, $this->entities->getConfiguration(), new EventManager()));
+            self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], null)));
+            $statements->statements = [];
+
+            $scenario($store, $statements);
+        } finally {
+            $connection->close();
+            $schema->close();
+            unlink($file);
+        }
     }
 
     private function heldWhileRecording(IntakeStore $loser, SyncState $readBefore): ?ProjectHeldByAnotherWriter
