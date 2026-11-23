@@ -62,7 +62,7 @@ final readonly class RolePromptCarriers
         }
 
         // because a class-string union may name an allowed carrier beside a refused one, every carrier it names is judged
-        $carriers = $this->classNames->namedAmong($construction->class, array_keys(self::BUILDERS), $scope);
+        $carriers = $this->classNames->standingFor($this->classNames->namesOf($construction->class, $scope), array_keys(self::BUILDERS));
         $misplaced = array_find($carriers, fn (string $carrier): bool => !array_any(self::BUILDERS[$carrier], fn (string $builder): bool => $this->isInClass($scope, $builder)));
 
         if (null !== $misplaced) {
@@ -116,7 +116,7 @@ final readonly class RolePromptCarriers
             return RuleErrorBuilder::message(self::UNNAMED_ADVICE)->identifier('intakt.reviewerRole')->build();
         }
 
-        $carrier = $this->classNames->matching($names, array_keys(self::BUILDERS))[0] ?? null;
+        $carrier = $this->classNames->standingFor($names, array_keys(self::BUILDERS))[0] ?? null;
 
         return null === $carrier ? null : $this->misplaced($carrier)->build();
     }

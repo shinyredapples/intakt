@@ -574,6 +574,38 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testATraitCannotBuildARoundReviewerThroughAnInterfaceBound(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builder.php', $this->interfaceBoundBuilder('Intakt\Sample', 'Builder', true));
+
+        self::assertStringContainsString('src/Sample/Builder.php (in context of class Intakt\Sample\Builder):15 intakt.reviewerRole new RoundReviewer() outside', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAClassCannotBuildARoundReviewerThroughAnInterfaceBound(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builder.php', $this->interfaceBoundBuilder('Intakt\Sample', 'Builder', false));
+
+        self::assertStringContainsString('src/Sample/Builder.php:15 intakt.reviewerRole new RoundReviewer() outside', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testTheRoundMayBuildARoundReviewerThroughAnInterfaceBound(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Review/Domain/ReviewRound.php', $this->interfaceBoundBuilder('Intakt\Core\Review\Domain', 'ReviewRound', false));
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnInterfaceBoundNoCarrierImplementsPasses(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builder.php', "<?php\nnamespace Intakt\\Sample;\n\nuse Countable;\n\ntrait Builds\n{\n    /** @param class-string<Countable> \$class */\n    private function build(string \$class): Countable\n    {\n        return new \$class();\n    }\n}\n\nfinal class Builder\n{\n    use Builds;\n\n    public function list(): Countable\n    {\n        return \$this->build(\\ArrayObject::class);\n    }\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testATraitATraitOfAClassUsesIsJudgedInThatClass(): void
     {
         $sandbox = $this->emptySandbox();
@@ -678,6 +710,15 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     protected function ruleFor(string $root): RawPromptMessageRule
     {
         return new RawPromptMessageRule($root);
+    }
+
+    private function interfaceBoundBuilder(string $namespace, string $class, bool $inTrait): string
+    {
+        $build = "    /** @param class-string<HasPlace> \$class */\n    private function build(string \$class, UuidV7 \$id, \\Intakt\\Core\\Review\\Domain\\ReviewRound \$round, PanelReviewer \$member): HasPlace\n    {\n        return new \$class(\$id, \$round, \$member);\n    }\n";
+        $reviewer = "    public function reviewer(UuidV7 \$id, \\Intakt\\Core\\Review\\Domain\\ReviewRound \$round, PanelReviewer \$member): HasPlace\n    {\n        return \$this->build(RoundReviewer::class, \$id, \$round, \$member);\n    }\n";
+        $declarations = $inTrait ? "trait Builds\n{\n{$build}}\n\nfinal class {$class}\n{\n    use Builds;\n\n{$reviewer}}\n" : "final class {$class}\n{\n{$build}\n{$reviewer}}\n";
+
+        return "<?php\nnamespace {$namespace};\n\nuse Intakt\\Core\\Review\\Contract\\PanelReviewer;\nuse Intakt\\Core\\Review\\Domain\\HasPlace;\nuse Intakt\\Core\\Review\\Domain\\RoundReviewer;\nuse Symfony\\Component\\Uid\\UuidV7;\n\n\n{$declarations}";
     }
 
     private function traitBuilding(string $namespace, string $expression): string
