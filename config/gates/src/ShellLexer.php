@@ -99,16 +99,11 @@ final class ShellLexer
         };
     }
 
-    private function afterInExpansion(int $offset, int $frame): int
+    private function afterOperatorDecided(int $offset): int
     {
-        $char = $this->source[$offset];
+        array_pop($this->frames);
 
-        return match (true) {
-            '}' === $char => $this->afterClosing($offset),
-            '\\' === $char => $offset + 2,
-            "'" === $char && self::QUOTED_WORD === $frame => $offset + 1,
-            default => $this->afterQuoteOrDollar($offset, $char),
-        };
+        return $this->afterOpening($this->quotedKindAt($offset), $offset);
     }
 
     private function afterInSubscript(int $offset): int
@@ -123,11 +118,16 @@ final class ShellLexer
         };
     }
 
-    private function afterOperatorDecided(int $offset): int
+    private function afterInExpansion(int $offset, int $frame): int
     {
-        array_pop($this->frames);
+        $char = $this->source[$offset];
 
-        return $this->afterOpening($this->quotedKindAt($offset), $offset);
+        return match (true) {
+            '}' === $char => $this->afterClosing($offset),
+            '\\' === $char => $offset + 2,
+            "'" === $char && self::QUOTED_WORD === $frame => $offset + 1,
+            default => $this->afterQuoteOrDollar($offset, $char),
+        };
     }
 
     private function afterComment(int $offset): int
