@@ -48,7 +48,7 @@ final readonly class PullRequestsOfTasks
             $found = array_find($this->candidatesOf($task->number(), $plan, $open), function (BranchPullRequest $pull) use ($historyOf, $plan, $task): bool {
                 $history = $historyOf($pull);
 
-                return $history instanceof IssueHistory && $this->belongsTo($task->number(), $pull, $history, $plan);
+                return $history instanceof IssueHistory && ($this->closesNow($task->number(), $pull, $history) || $this->notTheTasks($task->number(), $pull, $plan));
             });
             if ($found instanceof BranchPullRequest) {
                 $reworks[$task->number()] = $found->number;
@@ -131,13 +131,15 @@ final readonly class PullRequestsOfTasks
         return Vouching::of($pull->author, $history, $steers)->trusted ? $history : null;
     }
 
-    // A trusted pull request that is not on the task's branch must close the task in the history just read. One the plan gives to the task and that no longer closes it fails the read, because a trusted edit between the tick's listing and the branch read pointed it elsewhere and the next listing settles where; one the plan does not give to the task is simply another task's.
-    private function belongsTo(int $task, BranchPullRequest $pull, IssueHistory $history, IntakePlan $plan): bool
+    // A trusted pull request that is not on the task's branch must close the task in the history just read, not only in the plan, because a trusted edit between the tick's listing and the branch read can point it at another task.
+    private function closesNow(int $task, BranchPullRequest $pull, IssueHistory $history): bool
     {
-        if (TaskBranchName::names($pull->branch, $task) || in_array($task, new IssueReferences()->closedBy($history->body), true)) {
-            return true;
-        }
+        return TaskBranchName::names($pull->branch, $task) || in_array($task, new IssueReferences()->closedBy($history->body), true);
+    }
 
+    // One the plan gives to the task and that no longer closes it fails the read, because the next listing settles which task it closes now; one the plan does not give to the task is simply another task's.
+    private function notTheTasks(int $task, BranchPullRequest $pull, IntakePlan $plan): bool
+    {
         if (in_array($pull->number, $plan->closingPullRequests[$task] ?? [], true)) {
             throw new ForgeReadFailed(sprintf('GitHub holds pull request #%d without the closing reference to #%d it was listed with, so the pull request of that task is not known until the next listing.', $pull->number, $task));
         }
