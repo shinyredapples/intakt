@@ -13,12 +13,6 @@ final readonly class UpperWait
     // The judge is one model call, which the vendor holds no longer than a review, so it gets a review's limit.
     public const int JUDGE_SECONDS = RoundReviewer::REVIEW_CEILING_SECONDS;
 
-    public function __construct(
-        private int $reviewerSeconds = RoundReviewer::REVIEW_CEILING_SECONDS,
-        private int $judgeSeconds = self::JUDGE_SECONDS,
-    ) {
-    }
-
     public function secondsFor(Panel $panel): int
     {
         return $this->secondsForReviewers(count($panel->reviewers));
@@ -26,6 +20,6 @@ final readonly class UpperWait
 
     public function secondsForReviewers(int $reviewers): int
     {
-        return $reviewers * $this->reviewerSeconds + $this->judgeSeconds;
+        return $reviewers * RoundReviewer::REVIEW_CEILING_SECONDS + self::JUDGE_SECONDS;
     }
 }
