@@ -79,7 +79,31 @@ final readonly class TreeFingerprint
             throw new UnexpectedValueException('no HEAD commit');
         }
 
-        return [trim($head->output), $workspace->baseTip(), $workspace->mergeBase()];
+        return [trim($head->output), $workspace->baseTip(), $workspace->mergeBase(), $this->shallowBoundary()];
+    }
+
+    /**
+     * @throws UnexpectedValueException
+     */
+    // Because a shallow checkout hides the commits beyond its boundary from the history gates, deepening it is another check although HEAD and the tree stay the same.
+    private function shallowBoundary(): ?string
+    {
+        $located = $this->runner->git(['rev-parse', '--git-path', 'shallow'], $this->root);
+
+        if (!$located->succeeded()) {
+            throw new UnexpectedValueException('cannot locate the shallow file');
+        }
+
+        $path = trim($located->output);
+        $shallow = str_starts_with($path, '/') ? $path : $this->root.'/'.$path;
+
+        if (!file_exists($shallow) && !is_link($shallow)) {
+            return null;
+        }
+
+        $boundary = is_file($shallow) ? file_get_contents($shallow) : false;
+
+        return false === $boundary ? throw new UnexpectedValueException('cannot read the shallow file') : $boundary;
     }
 
     /**

@@ -401,6 +401,36 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    public function testAHistoryMadeShallowAfterThePassRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $this->pass($root, $home);
+
+        file_put_contents($root->root.'/.git/shallow', trim($root->git('rev-parse', 'HEAD')->output)."\n");
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testADeepenedShallowHistoryRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        file_put_contents($root->root.'/.git/shallow', trim($root->git('rev-parse', 'HEAD')->output)."\n");
+        $this->pass($root, $home);
+
+        unlink($root->root.'/.git/shallow');
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testAnUnchangedShallowHistoryStillReusesThePass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        file_put_contents($root->root.'/.git/shallow', trim($root->git('rev-parse', 'HEAD')->output)."\n");
+        $this->pass($root, $home);
+
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testATreeWithoutGitIsNeverReused(): void
     {
         $root = $this->emptySandbox();
