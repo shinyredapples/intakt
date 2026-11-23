@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(LedgerFailingHeads::class)]
 #[CoversClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 final class LedgerFailingHeadsTest extends TestCase
 {
     private DashboardLedger $ledger;
@@ -132,6 +132,13 @@ final class LedgerFailingHeadsTest extends TestCase
         $this->ledger->failHead('alpha', '7', 1);
 
         $this->ledger->failHeadWithoutCause('alpha', '7');
+
+        self::assertSame([], $this->failing());
+    }
+
+    public function testAFailureWhoseNextTryHoldsANulByteIsNotListed(): void
+    {
+        $this->ledger->failHeadRetryingAt('alpha', '7', "2026-10-28T12:08:00+00:00\0");
 
         self::assertSame([], $this->failing());
     }

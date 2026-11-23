@@ -8,12 +8,12 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final readonly class Lookup
 {
-    public function __construct(private ContainerInterface $container)
+    /**
+     * Takes the container per call, because a container in the constructor is
+     * a service locator that intakt.noServiceLocator refuses in src/.
+     */
+    public function kernel(ContainerInterface $container): object
     {
-    }
-
-    public function kernel(): object
-    {
-        return $this->container->get('kernel');
+        return $container->get('kernel');
     }
 }
