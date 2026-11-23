@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\JourneyPage;
 
-// bin/journey-record derives this file from the recorded issues, which hold pull requests too (merged ones as closed),
-// so one file answers for every number a Where cell names; the journey's own issues.json is never needed here.
+// A file of its own, because a missing state file must keep the statuses as written without failing the journey page.
 final readonly class IssueStates
 {
     public const string FILE = 'issue-states.json';
@@ -19,15 +18,22 @@ final readonly class IssueStates
         $items = false === $json ? null : json_decode($json, true);
         $states = [];
 
-        foreach (is_array($items) ? $items : [] as $item) {
-            $number = is_array($item) ? ($item['number'] ?? null) : null;
-            $state = is_array($item) ? ($item['state'] ?? null) : null;
-
-            if (is_int($number) && in_array($state, ['open', 'closed'], true)) {
-                $states[$number] = 'open' === $state;
+        foreach (is_array($items) ? array_filter($items, is_array(...)) : [] as $item) {
+            if ($this->isState($item)) {
+                $states[$item['number']] = 'open' === $item['state'];
             }
         }
 
         return $states;
+    }
+
+    /**
+     * @param array<mixed> $item
+     *
+     * @phpstan-assert-if-true array{number: int, state: 'open'|'closed'} $item
+     */
+    private function isState(array $item): bool
+    {
+        return is_int($item['number'] ?? null) && in_array($item['state'] ?? null, ['open', 'closed'], true);
     }
 }
