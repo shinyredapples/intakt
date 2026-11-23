@@ -55,7 +55,7 @@ The `tests` gate also guards the [parity record](parity.md): `tests/Application/
 
 `ratchet/docs.json` lists what was over a limit when the gate arrived: the key of each oversized paragraph (a hash of its words), a word ceiling for each oversized user or guide page, and the architecture pages excused from "In short". The gate compares the list with its copy on the target branch and fails on any entry that is new or any ceiling that is higher, so the list only shrinks.
 
-An edited paragraph gets a new key, so it must meet the limit, and a listed page may not grow past its ceiling. Without git history the limits still apply and the shrink check is skipped.
+An edited paragraph gets a new key, so it must meet the limit, and a listed page may not grow past its ceiling. Without git history the limits still apply and the shrink check is skipped. Like the other gates that start only `git`, its tests run it in the test process through `Sandbox::runGate()`.
 
 ## The test time budget (planned)
 
