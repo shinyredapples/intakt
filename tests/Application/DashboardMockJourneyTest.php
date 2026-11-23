@@ -107,9 +107,11 @@ final class DashboardMockJourneyTest extends TestCase
     private function series(string $id): array
     {
         $html = (string) file_get_contents(self::MOCKS.'journey.html');
-        self::assertSame(1, preg_match('/C\(\$\("'.preg_quote($id, '/').'"\).*?values: (\[[^\]]+\])/', $html, $matches), 'Missing series '.$id);
+        preg_match('/C\(\$\("'.preg_quote($id, '/').'"\).*?values: (\[[^\]]+\])/', $html, $matches);
+        $values = json_decode($matches[1] ?? 'null', true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsList($values, 'Missing series '.$id);
 
-        return json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
+        return array_map(static fn (mixed $value): int => is_int($value) ? $value : -1, $values);
     }
 
     private function page(string $name): HTMLDocument
