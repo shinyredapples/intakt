@@ -26,13 +26,13 @@
 .verdict-card .verdict-count { margin: 0; font-size: var(--t17); }
 .verdict-card .verdict-count .figure { font-weight: 700; font-size: var(--t28); }
 .verdict-card .verdict-text { flex: 1 1 0; }
-.urgency-bar { display: flex; gap: 3px; height: 10px; margin: var(--s8) 0; }
+/* The gaps share at most half the bar, because a fixed gap per segment overflows a phone once there are about a hundred findings; --n is the segment count the card sets. */
+.urgency-bar { display: flex; gap: min(3px, calc(50% / var(--n, 1))); height: 10px; margin: var(--s8) 0; }
 .urgency-bar .seg { flex: 1 1 0; border-radius: var(--r-chip); background: var(--hairline); }
 .urgency-bar .seg.urgent { background: var(--red); }
 .urgency-bar .seg.should-fix { background: var(--amber); }
 .urgency-bar .seg.nice-to-have { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
 .urgency-bar .seg.unranked { background: var(--hairline); }
-/* The legend's shapes match the bar's segments: triangle red, dot amber, ring muted (the mock's key). */
 .urgency-counts { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s16); margin: 0; padding: 0; list-style: none; font-size: var(--t15); color: var(--ink); }
 .urgency-counts li { display: inline-flex; align-items: center; gap: 6px; }
 .urgency-counts .shape { width: 14px; height: 14px; flex: none; }

@@ -137,7 +137,9 @@ final class ReviewedRoundTest extends TestCase
 
     public function testASoleReviewerIsNamedAsTheReviewer(): void
     {
-        self::assertSame('The reviewer says approved', $this->round()->withOutcomes([$this->answered('a', Decision::Approve)])->agreement());
+        $round = new ReviewedRound(new RoundStart('r-1', 'alpha', 1), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+
+        self::assertSame('The reviewer says approved', $round->withOutcomes([$this->answered('a', Decision::Approve)])->agreement());
     }
 
     public function testNoReviewerOutcomeGivesNoAgreementLine(): void
@@ -169,6 +171,20 @@ final class ReviewedRoundTest extends TestCase
         $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->started('b')->blocked('no access')]);
 
         self::assertSame('1 of 2 says changes needed', $round->agreement());
+    }
+
+    public function testOneRecordedVerdictOnAPanelOfTwoSaysOneOfTwoWhileTheOtherHasNoRowYet(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes)]);
+
+        self::assertSame('1 of 2 says changes needed', $round->agreement());
+    }
+
+    public function testMoreReviewerRowsThanTheStartRowNamedCountAsThePanel(): void
+    {
+        $round = new ReviewedRound(new RoundStart('r-1', 'alpha', 1), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+
+        self::assertSame('Both say approved', $round->withOutcomes([$this->answered('a', Decision::Approve), $this->answered('b', Decision::Approve)])->agreement());
     }
 
     private function answered(string $id, Decision $decision): ReviewerOutcome

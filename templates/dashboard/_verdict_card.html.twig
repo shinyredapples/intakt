@@ -26,7 +26,7 @@
         {% if latest.isJudged %}
         {%- set unranked = open|filter(f => f.urgency is null)|length -%}
         <p class="verdict-count"><span class="figure">{{ open|length }}</span> to fix</p>
-        <div class="urgency-bar" aria-hidden="true">
+        <div class="urgency-bar" style="--n:{{ open|length }}" aria-hidden="true">
             {%- for urgency in urgencies -%}
             {%- for finding in open|filter(f => f.urgency is same as(urgency)) -%}
             <span class="seg {{ urgency.value }}"></span>
@@ -61,7 +61,9 @@
             </li>
             {%- endfor -%}
         </ul>
+        {%- if latest.agreement is not empty %}
         <p class="agreement">{{ latest.agreement }}</p>
+        {%- endif %}
     </div>
     {% endif %}
 </section>

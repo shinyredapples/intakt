@@ -172,6 +172,28 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         self::assertSame([1, 1, '1 urgent, 0 should fix, 0 nice to have'], [$crawler->filter('.urgency-bar .seg')->count(), $crawler->filter('.urgency-bar .seg.urgent')->count(), implode(', ', $crawler->filter('.urgency-counts li')->each(static fn (Crawler $li): string => $li->text()))]);
     }
 
+    // The gaps between segments are a share of the bar's width divided by this count, so 132 findings still fit a 390 px phone.
+    public function testTheBarCarriesItsSegmentCountForItsGaps(): void
+    {
+        $this->givenAChangesRoundWith(['F1' => 'act', 'F2' => 'act', 'F3' => 'act']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('--n:3', $crawler->filter('.urgency-bar')->attr('style'));
+    }
+
+    public function testAJudgedPassWithoutAnyReviewerVerdictHasNoAgreementLine(): void
+    {
+        $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
+        $this->ledger->failReviewer('round-1', 'correctness', 'timeout');
+        $this->ledger->failReviewer('round-1', 'security', 'timeout');
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([2, 0], [$crawler->filter('.reviewer-faces .face')->count(), $crawler->filter('.verdict-reviewers .agreement')->count()]);
+    }
+
     public function testAnApprovedPassHasAnEmptyBar(): void
     {
         $this->givenAnApprovedRound();

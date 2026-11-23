@@ -37,6 +37,15 @@ final class ReviewPageStylesTest extends TestCase
         self::assertMatchesRegularExpression('/white-space:\s*normal;\s*overflow-wrap:\s*anywhere;/', $shared['.page-head .meta span'] ?? '');
     }
 
+    // A fixed gap per segment grows with the findings: 132 findings at 3 px need 393 px, wider than a 390 px phone, so the gaps take at most half the bar whatever the count.
+    public function testTheUrgencyBarsGapsShareHalfItsWidthAtMostWhateverTheSegmentCount(): void
+    {
+        $rules = $this->rulesOf($this->sheet('review.css'));
+
+        self::assertMatchesRegularExpression('~gap:\s*min\(3px,\s*calc\(50%\s*/\s*var\(--n,\s*1\)\)\);~', $rules['.urgency-bar'] ?? '');
+        self::assertDoesNotMatchRegularExpression('/gap:\s*\d+px;/', $rules['.urgency-bar'] ?? '');
+    }
+
     private function sheet(string $name): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/'.$name);

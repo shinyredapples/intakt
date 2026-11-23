@@ -133,11 +133,11 @@ final readonly class ReviewedRound
         return ReviewOutcome::ofQuorum($this);
     }
 
-    // One line on whether the reviewers agree, from their own verdicts and not the round's, so a split reads as a split. Only Approved and Changes needed count as a verdict, because a failed or blocked reviewer gave no opinion on the change; and the line names how many of the panel gave one, so two answers out of three never read as "Both". Empty while none has given one.
+    // One line on whether the reviewers agree, from their own verdicts and not the round's, so a split reads as a split. Only Approved and Changes needed count as a verdict, because a failed or blocked reviewer gave no opinion on the change; and the line names how many of the panel gave one, so two answers out of three never read as "Both". The panel is the start row's count, because a reviewer that has not written its row yet is still on it; the rows count instead when there are more of them. Empty while none has given one.
     public function agreement(): string
     {
         $verdicts = $this->verdictsGivenIn($this);
-        $panel = count($this->outcomesIn($this));
+        $panel = max($this->reviewers, count($this->outcomesIn($this)));
 
         if ([] === $verdicts) {
             return '';
