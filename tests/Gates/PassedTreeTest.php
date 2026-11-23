@@ -321,6 +321,28 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    // Because moving the folder a link points at leaves the link itself alone, only that folder tells that the gates may have read the tree while it was away.
+    public function testTheFolderBehindALinkAboveATrackedFileUnderAnIgnoredVarMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home, $target] = $this->trackedNoteUnderVarBehindALink();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        rename($target, $target.'-aside');
+        rename($target.'-aside', $target);
+
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testATrackedFileUnderAnIgnoredVarBehindALinkLeftAloneWhileTheGatesRanRecordsAPass(): void
+    {
+        [$root, $home] = $this->trackedNoteUnderVarBehindALink();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        self::assertTrue($tree->recordPass());
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testATrackedFileUnderAnIgnoredVarLeftAloneWhileTheGatesRanRecordsAPass(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
@@ -564,6 +586,22 @@ final class PassedTreeTest extends SandboxTestCase
         mkdir($root->root.'/'.FullReport::FOLDER, 0o777, true);
 
         return [$root, $this->home()];
+    }
+
+    /**
+     * @return array{Sandbox, Sandbox, string}
+     */
+    private function trackedNoteUnderVarBehindALink(): array
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('var/notes/example.md', "clean\n");
+        $root->git('add', '--force', 'var/notes/example.md');
+        $root->commitAll('docs: track a note under var');
+        $target = $this->emptySandbox()->root.'/notes';
+        rename($root->root.'/var/notes', $target);
+        $root->symlink('var/notes', $target);
+
+        return [$root, $home, $target];
     }
 
     private function pass(Sandbox $root, Sandbox $home, string ...$arguments): void
