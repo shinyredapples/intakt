@@ -40,12 +40,6 @@ final readonly class ReportedUsage
      */
     private static function countsAreWhole(array $reported): bool
     {
-        foreach (array_intersect_key($reported, array_flip(self::COUNTS)) as $value) {
-            if (!is_int($value) || $value < 0) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all(array_intersect_key($reported, array_flip(self::COUNTS)), static fn (mixed $count): bool => is_int($count) && $count >= 0);
     }
 }
