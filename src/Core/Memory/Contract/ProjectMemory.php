@@ -8,4 +8,6 @@ namespace Intakt\Core\Memory\Contract;
 interface ProjectMemory
 {
     public function relevantTo(MemoryQuery $query): RelevantMemory;
+
+    public function settledOn(SettledQuery $query): SettledMemory;
 }

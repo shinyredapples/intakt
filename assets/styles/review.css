@@ -15,16 +15,43 @@
 @media (prefers-reduced-motion: no-preference) { .review-path .who { animation: path-hop .6s ease-out 1; } }
 @keyframes path-hop { from { transform: translate(-50%, 8px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 
-/* The owl's verdict card: the answer of the latest pass, amber when changes are needed, green-tinted when approved. */
-.verdict-card { display: flex; align-items: center; gap: var(--s16); margin: var(--s8) 0 var(--s12); padding: var(--s16); border-radius: var(--r-card); background: var(--raised); border: 1px solid var(--hairline); }
+/* The owl's verdict card: the answer of the latest pass, amber when changes are needed, green-tinted when approved. It wraps at every width, because a long reviewer label or larger text can need more than one row, and px media queries do not follow the font size. */
+.verdict-card { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s16); margin: var(--s8) 0 var(--s12); padding: var(--s16); border-radius: var(--r-card); background: var(--raised); border: 1px solid var(--hairline); }
 .verdict-card.needs { background: var(--amber-tint); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
 .verdict-card.good { background: var(--tint); }
 .verdict-card .character { width: 96px; height: 96px; flex: none; }
-.verdict-card .verdict-text { min-width: 0; }
 .verdict-card .kicker { margin: 0; font-size: var(--t13); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .verdict-card .verdict-words { margin: 2px 0 4px; font-size: var(--t28); overflow-wrap: anywhere; }
 .verdict-card .verdict-count { margin: 0; font-size: var(--t17); }
-.verdict-card .verdict-count .figure { font-weight: 700; }
+.verdict-card .verdict-count .figure { font-weight: 700; font-size: var(--t28); }
+/* The 14rem basis makes the reviewers wrap before the verdict is squeezed; the column still shrinks, because at large text 14rem can be wider than the card. */
+.verdict-card .verdict-text { flex: 1 1 14rem; min-width: 0; }
+/* The gaps share at most half the bar, because a fixed gap per segment overflows a phone once there are about a hundred findings; --n is the segment count the card sets. */
+.urgency-bar { display: flex; gap: min(3px, calc(50% / var(--n, 1))); height: 10px; margin: var(--s8) 0; }
+.urgency-bar .seg { flex: 1 1 0; border-radius: var(--r-chip); background: var(--hairline); }
+.urgency-bar .seg.urgent { background: var(--red); }
+.urgency-bar .seg.should-fix { background: var(--amber); }
+.urgency-bar .seg.nice-to-have { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+.urgency-bar .seg.unranked { background: var(--hairline); }
+.urgency-counts { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s16); margin: 0; padding: 0; list-style: none; font-size: var(--t15); color: var(--ink); }
+.urgency-counts li { display: inline-flex; align-items: center; gap: 6px; }
+.urgency-counts .shape { width: 14px; height: 14px; flex: none; }
+.urgency-counts .shape.urgent { fill: var(--red); }
+.urgency-counts .shape.should-fix { fill: var(--amber); stroke: color-mix(in srgb, var(--amber) 60%, var(--ink)); stroke-width: 1.5; }
+.urgency-counts .shape.nice-to-have { fill: none; stroke: var(--muted); stroke-width: 3; }
+.urgency-counts .shape.unranked { fill: var(--muted); }
+/* The faces wrap and the labels break, so a configured panel larger than two or a long label stays inside the row the reviewers get. */
+.verdict-reviewers { flex: 0 1 auto; min-width: 0; display: grid; gap: var(--s8); justify-items: center; }
+.reviewer-faces { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s8) var(--s16); margin: 0; padding: 0; list-style: none; }
+.reviewer-faces .face { display: grid; justify-items: center; gap: 2px; min-width: 0; font-size: var(--t13); text-align: center; overflow-wrap: anywhere; }
+.reviewer-faces .character { width: 48px; height: 48px; }
+.reviewer-faces .face-lab { font-weight: 700; }
+/* The words stay in ink, because 13 px text on the tinted cards falls under 4.5:1 in a tint color in dark mode; only the glyph carries the color, as a graphic at 3:1. */
+.reviewer-faces .face-mark { color: var(--ink); }
+.reviewer-faces .ok .glyph { color: var(--deep); font-weight: 700; }
+[data-theme="dark"] .reviewer-faces .ok .glyph { color: var(--primary); }
+.reviewer-faces .no .glyph { color: var(--red); font-weight: 700; }
+.verdict-reviewers .agreement { margin: 0; font-size: var(--t15); color: var(--muted); }
 
 /* Each button's line under it says what happens next. */
 .task-actions .next-step { margin: var(--s4) 0 0; font-size: var(--t15); color: var(--muted); }
@@ -58,5 +85,9 @@
   .fix-card .urgency { justify-self: start; }
   .fix-card .fix-chev { grid-column: 2; grid-row: 1 / 3; }
   .verdict-card .character { width: 72px; height: 72px; }
+  .verdict-card .verdict-text { flex: 1 1 0; }
+  .verdict-card .reviewer-faces .character { width: 48px; height: 48px; }
+  .verdict-reviewers { width: 100%; justify-items: start; }
+  .reviewer-faces { justify-content: flex-start; }
   .verdict-card .verdict-words { font-size: var(--t21); }
 }
