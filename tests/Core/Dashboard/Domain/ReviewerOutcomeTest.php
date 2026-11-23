@@ -142,6 +142,13 @@ final class ReviewerOutcomeTest extends TestCase
         self::assertNull($this->reviewer()->stopped()->outcome());
     }
 
+    public function testAnInterruptedReviewerKeepsItsInterruptionCountAndGivesNoOutcome(): void
+    {
+        $interrupted = $this->reviewer()->interrupted(3);
+
+        self::assertSame([3, null], [$interrupted->interruptions, $interrupted->outcome()]);
+    }
+
     public function testAReviewerStartedAgainAfterAnAnswerGivesNoOutcome(): void
     {
         $restarted = $this->reviewer()->answered(Decision::Approve, 0, ProjectMode::Live)->restarted(new DateTimeImmutable('2026-10-28T11:05:00+00:00'), null);

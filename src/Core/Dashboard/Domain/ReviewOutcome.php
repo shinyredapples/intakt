@@ -35,7 +35,7 @@ enum ReviewOutcome: string
             ReviewerProgress::Answered => $reviewer->decision instanceof Decision ? self::ofDecision($reviewer->decision) : null,
             ReviewerProgress::Failed => self::Failed,
             ReviewerProgress::Blocked => self::Blocked,
-            ReviewerProgress::Running, ReviewerProgress::Stopped => null,
+            ReviewerProgress::Running, ReviewerProgress::Interrupted, ReviewerProgress::Stopped => null,
         };
     }
 

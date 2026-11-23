@@ -53,6 +53,14 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(length: self::FAILURE_LENGTH, nullable: true)]
     private ?string $failure = null;
 
+    // The agent's own session, kept across an interruption so the review can resume where it stopped; cleared only when a new attempt follows a real failure.
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $agentSessionId = null;
+
+    // Shown on the card only, because an outage is a wait and no limit may count it.
+    #[ORM\Column(options: ['default' => 0])]
+    private int $interruptions = 0;
+
     // The provider that reviewed in this reviewer's place; set means a catch-up review is owed, because another vendor reviewed; a move to another account of the same vendor never sets it.
     #[ORM\Column(length: 32, nullable: true, enumType: Provider::class)]
     private ?Provider $substitute = null;
@@ -65,10 +73,19 @@ final class RoundReviewer implements HasPlace
         #[ORM\JoinColumn(nullable: false)]
         private readonly ReviewRound $round,
         PanelReviewer $member,
+        // Kept apart from the id, because a UUIDv7 id follows the wall clock, which can step back between two reviewers of one panel.
+        #[ORM\Column(name: 'panel_position', options: ['default' => 0])]
+        private readonly int $position,
     ) {
         $this->roleName = $member->role->name;
         $this->rolePrompt = $member->role->prompt;
         $this->tier = $member->model->tier;
+    }
+
+    // The id breaks a tie, because every reviewer stored before migration Version20261123100000 is at position 0.
+    public function panelOrder(self $other): int
+    {
+        return [$this->position, $this->id->toBinary()] <=> [$other->position, $other->id->toBinary()];
     }
 
     public function recordStart(DateTimeImmutable $now): void
@@ -80,6 +97,17 @@ final class RoundReviewer implements HasPlace
     public function recordRestart(): void
     {
         ++$this->restarts;
+        $this->agentSessionId = null;
+    }
+
+    public function recordInterruption(): void
+    {
+        ++$this->interruptions;
+    }
+
+    public function recordAgentSession(string $agentSessionId): void
+    {
+        $this->agentSessionId = $agentSessionId;
     }
 
     public function recordVerdict(string $verdictJson, ?Provider $substitute): void
@@ -144,6 +172,16 @@ final class RoundReviewer implements HasPlace
     public function heldUntil(): ?DateTimeImmutable
     {
         return ReviewerState::Running === $this->state ? $this->startedAt?->add(new DateInterval(self::REVIEW_CEILING)) : null;
+    }
+
+    public function agentSessionId(): ?string
+    {
+        return $this->agentSessionId;
+    }
+
+    public function interruptions(): int
+    {
+        return $this->interruptions;
     }
 
     public function hasRestarted(): bool

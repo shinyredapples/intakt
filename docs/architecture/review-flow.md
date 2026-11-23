@@ -14,7 +14,7 @@ Worth knowing:
 
 The rest of this page is the detailed reference.
 
-One review from a door to the act list. The pages [Review rounds](review-rounds.md), [Judge](vendor.md#judge) and [Quorum policies](quorum-policies.md) hold the details; this page only shows how they connect. The round's states (collecting, complete, judged) are the `review_round` state machine, declared by the Workflow attributes on `src/Core/Review/Infrastructure/ReviewRoundStateMachine.php`; each reviewer's states (queued, running, verdict, failed, blocked) are the `reviewer` state machine, declared the same way on `src/Core/Review/Infrastructure/ReviewerStateMachine.php` ([Review rounds](review-rounds.md)).
+One review from a door to the act list. The pages [Review rounds](review-rounds.md), [Judge](vendor.md#judge) and [Quorum policies](quorum-policies.md) hold the details; this page only shows how they connect. The round's states (collecting, complete, judged) are the `review_round` state machine, declared by the Workflow attributes on `src/Core/Review/Infrastructure/ReviewRoundStateMachine.php`; each reviewer's states (queued, running, interrupted, verdict, failed, blocked) are the `reviewer` state machine, declared the same way on `src/Core/Review/Infrastructure/ReviewerStateMachine.php` ([Review rounds](review-rounds.md)).
 
 ```mermaid
 flowchart TD

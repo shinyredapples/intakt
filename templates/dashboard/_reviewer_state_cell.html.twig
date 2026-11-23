@@ -2,6 +2,7 @@
 {% set progress = outcome.progress.name %}
 <td id="round-{{ round }}-reviewer-{{ outcome.id }}-state"><span class="reviewer-outcome">
     {%- if progress == 'Running' %}<span class="dot ok"></span><span class="muted">running</span>
+    {%- elseif progress == 'Interrupted' %}<span class="muted">Waiting for the network</span><span class="muted">{{ outcome.interruptions }} {{ outcome.interruptions == 1 ? 'interruption' : 'interruptions' }}</span>
     {%- elseif progress == 'Stopped' %}<span class="muted">stopped</span>
     {%- elseif outcome.outcome is null %}<span class="muted">answered</span>
     {%- else %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome.outcome, on_page: true, plain: true}, with_context = false) }}{% if outcome.note is not empty %}<span class="muted">{{ outcome.note }}</span>{% endif %}{% endif -%}

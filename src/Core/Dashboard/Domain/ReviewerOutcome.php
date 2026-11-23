@@ -17,6 +17,7 @@ final readonly class ReviewerOutcome
     public ?string $note;
     public ?string $substitute;
     public ProjectMode $mode;
+    public int $interruptions;
 
     public function __construct(
         public string $id,
@@ -31,6 +32,7 @@ final readonly class ReviewerOutcome
         $this->note = null;
         $this->substitute = null;
         $this->mode = ProjectMode::Live;
+        $this->interruptions = 0;
     }
 
     // The model comes from the latest start alone, because a reviewer started again may run on another model, and a start written before the model was recorded has none.
@@ -99,6 +101,12 @@ final readonly class ReviewerOutcome
     public function blocked(string $reason): self
     {
         return clone ($this, ['progress' => ReviewerProgress::Blocked, 'note' => $reason]);
+    }
+
+    // The count is shown and nothing more, because an outage is a wait that no limit counts.
+    public function interrupted(int $interruptions): self
+    {
+        return clone ($this, ['progress' => ReviewerProgress::Interrupted, 'interruptions' => $interruptions]);
     }
 
     public function stopped(): self

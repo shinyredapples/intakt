@@ -22,6 +22,7 @@ digraph review_round {
         reviewer_start [shape=point, label=""];
         queued;
         running;
+        interrupted;
         verdict [shape=doublecircle];
         failed [shape=doublecircle];
         blocked [shape=doublecircle];
@@ -32,5 +33,8 @@ digraph review_round {
         running -> queued [label="requeue\n(the ledger refused the end event, a rate limit,\nor the first stopped worker before start)"];
         running -> blocked [label="block\n(the worker stopped twice)"];
         queued -> blocked [label="block\n(the message reached the failure transport)"];
+        running -> interrupted [label="interrupt\n(an outage; keeps the agent session id,\ncounts no restart and no failure)"];
+        interrupted -> running [label="resume\n(a new conversation, the same agent session id)"];
+        interrupted -> blocked [label="block\n(the message reached the failure transport)"];
     }
 }

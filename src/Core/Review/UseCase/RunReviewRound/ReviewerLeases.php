@@ -60,6 +60,13 @@ final readonly class ReviewerLeases
         $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->fail($stored, $failure));
     }
 
+    // Neither a failure nor a restart, because an outage is a wait and only a real failure may use up a limit.
+    public function recordInterrupted(RoundReviewer $reviewer): void
+    {
+        $interrupt = fn (RoundReviewer $stored) => $this->moves->interrupt($stored);
+        $this->record($reviewer, $interrupt, afterTheCeiling: $interrupt);
+    }
+
     // Blocked with the reason, because no provider is left to review and a retry would only wait for one the owner named a way around.
     public function recordOutage(RoundReviewer $reviewer, string $reason): void
     {
@@ -95,17 +102,18 @@ final readonly class ReviewerLeases
     /**
      * @template T
      *
-     * @param Closure(RoundReviewer): T $move
+     * @param Closure(RoundReviewer): T        $move
+     * @param (Closure(RoundReviewer): T)|null $afterTheCeiling
      *
      * @return T|null
      */
-    private function record(RoundReviewer $reviewer, Closure $move): mixed
+    private function record(RoundReviewer $reviewer, Closure $move, ?Closure $afterTheCeiling = null): mixed
     {
         $attempts = 0;
 
         while (true) {
             try {
-                return $this->recordOnce($reviewer, $move);
+                return $this->recordOnce($reviewer, $move, $afterTheCeiling ?? $this->failAtTheCeiling(...));
             } catch (ReviewEventNotRecorded $refused) {
                 // A new transaction, because the result is already in hand and only a fresh snapshot can write after another reviewer committed.
                 if (++$attempts < self::STORE_ATTEMPTS && $this->entities->isOpen()) {
@@ -118,18 +126,27 @@ final readonly class ReviewerLeases
         }
     }
 
+    // Failed rather than recorded, because a result after the ceiling lands on a reviewer a redelivery may already treat as stopped; an outage passes its own move instead, since it stays a wait.
+    private function failAtTheCeiling(RoundReviewer $stored): null
+    {
+        $this->moves->fail($stored, self::CEILING_PASSED);
+
+        return null;
+    }
+
     /**
      * @template T
      *
-     * @param Closure(RoundReviewer): T $move
+     * @param Closure(RoundReviewer): T        $move
+     * @param Closure(RoundReviewer): (T|null) $afterTheCeiling
      *
      * @return T|null
      */
-    private function recordOnce(RoundReviewer $reviewer, Closure $move): mixed
+    private function recordOnce(RoundReviewer $reviewer, Closure $move, Closure $afterTheCeiling): mixed
     {
         $now = $this->clock->now();
 
-        return $this->inOneTransaction(function () use ($reviewer, $move, $now): mixed {
+        return $this->inOneTransaction(function () use ($reviewer, $move, $afterTheCeiling, $now): mixed {
             $stored = $this->lockedRow($reviewer->id());
 
             // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
@@ -137,13 +154,7 @@ final readonly class ReviewerLeases
                 return null;
             }
 
-            if (!$this->withinTheHold($stored, $now)) {
-                $this->moves->fail($stored, self::CEILING_PASSED);
-
-                return null;
-            }
-
-            return $move($stored);
+            return $this->withinTheHold($stored, $now) ? $move($stored) : $afterTheCeiling($stored);
         });
     }
 
@@ -170,6 +181,12 @@ final readonly class ReviewerLeases
 
         if (ReviewerState::Queued === $reviewer->state()) {
             $this->moves->start($reviewer, $now);
+
+            return;
+        }
+
+        if (ReviewerState::Interrupted === $reviewer->state()) {
+            $this->moves->resume($reviewer, $now);
 
             return;
         }

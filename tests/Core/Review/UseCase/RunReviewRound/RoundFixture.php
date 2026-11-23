@@ -441,7 +441,7 @@ final readonly class RoundFixture
         }
     }
 
-    private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
+    public function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
         $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), $this->roundLedger($ledger ?? $this->ledger), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
 

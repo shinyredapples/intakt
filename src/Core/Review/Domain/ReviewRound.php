@@ -112,7 +112,7 @@ final class ReviewRound implements HasPlace
 
     public function addReviewer(UuidV7 $id, PanelReviewer $member): void
     {
-        $this->reviewers->add(new RoundReviewer($id, $this, $member));
+        $this->reviewers->add(new RoundReviewer($id, $this, $member, $this->reviewers->count()));
     }
 
     public function id(): Uuid
@@ -185,12 +185,16 @@ final class ReviewRound implements HasPlace
         $this->resolvedFindingIds = $json;
     }
 
+    // In panel order, because PostgreSQL returns the stored rows in storage order, which an update changes.
     /**
      * @return list<RoundReviewer>
      */
     public function reviewers(): array
     {
-        return array_values($this->reviewers->toArray());
+        $reviewers = array_values($this->reviewers->toArray());
+        usort($reviewers, static fn (RoundReviewer $one, RoundReviewer $other): int => $one->panelOrder($other));
+
+        return $reviewers;
     }
 
     public function everyReviewerFinished(): bool

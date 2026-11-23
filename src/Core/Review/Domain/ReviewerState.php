@@ -8,6 +8,7 @@ enum ReviewerState: string
 {
     case Queued = 'queued';
     case Running = 'running';
+    case Interrupted = 'interrupted';
     case Verdict = 'verdict';
     case Failed = 'failed';
     case Blocked = 'blocked';
@@ -16,7 +17,7 @@ enum ReviewerState: string
     {
         return match ($this) {
             self::Verdict, self::Failed, self::Blocked => true,
-            self::Queued, self::Running => false,
+            self::Queued, self::Running, self::Interrupted => false,
         };
     }
 

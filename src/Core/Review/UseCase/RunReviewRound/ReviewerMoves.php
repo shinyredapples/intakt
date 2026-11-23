@@ -81,6 +81,20 @@ final readonly class ReviewerMoves
         $this->machine->apply($reviewer, ReviewerTransition::Requeue->value);
     }
 
+    // No ledger event yet, because reporting an interruption on the ledger is a later part of #2678; the stored session id and the failure stay as they are.
+    public function interrupt(RoundReviewer $reviewer): void
+    {
+        $reviewer->recordInterruption();
+        $this->machine->apply($reviewer, ReviewerTransition::Interrupt->value);
+    }
+
+    // A new conversation, because the store refuses one that was already started; the agent session id stays for the resume.
+    public function resume(RoundReviewer $reviewer, DateTimeImmutable $now): void
+    {
+        $reviewer->recordStart($now);
+        $this->machine->apply($reviewer, ReviewerTransition::Resume->value);
+    }
+
     // Only for a pending request, because a model can name the stopped finding itself, and only the owner's request may make the ledger say a reviewer was stopped.
     private function answerStopRequest(RoundReviewer $reviewer, Verdict $verdict): bool
     {

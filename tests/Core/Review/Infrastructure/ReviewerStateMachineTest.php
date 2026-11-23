@@ -28,13 +28,13 @@ final class ReviewerStateMachineTest extends KernelTestCase
     public function testTheReviewerMachineKeepsItsPlacesInTheirOrder(): void
     {
         self::assertSame(
-            ['queued' => 'queued', 'running' => 'running', 'verdict' => 'verdict', 'failed' => 'failed', 'blocked' => 'blocked'],
+            ['queued' => 'queued', 'running' => 'running', 'interrupted' => 'interrupted', 'verdict' => 'verdict', 'failed' => 'failed', 'blocked' => 'blocked'],
             $this->reviewerMachine()->getDefinition()->getPlaces(),
         );
     }
 
-    // Two block transitions are expected, because the configuration split a state machine transition with two input places into one per place.
-    public function testTheReviewerMachineKeepsItsTransitionsWithBlockFromQueuedAndRunning(): void
+    // Three block transitions are expected, because the configuration split a state machine transition with three input places into one per place.
+    public function testTheReviewerMachineKeepsItsTransitionsWithBlockFromQueuedRunningAndInterrupted(): void
     {
         $transitions = array_map(
             static fn (Transition $transition): array => [$transition->getName(), $transition->getFroms(), $transition->getTos()],
@@ -48,7 +48,16 @@ final class ReviewerStateMachineTest extends KernelTestCase
             ['requeue', ['running'], ['queued']],
             ['block', ['queued'], ['blocked']],
             ['block', ['running'], ['blocked']],
+            ['block', ['interrupted'], ['blocked']],
+            ['interrupt', ['running'], ['interrupted']],
+            ['resume', ['interrupted'], ['running']],
         ], $transitions);
+    }
+
+    public function testAnInterruptedReviewerHasStartedButIsNotFinished(): void
+    {
+        self::assertTrue(ReviewerState::Interrupted->hasStarted());
+        self::assertFalse(ReviewerState::Interrupted->isFinished());
     }
 
     public function testAReviewerStartsQueued(): void
