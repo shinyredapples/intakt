@@ -640,6 +640,16 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertStringContainsString('Cost: 0.0104 USD estimated, price date unknown', self::wordsOf($crawler->filter('.page-head p.meta')));
     }
 
+    public function testTheFullRecordViewRendersTheCostLabelAsOneWholeFactLabelBesideTheFigure(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        self::assertSame(['Cost:'], $crawler->filter('.page-head p.meta .fact-label')->each(static fn (Crawler $label): string => $label->text(normalizeWhitespace: false)));
+        self::assertCount(1, $crawler->filter('.page-head p.meta .fact-label + span#review-summary-cost'));
+    }
+
     public function testAnUnknownCostNamesTheModelEscapedAndIsNeverZero(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
