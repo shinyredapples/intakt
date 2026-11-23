@@ -67,7 +67,7 @@ final readonly class LedgerBuildSteps
         return $rows;
     }
 
-    // A row of the task with its run and step, or with neither for a malformed task row of an unnamed run, because that row is left out but still marks where a new run began.
+    // A row of the task with its run and step; without its step for a malformed row of a named run or a malformed task row of an unnamed run, because that row is left out but still marks where its run began.
     /**
      * @return array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}|null
      */
@@ -85,7 +85,12 @@ final readonly class LedgerBuildSteps
             return [$run, $step];
         }
 
-        return null === $run && $this->isTaskRowOf($recorded, $project, $task) ? [null, null] : null;
+        if (!$this->isRowOf($recorded, $project, $task)) {
+            return null;
+        }
+
+        // Only the task row of an unnamed run, because without a run id only the task step tells that a new run began.
+        return null !== $run || BuildStep::Task->value === (LedgerPayload::of($recorded)['step'] ?? null) ? [$run, null] : null;
     }
 
     // Null for a row written before runs were named, and false for a run that is no UUID (an explicit null included): the build never writes one, so the row's run cannot be told and the row is left out.
@@ -100,11 +105,11 @@ final readonly class LedgerBuildSteps
         return is_string($payload['run']) && Uuid::isValid($payload['run']) ? strtolower($payload['run']) : false;
     }
 
-    private function isTaskRowOf(RecordedEvent $recorded, string $project, string $task): bool
+    private function isRowOf(RecordedEvent $recorded, string $project, string $task): bool
     {
         $payload = LedgerPayload::of($recorded);
 
-        return $project === ($payload['project'] ?? null) && $task === ($payload['task'] ?? null) && BuildStep::Task->value === ($payload['step'] ?? null);
+        return $project === ($payload['project'] ?? null) && $task === ($payload['task'] ?? null);
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.

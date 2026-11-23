@@ -897,6 +897,23 @@ final class BuildTaskTest extends TestCase
         self::assertSame([['task', 'failed', BuildTask::START_NOT_LOCKED]], array_map(static fn (array $row): array => [$row['step'], $row['outcome'], $row['failure']], $ledger->payloads()));
     }
 
+    public function testAStartLockHeldByAnotherRunOfTheTaskFailsTheTaskStepAtOnceAndRunsNoOtherStep(): void
+    {
+        $other = $this->startLockOf(7);
+        self::assertTrue($other->acquire(false));
+        $reads = $this->createMock(IssueReads::class);
+        $reads->expects(self::never())->method('readOpen');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+
+        self::assertTrue($other->isAcquired());
+        self::assertSame(BuildTask::START_BUSY, $outcome->failure);
+        self::assertSame(BuildStep::Task, $outcome->last);
+        self::assertSame([['task', 'failed', BuildTask::START_BUSY]], array_map(static fn (array $row): array => [$row['step'], $row['outcome'], $row['failure']], $ledger->payloads()));
+        self::assertDirectoryDoesNotExist($this->mirrors);
+    }
+
     public function testTheStartLockKeyOfOneProjectsTaskIsNotThatOfAnotherProjectWhoseNameRunsOn(): void
     {
         self::assertNotSame(new BuildRun('alpha:1', 2, 'a')->startLockKey(), new BuildRun('alpha', 12, 'a')->startLockKey());

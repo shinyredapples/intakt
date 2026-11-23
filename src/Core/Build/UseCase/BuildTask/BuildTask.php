@@ -43,6 +43,8 @@ final readonly class BuildTask
     // Fixed words, because the message of a lock store's failure can name where the store keeps its locks.
     public const string START_NOT_LOCKED = 'the start of the run could not be locked';
 
+    public const string START_BUSY = 'another run of this task is starting';
+
     public function __construct(
         private IssueReads $issues,
         private BuildCheckout $checkout,
@@ -83,6 +85,7 @@ final readonly class BuildTask
     }
 
     // Under a lock of the task from the issue read until its row is recorded, because the task page takes the run whose task row comes last in the ledger as the run started last, so a run that started earlier must not record its task row after a later one.
+    // Taken without waiting, so a stalled holder never blocks the next run. A run that cannot take it records its failed task row outside the lock and runs no other step; if the holder records its task row afterwards, the page shows the holder, which is right, because it is the run that goes on.
     /**
      * @throws BuildStepNotRecorded
      */
@@ -91,11 +94,15 @@ final readonly class BuildTask
         $lock = $this->locks->createLock($run->startLockKey(), ttl: null);
 
         try {
-            $lock->acquire(true);
+            $failure = $lock->acquire(blocking: false) ? null : self::START_BUSY;
         } catch (ExceptionInterface) {
-            $this->record($run, BuildStep::Task, self::START_NOT_LOCKED);
+            $failure = self::START_NOT_LOCKED;
+        }
 
-            return self::START_NOT_LOCKED;
+        if (null !== $failure) {
+            $this->record($run, BuildStep::Task, $failure);
+
+            return $failure;
         }
 
         try {

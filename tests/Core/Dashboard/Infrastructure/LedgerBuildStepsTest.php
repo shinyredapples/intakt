@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
+use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Dashboard\Infrastructure\LatestBuildRun;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
@@ -38,6 +39,36 @@ final class LedgerBuildStepsTest extends TestCase
 
         self::assertSame([['task', 'passed'], ['mirror', 'failed']], $this->stepsAndOutcomes($steps));
         self::assertSame('fetch refused', $steps[1]['failure']);
+    }
+
+    public function testAMalformedFirstRowOfANamedRunStillFixesWhereThatRunStarts(): void
+    {
+        $steps = $this->latestRunOf([
+            ['run' => self::OLDER, 'step' => 'task', 'outcome' => 'malformed'],
+            ['run' => self::NEWER, 'step' => 'task'],
+            ['run' => self::NEWER, 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'fetch refused'],
+            ['run' => self::OLDER, 'step' => 'mirror'],
+        ]);
+
+        self::assertSame([['task', 'passed'], ['mirror', 'failed']], $this->stepsAndOutcomes($steps));
+    }
+
+    public function testAMalformedRowOfANamedRunOfAnotherTaskDoesNotStartARunOfThisTask(): void
+    {
+        $steps = $this->latestRunOf([
+            ['run' => self::OLDER, 'step' => 'task'],
+            ['run' => self::NEWER, 'task' => '43', 'step' => 'task', 'outcome' => 'malformed'],
+        ]);
+
+        self::assertSame([['task', 'passed']], $this->stepsAndOutcomes($steps));
+    }
+
+    public function testTheUnnamedRunNeverHoldsMoreStepsThanTheBuildHasAfterManyLegacyRows(): void
+    {
+        $steps = array_column(BuildStep::cases(), 'value');
+        $rows = array_map(static fn (int $index): array => ['step' => $steps[$index * 5 % count($steps)]], range(0, 2000));
+
+        self::assertLessThanOrEqual(count($steps), count($this->latestRunOf($rows)));
     }
 
     public function testRowsWithoutARunAfterANamedRunAreTheLatestRunAsAfterARollback(): void

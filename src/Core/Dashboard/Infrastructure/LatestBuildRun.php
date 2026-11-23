@@ -23,12 +23,16 @@ final readonly class LatestBuildRun
         $unnamed = null;
 
         foreach ($rows as [$run, $step]) {
-            if (null === $step) {
-                $unnamed = null;
-            } elseif (null !== $run) {
+            if (null !== $run) {
+                // Also for a row left out as malformed, because the run's first row in the ledger is where it started, valid or not.
                 $named[$run] ??= self::started($runs);
+
                 // A second row of a step in the same run is left out, because one run ends each step once, so it is not one the build writes.
-                $runs[$named[$run]][$step['step']] ??= $step;
+                if (null !== $step) {
+                    $runs[$named[$run]][$step['step']] ??= $step;
+                }
+            } elseif (null === $step) {
+                $unnamed = null;
             } elseif (null !== $unnamed && self::continues($runs[$unnamed], $step)) {
                 $runs[$unnamed][$step['step']] = $step;
             } else {
