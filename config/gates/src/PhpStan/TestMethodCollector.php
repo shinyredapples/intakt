@@ -121,12 +121,6 @@ final readonly class TestMethodCollector implements Collector
         return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method)];
     }
 
-    // because PHPUnit runs only a static method returning an iterable as a provider, any other method is a test whatever names it, a static one returning void included
-    private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
-    {
-        return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
-    }
-
     // the class that declares the named method, because a provider a parent class or a trait declares is one declaration however many subclasses name it
     /**
      * @return array{string, string}
@@ -139,6 +133,12 @@ final readonly class TestMethodCollector implements Collector
     private function readsAsSentence(string $words): bool
     {
         return 1 === preg_match('~^(?:'.self::WORD.')+$~', $words) && self::SENTENCE_WORDS <= preg_match_all('~'.self::WORD.'~', $words);
+    }
+
+    // because PHPUnit runs only a static method returning an iterable as a provider, any other method is a test whatever names it, a static one returning void included
+    private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
+    {
+        return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
     }
 
     // checked up the hierarchy because an abstract test case may name a provider that only each subclass implements
