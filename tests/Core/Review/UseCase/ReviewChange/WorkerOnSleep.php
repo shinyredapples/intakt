@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
+use LogicException;
 use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
@@ -31,6 +32,11 @@ final readonly class WorkerOnSleep implements ClockInterface
     #[Override]
     public function sleep(float|int $seconds): void
     {
+        // The jump hides the asked length, so a change of the command's poll interval must fail here instead of passing unnoticed.
+        if (null !== $this->sleepsFor && 1 !== $seconds) {
+            throw new LogicException(sprintf('The command asked to sleep %s seconds, the tests expect its poll of 1 second.', $seconds));
+        }
+
         ($this->work)();
         $this->clock->sleep($this->sleepsFor ?? $seconds);
     }
