@@ -74,35 +74,20 @@ final readonly class BugReport
 
         // Without code, quoted outside text and comments, read in the order they open, because a part written there is an example or a quote, not the task's own statement.
         foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $body)) as $line) {
-            if (null !== $closing) {
-                $closes = 1 === preg_match($closing, $line, $found);
-                $closing = $closes ? null : $closing;
-
-                if (!$closes || !isset($found['rest'])) {
-                    $kept[] = '';
-
-                    continue;
-                }
-
-                $line = $found['rest'];
-            } elseif (null !== ($closing = self::closingOf($line))) {
-                $kept[] = '';
-
-                continue;
-            }
-
-            $line = (string) preg_replace(self::COMMENT, '', $line);
-            $opens = strpos($line, '<!--');
-
-            if (false !== $opens) {
-                $line = substr($line, 0, $opens);
-                $closing = self::COMMENT_CLOSES;
-            }
-
-            $kept[] = $line;
+            [$kept[], $closing] = null === $closing ? self::openedIn($line) : self::closedIn($line, $closing);
         }
 
         return $kept;
+    }
+
+    /**
+     * @return array{string, ?string}
+     */
+    private static function openedIn(string $line): array
+    {
+        $closing = self::closingOf($line);
+
+        return null === $closing ? self::withoutComments($line) : ['', $closing];
     }
 
     // A fence closes only with the same character at least as often, because CommonMark lets a longer fence hold a shorter one.
@@ -116,12 +101,35 @@ final readonly class BugReport
             return null;
         }
 
-        // CommonMark reads backticks after a backtick fence as an inline code span, not as a fence.
+        // No fence when more backticks follow, because CommonMark reads such a line as an inline code span.
         if ('`' === $found['fence'][0] && str_contains($found['info'], '`')) {
             return null;
         }
 
         return sprintf('/^[ \t]*%s{%d,}[ \t]*$/', preg_quote($found['fence'][0], '/'), strlen($found['fence']));
+    }
+
+    /**
+     * @return array{string, ?string}
+     */
+    private static function withoutComments(string $line): array
+    {
+        $line = (string) preg_replace(self::COMMENT, '', $line);
+        $opens = strpos($line, '<!--');
+
+        return false === $opens ? [$line, null] : [substr($line, 0, $opens), self::COMMENT_CLOSES];
+    }
+
+    /**
+     * @return array{string, ?string}
+     */
+    private static function closedIn(string $line, string $closing): array
+    {
+        if (1 !== preg_match($closing, $line, $found)) {
+            return ['', $closing];
+        }
+
+        return isset($found['rest']) ? self::withoutComments($found['rest']) : ['', null];
     }
 
     /**
