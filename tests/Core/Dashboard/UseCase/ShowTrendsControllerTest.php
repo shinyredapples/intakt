@@ -788,7 +788,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertCount(0, $upNext->filter('.review-line'));
     }
 
-    // The watcher's normal order: RoundStarts opens the review before it writes the queue line.
+    // The review opens first, because the watcher's RoundStarts writes the queue line only after it.
     public function testUpNextLinksARoundWhoseReviewOpenedBeforeItsQueueLineOnceUnderWaitingToStart(): void
     {
         $this->ledger->startRoundOf('feat/a', 'r-1', 1);
