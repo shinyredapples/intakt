@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CheckCommand;
+use Intakt\Gates\FullReport;
 use Intakt\Gates\GateSlots;
 use Intakt\Gates\JsonNode;
 use Intakt\Gates\Options;
@@ -86,7 +87,8 @@ final class CheckReuseTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->write('README.md', "clean\n");
         $sandbox->write('.gitignore', $ignored);
-        mkdir($sandbox->root.'/var');
+        // Because the folders above a counted path under var/ count too, the run that first creates the folder of the check notes nothing; that folder is there before, as after any earlier run.
+        mkdir($sandbox->root.'/'.FullReport::FOLDER, 0o777, true);
         if ($tracked) {
             $sandbox->write($path, "clean\n");
             $sandbox->git('add', '--force', $path);
