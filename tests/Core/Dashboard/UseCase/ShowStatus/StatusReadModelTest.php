@@ -453,11 +453,33 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
     }
 
+    public function testANextReadOfAWaitingHeadThatPhpWouldRollOverIsReportedAsNone(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-30T12:01:00+00:00');
+
+        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+        self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
+    }
+
     public function testANextReadWithANulByteOfAWaitingHeadIsReportedAsNone(): void
     {
         $this->ledger->keepHeadPendingUntil('alpha', '8', "2026-10-28T12:01:00+00:00\0");
 
         self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+    }
+
+    public function testAnImpossibleCalendarDateAsTheNextReadOfAWaitingHeadIsReportedAsNone(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-30T00:00:00+00:00');
+
+        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+    }
+
+    public function testAValidNextReadOfAWaitingHeadIsReportedAsStored(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-28T23:59:00+02:00');
+
+        self::assertSame(['2026-02-28T23:59:00+02:00'], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
     }
 
     public function testARedHeadIsARedGuardDecision(): void

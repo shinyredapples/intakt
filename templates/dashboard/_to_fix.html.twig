@@ -1,19 +1,30 @@
-{#- The last judged pass's findings to fix, one card each, opening the finding in the Full record: its headline as the title and the rest of its text cut to one line of explanation (DESIGN.md, list row) when it goes on. The newest round's judged live update replaces it by its id. -#}
-<section class="to-fix" id="review-to-fix" aria-labelledby="to-fix-title">
-    <h2 id="to-fix-title">To fix</h2>
-    <ol class="to-fix-list">
-        {% for finding in open %}
-        {% set urgency = finding.urgency %}
-        <li><a class="fix-card" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW_RECORD'), {round: judged}) }}#round-{{ judged }}-finding-{{ finding.id }}">
-            <span class="urgency{% if urgency is not null %} {{ urgency.value }}{% endif %}"{% if finding.severity is not null %} title="{{ finding.severity }}"{% endif %}>{{ urgency is null ? 'Severity not recorded' : urgency.words }}</span>
-            <span class="fix-body">
-                {% set headline = finding.headline %}
-                <span class="fix-title">{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span>
-                {% set more = finding.afterHeadline %}{% if more is not null %}<span class="fix-more">{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(more)}, with_context = false) }}</span>{% endif %}
-                {% if finding.place is not null %}<span class="fix-place mono">{{ finding.place }}</span>{% endif %}
-            </span>
+{#- The last judged pass's findings to fix in one group per urgency, side by side on a desktop and stacked on a phone, and one row per finding: its headline and its place, no explanation and nothing folded, so the overview reads at a glance (owner decision of 2026-11-22, #3573). An urgency without findings keeps its group, so the three groups always stand in the same place; a finding whose urgency was not recorded gets a fourth group, as it gets its own line in the verdict card's legend, so none is hidden. A row carries no kind symbol, because no kind is recorded yet. Each row opens the finding in the Full record. The newest round's judged live update replaces it by its id. -#}
+{%- set unranked = open|filter(f => f.urgency is null) -%}
+<section class="to-fix" id="review-to-fix" aria-label="To fix">
+    {% for urgency in enum_cases('Intakt\\Core\\Dashboard\\Domain\\FindingUrgency') %}
+    {{ _self.group(urgency.value, urgency.words, open|filter(f => f.urgency is same as(urgency)), judged) }}
+    {% endfor %}
+    {% if unranked is not empty %}
+    {{ _self.group('unranked', 'Urgency not recorded', unranked, judged) }}
+    {% endif %}
+</section>
+
+{%- macro group(key, words, findings, judged) -%}
+<section class="fix-group {{ key }}" aria-labelledby="fix-group-{{ key }}">
+    <h2 id="fix-group-{{ key }}">{{ include('dashboard/_urgency_shape.html.twig', {urgency: key}, with_context = false) }}<span class="fix-group-name">{{ words }}</span> <span class="fix-group-count">{{ findings|length }}</span></h2>
+    {% if findings is empty %}
+    <p class="fix-none">None</p>
+    {% else %}
+    <ul class="fix-rows">
+        {% for finding in findings %}
+        <li><a class="fix-row" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW_RECORD'), {round: judged}) }}#round-{{ judged }}-finding-{{ finding.id }}"{% if finding.severity is not null %} title="{{ finding.severity }}"{% endif %}>
+            {% set headline = finding.headline %}
+            <span class="fix-title">{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span>
             {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'fix-chev'}, with_context = false) }}
+            {% if finding.place is not null %}<span class="fix-place mono">{{ finding.place }}</span>{% endif %}
         </a></li>
         {% endfor %}
-    </ol>
+    </ul>
+    {% endif %}
 </section>
+{%- endmacro -%}

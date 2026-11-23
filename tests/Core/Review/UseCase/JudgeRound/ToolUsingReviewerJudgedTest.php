@@ -25,6 +25,7 @@ use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
@@ -59,6 +60,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
