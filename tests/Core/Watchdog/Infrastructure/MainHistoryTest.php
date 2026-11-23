@@ -315,7 +315,7 @@ final class MainHistoryTest extends TestCase
         [$type, $key] = explode(' ', $this->publicKey('owner'));
         $blob = (string) base64_decode($key, true);
         $fields = [];
-        for ($offset = 0; $offset < strlen($blob); $offset += 4 + strlen($fields[array_key_last($fields)])) {
+        for ($offset = 0; $offset < strlen($blob); $offset += 4 + strlen(array_last($fields))) {
             $fields[] = substr($blob, $offset + 4, (int) hexdec(bin2hex(substr($blob, $offset, 4))));
         }
         self::assertCount(3, $fields);
