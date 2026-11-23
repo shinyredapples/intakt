@@ -86,7 +86,7 @@ final class HealthcheckScriptTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $environment
+     * @param array<string, false|string> $environment
      */
     private function check(array $environment): Process
     {

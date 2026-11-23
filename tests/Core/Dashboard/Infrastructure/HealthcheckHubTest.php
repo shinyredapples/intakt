@@ -14,7 +14,7 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
 
-// Against a running FrankenPHP whose listening port differs from the dashboard port, the way the image runs when the owner publishes `-p 127.0.0.1:8080:7781`.
+// Against a running FrankenPHP whose listening port differs from the dashboard port, because that is how the image runs when the owner publishes `-p 127.0.0.1:8080:7781`.
 #[Group('hub')]
 #[CoversNothing]
 final class HealthcheckHubTest extends TestCase
@@ -63,23 +63,6 @@ final class HealthcheckHubTest extends TestCase
         }
     }
 
-    /**
-     * @return array<string, false|string>
-     */
-    private function environment(): array
-    {
-        return [
-            'SERVER_PORT' => $this->port,
-            'DASHBOARD_PORT' => self::PUBLISHED_PORT,
-            'DATABASE_URL' => 'sqlite:///'.$this->directory.'/intakt.db',
-            'CADDY_ADMIN' => $this->admin,
-            'MERCURE_JWT_SECRET' => self::SECRET,
-            'MERCURE_JWT_ISSUER' => 'http://localhost:'.$this->port,
-            'MERCURE_BOLT_PATH' => $this->directory.'/hub.db',
-            'INTAKT_SAMPLE_REPOSITORY' => false,
-        ];
-    }
-
     private function start(): void
     {
         $frankenphp = new ExecutableFinder()->find('frankenphp');
@@ -99,6 +82,23 @@ final class HealthcheckHubTest extends TestCase
         $this->server = new Process([$frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), $this->environment());
         $this->server->start();
         $this->waitForTheServer();
+    }
+
+    /**
+     * @return array<string, false|string>
+     */
+    private function environment(): array
+    {
+        return [
+            'SERVER_PORT' => $this->port,
+            'DASHBOARD_PORT' => self::PUBLISHED_PORT,
+            'DATABASE_URL' => 'sqlite:///'.$this->directory.'/intakt.db',
+            'CADDY_ADMIN' => $this->admin,
+            'MERCURE_JWT_SECRET' => self::SECRET,
+            'MERCURE_JWT_ISSUER' => 'http://localhost:'.$this->port,
+            'MERCURE_BOLT_PATH' => $this->directory.'/hub.db',
+            'INTAKT_SAMPLE_REPOSITORY' => false,
+        ];
     }
 
     private function waitForTheServer(): void
