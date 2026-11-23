@@ -196,6 +196,12 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $this->commitFrom($this->read(['show-ref', '--verify', '--hash', $reference]));
     }
 
+    private function exists(CommitId $commit): bool
+    {
+        // Checked first, because a head rewritten and collected away leaves no object behind, and that is a rewrite rather than a failed read.
+        return $this->git(['cat-file', '-e', $commit->hash.'^{commit}'])->isSuccessful();
+    }
+
     private function mergeBase(CommitId $head): CommitId
     {
         return $this->commitFrom($this->read(['merge-base', 'refs/heads/'.$this->repository->baseBranch, $head->hash]));
@@ -208,9 +214,12 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return new Diff($this->binaryFiles->named($patch, $this->blob(...)), $this->changedFiles($commits));
     }
 
-    private function blob(string $id): string
+    /**
+     * @return list<string>
+     */
+    private function range(CommitRange $commits): array
     {
-        return $this->read(['cat-file', 'blob', $id]);
+        return [$commits->base->hash, $commits->head->hash];
     }
 
     private function changedFiles(CommitRange $commits): ChangedFiles
@@ -225,28 +234,6 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         }
 
         return $files;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function range(CommitRange $commits): array
-    {
-        return [$commits->base->hash, $commits->head->hash];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function pathsBetween(CommitRange $commits): array
-    {
-        return array_map(static fn (ChangedFile $file): string => $file->path, [...$this->changedFiles($commits)]);
-    }
-
-    private function exists(CommitId $commit): bool
-    {
-        // Checked first, because a head rewritten and collected away leaves no object behind, and that is a rewrite rather than a failed read.
-        return $this->git(['cat-file', '-e', $commit->hash.'^{commit}'])->isSuccessful();
     }
 
     private function isAncestor(string $ancestor, string $descendant): bool
@@ -274,6 +261,14 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $merged->isSuccessful() && trim($merged->getOutput()) === trim($this->read(['rev-parse', $head->hash.'^{tree}']));
     }
 
+    /**
+     * @return list<string>
+     */
+    private function pathsBetween(CommitRange $commits): array
+    {
+        return array_map(static fn (ChangedFile $file): string => $file->path, [...$this->changedFiles($commits)]);
+    }
+
     private function blobAt(CommitId $head, string $path): string
     {
         // ls-tree lists nothing for a missing path but fails when the head cannot be read, which keeps the two apart.
@@ -286,6 +281,11 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         }
 
         throw FileNotFoundAtHead::at($path, $head);
+    }
+
+    private function blob(string $id): string
+    {
+        return $this->read(['cat-file', 'blob', $id]);
     }
 
     private function commitFrom(string $output): CommitId

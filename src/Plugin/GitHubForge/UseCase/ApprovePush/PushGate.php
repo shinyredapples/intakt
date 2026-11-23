@@ -119,15 +119,6 @@ final readonly class PushGate
     }
 
     /**
-     * @param list<IssueComment> $comments
-     */
-    // Only the request exactly as built now, never edited, counts, because the owner approves the diff the issue shows, and an admin can replace or edit a comment of the App.
-    private function requestIndex(array $comments, string $request): ?int
-    {
-        return array_find_key($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && !$comment->edited && $request === $comment->body);
-    }
-
-    /**
      * @throws ChangeNotShown
      * @throws ForgeWriteFailed
      */
@@ -137,5 +128,14 @@ final readonly class PushGate
 
         // The diff is the builder's text, and an issue comment is public, so a credential in it is never posted.
         return $this->secrets->findsSecretIn($body) ? throw ChangeNotShown::because('the diff holds text the secret scan finds, so it is not posted') : $body;
+    }
+
+    /**
+     * @param list<IssueComment> $comments
+     */
+    // Only the request exactly as built now, never edited, counts, because the owner approves the diff the issue shows, and an admin can replace or edit a comment of the App.
+    private function requestIndex(array $comments, string $request): ?int
+    {
+        return array_find_key($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && !$comment->edited && $request === $comment->body);
     }
 }

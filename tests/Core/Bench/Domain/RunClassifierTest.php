@@ -13,7 +13,6 @@ use Intakt\Core\Bench\Domain\RunClassifier;
 use Intakt\Core\Bench\Domain\RunOutcome;
 use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Review\Contract\Finding;
-use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Support\KernelTestCase;
@@ -115,11 +114,6 @@ final class RunClassifierTest extends KernelTestCase
         self::assertSame(['d1' => FailureCause::Harness], $verdict->missed);
     }
 
-    private function classify(string $json, RunOutcome $outcome, ?ChangeFiles $change = null): RunVerdict
-    {
-        return new RunClassifier(new DefectMatcher())->classify(Expectations::fromJson($json), $change ?? new ChangeFiles(['src/a.js' => 10]), $outcome);
-    }
-
     /**
      * @param list<array{string, int}> $places
      *
@@ -135,6 +129,11 @@ final class RunClassifierTest extends KernelTestCase
 
         $json = json_encode(['verdict' => 'changes', 'findings' => $findings, 'resolved' => [], 'follow_ups' => []], JSON_THROW_ON_ERROR);
 
-        return new VerdictParser()->parse(ScriptedReviewer::in(self::getContainer())->answering($json))->findings;
+        return ScriptedReviewer::in(self::getContainer())->verdictFor($json)->findings;
+    }
+
+    private function classify(string $json, RunOutcome $outcome, ?ChangeFiles $change = null): RunVerdict
+    {
+        return new RunClassifier(new DefectMatcher())->classify(Expectations::fromJson($json), $change ?? new ChangeFiles(['src/a.js' => 10]), $outcome);
     }
 }

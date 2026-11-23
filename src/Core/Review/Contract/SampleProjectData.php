@@ -30,6 +30,9 @@ final readonly class SampleProjectData
         return $this->text('price_date');
     }
 
+    /**
+     * @return non-empty-string
+     */
     public function model(Provider $provider, Tier $tier): string
     {
         return $this->text('models', $provider->value, $tier->value);
@@ -65,6 +68,9 @@ final readonly class SampleProjectData
         return $amounts;
     }
 
+    /**
+     * @return non-empty-string
+     */
     private function text(string ...$path): string
     {
         $value = $this->value(...$path);

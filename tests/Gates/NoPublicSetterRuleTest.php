@@ -25,11 +25,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NoPublicSetterRule
-    {
-        return new NoPublicSetterRule($root, self::createReflectionProvider());
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -186,5 +181,10 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
     public function testWideningAnExcludedTraitSetterPassesWhenTheClassExposesOnlyALowercaseName(): void
     {
         $this->assertRuleAccepts('excluded-trait-setter-alias');
+    }
+
+    protected function ruleFor(string $root): NoPublicSetterRule
+    {
+        return new NoPublicSetterRule($root, self::createReflectionProvider());
     }
 }

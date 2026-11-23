@@ -32,6 +32,8 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -207,22 +209,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private EventDispatcherInterface $dispatcher;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $this->platformKernel = self::createKernel();
-        $this->platformKernel->boot();
-        $this->dispatcher = ScriptedReviewer::in($this->platformKernel->getContainer())->dispatcher;
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $this->platformKernel->shutdown();
-        parent::tearDown();
-    }
-
     public function testAStructuredCallReturnsTheVerdictTheModelAnswered(): void
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->json());
@@ -230,7 +216,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
     }
 
@@ -240,7 +226,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
 
-        self::assertSame(['big'], $verdict->follow_ups);
+        self::assertEquals([new FollowUpNote('big')], $verdict->follow_ups);
     }
 
     public function testAnApprovalFromAReviewerThatReadsTheCheckoutCounts(): void
@@ -276,7 +262,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertSame(Decision::Changes, $correctness->verdict);
         self::assertSame(Decision::Changes, $security->verdict);
-        self::assertSame(['F1', 'F2'], $security->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $security->resolved);
         self::assertSame(['big' => 16000, 'middle' => 8000], $limits);
     }
 
@@ -410,7 +396,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertSame([], $answers);
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     public function testTheRetryAfterAnUnreadableAnswerGetsTwiceTheOutputRoomInANewConversation(): void
@@ -438,11 +424,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertCount(2, $reviewer->ids);
         self::assertSame($request->conversation->id->toRfc4122(), $reviewer->ids[0]);
         self::assertNotSame($reviewer->ids[0], $reviewer->ids[1]);
-    }
-
-    private function vendorAnswering(string $output): SymfonyAiVendor
-    {
-        return $this->vendor(static fn (): string => $output);
     }
 
     public function testAnAnsweredCallIsRecordedOnceAsStartedThenSettledWithItsTokens(): void
@@ -557,69 +538,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertInstanceOf(ProviderFailedTransiently::class, $failure);
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame(ServerException::class, $ledger->payloads()[1]['failure']);
-    }
-
-    private function thrownBy(Closure $call): ?Throwable
-    {
-        try {
-            $call();
-        } catch (Throwable $thrown) {
-            return $thrown;
-        }
-
-        return null;
-    }
-
-    /**
-     * @param callable(): Generator<mixed, DeltaInterface, mixed, mixed> $lastRound
-     */
-    private function toolRoundThen(callable $lastRound): Closure
-    {
-        /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
-        $rounds = [$this->toolRound(...), $lastRound];
-
-        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
-        return static function () use (&$rounds): StreamResult {
-            $round = array_shift($rounds) ?? self::cutAgain();
-
-            return new StreamResult($round());
-        };
-    }
-
-    private function toolRound(): Generator
-    {
-        yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
-        yield new TokenUsage(
-            promptTokens: 110,
-            model: 'big',
-        );
-    }
-
-    private function cutMidText(): Generator
-    {
-        yield new TokenUsage(
-            promptTokens: 120,
-            model: 'big',
-        );
-        yield new TextDelta('{"verdict":"approve",');
-
-        throw new IncompleteStreamException('The stream ended before its terminal event.');
-    }
-
-    /**
-     * @return Closure(): Generator<mixed, DeltaInterface, mixed, mixed>
-     */
-    private function brokenMidText(Throwable $outage): Closure
-    {
-        return static function () use ($outage): Generator {
-            yield new TokenUsage(
-                promptTokens: 120,
-                model: 'big',
-            );
-            yield new TextDelta('{"verdict":');
-
-            throw $outage;
-        };
     }
 
     public function testACallThatFailsIsLeftUnsettledOnce(): void
@@ -1214,8 +1132,8 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $server->shutdown();
 
         self::assertCount(5, $conversations->load($request->conversation->id));
-        self::assertSame(['big'], $verdict->follow_ups);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new FollowUpNote('big')], $verdict->follow_ups);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
     }
 
@@ -1254,6 +1172,90 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resetter->reset();
 
         self::assertSame([], $this->dispatcher->getCalledListeners());
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+        $this->platformKernel = self::createKernel();
+        $this->platformKernel->boot();
+        $this->dispatcher = ScriptedReviewer::in($this->platformKernel->getContainer())->dispatcher;
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->platformKernel->shutdown();
+        parent::tearDown();
+    }
+
+    private function vendorAnswering(string $output): SymfonyAiVendor
+    {
+        return $this->vendor(static fn (): string => $output);
+    }
+
+    private function thrownBy(Closure $call): ?Throwable
+    {
+        try {
+            $call();
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
+    }
+
+    private function cutMidText(): Generator
+    {
+        yield new TokenUsage(
+            promptTokens: 120,
+            model: 'big',
+        );
+        yield new TextDelta('{"verdict":"approve",');
+
+        throw new IncompleteStreamException('The stream ended before its terminal event.');
+    }
+
+    /**
+     * @param callable(): Generator<mixed, DeltaInterface, mixed, mixed> $lastRound
+     */
+    private function toolRoundThen(callable $lastRound): Closure
+    {
+        /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
+        $rounds = [$this->toolRound(...), $lastRound];
+
+        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
+        return static function () use (&$rounds): StreamResult {
+            $round = array_shift($rounds) ?? self::cutAgain();
+
+            return new StreamResult($round());
+        };
+    }
+
+    private function toolRound(): Generator
+    {
+        yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+        yield new TokenUsage(
+            promptTokens: 110,
+            model: 'big',
+        );
+    }
+
+    /**
+     * @return Closure(): Generator<mixed, DeltaInterface, mixed, mixed>
+     */
+    private function brokenMidText(Throwable $outage): Closure
+    {
+        return static function () use ($outage): Generator {
+            yield new TokenUsage(
+                promptTokens: 120,
+                model: 'big',
+            );
+            yield new TextDelta('{"verdict":');
+
+            throw $outage;
+        };
     }
 
     private static function cutAgain(): never

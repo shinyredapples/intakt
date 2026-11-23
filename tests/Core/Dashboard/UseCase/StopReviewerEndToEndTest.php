@@ -49,21 +49,12 @@ final class StopReviewerEndToEndTest extends WebTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->browser->disableReboot();
-        // The page reads the round's end from the clock, so it must share the fixture's time or the round is long overdue.
-        self::clockAt('2026-10-30 12:00:00 UTC');
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAStopPostedWhileAScriptedReviewerWorksCancelsItAndThePageShowsStoppedWithNoForm(): void
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
         $round = $this->fixture->reviewer($message->reviewerId)->round()->id()->toRfc4122();
-        $page = '/reviews/'.$round;
+        $page = '/reviews/'.$round.'/record';
         $running = [];
 
         $script = function () use ($message, $round, $page, &$running): ToolCallResult {
@@ -93,6 +84,15 @@ final class StopReviewerEndToEndTest extends WebTestCase
         self::assertSame('stopped', $crawler->filter('td[id$="-state"]')->text());
         self::assertCount(0, $crawler->filter('td[id$="-state"] .dot'));
         self::assertCount(0, $crawler->filter('form.stop-reviewer'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->browser->disableReboot();
+        // The page reads the round's end from the clock, so it must share the fixture's time or the round is long overdue.
+        self::clockAt('2026-10-30 12:00:00 UTC');
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function agentScripted(Closure $script): AgentVendor

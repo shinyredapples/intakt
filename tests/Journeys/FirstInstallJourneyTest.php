@@ -20,18 +20,6 @@ final class FirstInstallJourneyTest extends JourneyTestCase
 
     private string $directory = '';
 
-    protected function tearDown(): void
-    {
-        if ('' !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'first install and setup';
-    }
-
     public function testAFreshInstallIsSetUpAndShowsItsEmptyDashboard(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
@@ -46,6 +34,18 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         $this->step('find the first-run page on the projects page', $this->findTheFirstRunPageOnProjects(...));
     }
 
+    protected function tearDown(): void
+    {
+        if ('' !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'first install and setup';
+    }
+
     private function createTheDatabase(): void
     {
         self::assertStringContainsString('[OK]', $this->console(['doctrine:migrations:migrate']));
@@ -54,6 +54,15 @@ final class FirstInstallJourneyTest extends JourneyTestCase
     private function readTheBoardHeadline(): void
     {
         self::assertSame('Nothing is running yet. Start the first review.', $this->visit('/')->filter('#board-headline')->text());
+    }
+
+    private function followTheBoardLinkToTheFirstRunPage(): void
+    {
+        $link = $this->visit('/')->filter('.page-head .actions a.btn.primary');
+
+        self::assertSame('Set up Intakt', $link->text());
+        self::assertSame(self::FIRST_RUN, $link->attr('href'));
+        self::assertCount(3, $this->visit(self::FIRST_RUN)->filter('.own-steps > li'));
     }
 
     private function openProjectsOfAFreshInstall(): void
@@ -84,15 +93,6 @@ final class FirstInstallJourneyTest extends JourneyTestCase
 
         self::assertStringContainsString('Reviews', $page);
         self::assertStringContainsString('No review has started yet.', $page);
-    }
-
-    private function followTheBoardLinkToTheFirstRunPage(): void
-    {
-        $link = $this->visit('/')->filter('.page-head .actions a.btn.primary');
-
-        self::assertSame('Set up Intakt', $link->text());
-        self::assertSame(self::FIRST_RUN, $link->attr('href'));
-        self::assertCount(3, $this->visit(self::FIRST_RUN)->filter('.own-steps > li'));
     }
 
     // Through the journey's own kernel, because only it has the sample repository the start button needs; it writes to the instance's ledger, so the instance shows the round; the container is rebuilt first, because the sample repository is read when it is built.

@@ -227,13 +227,6 @@ final class InstallationTokenMinterTest extends TestCase
         self::assertSame([], array_filter($arguments, static fn (mixed $argument): bool => str_contains((string) $argument, $jwt)));
     }
 
-    private function minter(callable $respond, ?AppKey $key = null, ?LoggerInterface $logger = null): InstallationTokenMinter
-    {
-        $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, new MockClock('2026-11-25 10:00:00 UTC'));
-
-        return new InstallationTokenMinter($jwt, new MockHttpClient($respond), $logger ?? self::createStub(LoggerInterface::class));
-    }
-
     /**
      * @return list<scalar>
      */
@@ -286,6 +279,13 @@ final class InstallationTokenMinterTest extends TestCase
     private static function answer(string $token, string $expiresAt): string
     {
         return json_encode(['token' => $token, 'expires_at' => $expiresAt], JSON_THROW_ON_ERROR);
+    }
+
+    private function minter(callable $respond, ?AppKey $key = null, ?LoggerInterface $logger = null): InstallationTokenMinter
+    {
+        $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, new MockClock('2026-11-25 10:00:00 UTC'));
+
+        return new InstallationTokenMinter($jwt, new MockHttpClient($respond), $logger ?? self::createStub(LoggerInterface::class));
     }
 
     private static function recorded(string $fixture): string

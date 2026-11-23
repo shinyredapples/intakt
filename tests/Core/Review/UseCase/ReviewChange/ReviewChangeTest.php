@@ -107,12 +107,6 @@ final class ReviewChangeTest extends KernelTestCase
      */
     private array $parked = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->tiers = new VerdictPerRole([]);
-    }
-
     public function testATwoReviewerRoundWhereBothApproveIsApproved(): void
     {
         $review = $this->reviewWith(new VerdictPerRole([]));
@@ -517,6 +511,12 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertCount(1, $this->fixture->storedRounds());
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->tiers = new VerdictPerRole([]);
+    }
+
     private function mapping(Tier ...$mapped): Vendor
     {
         $vendor = self::createStub(Vendor::class);
@@ -546,23 +546,6 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
-    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
-    /**
-     * @param Closure(): string $round
-     */
-    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
-    {
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
-
-        return function () use ($vendor, $round): void {
-            foreach ($this->fixture->bus->messages as $message) {
-                $this->fixture->deliver($message, $vendor);
-            }
-
-            $this->parked = [new Envelope(new JudgeRound($round()))];
-        };
-    }
-
     // Two seconds a reviewer and one for the judge, so the two-reviewer panel's upper wait is 5 seconds.
     private function shortUpperWait(): UpperWait
     {
@@ -589,14 +572,6 @@ final class ReviewChangeTest extends KernelTestCase
         );
     }
 
-    private function failureTransport(): ListableReceiverInterface
-    {
-        $transport = self::createStub(ListableReceiverInterface::class);
-        $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
-
-        return $transport;
-    }
-
     // Messenger's own handling, so a refusal reaches the caller unwrapped as the application's command bus unwraps it; the reviewers' messages go to the test's workers.
     private function commandBus(): MessageBusInterface
     {
@@ -608,6 +583,14 @@ final class ReviewChangeTest extends KernelTestCase
     private function serializer(): SerializerInterface
     {
         return self::getContainer()->get('serializer.stored');
+    }
+
+    private function failureTransport(): ListableReceiverInterface
+    {
+        $transport = self::createStub(ListableReceiverInterface::class);
+        $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
+
+        return $transport;
     }
 
     private function request(?int $round = null): ChangeReviewRequest
@@ -634,6 +617,23 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertInstanceOf(ReviewRound::class, $round);
 
         return $round->id()->toRfc4122();
+    }
+
+    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
+    /**
+     * @param Closure(): string $round
+     */
+    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
+    {
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+
+        return function () use ($vendor, $round): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, $vendor);
+            }
+
+            $this->parked = [new Envelope(new JudgeRound($round()))];
+        };
     }
 
     // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.

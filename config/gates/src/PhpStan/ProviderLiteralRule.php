@@ -67,12 +67,6 @@ final readonly class ProviderLiteralRule implements Rule
         return $findings;
     }
 
-    // every text part of an interpolated string, because an id can follow the interpolation as well as lead it
-    private function isLiteral(Node $node): bool
-    {
-        return $node instanceof String_ || $node instanceof InterpolatedStringPart;
-    }
-
     /**
      * @param array<Node> $nodes
      *
@@ -94,6 +88,12 @@ final readonly class ProviderLiteralRule implements Rule
         }
 
         return $literals;
+    }
+
+    // every text part of an interpolated string, because an id can follow the interpolation as well as lead it
+    private function isLiteral(Node $node): bool
+    {
+        return $node instanceof String_ || $node instanceof InterpolatedStringPart;
     }
 
     // a named class that implements the descriptor contract, read through reflection, so a class only named like a descriptor is still checked; an anonymous class has no namespacedName at all, so it counts only inside a descriptor

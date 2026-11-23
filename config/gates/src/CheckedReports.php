@@ -92,27 +92,33 @@ final readonly class CheckedReports
         return $this->sectionFinding($this->statusSection($lines), $readyLines);
     }
 
-    /**
-     * @param array<int, string> $section
-     * @param array<int, string> $readyLines
-     */
-    private function sectionFinding(array $section, array $readyLines): ?string
-    {
-        $statuses = $this->statusValues($section, self::STATUS_LINE);
-
-        if ([] !== array_diff_key($readyLines, $statuses)) {
-            return 'has a ready to file status outside the top-level lines of its Upstream status section: write the status as a list item in the Upstream status section';
-        }
-
-        $text = implode("\n", $section);
-        $finding = $this->isReady(array_last($statuses) ?? '') ? $this->checkFinding($text) ?? $this->pullRequestsFinding($text) : null;
-
-        return null === $finding ? null : 'is ready to file '.$finding;
-    }
-
     private function isStatusHeading(string $line): bool
     {
         return 1 === preg_match(self::SECTION_HEADING, $line) && self::STATUS_HEADING === trim($line);
+    }
+
+    // Keyed by line number, so the top-level lines can be told apart from the other ready lines; the last one decides.
+    /**
+     * @param array<int, string> $lines
+     *
+     * @return array<int, string>
+     */
+    private function statusValues(array $lines, string $pattern): array
+    {
+        $values = [];
+
+        foreach ($lines as $number => $line) {
+            if (1 === preg_match($pattern, $line, $match)) {
+                $values[$number] = $match['value'];
+            }
+        }
+
+        return $values;
+    }
+
+    private function isReady(string $value): bool
+    {
+        return 1 === preg_match(self::READY, $value);
     }
 
     // Only this section, because a Status line in another section (a fix experiment) would otherwise retire a ready report.
@@ -141,28 +147,22 @@ final readonly class CheckedReports
         return $section;
     }
 
-    // Keyed by line number, so the top-level lines can be told apart from the other ready lines; the last one decides.
     /**
-     * @param array<int, string> $lines
-     *
-     * @return array<int, string>
+     * @param array<int, string> $section
+     * @param array<int, string> $readyLines
      */
-    private function statusValues(array $lines, string $pattern): array
+    private function sectionFinding(array $section, array $readyLines): ?string
     {
-        $values = [];
+        $statuses = $this->statusValues($section, self::STATUS_LINE);
 
-        foreach ($lines as $number => $line) {
-            if (1 === preg_match($pattern, $line, $match)) {
-                $values[$number] = $match['value'];
-            }
+        if ([] !== array_diff_key($readyLines, $statuses)) {
+            return 'has a ready to file status outside the top-level lines of its Upstream status section: write the status as a list item in the Upstream status section';
         }
 
-        return $values;
-    }
+        $text = implode("\n", $section);
+        $finding = $this->isReady(array_last($statuses) ?? '') ? $this->checkFinding($text) ?? $this->pullRequestsFinding($text) : null;
 
-    private function isReady(string $value): bool
-    {
-        return 1 === preg_match(self::READY, $value);
+        return null === $finding ? null : 'is ready to file '.$finding;
     }
 
     private function checkFinding(string $report): ?string

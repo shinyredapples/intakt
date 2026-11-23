@@ -25,8 +25,10 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
+use Intakt\Core\Review\UseCase\ReadRound\GivenVerdict;
 use Intakt\Core\Review\UseCase\ReadRound\ReadableRounds;
 use Intakt\Core\Review\UseCase\ReadRound\ReviewerIdentity;
 use Intakt\Core\Review\UseCase\ReadRound\ReviewerStatus;
@@ -59,6 +61,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewerIdentity::class)]
 #[CoversClass(RoundVerdictsTool::class)]
 #[CoversClass(RoundVerdicts::class)]
+#[CoversClass(GivenVerdict::class)]
+#[UsesClass(ReviewerAnswer::class)]
 #[CoversClass(RoundActListTool::class)]
 #[CoversClass(RoundActList::class)]
 #[CoversClass(RoundFindingsResource::class)]
@@ -79,11 +83,6 @@ use Symfony\Component\Serializer\SerializerInterface;
 final class ReadRoundToolsTest extends KernelTestCase
 {
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testTheStatusOfARoundWaitingForItsReviewersListsThemQueued(): void
     {
@@ -153,7 +152,7 @@ final class ReadRoundToolsTest extends KernelTestCase
 
         $verdicts = (new RoundVerdictsTool($this->readable(), new StoredVerdicts($this->serializer())))($round->id()->toRfc4122());
 
-        self::assertSame([Decision::Changes, Decision::Approve], array_map(static fn (PanelVerdict $verdict): Decision => $verdict->verdict->verdict, $verdicts->verdicts));
+        self::assertSame([Decision::Changes, Decision::Approve], array_map(static fn (GivenVerdict $verdict): Decision => $verdict->verdict->verdict, $verdicts->verdicts));
     }
 
     public function testTheActListIsEmptyAndNotJudgedBeforeTheJudgeHasAnswered(): void
@@ -200,7 +199,7 @@ final class ReadRoundToolsTest extends KernelTestCase
         $data = json_decode(json_encode($answer, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
 
         self::assertSame(['roundId', 'judged', 'act', 'mark'], array_keys($data));
-        self::assertSame(['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'repeat', 'requirement', 'evidence', 'regression', 'merged', 'judge_note'], array_keys($this->firstActEntryAsJson($answer)));
+        self::assertSame(['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'repeat', 'requirement', 'evidence', 'regression', 'gate_gap', 'merged', 'judge_note'], array_keys($this->firstActEntryAsJson($answer)));
     }
 
     public function testAJudgeAnswerThatRejectsAP1LeavesItOnTheActListWithTheJudgesNote(): void
@@ -292,6 +291,7 @@ final class ReadRoundToolsTest extends KernelTestCase
             'requirement' => null,
             'evidence' => null,
             'regression' => false,
+            'gate_gap' => false,
             'merged' => [],
         ], $findings[0]);
     }
@@ -355,6 +355,11 @@ final class ReadRoundToolsTest extends KernelTestCase
         self::assertSame(ReplayMark::Replay, $this->actList()($round->id()->toRfc4122())->mark);
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     private function flag(string $project): void
     {
         new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay($project));
@@ -389,18 +394,6 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function notesOf(array $act): array
     {
         return array_combine(array_map(static fn (Finding $entry): string => $entry->id, $act), array_map(static fn (Finding $entry): ?string => $entry->judgeNote(), $act));
-    }
-
-    /**
-     * @param list<Finding> $findings
-     */
-    private function judgedRoundReporting(array $findings): ReviewRound
-    {
-        $round = $this->fixture->start(1);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round->id()->toRfc4122()));
-
-        return $this->fixture->round($round->id()->toRfc4122());
     }
 
     private function statusTool(): RoundStatusTool
@@ -483,6 +476,18 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function quoting(string $id, string $text): Finding
     {
         return new Finding($id, Severity::P1, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function judgedRoundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round->id()->toRfc4122()));
+
+        return $this->fixture->round($round->id()->toRfc4122());
     }
 
     private function finding(string $id, Severity $severity): Finding

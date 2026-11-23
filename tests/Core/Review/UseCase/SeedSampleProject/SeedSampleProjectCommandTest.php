@@ -65,19 +65,6 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private SampleProjectData $data;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->data = new SampleProjectData();
-        $this->compatibleBaseUrl = $this->data->routerUrl()->toRawString();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     /**
      * @return iterable<string, array{list<Provider>}>
      */
@@ -363,6 +350,19 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringNotContainsString('mcp/owner', $display);
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->data = new SampleProjectData();
+        $this->compatibleBaseUrl = $this->data->routerUrl()->toRawString();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
     private function seed(Provider ...$keyed): CommandTester
     {
         $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()));
@@ -372,20 +372,20 @@ final class SeedSampleProjectCommandTest extends TestCase
         return $tester;
     }
 
-    private function tester(SeedSampleProjectCommand $command): CommandTester
-    {
-        $application = new Application();
-        $application->addCommand($command);
-
-        return new CommandTester($application->find('intakt:sample:seed'));
-    }
-
     private function project(Provider ...$keyed): SampleProject
     {
         $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
 
         return new SampleProject($accounts, $this->compatibleBaseUrl, $this->data);
+    }
+
+    private function tester(SeedSampleProjectCommand $command): CommandTester
+    {
+        $application = new Application();
+        $application->addCommand($command);
+
+        return new CommandTester($application->find('intakt:sample:seed'));
     }
 
     // Made-up names, prices and date, so a value that still came from code instead of the data file would show.

@@ -14,7 +14,6 @@ use Intakt\Core\Bench\Domain\RunClassifier;
 use Intakt\Core\Bench\Domain\RunOutcome;
 use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Review\Contract\Finding;
-use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Support\KernelTestCase;
@@ -79,6 +78,14 @@ final class ScriptedBenchRunTest extends KernelTestCase
     }
 
     /**
+     * @return list<Finding>
+     */
+    private function findingsOn(Expectations $expectations): array
+    {
+        return $this->scripted(array_map(static fn (PlantedDefect $defect): array => [$defect->file, $defect->from], $expectations->defects));
+    }
+
+    /**
      * @param callable(Expectations): RunOutcome $review
      */
     private function reviewBench(callable $review): BenchFigures
@@ -106,14 +113,6 @@ final class ScriptedBenchRunTest extends KernelTestCase
     }
 
     /**
-     * @return list<Finding>
-     */
-    private function findingsOn(Expectations $expectations): array
-    {
-        return $this->scripted(array_map(static fn (PlantedDefect $defect): array => [$defect->file, $defect->from], $expectations->defects));
-    }
-
-    /**
      * @param list<array{string, int}> $places
      *
      * @return list<Finding>
@@ -127,6 +126,6 @@ final class ScriptedBenchRunTest extends KernelTestCase
 
         $json = json_encode(['verdict' => [] === $findings ? 'approve' : 'changes', 'findings' => $findings, 'resolved' => [], 'follow_ups' => []], JSON_THROW_ON_ERROR);
 
-        return new VerdictParser()->parse(ScriptedReviewer::in(self::getContainer())->answering($json))->findings;
+        return ScriptedReviewer::in(self::getContainer())->verdictFor($json)->findings;
     }
 }

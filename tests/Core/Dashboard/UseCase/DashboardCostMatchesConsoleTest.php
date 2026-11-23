@@ -58,7 +58,7 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $this->givenARoundFromARecordedUsageAnswer();
 
         $console = $this->consoleFigure();
-        $crawler = $this->browser->request('GET', '/reviews/'.self::ROUND);
+        $crawler = $this->browser->request('GET', '/reviews/'.self::ROUND.'/record');
 
         self::assertSame('0.0050 USD estimated, prices of 2026-11-13', $console);
         self::assertSame('Cost: '.$console, $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
@@ -71,7 +71,7 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $this->givenARoundFromARecordedUsageAnswer();
 
         $console = $this->consoleFigure();
-        $this->browser->request('GET', '/reviews/'.self::ROUND);
+        $this->browser->request('GET', '/reviews/'.self::ROUND.'/record');
 
         self::assertSame('unknown, no price for model-a', $console);
         self::assertSelectorTextContains('.page-head p.meta', 'Cost: '.$console);

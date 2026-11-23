@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use NoDiscard;
@@ -42,7 +43,7 @@ final readonly class ReviewerMoves
     public function receive(RoundReviewer $reviewer, VendorReview $review): bool
     {
         $verdict = $review->verdict;
-        $reviewer->recordVerdict($this->serializer->serialize($verdict, JsonEncoder::FORMAT), $review->substitute);
+        $reviewer->recordVerdict($this->serializer->serialize(ReviewerAnswer::fromVerdict($verdict), JsonEncoder::FORMAT), $review->substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
         $this->ledger->verdictReceived($reviewer, $verdict);
         $stopped = $this->answerStopRequest($reviewer, $verdict);

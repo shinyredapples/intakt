@@ -97,30 +97,6 @@ final readonly class AccountPlatform implements PlatformInterface
         return $this->platform->getModelCatalog();
     }
 
-    // A streamed answer clears the account's reported error only once it was read whole, because a stream can still fail after it converted.
-    /**
-     * @param Closure(Throwable): void $failed
-     */
-    private function followAnswer(ResultInterface $result, DateTimeImmutable $sentAt, Closure $failed): ResultInterface
-    {
-        if (!$result instanceof StreamResult) {
-            $this->cooldowns->answered($this->account, $sentAt);
-
-            return $result;
-        }
-
-        $result->addListener(new AccountStreamFailures($failed));
-        $result->addListener(new AccountStreamAnswered(fn () => $this->cooldowns->answered($this->account, $sentAt)));
-
-        return $result;
-    }
-
-    // Void, because Symfony AI's onError and the stream listener take a callback that returns nothing.
-    private function failed(Throwable $failure, ?RawResultInterface $answer = null): void
-    {
-        $this->recordFailure($failure, $answer);
-    }
-
     // True when the failure itself is an account error, also one already recorded, because the send path logs every other failure itself. The raw answer is known only once the call was sent, so a failure while sending has none.
     private function recordFailure(Throwable $failure, ?RawResultInterface $answer = null): bool
     {
@@ -145,6 +121,30 @@ final readonly class AccountPlatform implements PlatformInterface
         return $thrownIsAccountError;
     }
 
+    // Void, because Symfony AI's onError and the stream listener take a callback that returns nothing.
+    private function failed(Throwable $failure, ?RawResultInterface $answer = null): void
+    {
+        $this->recordFailure($failure, $answer);
+    }
+
+    // A streamed answer clears the account's reported error only once it was read whole, because a stream can still fail after it converted.
+    /**
+     * @param Closure(Throwable): void $failed
+     */
+    private function followAnswer(ResultInterface $result, DateTimeImmutable $sentAt, Closure $failed): ResultInterface
+    {
+        if (!$result instanceof StreamResult) {
+            $this->cooldowns->answered($this->account, $sentAt);
+
+            return $result;
+        }
+
+        $result->addListener(new AccountStreamFailures($failed));
+        $result->addListener(new AccountStreamAnswered(fn () => $this->cooldowns->answered($this->account, $sentAt)));
+
+        return $result;
+    }
+
     // Matched by the exception type only, because the provider's text can change (plan T5); null for anything else, such as an answer Intakt could not read, because the account answered and stays usable (issue #1831).
     /**
      * @return (Closure(): void)|null
@@ -158,31 +158,6 @@ final readonly class AccountPlatform implements PlatformInterface
             $failure instanceof RetryableExceptionInterface => fn () => $this->cooldowns->coolDown($this->account, null),
             default => null,
         };
-    }
-
-    // A pinned router provider's 429 cools only the pin, so the account's other router providers and models, a pinned fallback among them, stay free (issue #2861); the account cools instead only when the pin could not be saved, so a 429 is never followed by a call at once. A failing write is logged and never costs the caller the provider's 429.
-    private function coolDownLimited(?int $retryAfter): void
-    {
-        if ($this->coolDownPinned($retryAfter)) {
-            return;
-        }
-
-        $this->coolDownAccount($retryAfter);
-    }
-
-    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset.
-    private function coolDownAccount(?int $retryAfter): void
-    {
-        try {
-            if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
-                $this->cooldowns->coolDownUntilPlanResets($this->account);
-            } else {
-                $this->cooldowns->coolDown($this->account, $retryAfter);
-            }
-            // Boundary: any failure of the account store is logged, because the provider's 429 must still reach the caller.
-        } catch (Throwable $notSaved) {
-            $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $this->account->key(), 'exception' => $notSaved]);
-        }
     }
 
     // Symfony AI's generic bridge throws its 429 without the response's Retry-After (symfony/ai#2913, reproduced in upstream/ai-failover-platform-deferred-rate-limit), so the header is read from the raw answer as RFC 9110 defines it: delta-seconds of any length, or an HTTP date judged against the clock, from visible ASCII and spaces only, capped at a day and at least a second; null when there is none or it does not parse, so the default minute applies.
@@ -207,6 +182,16 @@ final readonly class AccountPlatform implements PlatformInterface
         $seconds = 1 === preg_match('~^\d+\z~', $value) ? $this->delaySecondsOf($value) : $this->secondsUntilDate($value);
 
         return null === $seconds ? null : max(1, min(AccountCooldowns::LONGEST_SECONDS, $seconds));
+    }
+
+    // A pinned router provider's 429 cools only the pin, so the account's other router providers and models, a pinned fallback among them, stay free (issue #2861); the account cools instead only when the pin could not be saved, so a 429 is never followed by a call at once. A failing write is logged and never costs the caller the provider's 429.
+    private function coolDownLimited(?int $retryAfter): void
+    {
+        if ($this->coolDownPinned($retryAfter)) {
+            return;
+        }
+
+        $this->coolDownAccount($retryAfter);
     }
 
     // Judged by the digits that matter, because a delay too long for an integer is still a valid delay of at least a day.
@@ -249,5 +234,20 @@ final readonly class AccountPlatform implements PlatformInterface
         }
 
         return true;
+    }
+
+    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset.
+    private function coolDownAccount(?int $retryAfter): void
+    {
+        try {
+            if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
+                $this->cooldowns->coolDownUntilPlanResets($this->account);
+            } else {
+                $this->cooldowns->coolDown($this->account, $retryAfter);
+            }
+            // Boundary: any failure of the account store is logged, because the provider's 429 must still reach the caller.
+        } catch (Throwable $notSaved) {
+            $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $this->account->key(), 'exception' => $notSaved]);
+        }
     }
 }

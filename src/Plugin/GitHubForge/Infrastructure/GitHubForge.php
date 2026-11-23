@@ -200,30 +200,13 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     }
 
     /**
-     * @return array<mixed>
+     * @return ?array<mixed>
      */
-    private function branchComparison(PullRequestAddress $address, string $baseReference, CommitId $head): array
+    private function compare(PullRequestAddress $address, string $base, string $head): ?array
     {
-        return $this->compare($address, $this->encodeReference($baseReference), $head->hash) ?? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.');
-    }
+        $body = $this->get($address->repositoryPath().'/compare/'.$base.'...'.$head, self::JSON);
 
-    private function patch(PullRequestAddress $address, CommitRange $commits): string
-    {
-        // Read between the two commits, not from the pull request, so a head that moves meanwhile cannot mix two states.
-        $patch = $this->get($address->repositoryPath().'/compare/'.$commits->base->hash.'...'.$commits->head->hash, self::DIFF);
-
-        return $patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.');
-    }
-
-    /**
-     * @param array<mixed> $comparison
-     */
-    private function changedFiles(array $comparison): ChangedFiles
-    {
-        // The files of the comparison that named the merge base, so they belong to the same head as the patch.
-        $entries = $this->completeFilesOf($comparison) ?? throw new ForgeReadFailed('GitHub listed the changed files incompletely (300 files or more, or no file list).');
-
-        return new ChangedFiles(...$this->filesIn($entries));
+        return null === $body ? null : $this->decode($body);
     }
 
     /**
@@ -271,21 +254,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     }
 
     /**
-     * @return ?array<mixed>
-     */
-    private function compare(PullRequestAddress $address, string $base, string $head): ?array
-    {
-        $body = $this->get($address->repositoryPath().'/compare/'.$base.'...'.$head, self::JSON);
-
-        return null === $body ? null : $this->decode($body);
-    }
-
-    private function encodeReference(string $reference): string
-    {
-        return implode('/', array_map(rawurlencode(...), explode('/', $reference)));
-    }
-
-    /**
      * @param array<mixed> $data
      */
     private function commitAt(array $data, string ...$keys): CommitId
@@ -308,6 +276,38 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
 
         return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function branchComparison(PullRequestAddress $address, string $baseReference, CommitId $head): array
+    {
+        return $this->compare($address, $this->encodeReference($baseReference), $head->hash) ?? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.');
+    }
+
+    private function patch(PullRequestAddress $address, CommitRange $commits): string
+    {
+        // Read between the two commits, not from the pull request, so a head that moves meanwhile cannot mix two states.
+        $patch = $this->get($address->repositoryPath().'/compare/'.$commits->base->hash.'...'.$commits->head->hash, self::DIFF);
+
+        return $patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.');
+    }
+
+    /**
+     * @param array<mixed> $comparison
+     */
+    private function changedFiles(array $comparison): ChangedFiles
+    {
+        // The files of the comparison that named the merge base, so they belong to the same head as the patch.
+        $entries = $this->completeFilesOf($comparison) ?? throw new ForgeReadFailed('GitHub listed the changed files incompletely (300 files or more, or no file list).');
+
+        return new ChangedFiles(...$this->filesIn($entries));
+    }
+
+    private function encodeReference(string $reference): string
+    {
+        return implode('/', array_map(rawurlencode(...), explode('/', $reference)));
     }
 
     /**
@@ -371,18 +371,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
-    // Not chained either, because the trace of a failed post holds the bearer token too.
-    private function unreachableForWrite(string $failure): ForgeWriteFailed
-    {
-        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
-    }
-
     private function writeBearer(): string
     {
         try {
@@ -394,6 +382,12 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
     }
 
+    // Not chained either, because the trace of a failed post holds the bearer token too.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
+    }
+
     private function bearer(): string
     {
         try {
@@ -403,5 +397,11 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 }

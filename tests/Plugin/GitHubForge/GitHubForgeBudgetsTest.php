@@ -35,12 +35,6 @@ final class GitHubForgeBudgetsTest extends TestCase
     private MockClock $clock;
     private RateLimitReadings $readings;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = FreshReadings::at($this->clock);
-    }
-
     public function testAnInstallWithoutAGitHubAppShowsNoBudget(): void
     {
         self::assertSame([], $this->budgets('')->thisHour());
@@ -105,6 +99,12 @@ final class GitHubForgeBudgetsTest extends TestCase
         $this->read(remaining: 999);
 
         self::assertFalse($this->budgets('679')->thisHour()[0]->isRead());
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
     }
 
     private function read(int $remaining): void

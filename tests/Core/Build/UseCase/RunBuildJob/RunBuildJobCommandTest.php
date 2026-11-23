@@ -90,18 +90,6 @@ final class RunBuildJobCommandTest extends TestCase
 
     private ?JobRunner $runner = null;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-build-command-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        file_put_contents($this->folder.'/task.md', 'PLANT-task');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testABuiltJobWritesTheBundleAndPrintsThePullRequestText(): void
     {
         $tester = $this->executed(new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: <b>x</b>\n\n## Summary\n"]), []);
@@ -276,6 +264,18 @@ final class RunBuildJobCommandTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the tiers'));
 
         $this->executed(new JobOutput([]), [], $tiers);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-build-command-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        file_put_contents($this->folder.'/task.md', 'PLANT-task');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     /**

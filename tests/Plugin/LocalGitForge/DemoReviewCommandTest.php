@@ -137,22 +137,6 @@ final class DemoReviewCommandTest extends TestCase
 
     private MockClock $clock;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-20T12:00:00+00:00');
-        $this->tiers = $this->answering();
-        $this->sample = new TemporaryRepository();
-        $this->sample->commitFile('README.md', "base\n");
-        $this->sample->checkoutNewBranch(SampleChange::CHANGE);
-        $this->sample->commitFile('src/Shipping.php', "<?php\n");
-        $this->sample->checkout(SampleChange::BASE);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->sample->remove();
-    }
-
     /**
      * @return iterable<string, array{Decision, int}>
      */
@@ -385,28 +369,20 @@ final class DemoReviewCommandTest extends TestCase
         self::assertDirectoryDoesNotExist((string) $checkout);
     }
 
-    private function rateLimitedRouter(MockClock $clock): TierPlatform
+    protected function setUp(): void
     {
-        $router = MockPlatformFactory::createPlatform(static fn (): never => throw new RateLimitExceededException(60));
-        $pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $clock, new LockFactory(new InMemoryStore()));
-        $accounts = new AccountWindowsOnAClock($clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $router], $accounts, $clock, new NullLogger(), $pins);
-        $resolver = new ConfiguredTierResolver([SampleChange::PROJECT => ['tiers' => ['strong' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI]]]], []);
-
-        return new TierPlatform($resolver, new ServiceLocator([Provider::OpenAiCompatible->value => static fn (): PlatformInterface => $platform]), $accounts, new NullLogger());
+        $this->clock = new MockClock('2026-11-20T12:00:00+00:00');
+        $this->tiers = $this->answering();
+        $this->sample = new TemporaryRepository();
+        $this->sample->commitFile('README.md', "base\n");
+        $this->sample->checkoutNewBranch(SampleChange::CHANGE);
+        $this->sample->commitFile('src/Shipping.php', "<?php\n");
+        $this->sample->checkout(SampleChange::BASE);
     }
 
-    private function waitingOnCorrectness(): RoundProgress
+    protected function tearDown(): void
     {
-        return new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]);
-    }
-
-    private function answering(): TierInvoker
-    {
-        $tiers = self::createStub(TierInvoker::class);
-        $tiers->method('answering')->willReturn(new ResolvedModel(Provider::OpenAiCompatible, self::KIMI));
-
-        return $tiers;
+        $this->sample->remove();
     }
 
     private function reviewing(Decision $decision): ChangeReviews
@@ -435,6 +411,28 @@ final class DemoReviewCommandTest extends TestCase
         return $this->whenTheDemoIsRun($this->demo($repository, new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve)), 'demo-token'));
     }
 
+    private function report(): ReviewReport
+    {
+        return new ReviewReport(StoredSerializerFactory::create());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function lines(CommandTester $tester): array
+    {
+        return explode("\n", rtrim($tester->getDisplay(), "\n"));
+    }
+
+    private function onePanel(): Panels
+    {
+        $reviewer = new PanelReviewer(new ReviewerRole('correctness', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+
+        return $panels;
+    }
+
     private function demo(?string $repository, LocalChangeReview $review, string $ownerToken): DemoReviewCommand
     {
         $routes = new RouteCollection();
@@ -454,25 +452,27 @@ final class DemoReviewCommandTest extends TestCase
         return $tester;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function lines(CommandTester $tester): array
+    private function rateLimitedRouter(MockClock $clock): TierPlatform
     {
-        return explode("\n", rtrim($tester->getDisplay(), "\n"));
+        $router = MockPlatformFactory::createPlatform(static fn (): never => throw new RateLimitExceededException(60));
+        $pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $clock, new LockFactory(new InMemoryStore()));
+        $accounts = new AccountWindowsOnAClock($clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $router], $accounts, $clock, new NullLogger(), $pins);
+        $resolver = new ConfiguredTierResolver([SampleChange::PROJECT => ['tiers' => ['strong' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI]]]], []);
+
+        return new TierPlatform($resolver, new ServiceLocator([Provider::OpenAiCompatible->value => static fn (): PlatformInterface => $platform]), $accounts, new NullLogger());
     }
 
-    private function report(): ReviewReport
+    private function waitingOnCorrectness(): RoundProgress
     {
-        return new ReviewReport(StoredSerializerFactory::create());
+        return new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]);
     }
 
-    private function onePanel(): Panels
+    private function answering(): TierInvoker
     {
-        $reviewer = new PanelReviewer(new ReviewerRole('correctness', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willReturn(new ResolvedModel(Provider::OpenAiCompatible, self::KIMI));
 
-        return $panels;
+        return $tiers;
     }
 }

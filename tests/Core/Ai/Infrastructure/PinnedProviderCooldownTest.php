@@ -65,12 +65,6 @@ final class PinnedProviderCooldownTest extends TestCase
 
     private PinnedProviderCooldownWindows $pins;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-19T12:00:00.400000+00:00');
-        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
-    }
-
     public function testA429FromAPinnedProviderCoolsItsPinForTheRetryAfterAndTheCallGoesToTheNextAccount(): void
     {
         $answer = $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException(120)), $this->answering('second'))->invoke(self::PINNED, 'Review.');
@@ -358,14 +352,20 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
     }
 
-    private function accounts(PlatformInterface $default, PlatformInterface $team): AccountFailoverPlatform
+    protected function setUp(): void
     {
-        return new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $team], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins);
+        $this->clock = new MockClock('2026-11-19T12:00:00.400000+00:00');
+        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
     }
 
     private function answering(string|Closure $answer): PlatformInterface
     {
         return MockPlatformFactory::createPlatform($answer);
+    }
+
+    private function accounts(PlatformInterface $default, PlatformInterface $team): AccountFailoverPlatform
+    {
+        return new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $team], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins);
     }
 
     private function deepinfra(string $account): PinnedProvider

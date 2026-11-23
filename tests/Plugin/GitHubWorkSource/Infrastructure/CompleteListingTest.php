@@ -21,6 +21,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
+use Intakt\Plugin\GitHubForge\Infrastructure\IssueFields;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
@@ -55,6 +56,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeStore::class)]
 #[UsesClass(GitHubIssueReads::class)]
+#[UsesClass(IssueFields::class)]
 #[UsesClass(GitHubIssueHistories::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(IntakeRules::class)]
@@ -78,18 +80,6 @@ final class CompleteListingTest extends KernelTestCase
     private RecordedIssueReads $reads;
     private ScriptedHistories $histories;
     private BufferingLogger $logger;
-
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->store = new IntakeStore($entities);
-        $this->reads = new RecordedIssueReads();
-        $this->histories = new ScriptedHistories($this->reads);
-        $this->logger = new BufferingLogger();
-    }
 
     public function testAWaitOnSeveralIssuesIsAnsweredFromTheListingWithoutAReadPerReference(): void
     {
@@ -499,6 +489,18 @@ final class CompleteListingTest extends KernelTestCase
         });
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->store = new IntakeStore($entities);
+        $this->reads = new RecordedIssueReads();
+        $this->histories = new ScriptedHistories($this->reads);
+        $this->logger = new BufferingLogger();
+    }
+
     // A reader keeps its shared lock open, so the writer's commit is refused and leaves its pending lock, which refuses every new read of the file until it commits.
     /**
      * @param Closure(Closure(): void): void $test
@@ -574,14 +576,6 @@ final class CompleteListingTest extends KernelTestCase
         return $plan;
     }
 
-    private function listingOver(IssueReads $reads, IssueHistories $histories, string $label = 'intakt'): CompleteListing
-    {
-        $accounts = self::createStub(SteeringAccounts::class);
-        $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
-
-        return new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules($label), new IssueReferences(), $this->logger);
-    }
-
     /**
      * @return list<string>
      */
@@ -626,6 +620,21 @@ final class CompleteListingTest extends KernelTestCase
         return array_map(static fn (StoredIssue|QueuedIssue $item): int => $item->number(), $items);
     }
 
+    private function page(int $from, int $count): string
+    {
+        $issues = array_map(static fn (int $number): array => [
+            'number' => $number,
+            'title' => 'Issue '.$number,
+            'body' => '',
+            'user' => ['login' => 'ana'],
+            'labels' => [['name' => 'intakt']],
+            'milestone' => null,
+            'updated_at' => '2026-11-10T10:00:00Z',
+        ], range($from, $from + $count - 1));
+
+        return json_encode($issues, JSON_THROW_ON_ERROR);
+    }
+
     // Written by `ana` and every label applied by her, so only the text, the labels and the update time differ between the tests.
     /**
      * @param list<string> $labels
@@ -645,18 +654,11 @@ final class CompleteListingTest extends KernelTestCase
         return json_encode(['data' => ['repository' => ['issueOrPullRequest' => $item]]], JSON_THROW_ON_ERROR);
     }
 
-    private function page(int $from, int $count): string
+    private function listingOver(IssueReads $reads, IssueHistories $histories, string $label = 'intakt'): CompleteListing
     {
-        $issues = array_map(static fn (int $number): array => [
-            'number' => $number,
-            'title' => 'Issue '.$number,
-            'body' => '',
-            'user' => ['login' => 'ana'],
-            'labels' => [['name' => 'intakt']],
-            'milestone' => null,
-            'updated_at' => '2026-11-10T10:00:00Z',
-        ], range($from, $from + $count - 1));
+        $accounts = self::createStub(SteeringAccounts::class);
+        $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
 
-        return json_encode($issues, JSON_THROW_ON_ERROR);
+        return new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules($label), new IssueReferences(), $this->logger);
     }
 }

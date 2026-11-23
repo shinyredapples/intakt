@@ -44,24 +44,6 @@ final class CheckMainTest extends TestCase
 
     private ?string $path = null;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        if (null !== $this->path) {
-            putenv('PATH='.$this->path);
-        }
-        if (null !== $this->bin) {
-            new Filesystem()->remove($this->bin);
-        }
-        $this->repository->remove();
-    }
-
     public function testATaskBranchThatMergedMainAndBecameMainIsCleanWhenRecordedWithItsBase(): void
     {
         $base = $this->taskBranchThatMergedMain();
@@ -188,6 +170,24 @@ final class CheckMainTest extends TestCase
         $this->history()->broughtInBy(new RecordedMerge($head, $base));
     }
 
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        if (null !== $this->path) {
+            putenv('PATH='.$this->path);
+        }
+        if (null !== $this->bin) {
+            new Filesystem()->remove($this->bin);
+        }
+        $this->repository->remove();
+    }
+
     // Main moves on after the task branch forked, and the task branch then merges main, so main's own commit sits only on the merge's second parent; main's commit before the fast-forward is returned.
     private function taskBranchThatMergedMain(): string
     {
@@ -237,14 +237,14 @@ final class CheckMainTest extends TestCase
         return sprintf("printf '%%s\\n' %s > %s", escapeshellarg($entry), $this->shallowFile());
     }
 
-    private function shallowFile(): string
-    {
-        return escapeshellarg($this->repository->path.'/.git/shallow');
-    }
-
     private function realGit(): string
     {
         return escapeshellarg((string) new ExecutableFinder()->find('git'));
+    }
+
+    private function shallowFile(): string
+    {
+        return escapeshellarg($this->repository->path.'/.git/shallow');
     }
 
     // A git in front of the real one, because only that forces the cut between the shallow check and the coverage read.

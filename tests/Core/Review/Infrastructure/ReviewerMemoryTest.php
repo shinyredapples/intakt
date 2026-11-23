@@ -67,20 +67,6 @@ final class ReviewerMemoryTest extends TestCase
     private StoreMemoryIndex $index;
     private ReviewerMemory $memory;
 
-    protected function setUp(): void
-    {
-        $store = new Store();
-        // Every text embeds to the same vector, so only the project, the file match and the cap decide what is retrieved.
-        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
-            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
-        ));
-        $vectorizer = new Vectorizer($platform, 'embedder');
-        $documents = new MemoryDocuments();
-
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
-        $this->memory = new ReviewerMemory(new StoreProjectMemory(new Retriever($store, $vectorizer), $documents), new Fence(), new DiffPaths());
-    }
-
     public function testTheBriefingGivesTheReviewerTheEntriesThatDescribeTheFilesUnderReview(): void
     {
         $this->remember('Cart totals were rounded twice.', 'src/Cart.php');
@@ -252,6 +238,20 @@ final class ReviewerMemoryTest extends TestCase
         self::assertCount(3, $messages);
         self::assertInstanceOf(UserMessage::class, $last);
         self::assertStringNotContainsString('Cart totals', (string) $last->asText());
+    }
+
+    protected function setUp(): void
+    {
+        $store = new Store();
+        // Every text embeds to the same vector, so only the project, the file match and the cap decide what is retrieved.
+        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
+            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
+        ));
+        $vectorizer = new Vectorizer($platform, 'embedder');
+        $documents = new MemoryDocuments();
+
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->memory = new ReviewerMemory(new StoreProjectMemory(new Retriever($store, $vectorizer), $documents), new Fence(), new DiffPaths());
     }
 
     private function remember(string $text, string $file): void

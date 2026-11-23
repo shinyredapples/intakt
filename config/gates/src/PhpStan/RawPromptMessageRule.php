@@ -109,6 +109,21 @@ final readonly class RawPromptMessageRule implements Rule
             : array_map(static fn (ConstantStringType $name): string => $name->getValue(), $scope->getType($call->name)->getConstantStrings());
     }
 
+    private function constructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
+    {
+        $messageClass = $this->namedClass($construction->class, self::MESSAGE_CLASSES, $scope);
+
+        if (null !== $messageClass) {
+            return $this->rawMessage('new '.substr($messageClass, (int) strrpos($messageClass, '\\') + 1).'()');
+        }
+
+        if ($this->isInClass($scope, self::ROLE_HANDLER) && null !== $this->namedClass($construction->class, [self::CONVERSATION], $scope) && !$this->rolePromptIsProven($construction, $scope)) {
+            return RuleErrorBuilder::message(self::ROLE_ADVICE)->identifier('intakt.unprovenRolePrompt')->build();
+        }
+
+        return null;
+    }
+
     // because `[Message::class, 'ofUser']` is a callable only with exactly the keys 0 and 1, in any written order
     private function callableArrayFinding(Array_ $array, Scope $scope): ?IdentifierRuleError
     {
@@ -130,15 +145,6 @@ final readonly class RawPromptMessageRule implements Rule
         return $this->factoryNamed($array->getValueTypes()[$method]);
     }
 
-    // a method name known only at run time may be a factory, so any type that may be a string counts as one, `?string` too
-    private function factoryNamed(Type $method): ?string
-    {
-        $names = array_map(static fn (ConstantStringType $name): string => $name->getValue(), $method->getConstantStrings());
-
-        return array_find($names, static fn (string $name): bool => in_array(strtolower($name), self::MESSAGE_FACTORIES, true))
-            ?? ([] === $names && !$method->isString()->no() ? 'a factory name' : null);
-    }
-
     private function callableStringFinding(String_ $string): ?IdentifierRuleError
     {
         $parts = explode('::', $this->withoutLeadingBackslash($string->value));
@@ -148,29 +154,6 @@ final readonly class RawPromptMessageRule implements Rule
         }
 
         return $this->rawMessage('Message::'.$parts[1].'()');
-    }
-
-    /**
-     * @param list<string> $names
-     */
-    private function namesMessage(array $names): bool
-    {
-        return array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, self::MESSAGE));
-    }
-
-    private function constructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
-    {
-        $messageClass = $this->namedClass($construction->class, self::MESSAGE_CLASSES, $scope);
-
-        if (null !== $messageClass) {
-            return $this->rawMessage('new '.substr($messageClass, (int) strrpos($messageClass, '\\') + 1).'()');
-        }
-
-        if ($this->isInClass($scope, self::ROLE_HANDLER) && null !== $this->namedClass($construction->class, [self::CONVERSATION], $scope) && !$this->rolePromptIsProven($construction, $scope)) {
-            return RuleErrorBuilder::message(self::ROLE_ADVICE)->identifier('intakt.unprovenRolePrompt')->build();
-        }
-
-        return null;
     }
 
     /**
@@ -197,6 +180,23 @@ final readonly class RawPromptMessageRule implements Rule
             ...$type->getObjectTypeOrClassStringObjectType()->getObjectClassNames(),
             ...array_map(fn (ConstantStringType $name): string => $this->withoutLeadingBackslash($name->getValue()), $type->getConstantStrings()),
         ];
+    }
+
+    /**
+     * @param list<string> $names
+     */
+    private function namesMessage(array $names): bool
+    {
+        return array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, self::MESSAGE));
+    }
+
+    // a method name known only at run time may be a factory, so any type that may be a string counts as one, `?string` too
+    private function factoryNamed(Type $method): ?string
+    {
+        $names = array_map(static fn (ConstantStringType $name): string => $name->getValue(), $method->getConstantStrings());
+
+        return array_find($names, static fn (string $name): bool => in_array(strtolower($name), self::MESSAGE_FACTORIES, true))
+            ?? ([] === $names && !$method->isString()->no() ? 'a factory name' : null);
     }
 
     // because PHP accepts at most one leading backslash in a class string

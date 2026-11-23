@@ -7,7 +7,7 @@ namespace Intakt\Core\Review\Contract;
 use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Validator\Constraints\Valid;
 
-// Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
+// Stored through Infrastructure\ReviewerAnswer\Verdict, which owns the reviewer's answer format and the stored round JSON, so the typed resolved and follow_ups lists are written as lists of strings.
 final readonly class Verdict
 {
     // Kept although no verdict is given it any more, because rounds recorded before still hold it and must stay failed reviews.
@@ -20,9 +20,9 @@ final readonly class Verdict
     private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL, self::REVIEWER_STOPPED];
 
     /**
-     * @param list<Finding> $findings
-     * @param list<string>  $resolved
-     * @param list<string>  $follow_ups
+     * @param list<Finding>         $findings
+     * @param list<ResolvedFinding> $resolved
+     * @param list<FollowUpNote>    $follow_ups
      */
     public function __construct(
         public Decision $verdict,
@@ -103,11 +103,6 @@ final readonly class Verdict
     public function withholdsApprovalWithoutFinding(): bool
     {
         return Decision::Approve !== $this->verdict && [] === $this->findings;
-    }
-
-    private static function raisedByIntakt(Finding $finding): self
-    {
-        return new self(Decision::Blocked, [$finding], [], [], VerdictOrigin::Intakt);
     }
 
     public static function incompleteStream(string $reason, Evidence $evidence): self
@@ -198,5 +193,10 @@ final readonly class Verdict
         );
 
         return self::raisedByIntakt($finding);
+    }
+
+    private static function raisedByIntakt(Finding $finding): self
+    {
+        return new self(Decision::Blocked, [$finding], [], [], VerdictOrigin::Intakt);
     }
 }

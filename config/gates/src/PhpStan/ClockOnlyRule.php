@@ -93,13 +93,13 @@ final readonly class ClockOnlyRule implements Rule
         };
     }
 
-    private function isAbsoluteMoment(?Expr $argument): bool
-    {
-        return $argument instanceof String_ && 1 === preg_match(self::ABSOLUTE_MOMENT, $argument->value);
-    }
-
     private function names(Node $class, string $name): bool
     {
         return $class instanceof Name && 0 === strcasecmp(ltrim($class->toString(), '\\'), $name);
+    }
+
+    private function isAbsoluteMoment(?Expr $argument): bool
+    {
+        return $argument instanceof String_ && 1 === preg_match(self::ABSOLUTE_MOMENT, $argument->value);
     }
 }

@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Greets
+{
+    public function name(string $name): string
+    {
+        return ucfirst($name);
+    }
+
+    private function exclaimed(string $text): string
+    {
+        return $text.'!';
+    }
+
+    public function greet(string $name): string
+    {
+        return $this->exclaimed('Hello '.$this->name($name));
+    }
+}

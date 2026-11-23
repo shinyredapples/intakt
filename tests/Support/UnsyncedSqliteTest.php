@@ -21,19 +21,6 @@ final class UnsyncedSqliteTest extends KernelTestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->directory = sys_get_temp_dir().'/unsynced-sqlite-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        parent::tearDown();
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testASqliteFileConnectionDoesNotWaitForTheDiskAfterEveryWrite(): void
     {
         $connection = DriverManager::getConnection(
@@ -61,5 +48,18 @@ final class UnsyncedSqliteTest extends KernelTestCase
         self::assertInstanceOf(Connection::class, $connection);
 
         self::assertSame(self::SYNCHRONOUS_OFF, $connection->fetchOne('PRAGMA synchronous'));
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->directory = sys_get_temp_dir().'/unsynced-sqlite-'.bin2hex(random_bytes(4));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        new Filesystem()->remove($this->directory);
     }
 }

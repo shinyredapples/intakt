@@ -64,20 +64,6 @@ final class LocalGitForgeTest extends TestCase
     /** @var array<array-key, mixed> */
     private array $environment;
 
-    protected function setUp(): void
-    {
-        $this->environment = $_ENV;
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->commitFile('src/Gone.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $_ENV = $this->environment;
-        $this->repository->remove();
-    }
-
     #[RunInSeparateProcess]
     public function testAnUnexpectedInvalidArgumentWhileReadingAHashFromGitPassesThrough(): void
     {
@@ -799,6 +785,20 @@ final class LocalGitForgeTest extends TestCase
         $change = $this->forge()->change(new ChangeId('feature'));
 
         self::assertSame('feature', $change->id->value);
+    }
+
+    protected function setUp(): void
+    {
+        $this->environment = $_ENV;
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->commitFile('src/Gone.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV = $this->environment;
+        $this->repository->remove();
     }
 
     private function forge(string $baseBranch = 'main'): LocalGitForge

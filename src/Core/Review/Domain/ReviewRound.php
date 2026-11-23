@@ -23,7 +23,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Table(name: 'review_round')]
 final class ReviewRound implements HasPlace
 {
-    // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads.
+    // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads. The reviewers are ordered by id, the panel order the ids are handed out in, because an engine returns unordered rows as it keeps them, and PostgreSQL moves a row it updates, so repeated rounds listed their reviewers differently.
     /** @var Collection<int, RoundReviewer> */
     // Loaded by id, because the ids are time-ordered and made in panel order, and a database returns rows without an ORDER BY in any order it likes.
     #[ORM\OneToMany(targetEntity: RoundReviewer::class, mappedBy: 'round', cascade: ['persist'])]

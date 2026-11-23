@@ -57,6 +57,11 @@ final readonly class UsageReader
         return is_array($row) && $expected === $fields ? $row : throw $this->rejected($index, 'it must hold exactly '.implode(', ', self::FIELDS));
     }
 
+    private function rejected(int $index, string $reason): JourneyInputFailed
+    {
+        return new JourneyInputFailed('usage line '.($index + 1).' is refused: '.$reason);
+    }
+
     /**
      * @param array<mixed> $row
      *
@@ -82,10 +87,5 @@ final readonly class UsageReader
     private function unknown(int $index, string $field, array $known): JourneyInputFailed
     {
         return $this->rejected($index, $field.' must be one of '.implode(', ', array_map(static fn (BackedEnum $case): string => (string) $case->value, $known)));
-    }
-
-    private function rejected(int $index, string $reason): JourneyInputFailed
-    {
-        return new JourneyInputFailed('usage line '.($index + 1).' is refused: '.$reason);
     }
 }

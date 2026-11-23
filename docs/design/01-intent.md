@@ -7,7 +7,7 @@ Status: decided design (see Decisions); nothing is built yet.
 ## Terms
 
 - **Product owner** (short: the **owner**): the person who owns the project. Sets goals and priorities, makes the taste decisions, and holds the two approval floors (the approval system itself, and secrets and permissions).
-- **Team:** the model roles that do the work, with traditional team titles: Tech lead, Designer, Developer, Code reviewers, Security engineer, AI engineer and Maintainer, plus the opt-in Test engineer. What each one does, and what each was formerly called, is in the team table of the [Overview](05-architecture/01-overview.md#the-team). Machinery keeps technical names (orchestrator, scheduler, watchdog, checks, dashboard).
+- **Team:** the model roles that do the work, with traditional team titles: Tech lead, Designer, Developer, Code reviewers, Technical writer, Security engineer, AI engineer and Maintainer, plus the opt-in Test engineer. What each one does, and what each was formerly called, is in the team table of the [Overview](05-architecture/01-overview.md#the-team). Machinery keeps technical names (orchestrator, scheduler, watchdog, checks, dashboard).
 - **Spec:** what a project or feature should do, written by the owner or drafted with Intakt in the foundation flow.
 - **Plan:** the spec broken into milestones and tasks, with dependencies and what may run in parallel.
 - **Task:** one buildable unit of the plan, with acceptance criteria and the evidence its change must show, sized to be built and reviewed. Lanes build tasks, Code reviewers review their changes, routing rules choose their models.

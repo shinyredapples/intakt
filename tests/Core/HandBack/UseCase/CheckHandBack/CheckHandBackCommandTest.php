@@ -81,18 +81,6 @@ final class CheckHandBackCommandTest extends TestCase
 
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->ledger = new RecordingLedger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testAnAcceptedBundlePrintsItsHeadThePushedBaseAndHowManyCommitsWereRewritten(): void
     {
         $base = $this->history->commit('First');
@@ -253,6 +241,26 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertStringNotContainsString($key, $tester->getDisplay());
     }
 
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->ledger = new RecordingLedger();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
+    }
+
+    private function text(string $content = 'Adds the change.'): string
+    {
+        $path = $this->history->folder.'/'.bin2hex(random_bytes(4)).'.md';
+        new Filesystem()->dumpFile($path, $content);
+
+        return $path;
+    }
+
     /**
      * @param array<string, string|bool|list<string>> $input
      */
@@ -266,14 +274,6 @@ final class CheckHandBackCommandTest extends TestCase
         $tester->execute($input);
 
         return $tester;
-    }
-
-    private function text(string $content = 'Adds the change.'): string
-    {
-        $path = $this->history->folder.'/'.bin2hex(random_bytes(4)).'.md';
-        new Filesystem()->dumpFile($path, $content);
-
-        return $path;
     }
 
     private function flat(CommandTester $tester): string

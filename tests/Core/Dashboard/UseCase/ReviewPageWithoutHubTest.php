@@ -39,7 +39,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
@@ -51,10 +51,10 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertResponseIsSuccessful();
-        self::assertSame('Live log of review pass 1', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame('Live log of review pass 1', $crawler->filter('.task-grid > section.log-pane h2')->text());
         self::assertSame('correctness (standard tier, model not recorded) live', $crawler->filter('.log-pane #reviewer-round-1-correctness h3')->text());
     }
 
@@ -65,7 +65,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         $summaries->method('ofRound')->willReturn(new SessionSummary([new ToolCallCount('read_file', 2)], Cost::inUsd(0.3), ['src/A.php'], [], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
@@ -76,14 +76,15 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
     public function testThePlainPageStillLoadsTheScriptThatHoldsBackTheFirstClickOnStop(): void
     {
         $this->givenARunningRound();
+        $this->browser->disableReboot();
         $packages = self::getContainer()->get(Packages::class);
         self::assertInstanceOf(Packages::class, $packages);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
-        self::assertCount(1, $crawler->filter('.page-head form.stop-round button[data-arm-confirm="Click again to stop the round"]'));
+        self::assertCount(1, $this->browser->request('GET', '/reviews/round-1')->filter('.page-head form.stop-round button[data-arm-confirm="Click again to stop the round"]'));
         self::assertSame(
             [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { switchTaskPanes } from '%s'; import { highlightFindings } from '%s'; import { foldColumns } from '%s'; import { showMoreCards } from '%s'; import { toggleBanners } from '%s'; import { markBoardEdges } from '%s'; import { captionTour } from '%s'; import { copyCommands } from '%s'; import { showIdleProjectOctopus } from '%s'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document, window); highlightFindings(document); foldColumns(document); showMoreCards(document); toggleBanners(document); markBoardEdges(document, window); captionTour(document, sessionStorage); copyCommands(document, window); showIdleProjectOctopus(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('task-panes.js'), $packages->getUrl('finding-highlight.js'), $packages->getUrl('column-fold.js'), $packages->getUrl('column-more.js'), $packages->getUrl('banner-toggle.js'), $packages->getUrl('board-edge.js'), $packages->getUrl('tour-caption.js'), $packages->getUrl('copy-command.js'), $packages->getUrl('board-octopus.js'))],
             $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),
@@ -122,7 +123,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [$finding], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(0, $crawler->filter('script[type="importmap"]'));
         self::assertSame('F1', $crawler->filter('.log-summary .ls-findings button')->attr('data-highlight-finding'));

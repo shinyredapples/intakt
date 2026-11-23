@@ -91,29 +91,6 @@ final readonly class ReviewerLeases
         });
     }
 
-    private function decide(RoundReviewer $reviewer, DateTimeImmutable $now): void
-    {
-        if ($reviewer->isFinished()) {
-            return;
-        }
-
-        if (ReviewerState::Queued === $reviewer->state()) {
-            $this->moves->start($reviewer, $now);
-
-            return;
-        }
-
-        $heldUntil = $reviewer->heldUntil();
-
-        // Inside the hold the first worker is still reviewing, so the message comes back when the hold ends; after it, the worker counts as stopped.
-        if ($heldUntil instanceof DateTimeImmutable && $this->withinTheHold($reviewer, $now)) {
-            throw ReviewerStillHeld::until($heldUntil, $now);
-        }
-
-        // The worker counts as stopped, so its reviewer is started once more, because one stop may be a deploy; a second stop blocks it.
-        $reviewer->hasRestarted() ? $this->moves->block($reviewer, self::WORKER_STOPPED) : $this->moves->restart($reviewer, $now);
-    }
-
     /**
      * @template T
      *
@@ -175,14 +152,6 @@ final readonly class ReviewerLeases
         return ReviewerState::Running === $stored->state() && $stored->isSameAttemptAs($taken);
     }
 
-    // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.
-    private function withinTheHold(RoundReviewer $reviewer, DateTimeImmutable $now): bool
-    {
-        $heldUntil = $reviewer->heldUntil();
-
-        return $heldUntil instanceof DateTimeImmutable && $heldUntil > $now;
-    }
-
     // Loaded fresh under the lock, because another worker may have changed the row since this worker loaded it; cleared first, since refreshing a loaded row would set its readonly columns again.
     private function lockedRow(Uuid $reviewerId): RoundReviewer
     {
@@ -190,6 +159,37 @@ final readonly class ReviewerLeases
         $reviewer = $this->entities->find(RoundReviewer::class, $reviewerId, LockMode::PESSIMISTIC_WRITE);
 
         return $reviewer ?? throw ReviewerNotFound::for($reviewerId->toRfc4122());
+    }
+
+    private function decide(RoundReviewer $reviewer, DateTimeImmutable $now): void
+    {
+        if ($reviewer->isFinished()) {
+            return;
+        }
+
+        if (ReviewerState::Queued === $reviewer->state()) {
+            $this->moves->start($reviewer, $now);
+
+            return;
+        }
+
+        $heldUntil = $reviewer->heldUntil();
+
+        // Inside the hold the first worker is still reviewing, so the message comes back when the hold ends; after it, the worker counts as stopped.
+        if ($heldUntil instanceof DateTimeImmutable && $this->withinTheHold($reviewer, $now)) {
+            throw ReviewerStillHeld::until($heldUntil, $now);
+        }
+
+        // The worker counts as stopped, so its reviewer is started once more, because one stop may be a deploy; a second stop blocks it.
+        $reviewer->hasRestarted() ? $this->moves->block($reviewer, self::WORKER_STOPPED) : $this->moves->restart($reviewer, $now);
+    }
+
+    // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.
+    private function withinTheHold(RoundReviewer $reviewer, DateTimeImmutable $now): bool
+    {
+        $heldUntil = $reviewer->heldUntil();
+
+        return $heldUntil instanceof DateTimeImmutable && $heldUntil > $now;
     }
 
     /**

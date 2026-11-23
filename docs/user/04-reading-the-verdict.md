@@ -4,7 +4,7 @@
 
 ## The owl has spoken
 
-The review page stops moving. In the Now box, the owl's line reads "Changes requested, 5 findings to fix". You have a list, and you want to know which item to open first and whether each one is real. This chapter reads the verdict with you, top to bottom.
+The review page stops moving. The owl's card reads "Changes needed", with "5 to fix · 2 urgent" under it. Below it are the To fix cards. You have a list, and you want to know which item to open first and whether each one is real. This chapter reads the verdict with you, top to bottom.
 
 ## The judge's call
 
@@ -18,17 +18,17 @@ Plain code decides the outcome from the votes and the list, never from how a rev
 
 ## The list To fix
 
-Each card on the list is one thing to change.
+Each card on the list is one thing to change. On the main view a card shows the urgency, the first sentence, the rest of the text cut to one line, and the place. Press a card to open the finding in the **Full record**, where the id, the other reviewers' reports and the owl's call are.
 
 ![Five finding cards from the list To fix: F1, P1, the discount check changed from "amount >= 100" to "amount > 100", at src/discount.js:3, also reported as F6, Fix now; F2, P1, command injection through customerName and execSync, at src/report.js:4, also reported as F5 and F7, Fix now; F3 and F4, P2, new functions without tests; F8, P3, a base charge written twice in src/shipping.js:6, Fix now](../assets/guide/findings.webp)
 
-Read a card from left to right:
+In the Full record, read a card from left to right:
 
 1. **The urgency.** P1 must be fixed, P2 should be, P3 is a small remark.
 2. **The id,** such as F1. It names this problem for the rest of the review.
 3. **The text.** What is wrong, and often how to fix it.
 4. **The place,** a file and a line, such as `src/discount.js:3`.
-5. **Also reported as,** when another reviewer found the same problem at the same place. You fix it once.
+5. **Also reported as,** when another reviewer found the same problem at the same place. You fix it once. Each other id is listed once.
 6. **The owl's call,** in plain words: **Fix now**.
 
 Start with the P1 cards. In the demo, F1 brings back a discount bug and F2 lets a customer name run shell commands.
@@ -53,7 +53,7 @@ From round two on, a new P1 or P2 is lowered to P3, unless the reviewer marks it
 
 ## The rest of the page
 
-Below the Now box:
+The **Full record** link at the bottom of the main view opens the rest of the page:
 
 - **Timeline** lists every round. The newest judged round starts open; older ones fold to one line.
 - **Reviewers** in each round shows each reviewer's model, outcome and number of findings.

@@ -40,26 +40,26 @@ Prefer the terminal? `docker compose exec intakt php bin/console intakt:demo` ru
 
 ## What you see while it runs
 
-The top of the page tells the story so far. A path runs from **Pass 1** to **Merge**, and the meerkat stands on the pass that is being read. Under it, one line counts the rounds, the tokens and the estimated cost.
+The top of the page tells the story so far. Under the title comes the task sentence, then a path from **Pass 1** to **Merge**, where the meerkat stands on the pass that is being read. The rounds, tokens and estimated cost are in the **Full record**, which a link at the bottom of the page opens.
 
-![A live review page: "Review of sample-change in sample", the task sentence, the meerkat on Pass 1 of the path to Merge, the line with 1 round and 0 tokens so far, a Stop button, and the Now box: 0 of 2 reviewers finished, correctness on Kimi K3.1 Pro and security on DeepSeek V4 Pro both running, "No finding is open" under To fix, and the owl with "The judge has not judged this round yet"](../assets/guide/review-running.webp)
+![An earlier version of a live review page: "Review of sample-change in sample", the task sentence, the meerkat on Pass 1 of the path to Merge, the line with 1 round and 0 tokens so far, a Stop button, and the Now box: 0 of 2 reviewers finished, correctness on Kimi K3.1 Pro and security on DeepSeek V4 Pro both running, "No finding is open" under To fix, and the owl with "The judge has not judged this round yet"](../assets/guide/review-running.webp)
 
-The **Now** box has three parts:
+While the round is in review, a box headed **Now** has three parts:
 
 - **Reviewers** counts who has finished and shows each reviewer's role, model and state.
 - **To fix** stays empty until the owl has judged.
 - **The judge's call** says the owl has not judged yet.
 
-Further down, the live log shows each reviewer at work: the files it reads, the searches it runs, and finally its verdict and one line per finding. The page updates by itself; you never reload.
+To watch more, open the Full record: its live log shows each reviewer at work, the files it reads, the searches it runs, and finally its verdict and one line per finding. The page updates by itself; you never reload.
 
 ## While you wait
 
 On the board, the sample change sits in **In review** while the panel reads it. On an older 4-core desktop, the demo review took 42 seconds to its verdict (median of ten runs). A provider under load can take longer.
 
-If you change your mind, the **Stop** button ends the round. Press it twice: the first press asks you to confirm.
+If you change your mind, the **Stop** button asks the running reviewers to stop. Press it twice: the first press asks you to confirm. If the round has already ended, even when a page you left open still shows the button, Intakt refuses the press and stops nothing.
 
 ## When the owl is done
 
-The Now box fills in: each reviewer's verdict, the list To fix, and the owl's call, such as "Changes requested, 5 findings to fix". That list is where your next half hour goes.
+The Now box goes, and the owl's card and the **To fix** cards take its place. The card gives the owl's call, such as "Changes needed", with "5 to fix". The cards are the list where your next half hour goes; each one opens its finding in the Full record.
 
 Next: [Reading the verdict](04-reading-the-verdict.md)

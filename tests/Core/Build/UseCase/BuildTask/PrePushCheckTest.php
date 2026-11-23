@@ -31,16 +31,6 @@ final class PrePushCheckTest extends TestCase
 {
     private string $folder = '';
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-pre-push-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testARefusedBranchBecomesTheFailureText(): void
     {
         $failure = $this->checkThrowing(HandBackBranchRefused::isMain('main'))->failureOf($this->request(), 'BUNDLE');
@@ -53,6 +43,16 @@ final class PrePushCheckTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the check job'));
 
         $this->checkThrowing(new InvalidArgumentException('a bug in the check job'))->failureOf($this->request(), 'BUNDLE');
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-pre-push-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function checkThrowing(Throwable $failure): PrePushCheck
