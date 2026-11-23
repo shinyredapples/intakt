@@ -1001,6 +1001,21 @@ final class BuildScriptTest extends TestCase
         $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
     }
 
+    public function testATimeoutWhoseLinkTargetEndsInANewlineEndsTheJobBeforeTheSession(): void
+    {
+        // A plain file of the stripped name is allowed, so only a walk that keeps the newline sees the link that leads into the work area.
+        mkdir($this->history->folder.'/image');
+        $this->givenAWorkingTimeoutAt($this->history->folder.'/image/timeout');
+        $this->givenAWorkingTimeoutAt($this->work.'/timeout');
+        symlink($this->work.'/timeout', $this->history->folder."/image/timeout\n");
+        symlink($this->history->folder."/image/timeout\n", $this->bin.'/timeout');
+        $this->givenTheCliRecordsThatItRan();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
     public function testATimeoutThatIsALinkIntoTheOutputFolderEndsTheJobBeforeTheSession(): void
     {
         $this->givenAWorkingTimeoutAt($this->output.'/timeout');

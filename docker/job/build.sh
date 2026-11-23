@@ -66,7 +66,11 @@ system_command() {
         # The kernel's own bound for the links of one path, so a chain it would refuse is refused here too.
         links=$((links + 1))
         [ "$links" -le 40 ] || return 1
-        link="$(PATH="$system_path"; readlink -- "$at" 2>/dev/null)" || return 1
+        # A sentinel after the target, because command substitution drops trailing newlines and a target may end in one.
+        link="$(PATH="$system_path"; readlink -- "$at" 2>/dev/null && printf x)" || return 1
+        # Drop the sentinel and the one newline readlink prints, and no more.
+        link="${link%x}"
+        link="${link%?}"
         [ -n "$link" ] || return 1
         case "$link" in
             /*) at='' ;;
