@@ -22,7 +22,7 @@ final class PrRunPassedTest extends SandboxTestCase
         if [ "$2" = --paginate ]; then paginate=yes; shift; fi
         case "$2" in
           'repos/example/intakt/actions/workflows/ci.yml/runs?head_sha=abc&event=pull_request&status=success&per_page=100') page=runs ;;
-          'repos/example/intakt/actions/runs/'*'/artifacts?name=tested-tree-pushed&per_page=100') run=${2%/artifacts*}; page=artifacts-${run##*/} ;;
+          'repos/example/intakt/actions/runs/'*'/artifacts?name=main-tested-tree-pushed&per_page=100') run=${2%/artifacts*}; page=artifacts-${run##*/} ;;
           *) exit 3 ;;
         esac
         jq -r "$4" "$page.json"
@@ -35,17 +35,18 @@ final class PrRunPassedTest extends SandboxTestCase
     /** @return iterable<string, array{string, list<array{string, bool}>, string}> */
     public static function runs(): iterable
     {
-        yield 'a run that tested the pushed tree' => ['example/intakt', [['tested-tree-pushed', false]], 'yes'];
-        yield 'a run that tested another tree (another base branch, or an older base)' => ['example/intakt', [['tested-tree-merged', false]], 'no'];
-        yield 'a run whose record expired' => ['example/intakt', [['tested-tree-pushed', true]], 'no'];
+        yield 'a run that tested the pushed tree' => ['example/intakt', [['main-tested-tree-pushed', false]], 'yes'];
+        yield 'a run that tested another tree (an older main)' => ['example/intakt', [['main-tested-tree-merged', false]], 'no'];
+        yield 'a record under the name that runs into any branch uploaded before' => ['example/intakt', [['tested-tree-pushed', false]], 'no'];
+        yield 'a run whose record expired' => ['example/intakt', [['main-tested-tree-pushed', true]], 'no'];
         yield 'a run with no record' => ['example/intakt', [], 'no'];
-        yield 'a run whose artifact name only ends with the pushed tree\'s record' => ['example/intakt', [['report tested-tree-pushed', false]], 'no'];
-        yield 'a fork\'s run that tested the pushed tree' => ['fork/intakt', [['tested-tree-pushed', false]], 'no'];
+        yield 'a run whose artifact name only ends with the pushed tree\'s record' => ['example/intakt', [['report main-tested-tree-pushed', false]], 'no'];
+        yield 'a fork\'s run that tested the pushed tree' => ['fork/intakt', [['main-tested-tree-pushed', false]], 'no'];
     }
 
     /** @param list<array{string, bool}> $artifacts */
     #[DataProvider('runs')]
-    public function testOnlyARunFromThisRepositoryThatTestedThePushedTreeCounts(string $repository, array $artifacts, string $expected): void
+    public function testOnlyARunIntoMainFromThisRepositoryThatTestedThePushedTreeCounts(string $repository, array $artifacts, string $expected): void
     {
         $sandbox = $this->sandboxWithRuns([['id' => 7, 'head_repository' => ['full_name' => $repository]]]);
         $sandbox->write('artifacts-7.json', $this->json(['artifacts' => array_map(
@@ -73,8 +74,8 @@ final class PrRunPassedTest extends SandboxTestCase
             ['id' => 7, 'head_repository' => ['full_name' => 'example/intakt']],
             ['id' => 8, 'head_repository' => ['full_name' => 'example/intakt']],
         ]);
-        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'tested-tree-merged', 'expired' => false]]]));
-        $sandbox->write('artifacts-8.json', $this->json(['artifacts' => [['name' => 'tested-tree-pushed', 'expired' => false]]]));
+        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'main-tested-tree-merged', 'expired' => false]]]));
+        $sandbox->write('artifacts-8.json', $this->json(['artifacts' => [['name' => 'main-tested-tree-pushed', 'expired' => false]]]));
 
         self::assertSame("yes\n", $this->answer($sandbox)->output);
     }
@@ -83,8 +84,8 @@ final class PrRunPassedTest extends SandboxTestCase
     {
         $sandbox = $this->sandboxWithRuns([['id' => 7, 'head_repository' => ['full_name' => 'example/intakt']]]);
         $sandbox->write('runs-2.json', $this->json(['workflow_runs' => [['id' => 8, 'head_repository' => ['full_name' => 'example/intakt']]]]));
-        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'tested-tree-merged', 'expired' => false]]]));
-        $sandbox->write('artifacts-8.json', $this->json(['artifacts' => [['name' => 'tested-tree-pushed', 'expired' => false]]]));
+        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'main-tested-tree-merged', 'expired' => false]]]));
+        $sandbox->write('artifacts-8.json', $this->json(['artifacts' => [['name' => 'main-tested-tree-pushed', 'expired' => false]]]));
 
         $result = $this->answer($sandbox);
 
@@ -95,8 +96,8 @@ final class PrRunPassedTest extends SandboxTestCase
     public function testARecordOnALaterPageOfARunsArtifactsCounts(): void
     {
         $sandbox = $this->sandboxWithRuns([['id' => 7, 'head_repository' => ['full_name' => 'example/intakt']]]);
-        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'tested-tree-merged', 'expired' => false]]]));
-        $sandbox->write('artifacts-7-2.json', $this->json(['artifacts' => [['name' => 'tested-tree-pushed', 'expired' => false]]]));
+        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'main-tested-tree-merged', 'expired' => false]]]));
+        $sandbox->write('artifacts-7-2.json', $this->json(['artifacts' => [['name' => 'main-tested-tree-pushed', 'expired' => false]]]));
 
         $result = $this->answer($sandbox);
 

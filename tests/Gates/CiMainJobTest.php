@@ -18,6 +18,10 @@ final class CiMainJobTest extends TestCase
 {
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/ci.yml';
 
+    private const string ACTION = __DIR__.'/../../.github/actions/ci-image/action.yml';
+
+    private const string INTO_MAIN = "github.event_name == 'pull_request' && github.base_ref == 'main'";
+
     private const string GUARD = "(github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push')";
 
     public function testTheMainJobRunsOnAPushOnlyAndOnlyReadsActions(): void
@@ -54,7 +58,7 @@ final class CiMainJobTest extends TestCase
         }
     }
 
-    public function testAPullRequestRunRecordsTheTreeOfTheMergeItTestedAfterTheGates(): void
+    public function testAPullRequestRunIntoMainRecordsTheTreeOfTheMergeItTestedAfterTheGates(): void
     {
         $steps = $this->job('check')['steps'] ?? [];
         $names = array_map(static fn (array $step): string => $step['name'] ?? '', $steps);
@@ -62,12 +66,23 @@ final class CiMainJobTest extends TestCase
         $upload = $steps[count($steps) - 1];
 
         self::assertGreaterThan(array_search('Run the gates', $names, true), array_search('Record the tested tree', $names, true));
-        self::assertSame("github.event_name == 'pull_request'", $record['if'] ?? null);
+        self::assertSame(self::INTO_MAIN, $record['if'] ?? null);
         self::assertStringContainsString('git rev-parse "$GITHUB_SHA^{tree}"', $record['run'] ?? '');
-        self::assertSame("github.event_name == 'pull_request'", $upload['if'] ?? null);
+        self::assertSame(self::INTO_MAIN, $upload['if'] ?? null);
         self::assertMatchesRegularExpression('/^actions\/upload-artifact@[0-9a-f]{40}$/', $upload['uses'] ?? '');
-        self::assertSame('tested-tree-${{ steps.tested-tree.outputs.tree }}', $upload['with']['name'] ?? null);
+        self::assertSame('main-tested-tree-${{ steps.tested-tree.outputs.tree }}', $upload['with']['name'] ?? null);
         self::assertTrue($upload['with']['overwrite'] ?? null);
+    }
+
+    public function testARunOnMainSavesTheCiImageWhenTheCacheLacksItEvenIfTheRunnerHadIt(): void
+    {
+        /** @var array{runs: array{steps: list<Step>}} $action */
+        $action = Yaml::parseFile(self::ACTION);
+        $steps = array_column($action['runs']['steps'], null, 'id');
+
+        self::assertArrayNotHasKey('if', $steps['restore'] ?? []);
+        self::assertSame("\${{ steps.name.outputs.present == 'true' }}", $steps['restore']['with']['lookup-only'] ?? null);
+        self::assertSame("github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.restore.outputs.cache-hit != 'true'", $steps['export']['if'] ?? null);
     }
 
     /**

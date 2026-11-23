@@ -67,8 +67,9 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
   ([MCP](reference/mcp.md), [the skill](../skills/intakt-review/README.md)).
 - **The quality gates:** CI runs `bin/check`, and the journeys separately with `bin/check --journeys`, on pull requests
-  from this repository and on pushes to main. A pull request from a fork runs no CI job, so its code never reaches a
-  CI runner ([quality gates](architecture/quality-gates.md)).
+  from this repository and on pushes to main, except a push whose commit already passed as a pull request into main with
+  exactly the same files. A pull request from a fork runs no CI job, so its code never reaches a CI runner
+  ([quality gates](architecture/quality-gates.md)).
 - **Upstream reports:** likely bugs in Symfony, Symfony AI and other libraries, each with a minimal reproduction, and
   fixes that are in Symfony 8.2.0-BETA2 ([found and fixed upstream](../upstream/README.md#found-and-fixed-upstream),
   [upstream reproductions](../upstream/README.md), "Found in the beta" on
