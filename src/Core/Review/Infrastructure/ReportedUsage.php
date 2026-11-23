@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Ai\Contract\Provider;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
@@ -15,23 +14,18 @@ final readonly class ReportedUsage
     // Every count the bridges' extractors read, because they hand each on unchecked.
     private const array COUNTS = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens', 'cached_input_tokens'];
 
-    // Only a usage with figures counts, because an empty one would settle the job as having spent nothing.
+    // Only a usage with figures counts, and only one whose figures are all whole numbers of zero or more, because an empty or invalid one would settle the job as having spent nothing or less than it did; such an event counts as no usage, so the reservation stays unsettled.
     /**
      * @param array<array<mixed>> $events
      *
      * @return list<TokenUsageInterface>
-     *
-     * @throws ReviewJobFailure
      */
-    public static function in(Provider $provider, TokenUsageExtractorInterface $extractor, array $events): array
+    public static function in(TokenUsageExtractorInterface $extractor, array $events): array
     {
         $usage = [];
         foreach ($events as $event) {
             $reported = $event['usage'] ?? null;
-            if (is_array($reported) && !self::countsAreWhole($reported)) {
-                throw ReviewJobFailure::unreadableUsage($provider);
-            }
-            $read = is_array($reported) ? $extractor->extract(new InMemoryRawResult($event)) : null;
+            $read = is_array($reported) && self::countsAreWhole($reported) ? $extractor->extract(new InMemoryRawResult($event)) : null;
             if ($read instanceof TokenUsageInterface && (null !== $read->getPromptTokens() || null !== $read->getCompletionTokens())) {
                 $usage[] = $read;
             }
@@ -40,7 +34,7 @@ final readonly class ReportedUsage
         return $usage;
     }
 
-    // A negative count would settle the job below what it spent, and one of another type would stop the extractor with a TypeError.
+    // Because the extractor hands a negative count on as it is, and one of another type would stop it with a TypeError.
     /**
      * @param array<mixed> $reported
      */
