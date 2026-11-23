@@ -100,17 +100,6 @@ final class FinalStreamedUsageTest extends TestCase
         self::assertFalse($stream->getMetadata()->has('token_usage'));
     }
 
-    /**
-     * @return array{?int, ?int, ?int, ?int, ?int}
-     */
-    private function figuresOf(StreamResult $stream): array
-    {
-        $usage = $stream->getMetadata()->get('token_usage');
-        self::assertInstanceOf(TokenUsageInterface::class, $usage);
-
-        return [$usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getCacheCreationTokens(), $usage->getCacheReadTokens(), $usage->getTotalTokens()];
-    }
-
     // Followed by Symfony AI's usage listener, because a platform adds it after the converter's listeners.
     private function streamOf(TokenUsage|TextDelta|IncompleteStreamException ...$events): StreamResult
     {
@@ -125,5 +114,16 @@ final class FinalStreamedUsageTest extends TestCase
         })();
 
         return new StreamResult($deltas, [new FinalStreamedUsage(), new StreamListener()]);
+    }
+
+    /**
+     * @return array{?int, ?int, ?int, ?int, ?int}
+     */
+    private function figuresOf(StreamResult $stream): array
+    {
+        $usage = $stream->getMetadata()->get('token_usage');
+        self::assertInstanceOf(TokenUsageInterface::class, $usage);
+
+        return [$usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getCacheCreationTokens(), $usage->getCacheReadTokens(), $usage->getTotalTokens()];
     }
 }

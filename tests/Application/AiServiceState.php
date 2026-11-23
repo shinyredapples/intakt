@@ -151,6 +151,14 @@ final class AiServiceState
         }
     }
 
+    /**
+     * @return list<ReflectionProperty>
+     */
+    private function properties(object $object): array
+    {
+        return array_values(array_filter(new ReflectionObject($object)->getProperties(), static fn (ReflectionProperty $property): bool => !$property->isStatic()));
+    }
+
     private function record(object $object, ReflectionProperty $property, Trail $trail): void
     {
         $at = $trail->key();
@@ -165,14 +173,6 @@ final class AiServiceState
             $this->values[$at][$name] = self::fingerprint($property->getValue($object), 0);
             $this->visit($property->getValue($object), $trail->into($name));
         }
-    }
-
-    /**
-     * @return list<ReflectionProperty>
-     */
-    private function properties(object $object): array
-    {
-        return array_values(array_filter(new ReflectionObject($object)->getProperties(), static fn (ReflectionProperty $property): bool => !$property->isStatic()));
     }
 
     /**

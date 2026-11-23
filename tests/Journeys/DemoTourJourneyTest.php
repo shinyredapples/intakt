@@ -30,6 +30,16 @@ final class DemoTourJourneyTest extends JourneyTestCase
 
     private string $directory = '';
 
+    public function testAFreshInstallWithoutAKeyPlaysTheDemoRunToTheClosedFindingsOfRound2(): void
+    {
+        $this->step('create the database', $this->createTheDatabase(...));
+        $this->step('set up an empty demo project', $this->setUpAnEmptyDemoProject(...));
+        $dashboard = $this->step('press Play the demo run', $this->pressPlayTheDemoRun(...));
+        $this->step('let the queue worker play the run', $this->letTheWorkerPlayTheRun(...));
+        $this->step('read the act list of round 1', fn () => $this->readTheActListOfRound1($dashboard));
+        $this->step('read the closed findings of round 2', fn () => $this->readTheClosedFindingsOfRound2($dashboard));
+    }
+
     protected function tearDown(): void
     {
         if ('' !== $this->directory) {
@@ -40,16 +50,6 @@ final class DemoTourJourneyTest extends JourneyTestCase
     protected function journey(): string
     {
         return 'demo tour without a provider key';
-    }
-
-    public function testAFreshInstallWithoutAKeyPlaysTheDemoRunToTheClosedFindingsOfRound2(): void
-    {
-        $this->step('create the database', $this->createTheDatabase(...));
-        $this->step('set up an empty demo project', $this->setUpAnEmptyDemoProject(...));
-        $dashboard = $this->step('press Play the demo run', $this->pressPlayTheDemoRun(...));
-        $this->step('let the queue worker play the run', $this->letTheWorkerPlayTheRun(...));
-        $this->step('read the act list of round 1', fn () => $this->readTheActListOfRound1($dashboard));
-        $this->step('read the closed findings of round 2', fn () => $this->readTheClosedFindingsOfRound2($dashboard));
     }
 
     private function createTheDatabase(): void
@@ -85,18 +85,22 @@ final class DemoTourJourneyTest extends JourneyTestCase
 
     private function readTheActListOfRound1(KernelBrowser $dashboard): void
     {
-        $page = $dashboard->request('GET', '/reviews/'.self::FIRST);
+        $page = $dashboard->request('GET', '/reviews/'.self::FIRST.'/record');
 
         self::assertStringContainsString(self::FINDING, $page->filter('#round-'.self::FIRST.'-judged li.finding-card')->text());
     }
 
     private function readTheClosedFindingsOfRound2(KernelBrowser $dashboard): void
     {
+        $record = $dashboard->request('GET', '/reviews/'.self::SECOND.'/record');
+        self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $record->filter('#round-'.self::SECOND.'-judged')->text());
+
         $page = $dashboard->request('GET', '/reviews/'.self::SECOND);
 
-        self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $page->filter('#round-'.self::SECOND.'-judged')->text());
         self::assertSame('Step 5 of 5', $page->filter('#tour-caption .tour-dots')->attr('aria-label'));
-        self::assertSame('[id="round-'.self::SECOND.'-judged"]', $page->filter('#tour-caption')->attr('data-tour-at'));
+        self::assertSame('#review-verdict[data-round="'.self::SECOND.'"]', $page->filter('#tour-caption')->attr('data-tour-at'));
+        // The recorded demo run keeps no quorum decision, so the card's words say the outcome was not recorded; the stage only needs the card itself.
+        self::assertSame(['0 to fix · 0 urgent', 1], [$page->filter('#review-verdict .verdict-count')->text(), $page->filter($page->filter('#tour-caption')->attr('data-tour-at'))->count()]);
         self::assertSame(TourStage::RoundEnds->sentence(), $page->filter('#tour-caption .tour-line')->text());
     }
 

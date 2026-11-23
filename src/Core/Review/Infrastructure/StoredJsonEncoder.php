@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Encoder\JsonDecode;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 
-// Only on the stored serializer: decoding as arrays turns the object {"0":"B"} into the list ["B"], so a merged value that is an object is kept as one for StoredFindingNormalizer to refuse.
+// Only on the stored serializer: decoding as arrays turns the object {"0":"B"} into the list ["B"], so a merged value that is an object is kept as one for StoredFindingNormalizer to refuse; the rule holds at any depth because decoding knows no target type, so only stored findings may use a merged key.
 #[AutoconfigureTag('serializer.encoder', ['serializer' => 'stored', 'priority' => 10])]
 final class StoredJsonEncoder extends JsonEncoder
 {

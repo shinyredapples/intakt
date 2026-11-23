@@ -141,6 +141,14 @@ final readonly class InstallationReader
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function options(#[SensitiveParameter] string $credential): array
+    {
+        return ['auth_bearer' => $credential, 'headers' => self::HEADERS];
+    }
+
+    /**
      * @param Closure(): ResponseInterface $request
      *
      * @return array<mixed>
@@ -156,13 +164,5 @@ final readonly class InstallationReader
         }
 
         return 200 === $status ? $body : throw InstallationNotReadBack::becauseGitHubRefused($status);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function options(#[SensitiveParameter] string $credential): array
-    {
-        return ['auth_bearer' => $credential, 'headers' => self::HEADERS];
     }
 }

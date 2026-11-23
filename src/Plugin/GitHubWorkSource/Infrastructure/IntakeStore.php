@@ -48,23 +48,6 @@ final readonly class IntakeStore
         return $this->readOf($project, fn (): SyncState => $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? SyncState::neverSynced());
     }
 
-    // Named as held, because another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
-    /**
-     * @template T
-     *
-     * @param callable(): T $read
-     *
-     * @return T
-     */
-    private function readOf(string $project, callable $read): mixed
-    {
-        try {
-            return $read();
-        } catch (RetryableException $refusal) {
-            throw ProjectHeldByAnotherWriter::of($project, $refusal);
-        }
-    }
-
     // Written only while the stored generation is still the one read before the listing, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
     #[NoDiscard]
     public function recordIfStill(string $project, SyncState $readBefore, ListingRows $rows): bool
@@ -95,113 +78,6 @@ final readonly class IntakeStore
 
             return $this->lostAfter($failure, $project, $readBefore);
         }
-    }
-
-    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held, and a refused nested rollback would leave its level open on the shared connection.
-    /**
-     * @template T
-     *
-     * @param callable(EntityManagerInterface): T $write
-     *
-     * @return T
-     */
-    private function inTransaction(EntityManagerInterface $manager, callable $write): mixed
-    {
-        $connection = $manager->getConnection();
-        $outer = $connection->getTransactionNestingLevel();
-        $connection->beginTransaction();
-        try {
-            $written = $write($manager);
-            $manager->flush();
-            $connection->commit();
-
-            return $written;
-        } catch (Throwable $failure) {
-            $manager->close();
-            $this->rollBackAfter($connection, $outer);
-
-            throw $this->refusalBehind($failure);
-        }
-    }
-
-    // Looked for in the previous exceptions too, because the flush runs its statements in a nested transaction of its own and rolls it back in a finally block: when the server already aborted the whole transaction, that rollback is refused and thrown instead, with the statement's refusal at the end of its chain.
-    private function refusalBehind(Throwable $failure): Throwable
-    {
-        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-            if ($cause instanceof RetryableException) {
-                return $cause;
-            }
-        }
-
-        return $failure;
-    }
-
-    // Back to the level the write started at, because the flush leaves its nested level counted when its own rollback was refused. A refused rollback is ignored, so the failure that ended the write is still thrown.
-    private function rollBackAfter(Connection $connection, int $outer): void
-    {
-        for ($level = $connection->getTransactionNestingLevel(); $level > $outer; --$level) {
-            try {
-                $connection->rollBack();
-            } catch (Exception) {
-                $this->leaveALostSavepoint($connection, $level);
-            }
-        }
-    }
-
-    // DBAL counts the outermost transaction as ended before it asks the driver, but a nested one only after its savepoint rolled back. A commit of the nested level counts it as ended also when the release of its savepoint is refused, and it keeps nothing, because the level above is rolled back next.
-    private function leaveALostSavepoint(Connection $connection, int $level): void
-    {
-        if ($connection->getTransactionNestingLevel() !== $level) {
-            return;
-        }
-
-        try {
-            $connection->commit();
-        } catch (Exception) {
-        }
-    }
-
-    // SQLite keeps a transaction open when it refuses its COMMIT as busy, on DBAL's PDO and native SQLite3 drivers alike, while DBAL already counts it as ended and never rolls it back: left open, its uncommitted generation would be read back as another worker's and hold the write lock for every later call on the connection.
-    private function rollBackARefusedCommit(): void
-    {
-        $connection = $this->entities->getConnection();
-        if ($connection->isTransactionActive()) {
-            return;
-        }
-
-        $native = $connection->getNativeConnection();
-        if ($native instanceof PDO && $native->inTransaction()) {
-            $native->rollBack();
-        }
-
-        if ($native instanceof SQLite3) {
-            $this->rollBackNative($native);
-        }
-    }
-
-    // SQLite3 cannot say whether a transaction is open, so the rollback is tried and only its "no transaction is active" refusal is expected.
-    private function rollBackNative(SQLite3 $native): void
-    {
-        try {
-            $native->exec('ROLLBACK');
-        } catch (SQLite3Exception $refusal) {
-            if (!str_contains($refusal->getMessage(), 'no transaction is active')) {
-                throw $refusal;
-            }
-        }
-    }
-
-    private function lostAfter(UniqueConstraintViolationException|RetryableException $failure, string $project, SyncState $readBefore): false
-    {
-        $stored = $this->syncStateOf($project);
-
-        // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
-        if ($stored->generation !== $readBefore->generation) {
-            return false;
-        }
-
-        // A lock wait or a deadlock with the generation unmoved means another writer holds the project and has not committed: it may still roll back, so this is not a lost write and gets a name of its own. Any other failure stays one.
-        throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it.
@@ -324,6 +200,113 @@ final readonly class IntakeStore
         }
     }
 
+    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held, and a refused nested rollback would leave its level open on the shared connection.
+    /**
+     * @template T
+     *
+     * @param callable(EntityManagerInterface): T $write
+     *
+     * @return T
+     */
+    private function inTransaction(EntityManagerInterface $manager, callable $write): mixed
+    {
+        $connection = $manager->getConnection();
+        $outer = $connection->getTransactionNestingLevel();
+        $connection->beginTransaction();
+        try {
+            $written = $write($manager);
+            $manager->flush();
+            $connection->commit();
+
+            return $written;
+        } catch (Throwable $failure) {
+            $manager->close();
+            $this->rollBackAfter($connection, $outer);
+
+            throw $this->refusalBehind($failure);
+        }
+    }
+
+    // Back to the level the write started at, because the flush leaves its nested level counted when its own rollback was refused. A refused rollback is ignored, so the failure that ended the write is still thrown.
+    private function rollBackAfter(Connection $connection, int $outer): void
+    {
+        for ($level = $connection->getTransactionNestingLevel(); $level > $outer; --$level) {
+            try {
+                $connection->rollBack();
+            } catch (Exception) {
+                $this->leaveALostSavepoint($connection, $level);
+            }
+        }
+    }
+
+    // Looked for in the previous exceptions too, because the flush runs its statements in a nested transaction of its own and rolls it back in a finally block: when the server already aborted the whole transaction, that rollback is refused and thrown instead, with the statement's refusal at the end of its chain.
+    private function refusalBehind(Throwable $failure): Throwable
+    {
+        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            if ($cause instanceof RetryableException) {
+                return $cause;
+            }
+        }
+
+        return $failure;
+    }
+
+    // DBAL counts the outermost transaction as ended before it asks the driver, but a nested one only after its savepoint rolled back. A commit of the nested level counts it as ended also when the release of its savepoint is refused, and it keeps nothing, because the level above is rolled back next.
+    private function leaveALostSavepoint(Connection $connection, int $level): void
+    {
+        if ($connection->getTransactionNestingLevel() !== $level) {
+            return;
+        }
+
+        try {
+            $connection->commit();
+        } catch (Exception) {
+        }
+    }
+
+    // SQLite keeps a transaction open when it refuses its COMMIT as busy, on DBAL's PDO and native SQLite3 drivers alike, while DBAL already counts it as ended and never rolls it back: left open, its uncommitted generation would be read back as another worker's and hold the write lock for every later call on the connection.
+    private function rollBackARefusedCommit(): void
+    {
+        $connection = $this->entities->getConnection();
+        if ($connection->isTransactionActive()) {
+            return;
+        }
+
+        $native = $connection->getNativeConnection();
+        if ($native instanceof PDO && $native->inTransaction()) {
+            $native->rollBack();
+        }
+
+        if ($native instanceof SQLite3) {
+            $this->rollBackNative($native);
+        }
+    }
+
+    // SQLite3 cannot say whether a transaction is open, so the rollback is tried and only its "no transaction is active" refusal is expected.
+    private function rollBackNative(SQLite3 $native): void
+    {
+        try {
+            $native->exec('ROLLBACK');
+        } catch (SQLite3Exception $refusal) {
+            if (!str_contains($refusal->getMessage(), 'no transaction is active')) {
+                throw $refusal;
+            }
+        }
+    }
+
+    private function lostAfter(UniqueConstraintViolationException|RetryableException $failure, string $project, SyncState $readBefore): false
+    {
+        $stored = $this->syncStateOf($project);
+
+        // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
+        if ($stored->generation !== $readBefore->generation) {
+            return false;
+        }
+
+        // A lock wait or a deadlock with the generation unmoved means another writer holds the project and has not committed: it may still roll back, so this is not a lost write and gets a name of its own. Any other failure stays one.
+        throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
+    }
+
     // A query and not a repository: the shared configuration's repository factory keeps every manager it built a repository for, with the rows that manager loaded, for the life of the worker.
     /**
      * @template T of StoredIssue|TaskFailure
@@ -368,6 +351,23 @@ final readonly class IntakeStore
         }
 
         return $issues;
+    }
+
+    // Named as held, because another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
+    /**
+     * @template T
+     *
+     * @param callable(): T $read
+     *
+     * @return T
+     */
+    private function readOf(string $project, callable $read): mixed
+    {
+        try {
+            return $read();
+        } catch (RetryableException $refusal) {
+            throw ProjectHeldByAnotherWriter::of($project, $refusal);
+        }
     }
 
     private function keep(EntityManagerInterface $manager, ?StoredIssue $stored, StoredIssue $issue): void

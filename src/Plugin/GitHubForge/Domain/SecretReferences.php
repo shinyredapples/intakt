@@ -24,14 +24,6 @@ final readonly class SecretReferences
     /**
      * @return list<WorkflowFinding>
      */
-    private function inEntry(WorkflowEntry $entry): array
-    {
-        return [...$this->inText($entry->key, $entry->line), ...$this->in($entry->value)];
-    }
-
-    /**
-     * @return list<WorkflowFinding>
-     */
     private function inText(string $text, int $line): array
     {
         preg_match_all(self::SECRET, $text, $matches);
@@ -40,5 +32,13 @@ final readonly class SecretReferences
             static fn (string $reference): WorkflowFinding => new WorkflowFinding(WorkflowRisk::Secret, $line, sprintf('reads a repository secret (%s)', $reference)),
             $matches[0],
         );
+    }
+
+    /**
+     * @return list<WorkflowFinding>
+     */
+    private function inEntry(WorkflowEntry $entry): array
+    {
+        return [...$this->inText($entry->key, $entry->line), ...$this->in($entry->value)];
     }
 }

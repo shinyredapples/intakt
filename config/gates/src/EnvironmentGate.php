@@ -96,6 +96,32 @@ final readonly class EnvironmentGate implements Gate
     }
 
     /**
+     * @param array<string, array{written: string, loaded: string}> $settings
+     *
+     * @return list<string>
+     */
+    private function settingFindings(array $settings): array
+    {
+        $findings = [];
+
+        foreach ($settings as $name => $expected) {
+            if (!in_array($name, self::ALLOWED_SETTINGS, true)) {
+                continue;
+            }
+
+            $actual = $this->runtime->setting($name);
+
+            if (null !== $actual && $this->comparable($name, $actual) === $this->comparable($name, $expected['loaded'])) {
+                continue;
+            }
+
+            $findings[] = 'PHP setting '.$name.' is '.($actual ?? 'unset').' but '.self::CHECK_INI.' says '.$expected['written'];
+        }
+
+        return $findings;
+    }
+
+    /**
      * @return list<string>
      */
     private function versionFindings(JsonNode $manifest): array
@@ -122,32 +148,6 @@ final readonly class EnvironmentGate implements Gate
             }
 
             $findings[] = 'PHP extension '.substr($package, 4).' is required by '.self::MANIFEST.' but not loaded';
-        }
-
-        return $findings;
-    }
-
-    /**
-     * @param array<string, array{written: string, loaded: string}> $settings
-     *
-     * @return list<string>
-     */
-    private function settingFindings(array $settings): array
-    {
-        $findings = [];
-
-        foreach ($settings as $name => $expected) {
-            if (!in_array($name, self::ALLOWED_SETTINGS, true)) {
-                continue;
-            }
-
-            $actual = $this->runtime->setting($name);
-
-            if (null !== $actual && $this->comparable($name, $actual) === $this->comparable($name, $expected['loaded'])) {
-                continue;
-            }
-
-            $findings[] = 'PHP setting '.$name.' is '.($actual ?? 'unset').' but '.self::CHECK_INI.' says '.$expected['written'];
         }
 
         return $findings;

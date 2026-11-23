@@ -63,20 +63,6 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     private MockClock $clock;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-play-demo-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->ledger = new DashboardLedger();
-        $this->updates = new PublishedLiveEvents();
-        $this->clock = new MockClock(self::START);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAPlayedDemoRunReplaysTheConfiguredRecordingIntoTheDemoProject(): void
     {
         $this->handler($this->recordingFile())();
@@ -153,12 +139,18 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
-    private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
+    protected function setUp(): void
     {
-        $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
+        $this->directory = sys_get_temp_dir().'/intakt-play-demo-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->ledger = new DashboardLedger();
+        $this->updates = new PublishedLiveEvents();
+        $this->clock = new MockClock(self::START);
+    }
 
-        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function recordingFile(): string
@@ -174,14 +166,22 @@ final class PlayDemoRunHandlerTest extends TestCase
         return $file;
     }
 
-    private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
+    private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
-        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a'.$secondsAfterStart, $kind, $payload, new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
+        $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::judged($this->ledger, $marks));
+
+        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
     }
 
     private function format(): RecordingFormat
     {
         return new RecordingFormat(StoredSerializerFactory::create());
+    }
+
+    private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
+    {
+        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a'.$secondsAfterStart, $kind, $payload, new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
     }
 
     /**

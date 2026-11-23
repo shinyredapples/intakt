@@ -40,18 +40,6 @@ final class SmokeTestScriptTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-smoke-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->directory.'/docker', self::FAKE_DOCKER);
-        chmod($this->directory.'/docker', 0o755);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testWithoutAnImageTheScriptPrintsItsUsageAndExitsWithTwo(): void
     {
         $process = $this->smokeTest();
@@ -169,6 +157,18 @@ final class SmokeTestScriptTest extends TestCase
         $process = $this->script(['bash', '-c', 'source docker/smoke-test.sh; image=i; smoke=s; check_instance'], []);
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-smoke-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->directory.'/docker', self::FAKE_DOCKER);
+        chmod($this->directory.'/docker', 0o755);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     // The script path as $0 lets print_digests find the Dockerfile; sourced as ./ it does not count as run, so main stays out.

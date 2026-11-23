@@ -297,17 +297,17 @@ final class GitHubIssueHistoriesTest extends TestCase
         throw new LogicException('The read was expected to be rate limited.');
     }
 
-    private function listedAt(): DateTimeImmutable
-    {
-        return new DateTimeImmutable('2026-11-10T10:00:00Z');
-    }
-
     private function answering(string $fixture): RecordedIssueApi
     {
         $api = new RecordedIssueApi();
         $api->graphql = RecordedIssueApi::fixture($fixture);
 
         return $api;
+    }
+
+    private function listedAt(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-10T10:00:00Z');
     }
 
     // The fixture is changed in exactly one place, so a test cannot pass on a replacement that matched nothing.

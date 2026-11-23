@@ -32,19 +32,6 @@ final class ShowSampleReviewCommandTest extends TestCase
 
     private string $configuration = '';
 
-    protected function setUp(): void
-    {
-        $this->configuration = sys_get_temp_dir().'/'.uniqid('intakt-', true).'.yaml';
-        file_put_contents($this->configuration, "projects: {}\n");
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_file($this->configuration)) {
-            unlink($this->configuration);
-        }
-    }
-
     public function testAfterAKeylessStartItNamesTheKeysToSetInsteadOfTheReviewCommand(): void
     {
         unlink($this->configuration);
@@ -137,6 +124,19 @@ final class ShowSampleReviewCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertStringContainsString('No MCP owner token found: set MCP_OWNER_TOKEN in .env.local', $tester->getDisplay());
         self::assertStringNotContainsString('mcp/owner', $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->configuration = sys_get_temp_dir().'/'.uniqid('intakt-', true).'.yaml';
+        file_put_contents($this->configuration, "projects: {}\n");
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->configuration)) {
+            unlink($this->configuration);
+        }
     }
 
     /**

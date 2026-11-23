@@ -1,0 +1,19 @@
+{#- The last judged pass's findings to fix, one card each, opening the finding in the Full record: its headline as the title and the rest of its text cut to one line of explanation (DESIGN.md, list row) when it goes on. The newest round's judged live update replaces it by its id. -#}
+<section class="to-fix" id="review-to-fix" aria-labelledby="to-fix-title">
+    <h2 id="to-fix-title">To fix</h2>
+    <ol class="to-fix-list">
+        {% for finding in open %}
+        {% set urgency = finding.urgency %}
+        <li><a class="fix-card" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW_RECORD'), {round: judged}) }}#round-{{ judged }}-finding-{{ finding.id }}">
+            <span class="urgency{% if urgency is not null %} {{ urgency.value }}{% endif %}"{% if finding.severity is not null %} title="{{ finding.severity }}"{% endif %}>{{ urgency is null ? 'Severity not recorded' : urgency.words }}</span>
+            <span class="fix-body">
+                {% set headline = finding.headline %}
+                <span class="fix-title">{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span>
+                {% set more = finding.afterHeadline %}{% if more is not null %}<span class="fix-more">{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(more)}, with_context = false) }}</span>{% endif %}
+                {% if finding.place is not null %}<span class="fix-place mono">{{ finding.place }}</span>{% endif %}
+            </span>
+            {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'fix-chev'}, with_context = false) }}
+        </a></li>
+        {% endfor %}
+    </ol>
+</section>

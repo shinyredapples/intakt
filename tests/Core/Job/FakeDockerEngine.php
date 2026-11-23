@@ -268,16 +268,6 @@ final class FakeDockerEngine
     }
 
     /**
-     * @return array<int|string, mixed>
-     */
-    private function queryOf(string $url): array
-    {
-        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
-
-        return $query;
-    }
-
-    /**
      * @param array<string, mixed> $options
      */
     private function create(string $url, array $options): MockResponse
@@ -307,6 +297,51 @@ final class FakeDockerEngine
         $this->definitions[$name] = $definition;
 
         return $this->json(['Id' => $id], 201);
+    }
+
+    /**
+     * @return list<array{Id: string, Names: list<string>, Labels: array<string, string>}>
+     */
+    private function listing(): array
+    {
+        $listing = [];
+
+        foreach ($this->containers as $id => $container) {
+            $listing[] = ['Id' => $id, 'Names' => ['/'.$container->name], 'Labels' => ['intakt.job' => $container->job]];
+        }
+
+        return $listing;
+    }
+
+    private function nextId(): string
+    {
+        return sprintf('c0ffee%06d', ++$this->next);
+    }
+
+    /**
+     * @param array<mixed> $body
+     */
+    private function json(array $body, int $status = 200): MockResponse
+    {
+        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type' => 'application/json']]);
+    }
+
+    // A JSON object keyed by path, or null, because that is the shape the engine's image inspection answers with.
+    private function image(string $name): MockResponse
+    {
+        $paths = $this->volumes[$name] ?? [];
+
+        return $this->json(['Config' => ['Volumes' => [] === $paths ? null : (object) array_fill_keys($paths, (object) [])]]);
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    private function queryOf(string $url): array
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        return $query;
     }
 
     /**
@@ -440,14 +475,6 @@ final class FakeDockerEngine
         return $this->json(['State' => ['Running' => $container->running, 'OOMKilled' => false, 'ExitCode' => $container->exitCode, 'Health' => ['Status' => $status]]]);
     }
 
-    // A JSON object keyed by path, or null, because that is the shape the engine's image inspection answers with.
-    private function image(string $name): MockResponse
-    {
-        $paths = $this->volumes[$name] ?? [];
-
-        return $this->json(['Config' => ['Volumes' => [] === $paths ? null : (object) array_fill_keys($paths, (object) [])]]);
-    }
-
     private function remove(string $idOrName): MockResponse
     {
         $id = $this->idOf($idOrName);
@@ -459,32 +486,5 @@ final class FakeDockerEngine
         unset($this->containers[$id]);
 
         return new MockResponse('', ['http_code' => 204]);
-    }
-
-    /**
-     * @return list<array{Id: string, Names: list<string>, Labels: array<string, string>}>
-     */
-    private function listing(): array
-    {
-        $listing = [];
-
-        foreach ($this->containers as $id => $container) {
-            $listing[] = ['Id' => $id, 'Names' => ['/'.$container->name], 'Labels' => ['intakt.job' => $container->job]];
-        }
-
-        return $listing;
-    }
-
-    private function nextId(): string
-    {
-        return sprintf('c0ffee%06d', ++$this->next);
-    }
-
-    /**
-     * @param array<mixed> $body
-     */
-    private function json(array $body, int $status = 200): MockResponse
-    {
-        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type' => 'application/json']]);
     }
 }

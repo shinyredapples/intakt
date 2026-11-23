@@ -118,6 +118,19 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
     }
 
+    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets. The wait is the shortest of the waits that just found no account free, never a second read, so it is at least a second (see waits()); the longest window is listed too, so min() always has a value.
+    /**
+     * @param array<string, int> $waits
+     */
+    private function outOfAccounts(array $waits, SendFailures $failures): Throwable
+    {
+        if ($this->isEveryKeyRejected($failures)) {
+            return new EveryKeyRejected($this->provider);
+        }
+
+        return new EveryAccountCoolingDown($this->provider, min([AccountCooldowns::LONGEST_SECONDS, ...$waits]));
+    }
+
     /**
      * @param non-empty-array<string, AccountPlatform> $free
      */
@@ -130,6 +143,31 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
+    }
+
+    // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
+    private function isEveryKeyRejected(SendFailures $failures): bool
+    {
+        foreach (array_keys($this->platforms) as $name) {
+            $account = new Account($this->provider, $name);
+            if (!$failures->wasRejected($account) && !$this->cooldowns->isRejected($account)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Built per call over the free accounts only, because FailoverPlatform keys its limiter by platform class, which every account of a provider shares, and calls a failed platform again on the next call (upstream/ai-failover-platform-retries-a-failed-platform).
+    /**
+     * @param non-empty-array<string, AccountPlatform> $free
+     */
+    private function failover(array $free): FailoverPlatform
+    {
+        $neverLimits = new RateLimiterFactory(['id' => 'account-failover', 'policy' => 'no_limit'], new InMemoryStorage());
+
+        // A silent logger, because FailoverPlatform logs the provider's message, which can echo a key; AccountPlatform logs each failure by class instead.
+        return new FailoverPlatform(array_values($free), $neverLimits, $this->clock, new NullLogger());
     }
 
     // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it. The unreachable case is a guard for a platform that fails while sending (the HTTP client reports a failed name lookup only when the answer is read): judged over the accounts this call was sent to, because one whose cooldown ended during the call was never tried, and typed so the vendor retries the reviewer like an unreachable endpoint.
@@ -156,30 +194,15 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
     }
 
-    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets. The wait is the shortest of the waits that just found no account free, never a second read, so it is at least a second (see waits()); the longest window is listed too, so min() always has a value.
-    /**
-     * @param array<string, int> $waits
-     */
-    private function outOfAccounts(array $waits, SendFailures $failures): Throwable
+    // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
+    private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures, ?string $routerProvider): Throwable
     {
-        if ($this->isEveryKeyRejected($failures)) {
-            return new EveryKeyRejected($this->provider);
+        $waits = $this->waits($routerProvider);
+        if (in_array(0, $waits, true)) {
+            return new KeyRejected($this->accountThatAnswered($answer));
         }
 
-        return new EveryAccountCoolingDown($this->provider, min([AccountCooldowns::LONGEST_SECONDS, ...$waits]));
-    }
-
-    // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
-    private function isEveryKeyRejected(SendFailures $failures): bool
-    {
-        foreach (array_keys($this->platforms) as $name) {
-            $account = new Account($this->provider, $name);
-            if (!$failures->wasRejected($account) && !$this->cooldowns->isRejected($account)) {
-                return false;
-            }
-        }
-
-        return true;
+        return $this->outOfAccounts($waits, $failures);
     }
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
@@ -196,17 +219,6 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $typed;
     }
 
-    // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
-    private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures, ?string $routerProvider): Throwable
-    {
-        $waits = $this->waits($routerProvider);
-        if (in_array(0, $waits, true)) {
-            return new KeyRejected($this->accountThatAnswered($answer));
-        }
-
-        return $this->outOfAccounts($waits, $failures);
-    }
-
     // Matched against the provider's accounts rather than parsed, so the shape of an account key stays Account's own.
     private function accountThatAnswered(DeferredResult $answer): Account
     {
@@ -219,17 +231,5 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         throw new LogicException(sprintf('The answer names no account of provider "%s".', $this->provider->value));
-    }
-
-    // Built per call over the free accounts only, because FailoverPlatform keys its limiter by platform class, which every account of a provider shares, and calls a failed platform again on the next call (upstream/ai-failover-platform-retries-a-failed-platform).
-    /**
-     * @param non-empty-array<string, AccountPlatform> $free
-     */
-    private function failover(array $free): FailoverPlatform
-    {
-        $neverLimits = new RateLimiterFactory(['id' => 'account-failover', 'policy' => 'no_limit'], new InMemoryStorage());
-
-        // A silent logger, because FailoverPlatform logs the provider's message, which can echo a key; AccountPlatform logs each failure by class instead.
-        return new FailoverPlatform(array_values($free), $neverLimits, $this->clock, new NullLogger());
     }
 }

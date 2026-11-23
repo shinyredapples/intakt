@@ -115,30 +115,6 @@ final readonly class RequiredTools
         return [...array_map(self::notFound(...), array_values($missing)), ...(null === $tooOld ? [] : [$tooOld])];
     }
 
-    // Because an older Composer ignores config.policy.cooldown silently, it would lock and pass releases inside the period.
-    private function composerTooOld(): ?string
-    {
-        try {
-            $query = new Process(['composer', '--version', '--no-ansi', '--no-plugins', '--no-interaction'], $this->root);
-            $query->run();
-        } catch (ExceptionInterface) {
-            return $this->composerRefused('composer version could not be queried');
-        }
-
-        $found = 1 === preg_match('/^Composer version (\d+\.\d+\.\d+)/m', $query->getOutput(), $match) ? $match[1] : null;
-
-        if (null !== $found && version_compare($found, self::COMPOSER_MINIMUM, '>=')) {
-            return null;
-        }
-
-        return $this->composerRefused(null === $found ? 'composer reports no version' : 'composer '.$found.' found');
-    }
-
-    private function composerRefused(string $finding): string
-    {
-        return $finding.', '.self::COMPOSER_MINIMUM.' or later is required for policy.cooldown, see '.self::REQUIREMENTS;
-    }
-
     private function searchPath(): string
     {
         $path = getenv('PATH');
@@ -176,6 +152,35 @@ final readonly class RequiredTools
         return array_any($entries, fn (string $entry): bool => $this->isExecutable($this->directoryOf($entry).'/'.$name));
     }
 
+    // Because an older Composer ignores config.policy.cooldown silently, it would lock and pass releases inside the period.
+    private function composerTooOld(): ?string
+    {
+        try {
+            $query = new Process(['composer', '--version', '--no-ansi', '--no-plugins', '--no-interaction'], $this->root);
+            $query->run();
+        } catch (ExceptionInterface) {
+            return $this->composerRefused('composer version could not be queried');
+        }
+
+        $found = 1 === preg_match('/^Composer version (\d+\.\d+\.\d+)/m', $query->getOutput(), $match) ? $match[1] : null;
+
+        if (null !== $found && version_compare($found, self::COMPOSER_MINIMUM, '>=')) {
+            return null;
+        }
+
+        return $this->composerRefused(null === $found ? 'composer reports no version' : 'composer '.$found.' found');
+    }
+
+    private function composerRefused(string $finding): string
+    {
+        return $finding.', '.self::COMPOSER_MINIMUM.' or later is required for policy.cooldown, see '.self::REQUIREMENTS;
+    }
+
+    private function isExecutable(string $path): bool
+    {
+        return is_file($path) && is_executable($path);
+    }
+
     // Because a gate starts its command in the workspace root, a relative or empty PATH entry resolves there, as the shell does.
     private function directoryOf(string $entry): string
     {
@@ -184,10 +189,5 @@ final readonly class RequiredTools
         }
 
         return str_starts_with($entry, '/') ? $entry : $this->root.'/'.$entry;
-    }
-
-    private function isExecutable(string $path): bool
-    {
-        return is_file($path) && is_executable($path);
     }
 }

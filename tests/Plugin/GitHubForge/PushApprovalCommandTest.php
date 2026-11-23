@@ -109,21 +109,6 @@ final class PushApprovalCommandTest extends TestCase
     private ScriptedIssue $issue;
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('.github/workflows/checks.yml', $this->fixture('contained.yml'));
-        $this->repository->commitFile('bin/check', "#!/bin/sh\n");
-        $this->repository->checkoutNewBranch('head');
-        $this->issue = new ScriptedIssue();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testACiChangeInsideTheEnvelopePushesWithoutAskingTheOwner(): void
     {
         $this->repository->commitFile('bin/check', "#!/bin/sh\nexit 0\n");
@@ -379,6 +364,21 @@ final class PushApprovalCommandTest extends TestCase
         self::assertSame([], $this->issue->requests);
     }
 
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('.github/workflows/checks.yml', $this->fixture('contained.yml'));
+        $this->repository->commitFile('bin/check', "#!/bin/sh\n");
+        $this->repository->checkoutNewBranch('head');
+        $this->issue = new ScriptedIssue();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
+
     private function fixture(string $name): string
     {
         return (string) file_get_contents(__DIR__.'/Fixtures/workflows/'.$name);
@@ -389,7 +389,7 @@ final class PushApprovalCommandTest extends TestCase
         $reader = new WorkflowReader(new WorkflowInlineValue(), new WorkflowBlockValue());
         $scan = new CiScan(new WorkflowFileScan($reader, new TokenPermissions(), new SecretReferences()), new CiDefinition($reader));
         $gate = new PushGate(
-            new MirrorChange(new HardenedGit()),
+            new MirrorChange(new HardenedGit(), new BinaryFiles()),
             new MirrorWorkflows(new HardenedGit()),
             $scan,
             $this->issue->comments(),

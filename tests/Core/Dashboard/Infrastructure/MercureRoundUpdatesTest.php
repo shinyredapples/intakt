@@ -96,14 +96,6 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private RoundCosts $costs;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-        $this->ledger = new DashboardLedger();
-        $this->costs = self::createStub(RoundCosts::class);
-        $this->costs->method('costOf')->willReturn(Cost::none());
-    }
-
     public function testAJudgedStateAsksTheCostOfTheRoundsOfItsOwnReviewOnly(): void
     {
         $other = '01a19a97-48cf-70f1-bdae-965425786c48';
@@ -268,11 +260,6 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertStringContainsString('&lt;/template&gt;&lt;script&gt;x&lt;/script&gt;', $this->published[0]->getData());
         self::assertStringNotContainsString('<script>', $this->published[0]->getData());
-    }
-
-    private function readAnswer(string $title): ReadAnswer
-    {
-        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
     }
 
     public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedOnceByTheLiveUpdates(): void
@@ -719,6 +706,19 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertSame([LockReleasingException::class], $this->exceptionsLogged());
     }
 
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+        $this->ledger = new DashboardLedger();
+        $this->costs = self::createStub(RoundCosts::class);
+        $this->costs->method('costOf')->willReturn(Cost::none());
+    }
+
+    private function readAnswer(string $title): ReadAnswer
+    {
+        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
+    }
+
     /**
      * @return list<class-string>
      */
@@ -748,6 +748,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
         // Registered because a placed reviewer row shows a character, whose images the asset mapper names in the app.
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
+        // Registered because the judged stream links the Now box's findings to the Full record by its route.
+        $twig->addFunction(new TwigFunction('path', static fn (string $route, array $parameters = []): string => $route.'?'.http_build_query($parameters)));
         // Registered because a judged finding's text shows its backtick spans as code.
         $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
         $twig->addFunction(new TwigFunction('finding_title_spans', new FindingSpans()->ofATitle(...)));
@@ -762,11 +764,6 @@ final class MercureRoundUpdatesTest extends TestCase
             new LockFactory($locks ?? new InMemoryStore()),
             $this->log,
         );
-    }
-
-    private function pages(): LedgerReviewPages
-    {
-        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     // The first read pauses its fiber and answers a running round, because it stands for a read taken before the judge committed; every later one finds the round judged, since the judge commits before it publishes.
@@ -807,6 +804,11 @@ final class MercureRoundUpdatesTest extends TestCase
         };
 
         return new MercureLiveUpdates(new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), $publisher), $this->log);
+    }
+
+    private function pages(): LedgerReviewPages
+    {
+        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     /**

@@ -185,7 +185,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .subtabs a[aria-current="page"] { border-bottom-color: var(--primary); color: var(--ink); }
 
 /* Segmented tabs and filter chips. The mock spaces the tabs 20 px below and pads a tab 14 px, which have no step, so tokens only (D2) wins with --s16 and --s12. */
-.seg { display: inline-flex; margin-bottom: var(--s16); padding: 3px; border-radius: var(--r-btn); background: var(--tint); }
+.seg { display: inline-flex; margin-bottom: var(--s16); padding: var(--seg-pad); border-radius: var(--r-btn); background: var(--tint); }
 .seg button {
   height: 34px; padding: 0 var(--s12); border: 0; border-radius: var(--r-chip); background: none;
   color: var(--muted); font: 500 var(--t13)/1 var(--f-head); cursor: pointer;
@@ -304,7 +304,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .icon-btn { width: 44px; height: 44px; }
   .fchip { flex: none; height: 44px; }
   .seg { display: flex; }
-  .seg button { flex: 1; height: 44px; }
+  .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
   .stepper button { width: 48px; height: 46px; }
   .copy { flex-wrap: wrap; padding: calc(var(--s8) + 2px); }
@@ -628,19 +628,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .sb-finding { display: flex; gap: var(--s8); align-items: baseline; margin-bottom: var(--s8); padding: var(--s8) var(--s12); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
 .sb-finding:hover { background: var(--page); }
 .sev { flex: none; padding: 2px var(--s8); border-radius: var(--r-chip); background: var(--tint); font-size: var(--t13); font-weight: 600; }
-/* The verdict card sits right under the title, so on a phone the outcome and the first finding to fix fit on the first screen; one line per finding on a wide screen, its text cut short, because the full card below holds the rest. */
-.verdict-card { margin: var(--s8) 0 var(--s12); }
-.verdict-card .verdict-words { margin: 0; font-size: var(--t17); overflow-wrap: anywhere; }
-.verdict-card .verdict-to-fix { margin: var(--s8) 0 var(--s4); font-size: var(--t13); color: var(--muted); }
-.verdict-findings { margin: 0; padding: 0; list-style: none; }
-.verdict-findings a { display: flex; gap: var(--s8); align-items: baseline; min-height: 44px; padding: var(--s4) 0; color: var(--ink); text-decoration: none; }
-.verdict-findings a:hover .vf-title { text-decoration: underline; }
-.verdict-findings .vf-title { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The place keeps up to half the line whatever the text's length, and only its path is cut, so the line number always shows. */
-.verdict-findings .vf-place { display: flex; flex: 0 0 auto; max-width: 50%; min-width: 0; white-space: nowrap; color: var(--muted); font-size: var(--t13); }
-.verdict-findings .vf-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.verdict-findings .vf-line { flex: none; }
-.sb-finding code, .finding-card code, .verdict-findings code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
+.sb-finding code, .finding-card code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
 /* A judged round's findings are cards like the Now block's in one column, because a table column squeezed each finding to 110 px on a phone. */
 .finding-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s8); }
 /* An open finding of the Now block links to its card, and the sticky top bar would otherwise cover the card's chip and id. */
@@ -665,13 +653,9 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 @media (max-width: 760px) {
   .sb-finding { min-height: 44px; }
   .fc-quotes > summary { min-height: 44px; }
-  /* On a phone the place takes its own line under the text, because beside it the place left the text about 15 characters, too few to say what to fix; the text gets the row and at most two lines. */
-  .verdict-findings a { flex-wrap: wrap; row-gap: 0; }
-  .verdict-findings .vf-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
-  .verdict-findings .vf-place { flex-basis: 100%; max-width: 100%; }
   .finding-card { flex-wrap: wrap; }
-  /* The Timeline and Live log switch sticks under the top bar too, measured 66 px tall at 390 wide, because a card hidden under it reads as a link that went nowhere. */
-  .ttabs ~ .task-grid .finding-card { scroll-margin-top: calc(var(--top) + 66px + var(--s16)); }
+  /* The Timeline and Live log switch sticks under the top bar too, because a card hidden under it reads as a link that went nowhere; its height is added up from the same values the switch is drawn with, so the offset follows when one of them changes. */
+  .ttabs ~ .task-grid .finding-card { scroll-margin-top: calc(var(--top) + var(--tab-h) + 2 * var(--seg-pad) + 2 * var(--ttabs-pad) + var(--s16)); }
   .fc-body { flex-basis: 100%; }
 }
 .timeline-title { margin: var(--s32) 0 var(--s8); }
@@ -734,7 +718,7 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .page-head .task-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s8); width: 100%; margin-left: 0; }
   .task-actions > .start-review { grid-column: 1 / -1; }
   .task-actions .btn { width: 100%; }
-  .ttabs { display: flex; position: sticky; top: var(--top); z-index: 10; margin: 0 calc(-1 * var(--s16)) var(--s16); padding: var(--s8) var(--s16); background: var(--page); }
+  .ttabs { display: flex; position: sticky; top: var(--top); z-index: 10; margin: 0 calc(-1 * var(--s16)) var(--s16); padding: var(--ttabs-pad) var(--s16); background: var(--page); }
   .ttabs .seg { width: 100%; margin: 0; }
   .task-grid { gap: 0; }
   .task-grid[data-pane="timeline"] .log-pane, .task-grid[data-pane="log"] .tl-pane { display: none; }

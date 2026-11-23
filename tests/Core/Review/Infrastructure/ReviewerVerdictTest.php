@@ -20,6 +20,7 @@ use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -166,23 +167,6 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private string $diff = 'diff --git a/a b/a';
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-        $this->conversations = new InMemoryMessageStore();
-        $this->conversation = new UuidV7();
-        $this->round = new UuidV7();
-        $this->updates = new RecordedRoundUpdates();
-        $this->catalog = new UnstreamedModelCatalog();
-        $this->ledger = new InMemoryLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     public function testAProviderThatStreamsOnlyWhenAskedPublishesTheReadAnswerAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
     {
         $this->catalog = new FallbackModelCatalog();
@@ -253,7 +237,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], VerdictDocument::fromTheDesign()->json());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertPlatformCallCount(2);
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);
@@ -983,6 +967,23 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertToolCallCount(2);
         self::assertStringContainsString('loop over the items and add up the price', $this->sent[2]);
         self::assertStringContainsString('interface CartRepository', $this->sent[2]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+        $this->conversations = new InMemoryMessageStore();
+        $this->conversation = new UuidV7();
+        $this->round = new UuidV7();
+        $this->updates = new RecordedRoundUpdates();
+        $this->catalog = new UnstreamedModelCatalog();
+        $this->ledger = new InMemoryLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
     }
 
     // Because the toolbox is built per review and the platform per test, the collector is built from this run's platform instead of a profiled request.

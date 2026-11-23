@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
 use Intakt\Core\Git\UseCase\PushBranch\PushBranch;
 use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\Git\UseCase\PushBranch\SignedCommits;
@@ -19,6 +20,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
 
@@ -94,29 +96,49 @@ final readonly class PushScenario
         return $remote;
     }
 
+    // A url.<base>.<kind> rewrite in the repository's own config, because git applies it to the remote before every read and push.
+    public function rewriteInTheRepository(string $kind, string $prefix, string $replacement): void
+    {
+        $this->run(['config', '--file', $this->gitDirectory().'/config', 'url.'.$replacement.'.'.$kind, $prefix], $this->folder);
+    }
+
+    // A remote section named like a remote string, because git push takes the string as that remote's name and pushes to the section's address.
+    public function remoteSectionInTheRepository(string $name, string $key, string $value): void
+    {
+        $this->run(['config', '--file', $this->gitDirectory().'/config', 'remote.'.$name.'.'.$key, $value], $this->folder);
+    }
+
     public function push(?SigningKey $key = null): PushBranch
     {
-        $git = new BranchGit(new HardenedGit());
+        $git = new BranchGit(new HardenedGit(), new GuardedRun());
 
         return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory(new InMemoryStore()));
+    }
+
+    // Through another lock store than the in-memory one, because a store can fail where memory cannot.
+    public function pushWithLockStore(PersistingStoreInterface $store, ?SigningKey $key = null): PushBranch
+    {
+        $git = new BranchGit(new HardenedGit(), new GuardedRun());
+
+        return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory($store));
     }
 
     // Through another forge than the recording one, because a test of the real opener must see what it lets through.
     public function pushThrough(ChangeOpening $changes, ?Ledger $ledger = null): PushBranch
     {
-        $git = new BranchGit(new HardenedGit());
+        $git = new BranchGit(new HardenedGit(), new GuardedRun());
 
         return new PushBranch($git, new SignedCommits($git, $this->signingKey($this->key)), new PushRecords($ledger ?? $this->ledger), $changes, new LockFactory(new InMemoryStore()));
     }
 
     public function signingKey(string $file): SigningKey
     {
-        return new SigningKey($file, new Filesystem());
+        return new SigningKey($file, new Filesystem(), new GuardedRun());
     }
 
     public function signedCommits(?string $key = null): SignedCommits
     {
-        return new SignedCommits(new BranchGit(new HardenedGit()), $this->signingKey($key ?? $this->key));
+        return new SignedCommits(new BranchGit(new HardenedGit(), new GuardedRun()), $this->signingKey($key ?? $this->key));
     }
 
     public function remoteTip(?string $remote = null): ?string

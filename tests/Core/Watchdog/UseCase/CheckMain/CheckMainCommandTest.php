@@ -59,21 +59,6 @@ final class CheckMainCommandTest extends TestCase
     private TemporaryRepository $repository;
     private string $keys;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
-        mkdir($this->keys);
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-        new Filesystem()->remove($this->keys);
-    }
-
     public function testARecordedMergeOnMainIsReportedCleanAndExitsWithZero(): void
     {
         [$seen, $merge] = $this->seenCommitAndMergeOfATaskBranch();
@@ -353,6 +338,21 @@ final class CheckMainCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('missing\nviolation', $tester->getDisplay());
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
+        mkdir($this->keys);
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+        new Filesystem()->remove($this->keys);
     }
 
     /**
