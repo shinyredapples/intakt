@@ -2,7 +2,7 @@
 
 ## In short
 
-The check job is the pre-push check: it runs the project's check command on what a build handed back, in a job container of its own, because the builder's own run of the checks is never trusted. It repeats the hand-back checks and stops without a job when a file lost most of its content and the plan does not name that file. The job clones the repository, applies the bundle, merges the branch into current main when it lacks main, and runs the gate's steps. Its script can copy a mounted dependency snapshot before the first step when the merged tree's lock files and platform match; nothing passes one yet. The verdict comes from the `check-result` file, never from the exit code or the log.
+The check job is the pre-push check: it runs the project's check command on what a build handed back, in a job container of its own, because the builder's own run of the checks is never trusted. It repeats the hand-back checks and stops without a job when a file lost most of its content and the plan does not name that file. The job clones the repository, applies the bundle, merges the branch into current main when it lacks main, and runs the gate's steps. Its script can copy a mounted dependency snapshot before the first step when the merged tree's lock files and platform match; `RunCheckJob` passes one whenever `CheckDependencies::leaseFor()` returns a snapshot. The verdict comes from the `check-result` file, never from the exit code or the log.
 
 Worth knowing:
 
