@@ -12,6 +12,12 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 
 ![The Waiting on you page: the octopus above "Nothing needs you, Intakt keeps building and reviewing. When it needs a decision, it shows up here", then the sections Meanwhile, "No review is running now", and You handled today](../assets/guide/waiting-on-you.webp)
 
+## Intakt stops at start with "not a log level"
+
+- **What you see:** Intakt does not start, and the output says "INTAKT_LOG_LEVEL is set to a value that is not a log level: use one of emergency, alert, critical, error, warning, notice, info, debug."
+- **Why:** `INTAKT_LOG_LEVEL` holds something other than one of those levels in lower case, or is empty. The message does not repeat the value, so a key set there by mistake is not printed.
+- **What to do:** set `INTAKT_LOG_LEVEL` to one of the listed levels (`warning` is the usual one, `info` shows more), or remove it from `.env.local` and your environment to get `warning`, then start Intakt again.
+
 ## The setup page says a step is Missing
 
 - **What you see:** **1. Add a key here** is not Done, and lines such as Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
