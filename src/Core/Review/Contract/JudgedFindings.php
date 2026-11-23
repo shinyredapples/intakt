@@ -48,12 +48,27 @@ final readonly class JudgedFindings
             }
         }
 
-        $markOf = static fn (Finding $finding): ?Mark => $marks[$finding->id] ?? null;
-        $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => !$finding->gate_gap && (self::blocking($finding) || Mark::Act === $markOf($finding))));
-        $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => $finding->gate_gap ? in_array($markOf($finding), [Mark::Act, Mark::Defer], true) : !self::blocking($finding) && Mark::Defer === $markOf($finding)));
-        $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => ($finding->gate_gap || !self::blocking($finding)) && Mark::Reject === $markOf($finding)));
+        $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => self::actedOn($finding, $marks[$finding->id] ?? null)));
+        $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => self::deferred($finding, $marks[$finding->id] ?? null)));
+        $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => self::rejected($finding, $marks[$finding->id] ?? null)));
 
         return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings), $judgement->fallback());
+    }
+
+    private static function actedOn(Finding $finding, ?Mark $mark): bool
+    {
+        return !$finding->gate_gap && (self::blocking($finding) || Mark::Act === $mark);
+    }
+
+    // A gate gap the judge marked act is deferred as well, because a gate that misses a case gets a gate issue and not a send-back.
+    private static function deferred(Finding $finding, ?Mark $mark): bool
+    {
+        return $finding->gate_gap ? in_array($mark, [Mark::Act, Mark::Defer], true) : !self::blocking($finding) && Mark::Defer === $mark;
+    }
+
+    private static function rejected(Finding $finding, ?Mark $mark): bool
+    {
+        return Mark::Reject === $mark && ($finding->gate_gap || !self::blocking($finding));
     }
 
     // Only a P1 or P2 that is no gate gap and is marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
