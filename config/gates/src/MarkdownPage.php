@@ -13,7 +13,6 @@ final readonly class MarkdownPage
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
-
     private const string FRAMED_LINE = '/^[ \t]*\|.*(?<!\\\\)\|[ \t]*$/';
 
     private const string WORD = '/[\p{L}\p{N}]/u';
