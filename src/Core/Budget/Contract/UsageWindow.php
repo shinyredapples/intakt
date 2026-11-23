@@ -27,7 +27,7 @@ enum UsageWindow: string
             return array_find(self::cases(), static fn (self $window): bool => $window->seconds() === $windowMinutes * 60);
         }
 
-        if (null === $resetsAt) {
+        if (!$resetsAt instanceof DateTimeImmutable) {
             return null;
         }
 
