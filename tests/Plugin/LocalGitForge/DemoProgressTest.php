@@ -176,17 +176,18 @@ final class DemoProgressTest extends TestCase
         self::assertSame(['Waiting on the correctness reviewer ('.self::KIMI.').'], $this->lines());
     }
 
-    // Forced order: between two polls the correctness reviewer is blocked while its tier is free, and the security reviewer delivers its verdict before its tier starts to cool.
+    // Forced order, because the security tier must start to cool only after that reviewer delivered, between the two polls, while the blocked reviewer's tier stays free.
     public function testAReviewerThatDeliveredItsVerdictDoesNotStopTheDemoWhenItsTierCoolsAfterwards(): void
     {
-        $cooling = false;
         $tiers = self::createStub(TierInvoker::class);
-        $tiers->method('answering')->willReturnCallback(static function (string $project, Tier $tier) use (&$cooling): ResolvedModel {
-            return Tier::Standard === $tier && $cooling ? throw new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60) : new ResolvedModel(Provider::OpenAiCompatible, self::KIMI);
-        });
+        $tiers->method('answering')->willReturnOnConsecutiveCalls(
+            new ResolvedModel(Provider::OpenAiCompatible, self::KIMI),
+            new ResolvedModel(Provider::OpenAiCompatible, self::DEEPSEEK),
+            new ResolvedModel(Provider::OpenAiCompatible, self::KIMI),
+            self::throwException(new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60)),
+        );
         $progress = $this->progress($tiers);
         $progress->reached($this->waitingOnBoth());
-        $cooling = true;
 
         $progress->reached(new RoundProgress(2, 2, false, ['reviewer' => FinishedState::Blocked, 'security-reviewer' => FinishedState::Verdict], 2, [], false));
 

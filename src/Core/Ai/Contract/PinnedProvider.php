@@ -22,9 +22,9 @@ final readonly class PinnedProvider
         return $this->account->key().':'.$this->routerProvider;
     }
 
-    // Read without the options after a question mark, because Symfony AI's catalog takes them from the model name too.
+    // The model and the router provider it pins, read without the options after a question mark, because Symfony AI's catalog takes them from the model name too.
     /**
-     * @return array{string, string}|null the model and the router provider it pins
+     * @return array{string, string}|null
      */
     public static function parts(string $model): ?array
     {

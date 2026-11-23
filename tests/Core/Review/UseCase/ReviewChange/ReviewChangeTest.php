@@ -577,7 +577,10 @@ final class ReviewChangeTest extends KernelTestCase
 
         $this->reviewChange($work, sleepsFor: self::A_REVIEW_CEILING)->review($this->request(), $progress);
 
-        return [$progress->reported[0]->findingsToJudge, array_last($progress->reported)->findingsToJudge];
+        $last = array_last($progress->reported);
+        self::assertInstanceOf(RoundProgress::class, $last);
+
+        return [$progress->reported[0]->findingsToJudge, $last->findingsToJudge];
     }
 
     private function reviewChange(Closure $work, ?MessageBusInterface $bus = null, ?int $sleepsFor = null): ReviewChange

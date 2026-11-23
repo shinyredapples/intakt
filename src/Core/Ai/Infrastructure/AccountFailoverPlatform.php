@@ -195,6 +195,14 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
     }
 
+    // A 429 read from the answer has already cooled its pin (AccountPlatform), so with no account left the call ends with that wait at once and the first redelivery already waits for it, instead of the provider's 429, which Symfony AI's bridge reads without its Retry-After (issue #2861). With an account still free the 429 stays as it is.
+    private function limitedWhenRead(RateLimitExceededException $limited, SendFailures $failures, ?string $routerProvider): Throwable
+    {
+        $waits = $this->waits($routerProvider);
+
+        return in_array(0, $waits, true) ? $limited : $this->outOfAccounts($waits, $failures);
+    }
+
     // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
     private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures, ?string $routerProvider): Throwable
     {
@@ -204,14 +212,6 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         return $this->outOfAccounts($waits, $failures);
-    }
-
-    // A 429 read from the answer has already cooled its pin (AccountPlatform), so with no account left the call ends with that wait at once and the first redelivery already waits for it, instead of the provider's 429, which Symfony AI's bridge reads without its Retry-After (issue #2861). With an account still free the 429 stays as it is.
-    private function limitedWhenRead(RateLimitExceededException $limited, SendFailures $failures, ?string $routerProvider): Throwable
-    {
-        $waits = $this->waits($routerProvider);
-
-        return in_array(0, $waits, true) ? $limited : $this->outOfAccounts($waits, $failures);
     }
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
