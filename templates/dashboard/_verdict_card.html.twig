@@ -22,18 +22,29 @@
             Checked, but the outcome was not recorded
             {%- endif -%}
         </h2>
-        {#- The count on every judged pass, zeros included, so an Approved pass reads 0 to fix; a pass that ended without a verdict has no count to give. The bar has one segment per finding, and the counts in words under it carry the meaning, because color alone must not. #}
+        {#- The count on every judged pass, zeros included, so an Approved pass reads 0 to fix; a pass that ended without a verdict has no count to give. The bar has one segment per finding, grouped in the legend's order, and the legend's shapes and counts in words carry the meaning, because color alone must not; a finding without a recorded urgency gets its own segment and line, so the words add up to the count. #}
         {% if latest.isJudged %}
+        {%- set unranked = open|filter(f => f.urgency is null)|length -%}
         <p class="verdict-count"><span class="figure">{{ open|length }}</span> to fix</p>
         <div class="urgency-bar" aria-hidden="true">
-            {%- for finding in open -%}
-            <span class="seg {{ finding.urgency.value ?? 'unranked' }}"></span>
+            {%- for urgency in urgencies -%}
+            {%- for finding in open|filter(f => f.urgency is same as(urgency)) -%}
+            <span class="seg {{ urgency.value }}"></span>
             {%- endfor -%}
+            {%- endfor -%}
+            {%- if unranked > 0 -%}
+            {%- for i in 1..unranked -%}
+            <span class="seg unranked"></span>
+            {%- endfor -%}
+            {%- endif -%}
         </div>
         <ul class="urgency-counts">
             {%- for urgency in urgencies -%}
-            <li class="{{ urgency.value }}">{{ open|filter(f => f.urgency is same as(urgency))|length }} {{ urgency.words|lower }}</li>
+            <li class="{{ urgency.value }}">{{ include('dashboard/_urgency_shape.html.twig', {urgency: urgency.value}, with_context = false) }}<b>{{ open|filter(f => f.urgency is same as(urgency))|length }}</b> {{ urgency.words|lower }}</li>
             {%- endfor -%}
+            {%- if unranked > 0 -%}
+            <li class="unranked">{{ include('dashboard/_urgency_shape.html.twig', {urgency: 'unranked'}, with_context = false) }}<b>{{ unranked }}</b> urgency not recorded</li>
+            {%- endif -%}
         </ul>
         {% endif %}
     </div>
@@ -45,8 +56,8 @@
             {%- set given = reviewer.outcome -%}
             <li class="face {{ given is same as(outcomes.Approved) ? 'ok' : (given is same as(outcomes.ChangesRequested) ? 'no' : 'none') }}">
                 {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 48}, with_context = false) }}
-                <span class="face-lab">{{ reviewer.lab.value ?? 'Model not recorded' }}</span>
-                <span class="face-mark"><span aria-hidden="true">{{ given is same as(outcomes.Approved) ? '✓' : (given is same as(outcomes.ChangesRequested) ? '✗' : '–') }}</span> {{ given is null ? reviewer.progress.value : given.plainWords }}</span>
+                <span class="face-lab">{{ reviewer.faceLabel }}</span>
+                <span class="face-mark"><span class="glyph" aria-hidden="true">{{ given is same as(outcomes.Approved) ? '✓' : (given is same as(outcomes.ChangesRequested) ? '✗' : '–') }}</span> {{ reviewer.verdictInWords }}</span>
             </li>
             {%- endfor -%}
         </ul>

@@ -204,6 +204,73 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         self::assertSame('Both say changes needed', $crawler->filter('.verdict-reviewers .agreement')->text());
     }
 
+    public function testTheBarGroupsItsSegmentsInTheLegendsOrderWhateverOrderTheJudgeGaveThem(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeRatedFindings('round-1', ['F1' => 'P3', 'F2' => 'P1', 'F3' => 'P2', 'F4' => 'P1']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['seg urgent', 'seg urgent', 'seg should-fix', 'seg nice-to-have'], $crawler->filter('.urgency-bar .seg')->each(static fn (Crawler $seg): string => (string) $seg->attr('class')));
+    }
+
+    public function testEachLineOfTheLegendHasTheShapeOfItsUrgency(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeRatedFindings('round-1', ['F1' => 'P1']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['shape urgent', 'shape should-fix', 'shape nice-to-have'], $crawler->filter('.urgency-counts li svg')->each(static fn (Crawler $shape): string => (string) $shape->attr('class')));
+        self::assertCount(1, $crawler->filter('.urgency-counts li.urgent svg path'));
+    }
+
+    public function testAFindingWithoutAnUrgencyIsCountedInWordsSoTheWordsAddUpToTheCount(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeRatedFindings('round-1', ['F1' => null, 'F2' => 'P2']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['2 to fix', '0 urgent, 1 should fix, 0 nice to have, 1 urgency not recorded', 'seg should-fix, seg unranked'], [$crawler->filter('.verdict-count')->text(), implode(', ', $crawler->filter('.urgency-counts li')->each(static fn (Crawler $li): string => $li->text())), implode(', ', $crawler->filter('.urgency-bar .seg')->each(static fn (Crawler $seg): string => (string) $seg->attr('class')))]);
+    }
+
+    public function testEveryFindingHavingAnUrgencyShowsNoLineForAnUnrecordedOne(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeRatedFindings('round-1', ['F1' => 'P2']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.urgency-counts li.unranked, .urgency-bar .seg.unranked'));
+    }
+
+    public function testAReviewerOnAModelOfAKnownLabIsLabelledWithTheLab(): void
+    {
+        $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
+        $this->ledger->startReviewerOn('round-1', 'security', 'acme/robot-7');
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Moonshot AI', 'acme/robot-7'], $crawler->filter('.reviewer-faces .face-lab')->each(static fn (Crawler $lab): string => $lab->text()));
+    }
+
+    public function testAFailedReviewerBesideOneAskingForChangesIsNotCountedAsAgreeing(): void
+    {
+        $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'majority');
+        $this->ledger->answer('round-1', 'correctness', 1);
+        $this->ledger->failReviewer('round-1', 'security', 'timeout');
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['1 of 2 says changes needed', '– Failed'], [$crawler->filter('.verdict-reviewers .agreement')->text(), $crawler->filter('.reviewer-faces .face-mark')->last()->text()]);
+    }
+
     public function testAReviewerWhoseModelWasNotRecordedIsShownWithoutALab(): void
     {
         $this->givenAnApprovedRound();

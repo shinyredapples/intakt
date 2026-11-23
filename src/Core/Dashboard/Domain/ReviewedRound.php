@@ -133,25 +133,28 @@ final readonly class ReviewedRound
         return ReviewOutcome::ofQuorum($this);
     }
 
-    // One line on whether the reviewers agree, from their own outcomes and not the round's, so a split reads as a split; empty while none has given one.
+    // One line on whether the reviewers agree, from their own verdicts and not the round's, so a split reads as a split. Only Approved and Changes needed count as a verdict, because a failed or blocked reviewer gave no opinion on the change; and the line names how many of the panel gave one, so two answers out of three never read as "Both". Empty while none has given one.
     public function agreement(): string
     {
-        $given = $this->outcomesGivenIn($this);
-        $kinds = array_values(array_unique(array_map(static fn (ReviewOutcome $outcome): string => $outcome->plainWords(), $given)));
+        $verdicts = $this->verdictsGivenIn($this);
+        $panel = count($this->outcomesIn($this));
 
-        if ([] === $given) {
+        if ([] === $verdicts) {
             return '';
         }
 
-        if (1 === count($given)) {
-            return 'One reviewer says '.lcfirst($given[0]->plainWords());
+        $kinds = array_values(array_unique(array_map(static fn (ReviewOutcome $outcome): string => lcfirst($outcome->plainWords()), $verdicts)));
+
+        if (1 !== count($kinds)) {
+            return 'The reviewers disagree';
         }
 
-        if (1 === count($kinds)) {
-            return (2 === count($given) ? 'Both' : 'All '.count($given)).' say '.lcfirst($kinds[0]);
-        }
-
-        return 'The reviewers disagree';
+        return match (true) {
+            1 === $panel => 'The reviewer says '.$kinds[0],
+            count($verdicts) < $panel => count($verdicts).' of '.$panel.(1 === count($verdicts) ? ' says ' : ' say ').$kinds[0],
+            2 === $panel => 'Both say '.$kinds[0],
+            default => 'All '.$panel.' say '.$kinds[0],
+        };
     }
 
     public function failedReviewers(): int
@@ -267,21 +270,29 @@ final readonly class ReviewedRound
 
     // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty list for `$this->outcomes`.
     /**
+     * @return list<ReviewerOutcome>
+     */
+    private function outcomesIn(self $round): array
+    {
+        return $round->outcomes;
+    }
+
+    /**
      * @return list<ReviewOutcome>
      */
-    private function outcomesGivenIn(self $round): array
+    private function verdictsGivenIn(self $round): array
     {
-        $given = [];
+        $verdicts = [];
 
-        foreach ($round->outcomes as $reviewer) {
+        foreach ($this->outcomesIn($round) as $reviewer) {
             $outcome = $reviewer->outcome();
 
-            if ($outcome instanceof ReviewOutcome) {
-                $given[] = $outcome;
+            if (ReviewOutcome::Approved === $outcome || ReviewOutcome::ChangesRequested === $outcome) {
+                $verdicts[] = $outcome;
             }
         }
 
-        return $given;
+        return $verdicts;
     }
 
     // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.

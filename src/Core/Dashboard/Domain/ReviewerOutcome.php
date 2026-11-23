@@ -59,10 +59,20 @@ final readonly class ReviewerOutcome
         return $lab instanceof AiLab && '' !== $name ? $name.' ('.$lab->value.')' : $this->model;
     }
 
-    // Null for a model that was not recorded or belongs to no known lab, so the face is shown without a lab.
-    public function lab(): ?AiLab
+    // The lab alone, because a face has room for one short word; a model of no known lab keeps its id, so a recorded model never reads as missing.
+    public function faceLabel(): string
     {
-        return null === $this->model || '' === $this->model ? null : AiLab::of($this->model);
+        if (null === $this->model || '' === $this->model) {
+            return 'Model not recorded';
+        }
+
+        return AiLab::of($this->model)->value ?? $this->model;
+    }
+
+    // A reviewer without an outcome is still at work or was stopped, so its face says which in words rather than the ledger's state.
+    public function verdictInWords(): string
+    {
+        return $this->outcome()?->plainWords() ?? (ReviewerProgress::Stopped === $this->progress ? 'Stopped' : 'No verdict yet');
     }
 
     public function outcome(): ?ReviewOutcome

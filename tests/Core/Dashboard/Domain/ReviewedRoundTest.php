@@ -135,19 +135,50 @@ final class ReviewedRoundTest extends TestCase
         self::assertSame('The reviewers disagree', $round->agreement());
     }
 
-    public function testASoleReviewerIsNamedAsOne(): void
+    public function testASoleReviewerIsNamedAsTheReviewer(): void
     {
-        self::assertSame('One reviewer says approved', $this->round()->withOutcomes([$this->answered('a', Decision::Approve)])->agreement());
+        self::assertSame('The reviewer says approved', $this->round()->withOutcomes([$this->answered('a', Decision::Approve)])->agreement());
     }
 
     public function testNoReviewerOutcomeGivesNoAgreementLine(): void
     {
-        self::assertSame('', $this->round()->withOutcomes([new ReviewerOutcome('a', 'correctness', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'))])->agreement());
+        self::assertSame('', $this->round()->withOutcomes([$this->started('a')])->agreement());
+    }
+
+    public function testTwoFailedReviewersGaveNoVerdictSoThereIsNoAgreementLine(): void
+    {
+        self::assertSame('', $this->round()->withOutcomes([$this->started('a')->failed('timeout'), $this->started('b')->failed('timeout')])->agreement());
+    }
+
+    public function testTwoMatchingVerdictsOnAPanelOfThreeSayHowManyOfThePanel(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->answered('b', Decision::Changes), $this->started('c')]);
+
+        self::assertSame('2 of 3 say changes needed', $round->agreement());
+    }
+
+    public function testOneVerdictBesideAFailedReviewerSaysOneOfTwo(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Approve), $this->started('b')->failed('timeout')]);
+
+        self::assertSame('1 of 2 says approved', $round->agreement());
+    }
+
+    public function testABlockedReviewerIsNotReadAsDisagreeing(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->started('b')->blocked('no access')]);
+
+        self::assertSame('1 of 2 says changes needed', $round->agreement());
     }
 
     private function answered(string $id, Decision $decision): ReviewerOutcome
     {
-        return new ReviewerOutcome($id, 'correctness', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'))->answered($decision, 0, ProjectMode::Live);
+        return $this->started($id)->answered($decision, 0, ProjectMode::Live);
+    }
+
+    private function started(string $id): ReviewerOutcome
+    {
+        return new ReviewerOutcome($id, 'correctness', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'));
     }
 
     private function round(): ReviewedRound
