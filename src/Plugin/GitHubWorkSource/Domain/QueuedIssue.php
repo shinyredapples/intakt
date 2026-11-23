@@ -103,9 +103,9 @@ final readonly class QueuedIssue
         $body = $history->body;
 
         return $this->sorted($this->reading->listed->labels) === $this->sorted($history->currentLabels)
-            && $this->reading->waitsFor === $references->waitsFor($body)
-            && $this->reading->unreadableWaits === $references->unreadableWaits($body)
-            && $this->reading->closedBy === $references->closedBy($body);
+            && $this->sorted($this->reading->waitsFor) === $this->sorted($references->waitsFor($body))
+            && $this->sorted($this->reading->unreadableWaits) === $this->sorted($references->unreadableWaits($body))
+            && $this->sorted($this->reading->closedBy) === $this->sorted($references->closedBy($body));
     }
 
     // Only the labels the item carries, because those are what the eligibility and priority rules read; a label applied again by an account without write access leaves the label set as it was and is seen only here. Priority labels in the order they were applied, because the one applied last counts, and every other label as a set, because its order steers nothing.
@@ -121,9 +121,9 @@ final readonly class QueuedIssue
 
     // Sorted as strings, because GitHub promises no order and a numeric sort holds `1` and `01` equal and leaves them in the order they came.
     /**
-     * @param list<string> $labels
+     * @param list<int|string> $labels
      *
-     * @return list<string>
+     * @return list<int|string>
      */
     private function sorted(array $labels): array
     {
