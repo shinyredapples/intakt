@@ -201,17 +201,6 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param array<string, UsageStarted> $calls
-     */
-    // Each model once, in the order the reviewer's calls started, because a substitute provider may answer some of its calls; a call started before the model was kept names none.
-    private function modelsOfCalls(array $calls): ModelNames
-    {
-        $models = array_filter(array_map(static fn (UsageStarted $started): ?string => $started->model, $calls), static fn (?string $model): bool => null !== $model);
-
-        return new ModelNames(...array_values(array_unique($models)));
-    }
-
-    /**
      * @return array<string, array{started: list<DateTimeImmutable>, ended: list<DateTimeImmutable>}>
      */
     // Read once from the rows that name the round, because every reviewer row carries its round; the round is checked again, because the match is on the payload text.
@@ -259,6 +248,17 @@ final readonly class RoundLedgerReading implements RoundCosts
         }
 
         return (int) max($moments['ended'])->format('Uv') - (int) min($moments['started'])->format('Uv');
+    }
+
+    /**
+     * @param array<string, UsageStarted> $calls
+     */
+    // Each model once, in the order the reviewer's calls started, because a substitute provider may answer some of its calls; a call started before the model was kept names none.
+    private function modelsOfCalls(array $calls): ModelNames
+    {
+        $models = array_filter(array_map(static fn (UsageStarted $started): ?string => $started->model, $calls), static fn (?string $model): bool => null !== $model);
+
+        return new ModelNames(...array_values(array_unique($models)));
     }
 
     /**

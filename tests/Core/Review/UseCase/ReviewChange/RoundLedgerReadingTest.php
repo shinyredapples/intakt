@@ -528,11 +528,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
         return [...$this->reading()->judgeDoneOf($round)->act ?? []];
     }
 
-    private function reading(?Ledger $ledger = null): RoundLedgerReading
-    {
-        return new RoundLedgerReading($ledger ?? $this->ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices(['big' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
-    }
-
     private function recordCall(string $call, ?string $round, string $ending): void
     {
         $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => 'big'];
@@ -578,5 +573,10 @@ final class RoundLedgerReadingTest extends KernelTestCase
     private function usage(): array
     {
         return ['account' => null, 'model' => 'big', 'prompt' => 100, 'completion' => 20, 'thinking' => null, 'tool' => null, 'cached' => null, 'cache_creation' => null, 'cache_read' => null, 'total' => 120, 'remaining' => null, 'remaining_minute' => null, 'remaining_month' => null];
+    }
+
+    private function reading(?Ledger $ledger = null): RoundLedgerReading
+    {
+        return new RoundLedgerReading($ledger ?? $this->ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices(['big' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
     }
 }
