@@ -139,6 +139,7 @@ use Intakt\Tests\Core\Git\UseCase\PushBranch\RecordingChangeOpening;
 use Intakt\Tests\Core\HandBack\FailingLockStore;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
 use Intakt\Tests\Core\HandBack\UnreadableLedger;
+use Intakt\Tests\Core\HandBack\UnreleasableLockStore;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -426,6 +427,20 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame(BuildStep::PrePushCheck, $outcome->last);
         self::assertStringStartsWith('the pull request text round was not recorded, because its lock failed: Failed to acquire the "intakt-pull-request-text-', (string) $outcome->failure);
+        self::assertSame($outcome->failure, $this->stepsIn($ledger)[5]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testATextRoundLockThatCannotBeReleasedStillSendsTheFirstMissBackWithAStepRow(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->textLocks = new LockFactory(new UnreleasableLockStore());
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertStringStartsWith('the pull request text is sent back to the builder: ', (string) $outcome->failure);
         self::assertSame($outcome->failure, $this->stepsIn($ledger)[5]['failure']);
         self::assertNull($this->remoteTip());
     }

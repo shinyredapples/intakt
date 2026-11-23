@@ -26,6 +26,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\HandBack\FailingLockStore;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
 use Intakt\Tests\Core\HandBack\UnreadableLedger;
+use Intakt\Tests\Core\HandBack\UnreleasableLockStore;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -173,6 +174,15 @@ final class RoutePullRequestTextTest extends TestCase
         $this->expectExceptionMessageIs('the pull request text round was not recorded, because its lock failed: Failed to acquire the "intakt-pull-request-text-'.$this->task()->key.'" lock.');
 
         (void) $this->router(new LockFactory(new FailingLockStore()))->route($this->task(), self::TASK, self::MISSING_E2);
+    }
+
+    public function testALockThatCannotBeReleasedStillReturnsTheRecordedRoute(): void
+    {
+        $result = $this->router(new LockFactory(new UnreleasableLockStore()))->route($this->task(), self::TASK, self::MISSING_E2);
+
+        self::assertInstanceOf(FailedPullRequestText::class, $result);
+        self::assertSame(PullRequestTextRoute::SentBack, $result->route);
+        self::assertSame([LedgerEventKind::PullRequestTextSentBack], $this->ledger->kinds());
     }
 
     public function testALedgerThatCannotBeReadIsARoundNotRecordedAndRecordsNothing(): void
