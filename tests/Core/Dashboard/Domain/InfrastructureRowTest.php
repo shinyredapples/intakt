@@ -26,7 +26,7 @@ final class InfrastructureRowTest extends TestCase
 {
     public function testAReadingWithEverySourceUpShowsThreadsBusyAndIdleQueueDepthRestartsAndHubHealth(): void
     {
-        $row = InfrastructureRow::of(new ServerReading(new WorkerThreads(3, 5), new ServerMetrics(1, 2), HubHealth::Healthy), self::unchanged(...));
+        $row = InfrastructureRow::of(new ServerReading(new WorkerThreads(3, 5), new ServerMetrics(1, 2), HubHealth::Healthy), $this->unchanged(...));
 
         self::assertSame([
             ['Threads busy', '3', 'fine', null],
@@ -34,24 +34,24 @@ final class InfrastructureRowTest extends TestCase
             ['Queue depth', '1', 'fine', null],
             ['Worker restarts', '2', 'fine', null],
             ['Hub', 'healthy', 'fine', null],
-        ], self::shown($row));
+        ], $this->shown($row));
     }
 
     public function testASourceThatIsDownShowsItsDownStateWhileTheOtherSourcesStillShowTheirValues(): void
     {
-        $row = InfrastructureRow::of(new ServerReading(new EndpointDown('/frankenphp/threads did not answer'), new ServerMetrics(0, 4), HubHealth::Healthy), self::unchanged(...));
+        $row = InfrastructureRow::of(new ServerReading(new EndpointDown('/frankenphp/threads did not answer'), new ServerMetrics(0, 4), HubHealth::Healthy), $this->unchanged(...));
 
         self::assertSame([
             ['Worker threads', 'down', 'down', '/frankenphp/threads did not answer'],
             ['Queue depth', '0', 'fine', null],
             ['Worker restarts', '4', 'fine', null],
             ['Hub', 'healthy', 'fine', null],
-        ], self::shown($row));
+        ], $this->shown($row));
     }
 
     public function testDownMetricsShowOneDownStateForQueueDepthAndRestarts(): void
     {
-        $row = InfrastructureRow::of(new ServerReading(new WorkerThreads(0, 2), new EndpointDown('/metrics answered 500'), new EndpointDown('/mercure/health/ready did not answer')), self::unchanged(...));
+        $row = InfrastructureRow::of(new ServerReading(new WorkerThreads(0, 2), new EndpointDown('/metrics answered 500'), new EndpointDown('/mercure/health/ready did not answer')), $this->unchanged(...));
 
         self::assertSame(['Threads busy', 'Threads idle', 'Server metrics', 'Hub'], array_map(static fn (InfrastructureFigure $figure): string => $figure->label, $row->figures));
         self::assertSame([FigureState::Fine, FigureState::Fine, FigureState::Down, FigureState::Down], array_map(static fn (InfrastructureFigure $figure): FigureState => $figure->state, $row->figures));
@@ -59,7 +59,7 @@ final class InfrastructureRowTest extends TestCase
 
     public function testAnUnhealthyHubIsMarkedUnhealthyAndNotDown(): void
     {
-        $hub = array_last(InfrastructureRow::of(new ServerReading(new WorkerThreads(0, 2), new ServerMetrics(0, 0), HubHealth::Unhealthy), self::unchanged(...))->figures);
+        $hub = array_last(InfrastructureRow::of(new ServerReading(new WorkerThreads(0, 2), new ServerMetrics(0, 0), HubHealth::Unhealthy), $this->unchanged(...))->figures);
 
         self::assertSame(['unhealthy', FigureState::Unhealthy, null], [$hub?->value, $hub?->state, $hub?->downBecause]);
     }
@@ -79,10 +79,10 @@ final class InfrastructureRowTest extends TestCase
             ['Worker threads', 'down', 'down', 'FRANKENPHP_ADMIN_URL is not a URL.'],
             ['Server metrics', 'down', 'down', 'FRANKENPHP_ADMIN_URL is not a URL.'],
             ['Hub', 'down', 'down', 'FRANKENPHP_ADMIN_URL is not a URL.'],
-        ], self::shown($row));
+        ], $this->shown($row));
     }
 
-    private static function unchanged(string $reason): string
+    private function unchanged(string $reason): string
     {
         return $reason;
     }
@@ -90,7 +90,7 @@ final class InfrastructureRowTest extends TestCase
     /**
      * @return list<array{string, string, string, ?string}>
      */
-    private static function shown(InfrastructureRow $row): array
+    private function shown(InfrastructureRow $row): array
     {
         return array_map(static fn (InfrastructureFigure $figure): array => [$figure->label, $figure->value, $figure->state->value, $figure->downBecause], $row->figures);
     }
