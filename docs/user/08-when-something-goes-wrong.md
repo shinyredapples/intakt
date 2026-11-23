@@ -69,17 +69,19 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 
 ## The dashboard says "Open the dashboard on localhost"
 
-You set Intakt up on a small server in the hall and type its address into the laptop on your sofa. Instead of the board, a page tells you to open the dashboard on localhost. Nothing is broken: the dashboard has no login, so it answers only `http://localhost:7781` on the machine it runs on. Any other address could let a web page you visit act for you.
+You set Intakt up on a small server in the hall and type its address into the laptop on your sofa. Instead of the board, a page tells you to open the dashboard on localhost. Nothing is broken: the dashboard has no login, so it answers only `http://localhost:7781` (7781 is the default; if you publish another port, use that port, the value of `DASHBOARD_PORT`) on the machine it runs on. Any other address could let a web page you visit act for you.
 
 1. On the machine that runs Intakt, open `http://localhost:7781`.
 2. From another device, open a tunnel first: `ssh -L 7781:localhost:7781 you@your-server`.
 3. Keep that terminal open and open `http://localhost:7781` on the device.
 
+With another published port, say 8080, use it in all three places: `http://localhost:8080` and `ssh -L 8080:localhost:8080 you@your-server`.
+
 ## A button says "Connecting to live updates…"
 
 - **What you see:** a button stays disabled with that line below it, and after a few seconds "No live connection, so this waits."
 - **Why:** the page has no live connection to Intakt, and actions wait for it.
-- **What to do:** open the dashboard on `http://localhost:7781` as above, then reload the page.
+- **What to do:** open the dashboard on `http://localhost:7781` (or your published port) as above, then reload the page.
 
 ## The demo run did not play
 

@@ -83,8 +83,8 @@ final readonly class GitHubCiRuns
     {
         $bySuite = [];
         foreach ($workflowRuns as $run) {
-            // A run without the key links no suite, so that suite keeps an origin of its own and nothing replaces it.
-            if (!array_key_exists('check_suite_id', $run)) {
+            // A run without the key, or with a null one, links no suite, so that suite keeps an origin of its own and nothing replaces it.
+            if (null === ($run['check_suite_id'] ?? null)) {
                 continue;
             }
 
