@@ -21,10 +21,14 @@ enum UsageWindow: string
     }
 
     // A vendor with one window reports it as "primary", so a name would mislead: the stated length decides, else the reset does.
-    public static function told(?int $windowMinutes, DateTimeImmutable $resetsAt, DateTimeImmutable $now): ?self
+    public static function told(?int $windowMinutes, ?DateTimeImmutable $resetsAt, DateTimeImmutable $now): ?self
     {
         if (null !== $windowMinutes) {
             return array_find(self::cases(), static fn (self $window): bool => $window->seconds() === $windowMinutes * 60);
+        }
+
+        if (!$resetsAt instanceof DateTimeImmutable) {
+            return null;
         }
 
         $secondsToReset = $resetsAt->getTimestamp() - $now->getTimestamp();
