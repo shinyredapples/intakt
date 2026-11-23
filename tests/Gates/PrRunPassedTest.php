@@ -14,15 +14,23 @@ final class PrRunPassedTest extends SandboxTestCase
     private const string SCRIPT = __DIR__.'/../../.github/ci/pr-run-passed.sh';
 
     // A fake gh, so the test needs no network: it answers the script's two API calls from files and applies its --jq filter.
+    // Like gh, only --paginate reads the later pages (<page>-2.json and so on), so a call without it misses them.
     private const string FAKE_GH = <<<'SH'
         #!/bin/sh
         set -eu
         if [ -e fail ]; then echo 'gh: Not Found (HTTP 404)' >&2; exit 1; fi
+        paginate=no
+        if [ "$2" = --paginate ]; then paginate=yes; shift; fi
         case "$2" in
-          'repos/example/intakt/actions/workflows/ci.yml/runs?head_sha=abc&event=pull_request&status=success') jq -r "$4" runs.json ;;
-          repos/example/intakt/actions/runs/*/artifacts) run=${2%/artifacts}; jq -r "$4" "artifacts-${run##*/}.json" ;;
+          'repos/example/intakt/actions/workflows/ci.yml/runs?head_sha=abc&event=pull_request&status=success&per_page=100') page=runs ;;
+          'repos/example/intakt/actions/runs/'*'/artifacts?per_page=100') run=${2%/artifacts*}; page=artifacts-${run##*/} ;;
           *) exit 3 ;;
         esac
+        jq -r "$4" "$page.json"
+        if [ "$paginate" = no ]; then exit 0; fi
+        for later in "$page"-*.json; do
+          if [ -e "$later" ]; then jq -r "$4" "$later"; fi
+        done
         SH;
 
     /** @return iterable<string, array{string, list<array{string, bool}>, string}> */
@@ -72,6 +80,31 @@ final class PrRunPassedTest extends SandboxTestCase
         self::assertSame("yes\n", $this->answer($sandbox)->output);
     }
 
+    public function testARunOnALaterPageCounts(): void
+    {
+        $sandbox = $this->sandboxWithRuns([['id' => 7, 'head_repository' => ['full_name' => 'example/intakt']]]);
+        $sandbox->write('runs-2.json', $this->json(['workflow_runs' => [['id' => 8, 'head_repository' => ['full_name' => 'example/intakt']]]]));
+        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'tested-tree-merged', 'expired' => false]]]));
+        $sandbox->write('artifacts-8.json', $this->json(['artifacts' => [['name' => 'tested-tree-pushed', 'expired' => false]]]));
+
+        $result = $this->answer($sandbox);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame("yes\n", $result->output);
+    }
+
+    public function testARecordOnALaterPageOfARunsArtifactsCounts(): void
+    {
+        $sandbox = $this->sandboxWithRuns([['id' => 7, 'head_repository' => ['full_name' => 'example/intakt']]]);
+        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'tested-tree-merged', 'expired' => false]]]));
+        $sandbox->write('artifacts-7-2.json', $this->json(['artifacts' => [['name' => 'tested-tree-pushed', 'expired' => false]]]));
+
+        $result = $this->answer($sandbox);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame("yes\n", $result->output);
+    }
+
     public function testAFailingApiCallExitsNonZeroAndPrintsNoAnswer(): void
     {
         $sandbox = $this->sandboxWithRuns([]);
@@ -110,17 +143,17 @@ final class PrRunPassedTest extends SandboxTestCase
         return $sandbox;
     }
 
+    /** @param array<string, mixed> $value */
+    private function json(array $value): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR);
+    }
+
     private function answer(Sandbox $sandbox): ProcessResult
     {
         return $sandbox->runScript(
             'chmod +x bin/gh; PATH="$PWD/bin:$PATH"; sh '.escapeshellarg(self::SCRIPT).' abc pushed',
             ['GITHUB_REPOSITORY' => 'example/intakt'],
         );
-    }
-
-    /** @param array<string, mixed> $value */
-    private function json(array $value): string
-    {
-        return json_encode($value, JSON_THROW_ON_ERROR);
     }
 }
