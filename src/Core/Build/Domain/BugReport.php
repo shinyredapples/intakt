@@ -129,8 +129,6 @@ final readonly class BugReport
     }
 
     /**
-     * The content columns of the list items the line is in, innermost last.
-     *
      * @param list<int> $lists
      *
      * @return list<int>
@@ -204,30 +202,30 @@ final readonly class BugReport
     private static function withUnderlinedHeadingsMarked(array $lines): array
     {
         $start = null;
+        $listItem = -1;
 
         foreach ($lines as $index => $line) {
-            if (is_int($start) && 1 === preg_match(self::UNDERLINE, $line)) {
-                $text = implode(' ', array_map(trim(...), array_slice($lines, $start, $index - $start)));
-                array_splice($lines, $start, $index - $start + 1, ['# '.$text, ...array_fill(0, $index - $start, '')]);
+            $heading = self::underlinedFrom($line, $start, $listItem);
+
+            if (null !== $heading) {
+                $text = implode(' ', array_map(trim(...), array_slice($lines, $heading, $index - $heading)));
+                array_splice($lines, $heading, $index - $heading + 1, ['# '.$text, ...array_fill(0, $index - $heading, '')]);
                 $start = null;
 
                 continue;
             }
 
-            $start = self::paragraphAfter($line, $index, $start);
+            $start = '' === trim($line) || 1 === preg_match(self::HEADING, $line) ? null : $start ?? $index;
+            $listItem = 1 === preg_match(self::LIST_ITEM, $line) ? $index : $listItem;
         }
 
         return $lines;
     }
 
-    // An underline makes a heading only of the paragraph right above it, because after a blank line, a heading or a list item it is a rule; false marks a paragraph no underline can turn into a heading.
-    private static function paragraphAfter(string $line, int $index, int|false|null $start): int|false|null
+    private static function underlinedFrom(string $line, ?int $start, int $listItem): ?int
     {
-        if ('' === trim($line) || 1 === preg_match(self::HEADING, $line)) {
-            return null;
-        }
-
-        return 1 === preg_match(self::LIST_ITEM, $line) ? false : $start ?? $index;
+        // An underline makes a heading only of the paragraph right above it, because after a blank line, a heading or in a paragraph with a list item it is a rule.
+        return null !== $start && $listItem < $start && 1 === preg_match(self::UNDERLINE, $line) ? $start : null;
     }
 
     /**
