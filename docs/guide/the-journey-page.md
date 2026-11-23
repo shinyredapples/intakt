@@ -33,7 +33,7 @@ Tokens per merged pull request divides each day's tokens by the pull requests me
 
 Today only Intakt has a journey page. The plan is to give every project one on the dashboard, with the same kinds of figures worked out from what Intakt records. When a milestone closes, the Maintainer will draft a short dated entry from the issues' decisions, the stalls and the send-backs, each claim linking its issue or pull request.
 
-You approve that entry, and a pull request adds it to the project's `docs/journey.md`. How close you are to your subscription limits shows only in the dashboard's admin area, never in the repository. A project can turn the page off. The design is in [the dashboard design](../design/05-architecture/13-dashboard.md#journey-page).
+You approve that entry, and a pull request adds it to the project's `docs/journey.md`; the first one creates the file when the project has none. How close you are to your subscription limits shows only in the dashboard's admin area, on Team and accounts, never on the journey page or in the repository. A project can turn the page off. The design is in [the dashboard design](../design/05-architecture/13-dashboard.md#journey-page).
 
 ## Where you can read it
 

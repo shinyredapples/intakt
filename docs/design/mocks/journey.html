@@ -39,12 +39,12 @@
   </div>
   <div>
     <h2 class="label-sm">Tokens per merged pull request</h2>
-    <p><span class="stat">410k</span> <span class="muted small">measured</span></p>
-    <p class="small">86.9M measured tokens over 212 counted merges. Not included: 1.2M estimated tokens reserved for stopped steps.</p>
+    <p><span class="stat">495k</span> <span class="muted small">measured</span></p>
+    <p class="small">105.0M measured tokens over 212 counted merges. Not included: 1.2M estimated tokens reserved for stopped steps.</p>
   </div>
 </section>
 
-<section class="section" aria-labelledby="ms-h">
+<section class="section" id="milestones" aria-labelledby="ms-h">
   <h2 id="ms-h">Milestones, planned against done</h2>
   <p class="takeaway">Three of four milestones closed; M3 closed 4 days after its due date.</p>
   <table class="ledger">
@@ -79,14 +79,14 @@
   </section>
   <section class="chart" aria-labelledby="j4h">
     <h2 id="j4h">Tokens per merged pull request</h2>
-    <p class="takeaway">Down from 520k to 380k a merge over 14 days (measured over counted merges).</p>
+    <p class="takeaway">Down from 520k to 380k a merge over 14 days: each day's tokens by lane over that day's merges (measured over counted).</p>
     <div id="j-permerge"></div>
   </section>
 </div>
 
-<section class="section" aria-labelledby="tk-h">
+<section class="section" id="tokens" aria-labelledby="tk-h">
   <h2 id="tk-h">Tokens by vendor and lane</h2>
-  <p class="takeaway">Building takes about three quarters of the tokens on both vendors (measured, thousands a day).</p>
+  <p class="takeaway">Building takes three quarters of the tokens on both vendors: 39.43M in 14 days (measured, thousands a day).</p>
   <div class="multiples four">
     <div><h3 class="label-sm">Claude, building</h3><div id="t-cb"></div></div>
     <div><h3 class="label-sm">Claude, reviewing</h3><div id="t-cr"></div></div>
@@ -94,14 +94,15 @@
     <div><h3 class="label-sm">GPT, reviewing</h3><div id="t-gr"></div></div>
   </div>
   <h3 class="sub-h">By account, last 14 days</h3>
-  <table class="ledger">
-    <thead><tr><th>Account</th><th>Tokens (measured)</th></tr></thead>
+  <table class="ledger" id="accounts">
+    <thead><tr><th>Account</th><th>Tokens (measured, millions)</th></tr></thead>
     <tbody>
-      <tr><td>Work subscription</td><td>9.8M</td></tr>
-      <tr><td>Second subscription</td><td>4.1M</td></tr>
-      <tr><td>API key</td><td>1.3M</td></tr>
+      <tr><td>Work subscription</td><td>25.61</td></tr>
+      <tr><td>Home subscription</td><td>10.69</td></tr>
+      <tr><td>Overflow key</td><td>3.13</td></tr>
     </tbody>
   </table>
+  <p class="small muted">Tokens only. How close each account is to its plan's limits shows in the owner area, <a href="team.html#usage-by-project">Team and accounts</a>, never on this page.</p>
 </section>
 
 <section class="section" aria-labelledby="cap-h">
@@ -111,47 +112,53 @@
     <thead><tr><th>When</th><th>Change</th></tr></thead>
     <tbody>
       <tr><td>3 Nov</td><td>Build slots: 1 → 2</td></tr>
-      <tr><td>27 Oct</td><td>Account added: Second subscription</td></tr>
+      <tr><td>28 Oct</td><td>Account added: Home subscription</td></tr>
       <tr><td>12 Oct</td><td>Review workers: 2 → 3</td></tr>
     </tbody>
   </table>
 </section>
 
-<section class="section" aria-labelledby="en-h">
+<section class="section" id="entries" aria-labelledby="en-h">
   <h2 id="en-h">Milestone entries</h2>
-  <p class="takeaway">One dated entry per closed milestone, drafted from the issues' Decisions sections, your decisions, stalls with their causes and send-back patterns. Every claim links its issue or pull request.</p>
+  <p class="takeaway">One dated entry per closed milestone, drafted from the issues' Decisions sections, your decisions, stalls with their causes and send-back patterns. Every claim links its issue or pull request, listed under Sources.</p>
   <ol class="timeline">
     <li>
       <span class="node live" aria-hidden="true"></span>
       <div class="ev-head"><h3>M3 Gift cards closed</h3><span class="chip on-page strong"><span class="dot needs"></span>Waiting for your approval</span><time datetime="2026-11-14">14 Nov</time></div>
       <div class="ev-body">
-        <p>Gift cards store their currency, as you decided on <a href="task.html">#199</a>. The milestone closed 4 days late: <a href="task.html">#205</a> stalled 2 days because CI lacked a package the build had, fixed by an image change in <a href="#">pull request #231</a>. Most send-backs were docs that disagreed with the code (9 of 15, <a href="task.html">#208</a>, <a href="task.html">#214</a>).</p>
-        <p class="small muted">Drafted by the Maintainer. Every link checked: each names an issue or pull request of acme-shop.</p>
+        <p>Gift cards store their currency, as you decided on <a href="#src-199">#199</a>. The milestone closed 4 days late: <a href="#src-205">#205</a> stalled 2 days because CI lacked a package the build had, fixed by an image change in <a href="#src-231">pull request #231</a>. Most send-backs were docs that disagreed with the code (9 of 15, <a href="#src-208">#208</a>, <a href="#src-214">#214</a>).</p>
+        <p class="small muted">Drafted by the Maintainer. Every link checked: each names an issue or pull request of acme-shop. Your edits are scanned again before the pull request opens.</p>
         <div class="actions" style="margin-top:8px">
-          <button class="btn primary sm" type="button" data-toast="Entry approved: pull request opened for review">Approve and open the pull request</button>
+          <button class="btn primary sm" type="button" data-toast="Approved text scanned: pull request opened for review">Approve and open the pull request</button>
           <button class="btn secondary sm" type="button" data-toast="Editing the draft">Edit</button>
         </div>
       </div>
     </li>
     <li>
       <span class="node done" aria-hidden="true"></span>
-      <div class="ev-head"><h3>M2 Payments closed</h3><span class="chip on-page">Published in <a href="#">pull request #162</a></span><time datetime="2026-10-14">14 Oct</time></div>
-      <div class="ev-body"><p>Refunds go through the payment provider's own API (<a href="task.html">#121</a>). Review rounds fell from 2.4 to 1.6 a change once the docs check ran before each push (<a href="#">pull request #140</a>).</p></div>
+      <div class="ev-head"><h3>M2 Payments closed</h3><span class="chip on-page">Published in <a href="#src-162">pull request #162</a></span><time datetime="2026-10-14">14 Oct</time></div>
+      <div class="ev-body"><p>Refunds go through the payment provider's own API (<a href="#src-121">#121</a>). Review rounds fell from 2.4 to 1.6 a change once the docs check ran before each push (<a href="#src-140">pull request #140</a>).</p></div>
+    </li>
+    <li>
+      <span class="node done" aria-hidden="true"></span>
+      <div class="ev-head"><h3>M1 Shop runs closed</h3><span class="chip on-page">Published in <a href="#src-61">pull request #61</a>, which created docs/journey.md</span><time datetime="2026-09-18">18 Sep</time></div>
+      <div class="ev-body"><p>The shop ran two days early. Its first deploy waited a day on the database choice, which you settled on <a href="#src-12">#12</a>; the fix for the failing checkout test came in <a href="#src-47">pull request #47</a>.</p></div>
     </li>
   </ol>
-</section>
-
-<section class="section" aria-labelledby="lim-h" style="background:var(--tint);border-radius:var(--r-btn);padding:20px 24px">
-  <h2 id="lim-h">Usage against your limits</h2>
-  <p class="takeaway">Admin area only. These figures never go into docs/journey.md, its pull request or any shared report.</p>
-  <div class="window">
-    <div class="wl"><strong>Work subscription, weekly window</strong><span class="muted">acme-shop used 22% of the plan limit this week</span></div>
-    <div class="bar" role="img" aria-label="acme-shop used 22 percent of the weekly plan limit"><i class="used" style="width:22%"></i></div>
-  </div>
-  <div class="window">
-    <div class="wl"><strong>Second subscription, weekly window</strong><span class="muted">acme-shop used 9% of the plan limit this week</span></div>
-    <div class="bar" role="img" aria-label="acme-shop used 9 percent of the weekly plan limit"><i class="used" style="width:9%"></i></div>
-  </div>
+  <h3 class="sub-h">Sources</h3>
+  <ul class="small">
+    <li id="src-199">Issue #199 Gift cards keep their currency, closed 6 Nov, with your decision</li>
+    <li id="src-205">Issue #205 Redeem a gift card at checkout, stalled 11 to 13 Nov</li>
+    <li id="src-231">Pull request #231 Add the intl package to the CI image, merged 13 Nov</li>
+    <li id="src-208">Issue #208 Gift card balance page, sent back 3 times for docs</li>
+    <li id="src-214">Issue #214 Gift card expiry, sent back 2 times for docs</li>
+    <li id="src-162">Pull request #162 Journey entry for M2 Payments, merged 16 Oct</li>
+    <li id="src-121">Issue #121 Refunds, closed 9 Oct</li>
+    <li id="src-140">Pull request #140 Run the docs check before each push, merged 2 Oct</li>
+    <li id="src-61">Pull request #61 Journey entry for M1 Shop runs, merged 19 Sep</li>
+    <li id="src-12">Issue #12 Choose the database, closed 5 Sep, with your decision</li>
+    <li id="src-47">Pull request #47 Fix the checkout test's clock, merged 14 Sep</li>
+  </ul>
 </section>
 
 <script src="assets/charts.js"></script>
@@ -160,15 +167,15 @@
   var C = IntaktCharts.chart, $ = function (id) { return document.getElementById(id); };
   var days = ["10 Nov","11 Nov","12 Nov","13 Nov","14 Nov","15 Nov","16 Nov","17 Nov","18 Nov","19 Nov","20 Nov","21 Nov","22 Nov","23 Nov"];
   C($("j-merges"), { type: "bar", labels: days, values: [6,7,5,8,9,3,2,7,8,6,7,6,5,11], colName: "Merges (counted)" });
-  C($("j-open"), { type: "line", labels: days, values: [27,28,28,29,27,28,29,30,31,31,32,33,33,34], max: 40, colName: "Open issues (counted)" });
+  C($("j-open"), { type: "line", labels: days, values: [27,28,28,29,27,28,29,29,30,30,31,32,33,34], max: 40, colName: "Open issues (counted)" });
   C($("j-created"), { type: "bar", labels: days, values: [6,7,5,8,7,4,3,6,8,6,7,7,6,8], max: 10, height: 150, colName: "Created (counted)" });
   C($("j-closed"), { type: "bar", labels: days, values: [6,6,5,7,9,3,2,6,7,6,6,6,5,7], max: 10, height: 150, colName: "Closed (counted)" });
-  C($("j-permerge"), { type: "line", labels: days, values: [520,500,510,470,440,null,null,450,420,410,400,395,390,380], max: 600, unit: "k", colName: "Tokens per merge (measured)" });
-  var t = { type: "bar", labels: days, max: 1000, unit: "k", height: 120, colName: "Tokens (measured)" };
-  C($("t-cb"), Object.assign({}, t, { values: [620,700,540,760,800,300,210,680,720,610,650,640,560,900] }));
-  C($("t-cr"), Object.assign({}, t, { values: [180,210,160,220,240,90,60,200,210,180,190,190,170,260] }));
-  C($("t-gb"), Object.assign({}, t, { values: [210,240,190,260,270,100,80,230,250,210,220,220,190,300] }));
-  C($("t-gr"), Object.assign({}, t, { values: [70,80,60,90,90,30,20,80,80,70,70,70,60,100] }));
+  C($("j-permerge"), { type: "line", labels: days, values: [520,500,510,470,440,450,460,450,420,410,400,395,390,380], max: 600, unit: "k", colName: "Tokens per merge (measured)" });
+  var t = { type: "bar", labels: days, max: 2500, unit: "k", height: 120, colName: "Tokens (measured)" };
+  C($("t-cb"), Object.assign({}, t, { values: [1716,1925,1403,2068,2178,743,506,1733,1848,1353,1540,1304,1073,2299] }));
+  C($("t-cr"), Object.assign({}, t, { values: [468,525,383,564,594,203,138,473,504,369,420,356,293,627] }));
+  C($("t-gb"), Object.assign({}, t, { values: [624,700,510,752,792,270,184,630,672,492,560,474,390,836] }));
+  C($("t-gr"), Object.assign({}, t, { values: [312,350,254,376,396,134,92,314,336,246,280,236,194,418] }));
 })();
 </script>
 </main>

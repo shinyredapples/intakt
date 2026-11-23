@@ -95,6 +95,7 @@
     ["Accounts and usage", "Team", "team.html"],
     ["Infrastructure health", "Projects", "health.html"],
     ["Journey of acme-shop", "Projects", "journey.html"],
+    ["Usage by project against your limits", "Team", "team.html#usage-by-project"],
     ["Trends", "History", "trends.html"],
   ];
   const ACTIONS = [
