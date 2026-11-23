@@ -1,0 +1,5 @@
+services:
+    # Public under a test name, because no service calls the work source yet and a test proves the container hands it each project's eligibility label.
+    test.intakt.eligibility_labels:
+        alias: Intakt\Core\Watcher\Contract\EligibilityLabels
+        public: true

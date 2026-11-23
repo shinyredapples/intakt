@@ -8,7 +8,7 @@ Until the takeover, two sets of GitHub Apps run side by side: the earlier loop's
 
 All of these must hold. If one does not, stop here.
 
-- **Intakt builds tasks on its own.** Intakt takes its tasks from GitHub issues and runs builds in its build lane. Today both are planned (see the [user guide](user-manual.md)), and the `eligibility_label` key of a project's `watch` section is accepted but not read yet (see `config/intakt.example.yaml`), so this runbook cannot be run on the current code.
+- **Intakt builds tasks on its own.** Intakt takes its tasks from GitHub issues and runs builds in its build lane. Today both are planned (see the [user guide](user-manual.md)), and the `eligibility_label` key of a project's `watch` section is read only by the code that chooses the next task, which nothing calls yet (see `config/intakt.example.yaml`), so this runbook cannot be run on the current code.
 - **The labeled share ran.** Intakt has built the tasks carrying its own eligibility label end to end, and the weekly report compared its outcomes with the loop's (plan task T72).
 - **Every parity item names an Intakt test.** Each line of [Parity for the takeover](../architecture/parity.md) is checked and names an Intakt test that exists and passes (plan task T73).
 - **The owner gave the go.** Each stage of the switch starts with the owner's go.
@@ -18,7 +18,7 @@ Write down, before the first step:
 
 - the output of `php bin/console intakt:status` (the status of every project as one JSON line);
 - the open pull requests on each project, and who opened each one (the loop's App or a co-existence App);
-- the label the loop builds from, and the label in Intakt's `eligibility_label` for each project (the example configuration uses `intakt`);
+- the label the loop builds from, and the label in Intakt's `eligibility_label` for each project (`intakt` when the key is left out, as in the example configuration);
 - which projects run in `mode: reviewer-for-loop`, and for each one how the loop waits for Intakt's review (for example a required `intakt/review` status check on the branch, or a setting of the loop that hands its review to Intakt).
 
 ## Takeover
