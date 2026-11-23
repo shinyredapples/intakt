@@ -141,6 +141,20 @@ NODE_PATH="$(npm root --global)" bin/ui-check http://localhost:7780
 
 The address defaults to `http://localhost:7780`. `CHROME_PATH` names a Chrome or Chromium to use in place of Playwright's own browser.
 
+### Walking user journeys with the journey check
+
+`bin/journey-check` walks user journeys through a running dashboard in a headless browser, each from a fresh page, finding buttons and headings by their role and visible text. It prints one line per journey: passed, or the number and name of the step where it failed, the reason and a screenshot saved as `var/journey-check/<journey>-step-<n>.png`. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run (nothing answering at the address, no Playwright, or no browser).
+
+Its one journey for now, **first run without a key**, opens `/setup`, presses **Play the demo run** under **See a real review**, follows the run from `/demo` to its review page, waits for the verdict and checks that the findings to fix are listed. It needs a compose demo whose demo run has not been played yet. [Journey check](../architecture/journey-check.md) lists each step.
+
+```sh
+npm install --global playwright
+npx playwright install chromium
+NODE_PATH="$(npm root --global)" bin/journey-check http://localhost:7780
+```
+
+The address defaults to `http://localhost:7780`, and `CHROME_PATH` works as for the UI check.
+
 ## Running the container image
 
 The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. To check an image you built, run `docker/smoke-test.sh <image>`: it starts the image with throwaway secrets and checks that the dashboard answers, that MCP requests go to their own worker, that the server runs as an unprivileged user and that the admin port stays inside the container, then removes what it started. CI builds the image and runs this check on main and on every pull request that changes more than `docs/`, `tests/` or `upstream/` (the `image` job in `.github/workflows/ci.yml`). Every release also publishes a checked image, `ghcr.io/shinyredapples/intakt:<version>` and `:latest` (see [Releasing](../releasing.md#the-container-image)); use it instead of `docker build` when you run a release. Between two requests the worker clears the signed-in user, the database entities it loaded and the other per-request state of Intakt's own services, so one browser never sees another's flash messages or data. Each request also starts with the file permission mask (`umask`), locale and environment variables the worker started with, whatever the request before changed. The same reset runs between two messages of a consumer, so a reviewer's model, tools and conversation stay with its own review: the next one connects to the review tools again and sends only its own model, tools and messages (checked by `tests/Application/SymfonyAiResetTest.php`). A test in the repository (`tests/Application/WorkerModeTest.php`) checks the rest, both as the image runs and with `FRANKENPHP_RESET_KERNEL=1` (a fresh copy of Intakt's kernel for each request). The image does not set it.

@@ -106,6 +106,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Quality gates](quality-gates.md): every gate `bin/check` runs.
 - [CI](ci.md): what runs on GitHub Actions and when. Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
 - [Journeys](journeys.md): end-to-end tests of what a user does in a fresh install.
+- [Journey check](journey-check.md): user journeys walked in a real browser against a running dashboard.
 - [The journey page](journey-page.md): how `docs/journey.md` and its charts are regenerated.
 - [Releases](releases.md): the labels each pull request gets from its title type, for the release notes.
 - [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors.

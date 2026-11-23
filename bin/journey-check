@@ -1,0 +1,170 @@
+#!/usr/bin/env node
+// Walks user journeys through a running dashboard in a headless browser, as a person would, and reports each one as passed or failed.
+// A failed journey names the step where it broke and saves a screenshot of the page there as var/journey-check/<journey>-step-<n>.png.
+// Usage: bin/journey-check [address of a running dashboard, default http://localhost:7780]
+// Needs Node.js 22 and Playwright (NODE_PATH names where it is installed); CHROME_PATH names a system Chrome or Chromium.
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+const DEFAULT_ADDRESS = 'http://localhost:7780';
+const OUT = path.resolve(__dirname, '..', 'var', 'journey-check');
+const STEP_TIMEOUT_MS = 15_000;
+// The recorded demo run takes about a minute from Play to its verdict, so its steps wait far longer than a click does.
+const RUN_TIMEOUT_MS = 180_000;
+const VERDICT = /^(Approved|Changes needed|Blocked:|Failed:)/;
+
+// Controls are found by role and visible text only, so a redesign keeps the journeys while a renamed button fails the journey a person would miss it in.
+const JOURNEYS = [
+  {
+    name: 'first run without a key',
+    steps: [
+      {
+        name: '/setup shows See a real review',
+        run: async (page, address) => {
+          await page.goto(address + '/setup');
+          await page.getByRole('heading', { name: 'See a real review', level: 1 }).waitFor();
+        },
+      },
+      {
+        name: 'Play the demo run under See a real review leads to /demo',
+        run: async (page) => {
+          await page.getByRole('region', { name: 'See a real review' }).getByRole('button', { name: 'Play the demo run' }).click();
+          await page.waitForURL(/\/demo(\?|$)/);
+          await page.getByRole('heading', { name: 'The demo run', level: 1 }).waitFor();
+        },
+      },
+      {
+        name: 'the recording plays onto the dashboard',
+        run: async (page) => {
+          await page.waitForURL(/\/reviews\/[^/?#]+$/, { timeout: RUN_TIMEOUT_MS });
+          await page.getByRole('complementary', { name: 'Demo tour' }).waitFor();
+        },
+      },
+      {
+        name: 'the run reaches its verdict',
+        run: async (page) => {
+          await page.getByRole('region', { name: VERDICT }).waitFor({ timeout: RUN_TIMEOUT_MS });
+        },
+      },
+      {
+        name: 'the review page shows the findings',
+        run: async (page) => {
+          await page.getByRole('region', { name: 'To fix' }).getByRole('link').first().waitFor();
+        },
+      },
+    ],
+  },
+];
+
+async function main(argv) {
+  const { chromium } = require('playwright');
+  const address = (argv[0] ?? DEFAULT_ADDRESS).replace(/\/+$/, '');
+
+  await expectAnswer(address);
+  clearScreenshots();
+  const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
+  try {
+    const results = [];
+    for (const journey of JOURNEYS) results.push(await runJourney(browser, address, journey));
+    console.log(report(results));
+
+    return exitCode(results);
+  } finally {
+    await browser.close();
+  }
+}
+
+// A dashboard that does not answer is a check that could not run, not a journey that failed.
+async function expectAnswer(address) {
+  try {
+    await fetch(address + '/', { redirect: 'manual' });
+  } catch (error) {
+    throw new Error(`nothing answers at ${address}: ${error.cause?.code || error.cause?.message || error.message}`);
+  }
+}
+
+function clearScreenshots() {
+  fs.mkdirSync(OUT, { recursive: true });
+  for (const file of fs.readdirSync(OUT)) if (file.endsWith('.png')) fs.unlinkSync(path.join(OUT, file));
+}
+
+// A fresh context per journey, so no cookie, storage or open page of one journey changes what the next one sees.
+async function runJourney(browser, address, journey, out = OUT) {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(STEP_TIMEOUT_MS);
+
+    return { journey: journey.name, failure: await walk(page, address, journey, out) };
+  } finally {
+    await context.close();
+  }
+}
+
+async function walk(page, address, journey, out) {
+  for (const [index, step] of journey.steps.entries()) {
+    try {
+      await step.run(page, address);
+    } catch (error) {
+      return { number: index + 1, step: step.name, error: reasonOf(error), screenshot: await screenshot(page, journey, index + 1, out) };
+    }
+  }
+
+  return null;
+}
+
+// Playwright's message ends in a call log; its first line and the locator it waited for are what a reader needs.
+function reasonOf(error) {
+  const lines = String(error?.message ?? error).split('\n').map((line) => line.trim());
+  const waited = lines.find((line) => line.includes('waiting for'));
+
+  return waited === undefined ? lines[0] : `${lines[0]} (${waited})`;
+}
+
+// A page that crashed cannot be photographed, and that must not hide the step that broke.
+async function screenshot(page, journey, number, out) {
+  const file = `${slugOf(journey.name)}-step-${number}.png`;
+  fs.mkdirSync(out, { recursive: true });
+
+  return page.screenshot({ path: path.join(out, file), fullPage: true }).then(
+    () => path.relative(path.resolve(__dirname, '..'), path.join(out, file)),
+    () => null,
+  );
+}
+
+function slugOf(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function report(results) {
+  const lines = results.flatMap(resultLines);
+  const failed = results.filter((result) => result.failure !== null).length;
+  lines.push(`Journey check: ${results.length} journeys, ${results.length - failed} passed, ${failed} failed.`);
+
+  return lines.join('\n');
+}
+
+function resultLines(result) {
+  if (result.failure === null) return [`${result.journey}: passed`];
+  const { number, step, error, screenshot: shot } = result.failure;
+
+  return [`${result.journey}: failed at step ${number}, ${step}`, `  ${error}`, `  screenshot: ${shot ?? 'none, the page could not be captured'}`];
+}
+
+function exitCode(results) {
+  return results.some((result) => result.failure !== null) ? 1 : 0;
+}
+
+module.exports = { JOURNEYS, runJourney, report, exitCode };
+
+if (require.main === module) {
+  main(process.argv.slice(2)).then(
+    (code) => (process.exitCode = code),
+    (error) => {
+      console.error('Journey check stopped: ' + error.message);
+      process.exitCode = 2;
+    },
+  );
+}

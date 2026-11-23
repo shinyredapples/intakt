@@ -10,6 +10,7 @@ Worth knowing:
 - Each journey gets up to 240 seconds, and a failing one is one finding that names its step.
 - `JourneyTestCase` is the base class: `visit()` for pages, `console()` for commands, `publishedUpdates()` for what the hub recorded.
 - `bin/journey-alarm` turns a red run on main into one task.
+- `bin/journey-check` walks journeys in a real browser against a running dashboard instead ([Journey check](journey-check.md)).
 
 The rest of this page is the detailed reference.
 
