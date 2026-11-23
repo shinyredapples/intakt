@@ -79,18 +79,6 @@ final readonly class ShowBoardController
         ])));
     }
 
-    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
-    private function infrastructureRow(): InfrastructureRow
-    {
-        try {
-            $reading = $this->server->read();
-        } catch (AdminApiNotOnLocalhost $refused) {
-            return InfrastructureRow::refused($this->redactor->redact($refused->getMessage()));
-        }
-
-        return InfrastructureRow::of($reading, $this->redactor->redact(...));
-    }
-
     /**
      * @param array<string, string> $parameters
      */
@@ -136,5 +124,17 @@ final readonly class ShowBoardController
     private function redactedMain(FailingMain $main): FailingMain
     {
         return new FailingMain($main->project, $main->main, $main->toolFingerprint, $this->redactor->redact($main->reason));
+    }
+
+    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
+    private function infrastructureRow(): InfrastructureRow
+    {
+        try {
+            $reading = $this->server->read();
+        } catch (AdminApiNotOnLocalhost $refused) {
+            return InfrastructureRow::refused($this->redactor->redact($refused->getMessage()));
+        }
+
+        return InfrastructureRow::of($reading, $this->redactor->redact(...));
     }
 }
