@@ -102,12 +102,10 @@ final class StoredIssue
         $this->vouchedLabels = $stored->vouchedLabels;
     }
 
-    // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body.
+    // Compared as the queued item, because the pick asks the same of it and a row whose listing went unchanged keeps the numbers without the body.
     public function isListedAs(IssueHistory $history, IssueReferences $references): bool
     {
-        $body = $history->body;
-
-        return $this->hasLabels($history->currentLabels) && $this->namesNumbers($references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
+        return $this->queued()->isListedAs($history, $references);
     }
 
     public function isVouched(): bool
