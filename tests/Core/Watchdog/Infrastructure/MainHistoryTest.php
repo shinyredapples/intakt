@@ -298,6 +298,37 @@ final class MainHistoryTest extends TestCase
         }
     }
 
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function paddedRsaNumbers(): iterable
+    {
+        yield 'the exponent' => [1];
+        yield 'the modulus' => [2];
+    }
+
+    // Forced order: the padded copy is the one spelling of the owner's key that would outlive the owner-key exclusion and read as peer_signed behind a fatal owner check, so it must never become a peer key.
+    #[DataProvider('paddedRsaNumbers')]
+    public function testTheOwnersRsaKeyWithALeadingZeroByteAddedToANumberIsRefusedAsAPeerKey(int $number): void
+    {
+        $this->privateKey('owner', ['-t', 'rsa', '-b', '2048']);
+        [$type, $key] = explode(' ', $this->publicKey('owner'));
+        $blob = (string) base64_decode($key, true);
+        $fields = [];
+        for ($offset = 0; $offset < strlen($blob); $offset += 4 + strlen($fields[array_key_last($fields)])) {
+            $fields[] = substr($blob, $offset + 4, (int) hexdec(bin2hex(substr($blob, $offset, 4))));
+        }
+        self::assertCount(3, $fields);
+        $fields[$number] = "\x00".$fields[$number];
+
+        try {
+            $this->historyWithPeers([$type.' '.$key], [self::key($type, $fields)]);
+            self::fail('A padded copy of the owner key must be refused.');
+        } catch (OwnerKeyRefused $refused) {
+            self::assertStringStartsWith('Peer key 1 is not one SSH public key', $refused->getMessage());
+        }
+    }
+
     public function testAMalformedPeerKeyIsRefusedNamingItAsAPeerKeyAndItsPosition(): void
     {
         try {
@@ -872,6 +903,7 @@ final class MainHistoryTest extends TestCase
     public static function keysAtTheShapeLimits(): iterable
     {
         yield 'an rsa modulus of exactly 1024 bits after a leading zero byte' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x80".str_repeat("\x01", 127)])];
+        yield 'an rsa exponent whose leading zero byte keeps it positive' => [self::key('ssh-rsa', ['ssh-rsa', "\x00\x80\x01", "\x00\x80".str_repeat("\x01", 127)])];
         yield 'an uncompressed ecdsa point on its curve' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', self::P256_GENERATOR])];
     }
 
@@ -910,7 +942,10 @@ final class MainHistoryTest extends TestCase
         yield 'an rsa modulus encoded as a negative mpint' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x80".str_repeat("\x01", 127)])];
         yield 'an rsa exponent encoded as a negative mpint' => [self::key('ssh-rsa', ['ssh-rsa', "\x80\x01", "\x00\x80".str_repeat("\x01", 127)])];
         yield 'an rsa exponent of zero' => [self::key('ssh-rsa', ['ssh-rsa', "\x00\x00", "\x00\x80".str_repeat("\x01", 127)])];
-        yield 'an rsa modulus of 1023 bits' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x7f".str_repeat("\xff", 127)])];
+        yield 'an rsa modulus of 1023 bits' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x7f".str_repeat("\xff", 127)])];
+        yield 'an rsa exponent with a leading zero byte it does not need' => [self::key('ssh-rsa', ['ssh-rsa', "\x00\x01\x00\x01", "\x00\x80".str_repeat("\x01", 127)])];
+        yield 'an rsa modulus with a leading zero byte it does not need' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x01".str_repeat("\x01", 128)])];
+        yield 'an rsa modulus with a second leading zero byte' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x00\x80".str_repeat("\x01", 127)])];
         yield 'an ecdsa point in hybrid form' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x07".substr(self::P256_GENERATOR, 1)])];
         yield 'a key type the check does not know' => [self::key('ssh-unknown', ['ssh-unknown', str_repeat("\x01", 32)])];
         yield 'a second line' => ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA test\nowner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB"];
