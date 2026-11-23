@@ -52,7 +52,7 @@ While the round is in review, a box headed **Now** has three parts:
 - **To fix** stays empty until the owl has judged.
 - **The judge's call** says the owl has not judged yet.
 
-To watch more, open the Full record: its live log shows each reviewer at work, the files it reads, the searches it runs, and finally its verdict and one line per finding. The page updates by itself; you never reload.
+To watch more, open the Full record: its live log shows each reviewer at work, the files it reads, the searches it runs, and finally its verdict and one line per finding. A reviewer's heading, its role and model, appears with that reviewer's first live update: a tool call, streamed text, an answer or a retry notice. When a reviewer is asked again, the new try's text replaces the old one and the heading already shown stays as it is; a reload shows the model of the latest try. Everything else updates by itself without a reload.
 
 ## While you wait
 
