@@ -73,7 +73,7 @@ final readonly class ReviewJob
         try {
             $spec = new JobSpec($this->idOf($request), $image, $this->commandFor($request), [$checkout, new JobInput($prompt, self::PROMPT)], new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
 
-            return $this->answerOf($request->model->provider, $this->ranJob($spec));
+            return $this->answerOf($request->model->provider, $this->ranJob($spec), $checkout->hostPath);
         } finally {
             $this->filesystem->remove($prompt);
         }
@@ -137,7 +137,7 @@ final readonly class ReviewJob
         }
     }
 
-    private function answerOf(Provider $provider, ?JobResult $result): ReviewJobAnswer
+    private function answerOf(Provider $provider, ?JobResult $result, string $checkout): ReviewJobAnswer
     {
         if (!$result instanceof JobResult) {
             throw ReviewJobFailure::withoutResult();
@@ -148,12 +148,12 @@ final readonly class ReviewJob
             JobCause::TimedOut => throw ReviewJobFailure::outOfTime(),
             // The CLI cannot set the script's exit code, which is not 0 only for a refusal before the CLI ran.
             JobCause::Exited => 0 === $result->end->exitCode
-                ? $this->answered($provider, $result->output)
+                ? $this->answered($provider, $result->output, $checkout)
                 : throw ReviewJobFailure::refused($this->refusalIn($result->output) ?? sprintf('it exited with %d', $result->end->exitCode)),
         };
     }
 
-    private function answered(Provider $provider, JobOutput $output): ReviewJobAnswer
+    private function answered(Provider $provider, JobOutput $output, string $checkout): ReviewJobAnswer
     {
         $status = $this->cliStatusIn($provider, $output);
 
@@ -161,7 +161,7 @@ final readonly class ReviewJob
             throw ReviewJobFailure::cliFailed($provider, $status);
         }
 
-        return ReviewJobAnswer::read($provider, $output->contents(self::ANSWER) ?? '');
+        return ReviewJobAnswer::read($provider, $output->contents(self::ANSWER) ?? '', $checkout);
     }
 
     // The script refuses before the CLI runs, so the log holds only its own lines and git's.

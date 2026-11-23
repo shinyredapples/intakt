@@ -18,6 +18,7 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -49,6 +50,7 @@ use Symfony\Component\Uid\UuidV7;
 
 // Runs the reviewer over the Anthropic bridge with a scripted HTTP client, so the request the bridge builds and the usage it reads back are the real ones.
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[UsesClass(ReviewerRuns::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(FencedToolbox::class)]
