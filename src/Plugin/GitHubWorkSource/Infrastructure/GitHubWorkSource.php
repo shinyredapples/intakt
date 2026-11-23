@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemNotAsPlanned;
 use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
@@ -76,6 +77,8 @@ final readonly class GitHubWorkSource implements WorkSource
         foreach ($plan->ready as $issue) {
             try {
                 $steered = $this->isStillSteered($project, $issue);
+            } catch (ItemNotAsPlanned $changed) {
+                return $this->readAgainOnTheNextListing($project, $issue, $changed);
             } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
                 $this->logger->warning('The write-access check of task #{number} of project {project} failed, so nothing is picked: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
 
@@ -107,7 +110,7 @@ final readonly class GitHubWorkSource implements WorkSource
 
         $history = $this->histories->of($project, $issue->number(), $issue->updatedAt());
         if (!$issue->isListedAs($history, $this->references)) {
-            throw new ForgeReadFailed(sprintf('GitHub holds #%d with other labels, waits or closing references than it was planned with, so its history is not of the planned item.', $issue->number()));
+            throw ItemNotAsPlanned::listedOtherwise($issue->number());
         }
 
         $vouching = Vouching::of($issue->author(), $history, $steers);
@@ -116,10 +119,23 @@ final readonly class GitHubWorkSource implements WorkSource
         }
 
         if (!$issue->isVouchedAs($vouching)) {
-            throw new ForgeReadFailed(sprintf('The labels of #%d are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $issue->number()));
+            throw ItemNotAsPlanned::vouchedOtherwise($issue->number());
         }
 
         return true;
+    }
+
+    // Nothing is picked even once the item is forgotten, because a task behind it would be picked out of order; a refused forget is only logged, because the tick is fail-closed either way.
+    private function readAgainOnTheNextListing(string $project, QueuedIssue $issue, ItemNotAsPlanned $changed): WorkPick
+    {
+        $this->logger->warning('Task #{number} of project {project} is not the item it was planned with, so nothing is picked and the next listing reads it again: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $changed->getMessage(), 'exception' => $changed]);
+        try {
+            $this->store->forgetVouchingOf($project, $issue->number());
+        } catch (ProjectHeldByAnotherWriter $held) {
+            $this->logger->warning('Task #{number} of project {project} could not be forgotten, so the next listing may plan it as before: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
+        }
+
+        return WorkPick::nothing(NothingPicked::TrustNotChecked);
     }
 
     // Remembered for one pick only, because the author is often the last editor and the one who applied the labels, and each ask is a forge call.
