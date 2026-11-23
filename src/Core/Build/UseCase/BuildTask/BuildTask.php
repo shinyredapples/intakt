@@ -34,7 +34,7 @@ use InvalidArgumentException;
 use LogicException;
 use NoDiscard;
 use Symfony\Component\Filesystem\Exception\IOException;
-use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
 use Symfony\Component\Lock\LockFactory;
 
 // Because the build lane calls this for one task at a time, a run stops at the first failed step and never retries it: sending a failure back to the builder is the next task.
@@ -92,7 +92,7 @@ final readonly class BuildTask
 
         try {
             $lock->acquire(true);
-        } catch (LockFailure) {
+        } catch (ExceptionInterface) {
             $this->record($run, BuildStep::Task, self::START_NOT_LOCKED);
 
             return self::START_NOT_LOCKED;
@@ -108,6 +108,16 @@ final readonly class BuildTask
         }
     }
 
+    private function record(BuildRun $run, BuildStep $step, ?string $failure): void
+    {
+        $payload = $run->stepPayload($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure);
+        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
+
+        if (!$result->succeeded()) {
+            throw BuildStepNotRecorded::for($run, $step, (string) $result->failure);
+        }
+    }
+
     // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
     private function readTask(BuildTaskRequest $request): ListedIssue|string
     {
@@ -120,16 +130,6 @@ final readonly class BuildTask
         return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
-    private function record(BuildRun $run, BuildStep $step, ?string $failure): void
-    {
-        $payload = $run->stepPayload($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure);
-        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
-
-        if (!$result->succeeded()) {
-            throw BuildStepNotRecorded::for($run, $step, (string) $result->failure);
-        }
-    }
-
     /**
      * @throws BuildStepNotRecorded
      */
@@ -137,12 +137,8 @@ final readonly class BuildTask
     {
         $results = [];
 
-        foreach (BuildStep::cases() as $step) {
-            // Read and recorded by startInOrder() before the other steps, because they need the task it returns.
-            if (BuildStep::Task === $step) {
-                continue;
-            }
-
+        // From the second step on, because startInOrder() reads and records the first, the task, which the other steps need.
+        foreach (array_slice(BuildStep::cases(), 1) as $step) {
             $result = match ($step) {
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),

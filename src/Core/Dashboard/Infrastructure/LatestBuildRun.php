@@ -11,7 +11,7 @@ use Intakt\Core\Build\Contract\BuildStepOutcome;
 final readonly class LatestBuildRun
 {
     /**
-     * @param list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}> $rows in ledger order
+     * @param list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}> $rows
      *
      * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
      */
