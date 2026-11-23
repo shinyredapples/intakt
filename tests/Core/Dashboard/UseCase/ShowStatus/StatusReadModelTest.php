@@ -468,6 +468,20 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
     }
 
+    public function testAnImpossibleCalendarDateAsTheNextReadOfAWaitingHeadIsReportedAsNone(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-30T00:00:00+00:00');
+
+        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+    }
+
+    public function testAValidNextReadOfAWaitingHeadIsReportedAsStored(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-28T23:59:00+02:00');
+
+        self::assertSame(['2026-02-28T23:59:00+02:00'], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+    }
+
     public function testARedHeadIsARedGuardDecision(): void
     {
         $this->ledger->recordRedHead('alpha', '9', 'c');

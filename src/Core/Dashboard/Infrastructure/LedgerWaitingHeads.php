@@ -84,17 +84,13 @@ final readonly class LedgerWaitingHeads
         return $waiting;
     }
 
-    // Read and written again, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
+    // Parsed before it is passed on, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
     private function momentOf(?string $moment): ?string
     {
         // The parser throws on a NUL byte instead of refusing it, so such a moment is malformed before it is parsed.
         $parsed = null === $moment || str_contains($moment, "\0") ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
-        // The parser rolls an impossible date over to the next month and only warns, so a warning makes the moment malformed.
-        if (false === $parsed || 0 !== (DateTimeImmutable::getLastErrors()['warning_count'] ?? 0)) {
-            return null;
-        }
-
-        return $parsed->format(DATE_ATOM);
+        // The parser rolls an impossible calendar date over into the next month, so only a moment that formats back to the stored text counts.
+        return false === $parsed || $parsed->format(DATE_ATOM) !== $moment ? null : $moment;
     }
 }

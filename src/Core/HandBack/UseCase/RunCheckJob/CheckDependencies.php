@@ -10,7 +10,6 @@ use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
-use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use NoDiscard;
@@ -31,7 +30,6 @@ final readonly class CheckDependencies
     /**
      * @throws HandBackNotChecked
      * @throws DockerEngineFailed
-     * @throws JobRefused
      * @throws JobEventNotRecorded
      */
     #[NoDiscard('the lease pins the snapshot and must be released')]
@@ -70,7 +68,6 @@ final readonly class CheckDependencies
 
     /**
      * @throws DockerEngineFailed
-     * @throws JobRefused
      * @throws JobEventNotRecorded
      */
     private function leaseOfANewInstall(LockInputs $inputs, DependencyStep $step, string $image): ?DependencySnapshotLease
