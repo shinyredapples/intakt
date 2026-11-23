@@ -83,9 +83,11 @@ You set Intakt up on a small server in the hall and type its address into the la
 
 ## The demo run did not play
 
-- **What you see:** "The demo run did not play." with a reason, below the Play button.
-- **Why:** the reason says it, for example a demo recording that cannot be read.
-- **What to do:** run `docker compose exec intakt php bin/console intakt:demo:remove`, then press Play again. Play creates the demo project again by itself.
+You press **Play the demo run** and the line under the button changes to "The demo run did not play." with a reason.
+
+- **What you see:** that line, with a short reason such as "The demo recording could not be read."
+- **Why:** the reason says it. The details, with file names, are only in the install's log.
+- **What to do:** fix what the reason names. If you removed the demo project with `intakt:demo:remove`, press Play again: it creates the project again. If the page still shows the completed run after a removal, reload it. A page that opened after the refusal does not show it.
 
 More cases, and the exact wording of every reason, are in the [complete reference](../reference/user-manual.md).
 
