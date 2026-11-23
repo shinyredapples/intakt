@@ -125,6 +125,32 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere;/', $rules['.live-calls'] ?? '');
     }
 
+    // The mock puts Stop at the top beside the title, so the title column takes the rest of the row instead of pushing the actions under the review path.
+    public function testTheTaskActionsStandAtTheTopBesideATitleColumnThatTakesTheRestOfTheRow(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*align-items:\s*flex-start;\s*$/', $rules['.page-head:has(> .task-actions)'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*flex:\s*1 1 280px;\s*$/', $rules['.page-head:has(> .task-actions) > div:first-child'] ?? '');
+    }
+
+    // At 390 wide a long change name moved to a line of its own and left its "/" alone at the end of the line before.
+    public function testThePagesOwnCrumbShrinksOnTheTrailsLineSoALongChangeNameWrapsThere(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*flex:\s*1 1 12ch;\s*$/', $rules['.crumbs li:last-child'] ?? '');
+        self::assertMatchesRegularExpression('/min-width:\s*0;.*overflow-wrap:\s*anywhere;/s', $rules['.crumbs li'] ?? '');
+    }
+
+    // At 390 wide the Full record's "estimated" label broke into "estimate" and "d" beside the cost.
+    public function testAFiguresKindLabelInTheHeadsFactsNeverBreaksInsideItsWord(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*white-space:\s*nowrap;\s*overflow-wrap:\s*normal;\s*$/', $rules['.page-head .meta .figure-kind'] ?? '');
+    }
+
     // At 390 wide `anywhere` let the reviewer table shrink until "correctness" broke into three lines; `break-word` keeps words whole and the scroll box takes the width.
     public function testACellOfARoundTableKeepsItsWordsWholeAndTheTableScrolls(): void
     {
