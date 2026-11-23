@@ -31,6 +31,8 @@ final readonly class Finding
         #[Valid]
         public ?Evidence $evidence,
         public bool $regression = false,
+        // A field of the output contract rather than words in the text, because plain code is to route a gap in a gate that passed without parsing prose.
+        public bool $gate_gap = false,
         // Ignored, so the schema never asks a reviewer for it and an answer naming it is refused; only plain code merges findings, and StoredFindingNormalizer keeps it in stored JSON.
         #[Ignore]
         public FindingIds $merged = new FindingIds(),

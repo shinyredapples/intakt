@@ -158,13 +158,13 @@ final readonly class ReviewsPerDay
         return (string) array_search(max([0, ...$counts]), $counts, true);
     }
 
-    private function roundsReading(int $count): string
-    {
-        return sprintf('%d %s', $count, 1 === $count ? 'round' : 'rounds');
-    }
-
     private function name(string $day): string
     {
         return $this->names[$day] ?? $day;
+    }
+
+    private function roundsReading(int $count): string
+    {
+        return sprintf('%d %s', $count, 1 === $count ? 'round' : 'rounds');
     }
 }

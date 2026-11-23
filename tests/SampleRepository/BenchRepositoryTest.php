@@ -24,13 +24,6 @@ final class BenchRepositoryTest extends TestCase
 
     private ?TemporaryRepository $repository = null;
 
-    protected function tearDown(): void
-    {
-        if ($this->repository instanceof TemporaryRepository) {
-            new Filesystem()->remove($this->repository->path);
-        }
-    }
-
     public function testEveryBenchChangeBuildsOnTheBaseAsItsOwnBranch(): void
     {
         $repository = $this->build();
@@ -102,17 +95,11 @@ final class BenchRepositoryTest extends TestCase
         return array_combine($withDefects, array_map(static fn (string $change): array => [$change], $withDefects));
     }
 
-    /**
-     * @return list<string>
-     */
-    private static function changes(): array
+    protected function tearDown(): void
     {
-        $names = [];
-        foreach (new Finder()->directories()->depth(0)->in(self::SAMPLE.'/bench')->sortByName() as $directory) {
-            $names[] = $directory->getFilename();
+        if ($this->repository instanceof TemporaryRepository) {
+            new Filesystem()->remove($this->repository->path);
         }
-
-        return $names;
     }
 
     private static function expectationsOf(string $change): Expectations
@@ -179,6 +166,19 @@ final class BenchRepositoryTest extends TestCase
         }
 
         return $repository;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function changes(): array
+    {
+        $names = [];
+        foreach (new Finder()->directories()->depth(0)->in(self::SAMPLE.'/bench')->sortByName() as $directory) {
+            $names[] = $directory->getFilename();
+        }
+
+        return $names;
     }
 
     private function commitTree(TemporaryRepository $repository, string $directory): void

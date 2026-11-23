@@ -102,6 +102,44 @@ final readonly class HighlightFragments
     }
 
     /**
+     * @return list<string>|null
+     */
+    private function linesOf(string $file): ?array
+    {
+        $contents = $this->contentsOf($file);
+
+        return null === $contents ? null : array_map(rtrim(...), explode("\n", $contents));
+    }
+
+    /**
+     * @return array<string, int>|string
+     */
+    private function additionsOn(string $root): array|string
+    {
+        // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
+        $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
+
+        // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
+        if (!$head instanceof ProcessResult || self::UNBORN_HEAD === $head->exitCode) {
+            return [];
+        }
+
+        $unreadable = $this->unreadableHistoryFinding($root, $head);
+
+        if (null !== $unreadable) {
+            return $unreadable;
+        }
+
+        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
+
+        if (!$log->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
+        }
+
+        return $this->additionsIn($log->output);
+    }
+
+    /**
      * @return list<string>
      */
     private function fragmentNames(string $root): array
@@ -150,32 +188,13 @@ final readonly class HighlightFragments
         return $fragments;
     }
 
-    /**
-     * @return array<string, int>|string
-     */
-    private function additionsOn(string $root): array|string
+    private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
     {
-        // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
-        $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
-
-        // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
-        if (!$head instanceof ProcessResult || self::UNBORN_HEAD === $head->exitCode) {
-            return [];
+        if (!$head->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
         }
 
-        $unreadable = $this->unreadableHistoryFinding($root, $head);
-
-        if (null !== $unreadable) {
-            return $unreadable;
-        }
-
-        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
-
-        if (!$log->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
-        }
-
-        return $this->additionsIn($log->output);
+        return $this->shallowHistoryFinding($root);
     }
 
     /**
@@ -195,15 +214,6 @@ final readonly class HighlightFragments
         }
 
         return $history;
-    }
-
-    private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
-    {
-        if (!$head->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
-        }
-
-        return $this->shallowHistoryFinding($root);
     }
 
     // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
@@ -244,16 +254,6 @@ final readonly class HighlightFragments
         }
 
         return $rows;
-    }
-
-    /**
-     * @return list<string>|null
-     */
-    private function linesOf(string $file): ?array
-    {
-        $contents = $this->contentsOf($file);
-
-        return null === $contents ? null : array_map(rtrim(...), explode("\n", $contents));
     }
 
     private function contentsOf(string $file): ?string

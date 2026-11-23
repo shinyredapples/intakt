@@ -573,6 +573,11 @@ final class GitHubForgeTest extends TestCase
         self::assertCount($requestsBefore, $this->requested);
     }
 
+    private function comment(string $body, string ...$credentials): ReviewComment
+    {
+        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
+    }
+
     private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
     {
         try {
@@ -582,11 +587,6 @@ final class GitHubForgeTest extends TestCase
         }
 
         throw new LogicException('The post was expected to fail.');
-    }
-
-    private function comment(string $body, string ...$credentials): ReviewComment
-    {
-        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
     }
 
     private function movedChange(GitHubForge $forge): Change

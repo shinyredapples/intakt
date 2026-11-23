@@ -52,18 +52,11 @@ final class FailedReviewerPageTest extends WebTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->browser->disableReboot();
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAReviewerStoppedAtTheLimitShowsAsFailedInPlainWordsBesideTheConsolesQuorumOutcome(): void
     {
         $review = $this->reviewedWith(new StoppingAtTheLimitForRole('Look at part 1.'));
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertSame([['role-1', 'standard-model', 'Failed stopped at its output limit'], ['role-2', 'standard-model', 'Approved']], $this->reviewerRows($page));
@@ -74,6 +67,13 @@ final class FailedReviewerPageTest extends WebTestCase
         );
         self::assertSame('blocked', $review->decision->value);
         self::assertStringNotContainsString('Exception', $page->filter('main, body')->first()->text());
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->browser->disableReboot();
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function reviewedWith(StoppingAtTheLimitForRole $vendor): ChangeReview

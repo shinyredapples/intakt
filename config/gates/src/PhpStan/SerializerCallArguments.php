@@ -38,6 +38,19 @@ final readonly class SerializerCallArguments
         return null;
     }
 
+    // keyed as PHP passes the values, because an integer key is the next positional argument and a string key names its parameter; null because an unpacked value that is no readable literal array hides what it passes
+    /**
+     * @return ?array<int|string, Expr>
+     */
+    private function passedBy(Arg $argument): ?array
+    {
+        return match (true) {
+            !$argument->unpack => $argument->name instanceof Identifier ? [$argument->name->toString() => $argument->value] : [$argument->value],
+            $argument->value instanceof Array_ => $this->entriesOf($argument->value),
+            default => null,
+        };
+    }
+
     /**
      * @param array<int|string, Expr> $values
      * @param list<string>            $names
@@ -52,19 +65,6 @@ final readonly class SerializerCallArguments
                 return is_string($key) ? in_array($key, $names, true) : $index++ === $position;
             },
         );
-    }
-
-    // keyed as PHP passes the values, because an integer key is the next positional argument and a string key names its parameter; null because an unpacked value that is no readable literal array hides what it passes
-    /**
-     * @return ?array<int|string, Expr>
-     */
-    private function passedBy(Arg $argument): ?array
-    {
-        return match (true) {
-            !$argument->unpack => $argument->name instanceof Identifier ? [$argument->name->toString() => $argument->value] : [$argument->value],
-            $argument->value instanceof Array_ => $this->entriesOf($argument->value),
-            default => null,
-        };
     }
 
     // built as a PHP array on purpose, because PHP itself then applies its key rules: a numeric string key such as '1' is the integer key, a repeated key overwrites the earlier entry in place, and a nested spread renumbers integer keys

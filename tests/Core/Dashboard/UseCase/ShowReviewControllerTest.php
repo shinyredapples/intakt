@@ -78,10 +78,10 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->givenACompletedTwoRoundReview();
         $this->ledger->startRoundOf('feat/other', 'round-other', 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h1', 'Review of feat/thing in alpha');
+        self::assertSelectorTextContains('h1', 'Full record of feat/thing in alpha');
         self::assertSame(['Review pass 1', 'Review pass 2'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
     }
 
@@ -90,7 +90,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->flagAsReplay('alpha');
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame('Replay A recording played back: its verdicts were never given on this change and never count as one.', $crawler->filter('.page-head .replay-mark')->text());
     }
@@ -110,7 +110,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->flagAsReplay('alpha');
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['Replay', 'Replay'], $crawler->filter('section.round .replay-mark')->each(static fn (Crawler $mark): string => $mark->text()));
     }
@@ -123,11 +123,13 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->judgeRound('round-1');
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $this->browser->disableReboot();
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+        $main = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [0, 1, 1, 0],
-            [$crawler->filter('#round-round-1 .replay-mark')->count(), $crawler->filter('#round-round-2 .replay-mark')->count(), $crawler->filter('.state-block .sb-head .replay-mark')->count(), $crawler->filter('.page-head .replay-mark')->count()],
+            [0, 1, 1, 0, 0],
+            [$crawler->filter('#round-round-1 .replay-mark')->count(), $crawler->filter('#round-round-2 .replay-mark')->count(), $main->filter('.state-block .sb-head .replay-mark')->count(), $main->filter('.page-head .replay-mark')->count(), $crawler->filter('.page-head .replay-mark')->count()],
         );
     }
 
@@ -136,7 +138,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->flagAsReplay('alpha');
         $this->ledger->startReplayedRoundOf('feat/thing', 'round-1', 4.0);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['Replay', 'Played 4 times as fast as recorded'], [$crawler->filter('#round-round-1 .replay-mark')->text(), $crawler->filter('#round-round-1 .replay-factor')->text()]);
     }
@@ -147,7 +149,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startReplayedRoundOf('feat/thing', 'round-1', 1.5);
         $this->ledger->judgeRound('round-1');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('Played 1.5 times as fast as recorded', $crawler->filter('#round-round-1 summary .replay-factor')->text());
     }
@@ -167,7 +169,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startReplayedRoundOf('feat/thing', 'round-1', 0.0);
         $this->ledger->startReplayedRoundOf('feat/thing', 'round-2', 'fast');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([2, 0], [$crawler->filter('section.round')->count(), $crawler->filter('.replay-factor')->count()]);
     }
@@ -176,7 +178,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(
             [['correctness', 'standard tier, model not recorded', 'Changes needed', '2'], ['security', 'standard tier, model not recorded', 'Failed The provider is down.', 'no answer']],
@@ -197,7 +199,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'security', 0);
         $this->ledger->judgeFindings('round-1', []);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'Changes needed', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
@@ -207,7 +209,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewerOn('round-1', 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
 
-        $cell = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-reviewer-round-1-correctness-model');
+        $cell = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1-reviewer-round-1-correctness-model');
 
         self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$cell->text(), $cell->attr('title')]);
     }
@@ -217,7 +219,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewerOn('round-1', 'correctness', '0');
 
-        $cell = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-reviewer-round-1-correctness-model');
+        $cell = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1-reviewer-round-1-correctness-model');
 
         self::assertSame(['0', '0'], [$cell->text(), $cell->attr('title')]);
     }
@@ -227,7 +229,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
 
-        $cell = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-reviewer-round-1-correctness-model');
+        $cell = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1-reviewer-round-1-correctness-model');
 
         self::assertSame(['standard tier, model not recorded', null], [$cell->text(), $cell->attr('title')]);
     }
@@ -236,7 +238,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('#round-round-1 table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
         self::assertNotContains('', array_merge(...$this->rowsOf($crawler->filter('table.reviewers tbody tr'))));
@@ -250,7 +252,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'correctness', 1);
         $this->ledger->failReviewer('round-1', 'security', 'The provider is down.');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['Role', 'Model', 'Outcome', 'Findings counted'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
         self::assertSame([4, 4], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $row): int => $row->filter('td')->count()));
@@ -261,7 +263,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('standard tier, model not recorded', $crawler->filter('table.reviewers tbody td')->eq(1)->text());
     }
@@ -273,7 +275,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewerOn('round-1', 'security', 'model-b');
         $this->ledger->answer('round-1', 'security', 0);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(
             [[1, 0, 'running'], [0, 1, 'Approved']],
@@ -287,7 +289,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewer('round-1', 'correctness');
         $this->ledger->answer('round-1', 'correctness', 2);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('Changes needed', $crawler->filter('#round-round-1-reviewer-round-1-correctness-state .chip')->text());
         self::assertSame('Changes requested', $crawler->filter('#round-round-1-reviewer-round-1-correctness-state .chip')->attr('title'));
@@ -298,7 +300,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['Changes needed', 'Failed'], $crawler->filter('#round-round-1 table.reviewers .chip')->each(static fn (Crawler $chip): string => $chip->text()));
         self::assertSame(['The provider is down.'], $crawler->filter('#round-round-1 table.reviewers .reviewer-outcome .muted')->each(static fn (Crawler $cause): string => $cause->text()));
@@ -310,7 +312,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewerOn('round-1', 'correctness', 'model-a');
         $this->ledger->failReviewer('round-1', 'correctness', ChangesWithoutFindings::class);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $state = $crawler->filter('#round-round-1-reviewer-round-1-correctness-state');
         self::assertSame(['Failed', 'gave no approval without naming a finding'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
@@ -322,7 +324,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['Role', 'Model', 'Outcome', 'Findings counted', 'Stop'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
         self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
@@ -336,7 +338,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewer('round-1', 'security');
         $this->ledger->answer('round-1', 'security', 0);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
         self::assertSame(['Approved', 'Approved'], [$rows[0][2], $rows[1][2]]);
@@ -349,7 +351,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->failReviewer('round-1', 'security', 'The provider is down.');
         $this->ledger->owesCatchUp('round-1', 'security');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
         self::assertSame('Failed The provider is down.; answered by the substitute openai, a catch-up review is owed', $rows[0][2]);
@@ -362,7 +364,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->failReviewer('round-1', 'correctness', 'The worker stopped.');
         $this->ledger->startReviewer('round-1', 'correctness');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([['correctness', 'standard tier, model not recorded', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
         self::assertSelectorTextContains('section.round', '1 of 2 reviewers started.');
@@ -372,7 +374,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(
             [['P2', 'F1 Text of F1.', 'File and line not recorded', JudgeCall::Act->inWords()], ['P2', 'F2 Text of F2.', 'File and line not recorded', JudgeCall::FollowUp->inWords()], ['P2', 'F3 Text of F3.', 'File and line not recorded', JudgeCall::NotActedOn->inWords()]],
@@ -384,7 +386,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertStringContainsString('the judge had nothing to mark', $crawler->filter('#round-round-2')->text());
     }
@@ -394,7 +396,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeMarksOnly('round-1', ['F1'], ['F2']);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(
             [['Severity not recorded', 'F1 Text not recorded.', 'File and line not recorded', JudgeCall::Act->inWords()], ['Severity not recorded', 'F2 Text not recorded.', 'File and line not recorded', JudgeCall::FollowUp->inWords()]],
@@ -408,7 +410,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeMarksOnly('round-1', [], []);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1')->text());
         self::assertStringContainsString('findings were not recorded', $crawler->filter('#round-round-1')->text());
@@ -418,7 +420,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertStringContainsString('The judge has not judged this round yet.', $crawler->filter('#round-round-1')->text());
         self::assertSelectorTextContains('#round-round-1-head-state .muted.state-running', 'In progress');
@@ -440,7 +442,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSelectorTextContains('#round-round-1-head-state .chip', 'Blocked');
         self::assertStringContainsString('Blocked: '.RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 10800 seconds', $crawler->filter('#round-round-1-ending')->text());
@@ -463,7 +465,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewer('round-1', 'correctness');
         self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertStringContainsString('running', $crawler->filter('#round-round-1-reviewers')->text());
         self::assertCount(0, $crawler->filter('form.stop-reviewer'));
@@ -485,7 +487,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSelectorTextContains('#round-round-1-head-state .chip', 'Failed');
         self::assertSame('Failed: the judging failed', $crawler->filter('#round-round-1-ending')->text());
@@ -496,7 +498,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->givenACompletedTwoRoundReview();
         self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(2, $crawler->filter('section.round .state-judged'));
         self::assertCount(0, $crawler->filter('.chip.state-blocked'));
@@ -506,7 +508,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['Checked', 'Checked'], $crawler->filter('section.round summary .muted.state-judged')->each(static fn (Crawler $state): string => $state->text()));
         self::assertSame(['Judged', 'Judged'], $crawler->filter('section.round summary .muted.state-judged')->each(static fn (Crawler $state): string => (string) $state->attr('title')));
@@ -517,7 +519,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame([false, true], $crawler->filter('section.round details.ev')->each(static fn (Crawler $round): bool => null !== $round->attr('open')));
     }
@@ -529,7 +531,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'correctness', 2);
         $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'defer']);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertCount(2, $crawler->filter('#round-round-1 details.ev[open] .finding-card'));
     }
@@ -540,7 +542,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->judgeFindings('round-1', []);
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(1, $crawler->filter('#round-round-1 details.ev'));
         self::assertCount(0, $crawler->filter('details.ev[open]'));
@@ -550,7 +552,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame([1, 1], $crawler->filter('section.round details.ev > summary')->each(static fn (Crawler $row): int => $row->filter('svg.chev')->count()));
     }
@@ -568,11 +570,15 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
+        $this->browser->disableReboot();
         $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $record = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame('Review of feat/thing in alpha', $crawler->filter('.page-head h1')->text());
         self::assertCount(1, $crawler->filter('.page-head p.task-sentence'));
-        self::assertCount(1, $crawler->filter('.page-head p.meta'));
+        self::assertCount(0, $crawler->filter('.page-head p.meta'));
+        self::assertSame('Full record of feat/thing in alpha', $record->filter('.page-head h1')->text());
+        self::assertCount(1, $record->filter('.page-head p.meta'));
     }
 
     public function testThePageHeadShowsTheTaskSentenceOfTheLatestRoundUnderTheTitle(): void
@@ -597,7 +603,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['rounds', 'tokens', 'wallet', 'clock'], $crawler->filter('.page-head p.meta > span svg.i')->each($this->iconName(...)));
     }
@@ -606,7 +612,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['round-1', 'Started 2026-10-28 12:00:00 UTC'], $crawler->filter('#round-round-1 .meta > span')->each(static fn (Crawler $fact): string => $fact->text()));
     }
@@ -615,7 +621,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([['1500', '0', '0', '0', '500', '2000', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
         self::assertSame([['700', '0', '0', '0', '100', '800', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
@@ -627,7 +633,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->priceModelA();
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('0.0080 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
         self::assertSame('0.0024 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
@@ -639,7 +645,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->useRecordedTokens('round-1', ['prompt' => 10, 'completion' => 1, 'total' => 11], '<b>odd</b>');
 
-        $this->browser->request('GET', '/reviews/round-1');
+        $this->browser->request('GET', '/reviews/round-1/record');
 
         $page = (string) $this->browser->getResponse()->getContent();
         self::assertStringContainsString('unknown, no price for &lt;b&gt;odd&lt;/b&gt;', $page);
@@ -654,7 +660,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
         $this->ledger->useRecordedTokens('round-2', ['prompt' => 10, 'completion' => 1, 'total' => 11], 'model-b');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('0.0050 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
         self::assertSelectorTextContains('.page-head p.meta', 'Cost: unknown, no price for model-b');
@@ -665,7 +671,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->useRecordedTokens('round-1', ['account' => 'anthropic.default', 'prompt' => 4, 'completion' => 700, 'cached' => 39500, 'cache_creation' => 1500, 'cache_read' => 38000, 'total' => null]);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([['39504', '38000', '1500', '0', '700', '40204', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
@@ -675,7 +681,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->useTokens('round-elsewhere', 100, 10);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([['0', '0', '0', '0', '0', '0', '0.0000 USD, price date unknown']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
@@ -685,10 +691,10 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRound('round-1', 'alpha');
         $this->ledger->startRound('round-2', 'alpha');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['Review pass (number not recorded)'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
-        self::assertSelectorTextContains('h1', 'Review of round round-2 in alpha');
+        self::assertSelectorTextContains('h1', 'Full record of round round-2 in alpha');
     }
 
     public function testARoundOfTheSameChangeNameInAnotherProjectIsAnotherReview(): void
@@ -696,7 +702,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startRound('round-beta', 'beta');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertCount(1, $crawler->filter('section.round'));
     }
@@ -716,7 +722,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeFindings('round-1', ['<b>F1</b>' => 'act']);
 
-        $this->browser->request('GET', '/reviews/round-1');
+        $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSelectorNotExists('main b');
         self::assertStringContainsString('Text of &lt;b&gt;F1&lt;/b&gt;.', (string) $this->browser->getResponse()->getContent());
@@ -735,7 +741,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['alpha', 'feat/thing', '2 rounds', '2,800 tokens', 'Latest round started 2026-10-28 12:00:00 UTC'], array_values(array_filter($crawler->filter('.page-head p.meta > span')->each(static fn (Crawler $fact): string => self::wordsOf($fact)), static fn (string $fact): bool => !str_starts_with($fact, 'Cost:'))));
     }
@@ -744,7 +750,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['Review pass 1', 'Checked', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
         self::assertSame(['Review pass 2', 'Checked', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
@@ -758,7 +764,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'correctness', 3);
         $this->ledger->judgeMarksOnly('round-1', [], []);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertResponseIsSuccessful();
         $summary = $crawler->filter('#round-round-1 details.ev > summary')->text();
@@ -774,7 +780,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'correctness', 5);
         $this->ledger->judgeMarksOnly('round-1', ['F1'], ['F2']);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $summary = $crawler->filter('#round-round-1 details.ev > summary')->text();
         self::assertStringContainsString('findings not recorded, 2 marked by the judge', $summary);
@@ -785,7 +791,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenARoundJudgedChanges();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['Review pass 1', 'Changes needed', 'Checked', '1 finding', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
     }
@@ -794,7 +800,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenARoundJudgedChanges();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertStringContainsString('M20 4v5h-5', $crawler->filter('#round-round-1 summary > .chip')->html());
     }
@@ -803,7 +809,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenARoundJudgedChanges();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertDoesNotMatchRegularExpression('/\b(changes|approve|act|verdict)\b/', $crawler->filter('#round-round-1 details.ev > summary')->text());
     }
@@ -815,7 +821,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'security', 0);
         $this->ledger->judgeRound('round-1');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('Approved', $crawler->filter('#round-round-1 summary > .chip.approved')->text());
     }
@@ -827,7 +833,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'security', 0);
         $this->ledger->judgeRound('round-1');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $crawler->filter('#round-round-1-outcome')->text());
     }
@@ -839,7 +845,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->failReviewer('round-1', 'security', 'The provider is down.');
         $this->ledger->judgeRound('round-1');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(ReviewOutcome::Failed->value, $crawler->filter('#round-round-1 summary > .chip.broken')->text());
     }
@@ -857,7 +863,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenARoundJudgedAndASecondRunning();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(1, $crawler->filter('details.ev'));
         self::assertCount(0, $crawler->filter('#round-round-2 details'));
@@ -881,9 +887,11 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewerOn('round-1', 'correctness', 'Kimi K3');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $this->browser->disableReboot();
+        $main = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
-        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running'], $main->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
         self::assertSame([['correctness (Kimi K3 (Moonshot AI)) live', 'Kimi K3']], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): array => [$heading->text(), $heading->attr('title')]));
     }
 
@@ -891,11 +899,12 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenARoundJudgedAndASecondRunning();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $this->browser->disableReboot();
+        $links = $this->browser->request('GET', '/reviews/round-2')->filter('.state-block a.sb-finding');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
-        $links = $crawler->filter('.state-block a.sb-finding');
         self::assertCount(1, $links);
-        self::assertSame('#round-round-1-finding-F1', $links->attr('href'));
+        self::assertSame('/reviews/round-1/record#round-round-1-finding-F1', $links->attr('href'));
         self::assertCount(1, $crawler->filter('li.finding-card#round-round-1-finding-F1'));
     }
 
@@ -905,11 +914,12 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $this->browser->disableReboot();
+        $links = $this->browser->request('GET', '/reviews/round-2')->filter('.state-block a.sb-finding');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
-        $links = $crawler->filter('.state-block a.sb-finding');
         self::assertSame(['P1F1 Text of F1.'], $links->each(static fn (Crawler $link): string => $link->text()));
-        self::assertSame('#round-round-1-finding-F1', $links->attr('href'));
+        self::assertSame('/reviews/round-1/record#round-round-1-finding-F1', $links->attr('href'));
         self::assertSame(['F1'], $crawler->filter('#round-round-1 .finding-card .fc-id')->each(static fn (Crawler $id): string => $id->text()));
         self::assertSame(['Also reported as F2'], $crawler->filter('#round-round-1 .finding-card .fc-merged')->each(static fn (Crawler $merged): string => $merged->text()));
     }
@@ -927,10 +937,10 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenARoundJudgedAndASecondRunning();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(2, $crawler->filter('.task-grid > .tl-pane .round'));
-        self::assertSame('Live log of review pass 2', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame('Live log of review pass 2', $crawler->filter('.task-grid > section.log-pane h2')->text());
         self::assertSame(['correctness (standard tier, model not recorded) live', 'security (standard tier, model not recorded) live'], $crawler->filter('.log-pane #round-round-2-live .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
         self::assertCount(0, $crawler->filter('.tl-pane .live'));
     }
@@ -939,7 +949,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     {
         $this->givenACompletedTwoRoundReview();
 
-        $this->browser->request('GET', '/reviews/round-2');
+        $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSelectorNotExists('.log-pane');
         self::assertSelectorExists('.task-grid > .tl-pane #round-round-2');
@@ -950,7 +960,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->givenACompletedTwoRoundReview();
         $this->ledger->startRoundOf('feat/thing', 'round-3', 3);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-3');
+        $crawler = $this->browser->request('GET', '/reviews/round-3/record');
 
         self::assertSame('Each reviewer\'s tool calls and text appear here as it works.', $crawler->filter('.log-pane .log-empty')->text());
         self::assertCount(0, $crawler->filter('#round-round-3-live .live'));
@@ -963,7 +973,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
         $this->ledger->startReviewer('round-2', 'correctness');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(1, $crawler->filter('.log-pane'));
         self::assertCount(1, $crawler->filter('#round-round-2-live'));
@@ -976,9 +986,20 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $change = 'feat/'.str_repeat('a-very-long-branch-name-', 8);
         $this->ledger->startRoundOf($change, 'round-1', 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame($change, $crawler->filter('.page-head p.meta span.mono')->text());
+    }
+
+    public function testEveryTableOfTheReviewPageScrollsInANamedRegionTheKeyboardReaches(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        $wrappers = $crawler->filter('.table-scroll');
+        self::assertGreaterThan(0, $wrappers->count());
+        self::assertCount($wrappers->count(), $crawler->filter('.table-scroll[tabindex="0"][role="region"][aria-label]:not([aria-label=""])'));
     }
 
     /**
@@ -1010,17 +1031,6 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     private function priceModelA(): void
     {
         self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
-    }
-
-    public function testEveryTableOfTheReviewPageScrollsInANamedRegionTheKeyboardReaches(): void
-    {
-        $this->givenACompletedTwoRoundReview();
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        $wrappers = $crawler->filter('.table-scroll');
-        self::assertGreaterThan(0, $wrappers->count());
-        self::assertCount($wrappers->count(), $crawler->filter('.table-scroll[tabindex="0"][role="region"][aria-label]:not([aria-label=""])'));
     }
 
     private function givenACompletedTwoRoundReview(): void

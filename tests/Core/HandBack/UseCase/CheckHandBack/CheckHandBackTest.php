@@ -49,16 +49,6 @@ final class CheckHandBackTest extends TestCase
 {
     private BuildHistory $history;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testNewCommitsOnABranchNotPushedYetAreAcceptedOnTopOfMain(): void
     {
         $this->history->commit('First');
@@ -506,6 +496,16 @@ final class CheckHandBackTest extends TestCase
         $this->expectException(HandBackNotChecked::class);
 
         (void) $this->checker()->check(new HandBack($this->history->folder, 'task', $this->history->file(''), false, new JobCredentials()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     private function movedMain(): string

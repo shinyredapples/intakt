@@ -135,6 +135,15 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*display:\s*inline-block;\s*min-height:\s*44px;\s*$/', $rules['.page-head .lead .headline-setup'] ?? '');
     }
 
+    // The running headline is a link alone in its line too, since the line no longer goes on to what waits (UX2 home, #3326).
+    public function testOnAPhoneTheRunningHeadlineLinkIsAtLeast44PxTall(): void
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
+        $rules = $this->rulesOf(implode("\n", $blocks[1]));
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*inline-block;\s*min-height:\s*44px;\s*$/', $rules['.page-head .lead .headline-run'] ?? '');
+    }
+
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void
     {
         $rules = $this->rulesOf($this->mediaBlock('min-width: 1700px'));

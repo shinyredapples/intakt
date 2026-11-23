@@ -30,6 +30,16 @@ final readonly class TimelineSvg
         return $this->canvas->opened('' === $timeline->title ? 'Timeline' : $timeline->title, $y).$marks.'</svg>';
     }
 
+    private function at(float $x, float $y): string
+    {
+        return 'x="'.$this->canvas->number($x).'" y="'.$this->canvas->number($y).'"';
+    }
+
+    private function text(string $attributes, string $text): string
+    {
+        return '<text '.$attributes.'>'.$this->canvas->text($text).'</text>';
+    }
+
     /**
      * @return array{string, float}
      */
@@ -53,15 +63,5 @@ final readonly class TimelineSvg
         }
 
         return [$marks, $y + 12];
-    }
-
-    private function at(float $x, float $y): string
-    {
-        return 'x="'.$this->canvas->number($x).'" y="'.$this->canvas->number($y).'"';
-    }
-
-    private function text(string $attributes, string $text): string
-    {
-        return '<text '.$attributes.'>'.$this->canvas->text($text).'</text>';
     }
 }

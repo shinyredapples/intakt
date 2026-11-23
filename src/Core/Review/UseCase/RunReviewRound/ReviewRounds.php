@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Domain\ChangeRound;
@@ -65,10 +66,7 @@ final readonly class ReviewRounds
         $this->refuseAnotherNumber($command, $opened);
         $round = new ReviewRound($this->newId(), $command->target, $opened);
         $this->markAsReplayWhenItsProjectIs($round);
-
-        foreach ($command->panel->reviewers as $member) {
-            $round->addReviewer($this->newId(), $member);
-        }
+        $this->addThePanelInIdOrder($round, $command->panel);
 
         $this->entities->persist($round);
         $this->entities->flush();
@@ -129,25 +127,6 @@ final readonly class ReviewRounds
             || $this->canonicalRoundJudgedAt($round, $head->hash);
     }
 
-    // A round left under an old spelling predates every round of the canonical sequence, whose numbers do not compare with its own, so any judged canonical round of the same head supersedes it.
-    private function canonicalRoundJudgedAt(ReviewRound $round, string $head): bool
-    {
-        $canonical = ChangeAddress::canonical($round->change());
-
-        if ($canonical === $round->change()) {
-            return false;
-        }
-
-        /** @var list<ReviewRound> $rounds */
-        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.state = :judged', ReviewRound::class))
-            ->setParameter('project', $round->project())
-            ->setParameter('change', $canonical)
-            ->setParameter('judged', RoundState::Judged->value)
-            ->getResult();
-
-        return array_any($rounds, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head);
-    }
-
     // In canonical form, because the watcher names the pull request as the forge lists it and a round stores it canonically (StoredFindings::openRound()). By round number as judgedAfter() orders them, not by id, because an id follows a clock that can go back and would pick a round the publication then drops as superseded.
     public function latestJudgedAt(string $project, string $change, string $head): ?ReviewRound
     {
@@ -162,21 +141,24 @@ final readonly class ReviewRounds
             ?? $this->judgedUnderAnOldSpelling($project, $change, $head);
     }
 
-    // Only when the canonical sequence never judged this head, because a round that migration Version20261122100000 left under another spelling is the only verdict the head has; numbers of those sequences do not compare with each other, so the highest number decides among them and an id never does.
-    private function judgedUnderAnOldSpelling(string $project, string $change, string $head): ?ReviewRound
+    // Newest first: the canonical sequence by number, then the rounds migration Version20261122100000 left under another spelling, which predate it and among which the highest number decides, as judgedUnderAnOldSpelling() orders them. Matched by the canonical form, because the caller may name the change as the forge lists it.
+    /**
+     * @return list<ReviewRound>
+     */
+    public function ofEverySpelling(string $project, string $change): array
     {
         $canonical = ChangeAddress::canonical($change);
 
         /** @var list<ReviewRound> $rounds */
-        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change != :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project ORDER BY r.change.number DESC', ReviewRound::class))
             ->setParameter('project', $project)
-            ->setParameter('change', $canonical)
-            ->setParameter('judged', RoundState::Judged->value)
             ->getResult();
+        $ofChange = array_values(array_filter($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical));
 
-        // Matched by the canonical form of the stored address, as the migration grouped them, so an alias with a suffix is found and a local branch that differs only in case is not; the address is compared first so an unrelated round with a malformed historical identity is never read.
-        return array_find($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical
-            && $round->identity()->commits->head->hash === $head);
+        return [
+            ...array_filter($ofChange, static fn (ReviewRound $round): bool => $round->change() === $canonical),
+            ...array_filter($ofChange, static fn (ReviewRound $round): bool => $round->change() !== $canonical),
+        ];
     }
 
     // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.
@@ -217,6 +199,42 @@ final readonly class ReviewRounds
     public function openFindingsOf(ReviewRound $round): array
     {
         return $this->findings->openFor($round);
+    }
+
+    // A round left under an old spelling predates every round of the canonical sequence, whose numbers do not compare with its own, so any judged canonical round of the same head supersedes it.
+    private function canonicalRoundJudgedAt(ReviewRound $round, string $head): bool
+    {
+        $canonical = ChangeAddress::canonical($round->change());
+
+        if ($canonical === $round->change()) {
+            return false;
+        }
+
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.state = :judged', ReviewRound::class))
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $canonical)
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        return array_any($rounds, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head);
+    }
+
+    // Only when the canonical sequence never judged this head, because a round that migration Version20261122100000 left under another spelling is the only verdict the head has; numbers of those sequences do not compare with each other, so the highest number decides among them and an id never does.
+    private function judgedUnderAnOldSpelling(string $project, string $change, string $head): ?ReviewRound
+    {
+        $canonical = ChangeAddress::canonical($change);
+
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change != :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', $canonical)
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        // Matched by the canonical form of the stored address, as the migration grouped them, so an alias with a suffix is found and a local branch that differs only in case is not; the address is compared first so an unrelated round with a malformed historical identity is never read.
+        return array_find($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical
+            && $round->identity()->commits->head->hash === $head);
     }
 
     /**
@@ -289,6 +307,11 @@ final readonly class ReviewRounds
         }
     }
 
+    private function newId(): UuidV7
+    {
+        return new UuidV7(UuidV7::generate($this->clock->now()));
+    }
+
     private function markAsReplayWhenItsProjectIs(ReviewRound $round): void
     {
         if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
@@ -296,8 +319,14 @@ final readonly class ReviewRounds
         }
     }
 
-    private function newId(): UuidV7
+    // The ids are sorted before they are handed out in panel order, because a stored round lists its reviewers by id and an id taken at a clock time that went back would sort before the one taken just before it.
+    private function addThePanelInIdOrder(ReviewRound $round, Panel $panel): void
     {
-        return new UuidV7(UuidV7::generate($this->clock->now()));
+        $ids = array_map($this->newId(...), $panel->reviewers);
+        usort($ids, static fn (UuidV7 $one, UuidV7 $other): int => $one->compare($other));
+
+        foreach ($panel->reviewers as $position => $member) {
+            $round->addReviewer($ids[$position], $member);
+        }
     }
 }

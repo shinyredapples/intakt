@@ -114,12 +114,6 @@ final class CutStreamRetryVendorTest extends KernelTestCase
      */
     private array $streamed = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new InMemoryLedger();
-        $this->updates = new RecordedRoundUpdates();
-    }
-
     public function testAReviewerAskedAgainAfterACutStreamIsMarkedBeforeTheAnswerOfItsRetryAndTheCutAnswerIsNeverShown(): void
     {
         $answer = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json()));
@@ -251,6 +245,12 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new InMemoryLedger();
+        $this->updates = new RecordedRoundUpdates();
+    }
+
     /**
      * @param Closure(): ResultInterface $retry
      */
@@ -290,13 +290,6 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         return null;
     }
 
-    private function request(?ReviewerConversation $conversation = null): ReviewRequest
-    {
-        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
-
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), $conversation ?? new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
     /**
      * @param ?Closure(PlatformInterface): PlatformInterface $accounts
      */
@@ -310,5 +303,12 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(?ReviewerConversation $conversation = null): ReviewRequest
+    {
+        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), $conversation ?? new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }

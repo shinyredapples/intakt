@@ -34,16 +34,6 @@ final class DoctrineHoldsTest extends KernelTestCase
     private MockClock $clock;
     private DoctrineHolds $holds;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->holds = new DoctrineHolds($entities, $this->clock);
-    }
-
     public function testAUsageLimitCoolsTheAccountDownUntilItsReset(): void
     {
         self::assertSame(ReadingOutcome::Recorded, $this->holds->coolDown($this->claude('main'), $this->later('+2 hours')));
@@ -122,18 +112,28 @@ final class DoctrineHoldsTest extends KernelTestCase
         self::assertSame([], $this->holds->sharedInEffect());
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $this->holds = new DoctrineHolds($entities, $this->clock);
+    }
+
     private function cool(Account $account, string $resetIn): void
     {
         self::assertSame(ReadingOutcome::Recorded, $this->holds->coolDown($account, $this->later($resetIn)));
     }
 
-    private function later(string $modifier): DateTimeImmutable
-    {
-        return $this->clock->now()->modify($modifier);
-    }
-
     private function claude(string $name): Account
     {
         return new Account(Provider::ClaudeCode, $name);
+    }
+
+    private function later(string $modifier): DateTimeImmutable
+    {
+        return $this->clock->now()->modify($modifier);
     }
 }

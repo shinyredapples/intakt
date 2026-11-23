@@ -51,16 +51,6 @@ final class BenchChangeCheckoutTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-checkout-'.bin2hex(random_bytes(4));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheRequestCarriesTheTaskTheDiffAndACheckoutOfTheChange(): void
     {
         $change = $this->checkout()->open('free-shipping', 'alpha', $this->directory);
@@ -126,6 +116,16 @@ final class BenchChangeCheckoutTest extends TestCase
     public static function unknownNames(): array
     {
         return ['missing' => ['no-such-change'], 'parent folder' => ['../base'], 'empty' => ['']];
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-checkout-'.bin2hex(random_bytes(4));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function checkout(string $fixtures = self::FIXTURES): BenchChangeCheckout

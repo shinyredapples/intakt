@@ -4,6 +4,8 @@
 <turbo-stream action="replace" method="morph" target="board-setup"><template>{{ include('dashboard/_board_setup.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>
 {#- The empty board's first-day panel with its octopus, replaced from the panel's own partial: once a review has run it renders an empty hidden target, so the octopus leaves the page and comes back when the board is empty again. -#}
 <turbo-stream action="replace" target="board-octopus"><template>{{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>
+{#- Working now, replaced from its own partial: a round that opens adds its card, and one that is judged or ends takes it away, so the section never says Reviewing for a round nobody runs (UX2 home, #3326). Morphed, not swapped: a push while a review stays in progress carries the card the page already shows, so its link stays the same node and keeps the keyboard focus it holds. -#}
+<turbo-stream action="replace" method="morph" target="working-now"><template>{{ include('dashboard/_board_working.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>
 {#- The columns a round moves between, replaced from the board's own partial: a round starts in In review and ends in Done. Each is pushed with at most the page limit of cards (pushed), so the update does not grow with the install's history. -#}
 {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
 {% for column in [constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::InReview'), constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::Done')] %}
@@ -11,3 +13,5 @@
 {#- The phone switcher's button for the same column, updated inside so it keeps the column a swipe pressed and the keyboard focus. -#}
 <turbo-stream action="update" target="switch-{{ column.slug }}"><template>{{ include('dashboard/_board_switch.html.twig', {board: board, column: column}, with_context = false) }}</template></turbo-stream>
 {% endfor %}
+{#- The status line, replaced from the partial the board page includes: it is the board's one summary of who works, so a pushed board never says "Quiet" after a reviewer started. -#}
+<turbo-stream action="replace" target="status-line"><template>{{ include('dashboard/_status_line.html.twig', {working: board.whoIsWorking()}, with_context = false) }}</template></turbo-stream>

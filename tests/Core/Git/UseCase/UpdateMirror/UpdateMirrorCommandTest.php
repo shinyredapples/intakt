@@ -42,19 +42,6 @@ final class UpdateMirrorCommandTest extends TestCase
 
     private TemporaryRepository $remote;
 
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->mirrors);
-        $this->remote->remove();
-    }
-
     public function testTheCommandPrintsThePathOfTheMirrorAndExitsWithZero(): void
     {
         $tester = $this->whenTheCommandRuns('alpha', $this->remote->path);
@@ -98,6 +85,19 @@ final class UpdateMirrorCommandTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
 
         $this->whenTheCommandRuns('alpha', $this->remote->path, $filesystem);
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->mirrors);
+        $this->remote->remove();
     }
 
     private function displayOnOneLine(CommandTester $tester): string

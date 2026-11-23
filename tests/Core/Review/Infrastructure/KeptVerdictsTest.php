@@ -29,16 +29,6 @@ final class KeptVerdictsTest extends KernelTestCase
 
     private EntityManagerInterface $entities;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->entities = $entities;
-        $this->verdicts = new KeptVerdicts($entities, new MockClock('2026-11-21 10:00:00'));
-    }
-
     public function testAKeptVerdictIsFoundByItsKeyWithItsOutcomeAndReasons(): void
     {
         $this->verdicts->keep('finding-one', new EscalationVerdict(EscalationOutcome::Rejected, 'The code never runs.'), 'round-one');
@@ -111,5 +101,15 @@ final class KeptVerdictsTest extends KernelTestCase
         } catch (VerdictAlreadyKept) {
             self::assertSame(EscalationOutcome::Confirmed, $this->verdicts->ofKey('finding-twice')?->outcome);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
+        $this->verdicts = new KeptVerdicts($entities, new MockClock('2026-11-21 10:00:00'));
     }
 }

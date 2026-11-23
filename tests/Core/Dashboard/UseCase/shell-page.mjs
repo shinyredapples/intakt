@@ -114,6 +114,30 @@ class FakeColumn extends FakeElement {
     }
 }
 
+// The board's Working now as the server renders it, so also as a push brings it: one card link per change in progress, each with its project, none hidden.
+class FakeWorkingNow extends FakeElement {
+    id = 'working-now';
+
+    constructor(page, projects) {
+        super(page);
+        this.cards = projects.map((project, index) => {
+            const card = Object.assign(new FakeElement(page), { dataset: { project }, hidden: false });
+            card.setAttribute('href', `/reviews/round-${index + 1}`);
+            card.closest = (selector) => (selector === 'a[href]' ? card : null);
+
+            return card;
+        });
+    }
+
+    contains(element) {
+        return this.cards.includes(element);
+    }
+
+    querySelectorAll(selector) {
+        return selector === 'a[href]' ? this.cards : [];
+    }
+}
+
 class FakeKey {
     defaultPrevented = false;
 
@@ -218,7 +242,8 @@ export class Browser {
         const linkedProject = new URL(this.address).searchParams.get('project');
         const trail = this.projects.includes(linkedProject) ? Object.assign(new FakeElement(page), { dataset: { projectTrail: linkedProject } }) : null;
         const projectsItem = new FakeElement(page);
-        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true) };
+        const workingNow = new FakeWorkingNow(page, ['alpha', 'beta']);
+        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true), '#working-now': workingNow };
         if (trail) {
             projectsItem.setAttribute('aria-current', 'page');
             trail.remove = () => {
@@ -226,7 +251,7 @@ export class Browser {
                 delete shownElements['[data-project-trail]'];
             };
         }
-        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': rows, '[data-section-current]': trail ? [projectsItem] : [] };
+        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': [...rows, ...workingNow.cards], '[data-section-current]': trail ? [projectsItem] : [] };
 
         show(shownElements, allShown);
         context.location.href = this.address;
@@ -311,6 +336,25 @@ export class Browser {
                         render: () => {
                             shownElements[`#${id}`] = new FakeColumn(page, id, collapsed);
                             show(shownElements, allShown);
+                        },
+                    },
+                };
+                (documentListeners.get('turbo:before-stream-render') ?? []).forEach((listener) => listener(event));
+                event.detail.render(stream);
+            },
+            workingNow: () => shownElements['#working-now'],
+            shownWorkingNow: () => shownElements['#working-now'].cards.filter((card) => !card.hidden).map((card) => card.dataset.project),
+            // What Turbo does with the board's replace stream for Working now: put the server's section, every project's card shown, where the shown one was.
+            pushWorkingNow: (projects = ['alpha', 'beta']) => {
+                const stream = new FakeElement(page);
+                stream.setAttribute('action', 'replace');
+                stream.setAttribute('target', 'working-now');
+                const event = {
+                    target: stream,
+                    detail: {
+                        render: () => {
+                            shownElements['#working-now'] = new FakeWorkingNow(page, projects);
+                            show(shownElements, { ...allShown, '[data-project]': [...rows, ...shownElements['#working-now'].cards] });
                         },
                     },
                 };

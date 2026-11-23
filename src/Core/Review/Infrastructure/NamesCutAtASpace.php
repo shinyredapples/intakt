@@ -41,6 +41,26 @@ final readonly class NamesCutAtASpace
     }
 
     /**
+     * @param list<string> $names
+     *
+     * @return array<string, true>
+     */
+    private function firstWordsOf(array $names): array
+    {
+        $firstWords = [];
+
+        foreach ($names as $name) {
+            $firstWord = $this->firstWordOf($name);
+
+            if (null !== $firstWord) {
+                $firstWords[$firstWord] = true;
+            }
+        }
+
+        return $firstWords;
+    }
+
+    /**
      * @return array{string, string}
      */
     private function directoryAndNameOf(string $word): array
@@ -65,26 +85,6 @@ final readonly class NamesCutAtASpace
         $entries = is_readable($real) ? scandir($real) : false;
 
         return false === $entries ? null : $this->firstWordsOf($entries);
-    }
-
-    /**
-     * @param list<string> $names
-     *
-     * @return array<string, true>
-     */
-    private function firstWordsOf(array $names): array
-    {
-        $firstWords = [];
-
-        foreach ($names as $name) {
-            $firstWord = $this->firstWordOf($name);
-
-            if (null !== $firstWord) {
-                $firstWords[$firstWord] = true;
-            }
-        }
-
-        return $firstWords;
     }
 
     // A file name need not be UTF-8, so one that is not is split by bytes.

@@ -32,17 +32,6 @@ final class PendingHeadsTest extends KernelTestCase
     private MockClock $clock;
     private PendingHeads $pending;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
-        $this->pending = new PendingHeads($entities, $this->clock);
-    }
-
     public function testAKeptHeadWaitsUntilItsReadAgainTime(): void
     {
         $old = RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z');
@@ -167,6 +156,17 @@ final class PendingHeadsTest extends KernelTestCase
         $due = $this->pending->dueFor('alpha');
 
         self::assertSame([], $due);
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
+        $this->pending = new PendingHeads($entities, $this->clock);
     }
 
     private function pendingDecision(OpenChange $open): HeadDecision
