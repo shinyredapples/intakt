@@ -170,7 +170,7 @@ final readonly class DocsGate implements Gate
     {
         $findings = [];
         $seen = [];
-        $onTarget = null === $target ? [] : array_count_values(array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->key(), $this->oversizedParagraphsOf($target)));
+        $onTarget = $target instanceof MarkdownPage ? array_count_values(array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->key(), $this->oversizedParagraphsOf($target))) : [];
 
         foreach ($this->oversizedParagraphsOf($page) as $paragraph) {
             $key = $paragraph->key();
