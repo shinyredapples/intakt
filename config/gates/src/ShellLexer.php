@@ -193,19 +193,6 @@ final class ShellLexer
         };
     }
 
-    // Because a `;;`, `;&` or `;;&` ends a branch of a `case` command, the next word is a pattern again.
-    private function endsACaseBranch(int $offset): bool
-    {
-        return self::CASE_BODY === array_last($this->frames) && str_contains(';&', $this->source[$offset + 1] ?? '');
-    }
-
-    private function afterCaseBranch(int $offset): int
-    {
-        $this->frames[array_key_last($this->frames)] = self::CASE_PATTERN;
-
-        return $this->startingACommand($offset + (str_starts_with(substr($this->source, $offset, 3), ';;&') ? 3 : 2));
-    }
-
     // Because a `case` pattern ends at a `)` that closes nothing, the lexer follows a `case` command from its subject through its patterns and branches to its `esac`.
     private function afterPlainWordPart(int $offset, int $end): int
     {
@@ -236,9 +223,15 @@ final class ShellLexer
 
     private function afterCaseSubject(int $end): int
     {
-        $this->frames[array_key_last($this->frames)] = self::CASE_PATTERN;
+        $this->turnInto(self::CASE_PATTERN);
 
         return $this->afterWordPart($end);
+    }
+
+    private function turnInto(int $frame): void
+    {
+        array_pop($this->frames);
+        $this->frames[] = $frame;
     }
 
     // Because a command follows a reserved word such as `then`, the command start lasts over it, while after `for` a `((` opens arithmetic.
@@ -285,6 +278,19 @@ final class ShellLexer
         return count(array_filter($this->frames, static fn (int $frame): bool => !in_array($frame, self::CASE_FRAMES, true)));
     }
 
+    // Because a `;;`, `;&` or `;;&` ends a branch of a `case` command, the next word is a pattern again.
+    private function endsACaseBranch(int $offset): bool
+    {
+        return self::CASE_BODY === array_last($this->frames) && str_contains(';&', $this->source[$offset + 1] ?? '');
+    }
+
+    private function afterCaseBranch(int $offset): int
+    {
+        $this->turnInto(self::CASE_PATTERN);
+
+        return $this->startingACommand($offset + (str_starts_with(substr($this->source, $offset, 3), ';;&') ? 3 : 2));
+    }
+
     private function afterDoubleLessThan(int $offset): int
     {
         if ('<' === ($this->source[$offset] ?? '')) {
@@ -318,7 +324,7 @@ final class ShellLexer
 
     private function afterCasePattern(int $end): int
     {
-        $this->frames[array_key_last($this->frames)] = self::CASE_BODY;
+        $this->turnInto(self::CASE_BODY);
 
         return $this->startingACommand($end);
     }
