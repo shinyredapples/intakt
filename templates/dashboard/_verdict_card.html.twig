@@ -1,4 +1,4 @@
-{#- The scoreboard of the latest pass: the owl that judged it (its 48 px images shown at 96 px by the stylesheet), the verdict, the number to fix with one bar segment per finding, and a meerkat per reviewer, because an older pass's verdict was given on an older head; the count is of the last judged pass's findings to fix, which the To fix cards below show one card each. The judged round's live update replaces it by its id. -#}
+{#- The scoreboard of the latest pass: the owl that judged it (its 48 px images shown at 96 px by the stylesheet), the verdict, the number to fix with one bar segment per finding, and a meerkat per reviewer, because an older pass's verdict was given on an older head; the count is of the last judged pass's findings to fix, which the finding groups below show one row each. The judged round's live update replaces it by its id. -#}
 {%- set outcomes = enum('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome') -%}
 {%- set outcome = latest.reviewOutcome -%}
 {%- set needs = outcome is same as(outcomes.ChangesRequested) -%}

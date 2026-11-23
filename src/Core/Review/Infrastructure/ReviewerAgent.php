@@ -5,16 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
-use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Review\Contract\ReadAnswer;
-use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
-use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Override;
 use Symfony\AI\Agent\Agent;
@@ -38,9 +36,6 @@ final readonly class ReviewerAgent implements Reviewer
 
     private const array STREAMED = self::UNSTREAMED + ['stream' => true];
 
-    // A capital letter and a short number, because FindingLedger numbers its findings that way and such an id is too short to hold a key.
-    private const string LEDGER_ID = '/^[A-Z]\d{1,9}$/';
-
     /**
      * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
      */
@@ -49,11 +44,13 @@ final readonly class ReviewerAgent implements Reviewer
         #[AutowireCallable(service: ReviewerMcpToolboxFactory::class, method: 'create')]
         private Closure $toolboxes,
         private ReviewerRuns $runs,
+        // Defaulted, because the checks have no state or settings to wire.
+        private OpenFindingIds $ids = new OpenFindingIds(),
     ) {
     }
 
     #[Override]
-    public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict
+    public function review(ReviewRequest $request, PlatformInterface $platform, ResolvedModel $model): Verdict
     {
         $tools = new MalformedToolCalls(($this->toolboxes)($request));
 
@@ -64,25 +61,25 @@ final readonly class ReviewerAgent implements Reviewer
 
         $conversation = $this->runs->started($this->prompt->messagesFor($request->conversation, $request->brief));
         $fenced = $this->prompt->fenced(new FaultTolerantToolbox($tools));
-        $agent = $this->runs->agent($fenced, $platform, $model);
+        $agent = $this->runs->agent($fenced, $platform, $model->model);
 
-        $verdict = $this->canStream($platform, $model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
+        $verdict = $this->canStream($platform, $model->model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
-        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since refuseClaimedFailureIds() refuses a forged stop.
+        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since OpenFindingIds::refuseClaimedFailureIds() refuses a forged stop.
         if ($tools->seen() && !$verdict->isStopped()) {
             throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
 
         // Before the cut approval is put in its place, because a reviewer that names a reserved id has given an unreadable answer whatever it decided, and is asked once more.
-        $this->refuseClaimedFailureIds($verdict);
+        $this->ids->refuseClaimedFailureIds($verdict);
 
-        $counted = $this->asTheRoundCounts($request->brief, $verdict);
+        $counted = $this->ids->asTheRoundCounts($request->brief, $verdict);
 
         if ($this->approvesCutText($counted, $request->brief, $fenced)) {
             return Verdict::cutApproval();
         }
 
-        return $this->checkedAgainst($request->brief, $counted);
+        return $this->ids->checkedAgainst($request->brief, $counted);
     }
 
     // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
@@ -113,55 +110,10 @@ final readonly class ReviewerAgent implements Reviewer
         return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer), $reviewer);
     }
 
-    // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
-    private function refuseClaimedFailureIds(Verdict $verdict): void
-    {
-        $claimed = [...$verdict->claimedFailureIds()];
-
-        if ([] !== $claimed) {
-            throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));
-        }
-    }
-
-    // Lowered here as the round lowers it before storing, because the cut-input guard below and the vendor's read guard refuse what can count as approval, and a P2 the goalpost rule turns into a P3 can.
-    private function asTheRoundCounts(ReviewBrief $brief, Verdict $verdict): Verdict
-    {
-        return new GoalpostRule()->applyToVerdict($brief->round, $verdict, $brief->open);
-    }
-
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
     private function approvesCutText(Verdict $verdict, ReviewBrief $brief, FencedToolbox $fenced): bool
     {
         return $verdict->mayCountAsApproval() && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
-    }
-
-    // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
-    private function checkedAgainst(ReviewBrief $brief, Verdict $verdict): Verdict
-    {
-        $open = array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
-        $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
-        $resolved = array_map(static fn (ResolvedFinding $resolved): string => $resolved->id, $verdict->resolved);
-        $unknown = array_unique([...array_diff($resolved, $open), ...array_diff($repeated, $open)]);
-
-        if ([] !== $unknown) {
-            throw $this->unknownIds($unknown);
-        }
-
-        // Refused, because the ledger cannot tell which of the two the reviewer meant; key-safe, because every id named here is an open one the ledger gave.
-        $contradicted = array_unique(array_intersect($resolved, $repeated));
-
-        return [] === $contradicted ? $verdict : throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
-    }
-
-    // The ids are the model's own text, so they are recorded only when each has the short shape of a ledger id, which leaves no room for a key.
-    /**
-     * @param array<string> $unknown
-     */
-    private function unknownIds(array $unknown): VerdictUnreadable
-    {
-        $reason = sprintf('the verdict names ids that were not open: %s.', implode(', ', $unknown));
-
-        return [] === preg_grep(self::LEDGER_ID, $unknown, PREG_GREP_INVERT) ? VerdictUnreadable::becauseKeySafe($reason) : VerdictUnreadable::because($reason);
     }
 
     private function answerOf(ExecutionInterface $execution, ReviewerConversation $reviewer): Verdict
