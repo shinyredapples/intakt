@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -26,16 +27,21 @@ use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use NoDiscard;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 // One complete listing per tick, every page read before anything is sorted (owner decision of 2026-11-11), and waits answered from its rows, because a read per waited-for reference would cost a call each and a short listing would pick the wrong task and close open waits.
 final readonly class CompleteListing
 {
+    /**
+     * @param array<string, array{eligibility_label?: string}> $watches
+     */
     public function __construct(
         private IssueReads $reads,
         private IssueHistories $histories,
         private SteeringAccounts $accounts,
         private IntakeStore $store,
-        private IntakeRules $rules,
+        #[Autowire(param: WatcherServices::PROJECTS)]
+        private array $watches,
         private IssueReferences $references,
         private LoggerInterface $logger,
     ) {
@@ -57,20 +63,27 @@ final readonly class CompleteListing
     {
         $readBefore = $this->store->syncStateOf($project);
         try {
+            $rules = $this->rulesOf($project);
             $listing = $this->reads->listOpen($project, $readBefore->validator);
             $rows = $this->rowsOf($project, $listing);
-            $vouched = $this->vouchWhatSteers($project, $rows);
+            $vouched = $this->vouchWhatSteers($project, $rows, $rules);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
             return $this->shortListing($project, $short);
         }
 
         if ($listing->isUnchanged() && [] === $vouched) {
-            return $this->planOver($project, $rows);
+            return $this->planOver($project, $rows, $rules);
         }
 
         $listed = new ListingRows($rows, $listing->isUnchanged() ? $readBefore->validator : $listing->validator);
 
-        return $this->store->recordIfStill($project, $readBefore, $listed) ? $this->planOver($project, $rows) : $this->planOverTheNewerRows($project);
+        return $this->store->recordIfStill($project, $readBefore, $listed) ? $this->planOver($project, $rows, $rules) : $this->planOverTheNewerRows($project, $rules);
+    }
+
+    // Each project names its own eligibility label, so a project beside another loop builds only what carries its label; a project without a watch section has no label to build by, so nothing is listed for it.
+    private function rulesOf(string $project): IntakeRules
+    {
+        return new IntakeRules($this->watches[$project]['eligibility_label'] ?? throw new ForgeReadFailed(sprintf('Project "%s" has no watch section, so it names no eligibility label.', $project)));
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
@@ -107,9 +120,9 @@ final readonly class CompleteListing
      *
      * @return list<int>
      */
-    private function vouchWhatSteers(string $project, array $rows): array
+    private function vouchWhatSteers(string $project, array $rows, IntakeRules $rules): array
     {
-        $needing = array_map(static fn (QueuedIssue $item): int => $item->number(), $this->rules->itemsNeedingHistory(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows)));
+        $needing = array_map(static fn (QueuedIssue $item): int => $item->number(), $rules->itemsNeedingHistory(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows)));
         $steers = fn (string $account): bool => $this->accounts->steers($project, $account);
 
         $vouched = [];
@@ -146,18 +159,18 @@ final readonly class CompleteListing
     /**
      * @param list<StoredIssue> $rows
      */
-    private function planOver(string $project, array $rows): IntakePlan
+    private function planOver(string $project, array $rows, IntakeRules $rules): IntakePlan
     {
-        return $this->planOverWith($rows, $this->store->failuresOf($project));
+        return self::planOverWith($rules, $rows, $this->store->failuresOf($project));
     }
 
     // Another worker that stored a listing meanwhile holds the newer rows, but vouched them under its own eligibility label, so a row that is a candidate under this one has its history read first; the rows are not written again, because only a write that won may write.
-    private function planOverTheNewerRows(string $project): ?IntakePlan
+    private function planOverTheNewerRows(string $project, IntakeRules $rules): ?IntakePlan
     {
         $readBefore = $this->store->syncStateOf($project);
         $newer = $this->store->issuesOf($project);
         try {
-            $this->vouchWhatSteers($project, $newer);
+            $this->vouchWhatSteers($project, $newer, $rules);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
             return $this->shortListing($project, $short);
         }
@@ -165,7 +178,16 @@ final readonly class CompleteListing
         $failures = $this->store->failuresOf($project);
         $this->stillNewestSince($project, $readBefore);
 
-        return $this->planOverWith($newer, $failures);
+        return self::planOverWith($rules, $newer, $failures);
+    }
+
+    /**
+     * @param list<StoredIssue>  $rows
+     * @param array<int, string> $failures
+     */
+    private static function planOverWith(IntakeRules $rules, array $rows, array $failures): IntakePlan
+    {
+        return $rules->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $failures);
     }
 
     // Checked once, after the last read the plan is answered from, and never retried, because a winning write is never answered from rows older than the newest committed listing, and the history and failure reads leave time for a third worker to commit one.
@@ -174,14 +196,5 @@ final readonly class CompleteListing
         if ($this->store->syncStateOf($project)->generation !== $readBefore->generation) {
             throw ListingReplacedMeanwhile::of($project);
         }
-    }
-
-    /**
-     * @param list<StoredIssue>  $rows
-     * @param array<int, string> $failures
-     */
-    private function planOverWith(array $rows, array $failures): IntakePlan
-    {
-        return $this->rules->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $failures);
     }
 }

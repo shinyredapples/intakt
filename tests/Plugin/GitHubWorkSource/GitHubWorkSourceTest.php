@@ -86,6 +86,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
     /** @var list<string> */
     private array $writers = ['ana', 'bea'];
     private string $labelApplier = 'ana';
+    private string $eligibilityLabel = 'intakt';
     private ?ForgeReadFailed $historyFailure = null;
     /** @var array<int, array<string, string>> */
     private array $appliersOf = [];
@@ -419,6 +420,31 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertSame(3, $source->nextWork('alpha', WorkerState::Free)->task?->number);
     }
 
+    public function testATaskCarryingOnlyTheLoopsLabelIsNeitherQueuedNorPicked(): void
+    {
+        $this->reads->lists([Issues::task(7, ['ready'])]);
+        $source = $this->source();
+
+        $queue = $source->queue('alpha');
+
+        self::assertSame([[], []], [$queue->ready(), $queue->held()]);
+        $this->reads->listsUnchanged();
+        self::assertSame(NothingPicked::NoTaskReady, $source->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
+    public function testATaskCarryingTheLabelTheProjectNamesIsQueuedAndPicked(): void
+    {
+        $this->eligibilityLabel = 'build-me';
+        $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['build-me'])]);
+        $source = $this->source();
+
+        $queue = $source->queue('alpha');
+
+        self::assertSame([8], array_map(static fn (Task $task): int => $task->number, $queue->ready()));
+        $this->reads->listsUnchanged();
+        self::assertSame(8, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
     public function testTheDependentOfATaskFailedForGoodIsHeldAndNotPicked(): void
     {
         $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])]);
@@ -682,7 +708,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             return in_array($account, $this->writers, true);
         });
-        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules('intakt'), new IssueReferences(), $this->logger);
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, ['alpha' => ['eligibility_label' => $this->eligibilityLabel]], new IssueReferences(), $this->logger);
 
         return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, $this->logger);
     }
