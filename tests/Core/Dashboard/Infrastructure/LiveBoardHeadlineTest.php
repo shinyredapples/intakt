@@ -320,7 +320,7 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         parent::tearDown();
     }
 
-    // The first board is recorded, a second one is pushed while the pool refuses both the delete and the record, and the first board comes back once the pool works again.
+    // The pool refuses both the delete and the record of the second board, because only then does the first board stay the last pushed one when it comes back.
     private function returnToTheFirstBoardAfterARefusingPool(PublishedLiveEvents $live, MockClock $clock, int $secondsLater): void
     {
         $refused = new ArrayObject(['delete' => false, 'save' => false]);

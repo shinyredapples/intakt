@@ -128,7 +128,7 @@ final readonly class LiveBoardHeadline
             return;
         }
 
-        // A pool reports a refused delete by returning false, not by throwing, and the older board then stays the last pushed one until it expires.
+        // Logged like a throw, because a pool reports a refused delete by returning false and the older board then stays the last pushed one until it expires.
         if (!$forgotten) {
             $this->logger->warning('The last pushed board could not be forgotten.');
         }
@@ -157,7 +157,7 @@ final readonly class LiveBoardHeadline
             return;
         }
 
-        // A pool reports a refused write by returning false, not by throwing.
+        // Logged like a throw, because a pool reports a refused write by returning false and nobody would otherwise learn why an unchanged board is pushed again.
         if (!$recorded) {
             $this->logger->warning('The last pushed board could not be recorded.');
         }
