@@ -136,7 +136,9 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\PushScenario;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\RecordingChangeOpening;
+use Intakt\Tests\Core\HandBack\FailingLockStore;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
+use Intakt\Tests\Core\HandBack\UnreadableLedger;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -309,6 +311,8 @@ final class BuildTaskTest extends TestCase
     // A ledger that reads back for the text round, because InMemoryLedger reads nothing and the round counts the task's earlier lines.
     private ?RecordingLedger $textLedger = null;
 
+    private ?LockFactory $textLocks = null;
+
     public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
         $this->configuredRepository = 'acme/alpha';
@@ -410,6 +414,32 @@ final class BuildTaskTest extends TestCase
         self::assertSame([LedgerEventKind::PullRequestTextSentBack, LedgerEventKind::PullRequestTextToReviewers], $this->textLedger->kinds());
         self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
         self::assertSame(1, $this->changes->opened);
+    }
+
+    public function testALockStoreThatFailsInTheTextRoundEndsAtThePrePushCheckWithFixedTextAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->textLocks = new LockFactory(new FailingLockStore());
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertStringStartsWith('the pull request text round was not recorded, because its lock failed: Failed to acquire the "intakt-pull-request-text-', (string) $outcome->failure);
+        self::assertSame($outcome->failure, $this->stepsIn($ledger)[5]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testALedgerThatCannotBeReadInTheTextRoundEndsAtThePrePushCheckWithFixedTextAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->textLedger = new RecordingLedger(onRead: static fn () => throw new UnreadableLedger('the ledger is unreachable'));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the pull request text round was not recorded, because the ledger could not be read: the ledger is unreachable', $outcome->failure);
+        self::assertNull($this->remoteTip());
     }
 
     public function testAPullRequestBodyOverTheCapEndsAtThePrePushCheckSentBack(): void
@@ -1381,7 +1411,7 @@ final class BuildTaskTest extends TestCase
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
-        $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->locks)));
+        $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
         return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }

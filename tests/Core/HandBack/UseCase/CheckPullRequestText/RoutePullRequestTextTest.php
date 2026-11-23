@@ -23,7 +23,9 @@ use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Tests\Core\HandBack\FailingLockStore;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
+use Intakt\Tests\Core\HandBack\UnreadableLedger;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -163,6 +165,28 @@ final class RoutePullRequestTextTest extends TestCase
         $this->expectExceptionMessageIs('the pull request text\'s pull_request_text_sent_back line was not recorded: the ledger is down');
 
         $this->route(self::MISSING_E2);
+    }
+
+    public function testALockStoreThatFailsIsARoundNotRecorded(): void
+    {
+        $this->expectException(PullRequestTextRoundNotRecorded::class);
+        $this->expectExceptionMessageIs('the pull request text round was not recorded, because its lock failed: Failed to acquire the "intakt-pull-request-text-'.$this->task()->key.'" lock.');
+
+        (void) $this->router(new LockFactory(new FailingLockStore()))->route($this->task(), self::TASK, self::MISSING_E2);
+    }
+
+    public function testALedgerThatCannotBeReadIsARoundNotRecordedAndRecordsNothing(): void
+    {
+        $this->ledger = new RecordingLedger(onRead: static fn () => throw new UnreadableLedger('the ledger is unreachable'));
+
+        try {
+            $this->route(self::MISSING_E2);
+            self::fail('the round was routed');
+        } catch (PullRequestTextRoundNotRecorded $failure) {
+            self::assertSame('the pull request text round was not recorded, because the ledger could not be read: the ledger is unreachable', $failure->getMessage());
+        }
+
+        self::assertSame([], $this->ledger->kinds());
     }
 
     public function testNoLedgerLineHoldsTextOfThePullRequest(): void

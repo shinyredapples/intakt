@@ -14,4 +14,14 @@ final class PullRequestTextRoundNotRecorded extends RuntimeException implements 
     {
         return new self(sprintf('the pull request text\'s %s line was not recorded: %s', $kind, $failure));
     }
+
+    public static function unlocked(string $failure): self
+    {
+        return new self(sprintf('the pull request text round was not recorded, because its lock failed: %s', $failure));
+    }
+
+    public static function unread(string $failure): self
+    {
+        return new self(sprintf('the pull request text round was not recorded, because the ledger could not be read: %s', $failure));
+    }
 }
