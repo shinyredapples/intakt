@@ -133,7 +133,7 @@ final readonly class ReviewedRound
         return ReviewOutcome::ofQuorum($this);
     }
 
-    // Only Approved and Changes needed count, because failed and blocked reviewers give no opinion on the change.
+    // Failed and blocked reviewers give no opinion.
     public function agreement(): string
     {
         $verdicts = $this->verdictsGivenIn($this);
