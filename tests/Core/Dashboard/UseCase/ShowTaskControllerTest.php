@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Infrastructure\LatestBuildRun;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\UseCase\ShowTask\ShowTaskController;
@@ -15,6 +16,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ShowTaskController::class)]
 #[CoversClass(LedgerBuildSteps::class)]
+#[CoversClass(LatestBuildRun::class)]
 #[UsesClass(LedgerPayload::class)]
 final class ShowTaskControllerTest extends DashboardPageTestCase
 {

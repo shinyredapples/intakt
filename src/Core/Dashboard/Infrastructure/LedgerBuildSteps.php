@@ -47,32 +47,7 @@ final readonly class LedgerBuildSteps
      */
     public function latestRunOf(RecordedEvents $events, string $project, string $task): array
     {
-        /** @var array<string, array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $named */
-        $named = [];
-        /** @var list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}> $unnamed */
-        $unnamed = [];
-        $ended = false;
-
-        foreach ($this->rowsOf($events, $project, $task) as [$run, $step]) {
-            if (null === $step) {
-                $ended = true;
-            } elseif (null !== $run) {
-                // A second row of a step in the same run is left out, because one run ends each step once, so it is not one the build writes.
-                $named[$run][$step['step']] ??= $step;
-            } else {
-                $unnamed = !$ended && $this->continues($unnamed, $step) ? [...$unnamed, $step] : [$step];
-                $ended = false;
-            }
-        }
-
-        if ([] === $named) {
-            return $unnamed;
-        }
-
-        // The build takes a run's id time-ordered before it reads the task, so the greatest id is the run started last, whichever run wrote the last row. Every named run is newer than the rows written before runs were named.
-        ksort($named, SORT_STRING);
-
-        return array_values(array_last($named) ?? []);
+        return LatestBuildRun::of($this->rowsOf($events, $project, $task));
     }
 
     /**
@@ -83,22 +58,35 @@ final readonly class LedgerBuildSteps
         $rows = [];
 
         foreach ($events as $recorded) {
-            if (LedgerEventKind::BuildStepEnded !== $recorded->event->kind) {
-                continue;
-            }
+            $row = LedgerEventKind::BuildStepEnded === $recorded->event->kind ? $this->rowOf($recorded, $project, $task) : null;
 
-            $run = $this->runOf($recorded);
-            $step = false === $run ? null : $this->stepOf($recorded);
-
-            if (null !== $step && $project === $step['project'] && $task === $step['task']) {
-                $rows[] = [$run, $step];
-            } elseif (null === $run && $this->isTaskRowOf($recorded, $project, $task)) {
-                // A malformed task row of an unnamed run is left out, but it still marks where a new run began.
-                $rows[] = [null, null];
+            if (null !== $row) {
+                $rows[] = $row;
             }
         }
 
         return $rows;
+    }
+
+    // A row of the task with its run and step, or with neither for a malformed task row of an unnamed run, because that row is left out but still marks where a new run began.
+    /**
+     * @return array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}|null
+     */
+    private function rowOf(RecordedEvent $recorded, string $project, string $task): ?array
+    {
+        $run = $this->runOf($recorded);
+
+        if (false === $run) {
+            return null;
+        }
+
+        $step = $this->stepOf($recorded);
+
+        if (null !== $step && $project === $step['project'] && $task === $step['task']) {
+            return [$run, $step];
+        }
+
+        return null === $run && $this->isTaskRowOf($recorded, $project, $task) ? [null, null] : null;
     }
 
     // Null for a row written before runs were named, and false for a run that is not a non-empty string (an explicit null included): the build never writes one, so the row's run cannot be told and the row is left out.
@@ -110,7 +98,7 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        // Prefixed, so PHP never turns a numeric id into an integer key and every key sorts as text.
+        // Prefixed because PHP turns a numeric string key into an integer key, and the runs are sorted by their keys as text.
         return is_string($payload['run']) && '' !== $payload['run'] ? self::NAMED.$payload['run'] : false;
     }
 
@@ -119,24 +107,6 @@ final readonly class LedgerBuildSteps
         $payload = LedgerPayload::of($recorded);
 
         return $project === ($payload['project'] ?? null) && $task === ($payload['task'] ?? null) && BuildStep::Task->value === ($payload['step'] ?? null);
-    }
-
-    // A row written before runs were named continues the run before it only when that run's last step passed and the row's step comes later, because a run stops at its first failed step and runs its steps in order.
-    /**
-     * @param list<array{step: string, outcome: string}> $run
-     * @param array{step: string}                        $step
-     */
-    private function continues(array $run, array $step): bool
-    {
-        $last = array_last($run);
-
-        if (null === $last || BuildStepOutcome::Passed->value !== $last['outcome']) {
-            return false;
-        }
-
-        $order = array_flip(array_column(BuildStep::cases(), 'value'));
-
-        return $order[$step['step']] > $order[$last['step']];
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.

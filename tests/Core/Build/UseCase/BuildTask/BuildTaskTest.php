@@ -132,7 +132,6 @@ use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(BuildTask::class)]
@@ -257,6 +256,8 @@ final class BuildTaskTest extends TestCase
     private TierResolver $tiers;
 
     private JobRunner $runner;
+
+    private MockClock $clock;
 
     private JobRunner $checkRunner;
 
@@ -845,19 +846,19 @@ final class BuildTaskTest extends TestCase
     public function testARunStartedLaterCarriesARunIdThatSortsAfterTheEarlierRunsId(): void
     {
         $ledger = new InMemoryLedger();
-        $clock = new MockClock('2026-11-23 10:00:00');
-        (void) $this->taskOf($ledger, [], $clock)->run($this->request(7, $this->remote->path));
-        (void) $this->taskOf($ledger, [], $clock)->run($this->request(7, $this->remote->path));
-        $clock->sleep(1);
+        $this->clock = new MockClock('2026-11-23 10:00:00');
+        (void) $this->taskOf($ledger, [])->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf($ledger, [])->run($this->request(7, $this->remote->path));
+        $this->clock->sleep(1);
 
-        (void) $this->taskOf($ledger, [], $clock)->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf($ledger, [])->run($this->request(7, $this->remote->path));
 
-        $runs = array_column($ledger->payloads(), 'run');
-        self::assertCount(3, $runs);
-        self::assertContainsOnlyInstancesOf(UuidV7::class, array_map(Uuid::fromString(...), $runs));
+        $runs = array_values(array_filter(array_column($ledger->payloads(), 'run'), is_string(...)));
+        $ids = array_map(static fn (string $run): UuidV7 => new UuidV7($run), $runs);
+        self::assertCount(3, $ids);
         self::assertLessThan(0, strcmp($runs[0], $runs[1]));
         self::assertLessThan(0, strcmp($runs[1], $runs[2]));
-        self::assertSame('2026-11-23 10:00:01', Uuid::fromString($runs[2])->getDateTime()->format('Y-m-d H:i:s'));
+        self::assertSame('2026-11-23 10:00:01', $ids[2]->getDateTime()->format('Y-m-d H:i:s'));
     }
 
     public function testTheTaskIsReadThroughTheSingleIssueReadNeverTheListing(): void
@@ -1034,6 +1035,7 @@ final class BuildTaskTest extends TestCase
 
     protected function setUp(): void
     {
+        $this->clock = new MockClock();
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -1061,9 +1063,9 @@ final class BuildTaskTest extends TestCase
     /**
      * @param list<ListedIssue> $issues
      */
-    private function taskOf(InMemoryLedger $ledger, array $issues, MockClock $clock = new MockClock()): BuildTask
+    private function taskOf(InMemoryLedger $ledger, array $issues): BuildTask
     {
-        return $this->buildTask($this->listing($issues), $this->checkout(), $ledger, $clock);
+        return $this->buildTask($this->listing($issues), $this->checkout(), $ledger);
     }
 
     /**
@@ -1201,7 +1203,7 @@ final class BuildTaskTest extends TestCase
         return $this->checkoutIn($this->mirrors);
     }
 
-    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger, MockClock $clock = new MockClock()): BuildTask
+    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
@@ -1214,7 +1216,7 @@ final class BuildTaskTest extends TestCase
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $clock);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->clock);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
