@@ -2,8 +2,7 @@
 
 declare(strict_types=1);
 
-// Seeds an install for the mock comparison of #1796, because a fresh install has no review with a judged round and a running one.
-// Run it as APP_ENV=dev php .evidence/1796/seed.php after the migrations, because the dashboard of a dev install reads that environment's database.
+// Seeds a dev install (APP_ENV=dev, after the migrations) for the mock comparison of #1796, because a fresh install has no review with a judged round and a running one.
 
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
