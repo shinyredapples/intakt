@@ -143,6 +143,25 @@ final class LedgerFailingHeadsTest extends TestCase
         self::assertSame([], $this->failing());
     }
 
+    public function testAFailureWhoseNextTryIsAnImpossibleCalendarDateReadsAsOneWithoutANextTry(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+        $this->ledger->failHeadWithoutRetryAt('alpha', '7');
+        $withoutNextTry = $this->failing();
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $this->ledger->failHeadRetryingAt('alpha', '7', '2026-02-30T00:00:00+00:00');
+
+        self::assertSame([[], []], [$withoutNextTry, $this->failing()]);
+    }
+
+    public function testAFailureWhoseNextTryIsAValidMomentKeepsItAsStored(): void
+    {
+        $this->ledger->failHeadRetryingAt('alpha', '7', '2026-02-28T23:59:00+02:00');
+
+        self::assertSame(['2026-02-28T23:59:00+02:00'], array_map(static fn (FailingHead $head): string => $head->fault->retryAt->format(DATE_ATOM), $this->failing()));
+    }
+
     protected function setUp(): void
     {
         $this->ledger = new DashboardLedger();

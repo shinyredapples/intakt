@@ -104,7 +104,8 @@ final readonly class LedgerFailingHeads
         // The parser throws on a NUL byte instead of refusing it, so such a moment is malformed before it is parsed.
         $parsed = null === $moment || str_contains($moment, "\0") ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
-        return false === $parsed ? null : $parsed;
+        // The parser rolls an impossible calendar date over into the next month, so only a moment that formats back to the stored text counts.
+        return false === $parsed || $parsed->format(DATE_ATOM) !== $moment ? null : $parsed;
     }
 
     /**

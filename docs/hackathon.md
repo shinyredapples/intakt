@@ -57,8 +57,8 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
   which needs one provider key or Hugging Face token; without one, the demo plays a recorded real review of the sample
   change instead, calling no model ([five-minute start](../README.md#five-minute-start),
   [timed run](bench.md#timed-run)).
-- **The review page:** the owl's verdict card first, with how many findings are left to fix, then one To fix card per
-  finding with its priority, file and line. **Full record** holds the timeline, each round's reviewers, the judge's
+- **The review page:** the owl's verdict card first, with how many findings are left to fix, then the findings in three urgency groups, one row per
+  finding with its first sentence, file and line. **Full record** holds the timeline, each round's reviewers, the judge's
   call on every finding, the tokens and the cost ([reading the verdict](user/04-reading-the-verdict.md),
   [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
 - **Trends:** figures about the reviews of every project as tiles ([the Trends page](reference/user-manual.md#the-trends-page)).
