@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Domain;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
@@ -334,6 +335,17 @@ final class FindingLedgerTest extends TestCase
         $open = $ledger->openForReviewers();
 
         self::assertSame([['F1', true], ['F2', false]], array_map(static fn (Finding $finding): array => [$finding->id, $finding->gate_gap], $open));
+    }
+
+    public function testAnOpenFindingKeepsItsTitleAndKindUnderItsLedgerId(): void
+    {
+        $ledger = new FindingLedger();
+        $titled = new Finding('x', Severity::P2, 'src/A.php', 3, null, 'Broken.', FixableBy::Builder, false, null, null, title: 'The discount is added', kind: FindingKind::Logic);
+        $ledger->recordRound(1, [$titled, $this->finding('y')]);
+
+        $open = $ledger->openForReviewers();
+
+        self::assertSame([['F1', 'The discount is added', FindingKind::Logic], ['F2', null, null]], array_map(static fn (Finding $finding): array => [$finding->id, $finding->title, $finding->kind], $open));
     }
 
     public function testARepeatKeepsTheSeverityItWasReportedWith(): void

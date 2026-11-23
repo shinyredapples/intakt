@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Contract;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUpNote;
 use Intakt\Core\Review\Contract\ResolvedFinding;
@@ -64,6 +65,8 @@ final class VerdictParserTest extends KernelTestCase
             repeat: false,
             requirement: '...',
             evidence: new Evidence('...', '...'),
+            title: 'A cart loses its discount',
+            kind: FindingKind::Logic,
         );
         self::assertEquals(new Verdict(Decision::Changes, [$finding], [new ResolvedFinding('F1'), new ResolvedFinding('F2')], [new FollowUpNote('...')]), $verdict);
     }
@@ -149,6 +152,68 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectExceptionMessageMatches('/'.implode('|', $wordings).'/');
 
         $this->reviewer()->verdictFor($output);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function titlesOutsideThreeToSixWords(): iterable
+    {
+        yield 'two words' => ['Discount lost'];
+        yield 'seven words' => ['A cart of one hundred loses discounts'];
+    }
+
+    // Only the classes refuse these, because Symfony AI describes a word count in the description alone, which the schema file cannot hold an answer to.
+    #[DataProvider('titlesOutsideThreeToSixWords')]
+    public function testATitleOutsideThreeToSixWordsIsRefusedAsUnreadable(string $title): void
+    {
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessage('findings[0].title: This value is too');
+
+        $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
+    }
+
+    public function testANullTitleIsRefusedAsUnreadable(): void
+    {
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessage('findings[0].title: This value should not be null.');
+
+        $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', null)->json());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function titlesOfThreeToSixWords(): iterable
+    {
+        yield 'three words' => ['Discount is lost'];
+        yield 'six words' => ['A cart of 100 loses discounts'];
+    }
+
+    #[DataProvider('titlesOfThreeToSixWords')]
+    public function testATitleOfThreeToSixWordsMapsAsTheReviewerGaveIt(string $title): void
+    {
+        $verdict = $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
+
+        self::assertSame($title, $verdict->findings[0]->title);
+    }
+
+    /**
+     * @return iterable<string, array{string, FindingKind}>
+     */
+    public static function kinds(): iterable
+    {
+        foreach (FindingKind::cases() as $kind) {
+            yield $kind->value => [$kind->value, $kind];
+        }
+    }
+
+    #[DataProvider('kinds')]
+    public function testEveryKindMaps(string $value, FindingKind $kind): void
+    {
+        $verdict = $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('kind', $value)->json());
+
+        self::assertSame($kind, $verdict->findings[0]->kind);
     }
 
     public function testAWrongTypeIsRefusedWithTheContractVerdictNamedInItsText(): void

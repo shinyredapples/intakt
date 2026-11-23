@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Domain\OnePerPlace;
@@ -38,6 +39,31 @@ final class OnePerPlaceTest extends TestCase
         $act = new OnePerPlace()->actList([$this->atLineSeven('F1', 'First.'), $this->atLineSeven('F2', 'Second.')->withSeverity(Severity::P1)], ['F1', 'F2']);
 
         self::assertSame('First.', $act[0]->text);
+    }
+
+    public function testTheMergedEntryKeepsTheTitleAndKindOfTheFirstReviewerAlsoWhenTheOtherIsMoreSevere(): void
+    {
+        $reported = [$this->titled('F1', 7, 'The discount is added', FindingKind::Logic), $this->titled('F2', 7, 'The total is never checked', FindingKind::MissingTest)->withSeverity(Severity::P1)];
+
+        $act = new OnePerPlace()->actList($reported, ['F1', 'F2']);
+
+        self::assertSame([['F1', 'P1', 'The discount is added', FindingKind::Logic]], $this->titlesOf($act));
+    }
+
+    public function testAnEntryMergedByCauseKeepsTheTitleAndKindOfTheFindingItIsNamedAfter(): void
+    {
+        $reported = [$this->titled('F1', 7, 'The discount is added', FindingKind::Logic), $this->titled('F4', 9, 'A secret reaches the log', FindingKind::Security)];
+
+        $act = new OnePerPlace()->actList($reported, ['F1', 'F4'], ['F4' => 'F1']);
+
+        self::assertSame([['F1', 'P2', 'The discount is added', FindingKind::Logic]], $this->titlesOf($act));
+    }
+
+    public function testAnEntryWithoutATitleOrKindTakesNoneFromAFindingItMerged(): void
+    {
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->titled('F2', 7, 'The discount is added', FindingKind::Logic)], ['F1', 'F2']);
+
+        self::assertSame([['F1', 'P2', null, null]], $this->titlesOf($act));
     }
 
     public function testTheMergedEntryKeepsItsOwnJudgeNote(): void
@@ -351,5 +377,20 @@ final class OnePerPlaceTest extends TestCase
     private function atLineSeven(string $id, string $text): Finding
     {
         return new Finding($id, Severity::P2, 'src/A.php', 7, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param list<Finding> $act
+     *
+     * @return list<array{string, string, ?string, ?FindingKind}>
+     */
+    private function titlesOf(array $act): array
+    {
+        return array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, $entry->title, $entry->kind], $act);
+    }
+
+    private function titled(string $id, int $line, string $title, FindingKind $kind): Finding
+    {
+        return new Finding($id, Severity::P2, 'src/A.php', $line, null, 'Broken.', FixableBy::Builder, false, null, null, title: $title, kind: $kind);
     }
 }

@@ -586,7 +586,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $ledger->recordVerdict(1, new Verdict(Decision::Changes, [$this->openFinding('a'), $this->openFinding('b')], [], []));
         $this->open = $ledger->openForReviewers();
 
-        $verdict = $this->review('Add a cart.', [], '{"verdict":"changes","findings":[{"id":"F2","severity":"P2","file":"src/A.php","line":3,"symbol":null,"text":"Still there","fixable_by":"builder","repeat":true,"requirement":null,"evidence":null}],"resolved":["F1"],"follow_ups":[]}');
+        $verdict = $this->review('Add a cart.', [], '{"verdict":"changes","findings":[{"id":"F2","severity":"P2","file":"src/A.php","line":3,"symbol":null,"text":"Still there","fixable_by":"builder","repeat":true,"requirement":null,"evidence":null,"title":"The old bug is back","kind":"logic"}],"resolved":["F1"],"follow_ups":[]}');
         $ledger->recordVerdict(2, $verdict);
 
         self::assertStringContainsString('F1 [P2] src\/A.php:3', $this->sent[0]);

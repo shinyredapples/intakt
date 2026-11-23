@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUpNote;
 use Intakt\Core\Review\Contract\ResolvedFinding;
@@ -108,6 +109,15 @@ final class VerdictTest extends TestCase
     public function testAnIntaktFailureVerdictStaysBlocked(Verdict $failure): void
     {
         self::assertSame(Decision::Blocked, $failure->asRecorded()->verdict);
+    }
+
+    #[DataProvider('failureVerdicts')]
+    public function testAnIntaktFailureFindingHasATitleOfThreeToSixWordsAndTheKindOther(Verdict $failure): void
+    {
+        $finding = $failure->findings[0];
+        $words = count(explode(' ', (string) $finding->title));
+
+        self::assertSame([true, FindingKind::Other], [$words >= 3 && $words <= 6, $finding->kind]);
     }
 
     #[DataProvider('failureIds')]

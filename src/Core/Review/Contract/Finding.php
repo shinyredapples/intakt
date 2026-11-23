@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\NotNull;
 use Symfony\Component\Validator\Constraints\Valid;
+use Symfony\Component\Validator\Constraints\WordCount;
 
 // Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping; excluded because that output builds it, not the container.
 #[Exclude]
@@ -33,6 +36,16 @@ final readonly class Finding
         public bool $regression = false,
         // A field of the output contract rather than words in the text, because plain code is to route a gap in a gate that passed without parsing prose.
         public bool $gate_gap = false,
+        // Nullable only because a finding stored before reviewers named one has none, so NotNull still refuses a reviewer's answer without it; Symfony AI's schema keeps null in the type despite NotNull: upstream/ai-platform-not-null-promoted-property
+        #[NotNull]
+        // NotBlank too, because WordCount lets an empty string pass.
+        #[NotBlank]
+        #[WordCount(min: 3, max: 6)]
+        #[Schema(description: 'The problem in 3 to 6 plain words, for example "A cart of 100 loses its discount".')]
+        public ?string $title = null,
+        #[NotNull]
+        #[Schema(description: 'What sort of problem this is.')]
+        public ?FindingKind $kind = null,
         // Ignored, so the schema never asks a reviewer for it and an answer naming it is refused; only plain code merges findings, and StoredFindingNormalizer keeps it in stored JSON.
         #[Ignore]
         public FindingIds $merged = new FindingIds(),
