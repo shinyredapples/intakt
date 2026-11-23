@@ -220,6 +220,16 @@ final class RouteHandBackTest extends TestCase
         self::assertSame(HandBackRoute::SentBack, $result instanceof FailedHandBack ? $result->route : null);
     }
 
+    public function testRoutingReadsOnlyTheThreeHandBackKindsAndNeverTheWholeLedger(): void
+    {
+        $this->history->commit('First');
+
+        (void) $this->route('Uses the key '.$this->fakeKey());
+
+        self::assertSame(0, $this->ledger->fullReads);
+        self::assertEqualsCanonicalizing([LedgerEventKind::HandBackAccepted, LedgerEventKind::HandBackSentBack, LedgerEventKind::HandBackHandedOver], $this->ledger->kindsRequested);
+    }
+
     public function testAMissingScannerFailsClosedOnThePullRequestTextAndRecordsNothing(): void
     {
         $this->history->commit('First');

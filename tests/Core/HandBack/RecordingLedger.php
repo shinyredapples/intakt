@@ -22,6 +22,11 @@ final class RecordingLedger implements Ledger
     /** @var list<RecordedEvent> */
     private array $recorded = [];
 
+    public int $fullReads = 0;
+
+    /** @var list<LedgerEventKind> */
+    public array $kindsRequested = [];
+
     /**
      * @param ?Closure(): void $onRead
      */
@@ -46,6 +51,8 @@ final class RecordingLedger implements Ledger
     #[Override]
     public function readInOrder(): RecordedEvents
     {
+        ++$this->fullReads;
+
         if ($this->onRead instanceof Closure) {
             ($this->onRead)();
         }
@@ -84,6 +91,7 @@ final class RecordingLedger implements Ledger
     #[Override]
     public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
+        $this->kindsRequested = $kinds;
         if ($this->onRead instanceof Closure) {
             ($this->onRead)();
         }
