@@ -14,7 +14,7 @@
    "findings": [{"id": "F3", "severity": "P1" | "P2" | "P3", "file": "...", "line": 12, "symbol": "...",
                  "text": "...", "fixable_by": "builder" | "owner", "repeat": false, "requirement": "...",
                  "evidence": {"probe": "...", "output": "..."}, "regression": false,
-                 "title": "...", "kind": "security" | "logic" | "missing test" | "tidy-up" | "other"}],
+                 "title": "A large cart loses its discount", "kind": "security" | "logic" | "missing test" | "tidy-up" | "other"}],
    "resolved": ["F1", "F2"],
    "follow_ups": ["..."],
    "protected": "tightens" | "neutral" | "loosens", "protected_reason": "..."}

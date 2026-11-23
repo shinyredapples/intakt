@@ -19,7 +19,7 @@ the type still allows null
 
 ## Effect in Intakt
 
-`src/Core/Review/Contract/Finding.php` declares `title` and `kind` nullable, because findings stored before they existed have none, and puts `#[NotNull]` on both so a reviewer must give them. The schema sent to reviewers still allows `null` for both; `StrictVerdictConverter` validates the answer and refuses a `null` title or kind, so the gap costs a refused answer, never a stored finding without them. No workaround: the `#[Schema]` attribute has no `type` option to pin the type.
+`src/Core/Review/Contract/Finding.php` declares `title` and `kind` nullable, because findings stored before they existed have none, and puts `#[NotNull]` on both so a reviewer must give them. The schema sent to reviewers still has `null` in the type of both. For `title` that admits a `null` answer; for `kind` the `enum` lists only the five kinds, so a provider that holds the answer to the schema cannot give `null` there, though the type still names it. `StrictVerdictConverter` validates the answer and refuses a `null` title or kind, so the gap costs a refused answer, never a stored finding without them. No workaround: the `#[Schema]` attribute has no `type` option to pin the type.
 
 ## Upstream status
 
