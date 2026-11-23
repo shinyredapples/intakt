@@ -175,6 +175,76 @@ final class MainHistoryTest extends TestCase
         }
     }
 
+    #[DataProvider('exitCodesThatAreNoAnswer')]
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckEndsWithAnExitCodeThatIsNoAnswer(int $exitCode): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $path = $this->endOwnerChecksWith('exit '.$exitCode);
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function exitCodesThatAreNoAnswer(): iterable
+    {
+        yield 'a general error' => [1];
+        yield 'a program without the execute bit' => [126];
+        yield 'a program that is missing' => [127];
+        yield 'the code right below a refused signature' => [254];
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckCannotLaunchItsProgram(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $path = $this->endOwnerChecksWith('exec "$0.missing"');
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAPeerKeyStaysPeerSignedBehindTheProgramThatDoesNotLaunchWhenNoOwnerKeyIsAskedFor(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([], [$this->publicKey('peer')]);
+        $path = $this->endOwnerChecksWith('exit 127');
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testASignatureTheRealProgramRefusesForTheOwnerExitsWith255AndStillReachesThePeerCheck(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith('"$program" "$@"; status=$?; echo $status >> '.escapeshellarg($exits).'; exit $status');
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+            self::assertSame("255\n", file_get_contents($exits));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
     public function testAMalformedPeerKeyIsRefusedNamingItAsAPeerKeyAndItsPosition(): void
     {
         try {
@@ -858,10 +928,16 @@ final class MainHistoryTest extends TestCase
     // An ssh-keygen in front of the real one kills itself when asked for the owner principal, because only a signal forces an owner check that ends without an answer; the search path to restore is returned.
     private function interruptOwnerChecks(): string
     {
-        $bin = $this->keys.'/interrupting-bin';
+        return $this->endOwnerChecksWith('kill -TERM $$');
+    }
+
+    // An ssh-keygen in front of the real one runs the given shell line when asked for the owner principal and the real program ($program) otherwise, because a launch failure is an exit code and only a program in front forces it on the owner check alone; the search path to restore is returned.
+    private function endOwnerChecksWith(string $shellLine): string
+    {
+        $bin = $this->keys.'/owner-check-bin';
         mkdir($bin);
         $sshKeygen = escapeshellarg((string) new ExecutableFinder()->find('ssh-keygen'));
-        $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" -I owner \"*) kill -TERM \$\$ ;;\nesac\nexec ".$sshKeygen." \"\$@\"\n";
+        $script = "#!/bin/sh\nprogram=".$sshKeygen."\ncase \" \$* \" in\n    *\" -I owner \"*) ".$shellLine." ;;\nesac\nexec \"\$program\" \"\$@\"\n";
         file_put_contents($bin.'/ssh-keygen', $script);
         chmod($bin.'/ssh-keygen', 0o700);
         $path = (string) getenv('PATH');

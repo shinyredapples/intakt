@@ -23,6 +23,8 @@ final readonly class TrustedSignatures
 
     private const string PROGRAM = 'ssh-keygen';
     private const float TIMEOUT_SECONDS = 60;
+    private const int EXIT_VERIFIED = 0;
+    private const int EXIT_REFUSED = 255;
 
     /** @var array<string, list<string>> */
     private array $keys;
@@ -93,7 +95,7 @@ final readonly class TrustedSignatures
                 }
             }
         } catch (RuntimeException) {
-            // Fail closed for every class: an owner check that timed out, was killed or did not start says nothing about the owner's key, so a later peer match must not hide the owner's notice.
+            // Fail closed for every class: an owner check that timed out, was killed or ended with an exit code that is no answer says nothing about the owner's key, so a later peer match must not hide the owner's notice.
             return SignatureStatus::UnknownKey;
         }
 
@@ -107,6 +109,13 @@ final readonly class TrustedSignatures
      */
     private function verifies(array $command, string $payload): bool
     {
-        return 0 === new Process($command, null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, self::TIMEOUT_SECONDS)->run();
+        $exitCode = new Process($command, null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, self::TIMEOUT_SECONDS)->run();
+
+        // Only the program's own two exits are answers, because a program that could not be launched ends with a code as well (126 or 127) and that must not read as a refused signature.
+        return match ($exitCode) {
+            self::EXIT_VERIFIED => true,
+            self::EXIT_REFUSED => false,
+            default => throw new RuntimeException(sprintf('%s ended with exit code %d, which is no answer.', self::PROGRAM, $exitCode)),
+        };
     }
 }
