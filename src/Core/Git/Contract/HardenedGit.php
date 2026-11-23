@@ -96,19 +96,6 @@ final readonly class HardenedGit
         return new GitCall(new GitCommand(...$this->command($options, $arguments, $emptyTree)), $directory, $this->environmentOf($this->variables($directory, $emptyTree)));
     }
 
-    /**
-     * @param array<string, string|false> $variables
-     */
-    private function environmentOf(array $variables): GitEnvironment
-    {
-        $environment = GitEnvironment::of();
-        foreach ($variables as $name => $value) {
-            $environment = false === $value ? $environment->unsetting($name) : $environment->with(...[$name => $value]);
-        }
-
-        return $environment;
-    }
-
     private function absolute(string $directory): string
     {
         // Because the process changes into the directory before git reads GIT_WORK_TREE, a relative one would be resolved twice; a missing one stays as it is, and the call itself fails there.
@@ -234,6 +221,19 @@ final readonly class HardenedGit
         if (file_exists($file)) {
             throw RepositoryAttributesRefused::at($file);
         }
+    }
+
+    /**
+     * @param array<string, string|false> $variables
+     */
+    private function environmentOf(array $variables): GitEnvironment
+    {
+        $environment = GitEnvironment::of();
+        foreach ($variables as $name => $value) {
+            $environment = false === $value ? $environment->unsetting($name) : $environment->with(...[$name => $value]);
+        }
+
+        return $environment;
     }
 
     /**

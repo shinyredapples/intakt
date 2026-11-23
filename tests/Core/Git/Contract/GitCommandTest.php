@@ -18,6 +18,11 @@ final class GitCommandTest extends TestCase
 
     public function testNamedArgumentsAreReindexedAsAList(): void
     {
-        self::assertSame(['git', 'status'], [...new GitCommand(first: 'git', second: 'status')]);
+        $command = new GitCommand(
+            first: 'git',
+            second: 'status',
+        );
+
+        self::assertSame(['git', 'status'], [...$command]);
     }
 }
