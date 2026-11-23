@@ -146,7 +146,7 @@ final readonly class EvidenceItems
         return $isParagraphLine && 1 === preg_match(self::SETEXT_UNDERLINE, $lines[$index + 1] ?? '') ? 2 : 0;
     }
 
-    // A plain `Evidence:` label has no end of its own, so its list also ends where the text after the first item starts. Such a line has no indent, so it is never inside an item and can be cut before the items are walked.
+    // A plain `Evidence:` label has no end of its own, so its list also ends where the text after the first item starts. Such a line has no indent, so it is never inside an item and can be cut before the items are walked. The first item is a top-level one, because a marker in indented code starts no list.
     /**
      * @param list<string> $lines
      *
@@ -154,7 +154,7 @@ final readonly class EvidenceItems
      */
     private static function untilTheLabelListEnds(array $lines): array
     {
-        $first = array_find_key($lines, static fn (string $line): bool => null !== self::contentColumnOf($line));
+        $first = array_find_key($lines, static fn (string $line, int $index): bool => self::isTopLevelItem($lines, $index, null));
 
         if (null === $first) {
             return $lines;

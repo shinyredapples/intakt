@@ -311,4 +311,26 @@ final class EvidenceItemsTest extends TestCase
     {
         self::assertSame(1, EvidenceItems::countIn("\u{FEFF}## Evidence\n- E1. Show the result.\n"));
     }
+
+    public function testACommentOnTheMarkerLineKeepsTheMarkersSpacesSoALessIndentedItemIsTopLevel(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n-   <!-- note -->\n    Show the test run.\n  - Show the exit code."));
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n-   <!-- note -->\n    Show the test run.\n    - A nested note."));
+    }
+
+    public function testABulletInIndentedCodeIsNotTheFirstItemOfALabelList(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("Evidence:\n\n    - an example in indented code\n\nShow this result:\n- Show the test run."));
+    }
+
+    public function testACommentIndentedFourColumnsInAParagraphContinuesIt(): void
+    {
+        self::assertSame(0, EvidenceItems::countIn("## Evidence\nFirst paragraph.\n    <!-- note -->\n10. still prose."));
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\nFirst paragraph.\n\n    <!-- note -->\n10. an item after indented code."));
+    }
+
+    public function testACommentAtTheContentColumnOfAnItemIsAnHtmlBlockThatEndsItsParagraph(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n1.  First.\n    <!-- note -->\nA paragraph after the list.\n2. still prose."));
+    }
 }

@@ -11,7 +11,11 @@ final readonly class HiddenBlockOpeners
 
     private const string EMPTY_MARKER = '/^ *(?:[-*+]|\d{1,9}[.)]) *$/';
 
-    private const string MARKER_WITH_CONTENT = '/^ *(?:[-*+]|\d{1,9}[.)]) +\S/';
+    private const string MARKER_WITH_CONTENT = '/^( *(?:[-*+]|\d{1,9}[.)]) +)\S/';
+
+    private const string INDENTED_COMMENT = '/^( *)<!--/';
+
+    private const string STAND_IN = 'hidden';
 
     /**
      * @return list<string>
@@ -22,16 +26,29 @@ final readonly class HiddenBlockOpeners
         $task = str_replace(["\r\n", "\r"], "\n", $task);
         // A byte order mark is no text, so a task that starts with one still starts with its heading.
         $task = str_starts_with($task, "\u{FEFF}") ? substr($task, 3) : $task;
-        $raw = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", $task));
-        $visible = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", MarkdownText::visibleProse($task)));
+        $prose = MarkdownText::visibleProse($task);
+        $rawLines = explode("\n", $task);
+        $proseLines = explode("\n", $prose);
+        $raw = array_map(MarkdownText::withSpacesForTabs(...), $rawLines);
+        $visible = array_map(MarkdownText::withSpacesForTabs(...), $proseLines);
+        $items = OpenListItems::of($prose);
+        $lineStart = 0;
 
         foreach ($visible as $index => $line) {
-            if ('' === trim($line) && 1 === preg_match(self::BLOCK_OPENER, $raw[$index] ?? '', $match)) {
+            $rawLine = $raw[$index] ?? '';
+
+            if ('' === trim($line) && 1 === preg_match(self::BLOCK_OPENER, $rawLine, $match)) {
                 $visible[$index] = $match[1].'***';
-            } elseif (1 === preg_match(self::EMPTY_MARKER, $line) && 1 === preg_match(self::MARKER_WITH_CONTENT, $raw[$index] ?? '')) {
-                // A comment or fence on the marker line is the item's content, so the item is not empty and interrupts a paragraph like any other (https://spec.commonmark.org/0.31.2/#list-items); a word stands in for it.
-                $visible[$index] = rtrim($line).' hidden';
+            } elseif (1 === preg_match(self::EMPTY_MARKER, $line) && 1 === preg_match(self::MARKER_WITH_CONTENT, $rawLine, $match)) {
+                // A comment or fence on the marker line is the item's content, so the item is not empty and interrupts a paragraph like any other (https://spec.commonmark.org/0.31.2/#list-items); a word stands in for it after the marker's own spaces, because they set the item's content column.
+                $visible[$index] = $match[1].self::STAND_IN;
+            } elseif ('' === trim($line) && 1 === preg_match(self::INDENTED_COMMENT, $rawLine, $match) && MarkdownText::isParagraphLine($visible[$index - 1] ?? '')) {
+                // A comment indented too far to open an HTML block is inline in the paragraph above, so its line continues that paragraph (https://spec.commonmark.org/0.31.2/#html-blocks); a word at its indent stands in for it.
+                $items = $items->readUpTo($lineStart + 1);
+                $visible[$index] = $items->opensAnHtmlBlock($lineStart + strspn($rawLines[$index], " \t")) ? $line : $match[1].self::STAND_IN;
             }
+
+            $lineStart += strlen($proseLines[$index]) + 1;
         }
 
         return $visible;
