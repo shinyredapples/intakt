@@ -76,10 +76,10 @@ final readonly class RoundLedger
         ));
     }
 
-    // The model goes with the start, because the dashboard names a reviewer by it from the ledger alone and a later change of the tier's model must not rename it.
+    // The model goes with the start, because the dashboard names a reviewer by it from the ledger alone and a later change of the tier's model must not rename it; the round is the subject, because the starts of one round are then read through the index without reading every other round's.
     public function reviewerStarted(RoundReviewer $reviewer): void
     {
-        $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer), model: $this->modelOf($reviewer)));
+        $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer), model: $this->modelOf($reviewer)), $reviewer->round()->id()->toRfc4122());
     }
 
     // The mode goes with each verdict, because the mode of its moment is lost once the project is switched.
@@ -256,9 +256,9 @@ final readonly class RoundLedger
         }
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused|EscalationVerdictKept|EscalationReviewFailed $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused|EscalationVerdictKept|EscalationReviewFailed $payload, ?string $subject = null): void
     {
-        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
+        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT), $subject));
 
         if (!$result->succeeded()) {
             throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);

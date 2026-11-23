@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use ArrayObject;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\Headline;
@@ -13,6 +15,7 @@ use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LiveBoardHeadline;
+use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -24,16 +27,26 @@ use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Tests\Support\UnpricedRoundCosts;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Psr\Log\NullLogger;
+use Psr\Cache\CacheItemInterface;
+use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Mercure\Hub;
+use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
 #[CoversClass(LiveBoardHeadline::class)]
+#[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundPayloads::class)]
@@ -46,6 +59,8 @@ use Twig\Environment;
 #[UsesClass(LiveEvent::class)]
 final class LiveBoardHeadlineTest extends KernelTestCase
 {
+    private BufferingLogger $log;
+
     public function testTheBoardPublishedWithoutARoundIsAnEmptyBoardWithItsWaitingOctopusOnTheShellTopic(): void
     {
         $live = new PublishedLiveEvents();
@@ -133,6 +148,212 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertSame(BoardColumn::Done->emptyLine(), $done->filter('.col-empty')->text());
     }
 
+    public function testAnUnchangedBoardIsNotPushedAgain(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('change-1', 'r1', 1);
+        $live = new PublishedLiveEvents();
+        $headline = $this->headlineOn($ledger, $live);
+
+        $headline->publishLatest(Uuid::v7());
+        $headline->publishLatest(Uuid::v7());
+
+        self::assertCount(1, $live->events);
+    }
+
+    public function testAnUnchangedBoardIsNotPushedAgainByAnotherWorkerOfTheInstall(): void
+    {
+        $ledger = new DashboardLedger();
+        $live = new PublishedLiveEvents();
+        $lastPushed = new ArrayAdapter();
+
+        $this->headlineOn($ledger, $live, $lastPushed)->publishLatest(Uuid::v7());
+        $this->headlineOn($ledger, $live, $lastPushed)->publishLatest(Uuid::v7());
+
+        self::assertCount(1, $live->events);
+    }
+
+    public function testTheBoardPublishedWithoutARoundIsNotPushedAgainWhenUnchanged(): void
+    {
+        $live = new PublishedLiveEvents();
+        $headline = $this->headlineOn(new DashboardLedger(), $live);
+
+        $headline->publishLatest(Uuid::v7());
+        $headline->publishTheBoard();
+
+        self::assertCount(1, $live->events);
+    }
+
+    public function testABoardThatChangedSinceTheLastPushIsPushedAgain(): void
+    {
+        $ledger = new DashboardLedger();
+        $live = new PublishedLiveEvents();
+        $headline = $this->headlineOn($ledger, $live);
+
+        $headline->publishLatest(Uuid::v7());
+        $ledger->startRoundOf('change-1', 'r1', 1);
+        $headline->publishLatest(Uuid::v7());
+
+        self::assertCount(2, $live->events);
+    }
+
+    public function testAPoolThatCannotBeReadStillPushesTheBoardAndIsLogged(): void
+    {
+        $pool = self::createStub(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willThrowException(new InvalidArgumentException('disk full'));
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
+
+        self::assertCount(1, $live->events);
+        self::assertContains(['warning', 'The last pushed board could not be read.'], array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs()));
+    }
+
+    public function testABoardTheHubRefusedIsPushedAgainOnTheNextTrigger(): void
+    {
+        $http = new MockHttpClient([new MockResponse('', ['http_code' => 503]), new MockResponse('event-1')]);
+        $hub = new Hub('http://localhost/.well-known/mercure', new StaticTokenProvider('publisher.token.unsigned'), httpClient: $http);
+        $headline = $this->headlineOn(new DashboardLedger(), new MercureLiveUpdates($hub, $this->log));
+
+        $headline->publishTheBoard();
+        $headline->publishTheBoard();
+
+        self::assertSame(2, $http->getRequestsCount());
+    }
+
+    public function testAReturnToAnEarlierBoardIsPushedWhenThePoolRefusedTheRecordOfTheNewerOne(): void
+    {
+        $refused = new ArrayObject(['delete' => false, 'save' => false]);
+        $pool = $this->poolOver(new ArrayAdapter(), $refused);
+        $live = new PublishedLiveEvents();
+        $idle = new DashboardLedger();
+        $active = new DashboardLedger();
+        $active->startRoundOf('change-1', 'r1', 1);
+
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+        $refused['save'] = true;
+        $this->headlineOn($active, $live, $pool)->publishTheBoard();
+        $refused['save'] = false;
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+
+        self::assertCount(3, $live->events);
+    }
+
+    public function testAPoolThatRefusesTheDeleteStillPushesTheBoardAndIsLogged(): void
+    {
+        $live = new PublishedLiveEvents();
+        $pool = $this->poolOver(new ArrayAdapter(), new ArrayObject(['delete' => true, 'save' => false]));
+
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
+
+        self::assertCount(1, $live->events);
+        self::assertSame([['warning', 'The last pushed board could not be forgotten.']], $this->logged());
+    }
+
+    public function testAPoolThatRefusesTheRecordStillPushesTheBoardAndIsLogged(): void
+    {
+        $live = new PublishedLiveEvents();
+        $pool = $this->poolOver(new ArrayAdapter(), new ArrayObject(['delete' => false, 'save' => true]));
+
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
+
+        self::assertCount(1, $live->events);
+        self::assertSame([['warning', 'The last pushed board could not be recorded.']], $this->logged());
+    }
+
+    public function testAPoolThatTakesTheDeleteAndTheRecordLogsNothing(): void
+    {
+        $live = new PublishedLiveEvents();
+        $pool = $this->poolOver(new ArrayAdapter(), new ArrayObject(['delete' => false, 'save' => false]));
+
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
+
+        self::assertSame([], $this->logged());
+    }
+
+    public function testAReturnToAnEarlierBoardIsPushedOnceTheRecordThePoolCouldNotDeleteHasExpired(): void
+    {
+        $clock = new MockClock();
+        $live = new PublishedLiveEvents();
+
+        $this->returnToTheFirstBoardAfterARefusingPool($live, $clock, 60);
+
+        self::assertCount(3, $live->events);
+    }
+
+    public function testAReturnToAnEarlierBoardIsHeldBackWhileTheRecordThePoolCouldNotDeleteLasts(): void
+    {
+        $clock = new MockClock();
+        $live = new PublishedLiveEvents();
+
+        $this->returnToTheFirstBoardAfterARefusingPool($live, $clock, 59);
+
+        self::assertCount(2, $live->events);
+    }
+
+    public function testAnUnchangedBoardIsPushedAgainOnceItsRecordHasExpired(): void
+    {
+        $clock = new MockClock();
+        $live = new PublishedLiveEvents();
+        $headline = $this->headlineOn(new DashboardLedger(), $live, new ArrayAdapter(clock: $clock));
+
+        $headline->publishTheBoard();
+        $clock->sleep(60);
+        $headline->publishTheBoard();
+
+        self::assertCount(2, $live->events);
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+    }
+
+    protected function tearDown(): void
+    {
+        // Emptied, because a buffering logger prints what it still holds when it is destroyed.
+        $this->log->cleanLogs();
+        parent::tearDown();
+    }
+
+    // The pool refuses both the delete and the record of the second board, because only then does the first board stay the last pushed one when it comes back.
+    private function returnToTheFirstBoardAfterARefusingPool(PublishedLiveEvents $live, MockClock $clock, int $secondsLater): void
+    {
+        $refused = new ArrayObject(['delete' => false, 'save' => false]);
+        $pool = $this->poolOver(new ArrayAdapter(clock: $clock), $refused);
+        $idle = new DashboardLedger();
+        $active = new DashboardLedger();
+        $active->startRoundOf('change-1', 'r1', 1);
+
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+        $refused->exchangeArray(['delete' => true, 'save' => true]);
+        $this->headlineOn($active, $live, $pool)->publishTheBoard();
+        $refused->exchangeArray(['delete' => false, 'save' => false]);
+        $clock->sleep($secondsLater);
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+    }
+
+    /**
+     * @param ArrayObject<string, bool> $refused
+     */
+    private function poolOver(ArrayAdapter $stored, ArrayObject $refused): CacheItemPoolInterface
+    {
+        $pool = self::createStub(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturnCallback($stored->getItem(...));
+        $pool->method('deleteItem')->willReturnCallback(static fn (string $key): bool => true !== $refused['delete'] && $stored->deleteItem($key));
+        $pool->method('save')->willReturnCallback(static fn (CacheItemInterface $item): bool => true !== $refused['save'] && $stored->save($item));
+
+        return $pool;
+    }
+
+    /**
+     * @return list<array{mixed, mixed}>
+     */
+    private function logged(): array
+    {
+        return array_values(array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [null, null], $this->log->cleanLogs()));
+    }
+
     private function pushedDoneColumnOf(int $judged): Crawler
     {
         $ledger = new DashboardLedger();
@@ -157,12 +378,12 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         return new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="col-done"] section#col-done');
     }
 
-    private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live): LiveBoardHeadline
+    private function headlineOn(DashboardLedger $ledger, LiveUpdates $live, CacheItemPoolInterface $lastPushed = new ArrayAdapter()): LiveBoardHeadline
     {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
-        return new LiveBoardHeadline($pages, $twig, $live, new LockFactory(new InMemoryStore()), new NullLogger());
+        return new LiveBoardHeadline($pages, $twig, $live, new LockFactory(new InMemoryStore()), $lastPushed, $this->log);
     }
 }

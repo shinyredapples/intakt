@@ -7,6 +7,8 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\RelevantMemory;
+use Intakt\Core\Memory\Contract\SettledMemory;
+use Intakt\Core\Memory\Contract\SettledQuery;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -26,5 +28,11 @@ final readonly class RemembersNothing implements ProjectMemory
     public function relevantTo(MemoryQuery $query): RelevantMemory
     {
         return RelevantMemory::within([], $query->maxBytes);
+    }
+
+    #[Override]
+    public function settledOn(SettledQuery $query): SettledMemory
+    {
+        return SettledMemory::none();
     }
 }

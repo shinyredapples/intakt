@@ -167,6 +167,37 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([$reviewer => 'changes'], $this->judgeDonePayloads()[0]['votes']);
     }
 
+    public function testAGateGapP3TheJudgeMarksActIsRecordedAsAFollowUpAndNotOnTheActList(): void
+    {
+        $gateGap = new Finding('A', Severity::P3, null, null, null, 'The cs gate misses this case.', FixableBy::Builder, false, 'cs', null, gate_gap: true);
+        $round = $this->roundReporting([$gateGap, $this->finding('B', Severity::P3)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F2'], 'follow_ups' => ['F1']]], $this->judgeCalls());
+    }
+
+    public function testAReviewerWhoseOnlyFindingIsAGateGapP3TheJudgeMarksActVotesApprove(): void
+    {
+        $round = $this->roundReporting([new Finding('A', Severity::P3, null, null, null, 'The cs gate misses this case.', FixableBy::Builder, false, 'cs', null, gate_gap: true)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([$reviewer => 'approve'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
+    public function testAGateGapP1TheJudgeMarksActStaysOnTheActListAndItsReviewerVotesChanges(): void
+    {
+        $round = $this->roundReporting([new Finding('A', Severity::P1, null, null, null, 'The cs gate misses this case.', FixableBy::Builder, false, null, null, gate_gap: true)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => []]], $this->judgeCalls());
+        self::assertSame([$reviewer => 'changes'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
     public function testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList(): void
     {
         $round = $this->completedRound();

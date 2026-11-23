@@ -95,6 +95,20 @@ final class WorkflowFileScanTest extends TestCase
         self::assertSame([['runner', 5, 'the job check runs on build-box, not a GitHub-hosted runner label']], $this->summary($findings));
     }
 
+    public function testAWhitespaceOnlyRunnerLabelIsNotASingleName(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: ' '"));
+
+        self::assertSame([['unreadable', 5, 'a runner label of the job check that is not a single name']], $this->summary($findings));
+    }
+
+    public function testAWhitespaceOnlyLabelInARunnerListIsNotASingleName(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: [ubuntu-latest, ' ']"));
+
+        self::assertSame([['unreadable', 5, 'a runner label of the job check that is not a single name']], $this->summary($findings));
+    }
+
     public function testEachLabelOfAListedRunnerIsChecked(): void
     {
         $findings = $this->scan($this->withJob('runs-on: [self-hosted, ubuntu-24.04, linux]'));

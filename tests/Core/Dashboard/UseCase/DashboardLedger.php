@@ -19,8 +19,21 @@ final class DashboardLedger implements Ledger
     /** @var list<RecordedEvent> */
     private array $recorded = [];
 
+    private bool $failNextAppend = false;
+
+    public function failNextAppend(): void
+    {
+        $this->failNextAppend = true;
+    }
+
     public function append(LedgerEvent $event): AppendResult
     {
+        if ($this->failNextAppend) {
+            $this->failNextAppend = false;
+
+            return AppendResult::failed('disk full');
+        }
+
         $this->recorded[] = new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
         return AppendResult::appended(Uuid::v7());
@@ -34,6 +47,16 @@ final class DashboardLedger implements Ledger
     public function readOfKind(LedgerEventKind $kind): RecordedEvents
     {
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
+    }
+
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind && $subject === $recorded->event->subject)));
+    }
+
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind && null === $recorded->event->subject)));
     }
 
     public function readMentioning(Mentions $texts): RecordedEvents
@@ -88,12 +111,12 @@ final class DashboardLedger implements Ledger
 
     public function startReviewer(string $round, string $role): void
     {
-        $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role));
+        $this->recordReviewerStart($round, $this->reviewer($round, $role));
     }
 
     public function startReviewerOn(string $round, string $role, string $model): void
     {
-        $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role) + ['model' => $model]);
+        $this->recordReviewerStart($round, $this->reviewer($round, $role) + ['model' => $model]);
     }
 
     public function answer(string $round, string $role, int $findings): void
@@ -332,6 +355,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason]);
     }
 
+    public function computeMain(string $project, string $main, string $state): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '']);
+    }
+
     public function failHeadWithoutCause(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
@@ -385,5 +413,14 @@ final class DashboardLedger implements Ledger
     private function add(LedgerEventKind $kind, array $payload, ?DateTimeImmutable $at = null): void
     {
         $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+    }
+
+    // Under the round as its subject, as RoundLedger appends it, so readOfKindAbout() finds it.
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function recordReviewerStart(string $round, array $payload): void
+    {
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewerStarted, json_encode($payload, JSON_THROW_ON_ERROR), $round), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 }
