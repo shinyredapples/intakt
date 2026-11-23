@@ -40,11 +40,7 @@ final readonly class ShellLiterals
 
     public function afterExpansion(int $offset): int
     {
-        return match (true) {
-            '$((' === substr($this->source, $offset, 3) => $this->afterArithmetic($offset + 3, 2),
-            '${' === substr($this->source, $offset, 2) => $this->afterParameter($offset + 2),
-            default => $offset + 1,
-        };
+        return '$((' === substr($this->source, $offset, 3) ? $this->afterArithmetic($offset + 3, 2) : $offset + 1;
     }
 
     // Because a `<<` or `#` in arithmetic is a shift or a base, arithmetic is skipped to the parenthesis that closes it.
@@ -79,54 +75,6 @@ final readonly class ShellLiterals
         }
 
         return [$delimiter, $offset, $quoted];
-    }
-
-    public function afterDoubleQuotedText(int $offset): int
-    {
-        while (($offset += strcspn($this->source, '"\\$`', $offset)) < $this->length) {
-            $char = $this->source[$offset];
-
-            if ('"' === $char) {
-                return $offset + 1;
-            }
-
-            $offset = match ($char) {
-                '\\' => min($offset + 2, $this->length),
-                '`' => $this->afterEscapedText($offset + 1, '`'),
-                default => $this->afterExpansion($offset),
-            };
-        }
-
-        return $this->length;
-    }
-
-    // Because a `#` in `${#name}` or `${name#prefix}` is an operator, a parameter expansion is skipped to its own closing brace, and a brace in a quoted default such as `${name:-'}'}` counts for nothing.
-    private function afterParameter(int $offset): int
-    {
-        $depth = 1;
-
-        while (($offset += strcspn($this->source, "{}\\'\"`\$", $offset)) < $this->length) {
-            $char = $this->source[$offset];
-            $offset = match ($char) {
-                '\\' => min($offset + 2, $this->length),
-                "'" => $this->afterSingleQuoted($offset + 1),
-                '"' => $this->afterDoubleQuotedText($offset + 1),
-                '`' => $this->afterEscapedText($offset + 1, '`'),
-                '$' => $this->afterExpansion($offset),
-                default => $offset + 1,
-            };
-            $depth += match ($char) {
-                '{' => 1,
-                '}' => -1,
-                default => 0,
-            };
-
-            if (0 === $depth) {
-                return $offset;
-            }
-        }
-
-        return $this->length;
     }
 
     /**

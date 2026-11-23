@@ -8,8 +8,8 @@ final readonly class CommentLanguages
 {
     // Because the dashboard's browser tests are ES modules (`.mjs`), a JavaScript file is any of the three extensions Node reads as JavaScript.
     private const array JAVASCRIPT_EXTENSIONS = ['.js', '.mjs', '.cjs'];
-    // Because the interpreter is named on the first line, directly or through `env`, as `sh`, `bash`, `dash`, `ksh` or `zsh`.
-    private const string SHELL_SHEBANG = '~\A#![ \t]*\S*/(?:env[ \t]+)?(?:ba|da|k|z)?sh(?:[ \t\r\n]|\z)~';
+    // Because the interpreter is named on the first line, directly or through `env` (also `env -S`, which passes it options), as `sh`, `bash`, `dash`, `ksh` or `zsh`.
+    private const string SHELL_SHEBANG = '~\A#![ \t]*\S*/(?:env[ \t]+(?:-S[ \t]*)?)?(?:ba|da|k|z)?sh(?:[ \t\r\n]|\z)~';
     private const int SHEBANG_BYTES = 256;
 
     public function __construct(

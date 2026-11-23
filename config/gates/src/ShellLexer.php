@@ -17,8 +17,13 @@ final class ShellLexer
     private const string HERE_STRING = '<<<';
     private const int SUBSHELL = 0;
     private const int SUBSTITUTION = 1;
-    private const int SUBSTITUTION_IN_STRING = 2;
-    private const int CASE_ARMS = 3;
+    private const int CASE_ARMS = 2;
+    private const int STRING = 3;
+    private const int PARAMETER = 4;
+    // Because a string and a `${ }` expansion are text up to their closer, each is searched only for the characters that close it, escape in it or open something inside it.
+    private const array TEXT_STOPS = [self::STRING => '"\\$`', self::PARAMETER => "}\\'\"`\$"];
+    private const array TEXT_CLOSERS = [self::STRING => '"', self::PARAMETER => '}'];
+    private const string CASE_PATTERN_ENDS = ')|';
     private const string CASE_KEYWORD = 'case';
     private const string CASE_END = 'esac';
 
@@ -33,7 +38,9 @@ final class ShellLexer
      */
     private array $frames = [];
 
-    // Because a line end inside a substitution is not the end of the outer command's line, here-documents wait by the depth of the frames they were opened in.
+    private int $substitutions = 0;
+
+    // Because only a `$( )` is read as a source of its own, here-documents wait by the number of open substitutions: a line end in a subshell or a `case` reads every body queued on that line.
     /**
      * @var array<int, list<array{delimiter: string, joinsLines: bool, stripsTabs: bool}>>
      */
@@ -78,7 +85,7 @@ final class ShellLexer
             '<' === $char => $this->afterLessThan($offset),
             '>' === $char => $this->atWordStart($offset + 1),
             "'" === $char => $this->inWord($this->literals->afterSingleQuoted($offset + 1)),
-            '"' === $char => $this->afterDoubleQuoted($offset + 1),
+            '"' === $char => $this->afterOpenedText($offset + 1, self::STRING),
             '\\' === $char => $this->afterEscape($offset),
             '$' === $char => $this->afterDollar($offset),
             '`' === $char => $this->inWord($this->literals->afterEscapedText($offset + 1, '`')),
@@ -105,13 +112,12 @@ final class ShellLexer
     private function afterLineEnd(int $offset): int
     {
         ++$offset;
-        $depth = count($this->frames);
 
-        foreach ($this->pendingDocuments[$depth] ?? [] as $document) {
+        foreach ($this->pendingDocuments[$this->substitutions] ?? [] as $document) {
             $offset = $this->documents->afterBody($offset, $document);
         }
 
-        unset($this->pendingDocuments[$depth]);
+        unset($this->pendingDocuments[$this->substitutions]);
 
         return $this->atCommandStart($offset);
     }
@@ -143,11 +149,7 @@ final class ShellLexer
             return $this->atCommandStart($offset + 1);
         }
 
-        return match ($this->closedFrame()) {
-            self::SUBSTITUTION_IN_STRING => $this->afterDoubleQuoted($offset + 1),
-            self::SUBSTITUTION => $this->inWord($offset + 1),
-            default => $this->atCommandStart($offset + 1),
-        };
+        return self::SUBSTITUTION === $this->closedFrame() ? $this->afterText($offset + 1) : $this->atCommandStart($offset + 1);
     }
 
     private function afterLessThan(int $offset): int
@@ -183,30 +185,58 @@ final class ShellLexer
         return $end;
     }
 
-    private function afterDoubleQuoted(int $offset): int
+    private function afterOpenedText(int $offset, int $frame): int
     {
-        $source = $this->literals->source;
+        $this->frames[] = $frame;
 
-        while (($offset += strcspn($source, '"\\$`', $offset)) < $this->literals->length) {
-            if ('"' === $source[$offset]) {
-                return $this->inWord($offset + 1);
+        return $this->afterText($offset);
+    }
+
+    // Because a string and a `${ }` expansion nest in each other and both can hold a `$( )` of code, the text goes on in the innermost open one until code starts or the word goes on.
+    private function afterText(int $offset): int
+    {
+        while (null !== $stops = self::TEXT_STOPS[array_last($this->frames) ?? self::SUBSHELL] ?? null) {
+            $offset += strcspn($this->literals->source, $stops, $offset);
+
+            if ($offset >= $this->literals->length) {
+                return $this->literals->length;
             }
 
             if ($this->substitutionOpensAt($offset)) {
-                // Because a command substitution is code until its `)`, the string resumes only when that parenthesis closes this frame.
-                $this->frames[] = self::SUBSTITUTION_IN_STRING;
-
-                return $this->atCommandStart($offset + 2);
+                return $this->openSubstitution($offset);
             }
 
-            $offset = match ($source[$offset]) {
-                '\\' => min($offset + 2, $this->literals->length),
-                '`' => $this->literals->afterEscapedText($offset + 1, '`'),
-                default => $this->literals->afterExpansion($offset),
-            };
+            $offset = $this->afterTextCharacter($offset, array_last($this->frames));
         }
 
-        return $this->literals->length;
+        return $this->inWord($offset);
+    }
+
+    // Because a `#` in `${#name}` or `${name#prefix}` is an operator and a brace in a quoted default such as `${name:-'}'}` closes nothing, an expansion ends only at a `}` outside the quotes and expansions inside it, while a plain `{` opens nothing, as in `${name:-{}`.
+    private function afterTextCharacter(int $offset, int $frame): int
+    {
+        $char = $this->literals->source[$offset];
+
+        if (self::TEXT_CLOSERS[$frame] === $char) {
+            array_pop($this->frames);
+
+            return $offset + 1;
+        }
+
+        return match ($char) {
+            '\\' => min($offset + 2, $this->literals->length),
+            "'" => $this->literals->afterSingleQuoted($offset + 1),
+            '`' => $this->literals->afterEscapedText($offset + 1, '`'),
+            '"' => $this->afterOpenedFrame($offset + 1, self::STRING),
+            default => '{' === ($this->literals->source[$offset + 1] ?? '') ? $this->afterOpenedFrame($offset + 2, self::PARAMETER) : $this->literals->afterExpansion($offset),
+        };
+    }
+
+    private function afterOpenedFrame(int $offset, int $frame): int
+    {
+        $this->frames[] = $frame;
+
+        return $offset;
     }
 
     // Because a backslash before a line end joins two lines, the state of the command goes on across it.
@@ -223,7 +253,8 @@ final class ShellLexer
     {
         return match ($this->literals->source[$offset + 1] ?? '') {
             "'" => $this->inWord($this->literals->afterEscapedText($offset + 2, "'")),
-            '"' => $this->afterDoubleQuoted($offset + 2),
+            '"' => $this->afterOpenedText($offset + 2, self::STRING),
+            '{' => $this->afterOpenedText($offset + 2, self::PARAMETER),
             default => $this->substitutionOpensAt($offset) ? $this->openSubstitution($offset) : $this->inWord($this->literals->afterExpansion($offset)),
         };
     }
@@ -245,7 +276,7 @@ final class ShellLexer
         }
 
         // Because the `)` that ends a `case` pattern closes no substitution, the arms are a frame of their own until `esac`.
-        if (self::CASE_KEYWORD === $word) {
+        if (self::CASE_KEYWORD === $word && !$this->aCasePatternEndsAt($end)) {
             $this->frames[] = self::CASE_ARMS;
         }
 
@@ -263,23 +294,37 @@ final class ShellLexer
         [$delimiter, $end, $quoted] = $this->literals->documentDelimiterAt($offset);
 
         if ('' !== $delimiter || $quoted) {
-            $this->pendingDocuments[count($this->frames)][] = ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator];
+            $this->pendingDocuments[$this->substitutions][] = ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator];
         }
 
         return $this->inWord($end);
     }
 
-    // Because a here-document opened in a frame that closes on its own line, as in `(cat <<EOF)`, is read at the enclosing frame's line end.
+    // Because a `case` right before `)` or `|` is a pattern of the enclosing `case`, as in `case) :;;`, and opens no arms of its own.
+    private function aCasePatternEndsAt(int $end): bool
+    {
+        $next = $this->literals->source[$end + strspn($this->literals->source, ShellLiterals::BLANKS, $end)] ?? "\n";
+
+        return str_contains(self::CASE_PATTERN_ENDS, $next);
+    }
+
+    // Because a here-document opened in a substitution that closes on its own line, as in `$(cat <<EOF)`, is read at the enclosing line end.
     private function closedFrame(): ?int
     {
-        $depth = count($this->frames);
+        $frame = array_pop($this->frames);
 
-        if ($depth > 0 && isset($this->pendingDocuments[$depth])) {
-            $this->pendingDocuments[$depth - 1] = [...$this->pendingDocuments[$depth - 1] ?? [], ...$this->pendingDocuments[$depth]];
-            unset($this->pendingDocuments[$depth]);
+        if (self::SUBSTITUTION !== $frame) {
+            return $frame;
         }
 
-        return array_pop($this->frames);
+        $scope = $this->substitutions--;
+
+        if (isset($this->pendingDocuments[$scope])) {
+            $this->pendingDocuments[$scope - 1] = [...$this->pendingDocuments[$scope - 1] ?? [], ...$this->pendingDocuments[$scope]];
+            unset($this->pendingDocuments[$scope]);
+        }
+
+        return $frame;
     }
 
     private function substitutionOpensAt(int $offset): bool
@@ -290,6 +335,7 @@ final class ShellLexer
     private function openSubstitution(int $offset): int
     {
         $this->frames[] = self::SUBSTITUTION;
+        ++$this->substitutions;
 
         return $this->atCommandStart($offset + 2);
     }

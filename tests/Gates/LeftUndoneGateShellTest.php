@@ -155,6 +155,7 @@ final class LeftUndoneGateShellTest extends SandboxTestCase
         yield 'sh' => ['#!/bin/sh'];
         yield 'bash through env' => ['#!/usr/bin/env bash'];
         yield 'bash with options' => ['#!/bin/bash -eu'];
+        yield 'bash with options through env -S' => ['#!/usr/bin/env -S bash -eu'];
         yield 'dash after a blank' => ['#! /bin/dash'];
     }
 

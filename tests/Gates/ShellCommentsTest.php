@@ -70,6 +70,18 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment in a substitution on the line of a here-document operator' => ["cat <<EOF \"\$(\n    # TODO later\n    printf '%s\\n' input\n)\"\n# TODO inside\nEOF\n# FIXME later\n", [2 => 'TODO', 7 => 'FIXME']];
         yield 'a comment between nested here-documents' => ["cat <<EOF \"\$(\n    cat <<EOF\n# TODO inside\nEOF\n    # TODO later\n)\"\n# TODO outer\nEOF\n# FIXME later\n", [5 => 'TODO', 9 => 'FIXME']];
         yield 'a comment after a here-document opened in a subshell' => ["(cat <<EOF)\n# TODO inside\nEOF\n# FIXME later\n", [4 => 'FIXME']];
+        yield 'a comment after a here-document piped into a subshell' => ["cat <<EOF | (\n# TODO this is body text\nEOF\ncat\n)\n# FIXME later\n", [6 => 'FIXME']];
+        yield 'a comment after a here-document before a subshell in a list' => ["cat <<EOF && (\n# TODO this is body text\nEOF\ntrue\n)\n# FIXME later\n", [6 => 'FIXME']];
+        yield 'a comment after a here-document piped into a case' => ["cat <<EOF | case x in\n# TODO this is body text\nEOF\nx) cat ;;\nesac\n# FIXME later\n", [6 => 'FIXME']];
+        yield 'a comment after a here-document piped into a group' => ["cat <<EOF | {\n# TODO this is body text\nEOF\ncat\n}\n# FIXME later\n", [6 => 'FIXME']];
+        yield 'a comment after a here-document opened inside a subshell over lines' => ["(\ncat <<EOF\n# TODO inside\nEOF\n# XXX later\n)\n", [5 => 'XXX']];
+        yield 'a comment after a plain brace in a parameter default' => ["printf '<%s>\\n' \"\${v:-{}\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment in a substitution in a parameter default' => ["value=\"\${value:-\$(\n    # TODO remove fallback\n    printf '%s' fallback\n)}\"\n# FIXME later\n", [2 => 'TODO', 5 => 'FIXME']];
+        yield 'a comment in a substitution in an unquoted parameter default' => ["value=\${value:-\$(\n    # TODO remove fallback\n    date)} # FIXME later\n", [2 => 'TODO', 3 => 'FIXME']];
+        yield 'a comment in a substitution in a string in a parameter default' => ["value=\"\${a:-\"\$(date # TODO later\n)\"}\" # FIXME later\n", [1 => 'TODO', 2 => 'FIXME']];
+        yield 'a comment after a case whose pattern is the word case' => ["x=\"\$(case x in\n  case) :;;\nesac)\"\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after a case whose pattern list starts with the word case' => ["case x in\n  case | y) (true) ;;\nesac\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment in a case nested in a case arm' => ["case x in\n  x) case y in\n       y) # TODO later\n          ;;\n     esac ;;\nesac\n", [3 => 'TODO']];
     }
 
     /**
@@ -109,6 +121,8 @@ final class ShellCommentsTest extends TestCase
         yield 'a marker in a here-document in a substitution' => ["x=\$(cat <<EOF\n# TODO inside\nEOF\n)\n"];
         yield 'a marker after a single-quoted closing brace in a parameter default' => ["value=\${value:-'} # TODO literal'}\n"];
         yield 'a marker after a double-quoted closing brace in a parameter default' => ["value=\${value:-\"} # TODO literal\"}\n"];
+        yield 'a marker after a hash in a parameter default in a string' => ["echo \"\${x:-a # TODO literal}\"\n"];
+        yield 'a marker after a string that ends in a parameter default' => ["echo \${x:-\"a\" # TODO literal\n}\n"];
         yield 'a hash in a shebang' => ["#!/bin/sh\n"];
         yield 'a reasoned exception' => ["# TODO(#123): drop once the image ships curl\n"];
     }
