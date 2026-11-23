@@ -187,6 +187,16 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([$reviewer => 'approve'], $this->judgeDonePayloads()[0]['votes']);
     }
 
+    public function testAReviewerWhoseOnlyFindingIsAGateGapP1TheJudgeMarksActVotesBlockedAndNeverApproves(): void
+    {
+        $round = $this->roundReporting([new Finding('A', Severity::P1, null, null, null, 'The cs gate misses this case.', FixableBy::Builder, false, 'cs', null, gate_gap: true)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([$reviewer => 'blocked'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
     public function testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList(): void
     {
         $round = $this->completedRound();
