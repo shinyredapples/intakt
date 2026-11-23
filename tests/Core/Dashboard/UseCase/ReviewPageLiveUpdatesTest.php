@@ -331,7 +331,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertSame(['Checked, but the outcome was not recorded', '1 to fix · 0 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Checked, but the outcome was not recorded', '1 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
     public function testThePushedOwlsCardStatesTheJudgesCallAndCountsTheFindingsToFix(): void
@@ -341,7 +341,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['Changes needed', '2 to fix · 0 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '2 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
     public function testThePushedOwlsCardCountsTheFindingsToFixAsTheCardsItShows(): void
@@ -375,7 +375,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame([['Urgent', 'Text of F1.'], ['Should fix', 'Text of F2.']], $updated->filter('#review-to-fix .fix-card')->each(static fn (Crawler $card): array => [$card->filter('.urgency')->text(), $card->filter('.fix-title')->text()]));
-        self::assertSame('2 to fix · 1 urgent', $updated->filter('#review-verdict .verdict-count')->text());
+        self::assertSame('2 to fix', $updated->filter('#review-verdict .verdict-count')->text());
     }
 
     public function testAJudgedRoundOfOneEntryPerCausePushedToAPageOpenedBeforeItStartsShowsTheFindingsAsAReloadDoes(): void
@@ -396,7 +396,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, []);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['Approved', '0 to fix · 0 urgent', 0, 0], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text(), $updated->filter('.fix-card')->count(), $updated->filter('.state-block')->count()]);
+        self::assertSame(['Approved', '0 to fix', 0, 0], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text(), $updated->filter('.fix-card')->count(), $updated->filter('.state-block')->count()]);
     }
 
     // A round started without a recorded quorum has no outcome, and a policy must never be guessed.

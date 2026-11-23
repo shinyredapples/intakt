@@ -640,6 +640,28 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertStringContainsString('Cost: 0.0104 USD estimated, price date unknown', self::wordsOf($crawler->filter('.page-head p.meta')));
     }
 
+    public function testTheFullRecordViewRendersTheCostLabelAsOneWholeFactLabelBesideTheFigure(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        self::assertSame(['Cost:'], $crawler->filter('.page-head p.meta .fact-label')->each(static fn (Crawler $label): string => $label->text(normalizeWhitespace: false)));
+        self::assertCount(1, $crawler->filter('.page-head p.meta .fact-label + span#review-summary-cost'));
+    }
+
+    public function testTheCostLabelStaysOneWholeFactLabelBesideAnUnknownCostOfALongUnpricedModelId(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->useRecordedTokens('round-1', ['prompt' => 10, 'completion' => 1, 'total' => 11], 'anthropic/claude-opus-5-5-20261101-extended-context-preview');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        self::assertCount(1, $crawler->filter('.page-head p.meta .fact-label'));
+        self::assertSame('Cost:', $crawler->filter('.page-head p.meta .fact-label')->text(normalizeWhitespace: false));
+        self::assertSelectorTextContains('.page-head p.meta .fact-label + span#review-summary-cost', 'unknown, no price for anthropic/claude-opus-5-5-20261101-extended-context-preview');
+    }
+
     public function testAnUnknownCostNamesTheModelEscapedAndIsNeverZero(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);

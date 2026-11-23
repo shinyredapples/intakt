@@ -185,6 +185,22 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
+    // Every finding marked act, each at its own line so none folds into another; a null severity leaves the key out, as a row written without one.
+    /**
+     * @param array<string, ?string> $severities
+     */
+    public function judgeRatedFindings(string $round, array $severities): void
+    {
+        $line = 0;
+        $findings = [];
+
+        foreach ($severities as $id => $severity) {
+            $findings[] = ['id' => $id, 'text' => 'Text of '.$id.'.', 'merged' => [], 'file' => 'src/A.php', 'line' => ++$line, ...(null === $severity ? [] : ['severity' => $severity])];
+        }
+
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => array_keys($severities), 'follow_ups' => [], 'findings' => $findings, 'fallback' => false]);
+    }
+
     // Written as RoundLedger records two act findings at one place, because the page must fold the second into the first.
     public function judgeOneEntryOf(string $round, string $entry, string $merged): void
     {

@@ -54,7 +54,7 @@
             {text: review.change ?: 'round ' ~ round, mono: true},
             {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round' : ' rounds')},
             {icon: 'tokens', markup: totals.tokens(review)},
-            {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
+            {icon: 'wallet', label: 'Cost:', markup: totals.cost(review)},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
         {% endif %}
