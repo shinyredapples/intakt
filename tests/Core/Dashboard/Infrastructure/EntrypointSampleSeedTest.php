@@ -549,6 +549,16 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringEndsWith('http://localhost:7781/', $calls[$asked[3]]);
     }
 
+    public function testTheStartMessageAsksTheServerPortWithThePublishedHostAndPrintsThePublishedAddress(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SERVER_PORT' => '7781', 'DASHBOARD_PORT' => '8080']);
+
+        $this->waitForTheAddress('http://localhost:8080');
+
+        self::assertStringContainsString('curl --fail --silent --max-time 2 --output /dev/null -H Host: localhost:8080 http://localhost:7781/', $this->calls());
+        self::assertStringEndsWith('http://localhost:8080', trim((string) $this->entrypoint?->getOutput()));
+    }
+
     public function testTheDemoStartPrintsTheDashboardAddressAndNotTheReviewCommand(): void
     {
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
@@ -900,15 +910,15 @@ final class EntrypointSampleSeedTest extends TestCase
         return $programs;
     }
 
-    private function waitForTheAddress(): void
+    private function waitForTheAddress(string $address = 'http://localhost:7781'): void
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
 
-        while (hrtime(true) < $deadline && !str_contains((string) $this->entrypoint?->getOutput(), 'http://localhost:7781')) {
+        while (hrtime(true) < $deadline && !str_contains((string) $this->entrypoint?->getOutput(), $address)) {
             usleep(50_000);
         }
 
-        self::assertStringContainsString('http://localhost:7781', (string) $this->entrypoint?->getOutput(), (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringContainsString($address, (string) $this->entrypoint?->getOutput(), (string) $this->entrypoint?->getErrorOutput());
     }
 
     private function waitForTheCall(string $call): void
