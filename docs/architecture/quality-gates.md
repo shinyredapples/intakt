@@ -55,7 +55,9 @@ The `docs` gate (`DocsGate`) measures `README.md` and every `.md` file under `do
 
 - A paragraph has at most 80 words, on every measured page.
 - A page under `docs/user/` or `docs/guide/` has at most 1,500 words.
-- A page under `docs/architecture/` of more than 1,500 words opens with an "In short" section of at most 120 words.
+- A page under `docs/architecture/` of more than 1,500 words opens with an "In short" section of at most 120 words; an empty one fails.
+
+It measures the pages the working tree holds, so a page deleted but not yet staged is not read, while one that is there but cannot be read fails.
 
 A paragraph finding names the file, the line and the limit, and says to split or cut the paragraph. A page finding and a summary finding name the file and the limit, and say how to fix the page.
 
@@ -65,7 +67,7 @@ The list has three sections. `paragraphs` maps a page to the keys of its oversiz
 
 The list may only shrink (`DocsListChanges`, when the target branch has a list): an entry added or raised fails, and so does one dropped or lowered while its page still needs it. An entry that excuses nothing fails too, also on a first run and without git history (`UnneededDocsEntries`): a key the page no longer has, a count above the copies on the page, or a ceiling above the page's words. So whoever fixes a wall removes its entry.
 
-A missing, empty or invalid list fails the gate, and so does a target branch that runs the gate (it has `config/gates/src/DocsGate.php`) without a list. Without git history the gate passes with the note `checked against the list alone, no git history in this tree`.
+A missing, empty or invalid list fails the gate, and so does a target branch that runs the gate (it has `config/gates/src/DocsGate.php`) without a list. A file of the target branch that git lists but cannot read fails the gate (`cannot read <path> on the target branch: git show failed`) instead of counting as absent. Without git history the gate passes with the note `checked against the list alone, no git history in this tree`.
 
 The paragraph limit comes from replaying the gate over main and the pull requests merged in the two weeks before. That replay found 80 words the strictest limit with the fewest bounces of a change that did not grow a wall: 60 words caught 5 more walls but bounced 1 more such change, and 100 words bounced as many (2) but caught fewer. A rerun over the 63 pull requests merged from 2026-11-09 to 2026-11-23 found:
 

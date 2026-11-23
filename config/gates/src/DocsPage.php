@@ -55,6 +55,7 @@ final readonly class DocsPage
         return match (true) {
             !$summary instanceof MarkdownSummary => 'has no "In short" section',
             !$summary->opensPage => 'does not open with its "In short" section',
+            0 === $summary->words => 'has an empty "In short" section',
             $summary->words > self::SUMMARY_WORDS => 'has an "In short" section of '.$summary->words.' words',
             default => null,
         };

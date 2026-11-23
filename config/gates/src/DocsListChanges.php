@@ -34,7 +34,8 @@ final readonly class DocsListChanges
 
         foreach ($head->paragraphs as $page => $keys) {
             foreach ($keys as $key => $count) {
-                $before = $base->paragraphCount($page, $key);
+                // PHP turns a key of digits alone into an integer, so it is made a string again before the typed lookup.
+                $before = $base->paragraphCount((string) $page, (string) $key);
 
                 if ($count > $before) {
                     $findings[] = self::LIST.'paragraph '.$key.' of '.$page.' rose from '.$before.' to '.$count.', but the list may only shrink: bring the paragraph within '.DocsPage::PARAGRAPH_WORDS.' words instead';
@@ -59,7 +60,7 @@ final readonly class DocsListChanges
             foreach ($keys as $key => $count) {
                 $needed = min($count, ($pages[$page] ?? null)?->oversizedCounts[$key] ?? 0);
 
-                if ($head->paragraphCount($page, $key) < $needed) {
+                if ($head->paragraphCount((string) $page, (string) $key) < $needed) {
                     $findings[] = self::LIST.'paragraph '.$key.' of '.$page.' was dropped from the list while the page still has it: restore its count of '.$needed;
                 }
             }

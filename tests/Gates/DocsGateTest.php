@@ -214,6 +214,61 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($result->isPassing(), implode("\n", $result->findings));
     }
 
+    public function testALargeArchitecturePageWithAnEmptyInShortFails(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n## In short\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertSame(['docs/architecture/topic.md: page of 1605 words, over the limit of 1500 words for a page under docs/architecture/, has an empty "In short" section: open it with an "In short" section of at most 120 words'], $result->findings);
+    }
+
+    public function testAPageDeletedInTheWorkingTreeBeforeItIsStagedIsNotMeasured(): void
+    {
+        $sandbox = $this->targetWith([self::GUIDE => 'Short.', DocsRatchetList::PATH => $this->list()]);
+        unlink($sandbox->root.'/'.self::GUIDE);
+
+        $result = $sandbox->gateResult($this->gate());
+
+        self::assertTrue($result->isPassing(), implode("\n", $result->findings));
+    }
+
+    public function testAPageThatExistsButCannotBeReadFails(): void
+    {
+        $sandbox = $this->targetWith([self::GUIDE => 'Short.', DocsRatchetList::PATH => $this->list()]);
+        unlink($sandbox->root.'/'.self::GUIDE);
+        $sandbox->write(self::GUIDE.'/inside.txt', 'Not a page.');
+
+        $result = $sandbox->gateResult($this->gate());
+
+        self::assertSame(['cannot read docs/guide/start.md'], $result->findings);
+    }
+
+    public function testAKeyOfDigitsAloneIsComparedAsAKey(): void
+    {
+        $list = $this->list([self::GUIDE => ['1234567890123456' => 1]]);
+        $sandbox = $this->targetWith([self::GUIDE => 'Short.', DocsRatchetList::PATH => $list]);
+
+        $result = $this->changeTo($sandbox, [DocsRatchetList::PATH => $list]);
+
+        self::assertSame(['ratchet/docs.json: paragraph 1234567890123456 of docs/guide/start.md is gone or within 80 words: remove its entry'], $result->findings);
+    }
+
+    public function testATargetBranchThatGitCannotReadFailsInsteadOfCountingAsAFirstRun(): void
+    {
+        $sandbox = $this->targetWith([DocsRatchetList::PATH => $this->list(), 'config/gates/src/DocsGate.php' => "<?php\n"]);
+        $this->changeTo($sandbox, [self::GUIDE => $this->wall('one'), DocsRatchetList::PATH => $this->list([self::GUIDE => [$this->keyOf('one') => 1]])]);
+
+        foreach ([DocsRatchetList::PATH, 'config/gates/src/DocsGate.php'] as $path) {
+            $blob = trim($sandbox->git('rev-parse', 'main:'.$path)->output);
+            unlink($sandbox->root.'/.git/objects/'.substr($blob, 0, 2).'/'.substr($blob, 2));
+        }
+
+        $result = $sandbox->gateResult($this->gate());
+
+        self::assertSame(['cannot read ratchet/docs.json on the target branch: git show failed'], $result->findings);
+    }
+
     public function testAnUnlistedArchitecturePageOfTheTargetBranchWithoutInShortPasses(): void
     {
         $sandbox = $this->targetWith([self::ARCHITECTURE => $this->page(1600)]);

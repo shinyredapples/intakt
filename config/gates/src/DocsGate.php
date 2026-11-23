@@ -64,8 +64,10 @@ final readonly class DocsGate implements Gate
     private function pagesOf(Workspace $workspace): array
     {
         $pages = [];
+        // Because the index still lists a page deleted but not yet staged, only what the working tree holds is measured; a page there that cannot be read still fails the reader.
+        $present = array_filter($workspace->repositoryFiles(), static fn (string $path): bool => file_exists($workspace->root.'/'.$path) || is_link($workspace->root.'/'.$path));
 
-        foreach ($this->reader->pages($workspace->root, $workspace->repositoryFiles()) as $page) {
+        foreach ($this->reader->pages($workspace->root, array_values($present)) as $page) {
             $pages[$page->path] = new DocsPage($page);
         }
 
@@ -141,11 +143,22 @@ final readonly class DocsGate implements Gate
         }
     }
 
+    // Because a failed read must not pass for an absent file, which would let a list that exists go unchecked, absence is asked of the tree first and any read after that must succeed.
     private function fileAt(Workspace $workspace, string $commit, string $path): ?string
     {
+        $listed = $workspace->git(['ls-tree', '--name-only', $commit, '--', $path]);
+
+        if (!$listed->succeeded()) {
+            throw new ScopeFailure('cannot list '.$path.' on the target branch: git ls-tree failed');
+        }
+
+        if ('' === trim($listed->output)) {
+            return null;
+        }
+
         $shown = $workspace->git(['show', $commit.':'.$path]);
 
-        return $shown->succeeded() ? $shown->output : null;
+        return $shown->succeeded() ? $shown->output : throw new ScopeFailure('cannot read '.$path.' on the target branch: git show failed');
     }
 
     /**
