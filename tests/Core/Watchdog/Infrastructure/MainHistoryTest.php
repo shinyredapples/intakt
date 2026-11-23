@@ -268,7 +268,7 @@ final class MainHistoryTest extends TestCase
         $signed = $this->repository->commitSignedWith($privateKey, 'Owner change');
         [$type, $key] = explode(' ', $this->publicKey('owner'));
         $digits = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-        $last = strpos($key, '=') - 1;
+        $last = strlen(rtrim($key, '=')) - 1;
         $respelled = substr_replace($key, $digits[strpos($digits, $key[$last]) ^ 1], $last, 1);
         self::assertSame(base64_decode($key, true), base64_decode($respelled, true));
         $history = $this->historyWithPeers([$type.' '.$key], [$type.' '.$respelled]);
