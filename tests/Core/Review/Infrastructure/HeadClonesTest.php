@@ -25,7 +25,7 @@ final class HeadClonesTest extends TestCase
     // Because CI runs as a user without a git identity, and git refuses a commit without one.
     private const array IDENTITY = ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false'];
 
-    // A setting given to the process, as an outer git or a tool may export it.
+    // Exported to the process, because an outer git or a tool may set it there.
     private const array PROCESS_SETTING = ['GIT_CONFIG_COUNT' => '1', 'GIT_CONFIG_KEY_0' => 'core.autocrlf', 'GIT_CONFIG_VALUE_0' => 'true'];
 
     private string $root = '';
