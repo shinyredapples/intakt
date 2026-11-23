@@ -9,6 +9,7 @@ use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\BranchPullRequest;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\PullRequestBranches;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
@@ -44,7 +45,11 @@ final readonly class PullRequestsOfTasks
         $steers = $this->accessAskedOncePerAccount($project);
         $reworks = [];
         foreach ($tasks as $task) {
-            $found = array_find($this->candidatesOf($task->number(), $plan, $open), fn (BranchPullRequest $pull): bool => $this->countsFor($task->number(), $project, $pull, $steers));
+            $found = array_find($this->candidatesOf($task->number(), $plan, $open), function (BranchPullRequest $pull) use ($project, $steers, $task): bool {
+                $history = $this->trustedHistoryOf($project, $pull, $steers);
+
+                return $history instanceof IssueHistory && $this->stillBelongsTo($task->number(), $pull, $history);
+            });
             if ($found instanceof BranchPullRequest) {
                 $reworks[$task->number()] = $found->number;
             }
@@ -96,21 +101,24 @@ final readonly class PullRequestsOfTasks
         return $candidates;
     }
 
-    // The author is asked first, because a pull request whose author has no write access counts for nothing and its history need not be read; its history is the one the branch listing showed, so an edit since fails the read instead of passing unchecked. A trusted one that is not on the task's branch must still close the task in that history, because a trusted edit between the tick's listing and the branch read can point it at another task, and the plan would still give it to this one.
+    // Null for a pull request that counts for nothing. The author is asked first, because the history of one whose author has no write access need not be read; its history is the one the branch listing showed, so an edit since fails the read instead of passing unchecked.
     /**
      * @param Closure(string): bool $steers
      */
-    private function countsFor(int $task, string $project, BranchPullRequest $pull, Closure $steers): bool
+    private function trustedHistoryOf(string $project, BranchPullRequest $pull, Closure $steers): ?IssueHistory
     {
         if (!$steers($pull->author)) {
-            return false;
+            return null;
         }
 
         $history = $this->histories->of($project, $pull->number, $pull->updatedAt);
-        if (!Vouching::of($pull->author, $history, $steers)->trusted) {
-            return false;
-        }
 
+        return Vouching::of($pull->author, $history, $steers)->trusted ? $history : null;
+    }
+
+    // A trusted pull request that is not on the task's branch must still close the task in the history just read, because a trusted edit between the tick's listing and the branch read can point it at another task, and the plan would still give it to this one.
+    private function stillBelongsTo(int $task, BranchPullRequest $pull, IssueHistory $history): bool
+    {
         if (!TaskBranchName::names($pull->branch, $task) && !in_array($task, new IssueReferences()->closedBy($history->body), true)) {
             throw new ForgeReadFailed(sprintf('GitHub holds pull request #%d without the closing reference to #%d it was listed with, so the pull request of that task is not known until the next listing.', $pull->number, $task));
         }
