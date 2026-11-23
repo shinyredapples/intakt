@@ -738,6 +738,17 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringNotContainsString('verdict', $updated->filter('#round-'.$id.'-reviewers')->text());
     }
 
+    public function testARoundStartedFromTheDashboardShowsAStartingStateUntilItsFirstReviewerArrives(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $starting = $page->filter('#round-round-1-now-none');
+        self::assertSame('Starting the review: each reviewer appears here as soon as it begins.', $starting->text());
+        self::assertSame('status', $starting->attr('role'));
+    }
+
     public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -1147,7 +1158,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame(['No reviewer has started yet.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['Starting the review: each reviewer appears here as soon as it begins.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testOneListenerAuthorizesEveryUnfinishedRoundOfThePage(): void
