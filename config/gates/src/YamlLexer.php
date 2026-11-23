@@ -21,6 +21,7 @@ final class YamlLexer
     private int $lineStart = 0;
     private int $parentIndent = 0;
     private int $nodeColumn = 0;
+    private ?int $propertyColumn = null;
     private bool $plainScalarOpen = false;
     private bool $blockScalarFollows = false;
     private ?int $blockScalarIndent = null;
@@ -68,6 +69,7 @@ final class YamlLexer
         $this->plainScalarOpen = false;
         $this->valueStarts = true;
         $this->parentIndent = $indent;
+        $this->propertyColumn = null;
 
         if (0 === $indent && 1 === preg_match(self::DOCUMENT_MARKER, $this->source, $marker, 0, $offset)) {
             return $offset + 3;
@@ -144,18 +146,27 @@ final class YamlLexer
     // Because quotes, flow brackets and block scalar headers have their meaning only where a node starts, while inside a plain scalar they are its text.
     private function afterValueStart(int $offset, string $char): int
     {
-        $this->nodeColumn = $offset - $this->lineStart;
+        $this->nodeColumn = $this->propertyColumn ?? $offset - $this->lineStart;
+        $this->propertyColumn = null;
 
         return match (true) {
             "'" === $char => $this->afterJsonNode($this->afterSingleQuoted($offset + 1)),
             '"' === $char => $this->afterJsonNode($this->afterDoubleQuoted($offset + 1)),
             '[' === $char, '{' === $char => $this->openFlow($offset + 1),
-            '!' === $char, '&' === $char => $offset + strcspn($this->source, self::BLANKS."\n", $offset),
+            '!' === $char, '&' === $char => $this->afterNodeProperty($offset + strcspn($this->source, self::BLANKS."\n", $offset)),
             str_contains('-?', $char) && $this->blankFollows($offset) => $this->afterEntryIndicator($offset + 1),
             ':' === $char && $this->blankFollows($offset) => $offset + 1,
             0 === $this->flowDepth && 1 === preg_match(self::BLOCK_SCALAR_HEADER, $this->source, $header, 0, $offset) => $this->afterBlockScalarHeader($offset + strlen($header[0]), $header[1]),
             default => $this->afterPlainCharacter($offset, $char),
         };
+    }
+
+    // Because an anchor or a tag belongs to the node after it on its line, as in `- &id key: |`, that node's key keeps the property's column.
+    private function afterNodeProperty(int $end): int
+    {
+        $this->propertyColumn = $this->nodeColumn;
+
+        return $end;
     }
 
     private function afterSingleQuoted(int $offset): int

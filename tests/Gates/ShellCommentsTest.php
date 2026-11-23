@@ -75,6 +75,15 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment in a case branch after a continuing branch end' => ["a=\$(case \$b in\n  x) true ;;&\n  y) true # TODO later\n  ;;\nesac)\n", [3 => 'TODO']];
         yield 'a comment after a here-document whose delimiter follows a backslash and a line feed' => ["cat <<\\\nEOF\n# FIXME body\nEOF\n# TODO finish\n", [5 => 'TODO']];
         yield 'a comment after a here-document whose delimiter holds a backslash and a line feed' => ["cat <<E\\\nOF\n# FIXME body\nEOF\n# TODO finish\n", [5 => 'TODO']];
+        yield 'a comment after a function whose body holds a shift assignment' => ["f() { (( x <<= 1 )); }\n# TODO real comment\n", [2 => 'TODO']];
+        yield 'a comment after a spaced function whose body holds a shift assignment' => ["f ( ) { (( x <<= 1 )); }\n# TODO real comment\n", [2 => 'TODO']];
+        yield 'a comment after a function keyword whose body holds a shift assignment' => ["function f { (( x <<= 1 )); }\n# TODO real comment\n", [2 => 'TODO']];
+        yield 'a comment after a function keyword with parentheses whose body holds a shift assignment' => ["function f() { (( x <<= 1 )); }\n# TODO real comment\n", [2 => 'TODO']];
+        yield 'a comment after an empty array assignment' => ["a=() # TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a here-document whose body joins a line onto its delimiter' => ["cat <<EOF\nprefix\\\nEOF\n# TODO body text\nEOF\n# FIXME real comment\n", [6 => 'FIXME']];
+        yield 'a comment after a here-document whose body ends on an escaped backslash' => ["cat <<EOF\nprefix\\\\\nEOF\n# TODO real comment\n", [4 => 'TODO']];
+        yield 'a comment after a here-document whose quoted delimiter keeps a body backslash' => ["cat <<'EOF'\nprefix\\\nEOF\n# TODO real comment\n", [4 => 'TODO']];
+        yield 'a comment after a here-document with an ANSI-C quoted delimiter' => ["cat <<\$'EOF'\n# FIXME body text\nEOF\n# TODO real comment\n", [4 => 'TODO']];
     }
 
     /**

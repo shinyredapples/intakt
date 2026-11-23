@@ -51,6 +51,8 @@ final class YamlCommentsTest extends TestCase
         yield 'a comment after a quoted value on the next mapping line' => ["a: plain\nb: '# x' # TODO later\n", [2 => 'TODO']];
         yield 'a comment after a flow entry whose colon touches a quote' => ["key: [a:'b, c] # TODO later\n", [1 => 'TODO']];
         yield 'a comment after a flow mapping with a colon before a flow indicator' => ["key: {a:, b: '# x'} # TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a block scalar of an anchored compact mapping key' => ["- &id key: |\n    text\n  next: 1 # TODO later\n", [3 => 'TODO']];
+        yield 'a comment in a mapping under an anchored key' => ["key: &a\n  sub: |\n    text\n  # TODO later\n", [4 => 'TODO']];
         yield 'a comment on the first line after a byte order mark' => ["\u{FEFF}# TODO later\nkey: 1\n", [1 => 'TODO']];
     }
 
@@ -87,6 +89,8 @@ final class YamlCommentsTest extends TestCase
         yield 'a marker after the comment start' => ["# see the TODO list\n"];
         yield 'a reasoned exception' => ["key: 1 # TODO(#123): drop once the image is pinned\n"];
         yield 'a marker in a value' => ["TODO: 1\n"];
+        yield 'a marker in a block scalar of an anchored compact mapping key' => ["- &id key: |\n    # TODO scalar text\n  next: 1\n"];
+        yield 'a marker in a block scalar of a tagged compact mapping key' => ["- !tag key: |\n    # TODO scalar text\n  next: 1\n"];
     }
 
     #[DataProvider('documentsWithoutAMarkerComment')]

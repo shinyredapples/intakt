@@ -35,6 +35,7 @@ final class ShellLexer
     private bool $wordStarts = true;
     private bool $commandStarts = true;
     private bool $arithmeticMayStart = false;
+    private bool $functionNameFollows = false;
 
     /**
      * @var list<int>
@@ -202,6 +203,7 @@ final class ShellLexer
         return match (true) {
             self::CASE_PATTERN === $frame => $this->afterPatternWord($word, $end),
             'in' === $word && self::CASE_SUBJECT === $frame => $this->afterCaseSubject($end),
+            $this->functionNameFollows && '' !== $word => $this->afterFunctionName($end),
             $this->commandStarts => $this->afterCommandWord($word, $frame, $end),
             default => $this->afterWordPart($end),
         };
@@ -219,6 +221,14 @@ final class ShellLexer
         }
 
         return $this->afterWordPart($end);
+    }
+
+    // Because the body of `function f` is a command, a `{` or `((` after the name starts one.
+    private function afterFunctionName(int $end): int
+    {
+        $this->functionNameFollows = false;
+
+        return $this->startingACommand($end);
     }
 
     private function afterCaseSubject(int $end): int
@@ -240,6 +250,7 @@ final class ShellLexer
         match (true) {
             'case' === $word => $this->frames[] = self::CASE_SUBJECT,
             'esac' === $word && self::CASE_BODY === $frame => array_pop($this->frames),
+            'function' === $word => $this->functionNameFollows = true,
             default => null,
         };
 
@@ -307,8 +318,20 @@ final class ShellLexer
             self::CASE_PATTERN === array_last($this->frames) => $this->startingAWord($offset + 1),
             ($this->commandStarts || $this->arithmeticMayStart) && '(' === ($this->source[$offset + 1] ?? '') => $this->open(self::ARITHMETIC, $offset + 2),
             0 < $offset && str_contains('<>', $this->source[$offset - 1]) => $this->open(self::SUBSTITUTION, $offset + 1),
+            $this->closesAFunctionName($offset) => $this->startingACommand($this->afterBlanks($offset + 1) + 1),
             default => $this->open(self::SUBSHELL, $offset + 1),
         };
+    }
+
+    // Because a function's body is a command, as `{` in `f() { (( x <<= 1 )); }`, while `a=()` is an empty array.
+    private function closesAFunctionName(int $offset): bool
+    {
+        return ')' === ($this->source[$this->afterBlanks($offset + 1)] ?? '') && 0 < $offset && '=' !== $this->source[$offset - 1];
+    }
+
+    private function afterBlanks(int $offset): int
+    {
+        return $offset + strspn($this->source, " \t", $offset);
     }
 
     // Because a `$( )`, `<( )` or `>( )` is part of the word around it, a `#` right after it is text, while a `)` that closes nothing, as after a `case` pattern, starts a command.
