@@ -21,7 +21,7 @@ This is the only statement of it; every readiness rule in the design points here
 
 1. It states one outcome, an observable result and acceptance criteria.
 2. It fits the size contract, or it has been split into parts that do ([Choosing work](05-architecture/03-choosing-work.md)).
-3. It has a plan: the files, the approach and the risks. For a task of a project with a user interface whose paths or labels match the Designer's triggers, the plan also holds the Designer's additions: the flows, every state (empty, loading, error, success), the copy, the three widths (phone, tablet, desktop) and the accessibility needs ([The Designer](05-architecture/07-reviews.md#the-designer-planned)).
+3. It has a plan: the files, the approach and the risks. For a task of a project with a user interface whose paths or labels match the Designer's triggers, the plan also holds the Designer's additions: the flows, every state (empty, loading, error, success), the copy, the three widths (phone, tablet, desktop) and the accessibility needs ([The Designer](05-architecture/07-reviews.md#the-designer-planned)). Before the first build the plan also carries a brief that passes its plain-code check ([Choosing work](05-architecture/03-choosing-work.md), step 4).
 4. Every item of its Evidence list can be produced inside a job's sandbox; evidence only the owner or the orchestrator can produce is marked as such.
 5. It names the docs the change will touch.
 6. It names what it waits for (`Waits for #n`) and, for a split part, its source.

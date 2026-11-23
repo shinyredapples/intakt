@@ -16,4 +16,10 @@ final class CheckPullRequestTextInput
 
     #[Argument('The pull-request.md the build left in its output directory: the title on the first line, then the body')]
     public string $pullRequestText;
+
+    #[Argument('Only to run the build\'s round: the task\'s repository, such as the project\'s mirror; the outcome is then recorded and counts toward the task\'s one go-back')]
+    public ?string $repository = null;
+
+    #[Argument('The task\'s branch, with the repository')]
+    public ?string $branch = null;
 }
