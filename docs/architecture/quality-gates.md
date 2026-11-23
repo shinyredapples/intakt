@@ -51,23 +51,29 @@ The `tests` gate also guards the [parity record](parity.md): `tests/Application/
 
 ## The docs gate and its ratchet list
 
-`DocsGate` keeps the documentation readable. A paragraph has at most 80 words. A list item counts as a paragraph; headings, fenced or indented code and tables do not. A table is a header line and a delimiter row, or a line between outer pipes (a `docs/highlights.d/` fragment holds just one row). The `>` of a quote is no word.
+`DocsGate` keeps the documentation readable. A paragraph has at most 80 words. A list item counts as a paragraph; headings, fenced or indented code and tables do not. A table is a header line and a delimiter row, with the lines after it up to the next blank line. A line between outer pipes without a delimiter row next to it is a table row too, but only that line (a `docs/highlights.d/` fragment holds just one row). The `>` of a quote is no word.
 
-A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs/architecture/` over 1,500 words opens with an "In short" section: only blank lines stand between the title and its heading, it is not empty, and it has at most 120 words, its subsections included. Only the first "In short" of a page counts. Each finding names the file, the line and the limit, and says how to fix it.
+The reader is not a full CommonMark parser. It does not handle fenced code inside a blockquote, which it counts as prose, or setext titles (a line underlined with `=` or `-`), which it counts as part of a paragraph.
 
-`ratchet/docs.json` lists what was over a limit when the gate arrived: the key of each oversized paragraph (a hash of its words, listed once for each copy), a word ceiling for each oversized user or guide page, and the architecture pages excused from "In short". The file stays in place, with empty lists when nothing is listed; the gate fails without it.
+A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs/architecture/` over 1,500 words opens with an "In short" section: only blank lines stand between the title and its heading, it is not empty, and it has at most 120 words, its subsections included. Only the first "In short" of a page counts.
 
-Compared with its copy on the target branch, the list fails the gate when an entry is new or a ceiling is higher. It also fails when the change left an entry unneeded: a key that matches no oversized paragraph any more, a ceiling above the page's words or for a page within the limit, an excuse for a page that no longer needs one. So the list only shrinks, and a shortened wall cannot come back.
+A paragraph finding names the file, the line and the limit. A page or summary finding names the file and the limit. Each says how to fix it.
 
-An edited paragraph gets a new key, so it must meet the limit.
+`ratchet/docs.json` lists what was over a limit when the gate arrived: the key of each oversized paragraph (the first 16 hex characters of the SHA-256 of its words, listed once for each copy), a word ceiling for each oversized user or guide page, and the architecture pages excused from "In short". The file stays in place, with empty lists when nothing is listed; the gate fails without it.
 
-The target branch moves on while a change waits, so a wall it already has that its own list does not count is not this change's doing (`DocsAllowances`): such a paragraph passes while unchanged, such a page while it does not grow beyond its size there, and such an architecture page while its summary problem stays. A wall the target branch's list counts passes only while this list still counts it.
+On every run, also the first one and one without git, the list fails the gate when it holds an entry no longer needed: a key that matches no oversized paragraph any more, a ceiling above the page's words or for a page within the limit, an excuse for a page that no longer needs one. A shortened wall cannot come back.
 
-The ratchet checks are skipped without git history, and when the target branch has neither the list nor `config/gates/src/DocsGate.php` (the change that brings the gate). A target branch with the gate but without the list fails. Like the other gates that start only `git`, its tests run it in the test process through `Sandbox::runGate()`.
+Compared with its copy on the target branch, the list also fails the gate when an entry is new or a ceiling is higher, so it only shrinks. An edited paragraph gets a new key, so it must meet the limit.
+
+The target branch moves on while a change waits, so a wall it already has that its own list does not count is not this change's doing (`DocsAllowances`). Such a paragraph passes while unchanged, as often as the target branch has it beyond what its list counts. Such a page, and such an architecture page without its summary, pass while they do not grow beyond their size there. A wall the target branch's list counts passes only while this list still counts it.
+
+The comparison with the target branch is skipped without git history, and when the target branch has neither the list nor `config/gates/src/DocsGate.php` (the change that brings the gate). A target branch with the gate but without the list fails. Like the other gates that start only `git`, its tests run it in the test process through `Sandbox::runGate()`.
 
 The limits come from a replay over the 202 merges of main from 2026-11-09 to 2026-11-23 that changed these pages, each judged against its parent.
 
-At 80 words, 191 merges added or grew a wall and 2 only edited a wall without growing it; at 60 words it was 196 and 3. 173 merges grew a user or guide page beyond both 1,500 words and its earlier size. In 20, an architecture page over 1,500 words lacked a summary its parent did not already lack.
+Paragraphs, as merges that added or grew a wall against merges bounced that only edited a wall without growing it: 60 words, 196 and 3; 80 words, 191 and 2; 100 words, 190 and 2; 120 words, 188 and 3. 60 words catches 5 more walls but bounces 1 more such change. 80 words is the strictest limit with the fewest such bounces, so it is the limit.
+
+User and guide pages grown past 1,000, 1,500 and 2,000 words: 176, 173 and 172 merges. Architecture pages over the same sizes that newly lacked a summary: 21, 20 and 16. A ceiling that only stops growth cannot bounce a page that did not grow, so these limits have no false bounces by construction; 1,500 words catches nearly as much as 1,000.
 
 ## The test time budget (planned)
 
