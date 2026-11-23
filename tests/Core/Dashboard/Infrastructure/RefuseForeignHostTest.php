@@ -11,7 +11,6 @@ use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -20,6 +19,7 @@ use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardPageTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -31,7 +31,7 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 #[CoversClass(RefuseForeignHost::class)]
 #[UsesClass(DashboardHost::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(LedgerRounds::class)]
