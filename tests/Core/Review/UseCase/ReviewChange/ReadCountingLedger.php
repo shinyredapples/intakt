@@ -44,6 +44,22 @@ final class ReadCountingLedger implements Ledger
     }
 
     #[Override]
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        ++$this->reads;
+
+        return $this->ledger->readOfKindAbout($kind, $subject);
+    }
+
+    #[Override]
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        ++$this->reads;
+
+        return $this->ledger->readOfKindWithoutSubject($kind);
+    }
+
+    #[Override]
     public function readMentioning(Mentions $texts): RecordedEvents
     {
         ++$this->reads;
