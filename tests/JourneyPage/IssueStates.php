@@ -8,7 +8,7 @@ namespace Intakt\Tests\JourneyPage;
 final readonly class IssueStates
 {
     /**
-     * @return array<int, bool> issue or pull request number => still open; empty when the recording is missing or unreadable
+     * @return array<int, bool>
      */
     public function openByNumber(string $recordedFolder): array
     {
@@ -16,17 +16,27 @@ final readonly class IssueStates
         $pages = false === $json ? null : json_decode($json, true);
         $states = [];
 
-        foreach (is_array($pages) ? $pages : [] as $page) {
-            foreach (is_array($page) ? $page : [] as $item) {
-                $number = is_array($item) ? ($item['number'] ?? null) : null;
-                $state = is_array($item) ? ($item['state'] ?? null) : null;
+        foreach ($this->items(is_array($pages) ? $pages : []) as $item) {
+            $number = $item['number'] ?? null;
+            $state = $item['state'] ?? null;
 
-                if (is_int($number) && in_array($state, ['open', 'closed'], true)) {
-                    $states[$number] = 'open' === $state;
-                }
+            if (is_int($number) && in_array($state, ['open', 'closed'], true)) {
+                $states[$number] = 'open' === $state;
             }
         }
 
         return $states;
+    }
+
+    /**
+     * @param array<mixed> $pages
+     *
+     * @return list<array<mixed>>
+     */
+    private function items(array $pages): array
+    {
+        $items = array_merge([], ...array_map(static fn (mixed $page): array => is_array($page) ? array_values($page) : [], $pages));
+
+        return array_values(array_filter($items, is_array(...)));
     }
 }

@@ -13,7 +13,7 @@ final readonly class HighlightStatuses
     private const int WHERE = 3;
 
     /**
-     * @param array<int, bool> $openByNumber issue or pull request number => still open
+     * @param array<int, bool> $openByNumber
      */
     public function settled(string $highlights, array $openByNumber): string
     {
