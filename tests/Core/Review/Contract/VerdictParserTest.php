@@ -168,7 +168,7 @@ final class VerdictParserTest extends KernelTestCase
     public function testATitleOutsideThreeToSixWordsIsRefusedAsUnreadable(string $title): void
     {
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('findings[0].title: This value is too');
+        $this->expectExceptionMessageMatches('/findings\[0\]\.title: This value is too (short|long)/');
 
         $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
     }
@@ -176,7 +176,7 @@ final class VerdictParserTest extends KernelTestCase
     public function testANullTitleIsRefusedAsUnreadable(): void
     {
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('findings[0].title: This value should not be null.');
+        $this->expectExceptionMessageMatches('/findings\[0\]\.title: This value should not be null\./');
 
         $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', null)->json());
     }

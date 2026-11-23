@@ -43,25 +43,25 @@ final class OnePerPlaceTest extends TestCase
 
     public function testTheMergedEntryKeepsTheTitleAndKindOfTheFirstReviewerAlsoWhenTheOtherIsMoreSevere(): void
     {
-        $reported = [$this->titled('F1', 7, 'The discount is added', FindingKind::Logic), $this->titled('F2', 7, 'The total is never checked', FindingKind::MissingTest)->withSeverity(Severity::P1)];
+        $reported = [$this->titled('F1', 7, FindingKind::Logic), $this->titled('F2', 7, FindingKind::MissingTest)->withSeverity(Severity::P1)];
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2']);
 
-        self::assertSame([['F1', 'P1', 'The discount is added', FindingKind::Logic]], $this->titlesOf($act));
+        self::assertSame([['F1', 'P1', 'The F1 problem here', FindingKind::Logic]], $this->titlesOf($act));
     }
 
     public function testAnEntryMergedByCauseKeepsTheTitleAndKindOfTheFindingItIsNamedAfter(): void
     {
-        $reported = [$this->titled('F1', 7, 'The discount is added', FindingKind::Logic), $this->titled('F4', 9, 'A secret reaches the log', FindingKind::Security)];
+        $reported = [$this->titled('F1', 7, FindingKind::Logic), $this->titled('F4', 9, FindingKind::Security)];
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F4'], ['F4' => 'F1']);
 
-        self::assertSame([['F1', 'P2', 'The discount is added', FindingKind::Logic]], $this->titlesOf($act));
+        self::assertSame([['F1', 'P2', 'The F1 problem here', FindingKind::Logic]], $this->titlesOf($act));
     }
 
     public function testAnEntryWithoutATitleOrKindTakesNoneFromAFindingItMerged(): void
     {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->titled('F2', 7, 'The discount is added', FindingKind::Logic)], ['F1', 'F2']);
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->titled('F2', 7, FindingKind::Logic)], ['F1', 'F2']);
 
         self::assertSame([['F1', 'P2', null, null]], $this->titlesOf($act));
     }
@@ -379,17 +379,7 @@ final class OnePerPlaceTest extends TestCase
         return new Finding($id, Severity::P2, 'src/A.php', 7, null, $text, FixableBy::Builder, false, null, null);
     }
 
-    /**
-     * @param list<Finding> $act
-     *
-     * @return list<array{string, string, ?string, ?FindingKind}>
-     */
-    private function titlesOf(array $act): array
-    {
-        return array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, $entry->title, $entry->kind], $act);
-    }
-
-    private function titled(string $id, int $line, string $title, FindingKind $kind): Finding
+    private function titled(string $id, int $line, FindingKind $kind): Finding
     {
         return new Finding(
             $id,
@@ -402,8 +392,18 @@ final class OnePerPlaceTest extends TestCase
             false,
             null,
             null,
-            title: $title,
+            title: sprintf('The %s problem here', $id),
             kind: $kind,
         );
+    }
+
+    /**
+     * @param list<Finding> $act
+     *
+     * @return list<array{string, string, ?string, ?FindingKind}>
+     */
+    private function titlesOf(array $act): array
+    {
+        return array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, $entry->title, $entry->kind], $act);
     }
 }
