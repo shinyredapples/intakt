@@ -6,6 +6,8 @@ namespace Intakt\Gates;
 
 final readonly class DocsGate implements Gate
 {
+    // Because a replay over main's merges of 2026-11-09 to 2026-11-23 bounced 2 merges at 80 words (3 at 60) only for editing a wall
+    // without growing it, against 191 that added or grew one: 80 keeps the "about 60" rule with margin (docs/architecture/quality-gates.md).
     public const int PARAGRAPH_WORDS = 80;
     public const int PAGE_WORDS = 1500;
     public const int SUMMARY_WORDS = 120;

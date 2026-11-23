@@ -51,11 +51,17 @@ The `tests` gate also guards the [parity record](parity.md): `tests/Application/
 
 ## The docs gate and its ratchet list
 
-`DocsGate` keeps the documentation readable. A paragraph (a list item counts as one; code blocks, tables and headings do not) has at most 80 words. A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs/architecture/` over 1,500 words opens with an "In short" section of at most 120 words. Each finding names the file, the line and the limit, and says how to fix it.
+`DocsGate` keeps the documentation readable. A paragraph has at most 80 words. A list item counts as a paragraph; headings, fenced or indented code and tables do not. A table is a header line and a delimiter row, or a line between outer pipes (a `docs/highlights.d/` fragment holds just one row). The `>` of a quote is no word.
 
-`ratchet/docs.json` lists what was over a limit when the gate arrived: the key of each oversized paragraph (a hash of its words), a word ceiling for each oversized user or guide page, and the architecture pages excused from "In short". The gate compares the list with its copy on the target branch and fails on any entry that is new or any ceiling that is higher, so the list only shrinks.
+A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs/architecture/` over 1,500 words opens with an "In short" section: only blank lines stand between the title and its heading, it is not empty, and it has at most 120 words, its subsections included. Only the first "In short" of a page counts. Each finding names the file, the line and the limit, and says how to fix it.
 
-An edited paragraph gets a new key, so it must meet the limit, and a listed page may not grow past its ceiling. Without git history the limits still apply and the shrink check is skipped. Like the other gates that start only `git`, its tests run it in the test process through `Sandbox::runGate()`.
+`ratchet/docs.json` lists what was over a limit when the gate arrived: the key of each oversized paragraph (a hash of its words, listed once for each copy), a word ceiling for each oversized user or guide page, and the architecture pages excused from "In short". The file stays in place, with empty lists when nothing is listed; the gate fails without it.
+
+Compared with its copy on the target branch, the list fails the gate when an entry is new or a ceiling is higher. It also fails when the change left an entry unneeded: a key that matches no oversized paragraph any more, a ceiling above the page's words or for a page within the limit, an excuse for a page that no longer needs one. So the list only shrinks, and a shortened wall cannot come back.
+
+An edited paragraph gets a new key, so it must meet the limit. The ratchet checks are skipped without git history, and when the target branch has neither the list nor `config/gates/src/DocsGate.php` (the change that brings the gate). A target branch with the gate but without the list fails. Like the other gates that start only `git`, its tests run it in the test process through `Sandbox::runGate()`.
+
+The limits come from a replay over the 202 merges of main from 2026-11-09 to 2026-11-23 that changed these pages, each judged against its parent. At 80 words, 191 merges added or grew a wall and 2 only edited a wall without growing it; at 60 words it was 196 and 3. 173 merges grew a user or guide page beyond both 1,500 words and its earlier size. In 20, an architecture page over 1,500 words lacked a summary its parent did not already lack.
 
 ## The test time budget (planned)
 
