@@ -382,22 +382,6 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->getCrawler()->filter('#round-round-1 [data-dropped]'));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function quotesIn(Crawler $disclosure): array
-    {
-        return $disclosure->filter('.fc-quote-list > li > code')->each(static fn (Crawler $code): string => $code->text());
-    }
-
-    /**
-     * @return list<array{string, string}>
-     */
-    private function nearLinesIn(Crawler $quote): array
-    {
-        return $quote->filter('.fc-near-lines > li')->each(static fn (Crawler $line): array => [$line->filter('.fc-near-place')->text(), $line->filter('code')->text()]);
-    }
-
     public function testADroppedFindingCanBeReachedByFindingNavigation(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -426,6 +410,22 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(0, $crawler->filter('[data-dropped]'));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function quotesIn(Crawler $disclosure): array
+    {
+        return $disclosure->filter('.fc-quote-list > li > code')->each(static fn (Crawler $code): string => $code->text());
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function nearLinesIn(Crawler $quote): array
+    {
+        return $quote->filter('.fc-near-lines > li')->each(static fn (Crawler $line): array => [$line->filter('.fc-near-place')->text(), $line->filter('code')->text()]);
     }
 
     /**

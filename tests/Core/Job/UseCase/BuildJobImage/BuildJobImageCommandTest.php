@@ -105,17 +105,6 @@ final class BuildJobImageCommandTest extends TestCase
     /** @var list<MockResponse> */
     private array $requests = [];
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('composer.json', '{"require": {"php": ">=8.5.12", "ext-intl": "*"}, "config": {"platform": {"php": "8.5.12"}}}');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->repository->path, $this->context]);
-    }
-
     public function testAGeneratedImageIsBuiltAndItsPhpVerified(): void
     {
         $tester = $this->whenTheCommandRuns(self::BUILT);
@@ -299,6 +288,17 @@ final class BuildJobImageCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('there is no socket at /nonexistent/docker.sock', $this->display($tester));
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('composer.json', '{"require": {"php": ">=8.5.12", "ext-intl": "*"}, "config": {"platform": {"php": "8.5.12"}}}');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->repository->path, $this->context]);
     }
 
     /**

@@ -18,11 +18,6 @@ final class RawPromptMessageCallableRuleTest extends PhpStanRuleTestCase
 {
     private const string SAMPLE = "<?php\n\ndeclare(strict_types=1);\n\nnamespace %s;\n\nuse Symfony\\AI\\Platform\\Message\\Message;\n\nfinal readonly class %s\n{\n    public function messages(string \$text): mixed\n    {\n        return array_map(Message::ofUser(...), [\$text]);\n    }\n\n    public function factory(Message \$message): mixed\n    {\n        return \$message::forSystem(...);\n    }\n}\n";
 
-    protected function ruleFor(string $root): RawPromptMessageCallableRule
-    {
-        return new RawPromptMessageCallableRule($root);
-    }
-
     public function testAFirstClassCallableOfAMessageFactoryOutsideTheAssemblyIsRefused(): void
     {
         $sandbox = $this->emptySandbox();
@@ -56,5 +51,10 @@ final class RawPromptMessageCallableRuleTest extends PhpStanRuleTestCase
         $sandbox->write('tests/Sample/ReportTest.php', sprintf(self::SAMPLE, 'Intakt\Tests\Sample', 'ReportTest'));
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    protected function ruleFor(string $root): RawPromptMessageCallableRule
+    {
+        return new RawPromptMessageCallableRule($root);
     }
 }

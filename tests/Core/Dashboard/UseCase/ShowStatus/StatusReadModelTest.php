@@ -113,11 +113,6 @@ final class StatusReadModelTest extends TestCase
     /** @var array<string, RoundEnding> */
     private array $endings = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testTheStatusValidatesAgainstTheDocumentedSchema(): void
     {
         $this->holds = [SharedHold::Drain, SharedHold::Pause];
@@ -625,6 +620,11 @@ final class StatusReadModelTest extends TestCase
         self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), [...(array) $this->schemaAt(...$build, ...['outcome', 'enum']), BuildStepOutcome::Asked->value]);
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+    }
+
     private function schemaAt(string ...$path): mixed
     {
         $node = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
@@ -661,19 +661,13 @@ final class StatusReadModelTest extends TestCase
         return $project;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function schemaErrorsOf(string $json): array
+    private function queueHolding(int $messages): ReceiverInterface
     {
-        $document = json_decode($json);
-        $validator = new Validator();
-        $validator->validate($document, (object) ['$ref' => 'file://'.realpath(self::SCHEMA)]);
+        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
+        $queue->method('getMessageCount')->willReturn($messages);
+        self::assertInstanceOf(ReceiverInterface::class, $queue);
 
-        /** @var list<array{property: string, message: string}> $errors */
-        $errors = $validator->getErrors();
-
-        return array_map(static fn (array $error): string => $error['property'].': '.$error['message'], $errors);
+        return $queue;
     }
 
     private function readModel(string $redacting = ''): StatusReadModel
@@ -694,12 +688,18 @@ final class StatusReadModelTest extends TestCase
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
     }
 
-    private function queueHolding(int $messages): ReceiverInterface
+    /**
+     * @return list<string>
+     */
+    private function schemaErrorsOf(string $json): array
     {
-        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
-        $queue->method('getMessageCount')->willReturn($messages);
-        self::assertInstanceOf(ReceiverInterface::class, $queue);
+        $document = json_decode($json);
+        $validator = new Validator();
+        $validator->validate($document, (object) ['$ref' => 'file://'.realpath(self::SCHEMA)]);
 
-        return $queue;
+        /** @var list<array{property: string, message: string}> $errors */
+        $errors = $validator->getErrors();
+
+        return array_map(static fn (array $error): string => $error['property'].': '.$error['message'], $errors);
     }
 }

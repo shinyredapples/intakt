@@ -187,6 +187,14 @@ final readonly class PendingHeads
         return $this->entities->find(PendingHead::class, $key);
     }
 
+    /**
+     * @return array{project: string, change: string}
+     */
+    private function keyOf(string $project, OpenChange $open): array
+    {
+        return ['project' => $project, 'change' => $open->id->value];
+    }
+
     // Dropped so the next read goes to the database, because a worker keeps its entity manager while other workers change and remove rows.
     /**
      * @param array{project: string, change: string} $key
@@ -198,13 +206,5 @@ final readonly class PendingHeads
         if (null !== $loaded) {
             $this->entities->detach($loaded);
         }
-    }
-
-    /**
-     * @return array{project: string, change: string}
-     */
-    private function keyOf(string $project, OpenChange $open): array
-    {
-        return ['project' => $project, 'change' => $open->id->value];
     }
 }

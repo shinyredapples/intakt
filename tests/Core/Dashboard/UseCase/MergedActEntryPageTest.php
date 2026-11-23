@@ -72,13 +72,6 @@ final class MergedActEntryPageTest extends WebTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->browser->disableReboot();
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTwoReviewersReportingOnePlaceShowOneEntryWithBothIdsInTheConsoleTheJsonAndOnThePage(): void
     {
         $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P1)]);
@@ -148,6 +141,23 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertSame('Dropped before the judge: none of its 1 quoted code fragments is in the change', $page->filter('[data-dropped] .fc-reason')->text());
     }
 
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->browser->disableReboot();
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    private function judgeDoneOf(ChangeReview $review): ?JudgeDone
+    {
+        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($review->roundId);
+    }
+
+    private function findingAt(string $id, Severity $severity): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
     /**
      * @param non-empty-list<Finding> $findings
      */
@@ -188,16 +198,6 @@ final class MergedActEntryPageTest extends WebTestCase
         );
 
         return $reviewChange->review($this->request(count($findings), $diff), new IgnoredProgress());
-    }
-
-    private function judgeDoneOf(ChangeReview $review): ?JudgeDone
-    {
-        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($review->roundId);
-    }
-
-    private function findingAt(string $id, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     private function serializer(): SerializerInterface

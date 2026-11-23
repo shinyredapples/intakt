@@ -40,13 +40,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(ShowReviewController::class)]
 final class StopRoundControllerTest extends DashboardPageTestCase
 {
-    // The container keeps the ledger double across the page that hands out the token and the post that uses it.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->browser->disableReboot();
-    }
-
     public function testARunningRoundShowsAStopFormForTheRoundInThePageHeader(): void
     {
         $this->runningRound();
@@ -205,7 +198,20 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no unjudged round with this id."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no round still in review with this id."', NotFoundHttpException::class));
+        self::assertSame([], $this->requested());
+    }
+
+    public function testARoundThatEndedWithoutAJudgesCallRecordsNothing(): void
+    {
+        $this->runningRound();
+        $token = $this->token();
+        self::clockAt('2026-10-30T12:00:00+00:00');
+
+        $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $token]);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no round still in review with this id."', NotFoundHttpException::class));
         self::assertSame([], $this->requested());
     }
 
@@ -216,7 +222,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-9/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no unjudged round with this id."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no round still in review with this id."', NotFoundHttpException::class));
         self::assertSame([], $this->requested());
     }
 
@@ -230,18 +236,17 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/reviews/round-1/stop": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class));
     }
 
+    // The container keeps the ledger double across the page that hands out the token and the post that uses it.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->browser->disableReboot();
+    }
+
     private function runningRound(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'security');
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function requested(): array
-    {
-        return array_map(static fn ($row): mixed => json_decode($row->event->payload, true), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
     }
 
     // Read from a page's form, because the token belongs to the browser's session.
@@ -251,5 +256,13 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewer('token-page', 'security');
 
         return $this->browser->request('GET', '/reviews/token-page')->filter('form.stop-round input[name=_token]')->attr('value') ?? '';
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function requested(): array
+    {
+        return array_map(static fn ($row): mixed => json_decode($row->event->payload, true), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
     }
 }

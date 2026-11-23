@@ -82,24 +82,6 @@ final class FailedHeadsTest extends KernelTestCase
     private PendingHeads $pending;
     private DoctrineHolds $holds;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
-        $this->entities = $entities;
-        $this->pending = new PendingHeads($entities, $this->clock);
-        $this->holds = new DoctrineHolds($entities, $this->clock);
-    }
-
-    protected function tearDown(): void
-    {
-        unset($_SERVER[self::HELD_NAME]);
-        parent::tearDown();
-    }
-
     public function testTheSameHeadListedAgainWhileItsFourthFailureIsRecordedStaysDueWithoutFailures(): void
     {
         $old = RecordedForge::change('7', 'a', '2026-11-04T09:00:00Z');
@@ -295,6 +277,24 @@ final class FailedHeadsTest extends KernelTestCase
         self::assertSame(1, $this->pending->failuresOf('alpha', $first));
         self::assertSame(1, $this->pending->failuresOf('alpha', $next));
         self::assertLoggedErrors(2, 'The install-wide failure record failed; the head still backs off alone.');
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
+        $this->entities = $entities;
+        $this->pending = new PendingHeads($entities, $this->clock);
+        $this->holds = new DoctrineHolds($entities, $this->clock);
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER[self::HELD_NAME]);
+        parent::tearDown();
     }
 
     /**

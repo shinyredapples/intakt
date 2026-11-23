@@ -37,11 +37,6 @@ final class StreamedAnswerTest extends TestCase
 {
     private TextSeenByLaterListeners $later;
 
-    protected function setUp(): void
-    {
-        $this->later = new TextSeenByLaterListeners();
-    }
-
     public function testTheTextStillStreamsPieceByPieceAndOnlyOnce(): void
     {
         $emitted = $this->streamed([$this->textBlock(), $this->text('{"verdict":'), $this->text('"approve"}')]);
@@ -175,6 +170,11 @@ final class StreamedAnswerTest extends TestCase
         self::assertSame($refused, $this->thrownBy($this->brokenAfter([new TextDelta('{"verdict":')], $refused)));
     }
 
+    protected function setUp(): void
+    {
+        $this->later = new TextSeenByLaterListeners();
+    }
+
     /**
      * @param list<DeltaInterface> $deltas
      */
@@ -198,6 +198,22 @@ final class StreamedAnswerTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function textBlock(): array
+    {
+        return ['type' => 'content_block_start', 'content_block' => ['type' => 'text', 'text' => '']];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function text(string $text): array
+    {
+        return ['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => $text]];
     }
 
     /**
@@ -241,22 +257,6 @@ final class StreamedAnswerTest extends TestCase
                 yield new ToolCallStart('toolu_01', 'read_file');
             }
         }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function textBlock(): array
-    {
-        return ['type' => 'content_block_start', 'content_block' => ['type' => 'text', 'text' => '']];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function text(string $text): array
-    {
-        return ['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => $text]];
     }
 
     /**

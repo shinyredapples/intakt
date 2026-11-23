@@ -20,19 +20,6 @@ final class RectorPathsFileTest extends TestCase
 {
     private string $folder;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/rector-paths-file-test-'.getmypid();
-        new Filesystem()->mkdir($this->folder);
-        putenv(GatesCache::VARIABLE.'='.$this->folder);
-    }
-
-    protected function tearDown(): void
-    {
-        putenv(GatesCache::VARIABLE);
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testTheWrittenFileReadsBackEveryPathUnchanged(): void
     {
         $paths = ['src/A.php', "src/Line\nBreak.php", 'src/Ünïcode.php'];
@@ -115,6 +102,19 @@ final class RectorPathsFileTest extends TestCase
         file_put_contents($this->folder.'/paths.json', $contents);
 
         $this->assertReadFails($this->folder.'/paths.json', $reason);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/rector-paths-file-test-'.getmypid();
+        new Filesystem()->mkdir($this->folder);
+        putenv(GatesCache::VARIABLE.'='.$this->folder);
+    }
+
+    protected function tearDown(): void
+    {
+        putenv(GatesCache::VARIABLE);
+        new Filesystem()->remove($this->folder);
     }
 
     private function assertReadFails(string $file, string $reason): void

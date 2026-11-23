@@ -32,18 +32,6 @@ final class HeldCredentialsTest extends TestCase
 
     private string $vaultDirectory;
 
-    protected function setUp(): void
-    {
-        $this->vaultDirectory = sys_get_temp_dir().'/intakt-held-credentials-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        unset($_SERVER[self::NAME], $_SERVER[self::NAME.'_TEAM'], $_SERVER['OTHER_'.self::NAME], $_SERVER[self::NAME.'S'], $_ENV[self::NAME]);
-        putenv(self::NAME);
-        new Filesystem()->remove($this->vaultDirectory);
-    }
-
     public function testAVariableWithAnotherValueInEachSourceHoldsEveryValue(): void
     {
         putenv(self::NAME.'=process-credential-canary');
@@ -120,6 +108,18 @@ final class HeldCredentialsTest extends TestCase
         $kept->method('read')->willThrowException(new KeptProviderKeyUnreadable());
 
         self::assertSame([], new HeldCredentials([self::NAME], null, $kept)->values());
+    }
+
+    protected function setUp(): void
+    {
+        $this->vaultDirectory = sys_get_temp_dir().'/intakt-held-credentials-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER[self::NAME], $_SERVER[self::NAME.'_TEAM'], $_SERVER['OTHER_'.self::NAME], $_SERVER[self::NAME.'S'], $_ENV[self::NAME]);
+        putenv(self::NAME);
+        new Filesystem()->remove($this->vaultDirectory);
     }
 
     /**

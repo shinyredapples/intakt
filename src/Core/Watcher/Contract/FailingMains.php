@@ -60,20 +60,6 @@ final readonly class FailingMains
         return [$failing, $seen];
     }
 
-    private function failureReasonOf(RecordedEvent $recorded, PayloadFields $payload): ?string
-    {
-        $reason = $payload->text('reason');
-        $failedFromStore = LedgerEventKind::BootResultComputed === $recorded->event->kind && $this->readFromStore($payload) && 'failed' === $payload->text('state');
-
-        return null !== $reason && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
-    }
-
-    // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when it differs from what this reading shows.
-    private function readFromStore(PayloadFields $payload): bool
-    {
-        return 'store' === $payload->text('read_from');
-    }
-
     /**
      * @return array{string, string, string}|null
      */
@@ -88,5 +74,19 @@ final readonly class FailingMains
         }
 
         return [$project, $main, $tools];
+    }
+
+    private function failureReasonOf(RecordedEvent $recorded, PayloadFields $payload): ?string
+    {
+        $reason = $payload->text('reason');
+        $failedFromStore = LedgerEventKind::BootResultComputed === $recorded->event->kind && $this->readFromStore($payload) && 'failed' === $payload->text('state');
+
+        return null !== $reason && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
+    }
+
+    // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when it differs from what this reading shows.
+    private function readFromStore(PayloadFields $payload): bool
+    {
+        return 'store' === $payload->text('read_from');
     }
 }

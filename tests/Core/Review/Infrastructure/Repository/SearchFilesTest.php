@@ -20,16 +20,6 @@ final class SearchFilesTest extends TestCase
 {
     private ReviewCheckout $checkout;
 
-    protected function setUp(): void
-    {
-        $this->checkout = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->checkout->remove();
-    }
-
     public function testAnEmptyTextIsRefusedByName(): void
     {
         $this->expectException(SearchTextEmpty::class);
@@ -51,5 +41,15 @@ final class SearchFilesTest extends TestCase
     public function testATextInAFileIsFound(): void
     {
         self::assertSame('src/Cart.php:2:// total the cart', new SearchFiles($this->checkout->checkout)('total', '.'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->checkout = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->checkout->remove();
     }
 }

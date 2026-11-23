@@ -106,26 +106,6 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
      */
     private array $published = [];
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
-        $this->secretBefore = is_string($before) ? $before : null;
-        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        parent::setUp();
-        $this->givenTheDownloadedScriptsExist();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $secret = $this->secretBefore ?? '';
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        $this->removeTheStandIns();
-        parent::tearDown();
-    }
-
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
     {
         $this->givenARunningRound();
@@ -1481,6 +1461,26 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['Stop', 'Stop this reviewer'], $held);
     }
 
+    #[Override]
+    protected function setUp(): void
+    {
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
+        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        parent::setUp();
+        $this->givenTheDownloadedScriptsExist();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $secret = $this->secretBefore ?? '';
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        $this->removeTheStandIns();
+        parent::tearDown();
+    }
+
     private function actionsTheConnectionControllerHolds(): string
     {
         $script = (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
@@ -1562,31 +1562,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return [$round, $id, $page];
     }
 
-    /**
-     * @param array<string, 'act'|'defer'|'reject'> $marks
-     */
-    private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
-    {
-        $this->givenEveryReviewerAnswered($round, count($marks));
-        $this->ledger->judgeFindings($round->toRfc4122(), $marks);
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
-    }
-
     private function givenTheRoundIsJudgedAsOneEntryPerCause(Uuid $round): void
     {
         $this->givenEveryReviewerAnswered($round, 2);
         $this->ledger->judgeOneEntryPerCause($round->toRfc4122());
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
-    }
-
-    private function givenEveryReviewerAnswered(Uuid $round, int $findings): void
-    {
-        $id = $round->toRfc4122();
-        $this->ledger->startReviewer($id, 'security');
-        $this->ledger->startReviewer($id, 'correctness');
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
-        $this->ledger->answer($id, 'security', $findings);
-        $this->ledger->answer($id, 'correctness', $findings);
     }
 
     /**
@@ -1599,6 +1579,26 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
 
         return [$round, $id, $this->bothViews('/reviews/'.$id)];
+    }
+
+    /**
+     * @param array<string, 'act'|'defer'|'reject'> $marks
+     */
+    private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
+    {
+        $this->givenEveryReviewerAnswered($round, count($marks));
+        $this->ledger->judgeFindings($round->toRfc4122(), $marks);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+    }
+
+    private function givenEveryReviewerAnswered(Uuid $round, int $findings): void
+    {
+        $id = $round->toRfc4122();
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->startReviewer($id, 'correctness');
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
+        $this->ledger->answer($id, 'security', $findings);
+        $this->ledger->answer($id, 'correctness', $findings);
     }
 
     private function publishedStreams(): string

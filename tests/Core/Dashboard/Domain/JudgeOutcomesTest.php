@@ -118,14 +118,6 @@ final class JudgeOutcomesTest extends TestCase
         self::assertSame(2, $outcomes?->scaleTop());
     }
 
-    /**
-     * @param list<RoundFinding> $findings
-     */
-    private function judged(array $findings): ReviewedRound
-    {
-        return $this->round()->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'))->judgedOnItsOwnMarks();
-    }
-
     private function round(): ReviewedRound
     {
         return new ReviewedRound(new RoundStart('r-1', 'alpha', 2), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
@@ -137,5 +129,13 @@ final class JudgeOutcomesTest extends TestCase
     private function finding(string $id, JudgeCall $call, array $merged = []): RoundFinding
     {
         return new RoundFinding($id, 'P2', 'Text of '.$id.'.', $merged)->calledBy($call);
+    }
+
+    /**
+     * @param list<RoundFinding> $findings
+     */
+    private function judged(array $findings): ReviewedRound
+    {
+        return $this->round()->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'))->judgedOnItsOwnMarks();
     }
 }

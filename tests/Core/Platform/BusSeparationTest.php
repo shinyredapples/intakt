@@ -17,7 +17,9 @@ use Intakt\Tests\Core\Platform\Handler\RenameThing;
 use Intakt\Tests\Core\Platform\Handler\RenameThingHandler;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
+use stdClass;
 use Symfony\Component\Messenger\Exception\InvalidArgumentException;
 use Symfony\Component\Messenger\Exception\NoHandlerForMessageException;
 use Symfony\Component\Messenger\HandleTrait;
@@ -75,6 +77,21 @@ final class BusSeparationTest extends KernelTestCase
         )));
 
         $this->handle(new FindThing());
+    }
+
+    #[TestWith(['command.bus', CommandMessage::class])]
+    #[TestWith(['query.bus', QueryMessage::class])]
+    public function testAMessageWithNoBusMarkerIsRefusedOnEitherBus(string $bus, string $marker): void
+    {
+        $this->messageBus = $this->bus($bus);
+
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf(
+            'This bus only dispatches messages of type "%s", "%s" given.',
+            $marker,
+            stdClass::class,
+        )));
+
+        $this->handle(new stdClass());
     }
 
     public function testAMessageReceivedFromATransportIsNotRefusedByTheBus(): void

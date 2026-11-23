@@ -156,11 +156,6 @@ final class EscalationPromptTest extends TestCase
         self::assertContains('C.php', $cited);
     }
 
-    private function findingFirst(Finding $finding, string $diff): string
-    {
-        return new EscalationPrompt(new Fence())->findingFirst(new EscalationRequest($finding, $diff))->rendered();
-    }
-
     private function contentOf(string $rendered): string
     {
         return (string) new Fence()->contentOf(UntrustedSource::Diff, $this->fenceIn($rendered));
@@ -183,5 +178,10 @@ final class EscalationPromptTest extends TestCase
     private function finding(?string $file, string $text): Finding
     {
         return new Finding('f1', Severity::P1, $file, 12, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    private function findingFirst(Finding $finding, string $diff): string
+    {
+        return new EscalationPrompt(new Fence())->findingFirst(new EscalationRequest($finding, $diff))->rendered();
     }
 }

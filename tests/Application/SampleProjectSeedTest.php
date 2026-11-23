@@ -43,42 +43,6 @@ final class SampleProjectSeedTest extends KernelTestCase
         parent::tearDownAfterClass();
     }
 
-    protected function setUp(): void
-    {
-        $this->containers = self::compiledContainers();
-
-        foreach (self::VARIABLES as $name) {
-            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
-            $this->unsetVariable($name);
-        }
-
-        $this->directory = sys_get_temp_dir().'/intakt-sample-project-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        // An empty file, so the seeding kernel has no projects of a shipped config/intakt.yaml.
-        $_SERVER['INTAKT_CONFIG'] = $this->directory.'/none.yaml';
-        new Filesystem()->dumpFile($_SERVER['INTAKT_CONFIG'], '');
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->saved as $name => $before) {
-            $this->unsetVariable($name);
-            if (null !== $before['server']) {
-                $_SERVER[$name] = $before['server'];
-            }
-            if (null !== $before['env']) {
-                $_ENV[$name] = $before['env'];
-            }
-            if (false !== $before['process']) {
-                putenv($name.'='.$before['process']);
-            }
-        }
-
-        parent::tearDown();
-        $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testWithAnAnthropicKeyAndTheHuggingFaceRouterTheSeededPanelLoadsOnBothAndEveryTierResolvesToAnEnabledProvider(): void
     {
         $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
@@ -118,6 +82,42 @@ final class SampleProjectSeedTest extends KernelTestCase
 
         self::assertDirectoryExists($this->directory.'/sample-repository/.git');
         self::assertFileDoesNotExist($this->directory.'/intakt.yaml');
+    }
+
+    protected function setUp(): void
+    {
+        $this->containers = self::compiledContainers();
+
+        foreach (self::VARIABLES as $name) {
+            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
+            $this->unsetVariable($name);
+        }
+
+        $this->directory = sys_get_temp_dir().'/intakt-sample-project-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        // An empty file, so the seeding kernel has no projects of a shipped config/intakt.yaml.
+        $_SERVER['INTAKT_CONFIG'] = $this->directory.'/none.yaml';
+        new Filesystem()->dumpFile($_SERVER['INTAKT_CONFIG'], '');
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
+        }
+
+        parent::tearDown();
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove($this->directory);
     }
 
     // Set directly, because HF_TOKEN becomes these two only in the image's entrypoint, which this test does not run.

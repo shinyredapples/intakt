@@ -70,7 +70,8 @@ final readonly class FailedJudgings
         return $failed;
     }
 
-    private function isParked(string $roundId): bool
+    // The failure transport alone, so a caller that already read the ledger record does not read the ledger a second time.
+    public function isParked(string $roundId): bool
     {
         return isset($this->parkedRounds(self::PARKED_MESSAGES_READ)[$roundId]);
     }

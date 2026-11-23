@@ -36,21 +36,6 @@ final class EntrypointSampleSeedTest extends TestCase
 
     private ?Process $entrypoint = null;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
-        new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
-        // Linked and written here because the start asks Symfony Runtime for the kernel's environment and folders with the real PHP, which reads both from its working directory.
-        new Filesystem()->symlink(dirname(__DIR__, 4).'/vendor', $this->directory.'/vendor');
-        new Filesystem()->dumpFile($this->directory.'/.env', '');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->entrypoint?->stop(15);
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheDemoBuildsTheContainerAgainBeforeAndAfterTheSeed(): void
     {
         self::assertSame([
@@ -765,6 +750,21 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
+        new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
+        // Linked and written here because the start asks Symfony Runtime for the kernel's environment and folders with the real PHP, which reads both from its working directory.
+        new Filesystem()->symlink(dirname(__DIR__, 4).'/vendor', $this->directory.'/vendor');
+        new Filesystem()->dumpFile($this->directory.'/.env', '');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->entrypoint?->stop(15);
+        new Filesystem()->remove($this->directory);
+    }
+
     /**
      * @param array<string, false|string> $environment
      */
@@ -922,16 +922,6 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringContainsString($call, $this->calls(), (string) $this->entrypoint?->getErrorOutput());
     }
 
-    // The signal reaches only the entrypoint, as a container stop does, so its children end only when its trap runs.
-    private function secondsToStop(): float
-    {
-        $sent = hrtime(true);
-        $this->entrypoint?->signal(self::TERMINATE);
-        $this->entrypoint?->wait();
-
-        return (hrtime(true) - $sent) / 1_000_000_000;
-    }
-
     // Two and a half polls of the entrypoint's one-second loop, so a step it repeats or prints later would have run.
     private function waitForMorePolls(): void
     {
@@ -951,6 +941,16 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertSame($consumers, substr_count($this->calls(), 'a consumer ignores the stop'), (string) $this->entrypoint?->getErrorOutput());
     }
 
+    // The signal reaches only the entrypoint, as a container stop does, so its children end only when its trap runs.
+    private function secondsToStop(): float
+    {
+        $sent = hrtime(true);
+        $this->entrypoint?->signal(self::TERMINATE);
+        $this->entrypoint?->wait();
+
+        return (hrtime(true) - $sent) / 1_000_000_000;
+    }
+
     private function waitForTheServer(): void
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
@@ -960,25 +960,6 @@ final class EntrypointSampleSeedTest extends TestCase
         }
 
         self::assertStringContainsString('frankenphp run', $this->calls(), (string) $this->entrypoint?->getErrorOutput());
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function consoleCallsBeforeTheConsumers(): array
-    {
-        $calls = [];
-        foreach (explode("\n", $this->calls()) as $call) {
-            if (str_contains($call, 'messenger:consume')) {
-                break;
-            }
-
-            if (str_starts_with($call, 'php ')) {
-                $calls[] = substr($call, 4);
-            }
-        }
-
-        return $calls;
     }
 
     private function seen(): string
@@ -1010,5 +991,24 @@ final class EntrypointSampleSeedTest extends TestCase
     private function callsFile(): string
     {
         return $this->directory.'/calls';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function consoleCallsBeforeTheConsumers(): array
+    {
+        $calls = [];
+        foreach (explode("\n", $this->calls()) as $call) {
+            if (str_contains($call, 'messenger:consume')) {
+                break;
+            }
+
+            if (str_starts_with($call, 'php ')) {
+                $calls[] = substr($call, 4);
+            }
+        }
+
+        return $calls;
     }
 }

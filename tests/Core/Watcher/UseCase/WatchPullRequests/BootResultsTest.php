@@ -71,18 +71,6 @@ final class BootResultsTest extends KernelTestCase
     private DashboardLedger $ledger;
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->entities = $entities;
-        $this->clock = new MockClock('2026-11-13T10:00:00+00:00');
-        $this->ledger = new DashboardLedger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testMainsBootResultIsReusedForTheSameCommitAndToolFingerprint(): void
     {
         $bus = new BootingBus(BootOutcome::booted());
@@ -782,6 +770,18 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertCount(1, array_filter(iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed)), static fn (RecordedEvent $recorded): bool => str_contains($recorded->event->payload, '"read_from"')));
         self::assertSame([], $this->bannerReasons());
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
+        $this->clock = new MockClock('2026-11-13T10:00:00+00:00');
+        $this->ledger = new DashboardLedger();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     /**

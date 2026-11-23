@@ -63,11 +63,6 @@ final class StopReviewerTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAStopRequestedThirtySecondsBeforeTheRunBeganCancelsItAndTheLedgerRecordsTheStop(): void
     {
         $message = $this->started();
@@ -208,6 +203,11 @@ final class StopReviewerTest extends KernelTestCase
         self::assertSame([$message->reviewerId], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     private function started(): ReviewWithReviewer
     {
         $this->fixture->start(1);
@@ -252,16 +252,6 @@ final class StopReviewerTest extends KernelTestCase
     }
 
     /**
-     * @return list<LedgerEventKind>
-     */
-    private function stopRows(): array
-    {
-        $kinds = [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped];
-
-        return array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, $kinds, true)));
-    }
-
-    /**
      * @return list<mixed>
      */
     private function payloadValues(LedgerEventKind $kind, string $key): array
@@ -272,5 +262,15 @@ final class StopReviewerTest extends KernelTestCase
 
             return $payload[$key] ?? null;
         }, array_values(iterator_to_array($this->fixture->ledger()->readOfKind($kind))));
+    }
+
+    /**
+     * @return list<LedgerEventKind>
+     */
+    private function stopRows(): array
+    {
+        $kinds = [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped];
+
+        return array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, $kinds, true)));
     }
 }

@@ -1,5 +1,4 @@
-> **Judging the Symfony AI & MCP Hackathon?** Release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1) is the version we submitted and tested on both paths, the keyless demo and a run with a key:
-> `git clone --branch v0.4.1 https://github.com/shinyredapples/intakt.git && cd intakt`. Main is welcome too: it has what we built after the deadline, but it is not the tested submission.
+> **Judging the Symfony AI & MCP Hackathon?** Use the tested submission, release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1): the first install under [Five-minute start](#five-minute-start).
 
 <h1 align="center">
   <picture>
@@ -22,6 +21,15 @@ AI code review by a panel from different AI labs. A finding whose quoted code is
 </picture>
 
 ## Five-minute start
+
+The hackathon submission, tested on both paths (release v0.4.1):
+
+```
+git clone --branch v0.4.1 https://github.com/shinyredapples/intakt.git && cd intakt
+docker compose up -d --wait
+```
+
+The latest, with everything built after the deadline (main):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt

@@ -134,18 +134,6 @@ final readonly class DependencyJobs
         return $installed && $removed;
     }
 
-    private function removed(string $folder): bool
-    {
-        try {
-            $this->filesystem->remove($folder);
-
-            return true;
-        } catch (IOException) {
-            // Not thrown, because the next install of the key removes the leftover in its prepare and this check only loses the reuse.
-            return false;
-        }
-    }
-
     private function platformOf(JobResult $result): ?string
     {
         $platform = $result->output->contents(self::PLATFORM) ?? '';
@@ -210,6 +198,18 @@ final readonly class DependencyJobs
             return true;
         } catch (IOException) {
             // The store refuses an install it cannot keep whole and read-only, a link out of it included, so the check installs itself.
+            return false;
+        }
+    }
+
+    private function removed(string $folder): bool
+    {
+        try {
+            $this->filesystem->remove($folder);
+
+            return true;
+        } catch (IOException) {
+            // Not thrown, because the next install of the key removes the leftover in its prepare and this check only loses the reuse.
             return false;
         }
     }

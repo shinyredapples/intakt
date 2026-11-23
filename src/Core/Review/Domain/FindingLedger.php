@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -61,7 +62,7 @@ final class FindingLedger
         }
 
         // A finding another reviewer already reported again in this round stays open, so the verdicts of one round count the same in any order.
-        $this->resolve(array_values(array_filter($verdict->resolved, fn (string $id): bool => ($this->tracked[$id] ?? null)?->latestRound() !== $round)));
+        $this->resolve(array_values(array_map(static fn (ResolvedFinding $resolved): string => $resolved->id, array_filter($verdict->resolved, fn (ResolvedFinding $resolved): bool => ($this->tracked[$resolved->id] ?? null)?->latestRound() !== $round))));
         $earlier = $this->tracked;
 
         return array_map(fn (Finding $finding): string => $this->trackRepeat($round, $finding, $earlier), $verdict->findings);
@@ -167,6 +168,7 @@ final class FindingLedger
             $tracked->latest->requirement,
             $tracked->latest->evidence,
             $tracked->latest->regression,
+            $tracked->latest->gate_gap,
         );
     }
 

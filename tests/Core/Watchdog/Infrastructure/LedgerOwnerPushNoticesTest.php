@@ -29,12 +29,6 @@ final class LedgerOwnerPushNoticesTest extends TestCase
     private HaltLedger $ledger;
     private LedgerOwnerPushNotices $notices;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new HaltLedger();
-        $this->notices = new LedgerOwnerPushNotices($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
-    }
-
     public function testANoticedCommitCountsAsNoticedForItsProject(): void
     {
         $this->notices->notice('acme/shop', self::COMMIT);
@@ -77,5 +71,11 @@ final class LedgerOwnerPushNoticesTest extends TestCase
         }
 
         self::assertSame([], $this->notices->noticedOf('acme/shop'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new HaltLedger();
+        $this->notices = new LedgerOwnerPushNotices($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
     }
 }

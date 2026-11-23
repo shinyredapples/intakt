@@ -22,13 +22,6 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(FindingUrgency::class)]
 final class ReviewFullRecordTest extends DashboardPageTestCase
 {
-    // Kept across the two views' requests, so the second one reads the same ledger.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->browser->disableReboot();
-    }
-
     public function testTheMainViewRendersNoneOfTheMovedSectionsAndLinksToTheFullRecordOnce(): void
     {
         $this->givenAChangesRoundWithOneFindingToFix();
@@ -105,6 +98,13 @@ final class ReviewFullRecordTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/round-9/record');
 
         self::assertResponseStatusCodeSame(404);
+    }
+
+    // Kept across the two views' requests, so the second one reads the same ledger.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->browser->disableReboot();
     }
 
     private function givenAChangesRoundWithOneFindingToFix(): void

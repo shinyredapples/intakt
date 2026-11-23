@@ -119,48 +119,6 @@ final class Instance
         return $status;
     }
 
-    private function runCommand(): int
-    {
-        // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
-        $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
-        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR];
-        $environment = [...$this->environment(), 'INTAKT_INSTANCE_URL' => 'http://127.0.0.1:'.$this->listeningPort(), ...$this->web->commandEnvironment()];
-
-        $process = proc_open($command, $descriptors, $pipes, $this->root, $environment);
-
-        if (false === $process) {
-            throw new RuntimeException('cannot start the command');
-        }
-
-        return $this->awaitExit($process);
-    }
-
-    /**
-     * @param resource $process
-     */
-    private function awaitExit($process): int
-    {
-        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
-
-        while (hrtime(true) < $deadline) {
-            $state = proc_get_status($process);
-
-            if (!$state['running']) {
-                proc_close($process);
-
-                return $state['exitcode'];
-            }
-
-            usleep(50_000);
-        }
-
-        proc_terminate($process, 9);
-        proc_close($process);
-        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
-
-        return self::COMMAND_TIMED_OUT;
-    }
-
     private function createScratch(): string
     {
         $base = (string) getenv('TMPDIR');
@@ -197,6 +155,43 @@ final class Instance
         return $this->scratch.'/server.log';
     }
 
+    private function awaitAnswer(): InstanceStatus
+    {
+        $deadline = hrtime(true) + self::BOOT_SECONDS * 1_000_000_000;
+
+        while (hrtime(true) < $deadline) {
+            if (!$this->serverRuns()) {
+                return InstanceStatus::failed('the server exited: '.$this->logSummary());
+            }
+
+            $statusLine = $this->statusLineOf($this->listeningPort());
+
+            if (null !== $statusLine) {
+                return $this->statusFrom($statusLine);
+            }
+
+            usleep(100_000);
+        }
+
+        return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
+    }
+
+    private function runCommand(): int
+    {
+        // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
+        $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
+        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR];
+        $environment = [...$this->environment(), 'INTAKT_INSTANCE_URL' => 'http://127.0.0.1:'.$this->listeningPort(), ...$this->web->commandEnvironment()];
+
+        $process = proc_open($command, $descriptors, $pipes, $this->root, $environment);
+
+        if (false === $process) {
+            throw new RuntimeException('cannot start the command');
+        }
+
+        return $this->awaitExit($process);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -231,27 +226,6 @@ final class Instance
         $value = getenv($name);
 
         return false === $value || '' === $value || '0' === $value ? null : $value;
-    }
-
-    private function awaitAnswer(): InstanceStatus
-    {
-        $deadline = hrtime(true) + self::BOOT_SECONDS * 1_000_000_000;
-
-        while (hrtime(true) < $deadline) {
-            if (!$this->serverRuns()) {
-                return InstanceStatus::failed('the server exited: '.$this->logSummary());
-            }
-
-            $statusLine = $this->statusLineOf($this->listeningPort());
-
-            if (null !== $statusLine) {
-                return $this->statusFrom($statusLine);
-            }
-
-            usleep(100_000);
-        }
-
-        return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
     }
 
     private function serverRuns(): bool
@@ -291,14 +265,35 @@ final class Instance
         return array_values(array_filter($lines, static fn (string $line): bool => 1 !== preg_match(self::BUILT_IN_SERVER_LINE, $line)));
     }
 
-    private function readLog(): string
-    {
-        return is_file($this->logPath()) ? (string) file_get_contents($this->logPath()) : '';
-    }
-
     private function listeningPort(): ?int
     {
         return $this->web->port($this->readLog());
+    }
+
+    /**
+     * @param resource $process
+     */
+    private function awaitExit($process): int
+    {
+        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
+
+        while (hrtime(true) < $deadline) {
+            $state = proc_get_status($process);
+
+            if (!$state['running']) {
+                proc_close($process);
+
+                return $state['exitcode'];
+            }
+
+            usleep(50_000);
+        }
+
+        proc_terminate($process, 9);
+        proc_close($process);
+        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
+
+        return self::COMMAND_TIMED_OUT;
     }
 
     private function statusLineOf(?int $port): ?string
@@ -343,6 +338,11 @@ final class Instance
 
         proc_close($this->server);
         $this->server = null;
+    }
+
+    private function readLog(): string
+    {
+        return is_file($this->logPath()) ? (string) file_get_contents($this->logPath()) : '';
     }
 
     private function removeScratch(): void

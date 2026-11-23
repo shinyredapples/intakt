@@ -38,12 +38,6 @@ final class LedgerHaltsTest extends TestCase
     private HaltLedger $ledger;
     private LedgerHalts $halts;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new HaltLedger();
-        $this->halts = new LedgerHalts($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
-    }
-
     public function testARaisedHaltStandsAsACardNamingItsProjectCommitAndReason(): void
     {
         $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
@@ -180,6 +174,12 @@ final class LedgerHaltsTest extends TestCase
         } catch (HaltNotRecorded) {
             self::assertCount(1, $this->halts->standing());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new HaltLedger();
+        $this->halts = new LedgerHalts($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
     }
 
     private function unsigned(string $digit): MainViolation

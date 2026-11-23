@@ -65,15 +65,6 @@ final class GitHubAuthorTrustTest extends TestCase
     private MockClock $clock;
     private RateLimitReadings $readings;
 
-    protected function setUp(): void
-    {
-        $this->github = new RecordedTrust();
-        $this->logger = new RecordingLogger();
-        $this->key = AppKey::generate();
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = FreshReadings::at($this->clock);
-    }
-
     public function testAnAuthorWithWriteAccessIsTrusted(): void
     {
         self::assertTrue($this->isTrusted(RecordedTrust::PULL_BY_WRITER));
@@ -179,6 +170,15 @@ final class GitHubAuthorTrustTest extends TestCase
         (void) $trust->isAuthorTrusted(new ChangeId(RecordedTrust::PULL_BY_WRITER));
 
         self::assertCount(2, array_filter($this->github->requested, static fn (string $url): bool => str_ends_with($url, '/pulls/1')));
+    }
+
+    protected function setUp(): void
+    {
+        $this->github = new RecordedTrust();
+        $this->logger = new RecordingLogger();
+        $this->key = AppKey::generate();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
     }
 
     #[NoDiscard]

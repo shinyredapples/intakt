@@ -29,20 +29,6 @@ final class PhpGateDependencyStepTest extends TestCase
 
     private DependencyStep $step;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-dependency-step-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $step = new PhpGate()->dependencyStep(null);
-        self::assertNotNull($step);
-        $this->step = $step;
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheGenerationPointsTheRootPackageMetadataAtTheCheckedHeadNotAtTheHeadThatInstalled(): void
     {
         $this->project(['autoload' => ['classmap' => ['code/']]]);
@@ -734,6 +720,20 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertSame(0, $install->getExitCode(), $install->getErrorOutput());
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-dependency-step-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $step = new PhpGate()->dependencyStep(null);
+        self::assertNotNull($step);
+        $this->step = $step;
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
     // The lock for one source package, a git checkout of it at the locked commit and the installed.json that records it, because the guard compares the three.
     private function sourceProject(string $name, string $checkout = 'vendor/fixture/pkg'): void
     {
@@ -819,6 +819,14 @@ final class PhpGateDependencyStepTest extends TestCase
         new Filesystem()->dumpFile($this->directory.'/composer.json', json_encode($manifest, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
+    private function mustRun(string $command): string
+    {
+        $process = $this->runInProject($command);
+        self::assertTrue($process->isSuccessful(), $command."\n".$process->getErrorOutput());
+
+        return $process->getOutput();
+    }
+
     /**
      * @return array<mixed>
      */
@@ -828,14 +836,6 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertIsArray($contents);
 
         return $contents;
-    }
-
-    private function mustRun(string $command): string
-    {
-        $process = $this->runInProject($command);
-        self::assertTrue($process->isSuccessful(), $command."\n".$process->getErrorOutput());
-
-        return $process->getOutput();
     }
 
     /**

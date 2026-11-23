@@ -42,27 +42,6 @@ final class ShowStatusControllerTest extends WebTestCase
     private string $configuredDsn;
     private KernelBrowser $browser;
 
-    protected function setUp(): void
-    {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
-        $this->configuredDsn = is_string($configured) ? $configured : '';
-        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
-
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->queue()->setup();
-    }
-
-    protected function tearDown(): void
-    {
-        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
-
-        parent::tearDown();
-    }
-
     public function testTheStatusEndpointAnswersJsonThatValidatesAgainstTheDocumentedSchema(): void
     {
         $this->browser->request('GET', '/status');
@@ -124,6 +103,27 @@ final class ShowStatusControllerTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(200);
         self::assertSame('', (string) $this->browser->getResponse()->getContent());
+    }
+
+    protected function setUp(): void
+    {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
+        $this->configuredDsn = is_string($configured) ? $configured : '';
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->queue()->setup();
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+
+        parent::tearDown();
     }
 
     private function queue(): DoctrineTransport

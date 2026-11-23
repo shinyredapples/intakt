@@ -63,16 +63,6 @@ enum AiLab: string
         };
     }
 
-    // A family name only as a whole word, because "acme/gptish" is not a GPT; a namespace ends at its slash already.
-    private static function startsWith(string $part, string $marker): bool
-    {
-        if (!str_starts_with($part, $marker)) {
-            return false;
-        }
-
-        return str_ends_with($marker, '/') || 1 !== preg_match('/^[a-z]/', substr($part, strlen($marker)));
-    }
-
     private static function withoutHost(string $model): string
     {
         return explode(':', $model, 2)[0];
@@ -83,5 +73,15 @@ enum AiLab: string
         $slash = strrpos($model, '/');
 
         return false === $slash ? $model : substr($model, $slash + 1);
+    }
+
+    // A family name only as a whole word, because "acme/gptish" is not a GPT; a namespace ends at its slash already.
+    private static function startsWith(string $part, string $marker): bool
+    {
+        if (!str_starts_with($part, $marker)) {
+            return false;
+        }
+
+        return str_ends_with($marker, '/') || 1 !== preg_match('/^[a-z]/', substr($part, strlen($marker)));
     }
 }

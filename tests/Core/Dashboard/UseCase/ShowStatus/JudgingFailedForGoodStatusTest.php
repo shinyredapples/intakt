@@ -77,27 +77,6 @@ final class JudgingFailedForGoodStatusTest extends KernelTestCase
     private ?string $configuredDsn;
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
-        $this->configuredDsn = is_string($configured) ? $configured : null;
-        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
-
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->transport('messenger.transport.async')->setup();
-    }
-
-    protected function tearDown(): void
-    {
-        if (null === $this->configuredDsn) {
-            unset($_ENV[self::TRANSPORT_DSN]);
-        } else {
-            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
-        }
-
-        parent::tearDown();
-    }
-
     public function testStatusShowsARoundWhoseJudgingFailedForGoodAsAJudgingFailedOutcomeAndNoLongerInReview(): void
     {
         $roundId = $this->roundWhoseJudgingFailedForGood();
@@ -135,6 +114,27 @@ final class JudgingFailedForGoodStatusTest extends KernelTestCase
         self::assertLoggedError('error', sprintf('The judging of round %s failed for good; the round stays unjudged and is published as not reviewed.', $failure['round']));
         self::assertSame([[RoundFixture::CHANGE, $failure['round'], 'judging_failed', null]], array_map(static fn (array $outcome): array => [$outcome['change'], $outcome['round'], $outcome['end'], $outcome['decision']], $this->projectInStatus('alpha')['last_outcomes']));
         self::assertSame(0, $this->transport('messenger.transport.failed')->getMessageCount());
+    }
+
+    protected function setUp(): void
+    {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
+        $this->configuredDsn = is_string($configured) ? $configured : null;
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->transport('messenger.transport.async')->setup();
+    }
+
+    protected function tearDown(): void
+    {
+        if (null === $this->configuredDsn) {
+            unset($_ENV[self::TRANSPORT_DSN]);
+        } else {
+            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+        }
+
+        parent::tearDown();
     }
 
     // Only the panel and the vendor are the test's, because the proof is the installed wiring of both commands; the worker runs during the command's waits, because on an install a worker process runs beside it.

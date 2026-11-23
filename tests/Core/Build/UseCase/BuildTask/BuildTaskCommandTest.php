@@ -150,23 +150,6 @@ final class BuildTaskCommandTest extends TestCase
 
     private ?string $configuredRepository = null;
 
-    protected function setUp(): void
-    {
-        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
-        $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
-        $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
-        $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        $this->options = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1'];
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testItPrintsEachPassedStepAndTheEscapedTitle(): void
     {
         $tester = $this->execute(new InMemoryLedger(), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
@@ -325,6 +308,23 @@ final class BuildTaskCommandTest extends TestCase
         yield 'no image' => ['7', '--image', 'The --image option is required.'];
     }
 
+    protected function setUp(): void
+    {
+        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
+        $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
+        $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
+        $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        $this->options = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1'];
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
+
     private function displayOfTitle(string $title): string
     {
         $listed = Issues::task(7);
@@ -340,6 +340,14 @@ final class BuildTaskCommandTest extends TestCase
     private function execute(InMemoryLedger $ledger, BuildCheckout $checkout, array $input): CommandTester
     {
         return $this->tester($this->buildTask($this->listing(Issues::task(7)), $checkout, $ledger), $input);
+    }
+
+    private function listing(ListedIssue $task): IssueReads
+    {
+        $reads = self::createStub(IssueReads::class);
+        $reads->method('readOpen')->willReturn($task);
+
+        return $reads;
     }
 
     private function buildTask(IssueReads $issues, BuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
@@ -364,14 +372,6 @@ final class BuildTaskCommandTest extends TestCase
         $repositories->method('nameOf')->willReturn($this->configuredRepository);
 
         return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories));
-    }
-
-    private function listing(ListedIssue $task): IssueReads
-    {
-        $reads = self::createStub(IssueReads::class);
-        $reads->method('readOpen')->willReturn($task);
-
-        return $reads;
     }
 
     /**
