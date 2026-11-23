@@ -142,6 +142,30 @@ final readonly class ReviewedRound
         return [...array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => true === $outcome->started)];
     }
 
+    // Verdicts only, because failed and blocked reviewers give no opinion.
+    public function agreement(): string
+    {
+        $verdicts = $this->verdictsGivenIn($this);
+        $panel = max($this->reviewers, count($this->outcomesIn($this)));
+
+        if ([] === $verdicts) {
+            return '';
+        }
+
+        $kinds = array_values(array_unique(array_map(static fn (ReviewOutcome $outcome): string => lcfirst($outcome->plainWords()), $verdicts)));
+
+        if (1 !== count($kinds)) {
+            return 'The reviewers disagree';
+        }
+
+        return match (true) {
+            1 === $panel => 'The reviewer says '.$kinds[0],
+            count($verdicts) < $panel => count($verdicts).' of '.$panel.(1 === count($verdicts) ? ' says ' : ' say ').$kinds[0],
+            2 === $panel => 'Both say '.$kinds[0],
+            default => 'All '.$panel.' say '.$kinds[0],
+        };
+    }
+
     public function failedReviewers(): int
     {
         return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));
@@ -251,6 +275,33 @@ final readonly class ReviewedRound
     private function isReplayMarked(self $round): bool
     {
         return ReplayMark::Replay === $round->mark;
+    }
+
+    /**
+     * @return list<ReviewOutcome>
+     */
+    private function verdictsGivenIn(self $round): array
+    {
+        $verdicts = [];
+
+        foreach ($this->outcomesIn($round) as $reviewer) {
+            $outcome = $reviewer->outcome();
+
+            if (ReviewOutcome::Approved === $outcome || ReviewOutcome::ChangesRequested === $outcome) {
+                $verdicts[] = $outcome;
+            }
+        }
+
+        return $verdicts;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty list for `$this->outcomes`.
+    /**
+     * @return list<ReviewerOutcome>
+     */
+    private function outcomesIn(self $round): array
+    {
+        return $round->outcomes;
     }
 
     // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.

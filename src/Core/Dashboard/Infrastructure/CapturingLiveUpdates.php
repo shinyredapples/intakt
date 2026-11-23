@@ -38,29 +38,27 @@ final readonly class CapturingLiveUpdates implements LiveUpdates
     }
 
     #[Override]
-    public function publish(LiveEvent $event): void
+    public function publish(LiveEvent $event): bool
     {
         if ('' === $this->capture) {
-            $this->hub->publish($event);
-
-            return;
+            return $this->hub->publish($event);
         }
 
         $lock = $this->locks->createLock('dashboard-live-capture');
 
         // Waited for, and held across the publish and the append, because two workers publishing between each other's two steps would capture their updates in the other order than the hub sent them.
         if (!$this->capturedOrLogged($event, static fn () => $lock->acquire(true))) {
-            $this->hub->publish($event);
-
-            return;
+            return $this->hub->publish($event);
         }
 
         try {
-            $this->hub->publish($event);
+            $delivered = $this->hub->publish($event);
             $this->capturedOrLogged($event, fn () => $this->filesystem->appendToFile($this->capture, $this->format->lineOf(new CapturedUpdate($this->clock->now(), $event->topic, $event->turboStream))));
         } finally {
             $this->released($lock, $event);
         }
+
+        return $delivered;
     }
 
     private function capturedOrLogged(LiveEvent $event, callable $step): bool

@@ -8,6 +8,10 @@ const UNREACHABLE_AFTER_MS = 120000;
 const ACTIONS = 'form[method="post"] button[type="submit"]';
 // Marked in the page rather than remembered by the controller, because Turbo caches the page with the marks and a new controller restores it.
 const HELD = 'data-connection-held';
+// A line beside each held action, so a disabled button always says what it waits for; after one countdown without a connection it says why and what to do.
+const NOTE = 'data-connection-note';
+const EXPLAINED_AFTER_MS = RETRY_EVERY_S * 1000;
+const CONNECTING = 'Connecting to live updates…';
 
 export default class extends Controller {
     static targets = ['line', 'title', 'since', 'countdown', 'marker', 'frozen'];
@@ -87,8 +91,19 @@ export default class extends Controller {
             if (!action.disabled) {
                 action.disabled = true;
                 action.setAttribute(HELD, '');
+                action.after(this.heldNote());
             }
         });
+    }
+
+    heldNote() {
+        const note = document.createElement('p');
+        note.className = 'held-note';
+        note.setAttribute(NOTE, '');
+        note.setAttribute('role', 'status');
+        note.textContent = CONNECTING;
+
+        return note;
     }
 
     releaseActions() {
@@ -98,6 +113,13 @@ export default class extends Controller {
                 action.removeAttribute(HELD);
             }
         });
+        this.element.querySelectorAll(`[${NOTE}]`).forEach((note) => note.remove());
+    }
+
+    // Only a page the dashboard's own address serves gets this far, so its host and port (none on a default port) are the ones to open on the machine running Intakt.
+    explainHeldActions() {
+        const host = new URL(this.element.baseURI).host;
+        this.element.querySelectorAll(`[${NOTE}]`).forEach((note) => (note.textContent = explained(host)));
     }
 
     // The server renders elapsed times and nothing counts them on, so the time of the drop tells how old they are.
@@ -150,7 +172,14 @@ export default class extends Controller {
         this.countdownTarget.textContent = `${this.countdown} s`;
         this.lineTarget.hidden = false;
         this.markerTarget.hidden = false;
+        if (Date.now() - this.since >= EXPLAINED_AFTER_MS) {
+            this.explainHeldActions();
+        }
     }
+}
+
+function explained(host) {
+    return `No live connection, so this waits. Open http://${host} on the machine running Intakt, or reach it from another device through an SSH tunnel.`;
 }
 
 function clockTime(moment) {
