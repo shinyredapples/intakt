@@ -1,0 +1,21 @@
+{#- How a review works, drawn with the team instead of told: the change, two reviewers from two AI labs, the judge, To fix. The titles keep the technical words for anyone who hovers. -#}
+{%- set character = 'dashboard/components/character.html.twig' %}
+{%- set icon = 'dashboard/components/icon.html.twig' %}
+<ol class="review-strip" aria-label="How a review works">
+    <li title="The change under review">
+        <span class="rs-art rs-change">{{ include(icon, {name: 'pr'}, with_context = false) }}<span class="rs-lines"><span></span><span></span><span></span></span></span>
+        <span class="rs-label">The change</span>
+    </li>
+    <li title="Two reviewers, each a model from a different AI lab">
+        <span class="rs-art rs-pair">{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 48}, with_context = false) }}{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 48}, with_context = false) }}</span>
+        <span class="rs-label">Two AI labs</span>
+    </li>
+    <li title="The judge checks every finding against the change">
+        <span class="rs-art">{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}</span>
+        <span class="rs-label">Checks every finding</span>
+    </li>
+    <li title="The act list: the findings to fix now">
+        <span class="rs-art rs-fix">{% for i in 1..3 %}<span>{{ include(icon, {name: 'check', small: true}, with_context = false) }}<span></span></span>{% endfor %}</span>
+        <span class="rs-label">To fix</span>
+    </li>
+</ol>

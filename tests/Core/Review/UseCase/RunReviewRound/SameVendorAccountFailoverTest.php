@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -42,6 +43,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -76,6 +78,7 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[CoversClass(ReviewerMovesToAnotherAccount::class)]
 #[CoversClass(AccountLimitedVendor::class)]
 #[CoversClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[CoversClass(AccountPlatform::class)]
 #[CoversClass(AccountCooldownWindows::class)]
 #[UsesClass(ReviewerLeases::class)]
@@ -94,12 +97,6 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
 {
     private RoundFixture $fixture;
     private AccountCooldownWindows $cooldowns;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
-    }
 
     public function testAReviewerWhoseAccountIsOutIsQueuedAgainForAnImmediateRetry(): void
     {
@@ -151,6 +148,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
             LedgerEventKind::UsageRecorded,
             LedgerEventKind::UsageRecorded,
             LedgerEventKind::VerdictReceived,
+            LedgerEventKind::ReviewerFindingsRecorded,
         ], $this->fixture->ledgerKinds());
         self::assertSame(['anthropic.default'], $this->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
         self::assertSame(['anthropic.team'], $this->usageAccounts());
@@ -189,16 +187,10 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         self::assertSame(['anthropic.team', 'anthropic.team'], $this->usageAccounts());
     }
 
-    // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.
-    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor): void
+    protected function setUp(): void
     {
-        try {
-            $this->fixture->deliver($message, $vendor);
-            self::fail('The limited account gave a verdict.');
-        } catch (ReviewerMovesToAnotherAccount) {
-        }
-
-        $this->fixture->deliver($message, $vendor);
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
     private function vendorOnTwoAccounts(): Vendor
@@ -216,13 +208,25 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
             return $answer;
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(300)), 'team' => $team];
-        $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger());
+        $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, self::createStub(ReviewServerAccesses::class));
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+    }
+
+    // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.
+    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor): void
+    {
+        try {
+            $this->fixture->deliver($message, $vendor);
+            self::fail('The limited account gave a verdict.');
+        } catch (ReviewerMovesToAnotherAccount) {
+        }
+
+        $this->fixture->deliver($message, $vendor);
     }
 
     /**

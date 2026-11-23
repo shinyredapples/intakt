@@ -26,6 +26,15 @@ enum BoardColumn: string
         };
     }
 
+    // The feature that fills these columns is not running yet, so while empty they give their width to what works today and the board names them in one Coming next line instead (#3154); a column that holds an item shows again.
+    public function foldsIntoComingNext(int $count): bool
+    {
+        return 0 === $count && match ($this) {
+            self::Backlog, self::Ready, self::Planned, self::Building, self::Checking, self::Merging => true,
+            default => false,
+        };
+    }
+
     // What the column will hold and when, because "Nothing here" tells a newcomer nothing about the board, on the first day or after (#2067, D7; #2731).
     public function emptyLine(): string
     {

@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
@@ -58,6 +59,21 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::HeadForgotten, ['project' => $project, 'change' => $closed->id->value, 'head' => $closed->head->hash]);
     }
 
+    public function changeHandedToIntakt(string $project, OpenChange $change): void
+    {
+        $this->append(LedgerEventKind::ChangeHandedToIntakt, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+    }
+
+    public function handOverPublicationQueued(string $project, OpenChange $change): void
+    {
+        $this->append(LedgerEventKind::HandOverPublicationQueued, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+    }
+
+    public function changeNotHandedToIntakt(string $project, OpenChange $change): void
+    {
+        $this->append(LedgerEventKind::ChangeNotHandedToIntakt, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+    }
+
     public function headHandedOver(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
     {
         $this->append(LedgerEventKind::HeadHandedOver, $this->failureOf($failure, $failures, $retryAt));
@@ -82,7 +98,7 @@ final readonly class WatcherLedger
     // Read with the board's own rule over the project's lines, because a stored result must be compared with what the board shows, not with the last line, which the board may have passed over.
     public function failingMainOf(string $project): ?FailingMain
     {
-        $lines = $this->ledger->readMentioning(['"project":'.json_encode($project, JSON_THROW_ON_ERROR)]);
+        $lines = $this->ledger->readMentioning(new Mentions('"project":'.json_encode($project, JSON_THROW_ON_ERROR)));
 
         return array_find($this->failingMains->in($lines), static fn (FailingMain $failing): bool => $project === $failing->project);
     }

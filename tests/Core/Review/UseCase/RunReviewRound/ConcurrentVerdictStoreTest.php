@@ -27,21 +27,13 @@ final class ConcurrentVerdictStoreTest extends KernelTestCase
     private SecondWorker $other;
     private BeforeFirstAppendOf $ledger;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->fixture->useWalOnSqlite();
-        $this->first = new ScriptedVendor();
-        $this->second = new ScriptedVendor();
-    }
-
     public function testTwoVerdictsStoredAtOnceAreBothStoredWithOneCallToEachReviewer(): void
     {
         $round = $this->storeBothVerdictsAtOnce();
 
         self::assertSame([1, 1], [$this->first->calls, $this->second->calls]);
         self::assertSame([ReviewerState::Verdict, ReviewerState::Verdict], [$this->stateOf(0), $this->stateOf(1)]);
-        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerFindingsRecorded, LedgerEventKind::ReviewerFindingsRecorded], $this->fixture->ledgerKinds());
         self::assertSame([LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->other->ledger->kinds());
         self::assertSame(RoundState::Complete, $this->fixture->round($round)->state());
     }
@@ -56,6 +48,14 @@ final class ConcurrentVerdictStoreTest extends KernelTestCase
 
         self::assertSame(['the event was not stored: '.LockWaitTimeoutException::class], $this->ledger->failures);
         self::assertSame(1, $this->first->calls);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->fixture->useWalOnSqlite();
+        $this->first = new ScriptedVendor();
+        $this->second = new ScriptedVendor();
     }
 
     private function storeBothVerdictsAtOnce(): string

@@ -1,0 +1,39 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Waiting on you - Intakt{% endblock %}
+
+{# Roomy, because DESIGN.md's split page grows to 1720 px from 1500 px with the panels beside the list. #}
+{% block content_width %} roomy{% endblock %}
+
+{# The same project trail as Reviews, but no rail section: this page has its own rail entry, so Projects is not marked current beside it. The notices on this page belong to no project, so no filter hides them. #}
+{% block body %}
+{% if project_trail is not empty %}
+{{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
+    {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
+    {label: project_trail},
+], project_trail: project_trail, current: false}, with_context = false) }}
+{% endif %}
+{% if page.items is empty %}
+<div class="page-head">
+    <div>
+        <h1>Waiting on you</h1>
+        <p class="lead" id="waiting-lead">{{ include('dashboard/_waiting_lead.html.twig', {items: page.items}, with_context = false) }}</p>
+    </div>
+</div>
+{% else %}
+{# The octopus conducts once, at the top; each card shows the role who waits on the owner. No Why and no command to copy: the card says what needs you and what one tap does. #}
+<div class="wait-hero needs">
+    {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 96}, with_context = false) }}
+    <div>
+        <p class="wait-kicker">Waiting on you</p>
+        <h1>{{ page.items|length == 1 ? '1 thing needs you' : page.items|length ~ ' things need you' }}</h1>
+        <p class="lead">Everything else keeps running. Oldest first.</p>
+    </div>
+</div>
+{% endif %}
+{# The list before the panels, so a phone shows it first and the keyboard reaches the items before the panels. #}
+<div class="split">
+{{ include('dashboard/_waiting_list.html.twig', {items: page.items, now: now}, with_context = false) }}
+{{ include('dashboard/_waiting_side.html.twig', {page: page, now: now}, with_context = false) }}
+</div>
+{% endblock %}

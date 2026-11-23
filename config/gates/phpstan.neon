@@ -28,6 +28,8 @@ rules:
     - Intakt\Gates\PhpStan\ContainerUnknownHasIdRule
     - Intakt\Gates\PhpStan\ContainerUnknownParameterRule
     - Intakt\Gates\PhpStan\ContainerUnknownGetIdRule
+    - Intakt\Gates\PhpStan\BareSerializerFormatRule
+    - Intakt\Gates\PhpStan\HelperOrderRule
 
 services:
     -
@@ -92,3 +94,51 @@ services:
             root: %currentWorkingDirectory%
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NoStaticPropertyRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\RawPromptMessageRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\RawPromptMessageCallableRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NoPublicSetterRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NoMagicMethodRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NoPublicTraitSetterRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\TraitSetterDeclarationCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\TraitSetterUseCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\AbstractTraitSetterUseCollector
+        tags:
+            - phpstan.collector

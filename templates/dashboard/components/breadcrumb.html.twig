@@ -2,7 +2,7 @@
 <nav class="crumbs" aria-label="Breadcrumb"{% if project_trail is defined %} data-project-trail="{{ project_trail }}"{% endif %}>
     <ol>
         {%- for crumb in crumbs %}
-        <li>{% if loop.last %}<span aria-current="page">{{ crumb.label }}</span>{% else %}<a href="{{ crumb.href }}">{{ crumb.label }}</a>{% endif %}</li>
+        <li>{% if loop.last %}<span{% if (current ?? true) is not same as(false) %} aria-current="page"{% endif %}>{{ crumb.label }}</span>{% else %}<a href="{{ crumb.href }}">{{ crumb.label }}</a>{% endif %}</li>
         {%- endfor %}
     </ol>
 </nav>

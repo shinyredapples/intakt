@@ -4,9 +4,6 @@ const COPY_BUTTON = 'button[data-copy]';
 const MESSAGE = 'data-copy-message';
 const COPIED = 'Copied';
 const FAILED = 'Copy failed';
-const WHY = 'details.why';
-// A wide screen shows every Why, so only a phone has one to close.
-const PHONE = '(max-width: 760px)';
 
 const labels = new WeakMap();
 const timers = new WeakMap();
@@ -21,16 +18,13 @@ export function copyCommands(page, view) {
         }
     });
     // A page Turbo keeps for going back must come back saying Copy, with no timer left and no write still pending that could change it.
-    page.addEventListener('turbo:before-cache', () => page.querySelectorAll(COPY_BUTTON).forEach((button) => {
-        clicks.delete(button);
-        if (button.hasAttribute(MESSAGE)) {
-            restore(button, view);
-        }
-    }));
-    page.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && view.matchMedia(PHONE).matches) {
-            closeWhys(page, event.target);
-        }
+    page.addEventListener('turbo:before-cache', () => {
+        page.querySelectorAll(COPY_BUTTON).forEach((button) => {
+            clicks.delete(button);
+            if (button.hasAttribute(MESSAGE)) {
+                restore(button, view);
+            }
+        });
     });
 }
 
@@ -76,14 +70,4 @@ function restore(button, view) {
     timers.delete(button);
     button.removeAttribute(MESSAGE);
     button.textContent = labels.get(button);
-}
-
-// Closes every open Why, wherever the focus went since; only a focus the closing hides moves back to its summary.
-function closeWhys(page, focus) {
-    page.querySelectorAll(`${WHY}[open]`).forEach((why) => {
-        why.open = false;
-        if (focus?.closest?.(WHY) === why) {
-            why.querySelector('summary').focus();
-        }
-    });
 }

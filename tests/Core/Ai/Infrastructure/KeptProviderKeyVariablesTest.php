@@ -37,13 +37,6 @@ final class KeptProviderKeyVariablesTest extends TestCase
     private const string BODY = 'abcdefgh12345678';
     private const array COMPATIBLE = ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'];
 
-    protected function tearDown(): void
-    {
-        foreach (self::COMPATIBLE as $name) {
-            unset($_SERVER[$name], $_ENV[$name]);
-        }
-    }
-
     public function testAKeptAnthropicKeyLoadsAsItsProviderVariable(): void
     {
         $key = 'sk-ant-'.self::BODY;
@@ -133,6 +126,22 @@ final class KeptProviderKeyVariablesTest extends TestCase
         self::assertSame(['HF_TOKEN' => 'hf_'.self::BODY], $this->variablesOf('hf_'.self::BODY, [$failing]));
     }
 
+    public function testAnotherLoaderThatFailsIsLoggedWithOnlyAFixedMessage(): void
+    {
+        $failing = self::createStub(EnvVarLoaderInterface::class);
+        $failing->method('loadEnvVars')->willThrowException(new RuntimeException('vault-content-marker'));
+        $providers = new SymfonyAiProviderCatalog();
+        $keys = self::createStub(KeptProviderKeys::class);
+        $keys->method('read')->willReturn(ProviderKey::recognise('hf_'.self::BODY, $providers));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            'Another env loader failed, so its variable counts as set and the kept key does not stand in for it.',
+            ['loader' => $failing::class, 'exception_class' => RuntimeException::class],
+        );
+
+        new KeptProviderKeyVariables($keys, $providers, $logger, [$failing])->loadEnvVars();
+    }
+
     public function testAKeptKeyOfAProviderTheCatalogNoLongerListsLoadsNoVariable(): void
     {
         $keys = self::createStub(KeptProviderKeys::class);
@@ -159,6 +168,13 @@ final class KeptProviderKeyVariablesTest extends TestCase
         self::assertSame([], new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog(), $logger)->loadEnvVars());
     }
 
+    protected function tearDown(): void
+    {
+        foreach (self::COMPATIBLE as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
+        }
+    }
+
     /**
      * @param list<EnvVarLoaderInterface> $otherLoaders
      *
@@ -181,12 +197,6 @@ final class KeptProviderKeyVariablesTest extends TestCase
         return new KeptProviderKeyVariables($keys, $providers, otherLoaders: $otherLoaders);
     }
 
-    // Returns nothing because the processor reads a plain string variable itself and calls this only for a prefix it chains.
-    private function unused(): null
-    {
-        return null;
-    }
-
     /**
      * @param array<string, string> $secrets
      */
@@ -196,5 +206,11 @@ final class KeptProviderKeyVariablesTest extends TestCase
 
         // The vault's loader comes first because the container ranks it above the kept key's, and the kept key gets it too, as the container hands it every other loader.
         return new EnvVarProcessor(new Container(), new ArrayIterator([$vault, $this->loaderOf('hf_'.self::BODY, [$vault])]));
+    }
+
+    // Returns nothing because the processor reads a plain string variable itself and calls this only for a prefix it chains.
+    private function unused(): null
+    {
+        return null;
     }
 }

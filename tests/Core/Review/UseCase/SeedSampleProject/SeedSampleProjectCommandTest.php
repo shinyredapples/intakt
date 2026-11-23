@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\ModelPrice;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -53,6 +54,7 @@ use Symfony\Component\Yaml\Yaml;
 #[UsesClass(Verdict::class)]
 #[UsesClass(Decision::class)]
 #[UsesClass(SampleProjectData::class)]
+#[UsesClass(ModelPrice::class)]
 final class SeedSampleProjectCommandTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/../../../../../fixtures/sample-repository';
@@ -62,19 +64,6 @@ final class SeedSampleProjectCommandTest extends TestCase
     private string $compatibleBaseUrl;
 
     private SampleProjectData $data;
-
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->data = new SampleProjectData();
-        $this->compatibleBaseUrl = $this->data->routerUrl()->toRawString();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
 
     /**
      * @return iterable<string, array{list<Provider>}>
@@ -109,7 +98,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         }
     }
 
-    public function testWithOnlyTheRouterTheSecondMakersModelIsPriced(): void
+    public function testWithOnlyTheRouterTheSecondAiLabsModelIsPriced(): void
     {
         $this->seed(Provider::OpenAiCompatible);
 
@@ -143,7 +132,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringContainsString('its panel on anthropic and openai', $display);
     }
 
-    public function testAHuggingFaceTokenAlonePutsTheTwoReviewersOnModelsOfTwoMakers(): void
+    public function testAHuggingFaceTokenAlonePutsTheTwoReviewersOnModelsOfTwoAiLabs(): void
     {
         $display = $this->seed(Provider::OpenAiCompatible)->getDisplay();
 
@@ -198,14 +187,14 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringContainsString('The price table is dated 2030-01-02', new Filesystem()->readFile($this->configuration()));
     }
 
-    public function testWithOnlyTheRouterTheSecondMakerIsTheOneTheDataFileNames(): void
+    public function testWithOnlyTheRouterTheSecondAiLabIsTheOneTheDataFileNames(): void
     {
         $this->givenADataFile();
         $this->compatibleBaseUrl = 'https://router.example.test';
 
         $this->seed(Provider::OpenAiCompatible);
 
-        self::assertSame(['made-up-router', 'made-up-second-maker'], $this->reviewerModels());
+        self::assertSame(['made-up-router', 'made-up-second-lab'], $this->reviewerModels());
     }
 
     public function testTheOpenAiCompatibleEndpointCountsAtTheRouterUrlOfTheDataFile(): void
@@ -340,6 +329,19 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringNotContainsString('mcp/owner', $display);
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->data = new SampleProjectData();
+        $this->compatibleBaseUrl = $this->data->routerUrl()->toRawString();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
     private function seed(Provider ...$keyed): CommandTester
     {
         $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()));
@@ -349,20 +351,20 @@ final class SeedSampleProjectCommandTest extends TestCase
         return $tester;
     }
 
-    private function tester(SeedSampleProjectCommand $command): CommandTester
-    {
-        $application = new Application();
-        $application->addCommand($command);
-
-        return new CommandTester($application->find('intakt:sample:seed'));
-    }
-
     private function project(Provider ...$keyed): SampleProject
     {
         $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
 
         return new SampleProject($accounts, $this->compatibleBaseUrl, $this->data);
+    }
+
+    private function tester(SeedSampleProjectCommand $command): CommandTester
+    {
+        $application = new Application();
+        $application->addCommand($command);
+
+        return new CommandTester($application->find('intakt:sample:seed'));
     }
 
     // Made-up names, prices and date, so a value that still came from code instead of the data file would show.
@@ -377,12 +379,12 @@ final class SeedSampleProjectCommandTest extends TestCase
                 'openai' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
                 'openai_compatible' => ['strong' => 'made-up-router', 'standard' => 'made-up-router', 'light' => 'made-up-router'],
             ],
-            'second_maker' => 'made-up-second-maker',
+            'second_lab' => 'made-up-second-lab',
             'prices' => [
                 'made-up-strong' => ['input' => 7, 'output' => 70],
                 'made-up-standard' => ['input' => 0.7, 'output' => 7],
                 'made-up-router' => ['input' => 1, 'output' => 2],
-                'made-up-second-maker' => ['input' => 3, 'output' => 4],
+                'made-up-second-lab' => ['input' => 3, 'output' => 4],
             ],
         ]));
         $this->data = new SampleProjectData($file);

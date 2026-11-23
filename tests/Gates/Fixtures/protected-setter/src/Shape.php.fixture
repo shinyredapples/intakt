@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+abstract class Shape
+{
+    private string $label = '';
+
+    public function label(): string
+    {
+        return $this->label;
+    }
+
+    protected function setLabel(string $label): void
+    {
+        $this->label = $label;
+    }
+}

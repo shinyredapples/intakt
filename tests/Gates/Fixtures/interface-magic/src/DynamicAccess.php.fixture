@@ -1,0 +1,10 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+interface DynamicAccess
+{
+    public function __get(string $name): mixed;
+}

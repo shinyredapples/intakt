@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncode;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
 
@@ -29,7 +30,7 @@ final readonly class ReviewReport
 
     public function asJson(ChangeReview $review): string
     {
-        return $this->serializer->serialize(ReviewOutput::of($review), 'json', [
+        return $this->serializer->serialize(ReviewOutput::of($review), JsonEncoder::FORMAT, [
             AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS,
             JsonEncode::OPTIONS => JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
         ]);
@@ -73,6 +74,20 @@ final readonly class ReviewReport
         return $lines;
     }
 
+    private function findings(int $count): string
+    {
+        return $this->figures->marked($count.' findings', ReviewOutput::KINDS['findings']);
+    }
+
+    private function place(Finding $finding): string
+    {
+        if (null === $finding->file) {
+            return '(no file)';
+        }
+
+        return $this->text->of($finding->file).(null === $finding->line ? '' : ':'.$finding->line);
+    }
+
     // Only an entry the judge gave a note, so a P1 or P2 the judge did not argue with reads as before the note existed.
     private function judgeLine(Finding $finding): ?string
     {
@@ -82,22 +97,6 @@ final readonly class ReviewReport
         }
 
         return 'judge: '.$this->text->of($note);
-    }
-
-    // An unknown cost has no figure to mark, because there is nothing to mislabel; an estimate names the day of its price list, or says it is not recorded.
-    private function cost(Cost $cost): string
-    {
-        $reading = $cost->reading($this->text->of(...));
-        if (null === $cost->usd) {
-            return $reading;
-        }
-
-        return $this->figures->marked($reading, ReviewOutput::KINDS['cost']).', '.$cost->priceDateReading();
-    }
-
-    private function findings(int $count): string
-    {
-        return $this->figures->marked($count.' findings', ReviewOutput::KINDS['findings']);
     }
 
     // Only the parts a vendor reported, so a round without caching reads as before.
@@ -111,12 +110,14 @@ final readonly class ReviewReport
         return ' ('.implode(', ', array_map(static fn (string $label, int $count): string => $count.' '.$label, array_keys($parts), $parts)).')';
     }
 
-    private function place(Finding $finding): string
+    // An unknown cost has no figure to mark, because there is nothing to mislabel; an estimate names the day of its price list, or says it is not recorded.
+    private function cost(Cost $cost): string
     {
-        if (null === $finding->file) {
-            return '(no file)';
+        $reading = $cost->reading($this->text->of(...));
+        if (null === $cost->usd) {
+            return $reading;
         }
 
-        return $this->text->of($finding->file).(null === $finding->line ? '' : ':'.$finding->line);
+        return $this->figures->marked($reading, ReviewOutput::KINDS['cost']).', '.$cost->priceDateReading();
     }
 }

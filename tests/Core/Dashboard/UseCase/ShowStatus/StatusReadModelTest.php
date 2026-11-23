@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\ShowStatus;
 
+use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\SharedHold;
@@ -41,9 +42,11 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
-use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use JsonSchema\Validator;
@@ -84,6 +87,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 #[UsesClass(TokenFigures::class)]
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(FailureInWords::class)]
+#[UsesClass(RoundEnding::class)]
 final class StatusReadModelTest extends TestCase
 {
     private const string SCHEMA = __DIR__.'/../../../../../docs/user/status.schema.json';
@@ -104,10 +108,10 @@ final class StatusReadModelTest extends TestCase
     /** @var array<string, ReplayMark> */
     private array $storedMarks = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
+    private ?RoundEnding $ending = null;
+
+    /** @var array<string, RoundEnding> */
+    private array $endings = [];
 
     public function testTheStatusValidatesAgainstTheDocumentedSchema(): void
     {
@@ -329,7 +333,7 @@ final class StatusReadModelTest extends TestCase
         $project = $this->projectOf($this->read(), 'alpha');
 
         self::assertSame([], $project['lanes']['review']);
-        self::assertSame([['change' => '7', 'mark' => 'live', 'round' => 'r1', 'number' => 1, 'decision' => 'approve', 'judged_at' => '2026-10-28T12:00:00+00:00']], $project['last_outcomes']);
+        self::assertSame([['change' => '7', 'mark' => 'live', 'round' => 'r1', 'number' => 1, 'end' => 'judged', 'decision' => 'approve', 'judged_at' => '2026-10-28T12:00:00+00:00']], $project['last_outcomes']);
     }
 
     public function testTheEarlierJudgedRoundOfAChangeInReviewAgainIsItsLastOutcome(): void
@@ -350,6 +354,75 @@ final class StatusReadModelTest extends TestCase
         $this->ledger->judgeRound('r1');
 
         self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['last_outcomes'], 'decision'));
+    }
+
+    public function testARoundWhoseJudgingFailedForGoodIsAFailedLastOutcomeAndLeavesTheLane(): void
+    {
+        $this->ending = new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed');
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->answer('r1', 'correctness', 0);
+
+        $project = $this->projectOf($this->read(), 'alpha');
+
+        self::assertSame([], $project['lanes']['review']);
+        self::assertSame([['change' => '7', 'mark' => 'live', 'round' => 'r1', 'number' => 1, 'end' => 'judging_failed', 'decision' => null, 'judged_at' => null]], $project['last_outcomes']);
+    }
+
+    public function testAJudgingThatFailedForGoodAfterAnEarlierJudgedRoundIsTheChangesLastOutcome(): void
+    {
+        $this->ending = new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed');
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->judgeRound('r1');
+        $this->ledger->startRecordedRoundOf('7', 'r2', 2);
+
+        self::assertSame([['r2', 'judging_failed']], array_map(static fn (array $entry): array => [$entry['round'], $entry['end']], $this->projectOf($this->read(), 'alpha')['last_outcomes']));
+    }
+
+    public function testAFailedJudgingStaysTheChangesLastOutcomeWhileItsNextRoundRuns(): void
+    {
+        $this->endings = ['r1' => new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed')];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->startRecordedRoundOf('7', 'r2', 2);
+
+        $project = $this->projectOf($this->read(), 'alpha');
+
+        self::assertSame([['r1', 'judging_failed']], array_map(static fn (array $entry): array => [$entry['round'], $entry['end']], $project['last_outcomes']));
+        self::assertSame(['r2'], array_column($project['lanes']['review'], 'round'));
+    }
+
+    public function testAFailedJudgingAfterAJudgedRoundStaysTheLastOutcomeWhileAThirdRoundRuns(): void
+    {
+        $this->endings = ['r2' => new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed')];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->judgeRound('r1');
+        $this->ledger->startRecordedRoundOf('7', 'r2', 2);
+        $this->ledger->startRecordedRoundOf('7', 'r3', 3);
+
+        self::assertSame([['r2', 'judging_failed']], array_map(static fn (array $entry): array => [$entry['round'], $entry['end']], $this->projectOf($this->read(), 'alpha')['last_outcomes']));
+    }
+
+    public function testAJudgingFailureRecordedAfterTenJudgmentsIsTheNewestOfTheTenLatestOutcomes(): void
+    {
+        $this->endings = ['failed' => new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed', new DateTimeImmutable('2026-10-28T12:05:00+00:00'))];
+        $this->ledger->startRecordedRoundOf('11', 'failed', 1);
+
+        foreach (range(1, 10) as $change) {
+            $this->ledger->startRecordedRoundOf((string) $change, 'r'.$change, 1);
+            $this->ledger->judgeRoundAt('r'.$change, new DateTimeImmutable('2026-10-28T12:01:00+00:00'));
+        }
+
+        $outcomes = $this->projectOf($this->read(), 'alpha')['last_outcomes'];
+
+        self::assertCount(10, $outcomes);
+        self::assertSame(['failed', 'judging_failed'], [$outcomes[0]['round'], $outcomes[0]['end']]);
+    }
+
+    public function testARoundThatFailedInItsJudgingStillValidatesAgainstTheDocumentedSchema(): void
+    {
+        $this->ending = new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed');
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+
+        self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
     }
 
     public function testOnlyTheTenLatestOutcomesOfAProjectAreListed(): void
@@ -472,6 +545,11 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([...array_column(Decision::cases(), 'value'), null], $this->schemaAt(...$project, ...['last_outcomes', 'items', 'properties', 'decision', 'enum']));
     }
 
+    public function testTheSchemaNamesEveryRoundEndTheCodeHas(): void
+    {
+        self::assertSame(array_column(RoundEnds::cases(), 'value'), $this->schemaAt('properties', 'projects', 'items', 'properties', 'last_outcomes', 'items', 'properties', 'end', 'enum'));
+    }
+
     public function testAProjectFlaggedAsReplayAndItsReviewsAreMarkedAsReplay(): void
     {
         $this->replays = ['alpha'];
@@ -542,6 +620,11 @@ final class StatusReadModelTest extends TestCase
         self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), [...(array) $this->schemaAt(...$build, ...['outcome', 'enum']), BuildStepOutcome::Asked->value]);
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+    }
+
     private function schemaAt(string ...$path): mixed
     {
         $node = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
@@ -578,6 +661,33 @@ final class StatusReadModelTest extends TestCase
         return $project;
     }
 
+    private function queueHolding(int $messages): ReceiverInterface
+    {
+        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
+        $queue->method('getMessageCount')->willReturn($messages);
+        self::assertInstanceOf(ReceiverInterface::class, $queue);
+
+        return $queue;
+    }
+
+    private function readModel(string $redacting = ''): StatusReadModel
+    {
+        $holds = self::createStub(Holds::class);
+        $holds->method('sharedInEffect')->willReturn($this->holds);
+        $redactor = self::createStub(Redactor::class);
+        $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::none());
+        $ledger = $this->readFrom ?? $this->ledger;
+        $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
+        $endings = self::createStub(RoundEndings::class);
+        $endings->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
+        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
+
+        return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
+    }
+
     /**
      * @return list<string>
      */
@@ -591,30 +701,5 @@ final class StatusReadModelTest extends TestCase
         $errors = $validator->getErrors();
 
         return array_map(static fn (array $error): string => $error['property'].': '.$error['message'], $errors);
-    }
-
-    private function readModel(string $redacting = ''): StatusReadModel
-    {
-        $holds = self::createStub(Holds::class);
-        $holds->method('sharedInEffect')->willReturn($this->holds);
-        $redactor = self::createStub(Redactor::class);
-        $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-        $ledger = $this->readFrom ?? $this->ledger;
-        $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
-        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
-
-        return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
-    }
-
-    private function queueHolding(int $messages): ReceiverInterface
-    {
-        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
-        $queue->method('getMessageCount')->willReturn($messages);
-        self::assertInstanceOf(ReceiverInterface::class, $queue);
-
-        return $queue;
     }
 }

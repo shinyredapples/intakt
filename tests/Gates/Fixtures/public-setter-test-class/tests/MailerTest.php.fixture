@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class MailerTest
+{
+    private string $sender = '';
+
+    public function set_sender(string $sender): void
+    {
+        $this->sender = $sender;
+    }
+
+    public function sender(): string
+    {
+        return $this->sender;
+    }
+}

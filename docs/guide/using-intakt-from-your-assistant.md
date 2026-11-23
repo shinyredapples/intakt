@@ -31,15 +31,19 @@ When a review ends, its answer says how it ended, in one of three ways:
 - **judging failed:** the reviewers reported, but the judge could not finish. The decision is blocked, with the reason that the judging failed.
 - **no outcome in time:** the round did not end within its time limit, for example because no review worker was running. The decision is blocked, with the reason "no outcome in time". Start the worker (`messenger:consume async`) and review again.
 
-The dashboard's review page shows the same ends in the same words: a round that was never judged says **Blocked** with the reason "the judging failed" or "no outcome in time".
+The dashboard's review page shows the same two ends with the same reasons: a round whose judging failed says **Failed** with the reason "the judging failed", and a round with no outcome in time says **Blocked** with the reason "no outcome in time".
 
-The terminal command below blocks for the same two reasons.
+The terminal command below blocks for both reasons (exit code 11).
+
+### The judge's note on the act list
+
+The act list is what the builder must fix. A serious finding (P1 or P2) always stays on it, even when the judge thinks the reviewer is wrong or the fix belongs elsewhere. In that case the judge writes one sentence saying why, and Intakt keeps it beside the finding: the **judge's note**. It is a second opinion for whoever fixes the finding, not a pass to skip it. Your assistant reads it as `judge_note` on the entry, and the terminal command prints it on a line starting `judge:` under the finding. An entry the judge agreed with has no note.
 
 Your assistant can also read one thing that is not a tool: the **round findings** (`round_findings`, built), every finding the reviewers of a round reported. It only reads and changes nothing.
 
 How it stays safe:
 - **Every tool is labeled** with what it does ("only reads", "changes something"), so your assistant knows before it calls.
-- **Starting a review needs a token** you set in Intakt's config, and writing must be switched on there too. Without both, your assistant can read but not start anything ([how to set it up](../user/mcp.md)).
+- **Starting a review needs a token** you set in Intakt's config, and writing must be switched on there too. Without both, your assistant can read but not start anything ([how to set it up](../reference/mcp.md)).
 - **Intakt decides, not the model:** whether a tool may write is decided by Intakt's own rules, never by what the assistant asks for.
 - **Approvals are not tools:** no MCP tool can approve a merge or a protected change. That stays your click or comment on the forge.
 

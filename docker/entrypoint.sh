@@ -61,10 +61,58 @@ rm -f "$READY_MARK"
 
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
-# The cache directory is removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
+# Resolved as Symfony's kernel resolves APP_CACHE_DIR and APP_BUILD_DIR, so the folder removed is the one the kernel compiles into.
+kernel_dir() {
+    local dir=$1
+    [[ $dir == /* ]] || dir="$PWD/$dir"
+    echo "$dir/$2"
+}
+
+# The cache and build folders are removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
 rebuild_container() {
-    rm -rf "var/cache/${APP_ENV:-prod}"
+    local out env cache build
+    local -a values
+    # A plain assignment, so a read that fails ends the start here, before anything is removed.
+    out=$(kernel_values)
+    mapfile -t values <<< "$out"
+    # The read prints each value behind its name; anything else (a line more or less, another order) would shift a value into another one's place, so nothing is removed then.
+    if [[ ${#values[@]} -ne 3 || ${values[0]} != APP_ENV=* || ${values[1]} != APP_CACHE_DIR=* || ${values[2]} != APP_BUILD_DIR=* ]]; then
+        echo "intakt: the read of the kernel's environment and folders did not print exactly APP_ENV, APP_CACHE_DIR and APP_BUILD_DIR, so its old container cannot be removed" >&2
+        exit 1
+    fi
+    env=${values[0]#APP_ENV=}
+    cache=${values[1]#APP_CACHE_DIR=}
+    build=${values[2]#APP_BUILD_DIR=}
+    if [[ -z $env || $env == */* ]]; then
+        echo "intakt: could not read the kernel's environment, so its old container cannot be removed" >&2
+        exit 1
+    fi
+    if [[ -n $cache ]]; then rm -rf "$(kernel_dir "$cache" "$env")"; else rm -rf "var/cache/$env"; fi
+    [[ -z $build ]] || rm -rf "$(kernel_dir "$build" "$env")"
     php bin/console cache:warmup --no-interaction
+}
+
+# Prints APP_ENV, APP_CACHE_DIR and APP_BUILD_DIR as NAME=value, one per line, as bin/console sees them: Symfony Runtime loads the dotenv files with the runtime options bin/console gets (a dotenv_path, an APP_ENV a dotenv file sets), and a value in the environment wins. The environment is APP_ENV also when an env_var_name option names another variable, because bin/console passes APP_ENV to the kernel. A value with a control character ends the read before anything is printed, because a line break would read as two values and bash drops a NUL byte, so either would name another folder. Built from the options here instead of through vendor/autoload_runtime.php, which takes the project folder from where vendor really lies; the project folder is the working folder, as for bin/console in the image.
+kernel_values() {
+    php -r '
+        require "vendor/autoload.php";
+        $options = $_SERVER["APP_RUNTIME_OPTIONS"] ?? $_ENV["APP_RUNTIME_OPTIONS"] ?? [];
+        if (is_string($options)) {
+            $options = json_decode($options, true, 512, JSON_THROW_ON_ERROR);
+        }
+        $options += ["project_dir" => getcwd()];
+        new Symfony\Component\Runtime\SymfonyRuntime($options);
+        $lines = "";
+        foreach (["APP_ENV", "APP_CACHE_DIR", "APP_BUILD_DIR"] as $name) {
+            $value = $_SERVER[$name] ?? "";
+            if (!is_string($value) || 1 === preg_match("/[\\x00-\\x1f\\x7f]/", $value)) {
+                fwrite(STDERR, "intakt: $name holds a control character, so the folder it names cannot be read and nothing is removed\n");
+                exit(1);
+            }
+            $lines .= "$name=$value\n";
+        }
+        echo $lines;
+    '
 }
 
 # Assigned apart from the export, because export would hide a failed write, and a start without the token would leave the printed MCP setup unusable.
@@ -105,6 +153,9 @@ if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     print_provider_notes_once
     # Set last, so the health check is green only once the sample is seeded; cleared above on every start, so a restart is not healthy before the seed has run again.
     touch "$READY_MARK"
+# The project file is read only while the container is compiled, so every start builds it again before any worker acts on old projects: the image compiled its own without a project file, and a restart after the file was changed or removed still holds the projects the last start compiled.
+else
+    rebuild_container
 fi
 
 # Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.
@@ -139,13 +190,20 @@ stop_all() {
     mapfile -t children < <(jobs -p)
     kill -TERM "${children[@]}" 2>/dev/null || true
     # A consumer ignores SIGTERM until its worker exists (upstream/messenger-consume-ignores-early-sigterm), so what still runs after a grace period inside Docker's 10 s stop timeout is killed.
-    for _ in {1..80}; do
-        any_running "${children[@]}" || break
+    # A deadline, not a count of pauses, because on a loaded machine every pause overruns and 80 of them passed the stop timeout; read from the uptime, which a wall clock step cannot move (in hundredths of a second).
+    local deadline=$(( $(uptime_ticks) + 800 ))
+    while any_running "${children[@]}" && (( $(uptime_ticks) < deadline )); do
         sleep 0.1
     done
     kill -KILL "${children[@]}" 2>/dev/null || true
     wait
     exit "$1"
+}
+
+uptime_ticks() {
+    local up
+    read -r up _ < /proc/uptime
+    echo $(( 10#${up/./} ))
 }
 
 any_running() {
@@ -181,7 +239,7 @@ restart_ended() {
     done
 }
 
-# Bash runs the TERM trap only after a foreground command ends, so a call that takes seconds would add them to the 8 s grace of stop_all and pass Docker's 10 s stop timeout; as a job it is waited for, because wait returns at once on a trapped signal, and stop_all ends it with the other jobs.
+# Bash runs the TERM trap only after a foreground command ends, so a call or pause that takes seconds would add them to the 8 s grace of stop_all and pass Docker's 10 s stop timeout; as a job it is waited for, because wait returns at once on a trapped signal, and stop_all ends it with the other jobs.
 as_job() {
     "$@" &
     wait "$!"
@@ -207,9 +265,9 @@ for _ in $(seq "$MESSENGER_CONSUMERS"); do
 done
 start scheduler_watcher
 
-# A poll instead of wait -n, which blocks on the live children once it has forgotten a dead one; the second is also the pause before an ended consumer starts again, and the TERM trap runs after it, inside Docker's 10 s stop timeout.
+# A poll instead of wait -n, which blocks on the live children once it has forgotten a dead one; the second is also the pause before an ended consumer starts again, and it runs as a job, so the TERM trap runs at once instead of after it.
 while :; do
-    sleep 1
+    as_job sleep 1
     restart_ended
     show_dashboard_address_once
 done

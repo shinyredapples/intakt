@@ -17,6 +17,7 @@ final readonly class BranchGit
 
     public function __construct(
         private HardenedGit $hardened,
+        private GuardedRun $guardedRun,
         private float $timeoutSeconds = 600,
     ) {
     }
@@ -68,6 +69,29 @@ final readonly class BranchGit
         return $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments)->getExitCode() ?? -1;
     }
 
+    // The config entries that change where git sends a remote string (url.<base>.insteadOf and url.<base>.pushInsteadOf rewrites, and every remote.<name>.* key, includes followed) as key and value pairs, in one call, because git applies them before it reads or pushes, so the address the caller checked would not be the one git reaches.
+    /**
+     * @return list<array{string, string}>
+     *
+     * @throws BranchNotPushed
+     */
+    public function addressEntries(string $repository): array
+    {
+        $arguments = ['config', '--null', '--get-regexp', '^(url\..*\.(push)?insteadof|remote\..*)$'];
+        $process = $this->finished($this->process($repository, $arguments, []), $arguments);
+
+        // Exit code 1 means no such entry, because git config answers a search that matches no key with it.
+        return match ($process->getExitCode()) {
+            0 => array_map(static function (string $entry): array {
+                $parts = explode("\n", $entry, 2);
+
+                return [$parts[0], $parts[1] ?? ''];
+            }, array_values(array_filter(explode("\0", $process->getOutput()), static fn (string $entry): bool => '' !== $entry))),
+            1 => [],
+            default => throw BranchNotPushed::because('git config could not list the address rewrites and remote sections of the repository'),
+        };
+    }
+
     // Null when the two merge cleanly, else the paths that conflict, because the caller needs both; the merge writes objects only, never a ref or a work tree.
     /**
      * @return list<string>|null
@@ -96,16 +120,15 @@ final readonly class BranchGit
     private function process(string $repository, array $arguments, array $environment): Process
     {
         try {
-            $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
+            $call = $this->hardened->callInBareRepository($arguments, $repository);
         } catch (RepositoryAttributesRefused $refused) {
             throw BranchNotPushed::because($refused->getMessage());
         } catch (RuntimeException) {
-            // Because HardenedGit first asks git for the repository's object format, and that call can be killed or hit its limit like any other; its exception is not chained, as in GuardedRun.
-            throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped', $arguments[0] ?? ''));
+            // Because HardenedGit first asks git for the repository's object format, and that call can be killed, hit its limit like any other, or find no bare repository; its exception is not chained, as in GuardedRun.
+            throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped or found no bare repository', $arguments[0] ?? ''));
         }
 
-        // Because a work tree beside --git-dir would make git treat the bare repository as a checkout.
-        return new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false, ...$environment], null, $this->timeoutSeconds);
+        return new Process($call->command, $call->directory, [...$call->environment, ...$environment], null, $this->timeoutSeconds);
     }
 
     // Every call goes through this one step, so none leaves the push as a Process exception.
@@ -116,6 +139,6 @@ final readonly class BranchGit
      */
     private function finished(Process $process, array $arguments): Process
     {
-        return GuardedRun::of($process, 'git '.($arguments[0] ?? ''));
+        return $this->guardedRun->run($process, 'git '.($arguments[0] ?? ''));
     }
 }

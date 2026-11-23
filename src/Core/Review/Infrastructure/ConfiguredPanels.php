@@ -6,7 +6,9 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -31,7 +33,7 @@ final readonly class ConfiguredPanels implements Panels
 
     public function panelFor(string $project): Panel
     {
-        return $this->panelForChange($project, new ChangeDescription(0, [], []));
+        return $this->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels()));
     }
 
     public function panelForChange(string $project, ChangeDescription $change): Panel
@@ -64,7 +66,7 @@ final readonly class ConfiguredPanels implements Panels
         foreach ($rule['paths'] ?? [] as $glob) {
             $pattern = new PathGlob($glob);
 
-            if ([] !== array_filter($change->paths, $pattern->matches(...))) {
+            if ([] !== array_filter([...$change->paths], $pattern->matches(...))) {
                 return true;
             }
         }

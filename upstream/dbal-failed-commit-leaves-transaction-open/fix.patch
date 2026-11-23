@@ -1,0 +1,222 @@
+From 6371efc0fee8830178deed7247b335c3007a6dbb Mon Sep 17 00:00:00 2001
+From: Intakt Builder <builder@localhost>
+Date: Sat, 21 Nov 2026 00:13:54 +0000
+Subject: [PATCH] Roll back the transaction when the database refuses to commit
+ it
+
+---
+ src/Connection.php                   |  26 +++++-
+ tests/Functional/TransactionTest.php | 121 +++++++++++++++++++++++++++
+ 2 files changed, 145 insertions(+), 2 deletions(-)
+
+diff --git a/src/Connection.php b/src/Connection.php
+index c024b9014..e5b7e16a0 100644
+--- a/src/Connection.php
++++ b/src/Connection.php
+@@ -972,13 +972,16 @@ class Connection implements ServerVersionProvider
+         }
+ 
+         $shouldRollback = true;
++        $isTopLevel     = $this->transactionNestingLevel === 1;
+         try {
+             $this->commit();
+ 
+             $shouldRollback = false;
+         } catch (TheDriverException $t) {
++            // commit() has ended a refused top-level transaction, but not the one around a refused savepoint release
+             $shouldRollback = ! (
+-                $t instanceof TransactionRolledBack
++                $isTopLevel
++                || $t instanceof TransactionRolledBack
+                 || $t instanceof UniqueConstraintViolationException
+                 || $t instanceof ForeignKeyConstraintViolationException
+                 || $t instanceof DeadlockException
+@@ -1080,7 +1083,13 @@ class Connection implements ServerVersionProvider
+                 try {
+                     $connection->commit();
+                 } catch (Driver\Exception $e) {
+-                    throw $this->convertException($e);
++                    $exception = $this->convertException($e);
++
++                    if (! $exception instanceof ConnectionLost) {
++                        $this->rollBackAfterFailedCommit($connection);
++                    }
++
++                    throw $exception;
+                 }
+             } else {
+                 $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+@@ -1090,6 +1099,19 @@ class Connection implements ServerVersionProvider
+         }
+     }
+ 
++    /**
++     * Ends the transaction if the database kept it open after refusing to commit it, as SQLite does when the
++     * database is locked. A database that has already rolled the transaction back makes the rollback fail,
++     * which is ignored.
++     */
++    private function rollBackAfterFailedCommit(DriverConnection $connection): void
++    {
++        try {
++            $connection->rollBack();
++        } catch (Driver\Exception) {
++        }
++    }
++
+     /** @throws Exception */
+     private function updateTransactionStateAfterCommit(): void
+     {
+diff --git a/tests/Functional/TransactionTest.php b/tests/Functional/TransactionTest.php
+index 89ffa5bca..fc500cf22 100644
+--- a/tests/Functional/TransactionTest.php
++++ b/tests/Functional/TransactionTest.php
+@@ -5,9 +5,13 @@ declare(strict_types=1);
+ namespace Doctrine\DBAL\Tests\Functional;
+ 
+ use Doctrine\DBAL\Connection;
++use Doctrine\DBAL\DriverManager;
+ use Doctrine\DBAL\Exception\ConnectionLost;
++use Doctrine\DBAL\Exception\DriverException;
++use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+ use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
++use Doctrine\DBAL\Platforms\SQLitePlatform;
+ use Doctrine\DBAL\Schema\Column;
+ use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+ use Doctrine\DBAL\Schema\Table;
+@@ -15,15 +19,132 @@ use Doctrine\DBAL\Tests\FunctionalTestCase;
+ use Doctrine\DBAL\Tests\TestUtil;
+ use Doctrine\DBAL\Types\Types;
+ 
++use function array_map;
+ use function func_get_args;
+ use function restore_error_handler;
+ use function set_error_handler;
+ use function sprintf;
++use function strval;
++use function sys_get_temp_dir;
++use function tempnam;
++use function unlink;
+ 
+ use const E_WARNING;
+ 
+ class TransactionTest extends FunctionalTestCase
+ {
++    private ?Connection $writer = null;
++
++    private ?Connection $reader = null;
++
++    private ?string $path = null;
++
++    protected function tearDown(): void
++    {
++        $this->writer?->close();
++        $this->writer = null;
++        $this->reader?->close();
++        $this->reader = null;
++
++        if ($this->path !== null) {
++            unlink($this->path);
++            $this->path = null;
++        }
++
++        parent::tearDown();
++    }
++
++    public function testRefusedCommit(): void
++    {
++        $writer = $this->createWriterLockedOutByReader();
++        $writer->beginTransaction();
++        $writer->insert('refused_commit', ['id' => 1]);
++
++        try {
++            $writer->commit();
++            self::fail('The commit was expected to be refused.');
++        } catch (LockWaitTimeoutException) {
++        }
++
++        self::assertFalse($writer->isTransactionActive());
++
++        $this->reader?->rollBack();
++
++        $writer->beginTransaction();
++        $writer->insert('refused_commit', ['id' => 2]);
++        $writer->commit();
++
++        self::assertSame(['2'], array_map(
++            strval(...),
++            $writer->fetchFirstColumn('SELECT id FROM refused_commit'),
++        ));
++    }
++
++    public function testTransactionalWithRefusedCommit(): void
++    {
++        $writer = $this->createWriterLockedOutByReader();
++
++        $this->expectException(LockWaitTimeoutException::class);
++        $writer->transactional(static function (Connection $connection): void {
++            $connection->insert('refused_commit', ['id' => 1]);
++        });
++    }
++
++    /**
++     * Returns a connection to an SQLite database on which another connection holds a read transaction,
++     * so SQLite refuses the returned connection's commit of a write with "database is locked".
++     */
++    private function createWriterLockedOutByReader(): Connection
++    {
++        if (! $this->connection->getDatabasePlatform() instanceof SQLitePlatform) {
++            self::markTestSkipped('Restricted to SQLite.');
++        }
++
++        $path = tempnam(sys_get_temp_dir(), 'doctrine_refused_commit');
++        self::assertIsString($path);
++        $this->path = $path;
++
++        $params           = $this->connection->getParams();
++        $params['memory'] = false;
++        $params['path']   = $path;
++
++        $this->writer = DriverManager::getConnection($params, $this->connection->getConfiguration());
++        $this->writer->executeStatement('PRAGMA busy_timeout = 0');
++        $this->writer->executeStatement('CREATE TABLE refused_commit (id INTEGER PRIMARY KEY)');
++
++        $this->reader = DriverManager::getConnection($params, $this->connection->getConfiguration());
++        $this->reader->beginTransaction();
++        $this->reader->fetchOne('SELECT COUNT(*) FROM refused_commit');
++
++        return $this->writer;
++    }
++
++    public function testTransactionalRollsBackAfterRefusedSavepointRelease(): void
++    {
++        if (! $this->connection->getDatabasePlatform()->supportsReleaseSavepoints()) {
++            self::markTestSkipped('Restricted to platforms that release savepoints.');
++        }
++
++        $this->dropAndCreateTable(new Table('refused_release', [
++            Column::editor()->setUnquotedName('id')->setTypeName(Types::INTEGER)->create(),
++        ]));
++
++        $this->connection->beginTransaction();
++
++        try {
++            $this->connection->transactional(static function (Connection $connection): void {
++                $connection->insert('refused_release', ['id' => 1]);
++                // makes the release in commit() fail, as the database does when it refuses one
++                $connection->releaseSavepoint('DOCTRINE_2');
++            });
++            self::fail('The savepoint release was expected to be refused.');
++        } catch (DriverException) {
++        }
++
++        self::assertFalse($this->connection->isTransactionActive());
++        self::assertSame(0, (int) $this->connection->fetchOne('SELECT COUNT(*) FROM refused_release'));
++    }
++
+     public function testBeginTransactionFailure(): void
+     {
+         $this->expectConnectionLoss(static function (Connection $connection): void {
+-- 
+2.47.3
+

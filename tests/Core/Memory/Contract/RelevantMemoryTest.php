@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Memory\Contract;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\RelevantMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RelevantMemory::class)]
 #[UsesClass(MemoryEntry::class)]
+#[UsesClass(Paths::class)]
 final class RelevantMemoryTest extends TestCase
 {
     public function testEntriesStayInRelevanceOrder(): void
@@ -63,6 +65,6 @@ final class RelevantMemoryTest extends TestCase
 
     private function entry(string $text): MemoryEntry
     {
-        return new MemoryEntry('alpha', $text, ['a.php']);
+        return new MemoryEntry('alpha', $text, new Paths('a.php'));
     }
 }

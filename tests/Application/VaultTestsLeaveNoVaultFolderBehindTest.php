@@ -19,6 +19,29 @@ final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
 
     private bool $vaultsBefore;
 
+    // Forces the order a check that sorts by recorded durations put in one worker, because that order failed on main (#2434).
+    public function testTheKeptKeyWiringTestPassesRightAfterTheAiProvidersTestInOneProcess(): void
+    {
+        $process = $this->runInOneProcess('tests/Application/AiProvidersTest.php', 'tests/Core/Ai/Infrastructure/KeptProviderKeyVariablesWiringTest.php');
+
+        self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+    }
+
+    public function testTheAiProvidersTestLeavesNoVaultsFolderBehind(): void
+    {
+        $this->runInOneProcess('tests/Application/AiProvidersTest.php');
+
+        self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
+    }
+
+    public function testTheKeptKeyBuildWarningTestLeavesNoVaultsFolderBehind(): void
+    {
+        $process = $this->runInOneProcess('tests/Application/KeptKeyBuildWarningTest.php');
+
+        self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
+    }
+
     protected function setUp(): void
     {
         $this->scratch = sys_get_temp_dir().'/vault-order-'.bin2hex(random_bytes(4));
@@ -33,21 +56,6 @@ final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
         if (!$this->vaultsBefore && is_dir($this->vaults()) && [] === array_diff((array) scandir($this->vaults()), ['.', '..'])) {
             rmdir($this->vaults());
         }
-    }
-
-    // Forces the order a check that sorts by recorded durations put in one worker, because that order failed on main (#2434).
-    public function testTheKeptKeyWiringTestPassesRightAfterTheAiProvidersTestInOneProcess(): void
-    {
-        $process = $this->runInOneProcess('tests/Application/AiProvidersTest.php', 'tests/Core/Ai/Infrastructure/KeptProviderKeyVariablesWiringTest.php');
-
-        self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
-    }
-
-    public function testTheAiProvidersTestLeavesNoVaultsFolderBehind(): void
-    {
-        $this->runInOneProcess('tests/Application/AiProvidersTest.php');
-
-        self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
     }
 
     private function vaults(): string

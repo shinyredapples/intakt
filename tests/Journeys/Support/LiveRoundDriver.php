@@ -27,7 +27,7 @@ final readonly class LiveRoundDriver
     // Well inside the journeys gate's 240 seconds per journey, so a stalled round fails with this driver's message, not the gate's timeout, while the journey's other steps keep their share.
     private const int STEPPING_SECONDS = 150;
     // Matched on this text because the template of the round_changed stream prints it once the judge has ruled and the update carries no other flag.
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
 
     /**
      * @param Closure(list<string>): string $console

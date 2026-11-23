@@ -8,9 +8,9 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
-use InvalidArgumentException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
@@ -30,7 +30,8 @@ final readonly class MakeBuildClone
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws ProjectNameRefused
+     * @throws BranchNameRefused
      * @throws BuildCloneNotMade
      * @throws RepositoryAttributesRefused
      * @throws ExceptionInterface
@@ -56,8 +57,8 @@ final readonly class MakeBuildClone
 
             $this->addSource($directory, $mirror, $source);
             $this->checkOut($directory);
+            // Boundary: removes the half-made clone and rethrows, because a clone that failed half-way must never be taken for a build clone.
         } catch (Throwable $failed) {
-            // Because a clone that failed half-way must never be taken for a build clone.
             $this->filesystem->remove($directory);
 
             throw $failed;
@@ -94,7 +95,7 @@ final readonly class MakeBuildClone
         $ref = $this->branchRef($mirror, $branch);
 
         if ($ref === $main) {
-            throw new InvalidArgumentException(sprintf('the task\'s branch "%s" is main itself', $branch));
+            throw BranchNameRefused::mainItself($branch);
         }
 
         return $ref;
@@ -106,7 +107,7 @@ final readonly class MakeBuildClone
         $checked = $this->run($this->inMirror($mirror, ['check-ref-format', '--branch', $branch]));
 
         if (!$checked->isSuccessful() || trim($checked->getOutput()) !== $branch) {
-            throw new InvalidArgumentException(sprintf('"%s" is not a branch name git accepts', $branch));
+            throw BranchNameRefused::notAcceptedByGit($branch);
         }
 
         return self::BRANCHES.$branch;
@@ -174,10 +175,8 @@ final readonly class MakeBuildClone
 
     private function initialize(string $directory, string $branch, string $format): void
     {
-        $init = $this->hardened->call(['init', '--quiet', '--initial-branch='.$branch, '--object-format='.$format], $directory);
-
-        // Because git refuses a work tree without a git folder, which init has yet to make; it makes both in the folder it runs in.
-        $this->mustRun(new GitCall($init->command, $init->directory, [...$init->environment, 'GIT_WORK_TREE' => false]), $directory);
+        // The git folder is named, because git refuses the pinned work tree without one; it is the work tree's own .git, so init records no core.worktree.
+        $this->mustRun($this->hardened->call(['--git-dir=.git', 'init', '--quiet', '--initial-branch='.$branch, '--object-format='.$format], $directory), $directory);
     }
 
     private function fetch(string $directory, string $mirror, string $refspec): void
@@ -216,10 +215,7 @@ final readonly class MakeBuildClone
      */
     private function inMirror(string $mirror, array $arguments): GitCall
     {
-        $call = $this->hardened->call(['--git-dir='.$mirror, ...$arguments], $mirror);
-
-        // Because a work tree beside --git-dir would make git treat the bare mirror as a checkout.
-        return new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false]);
+        return $this->hardened->callInBareRepository($arguments, $mirror);
     }
 
     private function mustRun(GitCall $call, string $directory): string

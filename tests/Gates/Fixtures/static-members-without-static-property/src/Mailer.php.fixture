@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Mailer
+{
+    private const string GREETING = 'hello';
+
+    public function __construct(private string $sender)
+    {
+    }
+
+    public static function named(string $sender): self
+    {
+        return new self($sender);
+    }
+
+    public function send(string $body): string
+    {
+        static $prefix = self::GREETING;
+
+        $shout = static fn (string $part): string => strtoupper($part);
+
+        return $shout((is_string($prefix) ? $prefix : '').' '.$this->sender.' '.$body);
+    }
+}

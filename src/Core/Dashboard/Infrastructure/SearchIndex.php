@@ -24,6 +24,7 @@ final readonly class SearchIndex
     private const array PAGES = [
         DashboardRoutes::LIST_REVIEWS => ['Reviews', 'All projects, every review round'],
         DashboardRoutes::LIST_PROJECTS => ['Projects', 'All projects, every project that has started a review'],
+        DashboardRoutes::SHOW_TRENDS => ['Trends', 'All projects, how the reviews went'],
         DashboardRoutes::SHOW_COMPONENTS => ['Components', "All projects, the dashboard's building blocks"],
     ];
 

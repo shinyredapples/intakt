@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\Domain;
 
+use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use LogicException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'watcher_seen_change')]
@@ -43,6 +47,13 @@ final class SeenChange
     {
         $this->head = $open->head->hash;
         $this->updatedAt = $this->momentOf($open);
+    }
+
+    public function asOpenChange(): OpenChange
+    {
+        $moment = DateTimeImmutable::createFromFormat(self::MOMENT, $this->updatedAt, new DateTimeZone('UTC'));
+
+        return new OpenChange(new ChangeId($this->change), new CommitId($this->head), false === $moment ? throw new LogicException(sprintf('The seen moment "%s" is not a moment.', $this->updatedAt)) : $moment);
     }
 
     public function project(): string

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -35,10 +36,21 @@ final readonly class ReviewerMemory
     public function briefingOn(ReviewBrief $brief): ?UserMessage
     {
         $room = self::MAX_BYTES - $this->bytesOf($this->fenced(''));
-        $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, $this->paths->in($brief->change->diff), $room))->entries;
+        $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, new Paths(...$this->paths->in($brief->change->diff)), $room))->entries;
         $notes = $this->notesWithin($entries);
 
         return $notes instanceof FencedText ? $this->assembly->user(self::LEAD, $notes) : null;
+    }
+
+    private function fenced(string $notes): FencedText
+    {
+        return $this->fence->wrap(UntrustedSource::ProjectMemory, $notes);
+    }
+
+    // Measured as the whole message, introduction included, because the cap holds for what the model receives.
+    private function bytesOf(FencedText $notes): int
+    {
+        return strlen($this->assembly->userText(self::LEAD, $notes));
     }
 
     // The separators still add bytes the memory does not count, so the least relevant entries are dropped until the whole briefing fits; a lone top entry is shortened instead, because the most relevant note is worth more than none.
@@ -64,14 +76,6 @@ final readonly class ReviewerMemory
         return null;
     }
 
-    private function shortened(MemoryEntry $entry): FencedText
-    {
-        $room = self::MAX_BYTES - $this->bytesOf($this->fenced('')) - strlen(self::SHORTENED);
-
-        // mb_strcut cuts at a character boundary, so the text stays valid UTF-8.
-        return $this->fenced(mb_strcut($entry->text, 0, $room, 'UTF-8').self::SHORTENED);
-    }
-
     /**
      * @param non-empty-list<MemoryEntry> $entries
      */
@@ -80,14 +84,11 @@ final readonly class ReviewerMemory
         return $this->fenced(implode("\n\n", array_map(static fn (MemoryEntry $entry): string => $entry->text, $entries)));
     }
 
-    private function fenced(string $notes): FencedText
+    private function shortened(MemoryEntry $entry): FencedText
     {
-        return $this->fence->wrap(UntrustedSource::ProjectMemory, $notes);
-    }
+        $room = self::MAX_BYTES - $this->bytesOf($this->fenced('')) - strlen(self::SHORTENED);
 
-    // Measured as the whole message, introduction included, because the cap holds for what the model receives.
-    private function bytesOf(FencedText $notes): int
-    {
-        return strlen($this->assembly->userText(self::LEAD, $notes));
+        // mb_strcut cuts at a character boundary, so the text stays valid UTF-8.
+        return $this->fenced(mb_strcut($entry->text, 0, $room, 'UTF-8').self::SHORTENED);
     }
 }

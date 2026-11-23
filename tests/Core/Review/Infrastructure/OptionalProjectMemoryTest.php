@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -24,6 +25,7 @@ use Symfony\Component\HttpKernel\Log\Logger;
 #[CoversClass(OptionalProjectMemory::class)]
 #[UsesClass(MemoryQuery::class)]
 #[UsesClass(MemoryEntry::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(RelevantMemory::class)]
 #[UsesClass(ProjectMemoryNeedsEmbeddingModel::class)]
 #[UsesClass(RedactedJsonFormatter::class)]
@@ -34,16 +36,16 @@ final class OptionalProjectMemoryTest extends TestCase
     public function testAReadableMemoryIsPassedThrough(): void
     {
         $inner = self::createStub(ProjectMemory::class);
-        $inner->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('alpha', 'Note.', ['a.php'])], 100));
+        $inner->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('alpha', 'Note.', new Paths('a.php'))], 100));
 
-        $found = new OptionalProjectMemory($inner, self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+        $found = new OptionalProjectMemory($inner, self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 100));
 
         self::assertCount(1, $found->entries);
     }
 
     public function testAMemoryThatCannotBeReadGivesNoEntries(): void
     {
-        $found = new OptionalProjectMemory($this->failing(), self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+        $found = new OptionalProjectMemory($this->failing(), self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 100));
 
         self::assertSame([], $found->entries);
     }
@@ -54,7 +56,7 @@ final class OptionalProjectMemoryTest extends TestCase
         self::assertIsResource($output);
         $logger = new Logger('warning', $output, new RedactedJsonFormatter(new Redaction(), new MockClock(), new HeldCredentials([])));
 
-        new OptionalProjectMemory($this->failing(), $logger)->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+        new OptionalProjectMemory($this->failing(), $logger)->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 100));
 
         rewind($output);
         /** @var array{context: array{project: string, exception: array{class: string, message: string, trace: string}}} $record */
@@ -73,7 +75,7 @@ final class OptionalProjectMemoryTest extends TestCase
 
         $found = [];
         foreach (range(1, 3) as $ignored) {
-            $found[] = $memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 100))->entries;
+            $found[] = $memory->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 100))->entries;
         }
 
         rewind($output);
@@ -93,8 +95,8 @@ final class OptionalProjectMemoryTest extends TestCase
         $logger = new Logger('debug', $output, new RedactedJsonFormatter(new Redaction(), new MockClock(), new HeldCredentials([])));
         $memory = new OptionalProjectMemory($this->failing(), $logger);
 
-        $memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
-        $memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+        $memory->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 100));
+        $memory->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 100));
 
         rewind($output);
         self::assertCount(2, array_filter(explode("\n", (string) stream_get_contents($output)), static fn (string $line): bool => '' !== $line));

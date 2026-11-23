@@ -1,0 +1,12 @@
+{#- The octopus conducts from here while something waits on the owner, so the board shows it once (the rule in components.css hides the board's own octopus beside it); the count and the oldest wait are all the card says, the Waiting on you page holds the rest (UX2 home, #3326). A wait from an earlier day names its date, so an old one never reads as today's. -#}
+{%- set count = waiting|length -%}
+{%- set oldest = (waiting|first).noticedAt -%}
+<a class="needs-you" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_WAITING')) }}">
+    {{- include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 96}, with_context = false) -}}
+    <span class="grow">
+        <span class="kicker">Needs you</span>
+        <span class="decisions">{{ count }} {{ count == 1 ? 'decision' : 'decisions' }}</span>
+        <span class="meta">Oldest since <time datetime="{{ oldest|date('c', 'UTC') }}">{% if oldest|date('Y-m-d', 'UTC') != now|date('Y-m-d', 'UTC') %}{{ oldest|date('j M', 'UTC') }}, {% endif %}{{ oldest|date('H:i', 'UTC') }} UTC</time></span>
+    </span>
+    {{- include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'go'}, with_context = false) -}}
+</a>

@@ -52,6 +52,9 @@ final class ReviewDockerfileTest extends TestCase
     {
         yield 'a syntax directive' => ["# syntax=docker/dockerfile:1\nFROM php:8.5-cli\n"];
         yield 'the backslash as escape' => ["# escape=\\\nFROM php:8.5-cli\n"];
+        yield 'a directive whose value holds spaces' => ["# check=skip=all; error=true\nFROM php:8.5-cli\n"];
+        yield 'an escape line after a comment with a key and spaces, which is a comment' => ["# maintainer=Example Team\n# escape=`\nFROM php:8.5-cli\n"];
+        yield 'an escape line after an unknown directive name, which is a comment' => ["# syntax2=docker/dockerfile:1\n# escape=`\nFROM php:8.5-cli\n"];
         yield 'an escape line after an instruction, which is a comment' => ["FROM php:8.5-cli\n# escape=`\n"];
         yield 'an escape line after a comment, which is a comment' => ["# The job image\n# escape=`\nFROM php:8.5-cli\n"];
         yield 'an escape line after a blank line, which is a comment' => ["# syntax=docker/dockerfile:1\n\n# escape=`\nFROM php:8.5-cli\n"];
@@ -77,6 +80,7 @@ final class ReviewDockerfileTest extends TestCase
     {
         yield 'first line' => ["# escape=`\nFROM mcr.microsoft.com/windows/servercore\n", '`'];
         yield 'after another directive' => ["# syntax=docker/dockerfile:1\n#ESCAPE = `\nFROM php:8.5-cli\n", '`'];
+        yield 'after a directive whose value holds spaces' => ["# check=skip=all; error=true\n# escape=`\nFROM php:8.5-cli\n", '`'];
         yield 'Windows line ends' => ["# escape=`\r\nFROM php:8.5-cli\r\n", '`'];
         yield 'after a byte order mark, which Docker strips' => ["\u{FEFF}# escape=`\nFROM php:8.5-cli\n", '`'];
     }

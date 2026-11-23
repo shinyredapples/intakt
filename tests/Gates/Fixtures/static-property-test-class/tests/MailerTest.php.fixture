@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+final class MailerTest
+{
+    protected static string $checkout = '';
+
+    public function testItSends(): string
+    {
+        return self::$checkout;
+    }
+}

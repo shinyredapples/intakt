@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
@@ -27,8 +28,11 @@ final readonly class JudgedRounds
         private RoundLedger $ledger,
         private ChangeText $change,
         private DiffHunks $hunks,
+        private AddedLinesInCheckout $addedLines,
         private DiffPaths $paths,
         private StoredVerdicts $verdicts,
+        private FailedJudgings $failedJudgings,
+        private RecordRecurringP1s $recurringP1s,
     ) {
     }
 
@@ -48,12 +52,20 @@ final readonly class JudgedRounds
         return $this->hunks->in($round->diff());
     }
 
-    // Null for a round judged already, so a redelivered message asks the model nothing.
+    /**
+     * @return list<array{string, int, string}>
+     */
+    public function addedLinesOf(ReviewRound $round): array
+    {
+        return $this->addedLines->of($round->diff(), $round->checkoutRoot());
+    }
+
+    // Null for a round judged already or whose failed judging is recorded, so a redelivered message asks the model nothing.
     public function toJudge(string $roundId): ?ReviewRound
     {
         $round = $this->rounds->stored($roundId);
 
-        return RoundState::Judged === $round->state() ? null : $round;
+        return RoundState::Judged === $round->state() || $this->failedJudgings->isRecorded($roundId) ? null : $round;
     }
 
     /**
@@ -69,14 +81,21 @@ final readonly class JudgedRounds
         return $this->change->of($round->diff(), $round->checkoutRoot());
     }
 
-    // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model.
-    public function record(ReviewRound $round, JudgedFindings $judged): void
+    // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model, or recorded its judging as failed for good and queued its publication already, before a restart handed the judging out again; false then, so the caller announces only a judge transition that committed.
+    public function record(ReviewRound $round, JudgedFindings $judged): bool
     {
-        $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged): void {
-            if ($this->findings->markJudged($locked)) {
+        $recorded = false;
+        $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged, &$recorded): void {
+            $this->findings->lockChangeOf($locked);
+
+            if (!$this->failedJudgings->isRecorded($locked->id()->toRfc4122()) && $this->findings->markJudged($locked)) {
                 $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged));
+                $this->recurringP1s->of($locked);
+                $recorded = true;
             }
         });
+
+        return $recorded;
     }
 
     // Counted once, with the judgement, and recorded with it, so every reader of the round counts the same votes.

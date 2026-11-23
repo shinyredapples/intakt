@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -54,7 +55,7 @@ final readonly class RunBuildJob
 
     private const float CPUS = 2.0;
 
-    // Fixed, because sizing the limits for each task is plan task T60 (#1710); the CLI ends its session after this many turns.
+    // Fixed, because sizing the limits for each task is plan task T60 (#342); the CLI ends its session after this many turns.
     private const int MAX_TURNS = 100;
 
     // Below the job's own limit, because the runner's kill keeps no output, while the script's cut still bundles what the session committed.
@@ -63,12 +64,16 @@ final readonly class RunBuildJob
     // Beyond the allowance for the script's cleanup and bundle, so the runner's kill, which keeps no output, is a backstop that never fires first.
     private const int SECONDS = self::ALLOWANCE_SECONDS + 600;
 
+    private int $toolTimeLimitSeconds;
+
     public function __construct(
         private TierResolver $tiers,
         private BuilderPrompt $prompts,
         private JobRunner $jobs,
         private Gate $gate,
         private GatesAtOnce $gatesAtOnce,
+        #[Autowire(param: BuildServices::TOOL_TIME_LIMIT)]
+        mixed $toolTimeLimitSeconds,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
@@ -76,10 +81,19 @@ final readonly class RunBuildJob
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
     ) {
+        // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
+        if (!is_int($toolTimeLimitSeconds)) {
+            throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be a whole number of seconds, not %s.', get_debug_type($toolTimeLimitSeconds)));
+        }
+        // Below the allowance, because a tool call that outlives the session is cut with it anyway.
+        if ($toolTimeLimitSeconds < 1 || $toolTimeLimitSeconds >= self::ALLOWANCE_SECONDS) {
+            throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of %d seconds, not %d.', self::ALLOWANCE_SECONDS, $toolTimeLimitSeconds));
+        }
+        $this->toolTimeLimitSeconds = $toolTimeLimitSeconds;
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws BuildCloneIsNoFolder
      * @throws TierResolutionFailure
      * @throws BuilderNotOnClaudeCode
      * @throws JobRefused
@@ -116,7 +130,7 @@ final readonly class RunBuildJob
         $absolute = realpath($path);
 
         if (false === $absolute || !is_dir($absolute)) {
-            throw new InvalidArgumentException(sprintf('The build clone "%s" is no folder.', $path));
+            throw BuildCloneIsNoFolder::at($path);
         }
 
         return $absolute;
@@ -132,16 +146,6 @@ final readonly class RunBuildJob
         return $file;
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
-    {
-        try {
-            return $this->jobs->run($spec);
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
-        }
-    }
-
     /**
      * @param list<JobInput> $inputs
      */
@@ -150,11 +154,21 @@ final readonly class RunBuildJob
         return new JobSpec(
             $this->idOf($job),
             $job->image,
-            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES)],
+            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds],
             $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),
         );
+    }
+
+    private function ranJob(JobSpec $spec): ?JobResult
+    {
+        try {
+            return $this->jobs->run($spec);
+        } catch (JobOutputRefused) {
+            // No result, because the job wrote what the runner refuses to read.
+            return null;
+        }
     }
 
     // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Support;
 
+use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
 use Symfony\Component\Clock\ClockInterface;
@@ -14,6 +15,14 @@ final class PinnableClock implements ClockInterface
 {
     private ?MockClock $pinned = null;
 
+    /** @var (Closure(): void)|null */
+    private ?Closure $onSleep = null;
+
+    private bool $working = false;
+
+    // A time-zone view runs the work through the clock it came from, so work that sleeps through any view finds the one guard already raised.
+    private ?self $origin = null;
+
     public function __construct(private readonly ClockInterface $real)
     {
     }
@@ -23,6 +32,16 @@ final class PinnableClock implements ClockInterface
         $this->pinned = new MockClock($moment);
     }
 
+    // A test runs a worker during a command's waits on this clock, because on an install a worker process runs beside the command.
+    /**
+     * @param Closure(): void $work
+     */
+    public function workOnEachSleep(Closure $work): void
+    {
+        $clock = $this->origin ?? $this;
+        $clock->onSleep = $work;
+    }
+
     public function now(): DateTimeImmutable
     {
         return ($this->pinned ?? $this->real)->now();
@@ -30,6 +49,8 @@ final class PinnableClock implements ClockInterface
 
     public function sleep(float|int $seconds): void
     {
+        ($this->origin ?? $this)->work();
+
         ($this->pinned ?? $this->real)->sleep($seconds);
     }
 
@@ -37,7 +58,24 @@ final class PinnableClock implements ClockInterface
     {
         $clock = new self($this->real->withTimeZone($timezone));
         $clock->pinned = $this->pinned?->withTimeZone($timezone);
+        $clock->origin = $this->origin ?? $this;
 
         return $clock;
+    }
+
+    // A handler the work runs may sleep on this clock too; it must not start the work again inside itself.
+    private function work(): void
+    {
+        if (!$this->onSleep instanceof Closure || $this->working) {
+            return;
+        }
+
+        $this->working = true;
+
+        try {
+            ($this->onSleep)();
+        } finally {
+            $this->working = false;
+        }
     }
 }

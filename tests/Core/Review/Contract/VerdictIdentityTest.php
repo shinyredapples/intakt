@@ -6,24 +6,27 @@ namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\RecordedIdentityMalformed;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewTermMalformed;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -32,6 +35,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(VerdictIdentity::class)]
 #[CoversClass(VerdictStanding::class)]
 #[CoversClass(ReviewTerms::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(HeadMove::class)]
@@ -43,6 +47,9 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Verdict::class)]
 #[UsesClass(Decision::class)]
 #[UsesClass(QuorumPolicy::class)]
+#[UsesClass(RecordedIdentityMalformed::class)]
+#[UsesClass(ReviewTermMalformed::class)]
+#[UsesClass(CommitIdMalformed::class)]
 final class VerdictIdentityTest extends TestCase
 {
     private const string REVIEWED_HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -125,7 +132,7 @@ final class VerdictIdentityTest extends TestCase
 
         self::assertSame(Standing::KeptForUntouchedParts, $standing->standing);
         self::assertSame([IdentityField::Head, IdentityField::Base], $standing->changed);
-        self::assertSame(['src/Main.php'], $standing->reviewAgain);
+        self::assertSame(['src/Main.php'], [...$standing->reviewAgain]);
     }
 
     public function testADocumentationOnlyChangeKeepsTheVerdictExceptForTheTouchedPages(): void
@@ -135,7 +142,7 @@ final class VerdictIdentityTest extends TestCase
         $standing = $this->reviewed()->standingAt($current, $this->move(HeadMoveKind::Commits, 'docs/user/README.md', 'docs/guide/glossary.md'));
 
         self::assertSame(Standing::KeptForUntouchedParts, $standing->standing);
-        self::assertSame(['docs/user/README.md', 'docs/guide/glossary.md'], $standing->reviewAgain);
+        self::assertSame(['docs/user/README.md', 'docs/guide/glossary.md'], [...$standing->reviewAgain]);
     }
 
     #[TestWith(['README.md'], 'documentation outside the docs folder')]
@@ -193,13 +200,26 @@ final class VerdictIdentityTest extends TestCase
     }
 
     #[TestWith(['aaaa'], 'too few parts')]
-    #[TestWith([self::REVIEWED_HEAD.'.'.self::BASE.'.x.y.z'], 'terms that are no hashes')]
-    #[TestWith(['HEAD.'.self::BASE.'.x.y.z'], 'a head that is no commit')]
-    public function testARecordedIdentityOfAnotherShapeIsRefused(string $recorded): void
+    #[TestWith(['a.b.c.d.e.f'], 'too many parts')]
+    public function testARecordedIdentityWithoutFivePartsIsRefusedAsMalformed(string $recorded): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(new RecordedIdentityMalformed('A recorded verdict identity has five parts separated by dots.'));
 
         VerdictIdentity::fromRecorded($recorded);
+    }
+
+    public function testARecordedIdentityWhoseTermsAreNoHashesIsRefusedAsAMalformedTerm(): void
+    {
+        $this->expectExceptionObject(new ReviewTermMalformed('A review term is a lowercase hexadecimal SHA-256 hash.'));
+
+        VerdictIdentity::fromRecorded(self::REVIEWED_HEAD.'.'.self::BASE.'.x.y.z');
+    }
+
+    public function testARecordedIdentityWhoseHeadIsNoCommitIsRefusedAsAMalformedCommitId(): void
+    {
+        $this->expectException(CommitIdMalformed::class);
+
+        VerdictIdentity::fromRecorded('HEAD.'.self::BASE.'.x.y.z');
     }
 
     private function reviewed(): VerdictIdentity

@@ -50,16 +50,6 @@ final class CheckHandBackSecretsTest extends TestCase
 
     private BuildHistory $history;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testATokenInACommitMessageIsRefused(): void
     {
         $this->history->commit('Use the key '.$this->fakeKey());
@@ -244,13 +234,23 @@ final class CheckHandBackSecretsTest extends TestCase
         self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
     }
 
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
+    }
+
     // Built at run time and random, so neither this file nor the repository's history holds a key the secrets gates would find.
     private function fakeKey(): string
     {
         return 'sk_live_'.bin2hex(random_bytes(12));
     }
 
-    // Built at run time, so the repository holds no large file; random bytes with NUL runs, so git and the scanner both see binary content that does not compress away.
+    // Built at run time, so the repository holds no large file; NUL runs, so git and the scanner both see binary content. It repeats one random block, so it compresses readily and only its raw size is large.
     private function largeBinary(): string
     {
         return str_repeat(random_bytes(4096).str_repeat("\0", 4096), 640);

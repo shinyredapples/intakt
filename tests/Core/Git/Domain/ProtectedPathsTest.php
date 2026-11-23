@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Git\Domain;
 
 use Intakt\Core\Git\Domain\ChangedPath;
+use Intakt\Core\Git\Domain\ProtectedPathRefused;
 use Intakt\Core\Git\Domain\ProtectedPaths;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ProtectedPaths::class)]
+#[CoversClass(ProtectedPathRefused::class)]
 #[UsesClass(ChangedPath::class)]
 final class ProtectedPathsTest extends TestCase
 {
@@ -80,7 +81,7 @@ final class ProtectedPathsTest extends TestCase
     #[DataProvider('malformedEntries')]
     public function testAnEntryThatNamesNoPathOfTheRepositoryIsRefused(string $entry): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ProtectedPathRefused::class);
         $this->expectExceptionMessageIsOrContains(sprintf('"%s" is not a protected path', $entry));
 
         new ProtectedPaths([$entry]);

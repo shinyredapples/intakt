@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\FindingSpans;
+use Intakt\Core\Dashboard\Infrastructure\GlossaryExplanations;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
@@ -94,14 +95,6 @@ final class MercureRoundUpdatesTest extends TestCase
     private Ledger $ledger;
 
     private RoundCosts $costs;
-
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-        $this->ledger = new DashboardLedger();
-        $this->costs = self::createStub(RoundCosts::class);
-        $this->costs->method('costOf')->willReturn(Cost::none());
-    }
 
     public function testAJudgedStateAsksTheCostOfTheRoundsOfItsOwnReviewOnly(): void
     {
@@ -203,7 +196,7 @@ final class MercureRoundUpdatesTest extends TestCase
     {
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
-        self::assertStringContainsString('Judged.', $this->published[0]->getData());
+        self::assertStringContainsString('Checked.', $this->published[0]->getData());
     }
 
     public function testAJudgedRoundShowsItsRoundHeadAndNowBoxAsJudged(): void
@@ -211,7 +204,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertStringContainsString('target="round-'.self::ROUND.'-head-state"', $this->published[0]->getData());
-        self::assertStringContainsString('<span id="round-'.self::ROUND.'-now-phase">judged</span>', $this->published[0]->getData());
+        self::assertStringContainsString('<span id="round-'.self::ROUND.'-now-phase"><span class="term term-ask" tabindex="0" data-term="checked"', $this->published[0]->getData());
     }
 
     public function testARoundInProgressLeavesItsRoundHeadAndNowPhaseAlone(): void
@@ -267,11 +260,6 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertStringContainsString('&lt;/template&gt;&lt;script&gt;x&lt;/script&gt;', $this->published[0]->getData());
         self::assertStringNotContainsString('<script>', $this->published[0]->getData());
-    }
-
-    private function readAnswer(string $title): ReadAnswer
-    {
-        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
     }
 
     public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedOnceByTheLiveUpdates(): void
@@ -349,7 +337,7 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertCount(2, $this->published);
         self::assertSame('replace round-'.self::ROUND.'-summary-tools', $this->actionAndTargetOf($this->streamsOf($this->published[0])[0]));
         self::assertSame('replace round-'.self::ROUND.'-state', $this->actionAndTargetOf($this->published[1]));
-        self::assertStringContainsString('Judged.', $this->published[1]->getData());
+        self::assertStringContainsString('Checked.', $this->published[1]->getData());
     }
 
     public function testARoundWithoutARecordedSummaryPublishesNoSummary(): void
@@ -460,7 +448,7 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertTrue($judge->isTerminated());
         $summary = 'replace round-'.self::ROUND.'-summary-tools';
         self::assertSame([$summary, $summary, 'replace round-'.self::ROUND.'-state'], array_map($this->actionAndTargetOf(...), $this->published));
-        self::assertStringContainsString('Judged.', array_last($this->published)?->getData() ?? '');
+        self::assertStringContainsString('Checked.', array_last($this->published)?->getData() ?? '');
     }
 
     // The judge is paused inside its read, holding the lock, so the tool call's publisher finds it busy and leaves the summary to the judge, because nothing may follow the judged state.
@@ -475,7 +463,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertTrue($judge->isTerminated());
         self::assertSame(['replace round-'.self::ROUND.'-summary-tools', 'replace round-'.self::ROUND.'-state'], array_map($this->actionAndTargetOf(...), $this->published));
-        self::assertStringContainsString('Judged.', array_last($this->published)?->getData() ?? '');
+        self::assertStringContainsString('Checked.', array_last($this->published)?->getData() ?? '');
     }
 
     public function testAToolCallRecordedAfterTheRoundWasJudgedPublishesNoSummary(): void
@@ -496,7 +484,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates(null, $summaries)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertCount(1, $this->published);
-        self::assertStringContainsString('Judged.', $this->published[0]->getData());
+        self::assertStringContainsString('Checked.', $this->published[0]->getData());
         self::assertSame(
             [['warning', 'A live session summary was not published.', ['round' => self::ROUND, 'exception' => $failure]]],
             $this->log->cleanLogs(),
@@ -581,7 +569,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertCount(1, $this->published);
-        self::assertStringContainsString('Judged.', $this->published[0]->getData());
+        self::assertStringContainsString('Checked.', $this->published[0]->getData());
         self::assertStringNotContainsString('target="round-'.self::ROUND.'-judged"', $this->published[0]->getData());
         self::assertSame(
             [['warning', 'The judged round was not read for its live update.', ['round' => self::ROUND, 'exception' => $failure]]],
@@ -623,6 +611,18 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
+    public function testARoundUpdateNamesAReviewerOfAnUnknownModelByItsIdAlone(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->startReviewerOn(self::ROUND, 'security', 'acme/robot-7');
+        $this->ledger = $ledger;
+
+        $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'read_file');
+
+        self::assertStringContainsString('<h3 title="acme/robot-7">security (acme/robot-7) live</h3>', $this->published[0]->getData());
+    }
+
     public function testAToolCallNamesItsReviewerByTheRoleAndModelOfItsLatestStart(): void
     {
         $ledger = new DashboardLedger();
@@ -633,7 +633,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
         $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'read_file');
 
-        self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $this->published[0]->getData());
+        self::assertStringContainsString('<h3 title="Kimi K3">security (Kimi K3 (Moonshot AI)) live</h3>', $this->published[0]->getData());
         self::assertSame([], $this->log->cleanLogs());
     }
 
@@ -650,7 +650,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertCount(2, $this->published);
         foreach ($this->published as $update) {
-            self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $update->getData());
+            self::assertStringContainsString('<h3 title="Kimi K3">security (Kimi K3 (Moonshot AI)) live</h3>', $update->getData());
         }
     }
 
@@ -672,7 +672,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), [], [], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertCount(1, $this->published);
-        self::assertStringContainsString('Judged.', $this->published[0]->getData());
+        self::assertStringContainsString('Checked.', $this->published[0]->getData());
         $logs = $this->log->cleanLogs();
         self::assertCount(1, $logs);
         $log = $logs[0];
@@ -691,7 +691,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), [], [], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertSame(['replace round-'.self::ROUND.'-summary-tools', 'replace round-'.self::ROUND.'-state'], array_map($this->actionAndTargetOf(...), $this->published));
-        self::assertStringContainsString('Judged.', array_last($this->published)?->getData() ?? '');
+        self::assertStringContainsString('Checked.', array_last($this->published)?->getData() ?? '');
         self::assertSame([LockReleasingException::class], $this->exceptionsLogged());
     }
 
@@ -704,6 +704,19 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertSame(['replace round-'.self::ROUND.'-summary-tools'], array_map($this->actionAndTargetOf(...), $this->published));
         self::assertSame([LockReleasingException::class], $this->exceptionsLogged());
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+        $this->ledger = new DashboardLedger();
+        $this->costs = self::createStub(RoundCosts::class);
+        $this->costs->method('costOf')->willReturn(Cost::none());
+    }
+
+    private function readAnswer(string $title): ReadAnswer
+    {
+        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
     }
 
     /**
@@ -735,9 +748,13 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
         // Registered because a placed reviewer row shows a character, whose images the asset mapper names in the app.
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
+        // Registered because the judged stream links the Now box's findings to the Full record by its route.
+        $twig->addFunction(new TwigFunction('path', static fn (string $route, array $parameters = []): string => $route.'?'.http_build_query($parameters)));
         // Registered because a judged finding's text shows its backtick spans as code.
         $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
         $twig->addFunction(new TwigFunction('finding_title_spans', new FindingSpans()->ofATitle(...)));
+        // Registered because the judged stream explains "checked" with its glossary term.
+        $twig->addFunction(new TwigFunction('glossary_explanation', new GlossaryExplanations()->of(...)));
 
         return new MercureRoundUpdates(
             $this->live($publisher),
@@ -747,11 +764,6 @@ final class MercureRoundUpdatesTest extends TestCase
             new LockFactory($locks ?? new InMemoryStore()),
             $this->log,
         );
-    }
-
-    private function pages(): LedgerReviewPages
-    {
-        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     // The first read pauses its fiber and answers a running round, because it stands for a read taken before the judge committed; every later one finds the round judged, since the judge commits before it publishes.
@@ -792,6 +804,11 @@ final class MercureRoundUpdatesTest extends TestCase
         };
 
         return new MercureLiveUpdates(new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), $publisher), $this->log);
+    }
+
+    private function pages(): LedgerReviewPages
+    {
+        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     /**

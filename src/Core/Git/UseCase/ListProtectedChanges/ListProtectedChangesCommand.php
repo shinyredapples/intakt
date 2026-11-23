@@ -4,29 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\ListProtectedChanges;
 
-use Intakt\Core\Git\Contract\GitServices;
-use Intakt\Core\Git\Domain\Mirrors;
-use Intakt\Core\Git\Domain\ProtectedChanges;
-use Intakt\Core\Git\Domain\ProtectedPaths;
-use InvalidArgumentException;
+use Intakt\Core\Git\Contract\ProtectedChanges;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
+use Intakt\Core\Git\Domain\ProtectedPathRefused;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 #[AsCommand(name: 'intakt:protected:list', description: 'List the protected paths a head touches, read from the whole change since the merge base with main and from each of its commits')]
 final readonly class ListProtectedChangesCommand
 {
-    /**
-     * @param array<string, list<string>> $protectedPaths
-     */
     public function __construct(
-        private ListProtectedChanges $changes,
-        private Mirrors $mirrors,
-        #[Autowire(param: GitServices::PROTECTED_PATHS)]
-        private array $protectedPaths,
+        private ProtectedHeadsOfMirrors $heads,
     ) {
     }
 
@@ -38,8 +29,8 @@ final readonly class ListProtectedChangesCommand
         string $head,
     ): int {
         try {
-            $changes = $this->changes->of($this->mirrors->pathOf($project), $head, new ProtectedPaths($this->protectedPaths[$project] ?? []));
-        } catch (InvalidArgumentException $refused) {
+            $changes = $this->heads->checked($project, $head);
+        } catch (ProjectNameRefused|CommitNameRefused|ProtectedPathRefused $refused) {
             $io->error($refused->getMessage());
 
             return Command::FAILURE;

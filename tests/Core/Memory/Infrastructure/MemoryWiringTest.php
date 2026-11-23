@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Memory\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(OptionalProjectMemory::class)]
 #[UsesClass(MemoryDocuments::class)]
 #[UsesClass(MemoryEntry::class)]
+#[UsesClass(Paths::class)]
 final class MemoryWiringTest extends KernelTestCase
 {
     public function testReviewersAreWiredWithTheReadSideOfMemory(): void
@@ -37,6 +39,6 @@ final class MemoryWiringTest extends KernelTestCase
         $this->expectException(LogicException::class);
         $this->expectExceptionMessageMatches('/needs an embedding model/');
 
-        $index->index(new MemoryEntry('alpha', 'Text.', ['src/A.php']));
+        $index->index(new MemoryEntry('alpha', 'Text.', new Paths('src/A.php')));
     }
 }

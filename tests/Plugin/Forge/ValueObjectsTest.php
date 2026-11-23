@@ -8,6 +8,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ChangedFiles::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(FileStatus::class)]
+#[UsesClass(CommitIdMalformed::class)]
 final class ValueObjectsTest extends TestCase
 {
     public function testAFullHashIsACommitId(): void
@@ -29,23 +31,23 @@ final class ValueObjectsTest extends TestCase
         self::assertFalse($id->equals(new CommitId(str_repeat('cd', 20))));
     }
 
-    public function testAnAbbreviatedHashIsNotACommitId(): void
+    public function testAnAbbreviatedHashIsRefusedAsAMalformedCommitId(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(new CommitIdMalformed('A commit id is a full lowercase hexadecimal hash.'));
 
         new CommitId('abcdef1');
     }
 
     public function testAHashWithATrailingNewlineIsNotACommitId(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(CommitIdMalformed::class);
 
         new CommitId(str_repeat('ab', 20)."\n");
     }
 
     public function testAnOptionLikeHashIsNotACommitId(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(CommitIdMalformed::class);
 
         new CommitId('--output=x');
     }

@@ -18,45 +18,9 @@ class FakeCopyButton extends FakeElement {
     }
 }
 
-class FakeSummary extends FakeElement {
-    focused = false;
-
-    closest() {
-        return null;
-    }
-
-    focus() {
-        this.focused = true;
-    }
-}
-
-class FakeWhy extends FakeElement {
-    constructor(open) {
-        super();
-        this.open = open;
-        this.summary = new FakeSummary('Why');
-    }
-
-    querySelector(selector) {
-        return selector === 'summary' ? this.summary : null;
-    }
-}
-
-class FakeInsideWhy extends FakeElement {
-    constructor(why) {
-        super();
-        this.why = why;
-    }
-
-    closest(selector) {
-        return selector === 'details.why' ? this.why : null;
-    }
-}
-
 class FakePage {
     listeners = new Map();
     buttons = [];
-    whys = [];
 
     addEventListener(type, listener) {
         assert.equal(this.listeners.has(type), false);
@@ -64,12 +28,9 @@ class FakePage {
     }
 
     querySelectorAll(selector) {
-        if (selector === 'button[data-copy]') {
-            return this.buttons;
-        }
-        assert.equal(selector, 'details.why[open]');
+        assert.equal(selector, 'button[data-copy]');
 
-        return this.whys.filter((why) => why.open);
+        return this.buttons;
     }
 
     dispatch(type, event = {}) {
@@ -135,18 +96,13 @@ class FakeSlowClipboard {
     }
 }
 
-function pageWithACommand({ clipboard = new FakeClipboard(), phone = false } = {}) {
+function pageWithACommand({ clipboard = new FakeClipboard() } = {}) {
     const page = new FakePage();
     const timers = new FakeTimers();
     const view = {
         navigator: clipboard === null ? {} : { clipboard },
         setTimeout: (callback, delay) => timers.setTimeout(callback, delay),
         clearTimeout: (id) => timers.clearTimeout(id),
-        matchMedia: (query) => {
-            assert.equal(query, '(max-width: 760px)');
-
-            return { matches: phone };
-        },
     };
     copyCommands(page, view);
     const button = new FakeCopyButton();
@@ -304,60 +260,4 @@ test('a click outside a Copy button copies nothing', async () => {
     assert.deepEqual(clipboard.written, []);
     assert.equal(button.textContent, 'Copy');
     assert.equal(timers.pending.size, 0);
-});
-
-test('Escape on a phone closes the open Why and gives the focus back to its summary', () => {
-    const { page } = pageWithACommand({ phone: true });
-    const why = new FakeWhy(true);
-    page.whys.push(why);
-
-    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
-
-    assert.equal(why.open, false);
-    assert.equal(why.summary.focused, true);
-});
-
-test('Escape on a phone closes the open Why after the focus moved to a control outside it, and leaves the focus there', () => {
-    const { page, button } = pageWithACommand({ phone: true });
-    const why = new FakeWhy(true);
-    page.whys.push(why);
-
-    page.dispatch('keydown', { key: 'Escape', target: button });
-
-    assert.equal(why.open, false);
-    assert.equal(why.summary.focused, false);
-});
-
-test('Escape on a wide screen leaves the Why open, because every Why shows there', () => {
-    const { page } = pageWithACommand();
-    const why = new FakeWhy(true);
-    page.whys.push(why);
-
-    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
-
-    assert.equal(why.open, true);
-    assert.equal(why.summary.focused, false);
-});
-
-test('another key or a closed Why changes nothing', () => {
-    const { page } = pageWithACommand({ phone: true });
-    const open = new FakeWhy(true);
-    page.whys.push(open);
-
-    page.dispatch('keydown', { key: 'Enter', target: new FakeInsideWhy(open) });
-
-    assert.equal(open.open, true);
-    assert.equal(open.summary.focused, false);
-});
-
-test('Escape on a phone with every Why closed moves no focus', () => {
-    const { page } = pageWithACommand({ phone: true });
-    const closed = new FakeWhy(false);
-    page.whys.push(closed);
-
-    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(closed) });
-    page.dispatch('keydown', { key: 'Escape', target: null });
-
-    assert.equal(closed.open, false);
-    assert.equal(closed.summary.focused, false);
 });

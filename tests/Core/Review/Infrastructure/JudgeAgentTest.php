@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -30,6 +31,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgedFinding::class)]
 #[UsesClass(JudgeRequest::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(DiffPaths::class)]
@@ -50,7 +52,7 @@ final class JudgeAgentTest extends KernelTestCase
 
     public function testTheFilesTheChangeTouchesReachTheModelFencedBesideTheFindings(): void
     {
-        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/the-journey-of-a-task.md')], new UuidV7(), ['docs/guide/the-journey-of-a-task.md', 'src/A.php']), '{"marks":[{"id":"F1","mark":"act"}]}');
+        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/the-journey-of-a-task.md')], new UuidV7(), new Paths('docs/guide/the-journey-of-a-task.md', 'src/A.php')), '{"marks":[{"id":"F1","mark":"act"}]}');
 
         self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\n\\\\"docs\\\\\/guide\\\\\/the-journey-of-a-task\.md\\\\"\\\\n\\\\"src\\\\\/A\.php\\\\"\\\\n<<<END \1>>>/', $this->sent[0]);
     }
@@ -61,14 +63,14 @@ final class JudgeAgentTest extends KernelTestCase
         $files = new DiffPaths()->in($diff);
         self::assertSame(["docs/caf\xE9.txt"], $files);
 
-        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/caf\xE9.txt')], new UuidV7(), $files), '{"marks":[{"id":"F1","mark":"act"}]}');
+        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/caf\xE9.txt')], new UuidV7(), new Paths(...$files)), '{"marks":[{"id":"F1","mark":"act"}]}');
 
         self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
     }
 
     public function testAChangedPathHoldingANewlineOrAQuoteStaysOnOneLineOfTheFileList(): void
     {
-        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7(), ["docs/a\nb.md", 'docs/say "hi".md']), '{"marks":[{"id":"F1","mark":"act"}]}');
+        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7(), new Paths("docs/a\nb.md", 'docs/say "hi".md')), '{"marks":[{"id":"F1","mark":"act"}]}');
 
         self::assertStringContainsString('\\"docs\\/a\\\\nb.md\\"', $this->sent[0]);
         self::assertStringContainsString('say \\\\\\"hi\\\\\\"', $this->sent[0]);
@@ -76,21 +78,21 @@ final class JudgeAgentTest extends KernelTestCase
 
     public function testAP3WordingFindingInAListedFileComesBackAct(): void
     {
-        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/a.md')], new UuidV7(), ['docs/guide/a.md']), '{"marks":[{"id":"F1","mark":"act"}]}');
+        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/a.md')], new UuidV7(), new Paths('docs/guide/a.md')), '{"marks":[{"id":"F1","mark":"act"}]}');
 
         self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
     }
 
     public function testAP3FindingInAFileOutsideTheListComesBackDefer(): void
     {
-        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/Other.php')], new UuidV7(), ['docs/guide/a.md']), '{"marks":[{"id":"F1","mark":"defer"}]}');
+        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/Other.php')], new UuidV7(), new Paths('docs/guide/a.md')), '{"marks":[{"id":"F1","mark":"defer"}]}');
 
         self::assertEquals([new JudgedFinding('F1', Mark::Defer)], $judgement->marks);
     }
 
     public function testAnEmptyChangedFilesListIsSentAsADashInsideItsFence(): void
     {
-        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7(), []), '{"marks":[{"id":"F1","mark":"act"}]}');
+        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7(), new Paths()), '{"marks":[{"id":"F1","mark":"act"}]}');
 
         self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\n-\\\\n<<<END \1>>>/', $this->sent[0]);
     }
@@ -231,7 +233,12 @@ final class JudgeAgentTest extends KernelTestCase
             $given[] = $this->finding($id, 'src/A.php', $severity);
         }
 
-        return $this->ask(new JudgeRequest($task, $given, new UuidV7(), []), $answer);
+        return $this->ask(new JudgeRequest($task, $given, new UuidV7(), new Paths()), $answer);
+    }
+
+    private function finding(string $id, string $file, Severity $severity = Severity::P3): Finding
+    {
+        return new Finding($id, $severity, $file, 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 
     private function ask(JudgeRequest $request, string $answer): Judgement
@@ -243,10 +250,5 @@ final class JudgeAgentTest extends KernelTestCase
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
 
         return new JudgeAgent(new JudgePrompt(new Fence()))->judge($request, $platform, 'judge-model');
-    }
-
-    private function finding(string $id, string $file, Severity $severity = Severity::P3): Finding
-    {
-        return new Finding($id, $severity, $file, 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 }

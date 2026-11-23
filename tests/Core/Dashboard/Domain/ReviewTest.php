@@ -12,6 +12,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Domain\Timeline;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
@@ -124,13 +125,37 @@ final class ReviewTest extends TestCase
         self::assertSame($round, new Review([$round])->activeRound());
     }
 
+    public function testTheFirstRoundOfRoundsWithoutANumberIsTheSameWhicheverRoundCameFirst(): void
+    {
+        $first = $this->round('round-a', null);
+        $second = $this->round('round-b', null);
+
+        self::assertSame('round-a', new Review([$second, $first])->firstRound());
+        self::assertSame('round-a', new Review([$first, $second])->firstRound());
+    }
+
+    public function testTheFirstRoundIsTheLowestNumberedOneWhateverItsId(): void
+    {
+        self::assertSame('round-z', new Review([$this->round('round-a', 2), $this->round('round-z', 1)])->firstRound());
+    }
+
+    public function testAReviewOffersTheRoundAfterItsLatest(): void
+    {
+        self::assertSame(3, new Review([$this->round('round-a', 1), $this->round('round-b', 2)])->nextNumber());
+    }
+
+    public function testAHistoryOnlyReviewOffersNoNextRound(): void
+    {
+        self::assertNull(new Review([$this->round('round-a', 1), $this->round('round-b', 2)], Timeline::HistoryOnly)->nextNumber());
+    }
+
+    private function round(string $id, ?int $number): ReviewedRound
+    {
+        return new ReviewedRound(new RoundStart($id, 'alpha', 2), new RoundPlace('feat/thing', $number), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+    }
+
     private function judged(string $id, int $number): ReviewedRound
     {
         return $this->round($id, $number)->judgedWith([], new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
-    }
-
-    private function round(string $id, int $number): ReviewedRound
-    {
-        return new ReviewedRound(new RoundStart($id, 'alpha', 2), new RoundPlace('feat/thing', $number), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
     }
 }

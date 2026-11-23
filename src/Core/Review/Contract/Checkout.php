@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-use InvalidArgumentException;
-
 // The one place that decides what is inside the checkout, so the tools and the listener that denies their calls cannot disagree.
 final readonly class Checkout
 {
@@ -18,7 +16,7 @@ final readonly class Checkout
         $real = realpath($root);
 
         if (false === $real || !is_dir($real)) {
-            throw new InvalidArgumentException('The checkout is not a directory.');
+            throw CheckoutNotADirectory::create();
         }
 
         $this->root = $real;

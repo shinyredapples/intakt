@@ -51,6 +51,38 @@ final class BuildImageTest extends SandboxTestCase
         self::assertStringEqualsFile($sandbox->root.'/built', "build --tag {$tag} --file .github/ci/Dockerfile .\n");
     }
 
+    public function testAfterAFailedLoginAMissingTagFailsWithoutABuild(): void
+    {
+        $sandbox = $this->checkout();
+        $sandbox->write('env', '');
+
+        $result = $sandbox->runScript(
+            'PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT),
+            ['GITHUB_ENV' => $sandbox->root.'/env', 'DOCKERHUB_LOGIN_FAILED' => '1'],
+        );
+
+        self::assertFalse($result->succeeded());
+        self::assertStringContainsString('The Docker Hub login failed', $result->errors);
+        self::assertFileDoesNotExist($sandbox->root.'/built');
+        self::assertStringEqualsFile($sandbox->root.'/env', '');
+    }
+
+    public function testAfterAFailedLoginAnExistingTagIsStillReused(): void
+    {
+        $sandbox = $this->checkout();
+        $sandbox->write('present', '');
+        $sandbox->write('env', '');
+
+        $result = $sandbox->runScript(
+            'PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT),
+            ['GITHUB_ENV' => $sandbox->root.'/env', 'DOCKERHUB_LOGIN_FAILED' => '1'],
+        );
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertFileDoesNotExist($sandbox->root.'/built');
+        self::assertStringStartsWith('CI_IMAGE=intakt-ci:', (string) file_get_contents($sandbox->root.'/env'));
+    }
+
     private function checkout(): Sandbox
     {
         $sandbox = $this->emptySandbox();

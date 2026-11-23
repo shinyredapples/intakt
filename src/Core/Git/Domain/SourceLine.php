@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Domain;
 
-use InvalidArgumentException;
-
 final readonly class SourceLine
 {
     // A whole line with a full commit id, so a sentence, a quote or code that mentions one is prose and not a source line.
@@ -27,7 +25,7 @@ final readonly class SourceLine
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws SourceLineNotUnique
      */
     public static function in(string $text): ?self
     {
@@ -35,7 +33,7 @@ final readonly class SourceLine
 
         // Because the build gets that one commit, and picking one of two would decide for the author.
         if (count($lines) > 1) {
-            throw new InvalidArgumentException('the task names more than one Source line, so the commit to build from is unclear');
+            throw SourceLineNotUnique::inTask();
         }
 
         $line = array_first($lines);

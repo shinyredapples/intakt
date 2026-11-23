@@ -26,6 +26,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -44,6 +45,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerReviews::class)]
@@ -63,6 +65,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(ReviewStarted::class)]
 #[UsesClass(JudgeDone::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
@@ -70,11 +73,6 @@ use Symfony\Component\Uid\Uuid;
 final class LedgerReviewsTest extends TestCase
 {
     private DashboardLedger $ledger;
-
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
 
     public function testEventsOfKindsTheDashboardDoesNotReadAreIgnored(): void
     {
@@ -165,7 +163,7 @@ final class LedgerReviewsTest extends TestCase
     {
         $reviews = $this->reviewsOf(
             $this->row(LedgerEventKind::ReviewStarted, new ReviewStarted('r1', 'alpha', 3, 'feat/thing', 1, 'Add the thing.', '/repos/alpha', 'main')),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.')])),
         );
 
         self::assertSame([['r1', 'alpha', 3, ReviewState::Judged]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->project, $review->reviewers, $review->state], $reviews));
@@ -308,6 +306,11 @@ final class LedgerReviewsTest extends TestCase
         self::assertSame([ReviewState::InProgress, ReviewOutcome::Failed], [$reviews[0]->state, $reviews[0]->outcome]);
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+    }
+
     /**
      * @return list<ReviewSummary>
      */
@@ -321,17 +324,6 @@ final class LedgerReviewsTest extends TestCase
     /**
      * @return list<ReviewSummary>
      */
-    private function reviewsOf(RecordedEvent ...$events): array
-    {
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willReturn(new RecordedEvents(array_values($events)));
-
-        return $this->listOf($ledger);
-    }
-
-    /**
-     * @return list<ReviewSummary>
-     */
     private function listOf(Ledger $ledger): array
     {
         return ListedReviews::on($ledger)->newestFirst();
@@ -340,11 +332,22 @@ final class LedgerReviewsTest extends TestCase
     // Serialized as the writers do, so the reader is shown the row it meets in production.
     private function row(LedgerEventKind $kind, object $payload): RecordedEvent
     {
-        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, 'json'));
+        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT));
     }
 
     private function event(LedgerEventKind $kind, string $payload): RecordedEvent
     {
         return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+    }
+
+    /**
+     * @return list<ReviewSummary>
+     */
+    private function reviewsOf(RecordedEvent ...$events): array
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn(new RecordedEvents(array_values($events)));
+
+        return $this->listOf($ledger);
     }
 }

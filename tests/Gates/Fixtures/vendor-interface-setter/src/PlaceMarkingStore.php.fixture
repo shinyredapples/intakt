@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Override;
+use Symfony\Component\Workflow\Marking;
+use Symfony\Component\Workflow\MarkingStore\MarkingStoreInterface;
+
+final readonly class PlaceMarkingStore implements MarkingStoreInterface
+{
+    #[Override]
+    public function getMarking(object $subject): Marking
+    {
+        return new Marking(['draft' => 1]);
+    }
+
+    /**
+     * @param array<mixed> $context
+     */
+    #[Override]
+    public function setMarking(object $subject, Marking $marking, array $context = []): void
+    {
+    }
+}

@@ -32,10 +32,11 @@ final readonly class OutageWatch
         }
     }
 
+    // By the stored moment, not by age, because each window's age is sampled at its own clock reading and a pause between the lookups would make the older reading look newer.
     private function newestUseOf(Account $account): ?WindowUse
     {
         $uses = array_filter(array_map(fn (UsageWindow $window): ?WindowUse => $this->measured->of($account, $window), UsageWindow::cases()));
-        usort($uses, static fn (WindowUse $one, WindowUse $other): int => $other->ageInSeconds <=> $one->ageInSeconds);
+        usort($uses, static fn (WindowUse $one, WindowUse $other): int => $one->takenAt <=> $other->takenAt);
 
         return array_last($uses);
     }

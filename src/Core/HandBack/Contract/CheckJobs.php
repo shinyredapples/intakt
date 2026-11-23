@@ -8,14 +8,13 @@ use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobRefused;
-use InvalidArgumentException;
 use NoDiscard;
 
 // An interface, because the build task runs the pre-push check on what its job hands back and other modules may use only this module's contract.
 interface CheckJobs
 {
     /**
-     * @throws InvalidArgumentException
+     * @throws HandBackBranchRefused
      * @throws HandBackNotChecked
      * @throws RepositoryAttributesRefused
      * @throws JobRefused

@@ -68,9 +68,9 @@ final readonly class SampleRepository
 
     private function init(string $directory): void
     {
-        $call = $this->hardened->call(['init', '--quiet', '--initial-branch='.self::BASE], $directory);
-        // Without the pinned work tree, because git init refuses one without a git directory, and a recorded one would point at the partial directory after the rename.
-        new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false], timeout: self::TIMEOUT_SECONDS)->mustRun();
+        // The git folder is named, because git init refuses the pinned work tree without one; it is the work tree's own .git, so init records no core.worktree that would point at the partial directory after the rename.
+        $call = $this->hardened->call(['--git-dir=.git', 'init', '--quiet', '--initial-branch='.self::BASE], $directory);
+        new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS)->mustRun();
     }
 
     private function commit(string $directory, string $tree, string $message): void

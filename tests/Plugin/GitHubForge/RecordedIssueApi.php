@@ -7,7 +7,9 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\BudgetReserve;
+use Intakt\Plugin\GitHubForge\Infrastructure\ChangedWhileServed;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\EntityTags;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
@@ -16,6 +18,8 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\IssueFields;
+use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use LogicException;
 use Psr\Log\NullLogger;
@@ -32,9 +36,15 @@ final class RecordedIssueApi
     /** @var array<int, string> */
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
+    // Fifteen days after the scripted issues were last updated, because a page served in the second one of its issues changed fails a listing of several pages; null sends no Date.
+    public ?string $served = 'Wed, 25 Nov 2026 10:00:00 GMT';
     public bool $notModified = false;
+    // Answers 304 to a request that carries the current ETag, as GitHub does for a page that did not change; off by default, so a scripted page is read even when a validator is sent.
+    public bool $stable = false;
     /** @var list<int> */
     public array $namingNext = [];
+    // A `%d` stands for the next page's number, because a test of how `rel` is read scripts its own `Link` for a page in `namingNext`.
+    public string $nextLink = '<https://api.github.com/repositories/1/issues?page=%d>; rel="next", <https://api.github.com/repositories/1/issues?page=9>; rel="last"';
     /** @var list<string> */
     public array $conditions = [];
     // A body, or three digits for an HTTP status, because the history read is scripted like the listing pages.
@@ -49,14 +59,21 @@ final class RecordedIssueApi
     {
         [$calls, $checked] = $this->wiring();
 
-        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), $this->reserve);
+        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new IssueFields(new GitHubMoments()), $this->reserve, new ChangedWhileServed(new GitHubMoments()), new EntityTags(), new NextLinks());
     }
 
     public function histories(): GitHubIssueHistories
     {
         [$calls, $checked] = $this->wiring();
 
-        return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]));
+        return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments());
+    }
+
+    public static function fixture(string $name): string
+    {
+        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+
+        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
     }
 
     /**
@@ -78,24 +95,52 @@ final class RecordedIssueApi
         return [new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens)];
     }
 
-    public static function fixture(string $name): string
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function answer(string $method, string $url, array $options): ResponseInterface
     {
-        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+        $this->requests[] = $method.' '.$url;
+        $condition = $this->keepConditions($options);
 
-        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+        if (str_ends_with($url, '/graphql')) {
+            return $this->answerHistory($options);
+        }
+
+        $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
+        if ($this->notModified || ($this->stable && $condition === $this->etagOf($page))) {
+            return new MockResponse('', ['http_code' => 304]);
+        }
+
+        $body = $this->pages[$page] ?? '[]';
+
+        if (1 === preg_match('/^\d{3}$/', $body)) {
+            return new MockResponse('{}', ['http_code' => (int) $body, 'response_headers' => ['Retry-After' => '60']]);
+        }
+
+        $headers = ['ETag' => $this->etagOf($page), ...(null === $this->served ? [] : ['Date' => $this->served])];
+        if (in_array($page, $this->namingNext, true)) {
+            $headers['Link'] = sprintf($this->nextLink, $page + 1);
+        }
+
+        return new MockResponse($body, ['response_headers' => $headers]);
     }
 
     /**
      * @param array<string, mixed> $options
      */
-    private function keepConditions(array $options): void
+    private function keepConditions(array $options): ?string
     {
+        $condition = null;
         $headers = $options['headers'] ?? [];
         foreach (is_array($headers) ? $headers : [] as $header) {
             if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
-                $this->conditions[] = substr($header, strlen('If-None-Match: '));
+                $condition = substr($header, strlen('If-None-Match: '));
+                $this->conditions[] = $condition;
             }
         }
+
+        return $condition;
     }
 
     /**
@@ -108,34 +153,9 @@ final class RecordedIssueApi
         return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql, ['response_headers' => $this->graphqlHeaders]);
     }
 
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function answer(string $method, string $url, array $options): ResponseInterface
+    // A validator of its own for every page after the first, as GitHub sends, so a test sees that each page is asked again with its own.
+    private function etagOf(int $page): string
     {
-        $this->requests[] = $method.' '.$url;
-        $this->keepConditions($options);
-
-        if (str_ends_with($url, '/graphql')) {
-            return $this->answerHistory($options);
-        }
-
-        if ($this->notModified) {
-            return new MockResponse('', ['http_code' => 304]);
-        }
-
-        $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
-        $body = $this->pages[$page] ?? '[]';
-
-        if (1 === preg_match('/^\d{3}$/', $body)) {
-            return new MockResponse('{}', ['http_code' => (int) $body, 'response_headers' => ['Retry-After' => '60']]);
-        }
-
-        $headers = ['ETag' => $this->etag];
-        if (in_array($page, $this->namingNext, true)) {
-            $headers['Link'] = sprintf('<https://api.github.com/repositories/1/issues?page=%d>; rel="next", <https://api.github.com/repositories/1/issues?page=9>; rel="last"', $page + 1);
-        }
-
-        return new MockResponse($body, ['response_headers' => $headers]);
+        return 1 === $page ? $this->etag : substr($this->etag, 0, -1).'.p'.$page.'"';
     }
 }

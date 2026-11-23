@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Counter
+{
+    private int $count = 0;
+
+    public function add(int $step): int
+    {
+        $this->setCount($this->count + $step);
+
+        return $this->count;
+    }
+
+    private function setCount(int $count): void
+    {
+        $this->count = $count;
+    }
+}

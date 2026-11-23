@@ -6,10 +6,12 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -22,12 +24,15 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 
 #[CoversClass(ReviewOutput::class)]
 #[CoversClass(ReviewOutputVerdict::class)]
+#[UsesClass(BlockReasons::class)]
 #[UsesClass(ReviewExit::class)]
 #[UsesClass(Cost::class)]
+#[UsesClass(FindingIds::class)]
 final class ReviewOutputTest extends TestCase
 {
     public function testTheOutputCarriesTheExitCodeAndTheFindingsCountPerVerdict(): void
@@ -71,14 +76,14 @@ final class ReviewOutputTest extends TestCase
      */
     private function whenTheReviewIsWritten(array $merged = []): array
     {
-        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, true, 'R1', new Evidence('bin/check', 'failed'))->withMerged($merged);
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, true, 'R1', new Evidence('bin/check', 'failed'))->withMerged(new FindingIds(...$merged));
         $verdicts = [
             new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
         ];
-        $review = new ChangeReview('round-1', 2, Decision::Changes, $verdicts, [$finding], new RoundTokens(2, 100, 60, 30, 5, 20, 120), Cost::inUsd(0.045895), ['a reason']);
+        $review = new ChangeReview('round-1', 2, Decision::Changes, $verdicts, [$finding], new RoundTokens(2, 100, 60, 30, 5, 20, 120), Cost::inUsd(0.045895), new BlockReasons('a reason'));
 
-        $json = StoredSerializerFactory::create()->serialize(ReviewOutput::of($review), 'json', [AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS]);
+        $json = StoredSerializerFactory::create()->serialize(ReviewOutput::of($review), JsonEncoder::FORMAT, [AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS]);
         $output = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($output);
 

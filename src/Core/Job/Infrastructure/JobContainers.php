@@ -29,7 +29,7 @@ final readonly class JobContainers
     }
 
     // The proxy is closed after the job's container is gone, because the engine removes no network a container still uses.
-    public function runToEnd(JobSpec $spec, string $outputDirectory): JobEnd
+    public function runToEnd(JobSpec $spec, string $outputDirectory): ContainerEnd
     {
         $this->refuseImageVolumes($spec);
 
@@ -43,19 +43,6 @@ final readonly class JobContainers
         }
     }
 
-    private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): JobEnd
-    {
-        $container = $this->engine->create('intakt-job-'.$spec->id->value, $this->definition->of($spec, $outputDirectory, $route));
-
-        try {
-            $this->engine->start($container);
-
-            return $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)));
-        } finally {
-            $this->engine->remove($container);
-        }
-    }
-
     // A volume the image declares stays writable under ReadonlyRootfs, so the job could write outside its work area and output directory.
     private function refuseImageVolumes(JobSpec $spec): void
     {
@@ -63,6 +50,22 @@ final readonly class JobContainers
 
         if ([] !== $volumes) {
             throw JobRefused::forImageVolumes($spec->image, $volumes);
+        }
+    }
+
+    // The log is read before the container is removed, because the engine keeps it only as long as the container.
+    private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): ContainerEnd
+    {
+        $request = $this->definition->of($spec, $outputDirectory, $route);
+        $container = $this->engine->create('intakt-job-'.$spec->id->value, $request->definition);
+
+        try {
+            $this->engine->start($container);
+            $end = $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)));
+
+            return new ContainerEnd($end, $this->engine->standardErrorHead($container, StartCheckLog::MAX_BYTES), $request->mark);
+        } finally {
+            $this->engine->remove($container);
         }
     }
 
@@ -89,6 +92,11 @@ final readonly class JobContainers
         return max(0.0, (float) $deadline->format('U.u') - (float) $this->clock->now()->format('U.u'));
     }
 
+    private function endOf(ContainerState $state): JobEnd
+    {
+        return new JobEnd($state->memoryKilled ? JobCause::MemoryKilled : JobCause::Exited, $state->exitCode);
+    }
+
     // Classified from the state after the kill, because memory can kill the job in the last pause, and an exit code of a container still running was never confirmed.
     private function killed(string $container): JobEnd
     {
@@ -101,10 +109,5 @@ final readonly class JobContainers
         }
 
         return new JobEnd($state->memoryKilled ? JobCause::MemoryKilled : JobCause::TimedOut, $state->exitCode);
-    }
-
-    private function endOf(ContainerState $state): JobEnd
-    {
-        return new JobEnd($state->memoryKilled ? JobCause::MemoryKilled : JobCause::Exited, $state->exitCode);
     }
 }

@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
@@ -14,6 +15,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Judgement;
@@ -47,6 +49,7 @@ use Throwable;
 #[UsesClass(Verdict::class)]
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgeRequest::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(ProviderRateLimited::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(ProviderRejectedTheKey::class)]
@@ -55,6 +58,7 @@ use Throwable;
 #[UsesClass(Account::class)]
 #[UsesClass(KeyRejected::class)]
 #[UsesClass(EveryKeyRejected::class)]
+#[UsesClass(EveryAccountCoolingDown::class)]
 final class AccountLimitedVendorTest extends TestCase
 {
     public function testAReviewOnAnAccountWithAFreePlaceReturnsTheVendorsVerdict(): void
@@ -74,7 +78,7 @@ final class AccountLimitedVendorTest extends TestCase
         $vendor = self::createStub(Vendor::class);
         $vendor->method('judge')->willReturn($judgement);
 
-        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), []));
+        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), new Paths()));
 
         self::assertSame($judgement, $result);
     }
@@ -106,7 +110,7 @@ final class AccountLimitedVendorTest extends TestCase
 
         $this->expectException(VendorAccountOut::class);
 
-        $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), []));
+        $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), new Paths()));
     }
 
     public function testARateLimitWhileEveryAccountOfTheVendorCoolsDownWaitsUntilTheFirstIsFree(): void
@@ -115,6 +119,16 @@ final class AccountLimitedVendorTest extends TestCase
 
         self::assertInstanceOf(ProviderRateLimited::class, $out);
         self::assertSame(45, $out->retryAfterSeconds);
+    }
+
+    public function testARateLimitCarryingTheFailoversWaitWaitsThatLongEvenWhenTheAccountCooldownsReadZero(): void
+    {
+        $limited = new ProviderRateLimited(300, new EveryAccountCoolingDown(Provider::OpenAiCompatible, 42));
+
+        $out = $this->failureOf($this->vendor($this->failing($limited), $this->cooldowns(0)));
+
+        self::assertInstanceOf(ProviderRateLimited::class, $out);
+        self::assertSame(42, $out->retryAfterSeconds);
     }
 
     public function testATransientFailureWhileAnotherAccountOfTheVendorIsFreeMovesTheReviewThereAtOnce(): void
@@ -203,17 +217,6 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertInstanceOf(VendorAccountOut::class, $rejected);
     }
 
-    private function failureOf(AccountLimitedVendor $vendor): Throwable
-    {
-        try {
-            $_ = $vendor->review('intakt', Tier::Standard, $this->request());
-        } catch (Throwable $failure) {
-            return $failure;
-        }
-
-        self::fail('The review was expected to fail.');
-    }
-
     private function failing(Throwable $failure): Vendor
     {
         $vendor = self::createStub(Vendor::class);
@@ -233,6 +236,17 @@ final class AccountLimitedVendorTest extends TestCase
         $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn($secondsUntilAnAccountIsFree);
 
         return $cooldowns;
+    }
+
+    private function failureOf(AccountLimitedVendor $vendor): Throwable
+    {
+        try {
+            $_ = $vendor->review('intakt', Tier::Standard, $this->request());
+        } catch (Throwable $failure) {
+            return $failure;
+        }
+
+        self::fail('The review was expected to fail.');
     }
 
     private function tier(): TierResolver

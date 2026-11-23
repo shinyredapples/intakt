@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\IndexResolvedFindings;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
@@ -58,6 +59,6 @@ final readonly class IndexResolvedFindingsHandler
             $lines[] = 'Evidence: '.$finding->evidence->probe.': '.$finding->evidence->output;
         }
 
-        return new MemoryEntry($project, implode(PHP_EOL, $lines), null === $finding->file ? [] : [$finding->file]);
+        return new MemoryEntry($project, implode(PHP_EOL, $lines), null === $finding->file ? new Paths() : new Paths($finding->file));
     }
 }

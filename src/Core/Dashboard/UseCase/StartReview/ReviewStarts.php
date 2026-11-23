@@ -7,9 +7,11 @@ namespace Intakt\Core\Dashboard\UseCase\StartReview;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
@@ -25,6 +27,7 @@ final readonly class ReviewStarts
         private LedgerReviewPages $reviews,
         private MessageBusInterface $commands,
         private SampleChangeSource $sample,
+        private RoundLock $locks,
     ) {
     }
 
@@ -50,6 +53,11 @@ final readonly class ReviewStarts
             return null;
         }
 
+        // Taken only now, for a round the ledger knows, and released by RoundLock once the answer is built; keyed by the review's first round, so two presses that arrive together from two round pages of one review are kept apart too, and RoundNotNext still refuses a second press that comes later.
+        if (!$this->locks->tryHolding($review->firstRound())) {
+            return new StartAnswer([self::FLASH_ERROR, 'Another press for this review is still running, so nothing was started.']);
+        }
+
         return $this->started($this->commandFor($review, $source, $number));
     }
 
@@ -65,6 +73,9 @@ final readonly class ReviewStarts
     {
         try {
             $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
+        } catch (PanelNotConfigured) {
+            // The panel's own message names a configuration term a newcomer does not know yet; the CLI and MCP keep it.
+            return new StartAnswer([self::FLASH_ERROR, 'This project has no reviewers set up yet, so nothing was started.']);
         } catch (ReportableFailure $refusal) {
             return new StartAnswer([self::FLASH_ERROR, $refusal->getMessage()]);
         }

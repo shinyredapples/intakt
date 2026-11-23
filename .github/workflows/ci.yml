@@ -234,18 +234,54 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      # Decided in a step, like the image job's, so the check always reports: every push to main runs the journeys, a pull
+      # request only when it needs the app image (.github/ci/image-needed.sh) or touches the journeys' test code (the paths
+      # below). git diff exits 1 for a change and 0 for none; any other status is a git error and fails the step.
+      - name: Decide on the journeys
+        id: journeys
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          needed=yes
+          if [ "$EVENT" != push ]; then
+            base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
+            needed=$(.github/ci/image-needed.sh "$base" "$HEAD_SHA")
+            paths=(
+              tests/Journeys                              # the journeys themselves
+              tests/Support                               # StoredSerializerFactory.php, which DemoTourJourneyTest loads
+              tests/Core/Watcher/RecordedPullRequests.php # the recorded answers WatcherStart loads
+            )
+            if [ "$needed" != yes ]; then
+              status=0
+              git diff --quiet "$base" "$HEAD_SHA" -- "${paths[@]}" || status=$?
+              case "$status" in
+                0) ;;
+                1) needed=yes ;;
+                *) echo "::error::git diff failed with status $status."; exit 1 ;;
+              esac
+            fi
+          fi
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          if [ "$needed" = yes ]; then echo "journeys needed"; else echo "skipped: no journey inputs changed"; fi
       - name: Allow unprivileged user namespaces
-        if: runner.environment == 'github-hosted' || vars.CI_DISPOSABLE_RUNNER == 'true'
+        if: steps.journeys.outputs.needed == 'yes' && (runner.environment == 'github-hosted' || vars.CI_DISPOSABLE_RUNNER == 'true')
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Log in to Docker Hub
+        if: steps.journeys.outputs.needed == 'yes'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
       - name: Build or restore the CI image
+        if: steps.journeys.outputs.needed == 'yes'
         uses: $/.github/actions/ci-image
       - name: Run the journeys
+        if: steps.journeys.outputs.needed == 'yes'
         env:
           DISPOSABLE_RUNNER: ${{ vars.CI_DISPOSABLE_RUNNER }}
         run: |

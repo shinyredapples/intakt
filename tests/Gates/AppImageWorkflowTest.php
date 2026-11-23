@@ -176,14 +176,6 @@ final class AppImageWorkflowTest extends TestCase
     }
 
     /**
-     * @param WorkflowFile $workflow
-     */
-    private function runsOnPullRequestsOrBranchPushes(array $workflow): bool
-    {
-        return $this->startsOnPullRequestsOrBranchPushes($workflow['on'] ?? []);
-    }
-
-    /**
      * @param string|array<mixed> $on
      */
     private function startsOnPullRequestsOrBranchPushes(string|array $on): bool
@@ -217,5 +209,13 @@ final class AppImageWorkflowTest extends TestCase
         $workflow = Yaml::parseFile($path);
 
         return $workflow;
+    }
+
+    /**
+     * @param WorkflowFile $workflow
+     */
+    private function runsOnPullRequestsOrBranchPushes(array $workflow): bool
+    {
+        return $this->startsOnPullRequestsOrBranchPushes($workflow['on'] ?? []);
     }
 }

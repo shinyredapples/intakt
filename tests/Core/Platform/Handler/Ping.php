@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Platform\Handler;
 
-final readonly class Ping
+use Intakt\Core\Platform\Contract\CommandMessage;
+
+final readonly class Ping implements CommandMessage
 {
 }

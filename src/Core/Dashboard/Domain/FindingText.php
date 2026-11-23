@@ -15,7 +15,7 @@ final readonly class FindingText
 
     private const string CODE_OF_PARAGRAPHS = self::BLANK_LINE.self::CODE;
 
-    // An opening mark follows a space, a bracket, a quote or a code span and a closing one precedes a space, punctuation, a dash (**read**-only) or a code span, so snake_case names, arithmetic and globs keep their marks.
+    // An opening mark follows a space, a bracket, a quote or a code span and a closing one precedes a space, punctuation, a dash (**read**-only) or a code span, so snake_case names, arithmetic and globs keep their marks; because of the dash, a glob star before a dash still pairs with a later star in its paragraph (*-test.php and build*-old).
     private const string OPENS = '(?<=^|[\s(\[{"\'`\p{Ps}\p{Pi}])';
 
     private const string CLOSES = '(?=$|[\s)\]}"\'`\p{Pe}\p{Pf}\p{Pd}]|[.,;:!?…]+(?:$|[\s)\]}"\'`\p{Pe}\p{Pf}\p{Pd}]))';

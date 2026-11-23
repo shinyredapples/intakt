@@ -14,7 +14,6 @@ use PHPUnit\Framework\Attributes\Group;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
-use Symfony\Component\Messenger\Event\WorkerRunningEvent;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Worker;
 
@@ -78,13 +77,8 @@ final class DemoReviewLogTest extends KernelTestCase
         $events->addListener(WorkerMessageFailedEvent::class, static function (WorkerMessageFailedEvent $event) use (&$failures): void {
             $failures[] = $event->getThrowable()->getMessage();
         });
-        $events->addListener(WorkerRunningEvent::class, static function (WorkerRunningEvent $event): void {
-            if ($event->isWorkerIdle()) {
-                $event->getWorker()->stop();
-            }
-        });
 
-        new Worker(['async' => $this->queue()], $bus, $events, self::getContainer()->get(LoggerInterface::class))->run(['sleep' => 0]);
+        new Worker(['async' => $this->queue()], $bus, $events, self::getContainer()->get(LoggerInterface::class))->run(['sleep' => 0, 'stop_when_empty' => true]);
 
         return $failures;
     }

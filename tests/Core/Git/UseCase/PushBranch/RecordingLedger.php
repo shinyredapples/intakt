@@ -8,6 +8,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use LogicException;
@@ -47,13 +48,10 @@ final class RecordingLedger implements Ledger
         return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind)));
     }
 
-    /**
-     * @param list<string> $texts
-     */
     #[Override]
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
-        return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => array_any($texts, static fn (string $text): bool => str_contains($event->payload, $text)))));
+        return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => array_any([...$texts], static fn (string $text): bool => str_contains($event->payload, $text)))));
     }
 
     /**
@@ -69,11 +67,25 @@ final class RecordingLedger implements Ledger
      */
     public function payloadOf(LedgerEventKind $kind): array
     {
-        $event = array_first(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind)) ?? throw new LogicException('No such event was recorded.');
-        /** @var array<string, string> $payload */
-        $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+        return array_first($this->payloadsOf($kind)) ?? throw new LogicException('No such event was recorded.');
+    }
 
-        return $payload;
+    /**
+     * @return list<array<string, string>>
+     */
+    public function payloadsOf(LedgerEventKind $kind): array
+    {
+        $payloads = [];
+
+        foreach ($this->events as $event) {
+            if ($event->kind === $kind) {
+                /** @var array<string, string> $payload */
+                $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+                $payloads[] = $payload;
+            }
+        }
+
+        return $payloads;
     }
 
     /**

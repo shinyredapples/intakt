@@ -1,11 +1,12 @@
 name: highlights
-# Publishes the page bin/highlights assembles from docs/highlights.d/ to GitHub Pages; it is never committed.
+# Publishes the site bin/pages assembles, the front page, the highlights page and the journey page, to GitHub Pages; it is never committed.
 on:
   push:
     branches: [main]
     # Daily runs cover .github/ci/run-on-copy.sh and .github/actions/ci-image.
     paths:
       - docs/highlights.d/**
+      - docs/pages/**
       - bin/highlights
       - config/gates/src/Highlight*.php
       - .github/workflows/highlights.yml
@@ -20,6 +21,7 @@ permissions:
 jobs:
   build:
     if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
+    # GitHub's image pulls from Docker Hub unthrottled; a CI_RUNS_ON runner needs a Docker Hub login this job lacks.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # jekyll-build-pages reads the repository's Pages settings (jekyll-github-metadata): without pages: read its token
@@ -27,6 +29,9 @@ jobs:
     permissions:
       contents: read
       pages: read
+      # bin/journey-record reads the milestones, issues and pull requests for the journey page.
+      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,9 +39,15 @@ jobs:
           persist-credentials: false
       - name: Build or restore the CI image
         uses: $/.github/actions/ci-image
+      # On the runner, because the CI image has no gh; the job's own token stays out of the container.
+      - name: Record the journey's API answers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bin/journey-record _journey-api
       - name: Assemble the page
         # jekyll-build-pages runs Jekyll 3.10, which ignores render_with_liquid and runs Liquid on any {{ or {%. sed writes
-        # each of them as a Liquid string that prints it back, so Liquid hands docs/highlights.md to Markdown unchanged.
+        # each of them as a Liquid string that prints it back, so Liquid hands both pages to Markdown unchanged.
+        # The front page, docs/pages/index.html, has no front matter, so Jekyll copies it as it is.
         run: |
           set -eu
           mkdir _highlights
@@ -45,7 +56,7 @@ jobs:
             --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$GITHUB_WORKSPACE/_highlights:/page" \
-            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/highlights && sed "s/{[{%]/{{ \"&\" }}/g" docs/highlights.md > /page/index.md'
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/pages /page --recorded=/workspace/_journey-api && sed -i "s/{[{%]/{{ \"&\" }}/g" /page/highlights/index.md /page/journey/index.md'
       - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
         with:
           source: ./_highlights
@@ -54,7 +65,7 @@ jobs:
   publish:
     needs: build
     if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     permissions:
       pages: &pages-write write

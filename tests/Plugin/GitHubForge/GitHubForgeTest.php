@@ -11,6 +11,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
@@ -44,9 +45,12 @@ use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
+use Intakt\Tests\Plugin\Forge\CommitIdCheckThatThrows;
+use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -70,6 +74,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(ChangedFiles::class)]
 #[UsesClass(CommitId::class)]
+#[UsesClass(CommitIdMalformed::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(Diff::class)]
 #[UsesClass(FileContent::class)]
@@ -167,6 +172,25 @@ final class GitHubForgeTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $forge->change(new ChangeId(self::PULL));
+    }
+
+    public function testAnAbbreviatedHeadFromGitHubFailsTheReadAsBefore(): void
+    {
+        $this->pullFixture = 'pull_request_short_head.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered something other than a commit hash.'));
+
+        $this->forge()->change(new ChangeId(self::PULL));
+    }
+
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentWhileReadingAHashFromGitHubPassesThrough(): void
+    {
+        CommitIdCheckThatThrows::defineFor(str_repeat('1', 40));
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->forge()->change(new ChangeId(self::PULL));
     }
 
     public function testItDetectsAHeadThatMovedDuringReview(): void
@@ -549,6 +573,11 @@ final class GitHubForgeTest extends TestCase
         self::assertCount($requestsBefore, $this->requested);
     }
 
+    private function comment(string $body, string ...$credentials): ReviewComment
+    {
+        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
+    }
+
     private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
     {
         try {
@@ -558,11 +587,6 @@ final class GitHubForgeTest extends TestCase
         }
 
         throw new LogicException('The post was expected to fail.');
-    }
-
-    private function comment(string $body, string ...$credentials): ReviewComment
-    {
-        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
     }
 
     private function movedChange(GitHubForge $forge): Change

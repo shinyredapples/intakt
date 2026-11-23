@@ -61,6 +61,22 @@ final readonly class HardenedGit
     }
 
     /**
+     * @param list<string> $arguments
+     *
+     * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
+     */
+    public function callInBareRepository(array $arguments, string $repository): GitCall
+    {
+        $repository = $this->absolute($repository);
+        // Named and pinned as bare, because without a pinned work tree git would otherwise take the one core.worktree names, or the folder it runs in.
+        $options = ['--literal-pathspecs', '--git-dir='.$repository, '--bare'];
+        $emptyTree = $this->bareEmptyTree($options, $repository);
+
+        return new GitCall($this->command($options, $arguments, $emptyTree), $repository, $this->variables(null, $emptyTree));
+    }
+
+    /**
      * @return array<string, string|false>
      *
      * @throws RepositoryAttributesRefused
@@ -86,6 +102,71 @@ final readonly class HardenedGit
         $emptyTree = $this->emptyTree($directory);
 
         return new GitCall($this->command($options, $arguments, $emptyTree), $directory, $this->variables($directory, $emptyTree));
+    }
+
+    private function absolute(string $directory): string
+    {
+        // Because the process changes into the directory before git reads GIT_WORK_TREE, a relative one would be resolved twice; a missing one stays as it is, and the call itself fails there.
+        $absolute = realpath($directory);
+
+        return false === $absolute ? $directory : $absolute;
+    }
+
+    /**
+     * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
+     */
+    private function emptyTree(string $directory): string
+    {
+        // Because a missing directory holds no repository, and the git call itself fails there.
+        if (!is_dir($directory)) {
+            return self::EMPTY_TREES['sha1'];
+        }
+
+        // Git names the object format and the attributes file, because in a worktree or a submodule the file is not under <directory>/.git; where git cannot, the call itself fails the same way. rev-parse reads no attributes, so SHA-1's empty tree serves before the format is known.
+        $query = $this->query($this->question(['--literal-pathspecs'], []), $directory, $directory);
+        $answer = explode("\n", trim($query->getOutput()), 2);
+
+        if (!$query->isSuccessful() || 2 !== count($answer)) {
+            return self::EMPTY_TREES['sha1'];
+        }
+
+        [$format, $path] = $answer;
+        $this->refuseInfoAttributes($directory, $path);
+
+        return self::EMPTY_TREES[$format] ?? self::EMPTY_TREES['sha1'];
+    }
+
+    /**
+     * @param list<string> $options
+     *
+     * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
+     */
+    private function bareEmptyTree(array $options, string $repository): string
+    {
+        if (!is_dir($repository)) {
+            return self::EMPTY_TREES['sha1'];
+        }
+
+        // --show-cdup prints a line only where git found a work tree, which under --bare only a core.worktree beside a "core.bare = false" of the repository's own config brings back, since that beats --bare.
+        $query = $this->query($this->question($options, ['--show-cdup']), $repository, null);
+        $answer = explode("\n", rtrim($query->getOutput(), "\n"), 2);
+
+        if (!$query->isSuccessful() || 2 !== count($answer)) {
+            return self::EMPTY_TREES['sha1'];
+        }
+
+        [$format, $path] = $answer;
+
+        // Because a line that is empty or holds a slash is a way to a work tree, never an object format; refused as a failed git call, because every caller already handles one.
+        if ('' === $format || str_contains($format, '/')) {
+            throw WorkTreeInBareRepository::at($repository);
+        }
+
+        $this->refuseInfoAttributes($repository, $path);
+
+        return self::EMPTY_TREES[$format] ?? self::EMPTY_TREES['sha1'];
     }
 
     /**
@@ -114,43 +195,28 @@ final readonly class HardenedGit
         return $settings;
     }
 
-    private function absolute(string $directory): string
+    /**
+     * @param list<string> $options
+     * @param list<string> $question
+     *
+     * @return list<string>
+     */
+    private function question(array $options, array $question): array
     {
-        // Because the process changes into the directory before git reads GIT_WORK_TREE, a relative one would be resolved twice; a missing one stays as it is, and the call itself fails there.
-        $absolute = realpath($directory);
-
-        return false === $absolute ? $directory : $absolute;
+        return $this->command($options, ['rev-parse', ...$question, '--show-object-format', '--git-path', self::INFO_ATTRIBUTES], self::EMPTY_TREES['sha1']);
     }
 
     /**
-     * @throws RepositoryAttributesRefused
+     * @param list<string> $command
+     *
      * @throws RuntimeException
      */
-    private function emptyTree(string $directory): string
+    private function query(array $command, string $directory, ?string $workTree): Process
     {
-        // Because a missing directory holds no repository, and the git call itself fails there.
-        if (!is_dir($directory)) {
-            return self::EMPTY_TREES['sha1'];
-        }
-
-        // Git names the object format and the attributes file, because in a worktree or a submodule the file is not under <directory>/.git; where git cannot, the call itself fails the same way. rev-parse reads no attributes, so SHA-1's empty tree serves before the format is known.
-        $query = new Process(
-            $this->command(['--literal-pathspecs'], ['rev-parse', '--show-object-format', '--git-path', self::INFO_ATTRIBUTES], self::EMPTY_TREES['sha1']),
-            $directory,
-            $this->variables($directory, self::EMPTY_TREES['sha1']),
-        );
+        $query = new Process($command, $directory, $this->variables($workTree, self::EMPTY_TREES['sha1']));
         $query->run();
 
-        $answer = explode("\n", trim($query->getOutput()), 2);
-
-        if (!$query->isSuccessful() || 2 !== count($answer)) {
-            return self::EMPTY_TREES['sha1'];
-        }
-
-        [$format, $path] = $answer;
-        $this->refuseInfoAttributes($directory, $path);
-
-        return self::EMPTY_TREES[$format] ?? self::EMPTY_TREES['sha1'];
+        return $query;
     }
 
     /**
@@ -168,9 +234,9 @@ final readonly class HardenedGit
     /**
      * @return array<string, string|false>
      */
-    private function variables(string $directory, string $emptyTree): array
+    private function variables(?string $workTree, string $emptyTree): array
     {
-        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($directory, $emptyTree)];
+        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($workTree, $emptyTree)];
     }
 
     /**
@@ -207,11 +273,11 @@ final readonly class HardenedGit
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string|false>
      */
-    private function isolation(string $directory, string $emptyTree): array
+    private function isolation(?string $workTree, string $emptyTree): array
     {
-        // The work tree is pinned because core.worktree in the repository config would point working-tree reads at another directory, info/grafts would rewrite parents as a replace object does, and a partial clone would fetch a missing object through a promisor remote; the empty protocol allowlist beats every protocol.<name>.allow of the repository (protocol.allow=never would not, a more specific setting wins), so no remote helper, ssh command or credential helper it names can run.
+        // The work tree is pinned (a bare call pins the repository as bare instead) because core.worktree in the repository config would point working-tree reads at another directory, info/grafts would rewrite parents as a replace object does, and a partial clone would fetch a missing object through a promisor remote; the empty protocol allowlist beats every protocol.<name>.allow of the repository (protocol.allow=never would not, a more specific setting wins), so no remote helper, ssh command or credential helper it names can run.
         return [
             'GIT_CONFIG_NOSYSTEM' => '1',
             'GIT_CONFIG_GLOBAL' => '/dev/null',
@@ -219,7 +285,7 @@ final readonly class HardenedGit
             'GIT_NO_LAZY_FETCH' => '1',
             'GIT_ALLOW_PROTOCOL' => '',
             'GIT_GRAFT_FILE' => self::NOWHERE,
-            'GIT_WORK_TREE' => $directory,
+            'GIT_WORK_TREE' => $workTree ?? false,
             'GIT_ATTR_SOURCE' => $emptyTree,
             'GIT_ATTR_NOSYSTEM' => '1',
             'HOME' => self::NOWHERE,

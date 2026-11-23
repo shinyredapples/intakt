@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentials;
+use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
@@ -20,17 +22,23 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\NearLine;
+use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\FindingLedger;
+use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\CheckedOutFile;
+use Intakt\Core\Review\Infrastructure\DiffAddedLines;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
@@ -43,10 +51,12 @@ use Intakt\Core\Review\UseCase\RunReviewRound\LiveRoundProgress;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
+use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
@@ -73,10 +83,18 @@ use Throwable;
 #[CoversClass(QuotesInChange::class)]
 #[CoversClass(ChangeText::class)]
 #[UsesClass(DiffPaths::class)]
+#[UsesClass(Paths::class)]
 #[CoversClass(CausesInOneHunk::class)]
 #[CoversClass(DiffHunks::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(DroppedFinding::class)]
+#[UsesClass(NearestChangedLines::class)]
+#[UsesClass(DiffAddedLines::class)]
+#[UsesClass(AddedLinesInCheckout::class)]
+#[UsesClass(CheckedOutFile::class)]
+#[UsesClass(Checkout::class)]
+#[UsesClass(QuoteNearLines::class)]
+#[UsesClass(NearLine::class)]
 #[UsesClass(RoundJudged::class)]
 #[UsesClass(FollowUp::class)]
 #[UsesClass(Judgement::class)]
@@ -90,11 +108,7 @@ use Throwable;
 final class JudgeRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
+    private ?TemporaryRepository $checkout = null;
 
     public function testACompletedRoundIsQueuedForJudgingOnce(): void
     {
@@ -121,6 +135,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
 
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => ['F3']]], $this->judgeCalls());
+        self::assertFalse($this->judgeDonePayloads()[0]['fallback']);
     }
 
     public function testJudgeDoneRecordsEachReviewersVoteAsTheQuorumCountsIt(): void
@@ -131,6 +146,15 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Defer)])))($this->judgingOf($round));
 
         self::assertSame([$reviewer => 'approve'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
+    public function testJudgeDoneRecordsANullKeyForAP1NamingNoFileAndNoneForAP2(): void
+    {
+        $round = $this->roundReporting([$this->finding('A', Severity::P1), $this->finding('B', Severity::P2)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame(['F1' => null], $this->judgeDonePayloads()[0]['p1_keys']);
     }
 
     public function testJudgeDoneRecordsAChangesVoteForAP3TheJudgeMarksAct(): void
@@ -160,7 +184,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false]],
             $this->judgeDonePayloads()[0]['findings'],
         );
     }
@@ -335,7 +359,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $asked = $vendor->asked;
         self::assertInstanceOf(JudgeRequest::class, $asked);
-        self::assertSame(['src/Thing.php'], $asked->changedFiles);
+        self::assertSame(['src/Thing.php'], [...$asked->changedFiles]);
     }
 
     public function testTwoReviewersReportingDifferentFindingsUnderOneIdBothReachTheJudge(): void
@@ -424,6 +448,24 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
+    // Decision 5 of #2981: the dashboard leaves such a round out of the judge's chart, because its unmarked P3 is no rejection of the judge's.
+    public function testAnInvalidJudgeAnswerIsRecordedAsTheFallback(): void
+    {
+        $fallback = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P2), $this->finding('F3', Severity::P3)])))($this->judgingOf($fallback));
+
+        self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
+    }
+
+    // The fallback marks every finding when none is a P3, so only the place that chooses it can tell; the marks cannot (PR #2989, second review round).
+    public function testAFallbackThatMarksEveryFindingIsStillRecordedAsTheFallback(): void
+    {
+        $fallback = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P1), $this->finding('F3', Severity::P1)])))($this->judgingOf($fallback));
+
+        self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
+    }
+
     public function testAJudgedRoundDeliveredAgainAsksTheJudgeNothingAndRecordsNoSecondJudgeDone(): void
     {
         $round = $this->completedRound();
@@ -482,7 +524,43 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => '`grepName` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change']],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`grepName` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [], 'gate_gap' => false]],
+            $this->judgeDonePayloads()[0]['dropped'],
+        );
+    }
+
+    public function testAHeldCredentialOnANearestChangedLineIsRecordedRedacted(): void
+    {
+        $this->checkOutThingHolding("\$thing = new Thing();\n");
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`newThing` is not defined.')]);
+        $previous = $_SERVER['APP_SECRET'] ?? null;
+        $_SERVER['APP_SECRET'] = 'new';
+
+        try {
+            $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+        } finally {
+            if (null === $previous) {
+                unset($_SERVER['APP_SECRET']);
+            } else {
+                $_SERVER['APP_SECRET'] = $previous;
+            }
+        }
+
+        self::assertSame(
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '$thing = [redacted] Thing();']]]], 'gate_gap' => false]],
+            $this->judgeDonePayloads()[0]['dropped'],
+        );
+    }
+
+    public function testAFindingDroppedForItsQuotesIsRecordedWithTheNearestChangedLines(): void
+    {
+        $this->checkOutThingHolding("new\n");
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`newThing` is not defined.')]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame(
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => 'newThing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => 'new']]]], 'gate_gap' => false]],
             $this->judgeDonePayloads()[0]['dropped'],
         );
     }
@@ -503,7 +581,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
-        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null]], $this->judgeDonePayloads()[0]['findings']);
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null, 'gate_gap' => false]], $this->judgeDonePayloads()[0]['findings']);
     }
 
     public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
@@ -514,7 +592,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame(['F2' => 'F1'], $payload['same_cause']);
-        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null]], $payload['findings']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null, 'gate_gap' => false]], $payload['findings']);
     }
 
     public function testTwoFindingsInOneHunkWithDifferentCausesAreRecordedAsTwoEntries(): void
@@ -625,6 +703,17 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame('the judge saw [redacted] in the diff', $redacted);
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->checkout?->remove();
+        parent::tearDown();
+    }
+
     private function completedRound(): ReviewRound
     {
         $round = $this->fixture->start(2);
@@ -638,15 +727,12 @@ final class JudgeRoundTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
-    /**
-     * @param list<Finding> $findings
-     */
-    private function roundReporting(array $findings): ReviewRound
+    // A checkout holding the file the round's diff changes, because the nearest lines are read from the checked-out file.
+    private function checkOutThingHolding(string $content): void
     {
-        $round = $this->fixture->start(1);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-
-        return $this->fixture->round($round->id()->toRfc4122());
+        $this->checkout = new TemporaryRepository();
+        $this->checkout->commitFile('src/Thing.php', $content);
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes([]), $this->checkout->path);
     }
 
     // At one place, so a finding that is dropped would otherwise be merged with the other.
@@ -666,8 +752,8 @@ final class JudgeRoundTest extends KernelTestCase
     private function twoSeparateEntries(int $lineOfB): array
     {
         return [
-            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null],
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'gate_gap' => false],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null, 'gate_gap' => false],
         ];
     }
 
@@ -681,7 +767,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true, 'fallback' => true]), $this->judgeDonePayloads());
     }
 
     /**
@@ -736,5 +822,16 @@ final class JudgeRoundTest extends KernelTestCase
     private function finding(string $id, Severity $severity): Finding
     {
         return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+
+        return $this->fixture->round($round->id()->toRfc4122());
     }
 }

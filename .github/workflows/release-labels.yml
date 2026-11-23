@@ -4,16 +4,18 @@ name: release-labels
 # Never pull_request_target: a pull request from a fork gets a read-only token and is skipped.
 on:
   pull_request:
-    types: [opened, reopened, synchronize]
-concurrency:
-  group: release-labels-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+    types: [opened, reopened, edited]
 permissions:
   contents: read
 jobs:
   label:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.event.action != 'edited' || github.event.changes.title)
+    # GitHub's image has gh; a CI_RUNS_ON runner need not.
     runs-on: ubuntu-24.04
+    # On the job, not the workflow: a skipped edit (no title change) must not cancel a running label job.
+    concurrency:
+      group: release-labels-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     timeout-minutes: 5
     permissions:
       issues: write

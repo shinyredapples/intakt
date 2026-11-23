@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -54,6 +55,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(MemoryDocuments::class)]
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(RelevantMemory::class)]
 #[UsesClass(FencedText::class)]
 #[UsesClass(PromptAssembly::class)]
@@ -64,20 +66,6 @@ final class ReviewerMemoryTest extends TestCase
 
     private StoreMemoryIndex $index;
     private ReviewerMemory $memory;
-
-    protected function setUp(): void
-    {
-        $store = new Store();
-        // Every text embeds to the same vector, so only the project, the file match and the cap decide what is retrieved.
-        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
-            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
-        ));
-        $vectorizer = new Vectorizer($platform, 'embedder');
-        $documents = new MemoryDocuments();
-
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
-        $this->memory = new ReviewerMemory(new StoreProjectMemory(new Retriever($store, $vectorizer), $documents), new Fence(), new DiffPaths());
-    }
 
     public function testTheBriefingGivesTheReviewerTheEntriesThatDescribeTheFilesUnderReview(): void
     {
@@ -92,7 +80,7 @@ final class ReviewerMemoryTest extends TestCase
 
     public function testANoteFromOneProjectDoesNotReachAReviewOfAnotherProject(): void
     {
-        $this->index->index(new MemoryEntry('beta', 'Resolved finding: beta private billing secret leaked in composer.json scripts.', ['composer.json']));
+        $this->index->index(new MemoryEntry('beta', 'Resolved finding: beta private billing secret leaked in composer.json scripts.', new Paths('composer.json')));
 
         $briefing = $this->memory->briefingOn(new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', "diff --git a/composer.json b/composer.json\n"), [], 1));
 
@@ -101,7 +89,7 @@ final class ReviewerMemoryTest extends TestCase
 
     public function testANoteOfTheProjectUnderReviewStillReachesItWhenAnotherProjectHasNotesOnTheSameFile(): void
     {
-        $this->index->index(new MemoryEntry('beta', 'Beta cart note.', ['src/Cart.php']));
+        $this->index->index(new MemoryEntry('beta', 'Beta cart note.', new Paths('src/Cart.php')));
         $this->remember('Alpha cart note.', 'src/Cart.php');
 
         $briefing = $this->briefing(self::DIFF);
@@ -168,7 +156,7 @@ final class ReviewerMemoryTest extends TestCase
     {
         $memory = self::createStub(ProjectMemory::class);
         $memory->method('relevantTo')->willReturnCallback(static fn (MemoryQuery $query): RelevantMemory => RelevantMemory::within(
-            [new MemoryEntry(self::PROJECT, str_repeat('x', $query->maxBytes), ['src/Cart.php'])],
+            [new MemoryEntry(self::PROJECT, str_repeat('x', $query->maxBytes), new Paths('src/Cart.php'))],
             $query->maxBytes,
         ));
 
@@ -252,9 +240,23 @@ final class ReviewerMemoryTest extends TestCase
         self::assertStringNotContainsString('Cart totals', (string) $last->asText());
     }
 
+    protected function setUp(): void
+    {
+        $store = new Store();
+        // Every text embeds to the same vector, so only the project, the file match and the cap decide what is retrieved.
+        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
+            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
+        ));
+        $vectorizer = new Vectorizer($platform, 'embedder');
+        $documents = new MemoryDocuments();
+
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->memory = new ReviewerMemory(new StoreProjectMemory(new Retriever($store, $vectorizer), $documents), new Fence(), new DiffPaths());
+    }
+
     private function remember(string $text, string $file): void
     {
-        $this->index->index(new MemoryEntry(self::PROJECT, $text, [$file]));
+        $this->index->index(new MemoryEntry(self::PROJECT, $text, new Paths($file)));
     }
 
     private function brief(string $diff): ReviewBrief

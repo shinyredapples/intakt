@@ -61,16 +61,24 @@ final readonly class Workspace
         return is_file($this->tool($name));
     }
 
-    /**
-     * @return list<string>
-     */
-    public function phpFiles(): array
+    // Because a gate that tells its tool whether it sees only some files must take that answer from the list it passes, not from a second read of a tree that may have changed in between.
+    public function phpFileSelection(): PhpFileSelection
     {
-        if (Mode::ChangedFilesOnly === $this->mode) {
-            return $this->changedOrAllPhpFiles();
+        if (Mode::ChangedFilesOnly !== $this->mode) {
+            return PhpFileSelection::everyFile($this->allPhpFilesOrFail());
         }
 
-        return $this->allPhpFilesOrFail();
+        $mergeBase = $this->mergeBase();
+
+        if (null === $mergeBase) {
+            throw new ScopeFailure('no base branch found, pass --base=<ref>');
+        }
+
+        if ($this->changesWhatEveryPhpFileDependsOn($mergeBase)) {
+            return PhpFileSelection::everyFile($this->allPhpFilesOrFail());
+        }
+
+        return PhpFileSelection::of($this->scope->changedPhpFiles($mergeBase), $this->scope->allPhpFiles());
     }
 
     /**
@@ -183,24 +191,6 @@ final readonly class Workspace
     }
 
     /**
-     * @return list<string>
-     */
-    private function changedOrAllPhpFiles(): array
-    {
-        $mergeBase = $this->mergeBase();
-
-        if (null === $mergeBase) {
-            throw new ScopeFailure('no base branch found, pass --base=<ref>');
-        }
-
-        if ($this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase)) {
-            return $this->allPhpFilesOrFail();
-        }
-
-        return $this->scope->changedPhpFiles($mergeBase);
-    }
-
-    /**
      * @return non-empty-list<string>
      */
     private function allPhpFilesOrFail(): array
@@ -212,6 +202,23 @@ final readonly class Workspace
         }
 
         return $files;
+    }
+
+    private function changesWhatEveryPhpFileDependsOn(string $mergeBase): bool
+    {
+        return $this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase);
+    }
+
+    private function changesImportedServices(string $mergeBase): bool
+    {
+        return array_any($this->scope->changedPaths($mergeBase), static fn (string $path): bool => str_starts_with($path, 'tests/') && str_ends_with($path, self::IMPORTED_SERVICES));
+    }
+
+    private function isHead(string $commit): bool
+    {
+        $head = $this->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+
+        return $head->succeeded() && trim($head->output) === $commit;
     }
 
     /**
@@ -228,18 +235,6 @@ final readonly class Workspace
         }
 
         return false;
-    }
-
-    private function changesImportedServices(string $mergeBase): bool
-    {
-        return array_any($this->scope->changedPaths($mergeBase), static fn (string $path): bool => str_starts_with($path, 'tests/') && str_ends_with($path, self::IMPORTED_SERVICES));
-    }
-
-    private function isHead(string $commit): bool
-    {
-        $head = $this->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
-
-        return $head->succeeded() && trim($head->output) === $commit;
     }
 
     /**

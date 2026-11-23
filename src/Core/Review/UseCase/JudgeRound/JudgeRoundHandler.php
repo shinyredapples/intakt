@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
@@ -12,6 +14,7 @@ use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Domain\CausesInOneHunk;
+use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
@@ -29,6 +32,7 @@ final readonly class JudgeRoundHandler
         private JudgedRounds $rounds,
         private Vendor $vendor,
         private EventDispatcherInterface $events,
+        private Redactor $redactor,
     ) {
     }
 
@@ -43,8 +47,10 @@ final readonly class JudgeRoundHandler
         [$findings, $dropped] = $this->sortedByQuotes($round, $this->rounds->findingsOf($round));
         $judgement = new CausesInOneHunk()->checked($this->judgementOf($round, $findings), $findings, $this->rounds->hunksOf($round));
         $judged = JudgedFindings::of($judgement, $findings, $dropped);
-        $this->rounds->record($round, $judged);
-        $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
+        // Only after a committed judge transition, because a listener drops what an unjudged round still needs, such as its kept snapshot.
+        if ($this->rounds->record($round, $judged)) {
+            $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
+        }
     }
 
     // Before the judge and the act list, so a finding quoting code the change does not hold is neither judged nor merged with a real one at its place; its reason goes with the round.
@@ -63,6 +69,7 @@ final readonly class JudgeRoundHandler
         $quotes = new QuotesInChange();
         $kept = [];
         $dropped = [];
+        $addedLines = null;
 
         foreach ($findings as $finding) {
             $reason = $quotes->reasonToDrop($finding, $change);
@@ -73,7 +80,10 @@ final readonly class JudgeRoundHandler
                 continue;
             }
 
-            $dropped[] = DroppedFinding::of($finding, $reason);
+            // Read once and only for a round that drops a finding, because most rounds drop none.
+            $addedLines ??= $this->rounds->addedLinesOf($round);
+            // Redacted, because a changed line may hold a credential and the judge_done row is printed and served as it is stored.
+            $dropped[] = DroppedFinding::of($finding, $reason, new NearestChangedLines($this->redactor->redact(...))->forQuotesOf($finding->text, $addedLines));
         }
 
         return [$kept, $dropped];
@@ -90,7 +100,7 @@ final readonly class JudgeRoundHandler
         }
 
         try {
-            return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings, $round->id(), $this->rounds->filesOf($round)));
+            return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings, $round->id(), new Paths(...$this->rounds->filesOf($round))));
         } catch (ProviderRateLimited $limited) {
             throw JudgeLimited::after($limited->retryAfterSeconds);
         } catch (VendorAccountBusy|ProviderFailedTransiently) {

@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Stringable;
+
+final readonly class Greeters
+{
+    public function plain(): Stringable
+    {
+        return new class implements Stringable {
+            private static string $greeting = 'hello';
+
+            public function __toString(): string
+            {
+                return self::$greeting;
+            }
+        };
+    }
+}

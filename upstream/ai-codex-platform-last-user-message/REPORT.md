@@ -1,6 +1,6 @@
 # [Codex] Every user message but the last is dropped from the prompt
 
-Fixed by symfony/ai#2891 (merged 2026-11-06). Versions: `symfony/ai-codex-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12.
+Filed as pull request symfony/ai#2891 (merged 2026-11-06, not released yet). Versions: `symfony/ai-codex-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12.
 
 ## What happens
 
@@ -25,5 +25,5 @@ Every user message in the prompt, in order (for example separated by a blank lin
 
 - **Checked:** 2026-11-14. Ran against the default branch `main` of `symfony/ai` (c4cb5da): the reproduction passes. The newest release, v1.0.0-BETA1, still fails: `php bin/console intakt:upstream:run` prints `still fails  ai-codex-platform-last-user-message`.
 - **Existing issue or pull request:** symfony/ai#2544 (open, "[Platform] ClaudeCode and Codex bridges drop conversation history; support multi-turn via CLI session resume") stays open as the session-resume feature; it is not this bug.
-- **Pull requests and commits:** fixed upstream by symfony/ai#2891 (merged 2026-11-06), which keeps every user message and every text block in the Codex prompt.
-- **Status:** `fixed upstream` on the development branch by #2891; the first release after v1.0.0-BETA1 will carry it, and none is out yet. Once it is: record that release here, and revisit `src/Core/Ai/Infrastructure/CodexMessageBagNormalizer.php`.
+- **Pull requests and commits:** filed as pull request symfony/ai#2891 by Intakt (merged 2026-11-06), which keeps every user message and every text block in the Codex prompt.
+- **Status:** `filed as pull request` https://github.com/symfony/ai/pull/2891, merged 2026-11-06 on the development branch (recorded 2026-11-20); the first release after v1.0.0-BETA1 will carry it, and none is out yet. Once it is: record that release here, and revisit `src/Core/Ai/Infrastructure/CodexMessageBagNormalizer.php`. Checked 2026-11-22: no `symfony/ai` release after v1.0.0-BETA1 yet (the newest tag is still v1.0.0-BETA1).

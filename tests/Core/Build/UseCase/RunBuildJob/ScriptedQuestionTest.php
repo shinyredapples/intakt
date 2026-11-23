@@ -80,19 +80,6 @@ final class ScriptedQuestionTest extends TestCase
     private BuildHistory $history;
     private string $output = '';
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->output = $this->history->folder.'/output';
-        new Filesystem()->mkdir([$this->output, $this->history->folder.'/job', $this->history->folder.'/bin']);
-        file_put_contents($this->history->folder.'/prompt.md', "Build the task.\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testAScriptedQuestionReachesTheBuildJobsOutcome(): void
     {
         $this->givenTheBuildScriptRanWithTheCli(<<<'SH'
@@ -158,6 +145,19 @@ final class ScriptedQuestionTest extends TestCase
         self::assertSame("question: Which\\u{34F} store?\nchoice: SQLite\\u{34F}\nchoice: SQLite\nrecommendation: SQLite\n", $tester->getDisplay());
     }
 
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->output = $this->history->folder.'/output';
+        new Filesystem()->mkdir([$this->output, $this->history->folder.'/job', $this->history->folder.'/bin']);
+        file_put_contents($this->history->folder.'/prompt.md', "Build the task.\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
+    }
+
     private function givenTheBuildScriptRanWithTheCli(string $script): void
     {
         $folder = $this->history->folder;
@@ -171,7 +171,7 @@ final class ScriptedQuestionTest extends TestCase
             }
         }
 
-        new Process(['/bin/sh', self::SCRIPT, $this->history->work, $folder.'/prompt.md', 'task', 'claude-sonnet-5-5', '7', '600', ''], null, $environment, timeout: 20)->mustRun();
+        new Process(['/bin/sh', self::SCRIPT, $this->history->work, $folder.'/prompt.md', 'task', 'claude-sonnet-5-5', '7', '600', '', '1500'], null, $environment, timeout: 20)->mustRun();
     }
 
     private function whenTheBuildJobReadsTheScriptsOutput(): BuildJobOutcome
@@ -195,6 +195,6 @@ final class ScriptedQuestionTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
     }
 }

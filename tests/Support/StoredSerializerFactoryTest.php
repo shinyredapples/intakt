@@ -6,10 +6,12 @@ namespace Intakt\Tests\Support;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use Intakt\Core\Review\Infrastructure\StoredFindingNormalizer;
 use Intakt\Core\Review\Infrastructure\StoredJsonEncoder;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
@@ -24,6 +26,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(StoredFindingNormalizer::class)]
+#[UsesClass(StoredFindingIdsNormalizer::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(StoredJsonEncoder::class)]
 final class StoredSerializerFactoryTest extends KernelTestCase
 {
@@ -40,17 +44,27 @@ final class StoredSerializerFactoryTest extends KernelTestCase
     // A judge_done row, because reading it back needs the list of finding objects the container's serializer denormalizes.
     public function testTheFactoryReadsAPayloadBackAsTheContainersStoredSerializerDoes(): void
     {
-        $json = '{"round":"r1","act":["F1"],"follow_ups":["F2"],"findings":[{"id":"F1","severity":"P1","text":"Broken."}]}';
+        $json = '{"round":"r1","act":["F1"],"follow_ups":["F2"],"findings":[{"id":"F1","severity":"P1","text":"Broken.","merged":["F3"]}]}';
         $stored = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $stored);
 
         self::assertEquals($stored->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT), StoredSerializerFactory::create()->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT));
     }
 
+    // A judge_done row with id lists, because only the stored finding ids normalizer writes them.
+    public function testTheFactoryWritesAJudgeDoneRowAsTheContainersStoredSerializerDoes(): void
+    {
+        $done = new JudgeDone('r1', new FindingIds('F1', 'F3'), new FindingIds('F2'), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', new FindingIds('F3'))]);
+        $stored = self::getContainer()->get('serializer.stored');
+        self::assertInstanceOf(SerializerInterface::class, $stored);
+
+        self::assertSame($stored->serialize($done, JsonEncoder::FORMAT), StoredSerializerFactory::create()->serialize($done, JsonEncoder::FORMAT));
+    }
+
     // A finding with merged ids, because only the stored finding normalizer keeps them.
     public function testTheFactoryWritesAFindingWithMergedIdsAsTheContainersStoredSerializerDoes(): void
     {
-        $finding = new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: ['F2']);
+        $finding = new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: new FindingIds('F2'));
         $stored = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $stored);
 

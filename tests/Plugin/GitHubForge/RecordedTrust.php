@@ -42,6 +42,10 @@ final class RecordedTrust
     public const string PULL_BY_MAINTAINER = 'https://github.com/acme/widget/pull/5';
     public const string PULL_BY_STRANGER = 'https://github.com/acme/widget/pull/6';
     public const string PULL_WITHOUT_AUTHOR = 'https://github.com/acme/widget/pull/7';
+    public const string PULL_WITH_EMPTY_AUTHOR = 'https://github.com/acme/widget/pull/8';
+    public const string PULL_FROM_FORK = 'https://github.com/acme/widget/pull/9';
+    public const string PULL_FROM_DELETED_FORK = 'https://github.com/acme/widget/pull/10';
+    public const string PULL_WITHOUT_HEAD_REPO = 'https://github.com/acme/widget/pull/11';
     public const string PULL_UNKNOWN = 'https://github.com/acme/widget/pull/99';
 
     private const array PULLS = [
@@ -52,6 +56,10 @@ final class RecordedTrust
         5 => 'pull_by_maintainer.json',
         6 => 'pull_by_stranger.json',
         7 => 'pull_without_author.json',
+        8 => 'pull_with_empty_author.json',
+        9 => 'pull_from_fork.json',
+        10 => 'pull_from_deleted_fork.json',
+        11 => 'pull_without_head_repo.json',
     ];
 
     /** @var list<string> */
@@ -89,11 +97,15 @@ final class RecordedTrust
         };
     }
 
-    private function pull(string $path): MockResponse
+    /**
+     * @param array<mixed> $options
+     */
+    private function bearerOf(array $options): string
     {
-        $fixture = self::PULLS[(int) substr($path, strlen('/repos/acme/widget/pulls/'))] ?? null;
+        $normalized = $options['normalized_headers'] ?? null;
+        $headers = is_array($normalized) ? ($normalized['authorization'] ?? null) : null;
 
-        return null === $fixture ? new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/not_found.json'), ['http_code' => 404]) : $this->fixture($fixture);
+        return is_array($headers) && is_string($headers[0] ?? null) ? $headers[0] : '';
     }
 
     private function token(): MockResponse
@@ -105,27 +117,23 @@ final class RecordedTrust
         return new MockResponse(json_encode(['token' => 'minted-value', 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR), ['http_code' => 201]);
     }
 
+    private function fixture(string $name): MockResponse
+    {
+        return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.$name));
+    }
+
+    private function pull(string $path): MockResponse
+    {
+        $fixture = self::PULLS[(int) substr($path, strlen('/repos/acme/widget/pulls/'))] ?? null;
+
+        return null === $fixture ? new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/not_found.json'), ['http_code' => 404]) : $this->fixture($fixture);
+    }
+
     private function permission(string $path): MockResponse
     {
         $matched = preg_match('#^/repos/acme/widget/collaborators/([^/]+)/permission$#', $path, $parts);
         $fixture = 1 === $matched ? (self::PERMISSIONS[strtolower(rawurldecode($parts[1]))] ?? null) : null;
 
         return null === $fixture ? new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/not_found.json'), ['http_code' => 404]) : $this->fixture($fixture);
-    }
-
-    private function fixture(string $name): MockResponse
-    {
-        return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.$name));
-    }
-
-    /**
-     * @param array<mixed> $options
-     */
-    private function bearerOf(array $options): string
-    {
-        $normalized = $options['normalized_headers'] ?? null;
-        $headers = is_array($normalized) ? ($normalized['authorization'] ?? null) : null;
-
-        return is_array($headers) && is_string($headers[0] ?? null) ? $headers[0] : '';
     }
 }

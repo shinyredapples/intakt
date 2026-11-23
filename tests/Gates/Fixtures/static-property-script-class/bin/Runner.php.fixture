@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Bin\Sample;
+
+final class Runner
+{
+    private static int $runs = 0;
+
+    public function run(): int
+    {
+        return ++self::$runs;
+    }
+}

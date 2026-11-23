@@ -33,7 +33,7 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
     {
         $this->givenARoundJudged(1, 0);
 
-        $verdict = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-verdict');
+        $verdict = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1-verdict');
 
         self::assertSame('character-row', $verdict->attr('class'));
         self::assertSame(['character character-light', 'character character-dark'], $verdict->filter(self::OCTOPUS)->each(static fn (Crawler $image): ?string => $image->attr('class')));
@@ -44,7 +44,7 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
     {
         $this->givenARoundJudged(1, 0);
 
-        $images = $this->browser->request('GET', '/reviews/round-1')->filter(self::OCTOPUS);
+        $images = $this->browser->request('GET', '/reviews/round-1/record')->filter(self::OCTOPUS);
 
         self::assertCount(2, $images);
         $images->each(static function (Crawler $image): void {
@@ -63,7 +63,7 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
     {
         $this->givenARoundJudged(1, 0);
 
-        $page = $this->browser->request('GET', '/reviews/round-1');
+        $page = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('Outcome: Approved, decided by the quorum policy all over all 2 reviewers.', $page->filter('#round-round-1-verdict')->text());
         self::assertSame('Approved', $page->filter('#round-round-1 summary > .chip.approved')->text());
@@ -74,7 +74,7 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
     {
         $this->givenARoundJudged(1, 2);
 
-        $verdict = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-verdict');
+        $verdict = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1-verdict');
 
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $verdict->text());
         self::assertNull($verdict->attr('class'));
@@ -96,7 +96,7 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
         $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
         $this->ledger->answer('round-1', 'correctness', 0);
 
-        $verdict = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-verdict');
+        $verdict = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1-verdict');
 
         self::assertSame('', $verdict->text());
         self::assertCount(0, $verdict->filter('img'));
@@ -107,7 +107,7 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
         $this->givenARoundJudged(1, 0);
         $this->givenARoundJudged(2, 0);
 
-        $page = $this->browser->request('GET', '/reviews/round-2');
+        $page = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(0, $page->filter('#round-round-1-verdict img'));
         self::assertCount(2, $page->filter('#round-round-2-verdict '.self::OCTOPUS));
@@ -147,6 +147,21 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
         $this->ledger->startRoundOfQuorumAll('feat/thing', 'round-2', 2);
 
         self::assertCount(0, $this->browser->request('GET', '/reviews/round-2')->filter('img[src*="/mascot/"]'));
+    }
+
+    public function testAnOlderRoundJudgedLateWhileANewerRoundIsStillInReviewStreamsNoOctopus(): void
+    {
+        $this->ledger->startRoundOfQuorumAll('feat/thing', 'round-1', 1);
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->startRoundOfQuorumAll('feat/thing', 'round-2', 2);
+        $this->ledger->judgeRound('round-1');
+        $review = self::getContainer()->get(LedgerReviewPages::class)->reviewOf('round-1');
+
+        $stream = new Crawler(self::getContainer()->get(Environment::class)->render('dashboard/stream/round_judged.stream.html.twig', ['round' => 'round-1', 'reviewed' => $review?->rounds[0], 'review' => $review, 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertCount(1, $stream->filter('turbo-stream[target="round-round-1-verdict"] template'));
+        self::assertCount(0, $stream->filter('turbo-stream[target="round-round-1-verdict"] template img'));
     }
 
     private function givenARoundJudged(int $number, int $findings): void

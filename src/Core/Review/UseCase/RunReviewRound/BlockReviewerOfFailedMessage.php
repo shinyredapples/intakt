@@ -7,10 +7,12 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\EventListener\SendFailedMessageForRetryListener;
+use Symfony\Component\Messenger\EventListener\SendFailedMessageToFailureTransportListener;
 use Throwable;
 
-// Runs at the default priority, ahead of the listener that parks the message in the failure transport (-100), so the reviewer is blocked in the same step that parks the message.
-#[AsEventListener]
+// After the retry listener, because willRetry() is only decided there; before the message is parked, so the reviewer is blocked in the same step that parks it.
+#[AsEventListener(before: SendFailedMessageToFailureTransportListener::class, after: SendFailedMessageForRetryListener::class)]
 final readonly class BlockReviewerOfFailedMessage
 {
     public function __construct(

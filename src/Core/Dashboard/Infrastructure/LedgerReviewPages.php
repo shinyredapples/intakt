@@ -13,8 +13,10 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
@@ -31,6 +33,7 @@ final readonly class LedgerReviewPages
         private RoundEndings $endings,
         private ReplayMarks $marks,
         private LedgerBuildSteps $buildSteps = new LedgerBuildSteps(),
+        private CountedQuotes $quotes = new CountedQuotes(),
     ) {
     }
 
@@ -44,8 +47,8 @@ final readonly class LedgerReviewPages
             return null;
         }
 
-        $added = $this->addUnseen($rounds, $this->ledger->readMentioning($members), []);
-        $this->addUnseen($rounds, $this->ledger->readMentioning($rounds->callsOf($members)), $added);
+        $added = $this->addUnseen($rounds, $this->ledger->readMentioning(new Mentions(...$members)), []);
+        $this->addUnseen($rounds, $this->ledger->readMentioning(new Mentions(...$rounds->callsOf($members))), $added);
 
         return $rounds->reviewOf($round);
     }
@@ -70,12 +73,21 @@ final readonly class LedgerReviewPages
         return $this->rounds($this->ledger->readInOrder())->listedInStartOrder();
     }
 
+    // Read through the reviews rather than the list, because the trends count each round's cost and replay mark, which the list leaves out.
+    /**
+     * @return list<ReviewedRound>
+     */
+    public function everyRound(): array
+    {
+        return array_merge([], ...array_map(static fn (Review $review): array => $review->rounds, $this->rounds($this->ledger->readInOrder())->reviews()));
+    }
+
     // Read from the rows that name the round alone, because a live update goes out for each streamed text and must not read every start the ledger holds; the latest start wins, as on the page, and null means the reviewer has not started in that round.
     public function startedReviewerOf(string $round, string $reviewer): ?ReviewerOutcome
     {
         $started = null;
 
-        foreach ($this->ledger->readMentioning([$round]) as $recorded) {
+        foreach ($this->ledger->readMentioning(new Mentions($round)) as $recorded) {
             $row = $this->payloads->reviewerRowOf($recorded);
 
             if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
@@ -118,7 +130,7 @@ final readonly class LedgerReviewPages
 
     private function rounds(RecordedEvents $events): LedgerRounds
     {
-        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures, $this->endings, $this->marks);
+        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures, $this->endings, $this->marks, $this->quotes);
 
         foreach ($events as $recorded) {
             $rounds->add($recorded);

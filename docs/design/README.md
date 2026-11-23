@@ -34,9 +34,10 @@ Architecture:
 Dashboard mocks (static pages in [`mocks/`](mocks/), with made-up projects):
 
 - [Board](mocks/index.html)
-- [Waiting on you](mocks/waiting.html)
+- [Waiting on you](mocks/waiting.html) (before UX2, #3327: it still shows Copy and Why controls; the current page follows the Waiting rules in [DESIGN.md](mocks/DESIGN.md))
 - [Task](mocks/task.html)
 - [Settings](mocks/settings.html)
 - [Components](mocks/components.html)
+- [Review page, Scoreboard](mocks/review-scoreboard/index.html) (owner-approved direction for #3503, with real demo data; serve it from `docs/` so its fonts load, see the [mocks README](mocks/README.md#the-review-page-scoreboard))
 
 The single-file draft this folder was split from is in the git history (`docs/design.md`).

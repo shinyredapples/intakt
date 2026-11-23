@@ -1,5 +1,5 @@
 # The sample project's provider facts in one place, so refreshing the five-minute start is an edit of this file.
-# Read by src/Core/Review/Contract/SampleProjectData.php (the seed and the Hugging Face key check) and by docker/entrypoint.sh,
+# Read by src/Core/Review/Contract/SampleProjectData.php (the seed, the Hugging Face key check's router and the key check's model on a fresh install) and by docker/entrypoint.sh,
 # which reads router_url line by line with bash alone, so it must stay one top-level line with an unquoted value and no trailing comment.
 
 # Without /v1, because the generic bridge appends /v1/chat/completions itself.
@@ -14,8 +14,8 @@ models:
     openai: { strong: gpt-6.2-sol, standard: gpt-6.1-terra, light: gpt-6-luna }
     openai_compatible: { strong: 'moonshotai/Kimi-K3.1-Pro:deepinfra', standard: 'moonshotai/Kimi-K3.1-Pro:deepinfra', light: 'moonshotai/Kimi-K3.1-Pro:deepinfra' }
 
-# Another maker's model for the second reviewer when the router carries the whole panel, so the panel still has two makers.
-second_maker: 'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra'
+# Another AI lab's model for the second reviewer when the router carries the whole panel, so the panel still has two AI labs.
+second_lab: 'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra'
 
 # List prices in US dollars per million tokens, so the demo's first review shows a cost; the owner can change them in the seeded file.
 prices:

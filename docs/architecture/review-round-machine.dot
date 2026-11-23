@@ -1,0 +1,12 @@
+digraph workflow {
+  ratio="compress" rankdir="LR"
+  node [fontsize="9" fontname="Arial" color="#333333" fillcolor="lightblue" fixedsize="false" width="1"];
+  edge [fontsize="9" fontname="Arial" color="#333333" arrowhead="normal" arrowsize="0.5"];
+
+  place_4a891159c8f4f696e4fe3dfd3add2b0e1a63db43 [label=<<B>collecting</B>>, shape=circle style="filled"];
+  place_0737c22d3bfae812339732d14d8c7dbd6dc4e09c [label=<<B>complete</B>>, shape=circle];
+  place_4c6ec2d7f1de0f6120c676b37096df0730e6702f [label=<<B>judged</B>>, shape=circle];
+  place_4a891159c8f4f696e4fe3dfd3add2b0e1a63db43 -> place_0737c22d3bfae812339732d14d8c7dbd6dc4e09c [label="complete" style="solid"];
+  place_0737c22d3bfae812339732d14d8c7dbd6dc4e09c -> place_4c6ec2d7f1de0f6120c676b37096df0730e6702f [label="judge" style="solid"];
+}
+

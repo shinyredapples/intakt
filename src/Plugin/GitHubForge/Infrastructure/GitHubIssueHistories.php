@@ -4,19 +4,21 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 // GraphQL, because the REST API names neither the account that last edited a body nor the one that applied each label.
-final readonly class GitHubIssueHistories
+final readonly class GitHubIssueHistories implements IssueHistories
 {
     // A history of more label events than this fails, because a label applied later would go unread and its applier with it.
     private const int EVENTS = 100;
@@ -26,29 +28,47 @@ final readonly class GitHubIssueHistories
     // Suffixed, because GraphQL names an App by its bare slug (`renovate`) while the trust check tells an App from a person by the `[bot]` the REST API adds.
     private const string APP = 'Bot';
     private const string APP_SUFFIX = '[bot]';
+    // Issue or pull request, because the listing holds both and a pull request's closing keyword steers only by its history; the update time, the body and the labels are read beside the history, because only a history of the listed text and labels vouches for them and the update time alone has whole seconds.
     private const string QUERY = <<<'GRAPHQL'
         query ($owner: String!, $name: String!, $number: Int!, $events: Int!) {
           repository(owner: $owner, name: $name) {
-            issue(number: $number) {
-              author { __typename login }
-              userContentEdits(first: 1) { nodes { editor { __typename login } } }
-              timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
-                pageInfo { hasNextPage }
-                nodes {
-                  __typename
-                  ... on LabeledEvent { actor { __typename login } label { name } }
-                  ... on UnlabeledEvent { actor { __typename login } label { name } }
+            issueOrPullRequest(number: $number) {
+              __typename
+              ... on Comment {
+                updatedAt
+                body
+                author { __typename login }
+                userContentEdits(first: 1) { nodes { editor { __typename login } } }
+              }
+              ... on Labelable {
+                labels(first: $events) { pageInfo { hasNextPage } nodes { name } }
+              }
+              ... on Issue {
+                timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
+                  pageInfo { hasNextPage }
+                  nodes { __typename ...labelEvent ...unlabelEvent }
+                }
+              }
+              ... on PullRequest {
+                timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
+                  pageInfo { hasNextPage }
+                  nodes { __typename ...labelEvent ...unlabelEvent }
                 }
               }
             }
           }
         }
+
+        fragment labelEvent on LabeledEvent { actor { __typename login } label { name } }
+
+        fragment unlabelEvent on UnlabeledEvent { actor { __typename login } label { name } }
         GRAPHQL;
 
     public function __construct(
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
         private WatchedRepositories $repositories,
+        private GitHubMoments $moments,
     ) {
     }
 
@@ -56,11 +76,15 @@ final readonly class GitHubIssueHistories
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
      */
-    public function of(string $project, int $number): IssueHistory
+    public function of(string $project, int $number, DateTimeImmutable $listedAt): IssueHistory
     {
         $issue = $this->issueIn($this->answer($project, $number));
+        // A later update fails the read instead of vouching, because an edit or a label made after the listing would vouch for text and labels the listing does not hold.
+        if ($this->moments->parse($this->text($issue, 'updatedAt'))->getTimestamp() !== $listedAt->getTimestamp()) {
+            throw new ForgeReadFailed(sprintf('GitHub changed #%d after it was listed, so its history may be of other text and labels.', $number));
+        }
 
-        return new IssueHistory($this->lastEditorOf($issue), $this->labelsOf($issue));
+        return new IssueHistory($this->lastEditorOf($issue), $this->labelsOf($issue), $this->bodyOf($issue), $this->currentLabelsOf($issue));
     }
 
     /**
@@ -96,12 +120,6 @@ final readonly class GitHubIssueHistories
         return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object.');
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
     /**
      * @param array<mixed> $answer
      *
@@ -114,9 +132,19 @@ final readonly class GitHubIssueHistories
             throw new ForgeReadFailed('GitHub answered the history read with errors.');
         }
 
-        $issue = $this->at($answer, 'data', 'repository', 'issue');
+        $issue = $this->at($answer, 'data', 'repository', 'issueOrPullRequest');
 
-        return is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub answered a history read without the issue.');
+        return is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub answered a history read without the issue or pull request.');
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $this->at($data, ...$keys);
+
+        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 
     /**
@@ -154,6 +182,33 @@ final readonly class GitHubIssueHistories
         }
 
         return array_values($applied);
+    }
+
+    /**
+     * @param array<mixed> $issue
+     */
+    private function bodyOf(array $issue): string
+    {
+        $body = $issue['body'] ?? null;
+
+        // Empty is allowed, because an item without a description has the empty body.
+        return is_string($body) ? $body : throw new ForgeReadFailed('GitHub answered a history read without the body.');
+    }
+
+    /**
+     * @param array<mixed> $issue
+     *
+     * @return list<string>
+     */
+    private function currentLabelsOf(array $issue): array
+    {
+        $labels = $this->at($issue, 'labels');
+        $nodes = is_array($labels) ? ($labels['nodes'] ?? null) : null;
+        if (!is_array($labels) || !is_array($nodes) || false !== $this->at($labels, 'pageInfo', 'hasNextPage')) {
+            throw new ForgeReadFailed('GitHub answered labels this forge cannot read whole.');
+        }
+
+        return array_values(array_map(fn (mixed $label): string => $this->text(is_array($label) ? $label : [], 'name'), $nodes));
     }
 
     /**
@@ -199,16 +254,6 @@ final readonly class GitHubIssueHistories
     /**
      * @param array<mixed> $data
      */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $this->at($data, ...$keys);
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
     private function at(array $data, string ...$keys): mixed
     {
         $value = $data;
@@ -228,5 +273,11 @@ final readonly class GitHubIssueHistories
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 }

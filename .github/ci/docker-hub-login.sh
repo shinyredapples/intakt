@@ -8,4 +8,9 @@ if [ -z "${DOCKERHUB_TOKEN:-}" ]; then
     echo "No Docker Hub token set: pulls stay anonymous."
     exit 0
 fi
-printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+# A failed login does not fail the job: a CI image already on the runner or restored from the cache needs no pull, and
+# .github/actions/ci-image fails only when it would have to pull or build after one. Other pulls go on anonymously.
+if ! printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin; then
+    echo "::warning::Docker Hub login failed: pulls stay anonymous."
+    echo "DOCKERHUB_LOGIN_FAILED=1" >> "$GITHUB_ENV"
+fi

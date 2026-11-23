@@ -134,7 +134,7 @@ final readonly class SampleProject
         $provider = $tiers[$tier];
 
         if (Tier::Standard->value === $tier && Provider::OpenAiCompatible === $provider && $tiers[Tier::Strong->value] === $provider) {
-            return $this->data->secondMaker();
+            return $this->data->secondLab();
         }
 
         return $this->data->model($provider, Tier::from($tier));
@@ -185,7 +185,7 @@ final readonly class SampleProject
     {
         $prices = [];
         foreach ($models as $tier) {
-            $prices[$tier['model']] = $this->data->price($tier['model']);
+            $prices[$tier['model']] = iterator_to_array($this->data->price($tier['model']));
         }
 
         return $prices;

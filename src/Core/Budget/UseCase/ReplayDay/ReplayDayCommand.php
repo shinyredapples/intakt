@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\UseCase\ReplayDay;
 
-use InvalidArgumentException;
+use Intakt\Core\Budget\Contract\UsedPercentOutOfRange;
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -27,7 +28,7 @@ final readonly class ReplayDayCommand
     {
         try {
             $this->replay->replay($this->stepsOf($script), new ConsoleLogger($io), static fn (string $line) => $io->writeln(OutputFormatter::escape($line)));
-        } catch (IOException|InvalidArgumentException $failure) {
+        } catch (IOException|ReportableFailure|UsedPercentOutOfRange $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -49,7 +50,7 @@ final readonly class ReplayDayCommand
         );
         $steps = array_values(array_map(ScriptedStep::parse(...), $lines));
         if ([] === $steps) {
-            throw new InvalidArgumentException('The script holds no step.');
+            throw ScriptHoldsNoStep::create();
         }
 
         return $steps;

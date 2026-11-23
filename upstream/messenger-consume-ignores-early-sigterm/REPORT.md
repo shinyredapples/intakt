@@ -1,6 +1,6 @@
 # [Messenger] `messenger:consume` ignores a SIGTERM that arrives before its worker exists
 
-Fixed by symfony/symfony#67912 (merged 2026-11-06). Affected: 6.4.49, 7.4.22, 8.1.10 and 8.2.0-BETA1; target branch: 6.4. Versions: `symfony/messenger` v8.1.10, `symfony/console` v8.1.10, PHP 8.5.12 with `pcntl`.
+Filed as pull request symfony/symfony#67912 (merged into 6.4 on 2026-11-06, released in v8.2.0-BETA2). Affected: 6.4.49, 7.4.22, 8.1.10 and 8.2.0-BETA1; target branch: 6.4. Versions: `symfony/messenger` v8.1.10, `symfony/console` v8.1.10, PHP 8.5.12 with `pcntl`.
 
 ## What happens
 
@@ -29,7 +29,7 @@ Checked on 2026-11-03, refreshed on 2026-11-06.
 - **Existing issue or pull request:** none covers a signal before the worker exists. Related: #65633 (force quit on repeated SIGINT) and #66950. Also close: #41906 (graceful shutdown under Supervisor), #47809 (commands exiting gracefully).
 - **Searches** (`symfony/symfony` issues and pull requests, open and closed): `handleSignal messenger:consume`, `consume SIGTERM worker ignored`.
 - **Refresh (2026-11-06):** still reproduces on 6.4.49, 7.4.22, 8.1.10 and 8.2.0-BETA1; not fixed upstream. In the snippet, `addCommand()` is `add()` before 8.x, and on 8.2 the command's dispatcher argument must also implement `ListenerIntrospectionInterface`. Preferred fix: remember the signal and stop the worker right after it is created. Superseded: symfony/symfony#67912 fixed the bug, first released in v8.2.0-BETA2 (see `Decision` and `Status` below).
-- **Pull requests and commits:** fixed by symfony/symfony#67912 (`[Messenger] Stop the worker when a signal arrives before it is created`, merged 2026-11-06 into `6.4` as bb8fbad67f, then merged up into `8.1` and `8.2`), checked 2026-11-15 at `8.2` 979969dc83. The first release that contains it is v8.2.0-BETA2 (2026-11-13); v6.4.50, v7.4.23 and v8.1.11 (all 2026-11-04) do not. Intakt now pins `symfony/messenger` v8.2.0-BETA2, where `reproduce.php` prints `REPRODUCTION PASSES`. Searched pull requests with `is:pr handleSignal consume` (#67912, #66950, #65633) and `is:pr messenger signal before worker`; commits with `git log v8.1.10..origin/8.2` on `Command/ConsumeMessagesCommand.php` and `Worker.php`.
+- **Pull requests and commits:** filed as pull request symfony/symfony#67912 by Intakt (`[Messenger] Stop the worker when a signal arrives before it is created`, merged 2026-11-06 into `6.4` as bb8fbad67f, then merged up into `8.1` and `8.2`), checked 2026-11-15 at `8.2` 979969dc83. The first release that contains it is v8.2.0-BETA2 (2026-11-13); v6.4.50, v7.4.23 and v8.1.11 (all 2026-11-04) do not. Intakt now pins `symfony/messenger` v8.2.0-BETA2, where `reproduce.php` prints `REPRODUCTION PASSES`. Searched pull requests with `is:pr handleSignal consume` (#67912, #66950, #65633) and `is:pr messenger signal before worker`; commits with `git log v8.1.10..origin/8.2` on `Command/ConsumeMessagesCommand.php` and `Worker.php`.
 - **Intakt lock (2026-11-16):** passes. `php bin/console intakt:upstream:run` at `symfony/messenger` v8.2.0-BETA2: `passes       messenger-consume-ignores-early-sigterm`.
-- **Decision:** `fixed upstream` (v8.2.0-BETA2).
-- **Status:** `fixed upstream` (v8.2.0-BETA2): nothing to file; `ISSUE.md` was removed.
+- **Decision:** `filed as pull request` https://github.com/symfony/symfony/pull/67912, merged into 6.4 on 2026-11-06, released in v8.2.0-BETA2 (recorded 2026-11-20).
+- **Status:** `filed as pull request` symfony/symfony#67912, merged into 6.4 on 2026-11-06, released in v8.2.0-BETA2 (recorded 2026-11-20): nothing more to file; `ISSUE.md` was removed. Checked 2026-11-22: still merged and in v8.2.0-BETA2, nothing more to watch.

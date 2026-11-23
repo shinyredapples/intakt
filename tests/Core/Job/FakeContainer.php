@@ -9,6 +9,7 @@ final class FakeContainer
     public bool $running = false;
     public bool $memoryKilled = false;
     public int $exitCode = 0;
+    public string $startCheckMark = '';
 
     /** @var list<string> */
     public array $networks = [];

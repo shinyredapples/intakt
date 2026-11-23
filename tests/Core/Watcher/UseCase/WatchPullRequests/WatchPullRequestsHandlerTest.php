@@ -19,7 +19,14 @@ use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Intakt\Core\Ledger\Domain\EventRecord;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
@@ -52,6 +59,7 @@ use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangedHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangesHandedToIntakt;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadBackOff;
@@ -65,6 +73,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\VerdictsWithdrawalRefused;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
@@ -72,8 +81,10 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
+use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Application\EmptyDatabase;
@@ -82,6 +93,7 @@ use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -93,6 +105,8 @@ use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Exception\HandlerFailedException;
 
 #[Group('persistence')]
 #[CoversClass(WatchPullRequestsHandler::class)]
@@ -112,7 +126,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(StartedRound::class)]
 #[CoversClass(RoundStarts::class)]
 #[CoversClass(StaleVerdicts::class)]
+#[CoversClass(VerdictsWithdrawalRefused::class)]
 #[CoversClass(WatcherLedger::class)]
+#[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
 #[UsesClass(WatchPullRequests::class)]
@@ -138,6 +154,12 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BootOutcome::class)]
 #[UsesClass(MainCommit::class)]
 #[UsesClass(MarkVerdictsStale::class)]
+#[UsesClass(DoctrineLedger::class)]
+#[UsesClass(RecordedEvent::class)]
+#[UsesClass(RecordedEvents::class)]
+#[UsesClass(EventRecord::class)]
+#[UsesClass(LedgerEvent::class)]
+#[UsesClass(UtcDateTimeImmutableType::class)]
 final class WatchPullRequestsHandlerTest extends KernelTestCase
 {
     private const string PENDING = 'a';
@@ -160,25 +182,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private WatchPullRequestsHandler $handler;
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
-
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->listing = new RecordedForge();
-        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
-        $this->commands = new RecordingCommandBus();
-        $this->ledger = new InMemoryLedger();
-        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
-        $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
-        $this->queries = new StandingQueryBus($recorded, $entities);
-        $this->locks = new BeforeChangeLockStore();
-        $this->logger = new RecordingLogger();
-        $this->handler = $this->handler();
-    }
+    // Read from its own ledger, because the in-memory one reads nothing back.
+    private ?Ledger $openings = null;
+    private ?ChangeAuthorship $authorship = null;
 
     public function testANewHeadWithPendingCiStartsNoRound(): void
     {
@@ -188,6 +194,81 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([], $this->commands->started);
         self::assertSame([LedgerEventKind::HeadPending], $this->ledger->kinds());
+    }
+
+    public function testATickRecordsTheListedPullRequestIntaktOpenedAsHandedToIntaktBeforeItsHeadDecision(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued, LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(['1', '1', '2'], array_column(array_slice($this->ledger->payloads(), 0, 3), 'change'));
+    }
+
+    public function testAPullRequestListedBeforeItsOpeningRecordIsRecordedAsHandedToIntaktOnAnUnchangedListing(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $openings = new DoctrineLedger($doctrine, $this->clock);
+        $this->openings = $openings;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        self::assertTrue($openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
+
+        $this->tick();
+
+        self::assertSame(1, $this->listing->conditionalAnswers);
+        self::assertSame([LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued], $this->ledger->kinds());
+    }
+
+    public function testOneUnreadableAuthorDoesNotKeepAnUnrelatedHeadFromBeingQueued(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","change":"1"}'))->succeeded());
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('Author unavailable'));
+        $this->authorship = $authorship;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(['1', '2'], array_column($this->ledger->payloads(), 'change'));
+    }
+
+    public function testATickThatOverlapsAnotherWhileItReadsAnAuthorRecordsNoSecondHandOver(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","change":"1"}'))->succeeded());
+        $overlapped = false;
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(function () use (&$overlapped): bool {
+            if (!$overlapped) {
+                $overlapped = true;
+                $this->tick();
+            }
+
+            return true;
+        });
+        $this->authorship = $authorship;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued, LedgerEventKind::HeadPending], $this->ledger->kinds());
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -1159,6 +1240,37 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testAWithdrawalReviewRefusesIsTheHeadFailedCauseWithReviewsReason(): void
+    {
+        $this->failToWithdrawOnARefusedHead();
+
+        self::assertSame(VerdictsWithdrawalRefused::class.": Review refused to withdraw the verdicts of the head's round: RuntimeException: the review database is down", $this->causeOf(LedgerEventKind::HeadFailed));
+    }
+
+    public function testAWithdrawalRefusedThroughTheCommandBusNamesTheHandlersOwnException(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->commands->markFailure = new HandlerFailedException(new Envelope(new MarkVerdictsStale('round-1')), [new LogicException('No round round-1 is known.')]);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertStringEndsWith(": Review refused to withdraw the verdicts of the head's round: LogicException: No round round-1 is known.", $this->causeOf(LedgerEventKind::HeadFailed));
+    }
+
+    public function testAHeadWhoseWithdrawalIsRefusedFourTimesIsHandedOverWithTheRefusalAsItsCause(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->commands->markFailure = new RuntimeException('the review database is down');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tickEvery('+20 minutes', 4);
+
+        self::assertStringStartsWith(VerdictsWithdrawalRefused::class.': ', $this->causeOf(LedgerEventKind::HeadHandedOver));
+    }
+
     public function testAWithdrawalReviewCannotTakeIsSentAgainWhenTheHeadBootsOnItsNextTry(): void
     {
         $this->failToWithdrawOnARefusedHead();
@@ -1353,6 +1465,25 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertTrue(array_any($this->logger->logged, static fn (array $line): bool => 'The boot gate failed, so the review starts without it.' === $line[0]));
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->listing = new RecordedForge();
+        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
+        $this->commands = new RecordingCommandBus();
+        $this->ledger = new InMemoryLedger();
+        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
+        $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
+        $this->queries = new StandingQueryBus($recorded, $entities);
+        $this->locks = new BeforeChangeLockStore();
+        $this->logger = new RecordingLogger();
+        $this->handler = $this->handler();
+    }
+
     private function moveFromGreenToNextGreenAndBack(): void
     {
         $this->startRoundOnGreenHead();
@@ -1418,12 +1549,31 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         ($this->handler)(new WatchPullRequests('alpha'));
     }
 
+    private function causeOf(LedgerEventKind $kind): string
+    {
+        $line = array_search($kind, $this->ledger->kinds(), true);
+        self::assertIsInt($line);
+
+        $cause = $this->ledger->payloads()[$line]['cause'];
+        self::assertIsString($cause);
+
+        return $cause;
+    }
+
     private function tickEvery(string $interval, int $ticks): void
     {
         foreach (range(1, $ticks) as $ignored) {
             $this->tick();
             $this->clock->modify($interval);
         }
+    }
+
+    private function installWideThatCannotRecordAHold(): InstallWideFailures
+    {
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('lockStoreFailed')->willThrowException(new RuntimeException('the hold cannot be written'));
+
+        return $installWide;
     }
 
     private function loggedTheUnwrittenHold(): bool
@@ -1433,14 +1583,6 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
             return $exception instanceof RuntimeException && 'the hold cannot be written' === $exception->getMessage();
         });
-    }
-
-    private function installWideThatCannotRecordAHold(): InstallWideFailures
-    {
-        $installWide = self::createStub(InstallWideFailures::class);
-        $installWide->method('lockStoreFailed')->willThrowException(new RuntimeException('the hold cannot be written'));
-
-        return $installWide;
     }
 
     private function tickExpectingFailure(): void
@@ -1489,8 +1631,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore())), $ledger, $logger);
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
+        // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
+        $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel

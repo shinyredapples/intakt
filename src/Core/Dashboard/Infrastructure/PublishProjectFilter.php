@@ -38,8 +38,8 @@ final readonly class PublishProjectFilter
             if ($this->projects->isFirstRoundOf($opened->round, $opened->project)) {
                 $this->publishLatest();
             }
+            // Boundary: logs a failed filter update and swallows it, because the round is already committed and a failed live update must not send its start back to the queue.
         } catch (Throwable $failure) {
-            // Swallowed after a log, because the round is already committed and a failed live update must not send its start back to the queue.
             $this->logger->warning('The project filter was not published.', ['round' => $opened->round, 'project' => $opened->project, 'exception' => $failure]);
         }
     }

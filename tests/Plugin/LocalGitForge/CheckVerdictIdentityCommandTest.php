@@ -16,8 +16,10 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\RecordedIdentityMalformed;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewTermMalformed;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictIdentity;
@@ -27,6 +29,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileStatus;
@@ -40,8 +43,10 @@ use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\CheckVerdictIdentit
 use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\CheckVerdictIdentityInput;
 use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\RecordedIdentityUnreadable;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Plugin\Forge\CommitIdCheckThatThrows;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -79,23 +84,13 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(ReviewTerms::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(VerdictIdentity::class)]
+#[UsesClass(RecordedIdentityMalformed::class)]
+#[UsesClass(ReviewTermMalformed::class)]
+#[UsesClass(CommitIdMalformed::class)]
 #[UsesClass(VerdictStanding::class)]
 final class CheckVerdictIdentityCommandTest extends TestCase
 {
     private TemporaryRepository $repository;
-
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
 
     public function testItPrintsTheIdentityOfTheBranchStartingWithItsHeadAndBase(): void
     {
@@ -156,12 +151,30 @@ final class CheckVerdictIdentityCommandTest extends TestCase
         self::assertStringEndsWith("\nkept-for-untouched-parts: head, base changed\nreview again src/Main.php\n", $tester->getDisplay());
     }
 
-    public function testARecordedIdentityOfAnotherShapeFailsTheCommand(): void
+    public function testARecordedIdentityWithoutFivePartsIsReportedWithTheSameMessage(): void
     {
         $tester = $this->whenTheCommandRuns(['--reviewed' => 'not-an-identity']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('five parts', $tester->getDisplay());
+        self::assertSame('[ERROR] --reviewed is not a recorded verdict identity: A recorded verdict identity has five parts separated by dots.', $this->errorOf($tester));
+    }
+
+    public function testARecordedIdentityWithAnAbbreviatedHeadIsReportedWithTheSameMessage(): void
+    {
+        $tester = $this->whenTheCommandRuns(['--reviewed' => 'abc1234.'.substr($this->recordedIdentity(), 41)]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame('[ERROR] --reviewed is not a recorded verdict identity: A commit id is a full lowercase hexadecimal hash.', $this->errorOf($tester));
+    }
+
+    public function testARecordedIdentityWhoseTermsAreNoHashesIsReportedWithTheSameMessage(): void
+    {
+        [$head, $base] = explode('.', $this->recordedIdentity());
+
+        $tester = $this->whenTheCommandRuns(['--reviewed' => $head.'.'.$base.'.x.y.z']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame('[ERROR] --reviewed is not a recorded verdict identity: A review term is a lowercase hexadecimal SHA-256 hash.', $this->errorOf($tester));
     }
 
     public function testAProjectWithoutAPanelFailsTheCommand(): void
@@ -185,12 +198,37 @@ final class CheckVerdictIdentityCommandTest extends TestCase
         $this->whenTheCommandRuns([], $panels);
     }
 
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentWhileReadingTheReviewedIdentityPassesThrough(): void
+    {
+        $unexpected = str_repeat('f', 40);
+        CommitIdCheckThatThrows::defineFor($unexpected);
+        $reviewed = $unexpected.substr($this->recordedIdentity(), 40);
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->whenTheCommandRuns(['--reviewed' => $reviewed]);
+    }
+
     public function testAMissingRepositoryFailsNamingThePath(): void
     {
         $tester = $this->whenTheCommandRuns(['--repository' => 'no-such-repository']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString(RepositoryNotFound::at('no-such-repository')->getMessage(), $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function recordedIdentity(): string
@@ -218,6 +256,15 @@ final class CheckVerdictIdentityCommandTest extends TestCase
         ]);
 
         return $tester;
+    }
+
+    // The error block wraps at the terminal width, so its words are compared on one line.
+    private function errorOf(CommandTester $tester): string
+    {
+        $display = $tester->getDisplay();
+        $error = substr($display, (int) strpos($display, '[ERROR]'));
+
+        return trim((string) preg_replace('/\s+/', ' ', $error));
     }
 
     private function onePanel(): Panels

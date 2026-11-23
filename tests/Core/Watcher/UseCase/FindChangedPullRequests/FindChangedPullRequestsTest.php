@@ -45,18 +45,6 @@ final class FindChangedPullRequestsTest extends KernelTestCase
     private LockFactory $locks;
     private RecordingLogger $log;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->forge = new RecordedForge();
-        $this->log = new RecordingLogger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testAPullRequestSeenForTheFirstTimeIsReturned(): void
     {
         $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
@@ -81,6 +69,22 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         self::assertSame('W/"alpha-1"', $this->entities->find(ListingValidator::class, 'alpha')?->value());
         self::assertSame(['Listed the open pull requests.', 'Listed the open pull requests: unchanged.'], array_column($this->log->logged, 0));
         self::assertSame([['status' => 304, 'changed' => 0]], [array_intersect_key($this->log->logged[1][1], ['status' => 1, 'changed' => 1])]);
+    }
+
+    public function testTheOpenPullRequestsOfAProjectAreStillNamedAfterAnUnchangedListing(): void
+    {
+        $fractional = $this->at('8', '2026-11-01 11:00:00.123456');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'), $fractional);
+        $this->forge->opens('beta', RecordedForge::change('9', 'c', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+        $this->find('beta');
+        $this->find('alpha');
+        $this->entities->clear();
+
+        $open = $this->use($this->forge)->openOf('alpha');
+
+        self::assertSame(1, $this->forge->conditionalAnswers);
+        self::assertEquals([RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'), $fractional], $open);
     }
 
     public function testAPullRequestWhoseHeadAndUpdateTimeAreUnchangedIsNotReturnedAgain(): void
@@ -229,6 +233,18 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         $this->entities->flush();
         $this->entities->clear();
         self::assertSame('new', $this->entities->find(ListingValidator::class, 'beta')?->value());
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->forge = new RecordedForge();
+        $this->log = new RecordingLogger();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function at(string $id, string $updatedAt): OpenChange

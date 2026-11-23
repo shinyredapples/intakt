@@ -11,6 +11,9 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Git\Contract\BranchPushRequest;
+use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\Panel;
@@ -27,6 +30,7 @@ use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangedHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangesHandedToIntakt;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadBackOff;
@@ -45,8 +49,14 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
+use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
@@ -89,15 +99,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private string $firstHeadRuns = 'runs_in_progress.json';
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-    }
-
     public function testATickOverTwoRecordedPullRequestsRecordsOnePendingHeadAndQueuesOneRound(): void
     {
         $commands = new RecordingCommandBus();
@@ -109,7 +110,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $events = $this->recordedEvents();
         self::assertSame(1, preg_match_all('/ head_pending \{[^}]*pull\\\\\/7/', $events));
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/8/', $events));
-        self::assertStringContainsString('2 events', $events);
+        self::assertSame(2, preg_match_all('/ change_not_handed_to_intakt /', $events));
+        self::assertStringContainsString('4 events', $events);
     }
 
     public function testATickQueuesTheRoundOfAHeadWhoseQueuedRunANewerGreenRunOfTheSameOriginReplaced(): void
@@ -125,12 +127,81 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/7/', $events));
     }
 
-    private function recordedEvents(): string
+    // The repository is configured in another case than GitHub lists it, because the push builds its address from the configuration and the listing takes GitHub's.
+    public function testATickRecordsThePullRequestIntaktCreatedAsHandedToIntaktAndNotTheOneItOnlyUpdated(): void
     {
-        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
-        $tester->execute([]);
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        $records = new PushRecords($ledger);
+        $github = new ScriptedGitHub();
+        $github->createdNumber = 7;
+        $opener = $github->opener('alpha', 'Acme/Widgets');
+        $records->open($this->pushOf('feature/7', '1'), str_repeat('1', 40), $opener->openOrUpdate(new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'))));
+        // Seeded as an older line, because the opener now refuses the loop's #8 instead of updating it, and the ledger still holds such lines from before.
+        $records->open($this->pushOf('feature/8', '2'), self::GREEN, new OpenedChange(new ChangeId('https://github.com/Acme/Widgets/pull/8'), Opening::Updated));
 
-        return $tester->getDisplay();
+        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+
+        $events = $this->recordedEvents();
+        self::assertSame(['POST'], array_map(static fn (array $write): string => explode(' ', $write[0])[0], $github->writes));
+        self::assertSame(1, preg_match_all('/ change_handed_to_intakt /', $events));
+        self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+    }
+
+    // No record of Intakt for #8, because the loop's own pull requests have none and only the author GitHub sets can tell them apart.
+    public function testATickRecordsThePullRequestTheAppOpenedAsHandedToIntaktAndTheLoopsOwnAsNotHandedToIntakt(): void
+    {
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        $github = new ScriptedGitHub();
+        $github->createdNumber = 7;
+        new PushRecords($ledger)->open($this->pushOf('feature/7', '1'), str_repeat('1', 40), $github->opener('alpha', 'acme/widgets')->openOrUpdate(new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'))));
+
+        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+
+        $events = $this->recordedEvents();
+        self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+        self::assertSame(0, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/8/', $events));
+        self::assertSame(1, preg_match_all('/ change_not_handed_to_intakt \{[^}]*pull\\\\\/8/', $events));
+        self::assertSame(0, preg_match_all('/ change_not_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+    }
+
+    // The first push stops after GitHub created #7 and before `change_opened`, so only the retry writes the record.
+    public function testATickRecordsAPullRequestTheAppCreatedBeforeAnInterruptedPushAsHandedToIntakt(): void
+    {
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        $records = new PushRecords($ledger);
+        $github = new ScriptedGitHub();
+        $github->createdNumber = 7;
+        $opener = $github->opener('alpha', 'acme/widgets');
+        $proposal = new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'));
+        $push = $this->pushOf('feature/7', '1');
+        $records->intendChange($push, str_repeat('1', 40));
+        $opener->openOrUpdate($proposal);
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'feature/7'], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot']]];
+        $records->intendChange($push, str_repeat('1', 40));
+        $records->open($push, str_repeat('1', 40), $opener->openOrUpdate($proposal));
+
+        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+
+        $events = $this->recordedEvents();
+        self::assertSame(['POST', 'PATCH'], array_map(static fn (array $write): string => explode(' ', $write[0])[0], $github->writes));
+        self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+    }
+
+    private function pushOf(string $branch, string $head): BranchPushRequest
+    {
+        return new BranchPushRequest('alpha', 'repo', 'origin', $branch, new AcceptedHandBack(null, str_repeat($head, 40), 0), new ChangeText('Title', 'E1'));
     }
 
     private function handler(RecordingCommandBus $commands): WatchPullRequestsHandler
@@ -162,7 +233,15 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+    }
+
+    private function recordedEvents(): string
+    {
+        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
+        $tester->execute([]);
+
+        return $tester->getDisplay();
     }
 
     private function reads(MockClock $clock): GitHubWatchReads
@@ -175,7 +254,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
+        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]), new GitHubCiRuns(new GitHubMoments(), $clock), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
     private function answer(string $url): MockResponse

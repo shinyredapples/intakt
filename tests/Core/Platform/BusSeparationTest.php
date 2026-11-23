@@ -7,6 +7,8 @@ namespace Intakt\Tests\Core\Platform;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Platform\Contract\AsQueryHandler;
 use Intakt\Core\Platform\Contract\Bus;
+use Intakt\Core\Platform\Contract\CommandMessage;
+use Intakt\Core\Platform\Contract\QueryMessage;
 use Intakt\Tests\Core\Platform\Handler\FindThing;
 use Intakt\Tests\Core\Platform\Handler\FindThingHandler;
 use Intakt\Tests\Core\Platform\Handler\Ping;
@@ -15,10 +17,14 @@ use Intakt\Tests\Core\Platform\Handler\RenameThing;
 use Intakt\Tests\Core\Platform\Handler\RenameThingHandler;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
+use stdClass;
+use Symfony\Component\Messenger\Exception\InvalidArgumentException;
 use Symfony\Component\Messenger\Exception\NoHandlerForMessageException;
 use Symfony\Component\Messenger\HandleTrait;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\ReceivedStamp;
 
 #[CoversClass(AsCommandHandler::class)]
 #[CoversClass(AsQueryHandler::class)]
@@ -47,22 +53,52 @@ final class BusSeparationTest extends KernelTestCase
         self::assertSame('thing', $this->handle(new FindThing()));
     }
 
-    public function testACommandHandlerIsNotCallableOnTheQueryBus(): void
+    public function testACommandSentOnTheQueryBusIsRefused(): void
     {
         $this->messageBus = $this->bus('query.bus');
 
-        $this->expectException(NoHandlerForMessageException::class);
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf(
+            'This bus only dispatches messages of type "%s", "%s" given.',
+            QueryMessage::class,
+            RenameThing::class,
+        )));
 
         $this->handle(new RenameThing('abc'));
     }
 
-    public function testAQueryHandlerIsNotCallableOnTheCommandBus(): void
+    public function testAQuerySentOnTheCommandBusIsRefused(): void
     {
         $this->messageBus = $this->bus('command.bus');
 
-        $this->expectException(NoHandlerForMessageException::class);
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf(
+            'This bus only dispatches messages of type "%s", "%s" given.',
+            CommandMessage::class,
+            FindThing::class,
+        )));
 
         $this->handle(new FindThing());
+    }
+
+    #[TestWith(['command.bus', CommandMessage::class])]
+    #[TestWith(['query.bus', QueryMessage::class])]
+    public function testAMessageWithNoBusMarkerIsRefusedOnEitherBus(string $bus, string $marker): void
+    {
+        $this->messageBus = $this->bus($bus);
+
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf(
+            'This bus only dispatches messages of type "%s", "%s" given.',
+            $marker,
+            stdClass::class,
+        )));
+
+        $this->handle(new stdClass());
+    }
+
+    public function testAMessageReceivedFromATransportIsNotRefusedByTheBus(): void
+    {
+        $this->expectException(NoHandlerForMessageException::class);
+
+        $this->bus('command.bus')->dispatch(new FindThing(), [new ReceivedStamp('async')]);
     }
 
     public function testAHandlerThatIgnoresItsMessageIsRoutedByItsHandlesDeclaration(): void

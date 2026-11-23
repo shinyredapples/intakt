@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Mailer
+{
+    public function __construct(private string $sender)
+    {
+    }
+
+    public function setSender(string $sender): self
+    {
+        return new self($sender);
+    }
+
+    public function send(string $body): string
+    {
+        return $this->sender.': '.$body;
+    }
+}

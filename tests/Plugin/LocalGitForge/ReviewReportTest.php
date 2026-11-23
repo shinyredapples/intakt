@@ -8,9 +8,11 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Platform\Contract\FigureKind;
 use Intakt\Core\Platform\Contract\Figures;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\RoundEnds;
@@ -35,10 +37,12 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewOutput::class)]
 #[UsesClass(ReviewOutputVerdict::class)]
 #[UsesClass(RoundTokens::class)]
+#[UsesClass(BlockReasons::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(Figures::class)]
 #[UsesClass(FigureKind::class)]
 #[UsesClass(TokenFigures::class)]
+#[UsesClass(FindingIds::class)]
 final class ReviewReportTest extends TestCase
 {
     private const string SCHEMA = __DIR__.'/../../../docs/user/review-output.schema.json';
@@ -60,7 +64,7 @@ final class ReviewReportTest extends TestCase
 
     public function testAnActEntryThatMergesFindingsNamesTheIdsOfTheMergedFindings(): void
     {
-        $merged = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null)->withMerged(['F2', 'F4']);
+        $merged = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null)->withMerged(new FindingIds('F2', 'F4'));
         $review = $this->review(Decision::Changes);
 
         $lines = $this->report()->asLines(new ChangeReview($review->roundId, $review->round, $review->decision, $review->verdicts, [$merged], $review->tokens, $review->cost, $review->reasons));
@@ -266,18 +270,6 @@ final class ReviewReportTest extends TestCase
         self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
     }
 
-    private function review(Decision $decision, ?RoundTokens $tokens = null, ?Cost $cost = null): ChangeReview
-    {
-        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
-        $verdicts = [
-            new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
-            new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
-        ];
-        $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
-
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
-    }
-
     private function noted(string $note): Finding
     {
         return new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null)->withJudgeNote($note);
@@ -293,6 +285,18 @@ final class ReviewReportTest extends TestCase
     private function report(): ReviewReport
     {
         return new ReviewReport(StoredSerializerFactory::create());
+    }
+
+    private function review(Decision $decision, ?RoundTokens $tokens = null, ?Cost $cost = null): ChangeReview
+    {
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
+        $verdicts = [
+            new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
+            new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
+        ];
+        $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
+
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? new BlockReasons('correctness: provider refused the key') : new BlockReasons());
     }
 
     /**

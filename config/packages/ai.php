@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
@@ -39,6 +40,7 @@ use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubConfiguration;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
+use Psr\Log\LogLevel;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
@@ -56,6 +58,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigura
 use Symfony\Component\DependencyInjection\Parameter;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\HttpKernel\Log\Logger;
 use Symfony\Component\Yaml\Yaml;
 
 // Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
@@ -95,7 +98,8 @@ return static function (ContainerConfigurator $container): void {
 
     // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
     $keyProviders = new SymfonyAiProviderCatalog();
-    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, otherLoaders: [$vault])->loadEnvVars();
+    // The framework's own fallback logger on stderr, because the app's logger is a service of the container being built, and a skipped kept key must not go unnoticed.
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, new Logger(LogLevel::WARNING), [$vault])->loadEnvVars();
 
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
     $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {
@@ -308,7 +312,7 @@ return static function (ContainerConfigurator $container): void {
         }
 
         $container->services()->set($provider->accountsId(), AccountFailoverPlatform::class)
-            ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger')]);
+            ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger'), new ReferenceConfigurator(PinnedProviderCooldowns::class)]);
         $enabledAccounts[$provider->value] = array_keys($enabled);
         $tierPlatforms[$provider->value] = new ReferenceConfigurator($provider->accountsId());
     }
@@ -340,6 +344,11 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
+    $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
+        static fn (string $name): string => $env(new Account(Provider::OpenAiCompatible, $name)->variables()[0]),
+        $enabledAccounts[Provider::OpenAiCompatible->value] ?? [],
+    ));
     $container->parameters()->set(AiServices::PROJECTS, $projects);
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);

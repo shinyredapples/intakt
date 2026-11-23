@@ -102,7 +102,10 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
             $value = $loader->loadEnvVars()[$name] ?? null;
 
             return null !== $value && '' !== (string) $value;
-        } catch (Throwable) {
+            // Boundary: keeps a failing foreign loader from stopping the boot or a request, and logs it so the kept key is never paired with the owner's endpoint unnoticed.
+        } catch (Throwable $failure) {
+            $this->logger?->warning('Another env loader failed, so its variable counts as set and the kept key does not stand in for it.', ['loader' => $loader::class, 'exception_class' => $failure::class]);
+
             return true;
         }
     }

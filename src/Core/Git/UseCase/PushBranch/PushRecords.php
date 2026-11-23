@@ -11,6 +11,8 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use JsonException;
 
 // One record per phase and per commit the push intends to produce, so a restart reads where the last attempt stopped and never repeats a phase it finished; keyed by project too, because two projects can share history and branch names.
@@ -46,7 +48,11 @@ final readonly class PushRecords
         $record = $this->decoded($last->payload);
         $change = $record['change'] ?? null;
 
-        return is_string($change) && ($record[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
+        // Not without its opening, because a record written before openings were recorded must let the forge check the author again: docs/architecture/handed-to-intakt.md
+        $opening = $record['opening'] ?? null;
+        $known = is_string($opening) && null !== Opening::tryFrom($opening);
+
+        return $known && is_string($change) && ($record[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
     }
 
     /**
@@ -82,18 +88,13 @@ final readonly class PushRecords
         $this->append(LedgerEventKind::ChangeIntended, $this->keyOf($request, $head));
     }
 
+    // With how the forge got there, because only a pull request Intakt's identity created is handed to Intakt: docs/architecture/handed-to-intakt.md
     /**
      * @throws BranchNotPushed
      */
-    public function open(BranchPushRequest $request, string $head, string $change): void
+    public function open(BranchPushRequest $request, string $head, OpenedChange $change): void
     {
-        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change, self::TEXT_DIGEST => $this->digestOf($request->text)]);
-    }
-
-    // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.
-    private function digestOf(ChangeText $text): string
-    {
-        return hash('sha256', strlen($text->title).':'.$text->title.$text->body);
+        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change->id->value, self::TEXT_DIGEST => $this->digestOf($request->text), 'opening' => $change->opening->value]);
     }
 
     /**
@@ -149,6 +150,12 @@ final readonly class PushRecords
         }
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.
+    private function digestOf(ChangeText $text): string
+    {
+        return hash('sha256', strlen($text->title).':'.$text->title.$text->body);
     }
 
     /**

@@ -47,6 +47,11 @@ final readonly class ReviewCheckout
         symlink($target, $this->head.'/'.$path);
     }
 
+    public function pipe(string $path): void
+    {
+        posix_mkfifo($this->head.'/'.$path, 0o600);
+    }
+
     public function chmod(string $path, int $mode): void
     {
         chmod($this->head.'/'.$path, $mode);

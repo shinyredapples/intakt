@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-use InvalidArgumentException;
-
 // Hashes rather than the texts, so a recorded identity has a fixed shape and holds no task text or command line.
 final readonly class ReviewTerms
 {
@@ -18,7 +16,7 @@ final readonly class ReviewTerms
     ) {
         foreach ([$taskRevision, $checkCommand, $panelPolicy] as $hash) {
             if (1 !== preg_match('/^[0-9a-f]{64}\z/', $hash)) {
-                throw new InvalidArgumentException('A review term is a lowercase hexadecimal SHA-256 hash.');
+                throw new ReviewTermMalformed('A review term is a lowercase hexadecimal SHA-256 hash.');
             }
         }
     }

@@ -492,6 +492,54 @@ final class QuotesInChangeTest extends TestCase
         self::assertNotNull($reason);
     }
 
+    public function testAStrayBacktickBeforeARealQuoteCountsOnlyTheRealQuote(): void
+    {
+        $quotes = new QuotesInChange()->countedQuotes('A stray ` appears before `ghostName`.');
+
+        self::assertSame(['ghostName'], $quotes);
+    }
+
+    public function testAQuoteInsideAFencedSuggestedFixIsNotCounted(): void
+    {
+        $text = "`ghostName` is not defined. Suggested fix:\n```js\nconst fixName = `fixedName`;\n```";
+
+        $quotes = new QuotesInChange()->countedQuotes($text);
+
+        self::assertSame(['ghostName'], $quotes);
+    }
+
+    public function testFileNamesAndNumbersAreNotCounted(): void
+    {
+        $quotes = new QuotesInChange()->countedQuotes('`src/orders.js` calls `ghostName` at line `42` of `orders.log`.');
+
+        self::assertSame(['ghostName'], $quotes);
+    }
+
+    public function testAPaddedQuoteIsCountedTrimmed(): void
+    {
+        $quotes = new QuotesInChange()->countedQuotes('Wrap it as `` ghostName `` here.');
+
+        self::assertSame(['ghostName'], $quotes);
+    }
+
+    public function testAnUnsureQuoteIsNotCounted(): void
+    {
+        $quotes = new QuotesInChange()->countedQuotes('Uses ` leftName` here and `ghostName` there.');
+
+        self::assertSame(['ghostName'], $quotes);
+    }
+
+    public function testTheCountedQuotesAreAsManyAsTheDropReasonNames(): void
+    {
+        $text = "`ghostName` calls `otherGhost(1)` from `src/x.php`, twice: `ghostName`.\n```\n`fixName`\n```";
+
+        $quotes = new QuotesInChange()->countedQuotes($text);
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertSame(['ghostName', 'otherGhost(1)', 'ghostName'], $quotes);
+        self::assertSame(sprintf('none of its %d quoted code fragments is in the change', count($quotes)), $reason);
+    }
+
     private function finding(string $text, ?string $symbol = null): Finding
     {
         return new Finding('F1', Severity::P1, 'src/orders.js', 2, $symbol, $text, FixableBy::Builder, false, null, null);

@@ -27,7 +27,6 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\EventListener\SendFailedMessageToFailureTransportListener;
-use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Worker;
 use Symfony\Component\Uid\Uuid;
@@ -44,11 +43,6 @@ use Symfony\Component\Uid\Uuid;
 final class FailedMessageTest extends KernelTestCase
 {
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testAReviewerMessageThatReachesTheFailureTransportMarksTheReviewerBlockedAndCompletesTheRound(): void
     {
@@ -104,9 +98,8 @@ final class FailedMessageTest extends KernelTestCase
         $dispatcher = new EventDispatcher();
         $dispatcher->addListener(WorkerMessageFailedEvent::class, $this->fixture->failedMessages());
         $dispatcher->addSubscriber(new SendFailedMessageToFailureTransportListener(new ServiceLocator(['async' => static fn (): InMemoryTransport => $failed])));
-        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
 
-        new Worker(['async' => $incoming], new FailingBus(), $dispatcher, clock: $this->fixture->clock)->run(['sleep' => 0]);
+        new Worker(['async' => $incoming], new FailingBus(), $dispatcher, clock: $this->fixture->clock)->run(['sleep' => 0, 'stop_when_empty' => true]);
 
         self::assertCount(1, $failed->getSent());
         self::assertCount(1, $incoming->getRejected());
@@ -146,5 +139,10 @@ final class FailedMessageTest extends KernelTestCase
         ($this->fixture->failedMessages())(new WorkerMessageFailedEvent(new Envelope(new stdClass()), 'async', new RuntimeException('other')));
 
         self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($this->fixture->bus->messages[0]->reviewerId)->state());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 }

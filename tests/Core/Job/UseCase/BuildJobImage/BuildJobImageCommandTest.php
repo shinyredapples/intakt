@@ -105,17 +105,6 @@ final class BuildJobImageCommandTest extends TestCase
     /** @var list<MockResponse> */
     private array $requests = [];
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('composer.json', '{"require": {"php": ">=8.5.12", "ext-intl": "*"}, "config": {"platform": {"php": "8.5.12"}}}');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->repository->path, $this->context]);
-    }
-
     public function testAGeneratedImageIsBuiltAndItsPhpVerified(): void
     {
         $tester = $this->whenTheCommandRuns(self::BUILT);
@@ -195,6 +184,20 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertSame("FROM php:8.5.12-cli\n", $this->fileInTheSentContext('Dockerfile'));
         self::assertStringContainsString('dockerfile='.rawurlencode(ReviewDockerfile::PATH), $this->url);
         self::assertStringContainsString('Image intakt-job/demo:main ('.self::IMAGE.') built: PHP 8.5.12 with every required extension.', $this->display($tester));
+    }
+
+    public function testAReviewImageOfAProjectThatCommitsItsOwnReviewDockerfileSendsTheAddedEntryLast(): void
+    {
+        $this->repository->commitFile('Dockerfile', "FROM php:8.5.12-cli\n");
+        $this->repository->commitFile(ReviewDockerfile::PATH, "FROM scratch\n");
+
+        $tester = $this->whenTheCommandRuns(self::BUILT, options: ['--kind' => 'review']);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
+        $entries = $this->entriesInTheSentContext();
+        self::assertSame(ReviewDockerfile::PATH, array_last($entries));
+        self::assertSame([ReviewDockerfile::PATH, ReviewDockerfile::PATH], array_values(array_filter($entries, static fn (string $entry): bool => ReviewDockerfile::PATH === $entry)));
+        self::assertSame(ReviewDockerfile::after("FROM php:8.5.12-cli\n"), $this->fileInTheSentContext(ReviewDockerfile::PATH));
     }
 
     public function testAReviewImageKeepsALongPathAModeAndASymlinkOfTheTree(): void
@@ -287,6 +290,17 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertStringContainsString('there is no socket at /nonexistent/docker.sock', $this->display($tester));
     }
 
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('composer.json', '{"require": {"php": ">=8.5.12", "ext-intl": "*"}, "config": {"platform": {"php": "8.5.12"}}}');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->repository->path, $this->context]);
+    }
+
     /**
      * @param array<string, string> $options
      */
@@ -361,6 +375,18 @@ final class BuildJobImageCommandTest extends TestCase
         sort($names);
 
         return $names;
+    }
+
+    // In the archive's own order through tar, because PharData indexes entries by name and keeps only one of two alike.
+    /**
+     * @return list<string>
+     */
+    private function entriesInTheSentContext(): array
+    {
+        $listing = new Process(['tar', '-tf', $this->context]);
+        $listing->mustRun();
+
+        return array_values(array_filter(explode("\n", $listing->getOutput()), static fn (string $entry): bool => '' !== $entry));
     }
 
     private function display(CommandTester $tester): string

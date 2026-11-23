@@ -48,6 +48,84 @@ final class CaddyfileWorkersTest extends TestCase
 
     private HttpClientInterface $client;
 
+    public function testTheDashboardIsServedByTheAppWorkerAndTheMcpRouteByTheMcpWorker(): void
+    {
+        $this->start();
+        $response = $this->client->request('GET', $this->origin.'/projects');
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(['index.php' => 1, 'mcp.php' => 0], $this->requestsPerWorkerFile(1));
+
+        $this->client->request('POST', $this->origin.'/mcp/owner')->getStatusCode();
+
+        self::assertSame(['index.php' => 1, 'mcp.php' => 1], $this->requestsPerWorkerFile(2));
+    }
+
+    public function testAWorkerPastTheMemoryCeilingIsReplacedWithoutAFailedRequest(): void
+    {
+        $this->start(['WORKER_MEMORY_CEILING_MB' => (string) self::CEILING_MEGABYTES]);
+
+        $statuses = [];
+
+        for ($request = 0; $request < 10; ++$request) {
+            // Read so the server's debug log never fills its pipe and blocks the next answer.
+            $this->server->getIncrementalErrorOutput();
+            $statuses[] = $this->client->request('GET', $this->origin.'/projects')->getStatusCode();
+        }
+
+        self::assertSame(array_fill(0, 10, 200), $statuses);
+        self::assertTrue($this->server->isRunning());
+        self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheAppWorkers());
+    }
+
+    public static function testAMissingMemoryReadingIsNotTakenForAReplacedWorker(): void
+    {
+        $thread = ['Name' => 'Worker /app/public/index.php', 'RequestCount' => 10];
+
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfAppWorkers([$thread]));
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfAppWorkers([]));
+        self::assertSame(526_224, self::largestMemoryOfAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
+    }
+
+    public static function testRequestsAreCountedOnceTheWorkerHasFinishedTheLastAnsweredOne(): void
+    {
+        $reads = self::threadReads([self::appThreadWithRequests(9), self::appThreadWithRequests(10)]);
+
+        $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
+
+        self::assertSame(['index.php' => 10, 'mcp.php' => 0], $counts);
+    }
+
+    public static function testRequestsAlreadyCountedAreReadOnce(): void
+    {
+        $reads = self::threadReads([self::appThreadWithRequests(10)]);
+
+        $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
+
+        self::assertSame(['index.php' => 10, 'mcp.php' => 0], $counts);
+    }
+
+    public function testTheHelpersThatReadNoServerStayPrivateStatic(): void
+    {
+        foreach (['requestsOnceServed', 'largestMemoryOfAppWorkers'] as $name) {
+            $method = new ReflectionMethod(self::class, $name);
+
+            // Static callers keep them static, because Rector turns a private static helper with no static caller into an instance method.
+            self::assertTrue($method->isPrivate() && $method->isStatic(), $name.' must be private static.');
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->server)) {
+            $this->server->stop(5);
+        }
+
+        if (isset($this->directory)) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
     /**
      * @param array<string, string> $extraEnvironment
      */
@@ -82,47 +160,6 @@ final class CaddyfileWorkersTest extends TestCase
         $this->waitForTheWorkers();
     }
 
-    protected function tearDown(): void
-    {
-        if (isset($this->server)) {
-            $this->server->stop(5);
-        }
-
-        if (isset($this->directory)) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    public function testTheDashboardIsServedByTheAppWorkerAndTheMcpRouteByTheMcpWorker(): void
-    {
-        $this->start();
-        $response = $this->client->request('GET', $this->origin.'/projects');
-
-        self::assertSame(200, $response->getStatusCode());
-        self::assertSame(['index.php' => 1, 'mcp.php' => 0], $this->requestsPerWorkerFile(1));
-
-        $this->client->request('POST', $this->origin.'/mcp/owner')->getStatusCode();
-
-        self::assertSame(['index.php' => 1, 'mcp.php' => 1], $this->requestsPerWorkerFile(2));
-    }
-
-    public function testAWorkerPastTheMemoryCeilingIsReplacedWithoutAFailedRequest(): void
-    {
-        $this->start(['WORKER_MEMORY_CEILING_MB' => (string) self::CEILING_MEGABYTES]);
-
-        $statuses = [];
-
-        for ($request = 0; $request < 10; ++$request) {
-            // Read so the server's debug log never fills its pipe and blocks the next answer.
-            $this->server->getIncrementalErrorOutput();
-            $statuses[] = $this->client->request('GET', $this->origin.'/projects')->getStatusCode();
-        }
-
-        self::assertSame(array_fill(0, 10, 200), $statuses);
-        self::assertTrue($this->server->isRunning());
-        self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheAppWorkers());
-    }
-
     /**
      * @param array<string, string> $environment
      */
@@ -139,51 +176,6 @@ final class CaddyfileWorkersTest extends TestCase
     private function requestsPerWorkerFile(int $served): array
     {
         return self::requestsOnceServed($this->threads(...), $served);
-    }
-
-    /**
-     * @param Closure(): list<array<mixed>> $threads
-     *
-     * @return array<string, int>
-     */
-    // Polled, because FrankenPHP counts a request only when the worker has finished it, after its answer is sent.
-    private static function requestsOnceServed(Closure $threads, int $served): array
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
-
-        do {
-            $counts = self::requestsPerWorkerFileOf($threads());
-
-            if (array_sum($counts) >= $served) {
-                return $counts;
-            }
-
-            usleep(100_000);
-        } while (hrtime(true) < $deadline);
-
-        return $counts;
-    }
-
-    /**
-     * @param list<array<mixed>> $threads
-     *
-     * @return array<string, int>
-     */
-    // Counted by the file each thread runs, because the admin API names worker threads by file, not by worker name.
-    private static function requestsPerWorkerFileOf(array $threads): array
-    {
-        $counts = ['index.php' => 0, 'mcp.php' => 0];
-
-        foreach ($threads as $thread) {
-            $name = $thread['Name'] ?? null;
-            $requests = $thread['RequestCount'] ?? null;
-
-            if (is_string($name) && is_int($requests) && str_starts_with($name, 'Worker') && isset($counts[basename($name)])) {
-                $counts[basename($name)] += $requests;
-            }
-        }
-
-        return $counts;
     }
 
     // A worker that ends inside its last request is never counted, so the sign is memory: a replaced worker has not booted the kernel yet, and one that served past the ceiling still holds it. Polled, because the worker ends only after its answer is sent.
@@ -229,41 +221,12 @@ final class CaddyfileWorkersTest extends TestCase
         return $held ?? PHP_INT_MAX;
     }
 
-    public static function testAMissingMemoryReadingIsNotTakenForAReplacedWorker(): void
+    /**
+     * @return list<array<mixed>>
+     */
+    private static function appThreadWithRequests(int $requests): array
     {
-        $thread = ['Name' => 'Worker /app/public/index.php', 'RequestCount' => 10];
-
-        self::assertSame(PHP_INT_MAX, self::largestMemoryOfAppWorkers([$thread]));
-        self::assertSame(PHP_INT_MAX, self::largestMemoryOfAppWorkers([]));
-        self::assertSame(526_224, self::largestMemoryOfAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
-    }
-
-    public static function testRequestsAreCountedOnceTheWorkerHasFinishedTheLastAnsweredOne(): void
-    {
-        $reads = self::threadReads([self::appThreadWithRequests(9), self::appThreadWithRequests(10)]);
-
-        $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
-
-        self::assertSame(['index.php' => 10, 'mcp.php' => 0], $counts);
-    }
-
-    public static function testRequestsAlreadyCountedAreReadOnce(): void
-    {
-        $reads = self::threadReads([self::appThreadWithRequests(10)]);
-
-        $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
-
-        self::assertSame(['index.php' => 10, 'mcp.php' => 0], $counts);
-    }
-
-    public function testTheHelpersThatReadNoServerStayPrivateStatic(): void
-    {
-        foreach (['requestsOnceServed', 'largestMemoryOfAppWorkers'] as $name) {
-            $method = new ReflectionMethod(self::class, $name);
-
-            // Static callers keep them static, because Rector turns a private static helper with no static caller into an instance method.
-            self::assertTrue($method->isPrivate() && $method->isStatic(), $name.' must be private static.');
-        }
+        return [['Name' => 'Worker /app/public/index.php', 'RequestCount' => $requests]];
     }
 
     /**
@@ -291,11 +254,48 @@ final class CaddyfileWorkersTest extends TestCase
     }
 
     /**
-     * @return list<array<mixed>>
+     * @param Closure(): list<array<mixed>> $threads
+     *
+     * @return array<string, int>
      */
-    private static function appThreadWithRequests(int $requests): array
+    // Polled, because FrankenPHP counts a request only when the worker has finished it, after its answer is sent.
+    private static function requestsOnceServed(Closure $threads, int $served): array
     {
-        return [['Name' => 'Worker /app/public/index.php', 'RequestCount' => $requests]];
+        $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
+
+        do {
+            $counts = self::requestsPerWorkerFileOf($threads());
+
+            if (array_sum($counts) >= $served) {
+                return $counts;
+            }
+
+            usleep(100_000);
+        } while (hrtime(true) < $deadline);
+
+        return $counts;
+    }
+
+    /**
+     * @param list<array<mixed>> $threads
+     *
+     * @return array<string, int>
+     */
+    // Counted by the file each thread runs, because the admin API names worker threads by file, not by worker name.
+    private static function requestsPerWorkerFileOf(array $threads): array
+    {
+        $counts = ['index.php' => 0, 'mcp.php' => 0];
+
+        foreach ($threads as $thread) {
+            $name = $thread['Name'] ?? null;
+            $requests = $thread['RequestCount'] ?? null;
+
+            if (is_string($name) && is_int($requests) && str_starts_with($name, 'Worker') && isset($counts[basename($name)])) {
+                $counts[basename($name)] += $requests;
+            }
+        }
+
+        return $counts;
     }
 
     /**

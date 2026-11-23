@@ -30,38 +30,41 @@ final readonly class SampleProjectData
         return $this->text('price_date');
     }
 
+    /**
+     * @return non-empty-string
+     */
     public function model(Provider $provider, Tier $tier): string
     {
         return $this->text('models', $provider->value, $tier->value);
     }
 
-    public function secondMaker(): string
+    public function secondLab(): string
     {
-        return $this->text('second_maker');
+        return $this->text('second_lab');
     }
 
-    /**
-     * @return array<string, int|float>
-     */
-    public function price(string $model): array
+    public function price(string $model): ModelPrice
     {
         $price = $this->value('prices', $model);
         if (!is_array($price) || [] === $price) {
             throw $this->broken('prices', $model);
         }
 
-        $amounts = [];
+        $amounts = ModelPrice::none();
         foreach ($price as $kind => $amount) {
             if (!is_string($kind) || !is_int($amount) && !is_float($amount)) {
                 throw $this->broken('prices', $model);
             }
 
-            $amounts[$kind] = $amount;
+            $amounts = $amounts->with($kind, $amount);
         }
 
         return $amounts;
     }
 
+    /**
+     * @return non-empty-string
+     */
     private function text(string ...$path): string
     {
         $value = $this->value(...$path);

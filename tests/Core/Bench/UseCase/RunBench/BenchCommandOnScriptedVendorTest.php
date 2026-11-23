@@ -33,6 +33,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -66,7 +67,6 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 // Only the vendor is scripted, because the figures the command prints must come from stored rounds and ledger rows, as on an install.
 #[Group('persistence')]
@@ -86,6 +86,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 #[UsesClass(BenchReview::class)]
 #[UsesClass(BenchReviewerResult::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ModelNames::class)]
 #[UsesClass(RoundLedgerReading::class)]
 #[UsesClass(RunClassifier::class)]
 #[UsesClass(DefectMatcher::class)]
@@ -113,18 +114,6 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
     private RoundFixture $fixture;
 
     private string $results;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->results = sys_get_temp_dir().'/intakt-bench-command-'.bin2hex(random_bytes(4));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
-        parent::tearDown();
-    }
 
     public function testTheDocumentedCommandOnTheScriptedVendorSucceedsAndPrintsItsResultFile(): void
     {
@@ -154,6 +143,18 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
         $this->runTheDocumentedCommand();
 
         self::assertCount(24, $this->fixture->storedRounds());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->results = sys_get_temp_dir().'/intakt-bench-command-'.bin2hex(random_bytes(4));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
+        parent::tearDown();
     }
 
     private function runTheDocumentedCommand(): CommandTester
@@ -205,8 +206,6 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
         };
         $serializer = self::getContainer()->get('serializer.stored');
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
-        $failures = self::createStub(ListableReceiverInterface::class);
-        $failures->method('all')->willReturn([]);
 
         return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),
@@ -218,7 +217,7 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $vendor,
-            new FailedJudgings($failures),
+            $this->fixture->noFailedJudgings(),
         );
     }
 }

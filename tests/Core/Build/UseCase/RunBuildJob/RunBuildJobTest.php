@@ -14,6 +14,7 @@ use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -46,6 +47,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuildJobOutcome::class)]
 #[CoversClass(BuildVerdict::class)]
 #[CoversClass(BuilderNotOnClaudeCode::class)]
+#[CoversClass(BuildCloneIsNoFolder::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -77,17 +79,7 @@ final class RunBuildJobTest extends TestCase
 
     private GatesAtOnce $gatesAtOnce;
 
-    protected function setUp(): void
-    {
-        $this->gatesAtOnce = new GatesAtOnce(12, 1);
-        $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
+    private mixed $toolTimeLimit = 1500;
 
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
     {
@@ -105,9 +97,56 @@ final class RunBuildJobTest extends TestCase
 
         self::assertNotNull($this->ran);
         self::assertSame(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', ''],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', '', '1500'],
             $this->ran->command,
         );
+    }
+
+    #[TestWith([1800])]
+    #[TestWith([1])]
+    #[TestWith([2999])]
+    public function testTheBuilderSessionIsStartedWithTheToolTimeLimitFromConfiguration(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+
+        self::assertNotNull($this->ran);
+        self::assertSame((string) $seconds, $this->ran->command[11]);
+    }
+
+    #[TestWith([3000])]
+    #[TestWith([3001])]
+    public function testAToolTimeLimitNotBelowTheSessionsAllowanceIsRefused(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of 3000 seconds, not %d.', $seconds)));
+
+        $this->runBuilds(new JobOutput([]));
+    }
+
+    #[TestWith([true])]
+    #[TestWith(['1500'])]
+    #[TestWith([1500.0])]
+    public function testAToolTimeLimitThatIsNotAWholeNumberIsRefusedAsGiven(mixed $given): void
+    {
+        $this->toolTimeLimit = $given;
+
+        $this->expectExceptionMessageMatches('/tool time limit must be a whole number of seconds, not /');
+
+        $this->runBuilds(new JobOutput([]));
+    }
+
+    #[TestWith([0])]
+    #[TestWith([-1])]
+    public function testAToolTimeLimitBelowOneSecondIsRefused(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        $this->expectExceptionMessageMatches('/must be at least 1 second .*, not '.$seconds.'\.$/');
+
+        $this->runBuilds(new JobOutput([]));
     }
 
     #[TestWith([12, 2])]
@@ -203,7 +242,7 @@ final class RunBuildJobTest extends TestCase
 
     public function testACloneThatIsNoFolderIsRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(BuildCloneIsNoFolder::at($this->folder.'/missing'));
 
         (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/missing', 'task', new BuildBrief('x', [], null), Tier::Standard, 'img'));
     }
@@ -286,9 +325,16 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
     }
 
-    private function job(Tier $tier = Tier::Standard): BuildJob
+    protected function setUp(): void
     {
-        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
+        $this->gatesAtOnce = new GatesAtOnce(12, 1);
+        $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobEnd $end = new JobEnd(JobCause::Exited, 0)): RunBuildJob
@@ -304,11 +350,16 @@ final class RunBuildJobTest extends TestCase
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
     }
 
+    private function job(Tier $tier = Tier::Standard): BuildJob
+    {
+        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
+    }
+
     private function useCase(JobRunner $runner, ResolvedModel $model): RunBuildJob
     {
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }

@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Tests;
+
+use Throwable;
+
+final class OutsideSourceTest
+{
+    public function thrown(callable $work): ?Throwable
+    {
+        try {
+            $work();
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
+    }
+
+    public function runtime(callable $work): string
+    {
+        try {
+            $work();
+        } catch (\RuntimeException $thrown) {
+            return $thrown->getMessage();
+        }
+
+        return '';
+    }
+}

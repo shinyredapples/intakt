@@ -20,7 +20,7 @@ final readonly class MirrorChange
 
     public function __construct(
         private HardenedGit $hardened,
-        private BinaryFiles $binaryFiles = new BinaryFiles(),
+        private BinaryFiles $binaryFiles,
     ) {
     }
 
@@ -125,10 +125,8 @@ final readonly class MirrorChange
      */
     private function run(string $repository, array $arguments): Process
     {
-        $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
-
-        // Because a work tree beside --git-dir would make git treat the bare mirror as a checkout.
-        $process = new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false]);
+        $call = $this->hardened->callInBareRepository($arguments, $repository);
+        $process = new Process($call->command, $call->directory, $call->environment);
         $process->run();
 
         return $process;

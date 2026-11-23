@@ -1,8 +1,0 @@
-setup light 1440: axe critical 0, serious 0, moderate 0, minor 0
-setup light 1920: axe critical 0, serious 0, moderate 0, minor 0
-setup light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-setup dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-setup dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-setup dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-UI check: 6 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
-Screenshots in var/ui-check/

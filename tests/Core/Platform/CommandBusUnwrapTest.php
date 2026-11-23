@@ -7,6 +7,8 @@ namespace Intakt\Tests\Core\Platform;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Platform\Contract\AsQueryHandler;
 use Intakt\Core\Platform\Contract\Bus;
+use Intakt\Tests\Core\Platform\Handler\FindRefusedThing;
+use Intakt\Tests\Core\Platform\Handler\FindRefusedThingHandler;
 use Intakt\Tests\Core\Platform\Handler\RefuseThing;
 use Intakt\Tests\Core\Platform\Handler\RefuseThingHandler;
 use Intakt\Tests\Core\Platform\Handler\RelayRefusal;
@@ -22,6 +24,8 @@ use Throwable;
 #[CoversClass(AsCommandHandler::class)]
 #[CoversClass(AsQueryHandler::class)]
 #[UsesClass(Bus::class)]
+#[UsesClass(FindRefusedThing::class)]
+#[UsesClass(FindRefusedThingHandler::class)]
 #[UsesClass(RefuseThing::class)]
 #[UsesClass(RefuseThingHandler::class)]
 #[UsesClass(RelayRefusal::class)]
@@ -45,7 +49,7 @@ final class CommandBusUnwrapTest extends KernelTestCase
 
     public function testAHandlersFailureOnTheQueryBusStillArrivesWrapped(): void
     {
-        $failure = $this->failureOf(Bus::Query, new RefuseThing(new ThingRefused('Refused.')));
+        $failure = $this->failureOf(Bus::Query, new FindRefusedThing(new ThingRefused('Refused.')));
 
         self::assertInstanceOf(HandlerFailedException::class, $failure);
     }

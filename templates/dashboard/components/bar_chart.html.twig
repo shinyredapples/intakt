@@ -1,0 +1,51 @@
+{#- A bar's part is drawn solid inside a lighter whole of the same hue, because DESIGN.md's charts take one hue and small multiples instead of a second color. -#}
+{%- set width = 360 -%}
+{%- set height = 200 -%}
+{%- set left = 36 -%}
+{%- set right = 8 -%}
+{%- set above = 24 -%}
+{%- set below = 28 -%}
+{%- set plot = height - above - below -%}
+{%- set base = above + plot -%}
+{%- set step = (width - left - right) / bars|length -%}
+{#- A bar keeps a gap of 16 while it can and a share of its slot once slots grow narrow, and never drops below 0.1 so a long history never draws a bar of no width. -#}
+{%- set barWidth = max(0.1, min(40, max(step - 16, step * 0.6))) -%}
+{#- Labels show on every n-th bar once they would overlap (about 8 units a character at the chart's type size), because a long history crowds them; the tooltips and the table still name every bar. -#}
+{%- set axisEvery = max(1, (max(bars|map(bar => bar.label|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
+{%- set labelEvery = max(1, (max(bars|map(bar => (bar.shown ?? bar.value)|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
+{%- macro bar_path(x, y, w, base, rounded) -%}
+{#- The right edge is the written left edge plus the written width, because rounding the two edges apart can give a narrow bar the same number for both. -#}
+{%- set x = x|round(1) -%}
+{%- set w = max(0.1, w|round(1)) -%}
+{%- set r = rounded ? min(4, w / 2, base - y) : 0 -%}
+M{{ x }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x }},{{ y|round(1) }} {{ (x + r)|round(1) }},{{ y|round(1) }} H{{ (x + w - r)|round(1) }} Q{{ (x + w)|round(1) }},{{ y|round(1) }} {{ (x + w)|round(1) }},{{ (y + r)|round(1) }} V{{ base|round(1) }} Z
+{%- endmacro -%}
+<svg class="chart-svg" viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}" role="group" aria-label="{{ name }}">
+    {%- for share in [0, 0.5, 1] %}
+    {%- set y = above + plot - share * plot %}
+    <line x1="{{ left }}" x2="{{ width - right }}" y1="{{ y|round(1) }}" y2="{{ y|round(1) }}" class="{{ share == 0 ? 'c-base' : 'c-grid' }}"/>
+    <text x="{{ left - 6 }}" y="{{ (y + 4)|round(1) }}" class="c-axis" text-anchor="end" aria-hidden="true">{{ (share * top / (divisor|default(1)))|number_format(divisor|default(1) > 1 ? 4 : 0, '.', '') }}</text>
+    {%- endfor %}
+    {%- for bar in bars %}
+    {%- set center = left + step * loop.index0 + step / 2 %}
+    {%- set x = center - barWidth / 2 %}
+    {#- A positive value stands at least 1 unit tall, because a bar lost to rounding would read as zero or as No data. #}
+    {%- set y = (bar.value ?? 0) > 0 ? base - max(bar.value / top * plot, 1) : base %}
+    {%- if (bar.value ?? 0) > 0 %}
+    <path d="{{ _self.bar_path(x, y, barWidth, base, true) }}" class="c-bar{{ bar.part is not null ? ' c-whole' }}"/>
+    {%- endif %}
+    {%- if bar.part is not null and bar.part > 0 %}
+    {%- set partTop = base - max(bar.part / top * plot, 1) %}
+    <path d="{{ _self.bar_path(x, partTop, barWidth, base, bar.part == bar.value) }}" class="c-bar c-part"/>
+    {%- endif %}
+    {%- if loop.index0 % labelEvery == 0 %}
+    <text x="{{ center|round(1) }}" y="{{ (y - 6)|round(1) }}" class="c-label" text-anchor="middle" aria-hidden="true">{{ bar.shown ?? bar.value }}{% if bar.part is not null %} ({{ bar.part }} alone){% endif %}</text>
+    {%- endif %}
+    {%- if loop.index0 % axisEvery == 0 %}
+    <text x="{{ center|round(1) }}" y="{{ height - 8 }}" class="c-axis" text-anchor="middle" aria-hidden="true">{{ bar.label }}</text>
+    {%- endif %}
+    <rect x="{{ (left + step * loop.index0)|round(1) }}" y="{{ above }}" width="{{ step|round(1) }}" height="{{ plot }}" class="c-hit" tabindex="0" role="img" aria-label="{{ bar.inWords }}"
+        data-action="pointerenter->chart#pointerEnter pointerleave->chart#pointerLeave focus->chart#focusIn blur->chart#focusOut"
+        data-chart-reading-param="{{ bar.reading }}" data-chart-detail-param="{{ bar.detail }}"/>
+    {%- endfor %}
+</svg>

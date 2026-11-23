@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Platform\Handler;
 
-final readonly class RenameThing
+use Intakt\Core\Platform\Contract\CommandMessage;
+
+final readonly class RenameThing implements CommandMessage
 {
     public function __construct(public string $name)
     {

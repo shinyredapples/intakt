@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
@@ -22,7 +23,6 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Tests\Core\HandBack\BuildHistory;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -40,6 +40,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(HandBack::class)]
 #[UsesClass(HandBackRefusal::class)]
 #[UsesClass(HandBackNotChecked::class)]
+#[UsesClass(HandBackBranchRefused::class)]
 #[UsesClass(AttributionLines::class)]
 #[UsesClass(BundleHeader::class)]
 #[UsesClass(HardenedGit::class)]
@@ -47,16 +48,6 @@ use PHPUnit\Framework\TestCase;
 final class CheckHandBackTest extends TestCase
 {
     private BuildHistory $history;
-
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
 
     public function testNewCommitsOnABranchNotPushedYetAreAcceptedOnTopOfMain(): void
     {
@@ -486,16 +477,16 @@ final class CheckHandBackTest extends TestCase
         self::assertStringNotContainsString(substr($commit, 0, 7), $result->reason());
     }
 
-    public function testABranchThatIsMainItselfIsAnInvalidArgument(): void
+    public function testABranchThatIsMainItselfIsRefusedWithItsName(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(HandBackBranchRefused::isMain('main'));
 
         (void) $this->checker()->check(new HandBack($this->history->mirror, 'main', $this->history->file(''), false, new JobCredentials()));
     }
 
-    public function testABranchNameGitRefusesIsAnInvalidArgument(): void
+    public function testABranchNameGitRefusesIsRefusedWithItsName(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(HandBackBranchRefused::notAccepted('a..b'));
 
         (void) $this->checker()->check(new HandBack($this->history->mirror, 'a..b', $this->history->file(''), false, new JobCredentials()));
     }
@@ -505,6 +496,16 @@ final class CheckHandBackTest extends TestCase
         $this->expectException(HandBackNotChecked::class);
 
         (void) $this->checker()->check(new HandBack($this->history->folder, 'task', $this->history->file(''), false, new JobCredentials()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     private function movedMain(): string

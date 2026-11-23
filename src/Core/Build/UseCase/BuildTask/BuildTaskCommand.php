@@ -30,7 +30,7 @@ final readonly class BuildTaskCommand
 
         try {
             $outcome = $this->buildTask->run($request);
-        } catch (BuildStepNotRecorded $failure) {
+        } catch (BuildStepNotRecorded|PushRemoteRefused $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -68,6 +68,11 @@ final readonly class BuildTaskCommand
 
         if ($outcome->failed()) {
             $io->error(sprintf('%s failed: %s', $outcome->last->value, $outcome->failure));
+        }
+
+        // Fixed words, never the question, because the builder wrote it.
+        if ($outcome->parked()) {
+            $io->warning(sprintf('%s asked: the task is parked until its question is answered', $outcome->last->value));
         }
     }
 

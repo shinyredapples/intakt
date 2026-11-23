@@ -6,7 +6,6 @@ namespace Intakt\Core\Review\Infrastructure\Repository;
 
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewTool;
-use RuntimeException;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
@@ -26,13 +25,13 @@ final readonly class ListDirectory
         $real = $this->checkout->resolve($path);
 
         if (!is_dir($real)) {
-            throw new RuntimeException(sprintf('"%s" is not a directory.', $path));
+            throw PathNotReadable::notADirectory($path);
         }
 
         $names = scandir($real);
 
         if (false === $names) {
-            throw new RuntimeException(sprintf('"%s" cannot be listed.', $path));
+            throw PathNotReadable::unlistable($path);
         }
 
         $entries = array_values(array_diff($names, ['.', '..', '.git']));

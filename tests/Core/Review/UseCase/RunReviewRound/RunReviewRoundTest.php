@@ -59,11 +59,6 @@ final class RunReviewRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testARoundDispatchesOneMessagePerReviewerAndWaitsForThem(): void
     {
         $round = $this->fixture->start(3);
@@ -155,7 +150,7 @@ final class RunReviewRoundTest extends KernelTestCase
 
         self::assertSame(RoundState::Complete, $this->fixture->round($round->id()->toRfc4122())->state());
         self::assertSame(1, $vendor->calls);
-        self::assertCount(3, $this->fixture->ledgerKinds());
+        self::assertCount(4, $this->fixture->ledgerKinds());
     }
 
     public function testAFailedReviewerCountsAsFinishedAndTheRoundStillCompletes(): void
@@ -245,7 +240,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $this->fixture->deliver($this->fixture->bus->messages[0], $failing);
 
         self::assertSame(
-            [LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerFailed],
+            [LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerFailed, LedgerEventKind::ReviewerFindingsRecorded],
             $this->fixture->ledgerKinds(),
         );
     }
@@ -422,6 +417,11 @@ final class RunReviewRoundTest extends KernelTestCase
         $this->expectException(ReviewerNotFound::class);
 
         $this->fixture->deliver(new ReviewWithReviewer('019a2600-0000-7000-8000-000000000000'), new ScriptedVendor());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     // Set by hand, because a worker killed between the start and the end of a review leaves exactly this row behind.

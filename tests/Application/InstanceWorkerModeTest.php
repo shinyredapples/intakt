@@ -167,7 +167,7 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         mkdir($stubs);
         file_put_contents($stubs.'/frankenphp', '#!'.PHP_BINARY."\n".<<<'PHP'
             <?php
-            preg_match('~http://:(\d+)~',(string) file_get_contents($argv[array_search('--config', $argv, true) + 1]), $match);
+            preg_match('~http://:(\d+)~', (string) file_get_contents($argv[array_search('--config', $argv, true) + 1]), $match);
             $listener = stream_socket_server('tcp://127.0.0.1:'.$match[1]);
             $connection = stream_socket_accept($listener, 3);
             if (false !== $connection) {

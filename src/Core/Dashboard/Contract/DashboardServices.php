@@ -8,4 +8,5 @@ namespace Intakt\Core\Dashboard\Contract;
 final readonly class DashboardServices
 {
     public const string SAMPLE_REPOSITORY = 'intakt.dashboard.sample_repository';
+    public const string STATUS_PAGES = 'intakt.dashboard.status_pages';
 }

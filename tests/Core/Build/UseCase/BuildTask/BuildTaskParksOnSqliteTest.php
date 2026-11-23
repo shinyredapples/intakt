@@ -1,0 +1,216 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
+
+use Doctrine\DBAL\Connection;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\TierChoice;
+use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
+use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
+use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
+use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
+use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
+use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
+use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushStep;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Git\Contract\BranchPush;
+use Intakt\Core\Git\Contract\BuildCheckout;
+use Intakt\Core\HandBack\Contract\CheckJobs;
+use Intakt\Core\HandBack\Contract\HandBackChecks;
+use Intakt\Core\Job\Contract\JobEgress;
+use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobLimits;
+use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobResult;
+use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Domain\EventRecord;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
+use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
+use Intakt\Tests\Support\KernelTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
+
+// On the install's own database, because the parked row and the asked step share its transaction while the earlier steps go through the same ledger.
+#[Group('persistence')]
+#[CoversClass(BuildTask::class)]
+#[CoversClass(BuildTaskOutcome::class)]
+#[CoversClass(BuildTaskCommand::class)]
+#[UsesClass(BuildTaskInput::class)]
+#[UsesClass(BuildTaskRequest::class)]
+#[UsesClass(ParkedTasks::class)]
+#[UsesClass(PushRemoteCheck::class)]
+#[UsesClass(ParkedTaskRecord::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(HandBackCheck::class)]
+#[UsesClass(HandBackFile::class)]
+#[UsesClass(PrePushCheck::class)]
+#[UsesClass(PushStep::class)]
+#[UsesClass(DoctrineLedger::class)]
+#[UsesClass(EventRecord::class)]
+#[UsesClass(Issues::class)]
+#[UsesClass(ScriptedJobRunner::class)]
+#[UsesClass(RunBuildJob::class)]
+#[UsesClass(BuildJob::class)]
+#[UsesClass(BuildJobOutcome::class)]
+#[UsesClass(BuildVerdict::class)]
+#[UsesClass(BuildBrief::class)]
+#[UsesClass(BuilderPrompt::class)]
+#[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(PhpGate::class)]
+#[UsesClass(BuildFacts::class)]
+#[UsesClass(TierChoice::class)]
+#[UsesClass(JobSpec::class)]
+#[UsesClass(JobId::class)]
+#[UsesClass(JobInput::class)]
+#[UsesClass(JobLimits::class)]
+#[UsesClass(JobEgress::class)]
+#[UsesClass(JobResult::class)]
+#[UsesClass(JobEnd::class)]
+#[UsesClass(JobOutput::class)]
+final class BuildTaskParksOnSqliteTest extends KernelTestCase
+{
+    private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+
+    private const string QUESTION = '{"question":"PLANT-question: keep the old flag?","choices":["keep it","drop it"],"recommendation":"drop it"}';
+
+    private string $folder = '';
+
+    public function testABuildJobThatEndsWithAQuestionParksTheTaskWithItsAskedStepAndRunsNoLaterStep(): void
+    {
+        $outcome = $this->buildTask()->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertSame([BuildStep::BuildJob, null, true], [$outcome->last, $outcome->failure, $outcome->parked()]);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
+        self::assertSame(
+            [['project' => 'alpha', 'task' => 7, 'question' => '"PLANT-question: keep the old flag?"', 'recommendation' => '"drop it"']],
+            array_map(static fn (array $row): array => [...$row, 'task' => is_numeric($row['task']) ? (int) $row['task'] : $row['task']], $this->connection()->fetchAllAssociative('SELECT project, task, question, recommendation FROM build_parked_task')),
+        );
+        self::assertSame(
+            [
+                '{"project":"alpha","task":"7","step":"task","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","step":"mirror","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","step":"clone","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","step":"build_job","outcome":"asked","failure":null}',
+            ],
+            $this->connection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'),
+        );
+        self::assertSame([], glob($this->folder.'/hand-backs/*'));
+    }
+
+    public function testTheCommandPrintsThePassedStepsAndTheParkedLineButNeverTheQuestion(): void
+    {
+        $application = new Application();
+        $application->addCommand(new BuildTaskCommand($this->buildTask()));
+        $tester = new CommandTester($application->find('intakt:build:task'));
+
+        $tester->execute(['project' => 'alpha', 'issue' => '7', '--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1']);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString("task passed\nmirror passed\nclone passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString('build_job asked: the task is parked until its question is answered', $tester->getDisplay());
+        self::assertStringNotContainsString('build_job passed', $tester->getDisplay());
+        self::assertStringNotContainsString('PLANT', $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-build-task-parks-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        // A bundle and a text beside the question, because a question ends the build whatever else the job left.
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::QUESTION, self::QUESTION);
+        $tool = new SchemaTool($this->manager());
+        $tool->dropDatabase();
+        $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+        parent::tearDown();
+    }
+
+    private function buildTask(): BuildTask
+    {
+        $reads = self::createStub(IssueReads::class);
+        $reads->method('readOpen')->willReturn(Issues::task(7));
+        $checkout = self::createStub(BuildCheckout::class);
+        $routing = self::createStub(BuildRouting::class);
+        $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
+        $parked = self::getContainer()->get(ParkedTasks::class);
+        self::assertInstanceOf(ParkedTasks::class, $parked);
+
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)));
+    }
+
+    private function ledger(): Ledger
+    {
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+
+        return $ledger;
+    }
+
+    private function connection(): Connection
+    {
+        return $this->manager()->getConnection();
+    }
+
+    private function manager(): EntityManagerInterface
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        $manager = $registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        return $manager;
+    }
+}

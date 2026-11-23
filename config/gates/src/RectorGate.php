@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Override;
+
 final readonly class RectorGate extends PhpFilesToolGate
 {
     public function name(): string
@@ -21,8 +23,13 @@ final readonly class RectorGate extends PhpFilesToolGate
         return [
             'process', '--dry-run', '--no-progress-bar', '--output-format=json',
             '--config='.$workspace->config('rector.php'),
-            ...$files,
         ];
+    }
+
+    #[Override]
+    protected function environment(PhpFileSelection $selection): array
+    {
+        return [RectorPathsFile::VARIABLE => RectorPathsFile::written($selection->files)];
     }
 
     protected function findings(ProcessResult $result): array

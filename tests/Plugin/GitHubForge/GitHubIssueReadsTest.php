@@ -8,9 +8,13 @@ use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\GitHubForge\Infrastructure\ChangedWhileServed;
+use Intakt\Plugin\GitHubForge\Infrastructure\EntityTags;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\IssueFields;
+use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,6 +22,10 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GitHubIssueReads::class)]
+#[CoversClass(ChangedWhileServed::class)]
+#[CoversClass(EntityTags::class)]
+#[CoversClass(NextLinks::class)]
+#[CoversClass(IssueFields::class)]
 #[CoversClass(IssueListing::class)]
 #[CoversClass(ListedIssue::class)]
 #[UsesClass(RepositoryAddress::class)]
@@ -31,14 +39,203 @@ final class GitHubIssueReadsTest extends TestCase
         $api = new RecordedIssueApi();
         $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 100), 3 => $this->page(201, 100)];
         $api->namingNext = [1, 2];
+        $api->stable = true;
 
         $listing = $api->reads()->listOpen('alpha', null);
 
         self::assertSame(range(1, 300), array_map(static fn (ListedIssue $issue): int => $issue->number, $listing->issues()));
-        self::assertCount(3, $api->requests);
         self::assertStringContainsString('page=1', $api->requests[0]);
         self::assertStringContainsString('page=2', $api->requests[1]);
         self::assertStringContainsString('page=3', $api->requests[2]);
+    }
+
+    public function testMoreIssuesThanOnePageHoldsAreListedInFullWithTheIssueThatSortsFirstOnTheLastPage(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(2, 100), 2 => $this->page(1, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        $numbers = array_map(static fn (ListedIssue $issue): int => $issue->number, $api->reads()->listOpen('alpha', null)->issues());
+
+        self::assertCount(101, $numbers);
+        self::assertSame(1, end($numbers));
+    }
+
+    public function testEveryPageBeforeTheLastIsAskedAgainWithItsValidatorOnceTheLastIsRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 100), 3 => $this->page(201, 100)];
+        $api->namingNext = [1, 2];
+        $api->stable = true;
+
+        $api->reads()->listOpen('alpha', null);
+
+        self::assertCount(5, $api->requests);
+        self::assertStringContainsString('page=1', $api->requests[3]);
+        self::assertStringContainsString('page=2', $api->requests[4]);
+        self::assertSame(['W/"issues-1"', 'W/"issues-1.p2"'], $api->conditions);
+    }
+
+    public function testAnEarlierPageThatIsNotConfirmedUnchangedFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+
+        self::assertSame('GitHub did not confirm that page 1 of the open issues stayed the same while the later pages were read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnIssueListedOnTwoPagesFailsTheListingEvenWhenEveryEarlierPageIsConfirmed(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(100, 100), 3 => $this->page(201, 1)];
+        $api->namingNext = [1, 2];
+        $api->stable = true;
+
+        self::assertSame('GitHub listed issue #100 on two pages, so the open issues moved while they were read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAWildcardValidatorOnAnEarlierPageFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->etag = '*';
+        $api->stable = true;
+
+        self::assertSame('GitHub answered a validator that is not an entity tag.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAWildcardValidatorOnASinglePageFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 3)];
+        $api->etag = '*';
+
+        self::assertSame('GitHub answered a validator that is not an entity tag.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAStrongValidatorIsAskedAgainAsItWasServed(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->etag = '"issues-1"';
+        $api->stable = true;
+
+        self::assertCount(101, $api->reads()->listOpen('alpha', null)->issues());
+        self::assertSame(['"issues-1"'], $api->conditions);
+    }
+
+    public function testAnEarlierPageWithAnIssueUpdatedInTheSecondsItWasServedFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:56Z'), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertSame('Issue #1 on page 1 of the open issues changed in the seconds GitHub served the page, so a close and reopen while the later pages were read cannot be ruled out.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWithAnIssueUpdatedExactlyTheClockSlackBeforeItWasServedFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:55Z'), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertSame('Issue #1 on page 1 of the open issues changed in the seconds GitHub served the page, so a close and reopen while the later pages were read cannot be ruled out.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWhoseIssuesWereUpdatedBeforeTheClockSlackIsAccepted(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:54Z'), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertCount(101, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnIssueUpdatedInTheSecondTheLastPageWasServedIsAccepted(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1, '2026-11-25T10:00:00Z')];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertCount(101, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnEarlierPageWithoutADateFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = null;
+
+        self::assertSame('GitHub answered page 1 of open issues without a Date.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWithADateThisForgeCannotReadFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = '2026-11-25T10:00:00Z';
+
+        self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWithADateWhoseSecondIsOutOfRangeFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T10:00:00Z'), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = 'Wed, 25 Nov 2026 10:00:99 GMT';
+
+        self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWithADateWhoseWeekdayDoesNotMatchItsDayFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T10:00:00Z'), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = 'Thu, 25 Nov 2026 10:00:00 GMT';
+
+        self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAListedIssueWhoseUpdateMomentIsNotWrittenAsGitHubWritesItFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 1, '2026-11-25T9:00:00Z')];
+
+        self::assertSame('GitHub answered a moment this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAListedIssueWhoseUpdateMomentIsOutOfRangeFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 1, '2026-11-25T09:00:99Z')];
+
+        self::assertSame('GitHub answered a moment this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testASinglePageIsNotAskedAgain(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100)];
+
+        $api->reads()->listOpen('alpha', null);
+
+        self::assertCount(1, $api->requests);
     }
 
     public function testAListedIssueCarriesWhatTheIntakeReads(): void
@@ -79,6 +276,7 @@ final class GitHubIssueReadsTest extends TestCase
         $several = new RecordedIssueApi();
         $several->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
         $several->namingNext = [1];
+        $several->stable = true;
 
         self::assertSame('W/"issues-1"', $single->reads()->listOpen('alpha', null)->validator);
         self::assertNull($several->reads()->listOpen('alpha', null)->validator);
@@ -110,6 +308,71 @@ final class GitHubIssueReadsTest extends TestCase
         $api->namingNext = [1];
 
         self::assertStringContainsString('GitHub answered 500 to a read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testALaterPageAnsweredWithPartialContentFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => '206'];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertSame('GitHub answered 206 to a read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testANextRelationWithSpacesAroundTheEqualsSignReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel = "next"'));
+    }
+
+    public function testANextRelationAmongOthersInAQuotedValueReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="prev NEXT"'));
+    }
+
+    public function testAnUnquotedNextRelationReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=9>; rel=last, <https://api.github.com/repositories/1/issues?page=%d>;rel=next'));
+    }
+
+    public function testANextRelationWrittenWithAQuotedPairReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="ne\xt"'));
+    }
+
+    public function testAQuotedPairThatSpellsAnotherRelationEndsTheListing(): void
+    {
+        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="next\-page"'));
+    }
+
+    public function testARelationThatOnlyStartsWithNextEndsTheListing(): void
+    {
+        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="next-page"'));
+    }
+
+    public function testANextRelationQuotedInsideAnotherParameterEndsTheListing(): void
+    {
+        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; title="a; rel=next"'));
+    }
+
+    public function testALinkHeaderThisForgeCannotReadFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = '<https://api.github.com/repositories/1/issues?page=%d; rel="next"';
+
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testALinkHeaderWithAnEmptyListElementFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = '<https://api.github.com/repositories/1/issues?page=%d>; rel="next", , <https://api.github.com/repositories/1/issues?page=1>; rel="first"';
+
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureOf($api)->getMessage());
     }
 
     public function testARateLimitedLaterPageFailsTheListingAsRateLimited(): void
@@ -168,8 +431,160 @@ final class GitHubIssueReadsTest extends TestCase
             $api->pages[$page] = $this->page(($page - 1) * 100 + 1, 100);
         }
         $api->namingNext = range(1, 9);
+        $api->stable = true;
 
         self::assertCount(1000, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnOpenIssueIsReadWithOneRequestAndCarriesWhatAListingWouldCarry(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single([])];
+
+        $issue = $api->reads()->readOpen('alpha', 12);
+
+        self::assertSame(['GET https://api.github.com/repos/acme/widgets/issues/12'], $api->requests);
+        self::assertSame(12, $issue?->number);
+        self::assertSame('Add the export', $issue->title);
+        self::assertSame("Export the report.\n\nWaits for #9 and #10\n", $issue->body);
+        self::assertSame(['intakt', 'priority:high'], $issue->labels);
+        self::assertSame('2026-12-01T08:00:00+00:00', $issue->milestoneDue?->format('c'));
+    }
+
+    public function testAClosedIssueReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['state' => 'closed'])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAPullRequestReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['pull_request' => ['url' => 'https://api.github.com/repos/acme/widgets/pulls/12']])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnIssueGitHubAnswers404ForReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '404'];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testARateLimitedSingleReadFailsAsRateLimited(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '429'];
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testASingleReadAnsweredWithAnotherFailureFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '500'];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 500 to a read.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testASingleReadAnsweredWithNotModifiedFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->notModified = true;
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 304 to a read.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testAnIssueTransferredToAnotherRepositoryReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '301'];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnAnswerForAnotherNumberReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['number' => 99])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnAnswerForTheNextNumberReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single([])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 13));
+    }
+
+    public function testAnIssueWithAStateThisForgeDoesNotKnowFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['state' => 'unexpected'])];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testAnIssueWithoutAStateFailsTheRead(): void
+    {
+        $listed = json_decode(RecordedIssueApi::fixture('issues_open.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($listed);
+        self::assertIsArray($listed[0]);
+        unset($listed[0]['state']);
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => json_encode($listed[0], JSON_THROW_ON_ERROR)];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testASingleReadAnsweredWithAListFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '[]'];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue that is not an object.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function single(array $overrides): string
+    {
+        $listed = json_decode(RecordedIssueApi::fixture('issues_open.json'), true, flags: JSON_THROW_ON_ERROR);
+
+        return json_encode([...(is_array($listed) && is_array($listed[0]) ? $listed[0] : []), ...$overrides], JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * @return list<ListedIssue>
+     */
+    private function listedWithNextLink(string $nextLink): array
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = $nextLink;
+        $api->stable = true;
+
+        return $api->reads()->listOpen('alpha', null)->issues();
     }
 
     private function failureOf(RecordedIssueApi $api): ForgeReadFailed
@@ -183,7 +598,7 @@ final class GitHubIssueReadsTest extends TestCase
         self::fail('The listing was expected to fail.');
     }
 
-    private function page(int $from, int $count): string
+    private function page(int $from, int $count, string $updatedAt = '2026-11-10T10:00:00Z'): string
     {
         $issues = array_map(static fn (int $number): array => [
             'number' => $number,
@@ -192,7 +607,7 @@ final class GitHubIssueReadsTest extends TestCase
             'user' => ['login' => 'ana'],
             'labels' => [],
             'milestone' => null,
-            'updated_at' => '2026-11-10T10:00:00Z',
+            'updated_at' => $updatedAt,
         ], range($from, $from + $count - 1));
 
         return json_encode($issues, JSON_THROW_ON_ERROR);

@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Memory\Contract;
 
+use Intakt\Core\Git\Contract\Paths;
+
 final readonly class MemoryQuery
 {
-    /**
-     * @param list<string> $files
-     */
     public function __construct(
         public string $project,
-        public array $files,
+        public Paths $files,
         public int $maxBytes,
     ) {
     }

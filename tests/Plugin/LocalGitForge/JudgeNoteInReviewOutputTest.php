@@ -25,7 +25,6 @@ use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\OnePerPlace;
-use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
@@ -47,7 +46,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 // A round reviewed and judged through ReviewChange, the use case behind intakt:review, then printed as the command prints it, so the note travels the whole way from the judge's answer.
 #[Group('persistence')]
@@ -66,11 +64,6 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
     private const string DEFERRED = 'This belongs to the follow-up on retries.';
 
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testAJudgeAnswerThatRejectsAP1LeavesItOnTheActListWithTheJudgesNoteInTextAndJson(): void
     {
@@ -96,27 +89,9 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
         self::assertArrayNotHasKey('judge_note', $this->jsonRow($review, 'Text of A.'));
     }
 
-    private function judgeNoteAfter(ChangeReview $review, string $finding): ?string
+    protected function setUp(): void
     {
-        $lines = $this->report()->asLines($review);
-        $at = array_find_key($lines, static fn (string $line): bool => str_ends_with($line, ' '.$finding));
-        self::assertIsInt($at, 'The act list should print '.$finding);
-        $next = $lines[$at + 1] ?? '';
-
-        return str_starts_with($next, 'judge: ') ? substr($next, strlen('judge: ')) : null;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function jsonRow(ChangeReview $review, string $text): array
-    {
-        /** @var array{act_list: list<array<string, mixed>>} $document */
-        $document = json_decode($this->report()->asJson($review), true, flags: JSON_THROW_ON_ERROR);
-        $row = array_find($document['act_list'], static fn (array $row): bool => $text === $row['text']);
-        self::assertIsArray($row, 'The act list should hold '.$text);
-
-        return $row;
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     // Two places, so the judge's marks never meet in one merged entry.
@@ -145,12 +120,33 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
         return $this->reviewChange($work, $vendor)->review($this->request());
     }
 
+    private function judgeNoteAfter(ChangeReview $review, string $finding): ?string
+    {
+        $lines = $this->report()->asLines($review);
+        $at = array_find_key($lines, static fn (string $line): bool => str_ends_with($line, ' '.$finding));
+        self::assertIsInt($at, 'The act list should print '.$finding);
+        $next = $lines[$at + 1] ?? '';
+
+        return str_starts_with($next, 'judge: ') ? substr($next, strlen('judge: ')) : null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function jsonRow(ChangeReview $review, string $text): array
+    {
+        /** @var array{act_list: list<array<string, mixed>>} $document */
+        $document = json_decode($this->report()->asJson($review), true, flags: JSON_THROW_ON_ERROR);
+        $row = array_find($document['act_list'], static fn (array $row): bool => $text === $row['text']);
+        self::assertIsArray($row, 'The act list should hold '.$text);
+
+        return $row;
+    }
+
     private function reviewChange(Closure $work, Vendor $tiers): ReviewChange
     {
         $serializer = self::getContainer()->get('serializer.stored');
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
-        $failures = self::createStub(ListableReceiverInterface::class);
-        $failures->method('all')->willReturn([]);
 
         return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))], unwrapExceptions: true),
@@ -162,7 +158,7 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $tiers,
-            new FailedJudgings($failures),
+            $this->fixture->noFailedJudgings(),
             new UpperWait(),
         );
     }

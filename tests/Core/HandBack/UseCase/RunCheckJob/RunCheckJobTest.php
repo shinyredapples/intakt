@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
@@ -52,6 +53,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(CheckJobOutcome::class)]
 #[CoversClass(CheckVerdict::class)]
 #[UsesClass(CheckJob::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(LostContent::class)]
 #[UsesClass(PhpGate::class)]
 #[UsesClass(CheckHandBack::class)]
@@ -85,16 +87,6 @@ final class RunCheckJobTest extends TestCase
     private BuildHistory $history;
 
     private ?JobSpec $ran = null;
-
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
 
     public function testAJobWhoseOutputSaysPassedPassesTheCheck(): void
     {
@@ -151,7 +143,7 @@ final class RunCheckJobTest extends TestCase
         $gate->method('registryHosts')->willReturn([]);
 
         (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"]))), $gate)
-            ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, []));
+            ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, new Paths()));
 
         self::assertTrue($this->ranSpec()->egress->isNone());
     }
@@ -457,7 +449,7 @@ final class RunCheckJobTest extends TestCase
         $this->history->startMerge('main');
         $this->history->commitFile('named.txt', "1\n", 'Merge main and create an unrelated file at the named path');
 
-        $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), true, new JobCredentials()), 'job-image', null, ['named.txt']);
+        $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), true, new JobCredentials()), 'job-image', null, new Paths('named.txt'));
 
         $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $job);
 
@@ -465,12 +457,14 @@ final class RunCheckJobTest extends TestCase
         self::assertSame([['important.txt', 120, 0]], $this->lostIn($outcome));
     }
 
-    private function givenMainHolds(string $path, string $content): void
+    protected function setUp(): void
     {
-        $this->history->checkout('main');
-        $this->history->commitFile($path, $content, 'Add '.$path);
-        $this->history->push('main');
-        $this->history->startBranch('task', 'main');
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     /**
@@ -500,7 +494,7 @@ final class RunCheckJobTest extends TestCase
      */
     private function job(string $bundle, ?string $command, array $named): CheckJob
     {
-        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, $named);
+        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, new Paths(...$named));
     }
 
     private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob
@@ -524,16 +518,24 @@ final class RunCheckJobTest extends TestCase
         return $this->ran;
     }
 
+    private function lines(int $count): string
+    {
+        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
+    }
+
+    private function givenMainHolds(string $path, string $content): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile($path, $content, 'Add '.$path);
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+    }
+
     /**
      * @return list<array{string, int, int}>
      */
     private function lostIn(CheckJobOutcome $outcome): array
     {
         return array_map(static fn (LostContent $lost): array => [$lost->path, $lost->linesBefore, $lost->linesAfter], $outcome->lostContent);
-    }
-
-    private function lines(int $count): string
-    {
-        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
     }
 }

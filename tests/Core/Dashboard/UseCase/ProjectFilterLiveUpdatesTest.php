@@ -23,7 +23,6 @@ use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Twig\Environment;
 
 #[CoversClass(PublishProjectFilter::class)]
@@ -41,13 +40,12 @@ final class ProjectFilterLiveUpdatesTest extends DashboardPageTestCase
     public function testTheApplicationQueuesAnOpenedRoundForTheWorkers(): void
     {
         $commands = self::getContainer()->get('command.bus');
-        $queue = self::getContainer()->get('messenger.transport.async');
         self::assertInstanceOf(MessageBusInterface::class, $commands);
-        self::assertInstanceOf(InMemoryTransport::class, $queue);
 
         $commands->dispatch(new RoundOpened('round-1', 'alpha'));
 
-        self::assertEquals([new RoundOpened('round-1', 'alpha')], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()));
+        self::assertQueuedMessageCount(1, 'async', RoundOpened::class);
+        self::assertEquals([new RoundOpened('round-1', 'alpha')], array_map(static fn (Envelope $queued): object => $queued->getMessage(), self::getQueuedMessages('async')));
     }
 
     public function testTheApplicationPublishesTheProjectFilterOnEveryOpenedRound(): void

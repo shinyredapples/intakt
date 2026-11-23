@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Memory\Infrastructure;
 
 use Closure;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Symfony\AI\Store\Document\Metadata;
 use Symfony\AI\Store\Document\TextDocument;
@@ -18,13 +19,14 @@ final readonly class MemoryDocuments
 
     public function toDocument(MemoryEntry $entry): TextDocument
     {
-        $content = implode(' ', $entry->files).PHP_EOL.$entry->text;
+        $files = [...$entry->files];
+        $content = implode(' ', $files).PHP_EOL.$entry->text;
 
         // The same entry gets the same id, so indexing it twice replaces it; JSON keeps file lists that join alike apart, and the project keeps two projects' equal notes apart.
-        return new TextDocument(hash('sha256', json_encode([$entry->project, $entry->files, $entry->text], JSON_THROW_ON_ERROR)), $content, new Metadata([
+        return new TextDocument(hash('sha256', json_encode([$entry->project, $files, $entry->text], JSON_THROW_ON_ERROR)), $content, new Metadata([
             Metadata::KEY_TEXT => $content,
             self::PROJECT => $entry->project,
-            self::FILES => $entry->files,
+            self::FILES => $files,
             self::ENTRY => $entry->text,
         ]));
     }
@@ -57,10 +59,7 @@ final readonly class MemoryDocuments
         return is_string($text) ? $text : throw new StoredMemoryIsMalformed($document->getId(), self::ENTRY);
     }
 
-    /**
-     * @return list<string>
-     */
-    private function entryFiles(VectorDocumentInterface $document): array
+    private function entryFiles(VectorDocumentInterface $document): Paths
     {
         $files = $document->getMetadata()[self::FILES] ?? null;
 
@@ -68,9 +67,9 @@ final readonly class MemoryDocuments
             throw new StoredMemoryIsMalformed($document->getId(), self::FILES);
         }
 
-        return array_map(
+        return new Paths(...array_map(
             fn (mixed $file): string => is_string($file) ? $file : throw new StoredMemoryIsMalformed($document->getId(), self::FILES),
             $files,
-        );
+        ));
     }
 }

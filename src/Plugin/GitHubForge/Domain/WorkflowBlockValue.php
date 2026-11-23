@@ -11,11 +11,11 @@ final readonly class WorkflowBlockValue
      *
      * @return array{WorkflowScalar, int}
      */
-    public function read(array $lines, int $from, WorkflowLine $header): array
+    public function read(array $lines, WorkflowLine $header): array
     {
-        $indent = $this->textIndent($lines, $from, $header);
+        $indent = $this->textIndent($lines, $header);
         $texts = [];
-        $next = $from;
+        $next = $header->number;
         while (null !== $indent && $next < count($lines) && ($this->isBlank($lines[$next]) || $this->lead($lines[$next]) >= $indent)) {
             $texts[] = substr($lines[$next], $indent);
             ++$next;
@@ -32,10 +32,11 @@ final readonly class WorkflowBlockValue
     /**
      * @param list<string> $lines
      */
-    private function textIndent(array $lines, int $from, WorkflowLine $header): ?int
+    private function textIndent(array $lines, WorkflowLine $header): ?int
     {
         $widestBlank = 0;
-        for ($index = $from; $index < count($lines); ++$index) {
+        // Starts at the header's line number because it counts from one, which makes it the index of the line after the header.
+        for ($index = $header->number; $index < count($lines); ++$index) {
             $lead = $this->lead($lines[$index]);
             if ($this->isBlank($lines[$index])) {
                 $widestBlank = max($widestBlank, $lead);
@@ -57,13 +58,13 @@ final readonly class WorkflowBlockValue
         return null;
     }
 
-    private function lead(string $line): int
-    {
-        return strlen($line) - strlen(ltrim($line, ' '));
-    }
-
     private function isBlank(string $line): bool
     {
         return '' === trim($line, " \t");
+    }
+
+    private function lead(string $line): int
+    {
+        return strlen($line) - strlen(ltrim($line, ' '));
     }
 }

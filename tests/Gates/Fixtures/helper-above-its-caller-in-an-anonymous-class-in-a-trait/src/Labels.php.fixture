@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Labels
+{
+    public function label(): object
+    {
+        return new class {
+            private function trimmed(string $text): string
+            {
+                return trim($text);
+            }
+
+            public function render(string $text): string
+            {
+                return $this->trimmed($text);
+            }
+        };
+    }
+}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\UseCase\ShowComponents\ShowComponentsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -34,6 +35,9 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'copy field' => ['.copy code + button.btn'];
         yield 'bar' => ['.window .bar'];
         yield 'last-known bar' => ['.window .bar.last-known'];
+        yield 'bar chart with its tooltip' => ['[data-controller="chart"][data-action="keydown.esc@window->chart#dismiss"] svg.chart-svg .c-hit[tabindex="0"][aria-label]'];
+        yield 'chart table view' => ['[data-controller="chart"] details.c-table table'];
+        yield 'chart without data' => ['.takeaway[data-no-data]'];
         yield 'banner' => ['.banner.broken'];
         yield 'compact banner, collapsed' => ['.banner.compact:not(.open) .banner-toggle[aria-expanded="false"]'];
         yield 'compact banner, open' => ['.banner.compact.open .banner-toggle[aria-expanded="true"]'];
@@ -76,6 +80,20 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         }
     }
 
+    public function testTheSampleApprovalCardNamesTheSecretsFloorAndTheChangedFile(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertSame(['Approve this version: secrets limit, ForgeTokenStore.php changed'], $page->filter('#c-cards .spec[data-theme="light"] a.card.needs:not(.is-hover) .title + p.blocker')->each(static fn (Crawler $ask): string => $ask->text()));
+    }
+
+    public function testTheEmptyColumnSampleSaysWhatTheColumnWillHold(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertSame(['Tasks appear here when Intakt takes in an issue'], $page->filter('.spec[data-theme="light"] .col-empty')->each(static fn (Crawler $empty): string => $empty->text()));
+    }
+
     public function testTheComponentsPageShowsTheFourOutcomeChipsInBothThemes(): void
     {
         $page = $this->browser->request('GET', '/components');
@@ -98,11 +116,11 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         foreach (['light', 'dark'] as $theme) {
             $section = $page->filter('#c-characters .spec[data-theme="'.$theme.'"]');
             self::assertSame(
-                ['Code reviewer: Meerkat with a magnifying glass', 'Judge: Owl with a gavel', 'Waiting', 'Conducting', 'Bowing', 'Asleep'],
+                ['Code reviewer: Meerkat with a magnifying glass', 'Judge: Owl with a gavel', 'Maintainer: Tortoise with a toolbox', 'Developer: Beaver with a wrench', 'Security engineer: Hedgehog with a shield', 'Waiting', 'Conducting', 'Bowing', 'Asleep'],
                 $section->filter('.character-row')->each(static fn (Crawler $row): string => $row->text()),
                 $theme,
             );
-            self::assertCount(2 * (2 * 2 + 4), $section->filter('img.character[alt=""]'), $theme);
+            self::assertCount(2 * (count(Character::cases()) * 2 + 4), $section->filter('img.character[alt=""]'), $theme);
         }
     }
 
@@ -115,6 +133,14 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
             self::assertCount(1, $focused, $theme);
             self::assertStringContainsString('#626', $focused->text(), $theme);
         }
+    }
+
+    public function testTheSampleChartsTableListsTheSameNumbersAsItsBars(): void
+    {
+        $chart = $this->browser->request('GET', '/components')->filter('#c-charts [data-controller="chart"]')->first();
+
+        self::assertSame(['3 (2 alone)', '5 (1 alone)', '0 (0 alone)'], $chart->filter('.c-label')->each(static fn (Crawler $label): string => $label->text()));
+        self::assertSame(['3 (2 alone)', '5 (1 alone)', '0 (0 alone)'], $chart->filter('tbody tr')->each(static fn (Crawler $row): string => sprintf('%s (%s alone)', $row->filter('td')->eq(1)->text(), $row->filter('td')->eq(2)->text())));
     }
 
     public function testTheComponentsPageAnswersASecondRequestOfTheSameTest(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -54,19 +55,16 @@ final readonly class JudgePrompt
         );
     }
 
-    /**
-     * @param list<string> $paths
-     */
-    private function fileListOf(array $paths): string
+    private function fileListOf(Paths $paths): string
     {
-        if ([] === $paths) {
+        if ($paths->isEmpty()) {
             return '-';
         }
 
         // A path from git may hold bytes that are not UTF-8, so they are substituted instead of failing the judging.
         return implode("\n", array_map(
             static fn (string $path): string => json_encode($path, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR),
-            $paths,
+            [...$paths],
         ));
     }
 

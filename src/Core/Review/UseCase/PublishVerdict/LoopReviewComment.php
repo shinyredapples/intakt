@@ -60,12 +60,6 @@ final readonly class LoopReviewComment
             |> $this->withoutCommentOpener(...);
     }
 
-    // Broken after the redaction, so nothing can open it again: GitHub hides everything after an opener, the verdict block too, and a quoted marker must not reach the App's comment.
-    private function withoutCommentOpener(string $line): string
-    {
-        return str_replace(self::COMMENT_OPENER, '&lt;!--', $line);
-    }
-
     private function placeOf(Finding $finding): string
     {
         if (null === $finding->file) {
@@ -81,5 +75,11 @@ final readonly class LoopReviewComment
         $line = preg_replace('/[\s\x{85}\x{2028}\x{2029}]+/u', ' ', $text) ?? throw new UnexpectedValueException('A finding holds text that is not valid UTF-8.');
 
         return trim($line);
+    }
+
+    // Broken after the redaction, so nothing can open it again: GitHub hides everything after an opener, the verdict block too, and a quoted marker must not reach the App's comment.
+    private function withoutCommentOpener(string $line): string
+    {
+        return str_replace(self::COMMENT_OPENER, '&lt;!--', $line);
     }
 }

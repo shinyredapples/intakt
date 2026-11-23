@@ -3,23 +3,34 @@
 {% block title %}The demo run - Intakt{% endblock %}
 
 {% block body %}
-<div class="page-head">
-    <div>
-        <h1>The demo run</h1>
-        <p class="lead">A recorded review of a change, played onto this dashboard at {{ factor }} times its recorded pace. It calls no model, so it needs no provider key, and its rounds are marked as a replay that never counts as a verdict.</p>
-    </div>
-</div>
-<p class="demo-readiness" data-readiness="{{ readiness.value }}">{{ readiness.sentence }}</p>
-{%- if readiness.value == 'ready' %}
-<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo">
-    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
-    {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
-</form>
-{%- endif %}
-<h2>What the caption names</h2>
-<ol class="tour-stages">
-    {%- for stage in stages %}
-    <li>{{ stage.sentence }}</li>
+<div class="demo">
+    {#- Only Play sets this flash type, and only the request its redirect names reads it, so only that page tells assets/tour-caption.js to follow the run to the review. -#}
+    {%- if started_flash %}
+    {%- for line in app.flashes(started_flash) %}
+    <p class="flash flash-success" data-tour-follow>{{ line }}</p>
     {%- endfor %}
-</ol>
+    {%- endif %}
+    <div class="page-head">
+        {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\MascotPose::Conducting'), size: 144}, with_context = false) }}
+        <div>
+            <h1>The demo run</h1>
+            <p class="lead">A real review, recorded and played back.</p>
+        </div>
+    </div>
+    <p class="demo-facts">
+        {{ include('dashboard/components/chip.html.twig', {label: 'No key needed', icon: 'check', on_page: true}, with_context = false) }}
+        {{ include('dashboard/components/chip.html.twig', {label: 'Replay, not a verdict', icon: 'rounds', on_page: true}, with_context = false) }}
+    </p>
+    {%- if readiness.value == 'ready' %}
+    <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo">
+        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
+        {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
+    </form>
+    {#- The ready line is the button itself, so only a reason the run cannot play is written out. -#}
+    <p class="demo-readiness" data-readiness="{{ readiness.value }}" hidden></p>
+    {%- else %}
+    <p class="demo-readiness" data-readiness="{{ readiness.value }}">{{ readiness.sentence }}</p>
+    {%- endif %}
+    {{ include('dashboard/_review_strip.html.twig', with_context = false) }}
+</div>
 {% endblock %}

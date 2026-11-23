@@ -1,33 +1,34 @@
 # Job containers
 
-`Core/Job` runs each job (a build, a check, a review) in a fresh container through the Docker Engine API (plan task T44). No lane starts a job through it yet; `intakt:check:run` runs a [check job](check-job.md) through it, `intakt:build:run` a [build job](build-job.md), and `ReviewJob` a [review job](review-job.md), which nothing calls yet. Part 2 added the egress allowlist with a per-job proxy ([Egress](#egress)); part 3 added the [start check](#start-check) and its reduced mode. How this differs from the existing loop is in [Differences from the existing loop](differences-from-the-existing-loop.md).
+`Core/Job` runs each job (a build, a check, a review) in a fresh container through the Docker Engine API (plan task T44). No lane starts a job through it yet; `intakt:check:run` runs a [check job](check-job.md) through it, `intakt:build:run` a [build job](build-job.md), and `ReviewJob` a [review job](review-job.md), which nothing calls yet. Part 2 added the egress allowlist with a per-job proxy ([Egress](#egress)); part 3 added the [start check](#start-check) and its reduced mode. How this differs from the build loop that developed Intakt is in [Differences from the earlier loop](differences-from-the-earlier-loop.md).
 
 ## Surface
 
 - `Contract/JobRunner::run(JobSpec): JobResult`, implemented by `Infrastructure/ContainerJobRunner`.
-- `JobSpec`: a `JobId`, the image, the command, a list of `JobInput` (a host path mounted read-only at a container path), `JobLimits` (memory in bytes, CPUs, run time in seconds) and a `JobEgress`. It has no environment field, so nothing the orchestrator holds (forge token, signing key, API keys) can be passed to a job.
+- `JobSpec`: a `JobId`, the image, the command, a list of `JobInput` (a host path mounted read-only at a container path), `JobLimits` (memory in bytes, CPUs, run time in seconds), a `JobEgress` and, optionally, a `JobKeptFolder` (`JobSpec::$kept`: an absolute host folder the caller makes and removes, mounted writable at `/kept`, so a job can hand back more than its output directory may hold; the runner neither makes nor removes it, and no job uses one yet). It has no environment field, so nothing the orchestrator holds (forge token, signing key, API keys) can be passed to a job.
 - `JobEgress`: `JobEgress::none()` (no network at all, for probe jobs and a check job whose gate names no registry) or `JobEgress::to(list<string>)`, the exact host names the job may reach (each kept once). A check job passes its gate's registry hosts ([Check job](check-job.md)), a build job its vendor's API and the gate's registry hosts ([Build job](build-job.md)), and a review job its vendor's host alone ([Review job](review-job.md)).
-- `JobResult`: a `JobEnd` (the `JobCause` and the exit code) and the `JobOutput` (the files the job left in its output directory, by name, without the start check's report). What the start check found is in the ledger only (`job_start_check_failed`, see [Start check](#start-check)).
-- Refusals: `JobRefused` for a job id that is not 1 to 63 of `a-z`, `0-9`, `.`, `_`, `-` starting with a letter or digit, for a limit of zero or less, for an input whose host path is relative or whose container path is relative, `/`, or on or under `/work` or `/output` (after `..` is resolved), for an empty allowlist, for an allowlisted host that is not a lowercase host name of at most 253 characters with labels of 1 to 63 of `a-z`, `0-9`, `-` (not starting or ending with `-`) and a top-level domain of 2 to 63 letters (so no address, wildcard, leading or trailing dot, port, space or line break), for a job id that is already running, and for an image that declares volumes. `DockerEngineFailed` when the socket is missing, the engine does not answer, refuses a call (with the engine's message) or answers a body this client cannot read (a proxy log whose frames do not add up included). `JobOutputRefused` for an output entry that is a link, a folder or anything else but a plain file, or that cannot be read, for an output of more than 1000 entries, and for an output of more than 16 MiB in total (`JobOutputDirectories::MAX_FILES`, `MAX_BYTES`). `JobEventNotRecorded` when the ledger refuses the job's end.
+- `JobResult`: a `JobEnd` (the `JobCause` and the exit code) and the `JobOutput` (the files the job left in its output directory, by name). What the start check found is in the ledger only (`job_start_check_failed`, see [Start check](#start-check)).
+- Refusals: `JobRefused` for a job id that is not 1 to 63 of `a-z`, `0-9`, `.`, `_`, `-` starting with a letter or digit, for a limit of zero or less, for an input whose host path is relative or whose container path is relative, `/`, or on or under `/work`, `/output` or `/kept` (after `..` is resolved), for a kept folder whose host path is relative, for an empty allowlist, for an allowlisted host that is not a lowercase host name of at most 253 characters with labels of 1 to 63 of `a-z`, `0-9`, `-` (not starting or ending with `-`) and a top-level domain of 2 to 63 letters (so no address, wildcard, leading or trailing dot, port, space or line break), for a job id that is already running, and for an image that declares volumes. `DockerEngineFailed` when the socket is missing, the engine does not answer, refuses a call (with the engine's message) or answers a body this client cannot read (a proxy log whose frames do not add up included). `JobOutputRefused` for an output entry that is a link, a folder or anything else but a plain file, or that cannot be read, for an output of more than 1000 entries, and for an output of more than 16 MiB in total (`JobOutputDirectories::MAX_FILES`, `MAX_BYTES`). `JobEventNotRecorded` when the ledger refuses the job's end.
 
 ## The container
 
-`Infrastructure/JobContainerDefinition` builds the create request:
+`Infrastructure/JobContainerDefinition::of()` builds the create request and returns it with its start check's mark as a `JobContainerRequest`:
 
 | Setting | Value | Why |
 |---|---|---|
-| `ReadonlyRootfs` | `true` | nothing outside the work area and the output directory can be written |
+| `ReadonlyRootfs` | `true` | nothing outside the work area, the output directory and a kept folder can be written |
 | `Tmpfs` | `/work` (`rw,nosuid,nodev`) | the work area, gone with the container |
-| `Entrypoint` | `/bin/sh -c <docker/job/start-check.sh> intakt-start-check`, the script's text read from the project folder for each job | the [start check](#start-check) runs before the job's command in any image with a POSIX shell; the image's own entrypoint is not used |
+| `Entrypoint` | `/bin/sh -c <docker/job/start-check.sh> intakt-start-check <mark>`, the script's text read from the project folder for each job, and a mark of 32 hex digits from `random_bytes()`, new for every run | the [start check](#start-check) runs before the job's command in any image with a POSIX shell; the image's own entrypoint is not used |
 | `Cmd` | the inputs' container paths, `--`, then the job's command | the start check checks each input, then runs the command with `exec` |
-| `Env` | `HOME=/work`, `TMPDIR=/work`, `INTAKT_JOB_ID=<id>`, `INTAKT_JOB_OUTPUT=/output` only, and with an allowlist `INTAKT_JOB_EGRESS=<hosts, space-separated>` and `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, `https_proxy` set to `http://egress-proxy:3128` | a wiped home and own caches per job, no credential |
+| `Env` | `HOME=/work`, `TMPDIR=/work`, `INTAKT_JOB_ID=<id>`, `INTAKT_JOB_OUTPUT=/output` only, with a kept folder `INTAKT_JOB_KEPT=/kept`, and with an allowlist `INTAKT_JOB_EGRESS=<hosts, space-separated>` and `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, `https_proxy` set to `http://egress-proxy:3128` | a wiped home and own caches per job, no credential |
 | `WorkingDir` | `/work` | |
-| `Mounts` | each input as a read-only bind, then the job's own output directory as the only writable bind at `/output` | |
+| `Mounts` | each input as a read-only bind, then the job's own output directory as a writable bind at `/output`, and, only for a job with a kept folder, that folder as the one other writable bind at `/kept`; the output limits of `JobOutputDirectories` apply to `/output` only | |
 | `User` | the orchestrator's uid and gid | the job can write its output directory, which only that user can read, and never runs as root |
 | `Memory`, `MemorySwap` | the job's limit, both equal | a runaway job is killed at its own limit instead of swapping |
 | `NanoCpus` | CPUs times 10^9, rounded; `JobLimits` refuses a value that is not finite, rounds to less than 1 or does not fit a PHP integer | 0 would turn the engine's CPU limit off |
 | `NetworkMode`, `NetworkDisabled` | `none`, `true` for `JobEgress::none()`; with an allowlist the job's own internal network `intakt-job-<id>`, `false` | no network at all, or one whose only way out is the job's proxy |
 | `CapDrop`, `SecurityOpt` | `ALL`, `no-new-privileges` | |
+| `LogConfig` | `json-file`, `mode=blocking`, `max-size=10m`, `max-file=3` | the engine can read the start check's lines back and drops none of them, whatever log driver and mode the daemon defaults to; `10m` is the per-file rotation threshold and `3` the number of files kept, so a chatty job cannot fill the daemon's disk (a write can cross the threshold before rotation, so about 30 MB is the aim, not a strict maximum); a job that writes past it rotates the check's lines away, which counts as a failure |
 | `Labels` | `intakt.job=<id>` | finds the job's containers after a crash |
 
 The container is named `intakt-job-<id>`. Before it is created, the image is inspected (`GET /images/<name>/json`, the name URL-encoded into the path) and a job whose image declares volumes (`Config.Volumes`) is refused with `JobRefused`: a volume the image declares stays writable under `ReadonlyRootfs`, so the job could write outside its work area and output directory. An absent or `null` `Config.Volumes` means none.
@@ -51,14 +52,15 @@ flowchart TD
   state -->|still running, time left| pause[Pause one second]
   pause --> wait
   state -->|still running, run time over| kill[Kill, read the state again]
-  state --> remove[Remove the container]
-  kill -->|stopped: cause oom or timed_out| remove
+  state --> log[Read the head of the container's standard error]
+  kill -->|stopped: cause oom or timed_out| log
+  log --> remove[Remove the container]
   kill -->|still running| failed[Remove the container, DockerEngineFailed, no job_ended]
   failed --> failclose[Allowlist only: remove the proxy and the network]
   failclose --> clean
   remove --> refusals[Allowlist only: read the proxy's log, ledger: job_egress_refused]
   refusals --> close[Allowlist only: remove the proxy and the network]
-  close --> check[Read the start check's report, ledger: job_start_check_failed per failure]
+  close --> check[Read the start check's lines from that log, ledger: job_start_check_failed per failure]
   check --> record[Ledger: job_ended]
   record --> read[Read the output files]
   read --> clean[Remove the output directory, release the lock]
@@ -92,7 +94,7 @@ A container on an internal network gets no DNS answers for outside names from Do
 
 ## Start check
 
-Every job checks at start that what it was told it can do works, and runs in a reduced mode that says so otherwise. `docker/job/start-check.sh` (POSIX `sh`, using only shell built-ins, `rm` and `curl`) is the container's entrypoint and runs these checks in order, each one logged to standard error as `intakt-start-check: <check>: ok` or `intakt-start-check: <check>: <reason>`:
+Every job checks at start that what it was told it can do works, and runs in a reduced mode that says so otherwise. `docker/job/start-check.sh` (POSIX `sh`, using only shell built-ins, `rm` and `curl`) is the container's entrypoint. It takes the run's mark as its first argument, first turns the shell's `allexport` option off with `set +a` (so an image whose `sh` is bash and whose environment sets `SHELLOPTS=allexport` does not export the script's variables), then unsets `intakt_mark` (so a variable of that name the image exports cannot carry the mark into the job's environment), keeps the mark in that shell variable without exporting it, and shifts it off, so the job's command sees it neither in its arguments nor in its environment. It then runs these checks in order, each one logged to standard error as `intakt-start-check <mark>: <check>: ok` or `intakt-start-check <mark>: <check>: <reason>`:
 
 | Check | What it does | Failure reasons |
 |---|---|---|
@@ -101,25 +103,25 @@ Every job checks at start that what it was told it can do works, and runs in a r
 | `input` | for each input path before `--`: it exists, is readable and, for a folder, can be entered | `<path> is missing`, `<path> is not readable` |
 | `egress` | for each host in `INTAKT_JOB_EGRESS`: `curl --silent --output /dev/null --max-time 10 https://<host>/` through the job's proxy; any HTTP answer passes | `<host> is not reachable through the proxy (curl exit <n>)`, `curl is missing, so <host> cannot be checked` |
 
-It then writes its report to `/output/.intakt-start-check` (one `<check>: <reason>` line per failure and a last line `end`) and logs `intakt-start-check: full mode`, or, when a check failed, exports `INTAKT_REDUCED_MODE` (the failed checks' names, each once, space-separated, for example `output input egress`) and logs `intakt-start-check: reduced mode: <names>`. A job that runs in its reduced mode therefore finds out from its own environment. Then it runs the job's command with `exec`; without a command (no `--`) it logs `no command to run` and exits with 64. For example, with an unwritable output directory, an unreadable input and a proxy that lets nothing through:
+It writes nothing else: no report file is left in the output directory. It then logs `intakt-start-check <mark>: full mode`, or, when a check failed, exports `INTAKT_REDUCED_MODE` (the failed checks' names, each once, space-separated, for example `output input egress`) and logs `intakt-start-check <mark>: reduced mode: <names>`. A job that runs in its reduced mode therefore finds out from its own environment. Then it runs the job's command with `exec`; without a command (no `--`) it logs `no command to run` and exits with 64. For example, with an unwritable output directory, an unreadable input and a proxy that lets nothing through (the mark shortened here):
 
 ```
-intakt-start-check: output: cannot write a probe file in /output
-intakt-start-check: work: ok
-intakt-start-check: input: /input/repository: ok
-intakt-start-check: input: /input/memory is not readable
-intakt-start-check: egress: api.vendor.example is not reachable through the proxy (curl exit 7)
-intakt-start-check: output: cannot write the report
-intakt-start-check: reduced mode: output input egress
+intakt-start-check 3f9c…: output: cannot write a probe file in /output
+intakt-start-check 3f9c…: work: ok
+intakt-start-check 3f9c…: input: /input/repository: ok
+intakt-start-check 3f9c…: input: /input/memory is not readable
+intakt-start-check 3f9c…: egress: api.vendor.example is not reachable through the proxy (curl exit 7)
+intakt-start-check 3f9c…: reduced mode: output input egress
 ```
 
-After the job's container is removed, `Infrastructure/StartCheckReport::failuresIn()` reads the report from the output directory and the run records one `job_start_check_failed` event (`job`, `check`, `reason`) per failure before `job_ended`, at most 20 per job (`StartCheckReport::MAX_FAILURES`). The job runs after the check and can rewrite the report, so a report that is not a whole, well-formed one counts as a failure and never as a pass. A job can still replace the report with a well-formed one ending in `end`, which makes a failed check read as a pass: only a damaged or missing report counts as a failure.
+The result is read from the container's own log, which the job cannot rewrite. After the job has stopped and before its container is removed, `Infrastructure/DockerEngine::standardErrorHead()` reads its standard error (`GET /containers/<id>/logs?stderr=true`, no `tail`), and keeps for parsing at most the first 64 KiB of the engine's answer (`StartCheckLog::MAX_BYTES`, frame headers included); it stops reading once that much has arrived, so a chunk that crosses the limit may still be received, but the bytes past it are dropped, and a frame the limit cuts keeps what arrived of it. `Infrastructure/StartCheckLog::failuresIn()` then takes only the complete lines that start with `intakt-start-check <mark>: ` for this run's mark, up to the first `full mode` or `reduced mode: <names>` line. The script logs that line before it runs the job's command with `exec`, so everything the job prints after it (a forged `full mode` line included) is ignored, and the job, which starts only after it, cannot change the lines before it. The job never learns the mark, so a line it prints cannot carry it: if the engine dropped the script's own lines (the job's explicit logging configuration, `max-size` and `max-file`, rotates the `json-file` log while the job floods its standard error, and rotation can remove the start-check lines), the head holds no marked mode line and the check reads as failed, never as passed. The run records one `job_start_check_failed` event (`job`, `check`, `reason`) per failure before `job_ended`, at most 20 per job (`StartCheckLog::MAX_FAILURES`):
 
-- no report at all is an `output` failure (`no report in the output directory: it could not be written, or the check did not run`), which is how a broken output mount shows;
-- a link (never followed), a folder or anything else but a plain file, a report over 64 KiB, one that cannot be read, or one without its last `end` line is a single `report` failure;
-- a line that is not `output`, `work`, `input`, `egress` or `report`, a colon and a space and a reason of printable ASCII is a `report` failure naming the line; a reason is cut to 255 bytes.
+- each `<check>: <reason>` line before the mode line whose reason is not `ok` (and does not end in `: ok`, as `input: <path>: ok` and `egress: <host>: ok` do) is a failure of that check, its reason cut to at most 255 bytes, never inside a character;
+- a line that is not `output`, `work`, `input` or `egress`, a colon and a space and a reason of valid UTF-8 without control characters (so `/input/café` passes) is a `log` failure naming the line's number in the log;
+- a log without a marked mode line (empty, cut before it, a check that never ran, or the check's lines rotated away) is a `log` failure (`no mode line in the first 65536 bytes of the log: the check did not finish, did not run, or its lines were rotated away`), never a pass;
+- a mode line that does not name exactly the checks that failed before it (`full mode` after a failure, or `reduced mode:` with other names) is a `log` failure as well.
 
-The report is not part of the job's `JobOutput`. A missing `docker/job/start-check.sh` fails the run with Symfony Filesystem's `IOException` before the job's container is created.
+An engine that refuses the log call fails the run with `DockerEngineFailed`, as any other refused call does. A missing `docker/job/start-check.sh` fails the run with Symfony Filesystem's `IOException` before the job's container is created.
 
 ## After a crash
 
@@ -133,4 +135,4 @@ Every run calls it before it starts its own container, so the next job cleans up
 
 `Infrastructure/DockerEngine` talks to the Engine API version 1.44 (Docker Engine 25 or later; 25.0.5 or later for a job with an allowlist, see [Egress](#egress)) over the Unix socket in the container parameter `JobServices::DOCKER_SOCKET` (`/var/run/docker.sock`, set in `config/services.yaml`), through Symfony HttpClient with `bindto` set to the socket, which the curl client uses as its Unix socket. A missing socket fails at once with its path, because the curl client would otherwise read `bindto` as a network interface. The orchestrator runs Docker inside its own container, so the paths it mounts are paths the engine sees. The same client builds job images (`POST /build`, see [Job images](job-images.md#the-build)).
 
-Tests run against `tests/Core/Job/FakeDockerEngine.php`, a `MockHttpClient` callback that answers the same calls (the image inspection, the networks and the framed proxy log included) and plays a job by writing into the output directory the create request mounts, because the build sandbox has no Docker daemon; it leaves a passed start check's report (`end`) before the job's behavior runs. No test has run against a live engine yet. `tests/Core/Job/EgressProxyTest.php` checks the proxy's Squid config and reads refusals from lines in Squid's native log format. `tests/Core/Job/StartCheckScriptTest.php` runs the real `docker/job/start-check.sh` with `sh -c` as the entrypoint does, on temporary folders and a stand-in `curl`, and `tests/Core/Job/StartCheckReportTest.php` reads well-formed and malformed reports.
+Tests run against `tests/Core/Job/FakeDockerEngine.php`, a `MockHttpClient` callback that answers the same calls (the image inspection, the networks, the framed proxy log and the job's framed standard error included, each only for the streams the call asks for) and plays a job by writing into the output directory the create request mounts, because the build sandbox has no Docker daemon; unless a test sets the job's standard error, it answers a passed start check (`intakt-start-check <mark>: full mode`, with the mark the create request carries in place of `FakeContainerLogs::CHECK`, so a test tells the script's lines from lines the job forges). No test has run against a live engine yet. `tests/Core/Job/EgressProxyTest.php` checks the proxy's Squid config and reads refusals from lines in Squid's native log format. `tests/Core/Job/StartCheckScriptTest.php` runs the real `docker/job/start-check.sh` with `sh -c` as the entrypoint does, on temporary folders and a stand-in `curl`, `tests/Core/Job/StartCheckLogTest.php` reads well-formed, cut, forged, unmarked and malformed logs, and `tests/Core/Job/ForgedStartCheckOnSqliteTest.php` shows a forged pass stored as the failure in the install's SQLite ledger.

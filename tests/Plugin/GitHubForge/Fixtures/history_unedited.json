@@ -1,1 +1,1 @@
-{"data":{"repository":{"issue":{"author":{"__typename":"User","login":"ana"},"userContentEdits":{"nodes":[]},"timelineItems":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}
+{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","updatedAt":"2026-11-10T10:00:00Z","body":"","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},"author":{"__typename":"User","login":"ana"},"userContentEdits":{"nodes":[]},"timelineItems":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}

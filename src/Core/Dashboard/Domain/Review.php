@@ -15,7 +15,7 @@ final readonly class Review
     /**
      * @param non-empty-list<ReviewedRound> $rounds
      */
-    public function __construct(public array $rounds)
+    public function __construct(public array $rounds, private Timeline $timeline = Timeline::Current)
     {
         $this->project = $rounds[0]->project;
         $this->change = $rounds[0]->change;
@@ -25,6 +25,16 @@ final readonly class Review
     public function everyRoundIsAReplay(): bool
     {
         return array_all($this->rounds, static fn (ReviewedRound $round): bool => $round->isReplay());
+    }
+
+    // Lowest number, then lowest id, and not the first element, because the reader puts the round of the address first among rounds of equal number (older rounds have none), and every page of one review must name the same round.
+    public function firstRound(): string
+    {
+        $ids = array_map(static fn (ReviewedRound $round): string => $round->round, $this->rounds);
+        $numbers = array_map(static fn (ReviewedRound $round): int => $round->number ?? 0, $this->rounds);
+        array_multisort($numbers, SORT_NUMERIC, $ids, SORT_STRING);
+
+        return $ids[0];
     }
 
     public function latest(): ReviewedRound
@@ -47,6 +57,10 @@ final readonly class Review
     // Sent with the button as the page shows it, so a double submit or a page gone stale after another round started is refused instead of opening one more round.
     public function nextNumber(): ?int
     {
+        if (Timeline::HistoryOnly === $this->timeline) {
+            return null;
+        }
+
         $latest = $this->latest()->number;
 
         return null === $latest ? null : $latest + 1;
@@ -87,5 +101,13 @@ final readonly class Review
     public function cost(): Cost
     {
         return array_reduce($this->rounds, static fn (Cost $sum, ReviewedRound $round): Cost => $sum->plus($round->cost), Cost::none());
+    }
+
+    /**
+     * @return list<PathStep>
+     */
+    public function path(): array
+    {
+        return ReviewPath::of($this);
     }
 }

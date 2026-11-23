@@ -12,8 +12,6 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
-use Intakt\Core\Dashboard\Domain\AgentStep;
-use Intakt\Core\Dashboard\Domain\DemoChoices;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
 use Intakt\Core\Dashboard\Domain\PanelOfProject;
@@ -22,18 +20,16 @@ use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
-use Intakt\Core\Mcp\Contract\McpRoutes;
-use Intakt\Core\Mcp\Contract\ToolAccess;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
 use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
-use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 // Reads the same sources as intakt:ai:tiers and the project configuration, so the page shows what the install really has.
 final readonly class FirstRunSteps
@@ -49,42 +45,20 @@ final readonly class FirstRunSteps
         private Panels $panels,
         private LedgerReviewPages $reviews,
         private SampleChangeSource $sample,
-        private UrlGeneratorInterface $urls,
         #[Autowire(param: AiServices::DISABLED_PROVIDERS)]
         private array $disabledProviders,
-        #[SensitiveParameter]
-        #[Autowire(env: 'MCP_OWNER_TOKEN')]
-        private string $ownerToken,
-        #[Autowire(env: 'enum:'.ToolAccess::class.':MCP_OWNER_ACCESS')]
-        private ToolAccess $ownerAccess,
-        #[Autowire(env: 'INTAKT_COMPOSE_SERVICE')]
-        private string $composeService,
     ) {
     }
 
     public function firstRun(): FirstRun
     {
         $projects = $this->tiers->projects();
-        $providers = $this->providers(array_first($projects));
-        $firstReview = new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource);
 
         return new FirstRun(
-            $providers,
+            $this->providers(array_first($projects)),
             new ProjectStep(array_map($this->panelOf(...), $projects)),
-            $firstReview,
-            $this->agent(),
-            $this->choices($providers, $firstReview),
+            new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource),
         );
-    }
-
-    // Only on a demo install, because without the sample there is no demo review to run and no replay project to play one into.
-    private function choices(ProviderStep $providers, FirstReviewStep $firstReview): ?DemoChoices
-    {
-        if (!$this->sample->hasRepository()) {
-            return null;
-        }
-
-        return new DemoChoices($providers, $firstReview);
     }
 
     private function providers(?string $firstProject): ProviderStep
@@ -131,7 +105,7 @@ final readonly class FirstRunSteps
     {
         try {
             // A change with no lines, paths or labels matches no rule, so this is the core panel every change gets.
-            $panel = $this->panels->panelForChange($project, new ChangeDescription(0, [], []));
+            $panel = $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels()));
         } catch (PanelConfigurationFailure $failure) {
             return new PanelOfProject($project, $failure->getMessage());
         }
@@ -142,15 +116,5 @@ final readonly class FirstRunSteps
         );
 
         return new PanelOfProject($project, 'Reviewers: '.implode(', ', $reviewers).'.');
-    }
-
-    private function agent(): AgentStep
-    {
-        return new AgentStep(
-            $this->urls->generate(McpRoutes::OWNER, [], UrlGeneratorInterface::ABSOLUTE_URL),
-            '' !== $this->ownerToken,
-            ToolAccess::Write === $this->ownerAccess,
-            $this->composeService,
-        );
     }
 }

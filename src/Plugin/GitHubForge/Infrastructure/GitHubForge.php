@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
@@ -29,7 +30,6 @@ use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
-use InvalidArgumentException;
 use JsonException;
 use NoDiscard;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
@@ -39,6 +39,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
     private const string VERDICT_MARKER = '<!-- intakt-verdict: %s -->';
+    private const string OWNER_ASK_MARKER = '<!-- intakt-owner-ask: %s %s part %d -->';
     private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
@@ -130,16 +131,18 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     }
 
     // No stale check, because the status and the comment name the head they judge, so a head that moved on keeps its own verdict.
-    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
+    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): bool
     {
-        $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
+        return $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
     }
 
     private function publishAsTheApp(ChangeId $change, PublishedVerdict $verdict): void
     {
         $address = PullRequestAddress::of($change);
         $comments = $verdict->comments();
-        if (array_any($comments, $this->secrets->findsSecretIn(...))) {
+        // The asks scanned as GitHub shows them, without tags and entities, because a file name in an ask is written with entities inside <code>, and an entity in the middle of a key or a tag right after it hides the key from the scan's rules.
+        $rendered = array_map(static fn (string $ask): string => html_entity_decode(strip_tags($ask), ENT_QUOTES | ENT_HTML5, 'UTF-8'), $verdict->ownerAsks);
+        if (array_any([...$comments, ...$rendered], $this->secrets->findsSecretIn(...))) {
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
@@ -153,9 +156,9 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private function postVerdict(PullRequestAddress $address, PublishedVerdict $verdict, array $comments): void
     {
         // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
-        $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
-        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
-            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
+        $marked = [sprintf(self::VERDICT_MARKER, $verdict->token->value) => $comments, ...$this->askPartsOf($verdict)];
+        foreach ($this->comments->bodiesNotYetPosted($address, $marked) as $body) {
+            $this->post($address->issuePath().'/comments', ['body' => $body]);
         }
 
         $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [
@@ -163,6 +166,18 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             'context' => self::STATUS_CONTEXT,
             'description' => $verdict->description,
         ]);
+    }
+
+    // Each part of the ask by a marker of its own, so a retry posts the part an earlier try did not reach, and an ask the review comment did not carry; the marker names a digest of the whole ask, so a retry whose protected paths changed posts the ask it records instead of finding the old one.
+    /**
+     * @return array<string, list<string>>
+     */
+    private function askPartsOf(PublishedVerdict $verdict): array
+    {
+        $digest = hash('sha256', json_encode($verdict->ownerAsks, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
+        $markers = array_map(static fn (int $part): string => sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $digest, $part + 1), array_keys($verdict->ownerAsks));
+
+        return array_combine($markers, array_map(static fn (string $ask): array => [$ask], $verdict->ownerAsks));
     }
 
     private function isStale(Change $change): bool
@@ -185,30 +200,13 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     }
 
     /**
-     * @return array<mixed>
+     * @return ?array<mixed>
      */
-    private function branchComparison(PullRequestAddress $address, string $baseReference, CommitId $head): array
+    private function compare(PullRequestAddress $address, string $base, string $head): ?array
     {
-        return $this->compare($address, $this->encodeReference($baseReference), $head->hash) ?? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.');
-    }
+        $body = $this->get($address->repositoryPath().'/compare/'.$base.'...'.$head, self::JSON);
 
-    private function patch(PullRequestAddress $address, CommitRange $commits): string
-    {
-        // Read between the two commits, not from the pull request, so a head that moves meanwhile cannot mix two states.
-        $patch = $this->get($address->repositoryPath().'/compare/'.$commits->base->hash.'...'.$commits->head->hash, self::DIFF);
-
-        return $patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.');
-    }
-
-    /**
-     * @param array<mixed> $comparison
-     */
-    private function changedFiles(array $comparison): ChangedFiles
-    {
-        // The files of the comparison that named the merge base, so they belong to the same head as the patch.
-        $entries = $this->completeFilesOf($comparison) ?? throw new ForgeReadFailed('GitHub listed the changed files incompletely (300 files or more, or no file list).');
-
-        return new ChangedFiles(...$this->filesIn($entries));
+        return null === $body ? null : $this->decode($body);
     }
 
     /**
@@ -256,28 +254,13 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     }
 
     /**
-     * @return ?array<mixed>
-     */
-    private function compare(PullRequestAddress $address, string $base, string $head): ?array
-    {
-        $body = $this->get($address->repositoryPath().'/compare/'.$base.'...'.$head, self::JSON);
-
-        return null === $body ? null : $this->decode($body);
-    }
-
-    private function encodeReference(string $reference): string
-    {
-        return implode('/', array_map(rawurlencode(...), explode('/', $reference)));
-    }
-
-    /**
      * @param array<mixed> $data
      */
     private function commitAt(array $data, string ...$keys): CommitId
     {
         try {
             return new CommitId($this->textAt($data, ...$keys));
-        } catch (InvalidArgumentException $invalid) {
+        } catch (CommitIdMalformed $invalid) {
             throw new ForgeReadFailed('GitHub answered something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
     }
@@ -293,6 +276,38 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
 
         return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function branchComparison(PullRequestAddress $address, string $baseReference, CommitId $head): array
+    {
+        return $this->compare($address, $this->encodeReference($baseReference), $head->hash) ?? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.');
+    }
+
+    private function patch(PullRequestAddress $address, CommitRange $commits): string
+    {
+        // Read between the two commits, not from the pull request, so a head that moves meanwhile cannot mix two states.
+        $patch = $this->get($address->repositoryPath().'/compare/'.$commits->base->hash.'...'.$commits->head->hash, self::DIFF);
+
+        return $patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.');
+    }
+
+    /**
+     * @param array<mixed> $comparison
+     */
+    private function changedFiles(array $comparison): ChangedFiles
+    {
+        // The files of the comparison that named the merge base, so they belong to the same head as the patch.
+        $entries = $this->completeFilesOf($comparison) ?? throw new ForgeReadFailed('GitHub listed the changed files incompletely (300 files or more, or no file list).');
+
+        return new ChangedFiles(...$this->filesIn($entries));
+    }
+
+    private function encodeReference(string $reference): string
+    {
+        return implode('/', array_map(rawurlencode(...), explode('/', $reference)));
     }
 
     /**
@@ -356,18 +371,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
-    // Not chained either, because the trace of a failed post holds the bearer token too.
-    private function unreachableForWrite(string $failure): ForgeWriteFailed
-    {
-        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
-    }
-
     private function writeBearer(): string
     {
         try {
@@ -379,6 +382,12 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
     }
 
+    // Not chained either, because the trace of a failed post holds the bearer token too.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
+    }
+
     private function bearer(): string
     {
         try {
@@ -388,5 +397,11 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 }

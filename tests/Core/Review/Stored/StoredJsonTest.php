@@ -7,11 +7,15 @@ namespace Intakt\Tests\Core\Review\Stored;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingStatus;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -25,18 +29,21 @@ final class StoredJsonTest extends KernelTestCase
 {
     private const string TODAYS_FINDING = '{"id":"a","severity":"P2","file":"src/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true}';
 
+    // Written by the stored serializer on main before the answer document existed, so it pins the stored round JSON; the gate_gap marker came after it, in its fixed place after regression.
+    private const string VERDICT_FROM_MAIN = '{"verdict":"changes","findings":[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"merged":[]}],"resolved":["b"],"follow_ups":["later"]}';
+
     public function testAVerdictWrittenThroughTheSerializerReadsBackEqual(): void
     {
-        $verdict = new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']);
+        $verdict = new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')]);
 
-        $read = $this->serializer()->deserialize($this->serializer()->serialize($verdict, JsonEncoder::FORMAT), Verdict::class, JsonEncoder::FORMAT);
+        $read = $this->serializer()->deserialize($this->serializer()->serialize(ReviewerAnswer::fromVerdict($verdict), JsonEncoder::FORMAT), ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
 
         self::assertEquals($verdict, $read);
     }
 
     public function testAStoredVerdictKeepsTheSnakeCaseKeysOfTheWireFormat(): void
     {
-        $json = $this->serializer()->serialize(new Verdict(Decision::Changes, [$this->finding()], [], ['later']), JsonEncoder::FORMAT);
+        $json = $this->serializer()->serialize(ReviewerAnswer::fromVerdict(new Verdict(Decision::Changes, [$this->finding()], [], [new FollowUpNote('later')])), JsonEncoder::FORMAT);
 
         /** @var array<string, mixed> $stored */
         $stored = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
@@ -81,9 +88,23 @@ final class StoredJsonTest extends KernelTestCase
     {
         $row = '{"verdict":"changes","findings":['.self::TODAYS_FINDING.'],"resolved":["b"],"follow_ups":["later"]}';
 
-        $read = $this->serializer()->deserialize($row, Verdict::class, JsonEncoder::FORMAT);
+        $read = $this->serializer()->deserialize($row, ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
 
-        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), $read);
+        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')]), $read);
+    }
+
+    public function testARoundStoredBeforeTheAnswerDocumentStillDecodesToTheSameVerdict(): void
+    {
+        $read = $this->serializer()->deserialize(self::VERDICT_FROM_MAIN, ReviewerAnswer::class, JsonEncoder::FORMAT);
+
+        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')]), $read->toVerdict());
+    }
+
+    public function testEncodingAVerdictGivesTheSameJsonAsBeforeTheAnswerDocument(): void
+    {
+        $json = $this->serializer()->serialize(ReviewerAnswer::fromVerdict(new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')])), JsonEncoder::FORMAT);
+
+        self::assertSame(self::VERDICT_FROM_MAIN, $json);
     }
 
     public function testATrackedFindingRowWrittenByJsonEncodeStillReadsBack(): void
@@ -97,7 +118,7 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingWithMergedIdsReadsBackWithThem(): void
     {
-        $finding = $this->finding()->withMerged(['F2', 'F3']);
+        $finding = $this->finding()->withMerged(new FindingIds('F2', 'F3'));
 
         $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], JsonEncoder::FORMAT), Finding::class.'[]', JsonEncoder::FORMAT);
 
@@ -106,7 +127,7 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testATrackedFindingWithMergedIdsReadsBackWithThem(): void
     {
-        $tracked = [new TrackedFinding('a', $this->finding()->withMerged(['F2']), [1], FindingStatus::Open)];
+        $tracked = [new TrackedFinding('a', $this->finding()->withMerged(new FindingIds('F2')), [1], FindingStatus::Open)];
 
         $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, JsonEncoder::FORMAT), TrackedFinding::class.'[]', JsonEncoder::FORMAT);
 
@@ -115,9 +136,47 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingIsWrittenWithItsMergedIdsUnderTheKeyMerged(): void
     {
-        $json = $this->serializer()->serialize($this->finding()->withMerged(['F2']), JsonEncoder::FORMAT);
+        $json = $this->serializer()->serialize($this->finding()->withMerged(new FindingIds('F2')), JsonEncoder::FORMAT);
 
-        self::assertStringEndsWith(',"regression":true,"merged":["F2"]}', $json);
+        self::assertStringEndsWith(',"regression":true,"gate_gap":false,"merged":["F2"]}', $json);
+    }
+
+    public function testAFindingMarkedAsAGateGapIsWrittenWithTheMarkerAndReadsBackWithIt(): void
+    {
+        $finding = new Finding('a', Severity::P3, 'src/A.php', 7, null, 'The gate misses a static closure.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+
+        $json = $this->serializer()->serialize([$finding], JsonEncoder::FORMAT);
+        $read = $this->serializer()->deserialize($json, Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertStringContainsString('"regression":false,"gate_gap":true,', $json);
+        self::assertEquals([$finding], $read);
+    }
+
+    public function testATrackedFindingMarkedAsAGateGapReadsBackWithTheMarker(): void
+    {
+        $gap = new Finding('a', Severity::P3, null, null, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+        $tracked = [new TrackedFinding('a', $gap, [1], FindingStatus::Open)];
+
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, JsonEncoder::FORMAT), TrackedFinding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertEquals($tracked, $read);
+    }
+
+    public function testAFindingRowWrittenWithoutTheGateGapMarkerReadsAsNotAGateGap(): void
+    {
+        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(Finding::class, $read[0]);
+        self::assertFalse($read[0]->gate_gap);
+    }
+
+    public function testAFindingRowWithMergedIdsWrittenBeforeTheIdsWereOneValueReadsBackAndIsWrittenAgainUnchanged(): void
+    {
+        $row = '[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"merged":["F2","F3"]}]';
+
+        $read = $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertSame($row, $this->serializer()->serialize($read, JsonEncoder::FORMAT));
     }
 
     public function testAFindingRowWithoutMergedIdsReadsWithNone(): void
@@ -125,7 +184,7 @@ final class StoredJsonTest extends KernelTestCase
         $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertInstanceOf(Finding::class, $read[0]);
-        self::assertSame([], $read[0]->merged);
+        self::assertSame([], [...$read[0]->merged]);
     }
 
     /**

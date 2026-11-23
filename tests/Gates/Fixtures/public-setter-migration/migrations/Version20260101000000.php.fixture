@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Migrations\Sample;
+
+final class Version20260101000000
+{
+    private string $description = '';
+
+    public function setDescription(string $description): void
+    {
+        $this->description = $description;
+    }
+
+    public function description(): string
+    {
+        return $this->description;
+    }
+}

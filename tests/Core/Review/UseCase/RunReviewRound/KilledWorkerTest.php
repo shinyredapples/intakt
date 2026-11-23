@@ -32,11 +32,6 @@ final class KilledWorkerTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAReviewerWhoseWorkerStoppedIsStartedOnceMoreWhenItsMessageReturnsAfterTheHold(): void
     {
         $round = $this->fixture->start(1);
@@ -51,7 +46,7 @@ final class KilledWorkerTest extends KernelTestCase
         self::assertSame(1, $vendor->calls);
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
         self::assertSame(RoundState::Complete, $stored->state());
-        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerFindingsRecorded], $this->fixture->ledgerKinds());
     }
 
     public function testAReviewerStartedOnceMoreReviewsInANewConversation(): void
@@ -103,5 +98,10 @@ final class KilledWorkerTest extends KernelTestCase
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(RoundState::Complete, $stored->state());
         self::assertSame([ReviewerState::Verdict, ReviewerState::Blocked], array_map(static fn ($reviewer): ReviewerState => $reviewer->state(), $stored->reviewers()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 }

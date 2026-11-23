@@ -30,11 +30,6 @@ final class ShowServerErrorTest extends WebTestCase
 
     private KernelBrowser $browser;
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-    }
-
     public function testAServerErrorShowsTheShellAndAReferenceTheLogCarriesToo(): void
     {
         $this->readsFailOnce();
@@ -92,7 +87,7 @@ final class ShowServerErrorTest extends WebTestCase
         $crawler = $this->browser->request('GET', '/');
 
         self::assertResponseStatusCodeSame(500);
-        self::assertSame('/', $crawler->filter('a')->attr('href'));
+        self::assertSame('/?board=1', $crawler->filter('a')->attr('href'));
         $reference = $crawler->filter('code')->text();
         self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $reference));
         self::assertLoggedError(LogLevel::WARNING, 'The error page was shown without the dashboard shell.');
@@ -109,6 +104,11 @@ final class ShowServerErrorTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(404);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://attacker.example:7780/does-not-exist""', NotFoundHttpException::class));
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
     }
 
     private function readsFailOnce(): void

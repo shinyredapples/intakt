@@ -17,6 +17,8 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
+use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Psr\Log\NullLogger;
@@ -40,6 +42,17 @@ final class ScriptedGitHub
     public array $openPulls = [];
 
     public bool $unreachable = false;
+
+    // Answers the pull request look-up with a 429, because GitHub's pause must reach the opener's caller as a failed write.
+    public bool $pullsRateLimited = false;
+
+    // A raw body for the pull request look-up, because an answer that is no list must fail the look-up.
+    public ?string $pullsAnswer = null;
+
+    public int $createdNumber = 42;
+
+    // Null refuses `/app`, because a retry must fail when it cannot check the author of an open pull request against the App.
+    public ?string $appSlug = 'intakt';
 
     /** @var list<array<mixed>> */
     private array $comments = [];
@@ -65,15 +78,15 @@ final class ScriptedGitHub
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks), new GitHubAppSetting(self::APP_ID, new NullLogger()));
     }
 
-    public function opener(): GitHubChangeOpener
+    public function opener(string $project = 'widgets', string $repository = 'acme/widgets'): GitHubChangeOpener
     {
-        [$calls, $checked] = $this->stack();
+        [$calls, $checked, $jwt] = $this->stack();
 
-        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories(['widgets' => ['github' => 'acme/widgets']]));
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories([$project => ['github' => $repository]]), new SteeringIdentities(new TrustAnswers($calls), $jwt, ''));
     }
 
     /**
-     * @return array{GitHubCalls, CheckedInstallationTokens}
+     * @return array{GitHubCalls, CheckedInstallationTokens, AppJwt}
      */
     private function stack(): array
     {
@@ -88,7 +101,7 @@ final class ScriptedGitHub
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return [$calls, $checked];
+        return [$calls, $checked, $jwt];
     }
 
     /**
@@ -105,11 +118,39 @@ final class ScriptedGitHub
 
     private function read(string $url): ResponseInterface
     {
-        if (str_ends_with((string) parse_url($url, PHP_URL_PATH), '/pulls')) {
-            return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        if ('/app' === $path) {
+            return null === $this->appSlug ? new MockResponse('{"message":"Refused"}', ['http_code' => 401]) : new MockResponse(json_encode(['slug' => $this->appSlug], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        }
+
+        if (str_ends_with($path, '/pulls')) {
+            return $this->pulls($url);
         }
 
         return new MockResponse(json_encode(str_contains($url, 'page=1') ? $this->comments : [], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+    }
+
+    private function pulls(string $url): ResponseInterface
+    {
+        return match (true) {
+            $this->pullsRateLimited => new MockResponse('{"message":"Too many requests"}', ['http_code' => 429, 'response_headers' => ['retry-after' => '60']]),
+            null !== $this->pullsAnswer => new MockResponse($this->pullsAnswer, ['http_code' => 200]),
+            default => new MockResponse(json_encode($this->pageOfPulls($url), JSON_THROW_ON_ERROR), ['http_code' => 200]),
+        };
+    }
+
+    // Paged as GitHub pages, because a look-up that takes a full first page as the whole listing misses a pull request listed on a later one.
+    /**
+     * @return list<array<mixed>>
+     */
+    private function pageOfPulls(string $url): array
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $size = max(1, (int) ($query['per_page'] ?? 30));
+        $page = max(1, (int) ($query['page'] ?? 1));
+
+        return array_slice($this->openPulls, ($page - 1) * $size, $size);
     }
 
     /**
@@ -140,7 +181,7 @@ final class ScriptedGitHub
     private function created(string $method, string $url): ResponseInterface
     {
         return match (true) {
-            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]),
+            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => $this->createdNumber], JSON_THROW_ON_ERROR), ['http_code' => 201]),
             'PATCH' === $method => new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]),
             default => new MockResponse('{}', ['http_code' => 201]),
         };

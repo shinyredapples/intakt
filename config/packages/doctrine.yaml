@@ -16,6 +16,12 @@ doctrine:
             Doctrine\DBAL\Platforms\PostgreSQLPlatform: identity
         auto_mapping: false
         mappings:
+            Build:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/Build/Domain'
+                prefix: 'Intakt\Core\Build\Domain'
+                alias: Build
             Budget:
                 type: attribute
                 is_bundle: false
@@ -34,6 +40,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Core/Review/Domain'
                 prefix: 'Intakt\Core\Review\Domain'
                 alias: Review
+            GitHubWorkSource:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Plugin/GitHubWorkSource/Domain'
+                prefix: 'Intakt\Plugin\GitHubWorkSource\Domain'
+                alias: GitHubWorkSource
             Watcher:
                 type: attribute
                 is_bundle: false
@@ -41,9 +53,17 @@ doctrine:
                 prefix: 'Intakt\Core\Watcher\Domain'
                 alias: Watcher
 
+when@dev:
+    doctrine:
+        dbal:
+            # Also with APP_DEBUG=0, whose default leaves the db collector of a saved profile without its queries.
+            profiling: true
+
 when@test:
     doctrine:
         dbal:
+            # Also with APP_DEBUG=0, whose default leaves the db collector of an opted-in test profile without its queries.
+            profiling: true
             # "TEST_TOKEN" is typically set by ParaTest
             dbname_suffix: '_test%env(default::TEST_TOKEN)%'
 

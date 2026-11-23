@@ -234,6 +234,17 @@ final class CountedVoteTest extends TestCase
         self::assertSame(Decision::Changes, $vote->of($second));
     }
 
+    public function testADeferredP3CountsAsApprovalThoughAnotherReviewersP3DifferingOnlyInTheGateGapMarkerIsOnTheActList(): void
+    {
+        $deferred = new Finding('a', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null);
+        $acted = new Finding('b', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+
+        [$first, $second, $vote] = $this->countedFromLedger($deferred, $acted);
+
+        self::assertSame(Decision::Approve, $vote->of($first));
+        self::assertSame(Decision::Changes, $vote->of($second));
+    }
+
     public function testABlockedVerdictWithOnlyP3FindingsStaysBlocked(): void
     {
         $blocked = new Verdict(Decision::Blocked, [$this->finding('A', Severity::P3, 'One.')], [], []);
@@ -247,16 +258,6 @@ final class CountedVoteTest extends TestCase
     }
 
     /**
-     * @param list<Finding>       $reported
-     * @param array<string, Mark> $marks
-     * @param list<Finding>       $dropped
-     */
-    private function counted(array $reported, array $marks, array $dropped = []): CountedVote
-    {
-        return new CountedVote($reported, [], $this->judged($reported, $marks, $dropped));
-    }
-
-    /**
      * @param list<string>        $shown
      * @param list<Finding>       $reported
      * @param array<string, Mark> $marks
@@ -264,19 +265,6 @@ final class CountedVoteTest extends TestCase
     private function countedShowing(array $shown, array $reported, array $marks): CountedVote
     {
         return new CountedVote($reported, $shown, $this->judged($reported, $marks, []));
-    }
-
-    /**
-     * @param list<Finding>       $reported
-     * @param array<string, Mark> $marks
-     * @param list<Finding>       $dropped
-     */
-    private function judged(array $reported, array $marks, array $dropped): JudgedFindings
-    {
-        $kept = array_values(array_filter($reported, static fn (Finding $finding): bool => !in_array($finding, $dropped, true)));
-        $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding($id, $mark), array_keys($marks), $marks));
-
-        return JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
     }
 
     // Through a real ledger, so the reported findings carry every field the ledger keeps and the ids it gives.
@@ -296,13 +284,36 @@ final class CountedVoteTest extends TestCase
         return [$first, $second, new CountedVote($reported, [], $judged)];
     }
 
-    private function changes(Finding ...$findings): Verdict
-    {
-        return new Verdict(Decision::Changes, array_values($findings), [], []);
-    }
-
     private function finding(string $id, Severity $severity, string $text): Finding
     {
         return new Finding($id, $severity, 'src/A.php', 7, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param list<Finding>       $reported
+     * @param array<string, Mark> $marks
+     * @param list<Finding>       $dropped
+     */
+    private function counted(array $reported, array $marks, array $dropped = []): CountedVote
+    {
+        return new CountedVote($reported, [], $this->judged($reported, $marks, $dropped));
+    }
+
+    /**
+     * @param list<Finding>       $reported
+     * @param array<string, Mark> $marks
+     * @param list<Finding>       $dropped
+     */
+    private function judged(array $reported, array $marks, array $dropped): JudgedFindings
+    {
+        $kept = array_values(array_filter($reported, static fn (Finding $finding): bool => !in_array($finding, $dropped, true)));
+        $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding($id, $mark), array_keys($marks), $marks));
+
+        return JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
+    }
+
+    private function changes(Finding ...$findings): Verdict
+    {
+        return new Verdict(Decision::Changes, array_values($findings), [], []);
     }
 }

@@ -18,16 +18,22 @@ use Intakt\Core\Budget\UseCase\ReplayDay\DayReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ReplayDayCommand;
 use Intakt\Core\Budget\UseCase\ReplayDay\RolledBackReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
+use Intakt\Core\Budget\UseCase\ReplayDay\ScriptHoldsNoStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\ConsoleDisplay;
 use Intakt\Tests\Support\KernelTestCase;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
 
 // Through the kernel and the Doctrine stores, because the evidence of the guard is this command on a running install.
 #[Group('persistence')]
@@ -39,6 +45,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(DayReplay::class)]
 #[UsesClass(ScriptedStep::class)]
 #[UsesClass(ScriptLineNotUnderstood::class)]
+#[UsesClass(ScriptHoldsNoStep::class)]
 #[UsesClass(BudgetGuard::class)]
 #[UsesClass(CeilingStartGuard::class)]
 #[UsesClass(DoctrineHolds::class)]
@@ -47,17 +54,6 @@ use Symfony\Component\Console\Tester\CommandTester;
 final class ReplayDayCommandTest extends KernelTestCase
 {
     private CommandTester $command;
-
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $kernel = self::$kernel;
-        self::assertNotNull($kernel);
-        $this->command = new CommandTester(new Application($kernel)->find('intakt:budget:replay'));
-    }
 
     public function testTheScriptedDayPrintsEachDecisionOfTheGuardAndEachOutageNoticeOnce(): void
     {
@@ -158,6 +154,46 @@ final class ReplayDayCommandTest extends KernelTestCase
             '2026-11-02T08:59 start claude_code.main 0: cooling-down',
             '2026-11-02T09:00 start claude_code.main 0: start',
         ], $this->linesOf($this->command->getDisplay()));
+    }
+
+    public function testAScriptWithoutAStepIsRefusedWithItsRule(): void
+    {
+        $this->executeScript("# only a comment\n\n");
+
+        self::assertSame(Command::FAILURE, $this->command->getStatusCode());
+        self::assertStringContainsString('The script holds no step.', $this->command->getDisplay());
+    }
+
+    public function testAUsedPercentTooLargeToBeAReadingIsRefused(): void
+    {
+        $this->executeScript("2026-11-02T08:00 read claude_code.main five-hour 1e999 2026-11-02T13:00\n");
+
+        self::assertSame(Command::FAILURE, $this->command->getStatusCode());
+        self::assertStringContainsString('A measured use of INF percent is not a reading.', $this->command->getDisplay());
+    }
+
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
+    {
+        $replay = self::getContainer()->get(RolledBackReplay::class);
+        self::assertInstanceOf(RolledBackReplay::class, $replay);
+        $files = self::createStub(Filesystem::class);
+        $files->method('readFile')->willThrowException(new InvalidArgumentException('a bug in reading'));
+        $io = new SymfonyStyle(new ArrayInput([]), new BufferedOutput());
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in reading'));
+
+        new ReplayDayCommand($replay, $files)($io, 'day.txt');
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $kernel = self::$kernel;
+        self::assertNotNull($kernel);
+        $this->command = new CommandTester(new Application($kernel)->find('intakt:budget:replay'));
     }
 
     private function executeScript(string $contents): void

@@ -10,6 +10,7 @@ use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\CheckJobs;
 use Intakt\Core\HandBack\Contract\CheckVerdict;
+use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
@@ -27,7 +28,6 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Gate\Contract\Gate;
-use InvalidArgumentException;
 use NoDiscard;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -65,7 +65,7 @@ final readonly class RunCheckJob implements CheckJobs
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws HandBackBranchRefused
      * @throws HandBackNotChecked
      * @throws RepositoryAttributesRefused
      * @throws JobRefused
@@ -83,7 +83,7 @@ final readonly class RunCheckJob implements CheckJobs
         }
 
         $repository = $this->absolute($job->handBack->repository);
-        $lost = $this->lostContent->of($repository, $accepted->head, $job->namedByThePlan);
+        $lost = $this->lostContent->of($repository, $accepted->head, [...$job->namedByThePlan]);
 
         if ([] !== $lost) {
             return new CheckJobOutcome(CheckVerdict::LostContent, lostContent: $lost);

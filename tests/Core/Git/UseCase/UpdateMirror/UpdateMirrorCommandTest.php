@@ -9,11 +9,13 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirrorCommand;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -28,6 +30,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(UpdateMirrorCommand::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(Mirrors::class)]
+#[UsesClass(ProjectNameRefused::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(NetworkGitFailed::class)]
@@ -38,19 +41,6 @@ final class UpdateMirrorCommandTest extends TestCase
     private string $mirrors;
 
     private TemporaryRepository $remote;
-
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->mirrors);
-        $this->remote->remove();
-    }
 
     public function testTheCommandPrintsThePathOfTheMirrorAndExitsWithZero(): void
     {
@@ -87,16 +77,39 @@ final class UpdateMirrorCommandTest extends TestCase
         self::assertStringContainsString('was not updated', $this->displayOnOneLine($tester));
     }
 
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
+    {
+        $filesystem = self::createStub(Filesystem::class);
+        $filesystem->method('mkdir')->willThrowException(new InvalidArgumentException('unexpected'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->whenTheCommandRuns('alpha', $this->remote->path, $filesystem);
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->mirrors);
+        $this->remote->remove();
+    }
+
     private function displayOnOneLine(CommandTester $tester): string
     {
         // The error block wraps at the terminal width, so where it breaks depends on the temporary path's length.
         return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
-    private function whenTheCommandRuns(string $project, string $remote): CommandTester
+    private function whenTheCommandRuns(string $project, string $remote, Filesystem $filesystem = new Filesystem()): CommandTester
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        $mirror = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors));
+        $mirror = new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors));
         $application = new Application();
         $application->addCommand(new UpdateMirrorCommand($mirror));
         $tester = new CommandTester($application->find('intakt:mirror:update'));

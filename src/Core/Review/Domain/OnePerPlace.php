@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -134,7 +135,7 @@ final readonly class OnePerPlace
     {
         $merged = $entry
             ->withSeverity($this->higher($entry->severity, $finding->severity))
-            ->withMerged([...$entry->merged, $finding->id, ...$finding->merged]);
+            ->withMerged($this->idsMergedInto($entry, $finding));
         $note = $finding->judgeNote();
 
         return null === $entry->judgeNote() && null !== $note ? $merged->withJudgeNote($note) : $merged;
@@ -145,5 +146,18 @@ final readonly class OnePerPlace
         $order = Severity::cases();
 
         return array_search($one, $order, true) <= array_search($other, $order, true) ? $one : $other;
+    }
+
+    // The same id may be reported twice, so an id joins the list once and the entry never lists its own.
+    private function idsMergedInto(Finding $entry, Finding $finding): FindingIds
+    {
+        $ids = [];
+        foreach ([...$entry->merged, $finding->id, ...$finding->merged] as $id) {
+            if ($id !== $entry->id && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+
+        return new FindingIds(...$ids);
     }
 }

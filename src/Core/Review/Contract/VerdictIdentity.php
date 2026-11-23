@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
-use InvalidArgumentException;
 
 final readonly class VerdictIdentity
 {
@@ -28,7 +28,7 @@ final readonly class VerdictIdentity
         $parts = explode(self::SEPARATOR, $recorded);
 
         if (count(IdentityField::cases()) !== count($parts)) {
-            throw new InvalidArgumentException('A recorded verdict identity has five parts separated by dots.');
+            throw new RecordedIdentityMalformed('A recorded verdict identity has five parts separated by dots.');
         }
 
         [$head, $base, $taskRevision, $checkCommand, $panelPolicy] = $parts;
@@ -54,7 +54,7 @@ final readonly class VerdictIdentity
             return VerdictStanding::stale($changed);
         }
 
-        return VerdictStanding::keptExceptFor($changed, $move->paths);
+        return VerdictStanding::keptExceptFor($changed, new Paths(...$move->paths));
     }
 
     /**

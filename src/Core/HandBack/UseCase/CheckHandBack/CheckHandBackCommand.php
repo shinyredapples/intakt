@@ -7,7 +7,6 @@ namespace Intakt\Core\HandBack\UseCase\CheckHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -30,7 +29,7 @@ final readonly class CheckHandBackCommand
             $credentials = new JobCredentials(...array_map($this->credentialIn(...), $input->credentialEnv));
             $text = $this->pullRequestTextIn($input->pullRequestText);
             $result = $this->routes->route(new HandBack($input->repository, $input->branch, $input->bundle, $input->mergeMain, $credentials), $text);
-        } catch (InvalidArgumentException|ReportableFailure $failure) {
+        } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -55,7 +54,7 @@ final readonly class CheckHandBackCommand
         $value = $_SERVER[$variable] ?? getenv($variable);
 
         if (!is_string($value) || '' === $value) {
-            throw new InvalidArgumentException(sprintf('the credential variable "%s" is unset or empty', $variable));
+            throw CredentialVariableUnset::named($variable);
         }
 
         return $value;
@@ -65,8 +64,8 @@ final readonly class CheckHandBackCommand
     {
         try {
             return $this->filesystem->readFile($path);
-        } catch (IOException) {
-            throw new InvalidArgumentException(sprintf('the pull request text "%s" cannot be read', $path));
+        } catch (IOException $unreadable) {
+            throw PullRequestTextUnreadable::at($path, $unreadable);
         }
     }
 

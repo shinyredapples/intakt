@@ -8,12 +8,13 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Contract\WorkTreeInBareRepository;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -22,16 +23,19 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
 #[CoversClass(Mirrors::class)]
+#[CoversClass(ProjectNameRefused::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(NetworkGitFailed::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(MirrorNotUpdated::class)]
+#[UsesClass(WorkTreeInBareRepository::class)]
 final class UpdateMirrorTest extends TestCase
 {
     private string $mirrors;
@@ -41,24 +45,6 @@ final class UpdateMirrorTest extends TestCase
     private string $wrapper;
 
     private ?string $originalPath = null;
-
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->wrapper = $this->mirrors.'-bin';
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        if (null !== $this->originalPath) {
-            $this->withPath($this->originalPath);
-        }
-
-        new Filesystem()->remove([$this->mirrors, $this->wrapper]);
-        $this->remote->remove();
-    }
 
     public function testTheFirstUpdateOfAProjectCreatesItsBareMirror(): void
     {
@@ -106,7 +92,7 @@ final class UpdateMirrorTest extends TestCase
     #[DataProvider('unsafeNames')]
     public function testAProjectNameThatIsNotASafePathSegmentIsRefused(string $name): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ProjectNameRefused::class);
 
         try {
             $this->update($name, $this->remote->path);
@@ -172,6 +158,34 @@ final class UpdateMirrorTest extends TestCase
         $path = $this->update('alpha', $this->remote->path);
 
         self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
+    }
+
+    public function testARepositoryWhoseConfigNamesAWorkTreeIsNoMirrorAndIsReplacedByOne(): void
+    {
+        mkdir($this->mirrors);
+        $this->git($this->mirrors, 'init', '--bare', '--quiet', 'alpha.git');
+        $this->git($this->mirrors.'/alpha.git', 'config', 'core.bare', 'false');
+        $this->git($this->mirrors.'/alpha.git', 'config', 'core.worktree', $this->mirrors);
+
+        $path = $this->update('alpha', $this->remote->path);
+
+        self::assertSame('true', $this->git($path, 'config', 'core.bare'));
+        self::assertSame('', $this->git($path, 'config', '--default', '', 'core.worktree'));
+        self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
+    }
+
+    public function testACheckThatIsKilledBySignalNeverReplacesAValidMirror(): void
+    {
+        $path = $this->update('alpha', $this->remote->path);
+        file_put_contents($path.'/description', 'Keep this existing mirror');
+        $this->beforeTheFirstGitCallWith('--is-bare-repository', 'kill -TERM $$');
+
+        try {
+            $this->update('alpha', $this->remote->path);
+            self::fail('A check that was killed gives no answer and must stop the update.');
+        } catch (RuntimeException) {
+            self::assertSame('Keep this existing mirror', file_get_contents($path.'/description'));
+        }
     }
 
     public function testTheMirrorsHeadFollowsTheRemotesHead(): void
@@ -404,6 +418,24 @@ final class UpdateMirrorTest extends TestCase
         } catch (MirrorNotUpdated $failed) {
             self::assertStringContainsString('HEAD names refs/heads/topic', $failed->getMessage());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->wrapper = $this->mirrors.'-bin';
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->originalPath) {
+            $this->withPath($this->originalPath);
+        }
+
+        new Filesystem()->remove([$this->mirrors, $this->wrapper]);
+        $this->remote->remove();
     }
 
     private function beforeTheFirstGitCallWith(string $command, string $action): void

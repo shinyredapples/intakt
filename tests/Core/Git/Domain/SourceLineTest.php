@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Git\Domain;
 
 use Intakt\Core\Git\Domain\SourceLine;
-use InvalidArgumentException;
+use Intakt\Core\Git\Domain\SourceLineNotUnique;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(SourceLine::class)]
+#[CoversClass(SourceLineNotUnique::class)]
 final class SourceLineTest extends TestCase
 {
     private const string SHA1 = '0123456789abcdef0123456789abcdef01234567';
@@ -121,7 +122,7 @@ final class SourceLineTest extends TestCase
 
     public function testATaskWithTwoSourceLinesIsRefused(): void
     {
-        $this->expectExceptionObject(new InvalidArgumentException('the task names more than one Source line, so the commit to build from is unclear'));
+        $this->expectExceptionObject(new SourceLineNotUnique('the task names more than one Source line, so the commit to build from is unclear'));
 
         SourceLine::in('Source: feat/a@'.self::SHA1."\nSource: feat/b@".self::SHA1);
     }

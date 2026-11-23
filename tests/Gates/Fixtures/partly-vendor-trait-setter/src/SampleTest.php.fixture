@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class SampleTest extends TestCase
+{
+    use SharedSetup;
+
+    public function testItRuns(): void
+    {
+        self::assertTrue(true);
+    }
+}

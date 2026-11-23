@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Intakt\Core\Ai\Contract\ProjectNotConfigured;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Kernel;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -20,6 +22,8 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 // A journey test case, because what it proves is that the instance's container and the journey agree on where the hub records.
 #[CoversClass(JourneyTestCase::class)]
 #[UsesClass(JourneyVendor::class)]
+#[UsesClass(ScriptedJourneyVendor::class)]
+#[UsesClass(ScriptedHttpClient::class)]
 #[UsesClass(JourneyKeyCheck::class)]
 #[UsesClass(RecordingHub::class)]
 #[UsesClass(JourneySteps::class)]
@@ -28,24 +32,31 @@ final class JourneyContainerTest extends JourneyTestCase
 {
     private ?Kernel $kernel = null;
 
-    protected function tearDown(): void
+    public function testTheTestContainerReviewsWithTheScriptedJourneyVendor(): void
     {
-        $directory = $this->kernel?->getShareDir();
-        $this->kernel?->shutdown();
+        self::assertInstanceOf(ScriptedJourneyVendor::class, $this->container()->get(Vendor::class));
+    }
 
-        if (null !== $directory) {
-            new Filesystem()->remove($directory.'/'.RecordingHub::FILE);
+    public function testWithAScriptDirectoryTheTestContainersVendorAsksSymfonyAiVendor(): void
+    {
+        $before = $_SERVER;
+        $_SERVER['INTAKT_JOURNEY_SCRIPTS'] = sys_get_temp_dir();
+
+        try {
+            $vendor = $this->container()->get(Vendor::class);
+            self::assertInstanceOf(Vendor::class, $vendor);
+
+            $this->expectException(ProjectNotConfigured::class);
+
+            $vendor->mapsAModelTo('no-such-project', Tier::Standard);
+        } finally {
+            $_SERVER = $before;
         }
     }
 
-    protected function journey(): string
+    public function testTheTestContainersHttpClientIsTheScriptedOne(): void
     {
-        return 'journey support';
-    }
-
-    public function testTheTestContainerReviewsWithTheJourneyVendor(): void
-    {
-        self::assertInstanceOf(JourneyVendor::class, $this->container()->get(Vendor::class));
+        self::assertInstanceOf(ScriptedHttpClient::class, $this->container()->get('http_client'));
     }
 
     public function testTheTestContainerChecksPastedKeysWithTheJourneyKeyCheck(): void
@@ -132,6 +143,21 @@ final class JourneyContainerTest extends JourneyTestCase
         } finally {
             $_ENV = $before;
         }
+    }
+
+    protected function tearDown(): void
+    {
+        $directory = $this->kernel?->getShareDir();
+        $this->kernel?->shutdown();
+
+        if (null !== $directory) {
+            new Filesystem()->remove($directory.'/'.RecordingHub::FILE);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'journey support';
     }
 
     private function container(): TestContainer

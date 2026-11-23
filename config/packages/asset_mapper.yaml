@@ -5,6 +5,11 @@ framework:
         missing_import_mode: strict
         # The default polyfill for browsers without import maps loads a script from another host; the dashboard makes no outside request.
         importmap_polyfill: false
+        # So the browser refuses a module whose bytes differ from the ones the import map was computed from.
+        importmap_integrity_algorithms:
+            - sha384
+        # 3 days in seconds, because JavaScript packages follow the same rule as the Composer cooldown (config.policy.cooldown.period in composer.json).
+        minimum_release_age: 259200
 
 when@prod:
     framework:

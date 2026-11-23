@@ -27,6 +27,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -57,7 +58,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 #[Group('persistence')]
 #[CoversClass(ReviewBenchChange::class)]
@@ -65,6 +65,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 #[CoversClass(BenchReview::class)]
 #[CoversClass(BenchReviewerResult::class)]
 #[CoversClass(ReviewerOutcome::class)]
+#[UsesClass(ModelNames::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[UsesClass(ReviewChange::class)]
 #[UsesClass(ChangeReview::class)]
@@ -86,11 +87,6 @@ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 final class ReviewBenchChangeTest extends KernelTestCase
 {
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testTheReviewReturnsEachReviewersMatchedDefectsTokensDurationAndTheActList(): void
     {
@@ -127,16 +123,26 @@ final class ReviewBenchChangeTest extends KernelTestCase
         self::assertNull($other->verdict->harnessFailure);
     }
 
-    private function recording(VerdictPerRole $verdicts): Vendor
+    protected function setUp(): void
     {
-        $byRole = ['Look at part 1.' => ['seconds' => 3, 'tokens' => 500], 'Look at part 2.' => ['seconds' => 1, 'tokens' => 200]];
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
 
-        return new UsageRecordingVendor($verdicts, $this->fixture->ledger(), $this->fixture->clock, $byRole);
+    private function findingAt(string $id, int $line): Finding
+    {
+        return new Finding($id, Severity::P1, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     private function defectAt(int $line): Expectations
     {
         return Expectations::fromJson(json_encode([['id' => 'coupon', 'file' => 'src/A.php', 'lines' => ['from' => $line, 'to' => $line], 'description' => 'A planted defect.', 'severity' => 'P1']], JSON_THROW_ON_ERROR));
+    }
+
+    private function recording(VerdictPerRole $verdicts): Vendor
+    {
+        $byRole = ['Look at part 1.' => ['seconds' => 3, 'tokens' => 500], 'Look at part 2.' => ['seconds' => 1, 'tokens' => 200]];
+
+        return new UsageRecordingVendor($verdicts, $this->fixture->ledger(), $this->fixture->clock, $byRole);
     }
 
     private function review(Expectations $expectations, Vendor $vendor): BenchReview
@@ -146,6 +152,16 @@ final class ReviewBenchChangeTest extends KernelTestCase
         $change = new BenchChange('coupon-code', $expectations, new ChangeFiles(['src/A.php' => 20]), $request);
 
         return new ReviewBenchChange($this->reviewChange($vendor), new RunClassifier(new DefectMatcher()))->of($change);
+    }
+
+    private function panel(): Panel
+    {
+        $members = array_map(
+            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
+            [1, 2],
+        );
+
+        return new Panel($members, QuorumPolicy::All);
     }
 
     private function reviewChange(Vendor $vendor): ReviewChange
@@ -163,8 +179,6 @@ final class ReviewBenchChangeTest extends KernelTestCase
         };
         $serializer = self::getContainer()->get('serializer.stored');
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
-        $failures = self::createStub(ListableReceiverInterface::class);
-        $failures->method('all')->willReturn([]);
 
         return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),
@@ -176,22 +190,7 @@ final class ReviewBenchChangeTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $vendor,
-            new FailedJudgings($failures),
+            $this->fixture->noFailedJudgings(),
         );
-    }
-
-    private function panel(): Panel
-    {
-        $members = array_map(
-            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
-            [1, 2],
-        );
-
-        return new Panel($members, QuorumPolicy::All);
-    }
-
-    private function findingAt(string $id, int $line): Finding
-    {
-        return new Finding($id, Severity::P1, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 }

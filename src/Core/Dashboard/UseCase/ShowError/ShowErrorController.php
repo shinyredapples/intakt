@@ -66,6 +66,15 @@ final readonly class ShowErrorController
         return is_string($route) && !str_starts_with($route, DashboardRoutes::PREFIX);
     }
 
+    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
+    private function referenceFor(Throwable $exception, string $log): string
+    {
+        $reference = bin2hex(random_bytes(4));
+        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
+
+        return $reference;
+    }
+
     /**
      * @param array<mixed> $headers
      */
@@ -85,19 +94,11 @@ final readonly class ShowErrorController
         };
     }
 
-    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
-    private function referenceFor(Throwable $exception, string $log): string
-    {
-        $reference = bin2hex(random_bytes(4));
-        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
-
-        return $reference;
-    }
-
     private function render(int $status, string $message, ?string $reference): string
     {
         try {
             return $this->twig->render('dashboard/error.html.twig', ['status' => $status, 'message' => $message, 'reference' => $reference, 'project_names' => $this->projectNames()]);
+            // Boundary: logs a failed shell and answers with the plain page, because the error page itself must never fail.
         } catch (Throwable $failure) {
             $this->logger->warning('The error page was shown without the dashboard shell.', ['exception' => $failure]);
 
@@ -113,6 +114,7 @@ final readonly class ShowErrorController
     {
         try {
             return $this->projects->names();
+            // Boundary: logs an unreadable ledger and lists no projects, because the error page must answer even when the ledger is what failed.
         } catch (Throwable $failure) {
             $this->logger->warning('The error page lists no projects, because they could not be read.', ['exception' => $failure]);
 
@@ -124,6 +126,6 @@ final readonly class ShowErrorController
     {
         $note = null === $reference ? '' : sprintf('<p>Reference: <code>%s</code></p>', htmlspecialchars($reference));
 
-        return sprintf('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Intakt</title></head><body><h1>Intakt</h1><p>%s</p>%s<p><a href="/">Back to the board</a></p></body></html>', htmlspecialchars($message), $note);
+        return sprintf('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Intakt</title></head><body><h1>Intakt</h1><p>%s</p>%s<p><a href="/?board=1">Back to the board</a></p></body></html>', htmlspecialchars($message), $note);
     }
 }

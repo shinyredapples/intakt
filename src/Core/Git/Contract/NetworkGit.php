@@ -17,10 +17,9 @@ final readonly class NetworkGit
 {
     private const array RETRY_DELAYS = [10, 30];
 
-    // HardenedGit allows no protocol at all, so a network call names the two it needs; GIT_WORK_TREE would point a bare repository and a clone at the wrong place.
+    // HardenedGit allows no protocol at all, so a network call names the two it needs.
     private const array NETWORK = [
         'GIT_ALLOW_PROTOCOL' => 'file:https',
-        'GIT_WORK_TREE' => false,
         'GIT_TERMINAL_PROMPT' => '0',
     ];
 

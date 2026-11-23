@@ -26,18 +26,6 @@ final class ProbeTest extends TestCase
         new Filesystem()->remove(self::sharedProject());
     }
 
-    protected function setUp(): void
-    {
-        $this->scratch = sys_get_temp_dir().'/intakt-probe-test-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->scratch.'/tmp');
-        $this->project = $this->copyOfTheProject();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->scratch);
-    }
-
     // One boot holds the script, network and failing-child cases, because each namespaced boot costs seconds.
     public function testAFailingScriptReachesTheInstanceButNotTheNetworkAndItsChildIsKilled(): void
     {
@@ -215,6 +203,18 @@ final class ProbeTest extends TestCase
         self::assertSame([], $this->processesNaming($this->project.'/public'));
     }
 
+    protected function setUp(): void
+    {
+        $this->scratch = sys_get_temp_dir().'/intakt-probe-test-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->scratch.'/tmp');
+        $this->project = $this->copyOfTheProject();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->scratch);
+    }
+
     // Same rule as the gate tests: a host without unprivileged namespaces cannot run a probe, which the refusal test covers.
     private function skipWhenNetworkNamespacesAreRefused(): void
     {
@@ -237,11 +237,6 @@ final class ProbeTest extends TestCase
         $start = 'setsid '.PHP_BINARY.' -r \'touch($argv[1]); sleep(300);\' '.$marker.' 1>&2 &';
 
         return '<?php system('.var_export($start, true).'); while (!is_file('.var_export($marker, true).')) { usleep(10_000); }';
-    }
-
-    private function transcriptOf(Process $run): string
-    {
-        return 'exit '.$run->getExitCode()."\nstdout:\n".$run->getOutput()."\nstderr:\n".$run->getErrorOutput();
     }
 
     /**
@@ -270,15 +265,9 @@ final class ProbeTest extends TestCase
         return $process;
     }
 
-    /**
-     * @param array<string, string> $environment
-     */
-    private function runProbeFromTheScratchFolder(string $file, array $environment): Process
+    private function transcriptOf(Process $run): string
     {
-        $process = new Process([PHP_BINARY, $this->project.'/bin/probe', $file], $this->scratch, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', ...$environment]);
-        $process->run();
-
-        return $process;
+        return 'exit '.$run->getExitCode()."\nstdout:\n".$run->getOutput()."\nstderr:\n".$run->getErrorOutput();
     }
 
     // Each tool fails at once, so a run that finds them stops before the probe instead of reaching the network.
@@ -288,6 +277,17 @@ final class ProbeTest extends TestCase
             new Filesystem()->dumpFile($folder.'/'.$tool, "#!/bin/sh\nexit 1\n");
             new Filesystem()->chmod($folder.'/'.$tool, 0o755);
         }
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private function runProbeFromTheScratchFolder(string $file, array $environment): Process
+    {
+        $process = new Process([PHP_BINARY, $this->project.'/bin/probe', $file], $this->scratch, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', ...$environment]);
+        $process->run();
+
+        return $process;
     }
 
     /**

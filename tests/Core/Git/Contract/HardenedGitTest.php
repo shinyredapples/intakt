@@ -11,6 +11,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(HardenedGit::class)]
@@ -37,21 +38,6 @@ final class HardenedGitTest extends TestCase
     private array $environment;
 
     private string $workingDirectory;
-
-    protected function setUp(): void
-    {
-        $this->environment = $_ENV;
-        $this->workingDirectory = (string) getcwd();
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $_ENV = $this->environment;
-        chdir($this->workingDirectory);
-        $this->repository->remove();
-    }
 
     public function testTheCommandDisablesHooksFsmonitorExternalDiffAttributesSignaturesAndOutputEncodings(): void
     {
@@ -288,6 +274,161 @@ final class HardenedGitTest extends TestCase
         } catch (RepositoryAttributesRefused $refused) {
             self::assertStringContainsString('/.git/info/attributes exists', $refused->getMessage());
         }
+    }
+
+    public function testABareCallNamesTheRepositoryAndLeavesTheWorkTreeUnset(): void
+    {
+        $mirror = $this->mirror();
+        $_ENV['GIT_WORK_TREE'] = '/elsewhere';
+        $_ENV['GIT_DIR'] = '/elsewhere';
+
+        $call = new HardenedGit()->callInBareRepository(['rev-parse', '--is-bare-repository'], $mirror);
+
+        self::assertSame(
+            ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--git-dir='.realpath($mirror), '--bare', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', ...self::SETTINGS, 'rev-parse', '--is-bare-repository'],
+            $call->command,
+        );
+        self::assertSame(realpath($mirror), $call->directory);
+        self::assertFalse($call->environment['GIT_WORK_TREE']);
+        self::assertFalse($call->environment['GIT_DIR']);
+        self::assertSame('', $call->environment['GIT_ALLOW_PROTOCOL']);
+        self::assertSame('/nonexistent', $call->environment['GIT_GRAFT_FILE']);
+        self::assertSame("true\n", $this->runGit($call->command, $call->environment, $call->directory));
+    }
+
+    public function testABareCallOfASha256RepositoryGetsTheEmptyTreeOfItsObjectFormat(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->repository->commitFile('README.md', "base\n");
+
+        $call = new HardenedGit()->callInBareRepository(['log', '-1', '--format=%s'], $this->mirror());
+
+        self::assertSame('6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', $call->environment['GIT_ATTR_SOURCE']);
+        self::assertSame("Change README.md\n", $this->runGit($call->command, $call->environment, $call->directory));
+    }
+
+    public function testAWorkTreeInTheConfigOfABareRepositoryDoesNotApplyToABareCall(): void
+    {
+        $mirror = $this->mirror();
+        $this->runGit(['git', '--git-dir='.$mirror, 'config', 'core.worktree', $this->decoy()], []);
+
+        $call = new HardenedGit()->callInBareRepository(['rev-parse', '--is-bare-repository'], $mirror);
+        self::assertSame("true\n", $this->runGit($call->command, $call->environment, $call->directory));
+
+        $status = new HardenedGit()->callInBareRepository(['status', '--short'], $mirror);
+        $process = $this->start($status->command, $status->environment, $status->directory);
+        self::assertFalse($process->isSuccessful(), 'a working-tree read must find no work tree');
+        self::assertStringNotContainsString('planted.txt', $process->getOutput());
+    }
+
+    public function testABareCallRefusesARepositoryWhoseConfigGivesItAWorkTree(): void
+    {
+        $mirror = $this->mirror();
+        $decoy = $this->decoy();
+        $this->runGit(['git', '--git-dir='.$mirror, 'config', 'core.worktree', $decoy], []);
+        $this->runGit(['git', '--git-dir='.$mirror, 'config', 'core.bare', 'false'], []);
+
+        self::assertSame($decoy."\n", $this->runGit(['git', '--git-dir='.$mirror, '--bare', 'rev-parse', '--show-toplevel'], [], $mirror), 'the setting must beat a plain bare pin, or this test proves nothing');
+
+        $refusal = $this->bareRefusal(RuntimeException::class, $mirror);
+
+        self::assertStringEndsWith('/mirror.git names a work tree in its config (core.worktree), so a bare call refuses it', $refusal);
+    }
+
+    public function testABareCallReadsTheGitDirectoryOfACheckoutWithoutItsWorkTree(): void
+    {
+        file_put_contents($this->repository->path.'/README.md', "changed\n");
+        $gitDirectory = $this->repository->path.'/.git';
+
+        $log = new HardenedGit()->callInBareRepository(['log', '-1', '--format=%s'], $gitDirectory);
+        self::assertSame("Change README.md\n", $this->runGit($log->command, $log->environment, $log->directory));
+
+        $status = new HardenedGit()->callInBareRepository(['status', '--short'], $gitDirectory);
+        self::assertFalse($this->start($status->command, $status->environment, $status->directory)->isSuccessful(), 'a working-tree read must find no work tree');
+    }
+
+    public function testABareCallRefusesTheGitDirectoryOfACheckoutWhoseConfigNamesAWorkTree(): void
+    {
+        $this->repository->configure('core.worktree', $this->decoy());
+
+        $refusal = $this->bareRefusal(RuntimeException::class, $this->repository->path.'/.git');
+
+        self::assertStringEndsWith('/.git names a work tree in its config (core.worktree), so a bare call refuses it', $refusal);
+    }
+
+    public function testABareCallRefusesAGitDirectoryWhoseConfigNamesItselfAsTheWorkTree(): void
+    {
+        $gitDirectory = (string) realpath($this->repository->path.'/.git');
+        $this->repository->configure('core.worktree', $gitDirectory);
+
+        self::assertStringContainsString('names a work tree in its config', $this->bareRefusal(RuntimeException::class, $gitDirectory));
+    }
+
+    public function testABareCallRefusesARepositoryWhoseInfoAttributesExist(): void
+    {
+        $mirror = $this->mirror();
+        file_put_contents($mirror.'/info/attributes', "*.txt -diff\n");
+
+        self::assertStringContainsString('/info/attributes exists', $this->bareRefusal(RepositoryAttributesRefused::class, $mirror));
+    }
+
+    public function testABareCallOfAMissingRepositoryLeavesTheFailureToTheCall(): void
+    {
+        $missing = $this->repository->path.'/.git/missing.git';
+
+        $call = new HardenedGit()->callInBareRepository(['rev-parse', 'HEAD'], $missing);
+
+        self::assertSame($missing, $call->directory);
+        self::assertContains('--git-dir='.$missing, $call->command);
+    }
+
+    protected function setUp(): void
+    {
+        $this->environment = $_ENV;
+        $this->workingDirectory = (string) getcwd();
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV = $this->environment;
+        chdir($this->workingDirectory);
+        $this->repository->remove();
+    }
+
+    /**
+     * @param class-string<RuntimeException|RepositoryAttributesRefused> $refusal
+     */
+    private function bareRefusal(string $refusal, string $repository): string
+    {
+        try {
+            new HardenedGit()->callInBareRepository(['rev-parse', 'HEAD'], $repository);
+        } catch (RuntimeException|RepositoryAttributesRefused $refused) {
+            self::assertInstanceOf($refusal, $refused);
+
+            return $refused->getMessage();
+        }
+
+        self::fail('The bare call must be refused.');
+    }
+
+    private function mirror(): string
+    {
+        $mirror = $this->repository->path.'/.git/mirror.git';
+        $this->runGit(['git', 'clone', '--mirror', '--quiet', '--', $this->repository->path, $mirror], self::UNHARDENED);
+
+        return $mirror;
+    }
+
+    private function decoy(): string
+    {
+        $decoy = $this->repository->path.'/.git/decoy';
+        mkdir($decoy);
+        file_put_contents($decoy.'/planted.txt', "planted\n");
+
+        return $decoy;
     }
 
     /**

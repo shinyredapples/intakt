@@ -45,8 +45,8 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame([
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
-            '{"result":"fail","failed":["secrets"]}',
-        ], $run->lines());
+            '{"result":"fail","failed":["secrets"],"report":"var/check/report-<name>.json"}',
+        ], $this->linesNamingAnyReport($run));
         self::assertSame(1, $run->exitCode());
     }
 
@@ -57,8 +57,8 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame([
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
-            '{"result":"fail","failed":["secrets"]}',
-        ], $run->lines());
+            '{"result":"fail","failed":["secrets"],"report":"var/check/report-<name>.json"}',
+        ], $this->linesNamingAnyReport($run));
         self::assertSame(1, $run->exitCode());
     }
 
@@ -124,8 +124,8 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
             '{"gate":"tests","ok":true,"findings":[],"omitted":0}',
-            '{"result":"pass","failed":[]}',
-        ], $run->lines());
+            '{"result":"pass","failed":[],"report":"var/check/report-<name>.json"}',
+        ], $this->linesNamingAnyReport($run));
     }
 
     public function testTheContainerGateAlsoWaitsForTheStaticGates(): void
@@ -144,8 +144,8 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"phpstan","ok":true,"findings":[],"omitted":0}',
             '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
-            '{"result":"pass","failed":[]}',
-        ], $run->lines());
+            '{"result":"pass","failed":[],"report":"var/check/report-<name>.json"}',
+        ], $this->linesNamingAnyReport($run));
     }
 
     public function testAnOverrideThatNamesNoNumberOfGatesStopsBeforeAnyGateStarts(): void
@@ -223,6 +223,15 @@ final class GateChildrenTest extends SandboxTestCase
         return new CheckRun($this->runWithFakeGatesIn($environment, ...$arguments));
     }
 
+    // Because each report gets a fresh random name, the lines compare equal only with that name replaced.
+    /**
+     * @return list<string>
+     */
+    private function linesNamingAnyReport(CheckRun $run): array
+    {
+        return array_map(static fn (string $line): string => (string) preg_replace('~report-[0-9a-f]{16}\.json~', 'report-<name>.json', $line), $run->lines());
+    }
+
     private function runWithFakeGates(string ...$arguments): ProcessResult
     {
         return $this->runWithFakeGatesIn([GateSlots::VARIABLE => '1'], ...$arguments);
@@ -250,6 +259,23 @@ final class GateChildrenTest extends SandboxTestCase
         return $home;
     }
 
+    /**
+     * @param list<string> $gates
+     *
+     * @return list<int>
+     */
+    private function pidsOnceWritten(string $directory, array $gates): array
+    {
+        $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
+        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
+
+        while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
+            usleep(10000);
+        }
+
+        return array_map(static fn (string $file): int => (int) @file_get_contents($file), $files);
+    }
+
     // Because a stopped child whose parent died stays a zombie until it is reaped, which takes a moment on a busy machine; the limit only ends a hang.
     private function runsOnAfterAWhile(int $pid): bool
     {
@@ -268,22 +294,5 @@ final class GateChildrenTest extends SandboxTestCase
         $end = strrpos($status, ')');
 
         return false !== $end && 'Z' !== substr($status, $end + 2, 1);
-    }
-
-    /**
-     * @param list<string> $gates
-     *
-     * @return list<int>
-     */
-    private function pidsOnceWritten(string $directory, array $gates): array
-    {
-        $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
-        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
-
-        while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
-            usleep(10000);
-        }
-
-        return array_map(static fn (string $file): int => (int) @file_get_contents($file), $files);
     }
 }

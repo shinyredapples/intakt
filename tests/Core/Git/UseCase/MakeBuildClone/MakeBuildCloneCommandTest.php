@@ -8,8 +8,11 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\SourceLine;
+use Intakt\Core\Git\Domain\SourceLineNotUnique;
 use Intakt\Core\Git\Domain\TaskBranch;
+use Intakt\Core\Git\UseCase\MakeBuildClone\BranchNameRefused;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneCommand;
@@ -17,6 +20,7 @@ use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneInput;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -33,8 +37,11 @@ use Symfony\Component\Process\Process;
 #[UsesClass(MakeBuildClone::class)]
 #[UsesClass(MakeBuildCloneInput::class)]
 #[UsesClass(BuildCloneNotMade::class)]
+#[UsesClass(BranchNameRefused::class)]
 #[UsesClass(Mirrors::class)]
+#[UsesClass(ProjectNameRefused::class)]
 #[UsesClass(SourceLine::class)]
+#[UsesClass(SourceLineNotUnique::class)]
 #[UsesClass(TaskBranch::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(HardenedGit::class)]
@@ -47,20 +54,6 @@ final class MakeBuildCloneCommandTest extends TestCase
     private string $clone;
 
     private TemporaryRepository $remote;
-
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->clone = $this->mirrors.'-clone';
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone', $this->mirrors.'-clone-<info>literal<', $this->mirrors.'-task.md']);
-        $this->remote->remove();
-    }
 
     public function testTheCommandPrintsThePathOfTheBuildCloneAndExitsWithZero(): void
     {
@@ -196,6 +189,40 @@ final class MakeBuildCloneCommandTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    public function testATaskBranchThatIsMainExitsWithOneAndSaysWhy(): void
+    {
+        $this->givenTheProjectHasAMirror();
+
+        $tester = $this->whenTheCommandRuns('alpha', 'main');
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('the task\'s branch "main" is main itself', $this->displayOnOneLine($tester));
+    }
+
+    public function testAnUnexpectedInvalidArgumentExceptionFromReadingTheTaskPassesThrough(): void
+    {
+        $filesystem = self::createStub(Filesystem::class);
+        $filesystem->method('readFile')->willThrowException(new InvalidArgumentException('unexpected'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->commandReadingTasksWith($filesystem)->execute(['project' => 'alpha', 'branch' => 'feat/task', 'directory' => $this->clone, '--task' => $this->mirrors.'-task.md']);
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->clone = $this->mirrors.'-clone';
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone', $this->mirrors.'-clone-<info>literal<', $this->mirrors.'-task.md']);
+        $this->remote->remove();
+    }
+
     private function givenTheSourceBranch(): string
     {
         $this->remote->checkoutNewBranch('feat/big');
@@ -238,11 +265,17 @@ final class MakeBuildCloneCommandTest extends TestCase
      */
     private function whenTheCommandRuns(string $project, string $branch, array $options = []): CommandTester
     {
-        $application = new Application();
-        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), new Filesystem()));
-        $tester = new CommandTester($application->find('intakt:build:clone'));
+        $tester = $this->commandReadingTasksWith(new Filesystem());
         $tester->execute(['project' => $project, 'branch' => $branch, 'directory' => $this->clone, ...$options]);
 
         return $tester;
+    }
+
+    private function commandReadingTasksWith(Filesystem $taskFiles): CommandTester
+    {
+        $application = new Application();
+        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), $taskFiles));
+
+        return new CommandTester($application->find('intakt:build:clone'));
     }
 }

@@ -8,6 +8,8 @@ use Closure;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Override;
 
@@ -18,12 +20,21 @@ final class RecordingChangeOpening implements ChangeOpening
     public int $calls = 0;
     public ?Closure $during = null;
     public ?ChangeText $text = null;
+    public ?Closure $checking = null;
 
     /** @var array<string, ChangeId> */
     private array $pulls = [];
 
     #[Override]
-    public function openOrUpdate(ProposedChange $change): ChangeId
+    public function refuseForeignChange(ProposedChange $change): void
+    {
+        if ($this->checking instanceof Closure) {
+            ($this->checking)($change);
+        }
+    }
+
+    #[Override]
+    public function openOrUpdate(ProposedChange $change): OpenedChange
     {
         ++$this->calls;
 
@@ -35,11 +46,13 @@ final class RecordingChangeOpening implements ChangeOpening
         $this->text = $change->text;
         $key = json_encode([$change->project, $change->branch], JSON_THROW_ON_ERROR);
 
-        if (!isset($this->pulls[$key])) {
-            ++$this->opened;
-            $this->pulls[$key] = new ChangeId(sprintf('https://github.com/acme/%s/pull/%d', $change->project, $this->opened));
+        if (isset($this->pulls[$key])) {
+            return new OpenedChange($this->pulls[$key], Opening::Updated);
         }
 
-        return $this->pulls[$key];
+        ++$this->opened;
+        $this->pulls[$key] = new ChangeId(sprintf('https://github.com/acme/%s/pull/%d', $change->project, $this->opened));
+
+        return new OpenedChange($this->pulls[$key], Opening::Created);
     }
 }

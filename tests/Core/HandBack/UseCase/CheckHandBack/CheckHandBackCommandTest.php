@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
@@ -18,17 +19,20 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackCommand;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackInput;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\CredentialVariableUnset;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\FailedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\HandBackRoute;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\HandBackRoutes;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\PullRequestTextUnreadable;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RouteHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -62,27 +66,20 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BundleHeader::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
+#[UsesClass(HandBackBranchRefused::class)]
+#[UsesClass(CredentialVariableUnset::class)]
+#[UsesClass(PullRequestTextUnreadable::class)]
 final class CheckHandBackCommandTest extends TestCase
 {
     private const string CREDENTIAL = 'INTAKT_TEST_MOUNTED_CREDENTIAL';
+
+    private ?Filesystem $files = null;
 
     private BuildHistory $history;
 
     private RecordingLedger $ledger;
 
     private LockFactory $locks;
-
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->ledger = new RecordingLedger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
 
     public function testAnAcceptedBundlePrintsItsHeadThePushedBaseAndHowManyCommitsWereRewritten(): void
     {
@@ -213,6 +210,25 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertStringContainsString('the credential variable "'.self::CREDENTIAL.'" is unset or empty', $this->flat($tester));
     }
 
+    public function testABranchNameGitRefusesFailsWithTheReason(): void
+    {
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'a..b', 'bundle' => $this->history->file(''), 'pull-request-text' => $this->text()]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('"a..b" is not a branch name git accepts', $this->flat($tester));
+    }
+
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
+    {
+        $files = self::createStub(Filesystem::class);
+        $files->method('readFile')->willThrowException(new InvalidArgumentException('a bug in reading'));
+        $this->files = $files;
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in reading'));
+
+        $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->file(''), 'pull-request-text' => 'any.md']);
+    }
+
     public function testASecretInTheBundlePrintsTheRefusalWithoutTheSecret(): void
     {
         $key = 'sk_live_'.bin2hex(random_bytes(12));
@@ -225,19 +241,16 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertStringNotContainsString($key, $tester->getDisplay());
     }
 
-    /**
-     * @param array<string, string|bool|list<string>> $input
-     */
-    private function executed(array $input): CommandTester
+    protected function setUp(): void
     {
-        $scan = new BundleSecretScan('gitleaks');
-        $checks = new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), $scan);
-        $application = new Application();
-        $application->addCommand(new CheckHandBackCommand(new RouteHandBack($checks, $scan, new HandBackRoutes($this->ledger, $this->locks)), new Filesystem()));
-        $tester = new CommandTester($application->find('intakt:hand-back:check'));
-        $tester->execute($input);
+        $this->history = new BuildHistory();
+        $this->ledger = new RecordingLedger();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
 
-        return $tester;
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     private function text(string $content = 'Adds the change.'): string
@@ -246,6 +259,21 @@ final class CheckHandBackCommandTest extends TestCase
         new Filesystem()->dumpFile($path, $content);
 
         return $path;
+    }
+
+    /**
+     * @param array<string, string|bool|list<string>> $input
+     */
+    private function executed(array $input): CommandTester
+    {
+        $scan = new BundleSecretScan('gitleaks');
+        $checks = new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), $scan);
+        $application = new Application();
+        $application->addCommand(new CheckHandBackCommand(new RouteHandBack($checks, $scan, new HandBackRoutes($this->ledger, $this->locks)), $this->files ?? new Filesystem()));
+        $tester = new CommandTester($application->find('intakt:hand-back:check'));
+        $tester->execute($input);
+
+        return $tester;
     }
 
     private function flat(CommandTester $tester): string

@@ -38,6 +38,23 @@ final class DemoOwnerTokenSdkClientTest extends KernelTestCase
     /** @var array<string, string> */
     private array $previous = [];
 
+    public function testThePrintedTokenOfAFirstStartListsTheToolsAndStartsAReview(): void
+    {
+        $client = $this->connectedWith($this->printedToken($this->tokenTheFirstStartMade()));
+
+        self::assertContains('start_review', array_map(static fn (Tool $tool): string => $tool->name, $client->listTools()->tools));
+        $result = $client->callTool('start_review', ['review' => [
+            'project' => 'alpha',
+            'task' => SampleProject::TASK,
+            'change' => SampleRepository::BRANCH,
+            'repository' => $this->directory.'/sample-repository',
+            'base' => SampleRepository::BASE,
+        ]]);
+        self::assertFalse($result->isError);
+        self::assertIsArray($result->structuredContent);
+        self::assertSame(1, $result->structuredContent['round']);
+    }
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-demo-owner-token-'.bin2hex(random_bytes(6));
@@ -61,23 +78,6 @@ final class DemoOwnerTokenSdkClientTest extends KernelTestCase
         parent::tearDown();
     }
 
-    public function testThePrintedTokenOfAFirstStartListsTheToolsAndStartsAReview(): void
-    {
-        $client = $this->connectedWith($this->printedToken($this->tokenTheFirstStartMade()));
-
-        self::assertContains('start_review', array_map(static fn (Tool $tool): string => $tool->name, $client->listTools()->tools));
-        $result = $client->callTool('start_review', ['review' => [
-            'project' => 'alpha',
-            'task' => SampleProject::TASK,
-            'change' => SampleRepository::BRANCH,
-            'repository' => $this->directory.'/sample-repository',
-            'base' => SampleRepository::BASE,
-        ]]);
-        self::assertFalse($result->isError);
-        self::assertIsArray($result->structuredContent);
-        self::assertSame(1, $result->structuredContent['round']);
-    }
-
     // The entrypoint runs with a stand-in php whose seed step fails, so the start ends right after it has made the token, without a server.
     private function tokenTheFirstStartMade(): string
     {
@@ -92,6 +92,9 @@ final class DemoOwnerTokenSdkClientTest extends KernelTestCase
             'MERCURE_JWT_ISSUER' => 'http://localhost',
             'MCP_OWNER_TOKEN' => false,
             'MCP_OWNER_ACCESS' => false,
+            // Cleared, because the start removes the folders they name, which a caller's setting would point outside this test.
+            'APP_CACHE_DIR' => false,
+            'APP_BUILD_DIR' => false,
             'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample-repository',
             'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
             'MCP_OWNER_KEPT_FILE' => $this->directory.'/mcp-owner-token',

@@ -25,6 +25,8 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - No nested `try`: enforced by `bin/check` (`phpstan`).
 - At most three parameters, unless a vendor method's signature fixes more; constructors are exempt (they hold dependencies or a value's fields): enforced by `bin/check` (`phpstan`).
 - No flag parameters: enforced by `bin/check` (`phpstan`).
+- Constructor first, then public, protected and private methods: enforced by `bin/check` (`cs`).
+- Private helpers below the method that first calls them, in the order it first calls them: enforced by `bin/check` (`phpstan`).
 - Two or more named arguments in a call: each on its own line with a trailing comma, enforced by `bin/check` (`cs`).
 - Classes imported, global functions and constants written plain, class aliases only for a short-name clash and Doctrine's `ORM`: enforced by `bin/check` (`cs`, `phpstan`).
 - Time only through Symfony's `ClockInterface`: enforced by `bin/check` (`phpstan`).
@@ -32,7 +34,10 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - A `Provider` case value is derived from the case, never re-spelled, and an `intakt.` container id or parameter name comes from the module's ids class (`<Module>Services` in its `Contract/`): enforced by `bin/check` (`phpstan`).
 - Handlers use `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler`: enforced by `bin/check` (`architecture`).
 - Final classes (abstract classes allowed, anonymous classes exempt): enforced by `bin/check` (`phpstan`).
-- `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
+- No static properties (the gate does not judge abstract and anonymous classes): enforced by `bin/check` (`phpstan`).
+- No public setters (a setter is a method named `set`, in any letter case, followed by an uppercase letter, an underscore or the end of the name; one a vendor interface or parent declares is exempt): enforced by `bin/check` (`phpstan`).
+- No magic methods (any `__*` method; `__construct`, `__invoke` and `__toString` are fine): enforced by `bin/check` (`phpstan`).
+- `readonly` where possible, no static state (also none the gate cannot see, such as `static` variables or static properties of abstract classes), no service locator, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Worker mode: services keep no per-request state, also not in readonly properties, and `#[KeptForTheProcess]` marks only state that is the same for every request.
 - Small methods, early returns; split a service whose dependencies keep growing by responsibility, not by count.
@@ -68,17 +73,18 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 
 - A steered model must stay harmless: every decision that matters is made or checked by plain code, and each model role has only the tools its job needs.
 - A change that adds a model role, a new input to a model or a new tool for one updates the threat model page in the same change.
-- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews.
+- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews. Model messages are built only by `PromptAssembly`, from literals and fenced text (a reviewer role's configured prompt only through `systemWithRole()`): enforced by `bin/check` (`phpstan`) in `src/`, `bin/` and `config/`.
 - Only tasks, steering labels and comments from people with write access count, checked through the forge's permission API on each event.
 
 ## Docs, pull requests, commits
 
-- User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
+- User-visible changes update the reference (`docs/reference/`), the story chapters in `docs/user/` they make untrue, and `docs/architecture/` in the same change; docs state only what the code does.
+- Write for people. A user chapter is a short scene, then numbered steps; paragraphs of at most about 60 words, one idea per section. A change rewrites the section it touches and keeps it short; it never extends a paragraph or appends its rules to a page. Detail only contributors need goes to `docs/reference/` or `docs/architecture/`, never into `docs/user/`. A technical page over about 1,500 words opens with an "In short" section of at most about 120 words, which every change keeps true. The `docs` gate will enforce this (#3409); until then reviewers apply it.
 - `docs/architecture/` has one page per topic, listed in its `README.md`: a change updates the page of the topic it touches (`quality-gates.md` for a gate, `ai-providers.md` for a provider, `review-flow.md` for the path of a review), and a new topic gets its own page and one line in that index, never a section in the index itself.
 - A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row of `docs/highlights.md` (status, task and issue, path; never the pull request number) in the same change, always as a new fragment `docs/highlights.d/<issue>-<slug>.md` holding the whole row under its `## <section>` heading, never as an edit of `docs/highlights.md` or of another change's fragment; `bin/highlights` assembles the page, which git ignores and no change commits.
 - A change that adds, removes or changes an external command Intakt or its gates call updates `docs/architecture/requirements.md` in the same change.
 - A change that alters behavior a plain-words guide in `docs/guide/` describes updates that guide in the same change, in the same plain words (no jargon, diagrams kept true); a guide that describes a planned part marks it planned until it is built. A change that adds something a newcomer would need explained (a new concept, workflow, screen or command) that no guide covers adds a section or page to `docs/guide/`, or names it as a follow-up in the pull request.
-- One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` and `Source: <branch>@<sha>` lines.
+- One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` lines where the task depends on other work, and a `Source: <branch>@<sha>` line only in a task split from a larger change.
 - Every Evidence item of a task must be producible inside the builder's sandbox (no network beyond the model provider and the package registries, no forge access, no real credentials). Evidence only the owner or the orchestrator can produce is marked `(owner provides)` and is not the builder's to satisfy ([Writing a good task](docs/guide/writing-a-good-task.md)).
 - Conventional Commits, at most 100 characters; US English, no em-dashes. Run `bin/check` before every commit.
 
@@ -98,4 +104,19 @@ AI Mate: project diagnostic tools, exposed through the `vendor/bin/mate` CLI.
 - Installed extensions: symfony/ai-mate, symfony/ai-symfony-mate-extension.
 <!-- END AI_MATE_INSTRUCTIONS -->
 
-Use Mate before guessing how the container wires a service or where an env variable is set: `tools:call symfony-services`, `symfony-service-detail`, `symfony-dotenv-check`. The profiler tools find nothing, since the app does not enable the profiler. It is a dev tool: nothing of it is in the image, and application code never uses it.
+### Tools for looking inside the app
+
+Measured facts beat reading code. Mate and the profiler are dev tools: they are not in the image, and application code never uses them. The console commands below are read-only and work in any environment.
+
+- Mate (`vendor/bin/mate tools:call <tool> --<param>=<value>`), by purpose:
+  - Services: `symfony-services` finds services by id, class or tag; `symfony-service-detail` shows how one is wired.
+  - Environment: `symfony-dotenv-check` says which `.env*` file declares a variable and whether it resolves (masked); `server-info` reports the PHP runtime.
+  - Profiler: after a request to a running development install (`APP_ENV=dev`), `symfony-profiler-list` lists the saved profiles, newest first, and `symfony-profiler-get --token=<X-Debug-Token>` shows one with its collectors (`db`, `messenger`, `time`, `memory`). With `bin/instance`, run Mate as its command (`bin/instance -- <command>`), since the profiles live in its scratch cache.
+- Read-only console commands:
+  - `bin/console debug:container <id>`: what a service is and what it is wired to.
+  - `bin/console debug:router`: which route a path reaches.
+  - `bin/console debug:messenger`: which handler takes which message, on which bus.
+  - `bin/console debug:event-dispatcher <event>`: which listeners run for an event, in order.
+  - `bin/console debug:config <bundle>`: the configuration a bundle ends up with.
+  - `bin/console workflow:dump <name>`: the states and transitions of a workflow.
+  - `bin/console lint:container`: whether the container's services are wired with the right types.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
@@ -32,6 +33,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(JudgedFinding::class)]
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgeRequest::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(ReviewBrief::class)]
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(ReviewRequest::class)]
@@ -52,7 +54,7 @@ final class JourneyVendorTest extends TestCase
     {
         $findings = [$this->finding('A', Severity::P1), $this->finding('B', Severity::P3)];
 
-        $judgement = new JourneyVendor()->judge('sample', new JudgeRequest('Add a cart.', $findings, new UuidV7(), []));
+        $judgement = new JourneyVendor()->judge('sample', new JudgeRequest('Add a cart.', $findings, new UuidV7(), new Paths()));
 
         self::assertEquals([new JudgedFinding('A', Mark::Act)], $judgement->marks);
     }

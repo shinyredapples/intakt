@@ -9,7 +9,8 @@ final readonly class ReviewDockerfile
 {
     // A file of Intakt's own beside the project's files, so the project's Dockerfile is sent as it is committed.
     public const string PATH = '.intakt-review.Dockerfile';
-    private const string DIRECTIVE = '/^#\s*([a-z]+)\s*=\s*(\S*)\s*$/i';
+    // BuildKit's directive pattern with its known names, because a value with spaces (`# check=skip=all; error=true`) is a directive and the scan must go on past it, while another name is a comment that ends the directives.
+    private const string DIRECTIVE = '/^#\s*(syntax|escape|check)\s*=\s*(.+?)\s*$/i';
     // Docker's parser continues a line on a backslash that stands alone or follows another character than a backslash, so an escaped backslash ends the line.
     private const string CONTINUATION = '/(?:^|[^\\\\])\\\\$/';
     private const string BYTE_ORDER_MARK = "\u{FEFF}";

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Domain\OnePerPlace;
@@ -22,7 +23,7 @@ final class OnePerPlaceTest extends TestCase
 
         self::assertCount(1, $act);
         self::assertSame('F1', $act[0]->id);
-        self::assertSame(['F2'], $act[0]->merged);
+        self::assertSame(['F2'], [...$act[0]->merged]);
     }
 
     public function testTheMergedEntryKeepsTheHighestPriority(): void
@@ -58,7 +59,7 @@ final class OnePerPlaceTest extends TestCase
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 9)->withJudgeNote('Rejected: unreachable.')], ['F1', 'F2'], ['F2' => 'F1']);
 
         self::assertCount(1, $act);
-        self::assertSame(['F2'], $act[0]->merged);
+        self::assertSame(['F2'], [...$act[0]->merged]);
         self::assertSame(7, $act[0]->line);
         self::assertSame('Rejected: unreachable.', $act[0]->judgeNote());
     }
@@ -76,7 +77,45 @@ final class OnePerPlaceTest extends TestCase
 
         $act = new OnePerPlace()->actList($reported, ['F3', 'F1', 'F2']);
 
-        self::assertSame(['F2', 'F3'], $act[0]->merged);
+        self::assertSame(['F2', 'F3'], [...$act[0]->merged]);
+    }
+
+    public function testAFindingReportedTwiceWithTheSameIdGivesOneEntryWithNoMergedIds(): void
+    {
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F1', 'src/A.php', 7)], ['F1']);
+
+        self::assertCount(1, $act);
+        self::assertSame([], [...$act[0]->merged]);
+    }
+
+    public function testAMergedIdReportedTwiceIsListedOnce(): void
+    {
+        $reported = [$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7)];
+
+        $act = new OnePerPlace()->actList($reported, ['F1', 'F2']);
+
+        self::assertSame(['F2'], [...$act[0]->merged]);
+    }
+
+    public function testMergedIdsCarriedByAFindingAreListedOnceWithoutTheEntrysOwnId(): void
+    {
+        $first = $this->finding('F1', 'src/A.php', 7);
+        $second = $this->finding('F2', 'src/A.php', 7)->withMerged(new FindingIds('F1', 'F2', 'F3', 'F3'));
+
+        $act = new OnePerPlace()->actList([$first, $second, $second], ['F1', 'F2']);
+
+        self::assertCount(1, $act);
+        self::assertSame(['F2', 'F3'], [...$act[0]->merged]);
+    }
+
+    public function testARepeatedFindingThatCarriesItsOwnIdAndDuplicatesKeepsOnlyTheValidIds(): void
+    {
+        $legacy = $this->finding('F1', 'src/A.php', 7)->withMerged(new FindingIds('F1', 'F3', 'F3'));
+
+        $act = new OnePerPlace()->actList([$legacy, $legacy], ['F1']);
+
+        self::assertCount(1, $act);
+        self::assertSame(['F3'], [...$act[0]->merged]);
     }
 
     public function testFindingsAtOnePlaceThatTheJudgeMarksDifferentlyStaySeparate(): void
@@ -86,7 +125,7 @@ final class OnePerPlaceTest extends TestCase
         self::assertCount(1, $act);
         self::assertSame('F1', $act[0]->id);
         self::assertSame(Severity::P2, $act[0]->severity);
-        self::assertSame([], $act[0]->merged);
+        self::assertSame([], [...$act[0]->merged]);
     }
 
     public function testFindingsAtDifferentLinesOfOneFileStaySeparate(): void
@@ -94,7 +133,7 @@ final class OnePerPlaceTest extends TestCase
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 8)], ['F1', 'F2']);
 
         self::assertSame(['F1', 'F2'], array_column($act, 'id'));
-        self::assertSame([[], []], array_column($act, 'merged'));
+        self::assertSame([[], []], array_map(static fn (Finding $entry): array => [...$entry->merged], $act));
     }
 
     public function testFindingsAtTheSameLineOfDifferentFilesStaySeparate(): void
@@ -125,7 +164,7 @@ final class OnePerPlaceTest extends TestCase
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3']);
 
         self::assertSame(['F1', 'F2'], array_column($act, 'id'));
-        self::assertSame(['F3'], $act[0]->merged);
+        self::assertSame(['F3'], [...$act[0]->merged]);
     }
 
     public function testTwoActFindingsTheJudgeGivesOneCauseNearbyInOneFileGiveOneEntryWithTheHigherSeverity(): void
@@ -134,21 +173,21 @@ final class OnePerPlaceTest extends TestCase
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F3' => 'F1']);
 
-        self::assertSame([['F1', 'P1', ['F3']], ['F2', 'P2', []]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, $entry->merged], $act));
+        self::assertSame([['F1', 'P1', ['F3']], ['F2', 'P2', []]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, [...$entry->merged]], $act));
     }
 
     public function testALaterFindingOfHigherSeverityRaisesTheEntryOfItsCause(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F4', 'src/A.php', 9)->withSeverity(Severity::P1)], ['F1', 'F4'], ['F4' => 'F1']);
 
-        self::assertSame([['F1', 'P1', ['F4']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, $entry->merged], $act));
+        self::assertSame([['F1', 'P1', ['F4']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, [...$entry->merged]], $act));
     }
 
     public function testAFindingNamedAsTheCauseOfALaterOneTakesItIntoItsEntry(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 9)], ['F1', 'F2'], ['F1' => 'F2']);
 
-        self::assertSame([['F1', ['F2']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged], $act));
+        self::assertSame([['F1', ['F2']]], array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act));
     }
 
     public function testTwoActFindingsWithoutALinkAtDifferentLinesStaySeparate(): void
@@ -164,14 +203,14 @@ final class OnePerPlaceTest extends TestCase
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F1']);
 
-        self::assertSame([['F1', ['F2', 'F3']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged], $act));
+        self::assertSame([['F1', ['F2', 'F3']]], array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act));
     }
 
     public function testAFindingNamingACauseOffTheActListStaysOnItsOwn(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 8)], ['F2'], ['F2' => 'F1']);
 
-        self::assertSame([['F2', []]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged], $act));
+        self::assertSame([['F2', []]], array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act));
     }
 
     public function testAFindingLinkedToAnEarlierEntryBringsTheEntryAtItsOwnPlaceWithIt(): void
@@ -198,7 +237,7 @@ final class OnePerPlaceTest extends TestCase
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F3' => 'F1']);
 
-        self::assertSame([['F1', 'P1', ['F2', 'F3']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, $entry->merged], $act));
+        self::assertSame([['F1', 'P1', ['F2', 'F3']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->severity->value, [...$entry->merged]], $act));
     }
 
     public function testAJoinedEntryKeepsTheTextOfItsFirstFindingInPanelOrder(): void
@@ -243,7 +282,7 @@ final class OnePerPlaceTest extends TestCase
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F1', 'F3' => 'F2']);
 
-        self::assertSame([['F1', ['F2'], 'Broken.'], ['F3', [], 'Far defect.']], array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged, $entry->text], $act));
+        self::assertSame([['F1', ['F2'], 'Broken.'], ['F3', [], 'Far defect.']], array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged], $entry->text], $act));
     }
 
     public function testLinksAreTriedInThePanelOrderOfTheLinkingFinding(): void
@@ -301,7 +340,7 @@ final class OnePerPlaceTest extends TestCase
      */
     private function idsOf(array $act): array
     {
-        return array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged], $act);
+        return array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act);
     }
 
     private function finding(string $id, ?string $file, ?int $line): Finding

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
 use Intakt\Core\Platform\Contract\ReportableFailure;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -28,7 +27,7 @@ final readonly class UpdateMirrorCommand
     ): int {
         try {
             $path = $this->mirror->update($project, $remote);
-        } catch (InvalidArgumentException|ReportableFailure $failure) {
+        } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

@@ -8,7 +8,9 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Prices;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\SampleProjectData;
@@ -39,42 +41,6 @@ final class SampleProjectSeedTest extends KernelTestCase
     {
         self::compiledContainers()->remove();
         parent::tearDownAfterClass();
-    }
-
-    protected function setUp(): void
-    {
-        $this->containers = self::compiledContainers();
-
-        foreach (self::VARIABLES as $name) {
-            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
-            $this->unsetVariable($name);
-        }
-
-        $this->directory = sys_get_temp_dir().'/intakt-sample-project-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        // An empty file, so the seeding kernel has no projects of a shipped config/intakt.yaml.
-        $_SERVER['INTAKT_CONFIG'] = $this->directory.'/none.yaml';
-        new Filesystem()->dumpFile($_SERVER['INTAKT_CONFIG'], '');
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->saved as $name => $before) {
-            $this->unsetVariable($name);
-            if (null !== $before['server']) {
-                $_SERVER[$name] = $before['server'];
-            }
-            if (null !== $before['env']) {
-                $_ENV[$name] = $before['env'];
-            }
-            if (false !== $before['process']) {
-                putenv($name.'='.$before['process']);
-            }
-        }
-
-        parent::tearDown();
-        $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove($this->directory);
     }
 
     public function testWithAnAnthropicKeyAndTheHuggingFaceRouterTheSeededPanelLoadsOnBothAndEveryTierResolvesToAnEnabledProvider(): void
@@ -118,6 +84,42 @@ final class SampleProjectSeedTest extends KernelTestCase
         self::assertFileDoesNotExist($this->directory.'/intakt.yaml');
     }
 
+    protected function setUp(): void
+    {
+        $this->containers = self::compiledContainers();
+
+        foreach (self::VARIABLES as $name) {
+            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
+            $this->unsetVariable($name);
+        }
+
+        $this->directory = sys_get_temp_dir().'/intakt-sample-project-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        // An empty file, so the seeding kernel has no projects of a shipped config/intakt.yaml.
+        $_SERVER['INTAKT_CONFIG'] = $this->directory.'/none.yaml';
+        new Filesystem()->dumpFile($_SERVER['INTAKT_CONFIG'], '');
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
+        }
+
+        parent::tearDown();
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove($this->directory);
+    }
+
     // Set directly, because HF_TOKEN becomes these two only in the image's entrypoint, which this test does not run.
     private function setTheHuggingFaceRouter(): void
     {
@@ -143,7 +145,7 @@ final class SampleProjectSeedTest extends KernelTestCase
         $panels = $this->bootSeeded()->get(Panels::class);
         self::assertInstanceOf(Panels::class, $panels);
 
-        $panel = $panels->panelForChange('sample', new ChangeDescription(1, [], []));
+        $panel = $panels->panelForChange('sample', new ChangeDescription(1, new Paths(), new Labels()));
 
         return array_map(static fn (PanelReviewer $reviewer): Provider => $reviewer->model->provider, $panel->reviewers);
     }

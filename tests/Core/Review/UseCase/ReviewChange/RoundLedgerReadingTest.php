@@ -57,11 +57,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     private Ledger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new RoundFixture(self::getContainer())->ledger();
-    }
-
     public function testTheTokensOfACallRecordedTheWayUsageLedgerRecordsItAreCounted(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');
@@ -319,14 +314,14 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F1' => 'F2']] + $this->judgeDone('another-round'));
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F3' => 'F1']] + $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F3' => 'F1'], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
+        self::assertSame(['F3' => 'F1'], iterator_to_array($this->reading()->judgeDoneOf(self::ROUND)->sameCause ?? []));
     }
 
     public function testAJudgeDoneRowWrittenBeforeCausesWereLinkedReadsAsNoLinks(): void
     {
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame([], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
+        self::assertSame([], iterator_to_array($this->reading()->judgeDoneOf(self::ROUND)->sameCause ?? ['missing' => 'row']));
     }
 
     public function testTheJudgesNotesAreReadFromTheRoundsJudgeDoneRow(): void
@@ -351,6 +346,11 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([], $this->reading()->droppedOf(self::ROUND));
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new RoundFixture(self::getContainer())->ledger();
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -372,12 +372,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
      */
     private function actIdsOf(string $round): array
     {
-        return $this->reading()->judgeDoneOf($round)->act ?? [];
-    }
-
-    private function reading(): RoundLedgerReading
-    {
-        return new RoundLedgerReading($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices(['big' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
+        return [...$this->reading()->judgeDoneOf($round)->act ?? []];
     }
 
     private function recordCall(string $call, ?string $round, string $ending): void
@@ -401,15 +396,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    // Every key UsageLedger writes, because a row is read back whole through its payload class.
-    private function usage(): array
-    {
-        return ['account' => null, 'model' => 'big', 'prompt' => 100, 'completion' => 20, 'thinking' => null, 'tool' => null, 'cached' => null, 'cache_creation' => null, 'cache_read' => null, 'total' => 120, 'remaining' => null, 'remaining_minute' => null, 'remaining_month' => null];
-    }
-
-    /**
      * @return list<int>
      */
     private function tokensOf(string $round): array
@@ -425,5 +411,19 @@ final class RoundLedgerReadingTest extends KernelTestCase
     private function append(LedgerEventKind $kind, array $payload): void
     {
         self::assertTrue($this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    // Every key UsageLedger writes, because a row is read back whole through its payload class.
+    private function usage(): array
+    {
+        return ['account' => null, 'model' => 'big', 'prompt' => 100, 'completion' => 20, 'thinking' => null, 'tool' => null, 'cached' => null, 'cache_creation' => null, 'cache_read' => null, 'total' => 120, 'remaining' => null, 'remaining_minute' => null, 'remaining_month' => null];
+    }
+
+    private function reading(): RoundLedgerReading
+    {
+        return new RoundLedgerReading($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices(['big' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
     }
 }

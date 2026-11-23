@@ -32,6 +32,7 @@ use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
@@ -56,6 +57,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]
@@ -75,17 +77,6 @@ final class PushToTheLocalGitForgeTest extends TestCase
 {
     private PushScenario $scenario;
     private string $forge;
-
-    protected function setUp(): void
-    {
-        $this->scenario = new PushScenario();
-        $this->forge = $this->scenario->localGitForge();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-    }
 
     public function testABranchThatPassesIsPushedToTheLocalGitForgeWithEveryCommitSigned(): void
     {
@@ -165,6 +156,17 @@ final class PushToTheLocalGitForgeTest extends TestCase
         } catch (BranchNotPushed $refused) {
             self::assertStringContainsString('push_refused', $refused->getMessage());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+        $this->forge = $this->scenario->localGitForge();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
     }
 
     private function request(): BranchPushRequest

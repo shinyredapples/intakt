@@ -12,10 +12,13 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Dashboard\Domain\Timeline;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\FailureInWords;
@@ -26,6 +29,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\RoundCosts;
@@ -47,11 +51,18 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
+    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, everyRecorded: bool, fallback: ?bool, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
     private array $judged = [];
 
     /** @var array<string, ReplayMark> */
     private array $roundMarks = [];
+
+    /** @var array<string, array<string, list<string>>> */
+    private array $findingsByReviewer = [];
+
+    // Null for a reviewer whose row was written before reporters' severities were recorded, because such a round must be left out of the reviewer chart, never guessed.
+    /** @var array<string, array<string, array<string, string>|null>> */
+    private array $severitiesByReviewer = [];
 
     private readonly LedgerTokens $tokens;
 
@@ -62,6 +73,7 @@ final class LedgerRounds
         private readonly FailureInWords $failures,
         private readonly RoundEndings $endings,
         private readonly ReplayMarks $marks,
+        private readonly CountedQuotes $quotes = new CountedQuotes(),
     ) {
         $this->tokens = new LedgerTokens();
     }
@@ -88,6 +100,12 @@ final class LedgerRounds
             return;
         }
 
+        if (LedgerEventKind::ReviewerFindingsRecorded === $kind) {
+            $this->addReviewerFindings($recorded);
+
+            return;
+        }
+
         $this->addReviewerRow($recorded);
     }
 
@@ -95,7 +113,7 @@ final class LedgerRounds
     {
         $rounds = $this->membersOf($round);
 
-        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds));
+        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds), $this->timelineOf($rounds));
     }
 
     // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.
@@ -158,17 +176,37 @@ final class LedgerRounds
             return [];
         }
 
-        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
-        $rounds = [$chosen, ...array_values($others)];
+        $rounds = $this->oneSequenceOf($chosen, $this->sameReviewAs($chosen));
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
         return $rounds;
     }
 
-    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
-    private function markOf(ReviewedRound $round): ReplayMark
+    /**
+     * @return non-empty-list<ReviewedRound>
+     */
+    private function sameReviewAs(ReviewedRound $chosen): array
     {
-        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
+        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
+
+        return [$chosen, ...array_values($others)];
+    }
+
+    // A round number twice among the spellings of one pull request means two spellings were stored apart before the migration to the canonical address (Version20261122100000), each with a numbering of its own; only the chosen round's spelling is then its review, because mixing two numberings would make a legacy round the latest and offer a round number storage does not expect.
+    /**
+     * @param list<ReviewedRound> $rounds
+     *
+     * @return list<ReviewedRound>
+     */
+    private function oneSequenceOf(ReviewedRound $chosen, array $rounds): array
+    {
+        $numbers = array_filter(array_map(static fn (ReviewedRound $round): ?int => $round->number, $rounds), static fn (?int $number): bool => null !== $number);
+
+        if (count($numbers) === count(array_unique($numbers))) {
+            return $rounds;
+        }
+
+        return array_values(array_filter($rounds, static fn (ReviewedRound $round): bool => $round->change === $chosen->change));
     }
 
     private function addUsage(RecordedEvent $recorded): void
@@ -197,16 +235,26 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt, 'votes' => $judge->votes]];
+            $this->judged += [$judge->round => [
+                'findings' => $this->judgedFindings($judge, $findings ?? []),
+                'dropped' => $this->droppedFindings($recorded),
+                'everyRecorded' => $this->payloads->isEveryJudgedFindingRecorded($recorded, $judge),
+                'fallback' => $judge->fallback,
+                'textRecorded' => null !== $findings,
+                'at' => $recorded->recordedAt,
+                'votes' => $judge->votes,
+            ]];
         }
     }
 
-    /**
-     * @return list<RoundFinding>
-     */
-    private function droppedFindings(RecordedEvent $recorded): array
+    private function addReviewerFindings(RecordedEvent $recorded): void
     {
-        return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
+        $row = $this->payloads->reviewerFindingsOf($recorded);
+
+        if ($row instanceof ReviewerFindingsRecorded) {
+            $this->findingsByReviewer[$row->round][$row->reviewer] = $row->findings;
+            $this->severitiesByReviewer[$row->round][$row->reviewer] = $row->severities;
+        }
     }
 
     /**
@@ -217,13 +265,22 @@ final class LedgerRounds
     // A marked id keeps its row without its text, because the judge's call is recorded even where the finding's text is not (rounds judged before it was, or an unreadable entry).
     private function judgedFindings(JudgeDone $judge, array $findings): array
     {
-        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, $finding->merged, $finding->file, $finding->line), $findings);
+        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [...$finding->merged], $finding->file, $finding->line), $findings);
 
         return array_map(static fn (RoundFinding $finding): RoundFinding => match (true) {
-            in_array($finding->id, $judge->act, true) => $finding->calledBy(JudgeCall::Act),
-            in_array($finding->id, $judge->followUps, true) => $finding->calledBy(JudgeCall::FollowUp),
+            $judge->act->contains($finding->id) => $finding->calledBy(JudgeCall::Act),
+            $judge->followUps->contains($finding->id) => $finding->calledBy(JudgeCall::FollowUp),
             default => $finding,
         }, [...$this->entriesOf($recorded), ...$this->markedOnly($judge, $recorded)]);
+    }
+
+    /**
+     * @return list<RoundFinding>
+     */
+    private function droppedFindings(RecordedEvent $recorded): array
+    {
+        // The quotes come from the quote check itself, never from the card's own reading of the text, so the list is the one the recorded reason counted.
+        return array_map(fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason, $this->quotes->of($finding->text), $finding->nearest), $this->payloads->droppedOf($recorded));
     }
 
     /**
@@ -284,18 +341,68 @@ final class LedgerRounds
         return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
     }
 
+    // A spelling other than its canonical form, kept apart from rounds of its pull request, is history only, because storage numbers every new round of that pull request on the canonical row.
+    /**
+     * @param non-empty-list<ReviewedRound> $members
+     */
+    private function timelineOf(array $members): Timeline
+    {
+        $member = $members[0];
+        $keptApart = $member->change !== ChangeAddress::canonical($member->change) && count($members) < count($this->sameReviewAs($member));
+
+        return $keptApart ? Timeline::HistoryOnly : Timeline::Current;
+    }
+
+    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
+    private function markOf(ReviewedRound $round): ReplayMark
+    {
+        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
+    }
+
     // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.
     private function decidedAsOnThePage(ReviewedRound $round): ReviewedRound
     {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []));
+        $completed = $this->withReporters($round->withOutcomes(array_values($this->outcomes[$round->round] ?? [])));
 
         $judged = $this->judged[$round->round] ?? null;
+
+        $completed = match ($judged['fallback'] ?? null) {
+            true => $completed->judgedByFallback(),
+            false => $completed->judgedOnItsOwnMarks(),
+            null => $completed,
+        };
+
+        if (null !== $judged && !$judged['everyRecorded']) {
+            $completed = $completed->withFindingsMissing();
+        }
 
         return match (true) {
             null === $judged => $this->endedOrRunning($completed),
             $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
             default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
         };
+    }
+
+    // Left unrecorded unless every reviewer with a verdict has a readable row, because a round completed before the rows were written, or one whose row cannot be read, has no full record, and a partial one would turn a finding two reviewers reported into a one-reviewer catch.
+    private function withReporters(ReviewedRound $round): ReviewedRound
+    {
+        $reported = $this->findingsByReviewer[$round->round] ?? null;
+
+        if (null === $reported) {
+            return $round;
+        }
+
+        $answered = array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Answered === $outcome->progress);
+        $unrecorded = array_filter($answered, static fn (ReviewerOutcome $outcome): bool => !array_key_exists($outcome->id, $reported));
+
+        if ([] !== $unrecorded) {
+            return $round;
+        }
+
+        $severities = $this->severitiesByReviewer[$round->round] ?? [];
+        $rated = array_filter($severities, static fn (?array $rated): bool => null !== $rated);
+
+        return count($rated) === count($reported) ? $round->withFindingsByReviewer($reported)->withSeveritiesByReviewer($rated) : $round->withFindingsByReviewer($reported);
     }
 
     private function endedOrRunning(ReviewedRound $round): ReviewedRound

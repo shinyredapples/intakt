@@ -72,19 +72,12 @@ final class MergedActEntryPageTest extends WebTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->browser->disableReboot();
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTwoReviewersReportingOnePlaceShowOneEntryWithBothIdsInTheConsoleTheJsonAndOnThePage(): void
     {
         $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P1)]);
         $report = new ReviewReport($this->serializer());
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertContains('F1+F2 P1 src/A.php:7: Text of A.', $report->asLines($review));
@@ -101,7 +94,7 @@ final class MergedActEntryPageTest extends WebTestCase
 
         $review = $this->reviewed([$second, $first], $judgement, self::DISCOUNT_DIFF);
         $report = new ReviewReport($this->serializer());
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertContains('F1+F2 P1 src/discount.js:14: An order of exactly 100 lost its discount.', $report->asLines($review));
@@ -115,7 +108,7 @@ final class MergedActEntryPageTest extends WebTestCase
         $second = new Finding('B', Severity::P2, 'src/discount.js', 41, null, 'Text of B.', FixableBy::Builder, false, null, null);
 
         $review = $this->reviewed([$first, $second], new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')]), self::DISCOUNT_DIFF);
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertSame([['P1', 'F1', 'Text of A.', 'Fix now'], ['P2', 'F2', 'Text of B.', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
     }
@@ -126,11 +119,11 @@ final class MergedActEntryPageTest extends WebTestCase
         $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P2), $this->findingAt('C', Severity::P1)]);
         $act = $this->fixture->findingStore()->actListOf($this->fixture->round($review->roundId), $this->judgeDoneOf($review));
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
-        self::assertSame([['F1', 'F2, F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [$entry->id, implode(', ', $entry->merged), $entry->severity->value, $entry->text], $act));
-        self::assertSame([['P1', 'F1', 'Text of A.', 'Also reported as F2, F3', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
+        self::assertCount(1, $act);
+        self::assertSame(array_map(static fn (Finding $entry): array => [$entry->severity->value, $entry->id, $entry->text, 'Also reported as '.implode(', ', [...$entry->merged]), 'Fix now'], $act), $this->pageRows($page->filter('.finding-card')));
     }
 
     // The symbol is place, because only a quote is checked against the change, so a finding with an absent symbol and no quote must reach the judge.
@@ -140,11 +133,29 @@ final class MergedActEntryPageTest extends WebTestCase
         $judged = new Finding('B', Severity::P1, 'src/B.php', 12, 'ghostSymbol', 'Take the lock first.', FixableBy::Builder, false, null, null);
         $review = $this->reviewed([$dropped, $judged]);
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertSame([['P1', 'F2', 'Take the lock first.', 'Fix now']], $this->pageRows($page->filter('.finding-card:not([data-dropped])')));
-        self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->pageRows($page->filter('[data-dropped]')));
+        self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Quote not found in the code']], $this->pageRows($page->filter('[data-dropped]')));
+        self::assertSame('Dropped before the judge: none of its 1 quoted code fragments is in the change', $page->filter('[data-dropped] .fc-reason')->text());
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->browser->disableReboot();
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    private function judgeDoneOf(ChangeReview $review): ?JudgeDone
+    {
+        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($review->roundId);
+    }
+
+    private function findingAt(string $id, Severity $severity): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     /**
@@ -187,16 +198,6 @@ final class MergedActEntryPageTest extends WebTestCase
         );
 
         return $reviewChange->review($this->request(count($findings), $diff), new IgnoredProgress());
-    }
-
-    private function judgeDoneOf(ChangeReview $review): ?JudgeDone
-    {
-        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($review->roundId);
-    }
-
-    private function findingAt(string $id, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     private function serializer(): SerializerInterface

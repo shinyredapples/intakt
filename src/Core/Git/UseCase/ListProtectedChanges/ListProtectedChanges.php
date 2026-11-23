@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\ListProtectedChanges;
 
+use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\ChangeNotRead;
-use Intakt\Core\Git\Domain\ProtectedChanges;
 use Intakt\Core\Git\Domain\ProtectedPaths;
-use InvalidArgumentException;
 use NoDiscard;
 
 final readonly class ListProtectedChanges
@@ -22,13 +21,13 @@ final readonly class ListProtectedChanges
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws CommitNameRefused
      */
     #[NoDiscard]
     public function of(string $repository, string $head, ProtectedPaths $protected): ProtectedChanges
     {
         if (1 !== preg_match(self::COMMIT_NAME, $head)) {
-            throw new InvalidArgumentException(sprintf('"%s" is not a full commit name', $head));
+            throw CommitNameRefused::notFull($head);
         }
 
         try {

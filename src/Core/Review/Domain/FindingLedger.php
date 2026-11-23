@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -49,20 +50,22 @@ final class FindingLedger
         }
     }
 
-    // Unlike recordRound, only a finding marked repeat keeps an id: the reviewer was shown the open ids and says which ones came back.
-    public function recordVerdict(int $round, Verdict $verdict): void
+    // Unlike recordRound, only a finding marked repeat keeps an id: the reviewer was shown the open ids and says which ones came back. Returns the ledger ids the verdict's findings were tracked under, in its order, so the round can record which reviewer reported which finding.
+    /**
+     * @return list<string>
+     */
+    public function recordVerdict(int $round, Verdict $verdict): array
     {
         // A failed review is a fault of the reviewer, not of the change, so it adds nothing, the same as a reviewer that failed or was blocked.
         if ($verdict->isFailedReview()) {
-            return;
+            return [];
         }
 
         // A finding another reviewer already reported again in this round stays open, so the verdicts of one round count the same in any order.
-        $this->resolve(array_values(array_filter($verdict->resolved, fn (string $id): bool => ($this->tracked[$id] ?? null)?->latestRound() !== $round)));
+        $this->resolve(array_values(array_map(static fn (ResolvedFinding $resolved): string => $resolved->id, array_filter($verdict->resolved, fn (ResolvedFinding $resolved): bool => ($this->tracked[$resolved->id] ?? null)?->latestRound() !== $round))));
         $earlier = $this->tracked;
-        foreach ($verdict->findings as $finding) {
-            $this->trackRepeat($round, $finding, $earlier);
-        }
+
+        return array_map(fn (Finding $finding): string => $this->trackRepeat($round, $finding, $earlier), $verdict->findings);
     }
 
     /**
@@ -140,15 +143,15 @@ final class FindingLedger
     /**
      * @param array<string, TrackedFinding> $earlier
      */
-    private function trackRepeat(int $round, Finding $finding, array $earlier): void
+    private function trackRepeat(int $round, Finding $finding, array $earlier): string
     {
         if ($finding->repeat && isset($earlier[$finding->id])) {
             $this->tracked[$finding->id] = $this->tracked[$finding->id]->seenAgain($round, $finding);
 
-            return;
+            return $finding->id;
         }
 
-        $this->start($round, $this->goalposts->applyTo($round, $finding));
+        return $this->start($round, $this->goalposts->applyTo($round, $finding));
     }
 
     private function underItsId(TrackedFinding $tracked): Finding
@@ -165,12 +168,15 @@ final class FindingLedger
             $tracked->latest->requirement,
             $tracked->latest->evidence,
             $tracked->latest->regression,
+            $tracked->latest->gate_gap,
         );
     }
 
-    private function start(int $round, Finding $finding): void
+    private function start(int $round, Finding $finding): string
     {
         $id = $this->idPrefix.(count($this->tracked) + 1);
         $this->tracked[$id] = new TrackedFinding($id, $finding, [$round], FindingStatus::Open);
+
+        return $id;
     }
 }

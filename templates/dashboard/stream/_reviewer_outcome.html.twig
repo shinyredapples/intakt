@@ -1,7 +1,7 @@
 {#- A reviewer's state in the "now" block, finished or still running: its outcome chip when its ReviewerOutcome has one, followed by its reason as in the Reviewers table, otherwise its process state as muted text, never the bare word "verdict". -#}
 {%- set chip_outcome = (outcome ?? null)?.outcome -%}
 {%- if chip_outcome is not null -%}
-{{ include('dashboard/components/outcome_chip.html.twig', {outcome: chip_outcome, on_page: true}, with_context = false) }}{% if outcome.note is not empty %}<span class="muted">{{ outcome.note }}</span>{% endif %}
+{{ include('dashboard/components/outcome_chip.html.twig', {outcome: chip_outcome, on_page: true, plain: true}, with_context = false) }}{% if outcome.note is not empty %}<span class="muted">{{ outcome.note }}</span>{% endif %}
 {%- else -%}
 <span class="muted">{{ state == 'verdict' ? 'answered' : state }}</span>
 {%- endif -%}

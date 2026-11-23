@@ -15,6 +15,7 @@ use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -22,6 +23,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
+use Intakt\Core\Build\UseCase\RunBuildJob\TierNotKnown;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -29,6 +31,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -37,6 +40,7 @@ use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use IntlChar;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -47,6 +51,9 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJobCommand::class)]
 #[CoversClass(RunBuildJobInput::class)]
+#[CoversClass(TierNotKnown::class)]
+#[UsesClass(BuildCloneIsNoFolder::class)]
+#[UsesClass(JobRefused::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
@@ -81,17 +88,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     private ?JobSpec $ran = null;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-build-command-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        file_put_contents($this->folder.'/task.md', 'PLANT-task');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
+    private ?JobRunner $runner = null;
 
     public function testABuiltJobWritesTheBundleAndPrintsThePullRequestText(): void
     {
@@ -238,6 +235,49 @@ final class RunBuildJobCommandTest extends TestCase
         self::assertNull($this->ran);
     }
 
+    public function testACloneThatIsNoFolderIsPrintedAndFails(): void
+    {
+        $tester = $this->executed(new JobOutput([]), ['clone' => $this->folder.'/missing']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('missing" is no folder.', $this->flat($tester));
+        self::assertNull($this->ran);
+    }
+
+    public function testAJobTheRunnerRefusesIsPrintedAndFails(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobRefused::alreadyRunning(new JobId('build-demo')));
+        $this->runner = $runner;
+
+        $tester = $this->executed(new JobOutput([]), []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('The job "build-demo" is already running.', $this->flat($tester));
+    }
+
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willThrowException(new InvalidArgumentException('a bug in the tiers'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the tiers'));
+
+        $this->executed(new JobOutput([]), [], $tiers);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-build-command-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        file_put_contents($this->folder.'/task.md', 'PLANT-task');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
+
     /**
      * @param array<string, mixed> $arguments
      */
@@ -255,9 +295,10 @@ final class RunBuildJobCommandTest extends TestCase
         $application->addCommand(new RunBuildJobCommand(new RunBuildJob(
             $tiers ?? $this->tiers(),
             new BuilderPrompt(new Fence(), new PromptCut(new Fence())),
-            $runner,
+            $this->runner ?? $runner,
             new PhpGate(),
             new GatesAtOnce(12, 1),
+            1500,
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',

@@ -24,7 +24,7 @@ final readonly class CausesInOneHunk
     {
         $byId = array_combine(array_map(static fn (Finding $finding): string => $finding->id, $findings), $findings);
 
-        return new Judgement(array_map(
+        return $judgement->withMarks(array_map(
             fn (JudgedFinding $judged): JudgedFinding => null === $judged->same_cause_as || $this->inOneHunk([$byId[$judged->id] ?? null, $byId[$judged->same_cause_as] ?? null], $hunks)
                 ? $judged
                 : new JudgedFinding($judged->id, $judged->mark, note: $judged->note),

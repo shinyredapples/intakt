@@ -35,7 +35,7 @@ $types = new PropertyInfoExtractor([], [new PhpDocExtractor(), new ReflectionExt
 $serializer = new Serializer([new ArrayDenormalizer(), new ObjectNormalizer(propertyTypeExtractor: $types)], [new JsonEncoder()]);
 
 try {
-    $serializer->deserialize('{"items": {}}', Basket::class, 'json', [JsonDecode::ASSOCIATIVE => false]);
+    $serializer->deserialize('{"items": {}}', Basket::class, JsonEncoder::FORMAT,[JsonDecode::ASSOCIATIVE => false]);
     echo 'An object was accepted as a list of Item', PHP_EOL;
 
     exit(1);

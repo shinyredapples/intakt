@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+function make(): object
+{
+    final class Product
+    {
+        public static int $made = 0;
+    }
+
+    return new Product();
+}

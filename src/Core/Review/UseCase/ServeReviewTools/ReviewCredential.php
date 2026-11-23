@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ServeReviewTools;
 
-use LogicException;
 use Override;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -32,7 +31,7 @@ final readonly class ReviewCredential implements AccessTokenHandlerInterface
     public function issueFor(string $roundId): string
     {
         if ('' === $this->secret) {
-            throw new LogicException('APP_SECRET is empty, so no review credential can be issued.');
+            throw ReviewCredentialNeedsSecret::whileTheSecretIsEmpty();
         }
 
         return $roundId.'.'.$this->signature($roundId);

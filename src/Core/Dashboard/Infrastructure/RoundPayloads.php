@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\PayloadDefaults;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\DroppedFinding;
@@ -17,6 +18,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -40,7 +42,7 @@ final readonly class RoundPayloads
 
     public function startOf(RecordedEvent $recorded): ?ReviewedRound
     {
-        $numbered = $this->payloads->of($recorded, ReviewStarted::class, self::UNNAMED_START);
+        $numbered = $this->payloads->of($recorded, ReviewStarted::class, new PayloadDefaults(...self::UNNAMED_START));
 
         if ($numbered instanceof ReviewStarted) {
             return $this->reviewedRound($numbered, $numbered->number, $recorded);
@@ -54,7 +56,7 @@ final readonly class RoundPayloads
     // Only the judge's marks, with no findings, because the call stands where the finding text was not recorded (rounds judged before it was) or an entry is unreadable; judgedFindingsOf() reads the findings.
     public function judgeOf(RecordedEvent $recorded): ?JudgeDone
     {
-        return $this->payloads->ofWithout($recorded, JudgeDone::class, self::UNRECORDED_FINDINGS);
+        return $this->payloads->ofWithout($recorded, JudgeDone::class, new PayloadDefaults(...self::UNRECORDED_FINDINGS));
     }
 
     /**
@@ -64,6 +66,23 @@ final readonly class RoundPayloads
     public function judgedFindingsOf(RecordedEvent $recorded): ?array
     {
         return $this->payloads->entriesOf($recorded, 'findings', JudgeDoneFinding::class);
+    }
+
+    // False when an entry of the row's findings does not deserialize, or when an id the judge marked (on the act list, as a follow-up or in an entry's merges) is not among the findings read, because a count must not read part of the round as the whole; a row without findings is the marks-only kind the callers tell apart.
+    public function isEveryJudgedFindingRecorded(RecordedEvent $recorded, JudgeDone $judge): bool
+    {
+        $row = json_decode($recorded->event->payload, true);
+        $entries = is_array($row) ? ($row['findings'] ?? null) : null;
+
+        if (!is_array($entries)) {
+            return true;
+        }
+
+        $read = $this->judgedFindingsOf($recorded) ?? [];
+        $ids = array_map(static fn (JudgeDoneFinding $finding): string => $finding->id, $read);
+        $marked = array_merge([...$judge->act], [...$judge->followUps], ...array_map(static fn (JudgeDoneFinding $finding): array => [...$finding->merged], $read));
+
+        return count($entries) === count($read) && [] === array_diff($marked, $ids);
     }
 
     // Empty for a row written before drop reasons were recorded, because it dropped nothing the page could show; an unreadable entry is left out, because one bad entry must not hide the others.
@@ -86,6 +105,11 @@ final readonly class RoundPayloads
             LedgerEventKind::CatchUpOwed => $this->payloads->of($recorded, CatchUpOwed::class),
             default => null,
         };
+    }
+
+    public function reviewerFindingsOf(RecordedEvent $recorded): ?ReviewerFindingsRecorded
+    {
+        return $this->payloads->of($recorded, ReviewerFindingsRecorded::class);
     }
 
     // Told apart by the row's phase, because an unsettled row also reads into UsageSettled.
@@ -111,8 +135,10 @@ final readonly class RoundPayloads
     // Live when the mode is absent or unreadable, because a verdict recorded before the field existed was an ordinary one and its reviewer has answered either way.
     private function verdictOf(RecordedEvent $recorded): ?VerdictReceived
     {
-        return $this->payloads->of($recorded, VerdictReceived::class, self::UNMARKED_VERDICT)
-            ?? $this->payloads->ofWithout($recorded, VerdictReceived::class, self::UNMARKED_VERDICT);
+        $unmarked = new PayloadDefaults(...self::UNMARKED_VERDICT);
+
+        return $this->payloads->of($recorded, VerdictReceived::class, $unmarked)
+            ?? $this->payloads->ofWithout($recorded, VerdictReceived::class, $unmarked);
     }
 
     private function reviewedRound(ReviewStarted $started, ?int $number, RecordedEvent $recorded): ReviewedRound
