@@ -15,6 +15,8 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\ReviewerBlocked;
+use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
@@ -49,11 +51,15 @@ use Symfony\Component\Serializer\Encoder\JsonEncoder;
 #[UsesClass(UsageUnsettled::class)]
 #[UsesClass(TokenUsageRow::class)]
 #[UsesClass(TokenFigures::class)]
+#[UsesClass(ReviewerStarted::class)]
+#[UsesClass(ReviewerBlocked::class)]
 final class RoundLedgerReadingTest extends KernelTestCase
 {
     private const string ROUND = '0192a000-0000-7000-8000-000000000001';
 
     private const string OTHER_ROUND = '0192a000-0000-7000-8000-000000000002';
+
+    private RoundFixture $fixture;
 
     private Ledger $ledger;
 
@@ -334,6 +340,24 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(['The branch is unreachable.', null, null], array_map(static fn (JudgeDoneFinding $finding): ?string => $finding->judgeNote, $findings));
     }
 
+    public function testAReviewerWithAStartAndALaterBlockedRowLastsFromItsStartToTheBlockedRow(): void
+    {
+        $this->record(new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
+        $this->fixture->clock->modify('+2 seconds');
+        $this->record(new ReviewerBlocked(self::ROUND, 'r1', 'security', Tier::Standard, 'the budget is spent'));
+
+        self::assertSame(2000, $this->reading()->millisecondsOfReviewer('r1'));
+    }
+
+    public function testAReviewerWithAStartAndNoEndRowHasNoDuration(): void
+    {
+        $this->record(new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
+        $this->fixture->clock->modify('+2 seconds');
+        $this->record(new ReviewerBlocked(self::ROUND, 'r2', 'security', Tier::Standard, 'the budget is spent'));
+
+        self::assertNull($this->reading()->millisecondsOfReviewer('r1'));
+    }
+
     public function testARoundTheJudgeHasNotAnsweredHasNoJudgeDone(): void
     {
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::OTHER_ROUND));
@@ -348,7 +372,15 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     protected function setUp(): void
     {
-        $this->ledger = new RoundFixture(self::getContainer())->ledger();
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->ledger = $this->fixture->ledger();
+    }
+
+    private function record(ReviewerStarted|ReviewerBlocked $payload): void
+    {
+        $kind = $payload instanceof ReviewerStarted ? LedgerEventKind::ReviewerStarted : LedgerEventKind::ReviewerBlocked;
+
+        self::assertTrue($this->ledger->append(new LedgerEvent($kind, StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT)))->succeeded());
     }
 
     /**
