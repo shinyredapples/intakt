@@ -83,6 +83,8 @@ final class CheckDependenciesTest extends TestCase
 
     private string $platform = self::PLATFORM;
 
+    private bool $installBlocksThePins = false;
+
     /** @var list<JobSpec> */
     private array $ran = [];
 
@@ -200,6 +202,14 @@ final class CheckDependenciesTest extends TestCase
         self::assertNull($this->leaseFor($head));
     }
 
+    public function testASavedSnapshotThatCannotBePinnedLeavesTheCheckToInstallItself(): void
+    {
+        $head = $this->head();
+        $this->installBlocksThePins = true;
+
+        self::assertNull($this->leaseFor($head));
+    }
+
     protected function setUp(): void
     {
         $this->history = new BuildHistory();
@@ -247,6 +257,11 @@ final class CheckDependenciesTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec): JobResult {
             $this->ran[] = $spec;
+
+            if ($spec->kept instanceof JobKeptFolder && $this->installBlocksThePins) {
+                // During the install, because the save then succeeds and only the lease after it meets the blocked pin folder.
+                new Filesystem()->dumpFile(new CheckJobsFor($this->folder)->snapshotsFolder().'/.pins', 'occupied');
+            }
 
             if ($spec->kept instanceof JobKeptFolder) {
                 new Filesystem()->dumpFile($spec->kept->hostPath.'/vendor/composer/installed.json', "{\"packages\": []}\n");

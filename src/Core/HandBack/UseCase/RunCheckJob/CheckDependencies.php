@@ -15,6 +15,7 @@ use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use NoDiscard;
 use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
 
 // Null whenever the check installs its dependencies itself, as every check did before snapshots, so a reuse that cannot be proven safe only costs time.
 final readonly class CheckDependencies
@@ -64,8 +65,8 @@ final readonly class CheckDependencies
     {
         try {
             return $this->snapshots->lease($inputs->key());
-        } catch (IOException) {
-            // A store that cannot be opened only costs the reuse, because the check then installs its dependencies itself.
+        } catch (IOException|ExceptionInterface) {
+            // A store that cannot be opened or a snapshot that cannot be pinned only costs the reuse, because the check then installs its dependencies itself.
             return null;
         }
     }
