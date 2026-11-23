@@ -35,35 +35,6 @@ final class UnusedTraitCarrierRuleTest extends PhpStanRuleTestCase
 
     private string|false $changedFilesOnly = false;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
-        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
-        parent::setUp();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
-        parent::tearDown();
-    }
-
-    protected function ruleFor(string $root): UnusedTraitCarrierRule
-    {
-        return new UnusedTraitCarrierRule($root);
-    }
-
-    /**
-     * @return array<Collector<Node, mixed>>
-     */
-    #[Override]
-    protected function getCollectors(): array
-    {
-        return [new RunTimeTraitConstructionCollector(), new UsedTraitCollector()];
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
@@ -184,6 +155,35 @@ final class UnusedTraitCarrierRuleTest extends PhpStanRuleTestCase
         $sandbox->write('src/Sample/Builds.php', $this->traitWithAnonymousClassBuilding('new $text(\'x\', $text)'));
 
         self::assertStringStartsWith('src/Sample/Builds.php:17 intakt.reviewerRole A trait no class uses', $this->ruleFindingsIn($sandbox));
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        parent::setUp();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
+        parent::tearDown();
+    }
+
+    protected function ruleFor(string $root): UnusedTraitCarrierRule
+    {
+        return new UnusedTraitCarrierRule($root);
+    }
+
+    /**
+     * @return array<Collector<Node, mixed>>
+     */
+    #[Override]
+    protected function getCollectors(): array
+    {
+        return [new RunTimeTraitConstructionCollector(), new UsedTraitCollector()];
     }
 
     private function traitWithAnonymousClassBuilding(string $expression): string

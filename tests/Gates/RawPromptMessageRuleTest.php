@@ -391,11 +391,6 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
-    protected function ruleFor(string $root): RawPromptMessageRule
-    {
-        return new RawPromptMessageRule($root);
-    }
-
     /**
      * @return iterable<string, array{string, string, string}>
      */
@@ -678,6 +673,11 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\Report', self::BUILDER_PARAMETERS, [$expression]));
 
         self::assertStringContainsString($advice, $this->ruleFindingsIn($sandbox));
+    }
+
+    protected function ruleFor(string $root): RawPromptMessageRule
+    {
+        return new RawPromptMessageRule($root);
     }
 
     private function traitBuilding(string $namespace, string $expression): string
