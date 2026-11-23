@@ -67,7 +67,6 @@ final readonly class DependencyJobs
 
     /**
      * @throws DockerEngineFailed
-     * @throws JobRefused
      * @throws JobEventNotRecorded
      */
     public function platformIn(string $image, DependencyStep $step, string $head): ?string
@@ -83,7 +82,8 @@ final readonly class DependencyJobs
 
         try {
             return $this->platformOf($this->jobs->run($spec));
-        } catch (JobOutputRefused) {
+        } catch (JobOutputRefused|JobRefused) {
+            // A probe of the same head still running (a second check) or unreadable output only costs the reuse, so the check installs itself.
             return null;
         }
     }

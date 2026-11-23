@@ -47,6 +47,7 @@ use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobKeptFolder;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -134,6 +135,8 @@ final class RunCheckJobDependenciesTest extends TestCase
     private ?string $probedPlatform = self::PLATFORM;
 
     private bool $checkThrows = false;
+
+    private bool $probeRefused = false;
 
     private bool $linkOut = false;
 
@@ -276,6 +279,18 @@ final class RunCheckJobDependenciesTest extends TestCase
         }
     }
 
+    public function testAProbeOfTheSameHeadStillRunningLeavesTheCheckToInstallItselfWithoutASnapshot(): void
+    {
+        $this->givenMainLocks(self::LOCK);
+        $this->history->commit('Build work');
+        $this->probeRefused = true;
+
+        $outcome = $this->whenTheCheckRuns();
+
+        self::assertSame(CheckVerdict::Passed, $outcome instanceof CheckJobOutcome ? $outcome->verdict : null);
+        self::assertSame(['probe', 'check'], $this->jobsThatRan());
+    }
+
     public function testACheckWithAConfiguredCommandUsesNoSnapshotAndRunsOnlyTheCheckJob(): void
     {
         $this->givenMainLocks(self::LOCK);
@@ -400,6 +415,10 @@ final class RunCheckJobDependenciesTest extends TestCase
 
     private function probed(): JobResult
     {
+        if ($this->probeRefused) {
+            throw JobRefused::alreadyRunning(new JobId('probe-head'));
+        }
+
         return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(null === $this->probedPlatform ? [] : ['platform' => $this->probedPlatform]));
     }
 

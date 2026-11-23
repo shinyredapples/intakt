@@ -96,7 +96,7 @@ final readonly class RunCheckJob implements CheckJobs
 
         // Held until the job is gone, because a released pin lets an eviction remove the mounted snapshot.
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $accepted, $dependencies)));
+            return $this->outcomeOf($this->ranJob($this->specOf($job, $accepted, $repository, $dependencies)));
         } finally {
             $dependencies?->release();
         }
@@ -114,11 +114,11 @@ final readonly class RunCheckJob implements CheckJobs
         return $absolute;
     }
 
-    private function specOf(CheckJob $job, AcceptedHandBack $accepted, ?CheckSnapshot $dependencies): JobSpec
+    private function specOf(CheckJob $job, AcceptedHandBack $accepted, string $repository, ?CheckSnapshot $dependencies): JobSpec
     {
         $script = $this->filesystem->readFile($this->checkScript);
         $steps = $this->gate->checkSteps($job->configuredCommand);
-        $inputs = [new JobInput($this->absolute($job->handBack->repository), self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
+        $inputs = [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
         $options = [];
 
         if ($dependencies instanceof CheckSnapshot) {
