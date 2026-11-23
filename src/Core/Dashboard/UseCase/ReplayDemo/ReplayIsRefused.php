@@ -8,7 +8,7 @@ use RuntimeException;
 
 final class ReplayIsRefused extends RuntimeException
 {
-    // The code of a refusal that only means another Play came first, so the page of that first Play is not told its run failed.
+    // The code of a refusal that only means another Play came first, so the refused Play's page points at that run instead of reporting a failure.
     private const int ANOTHER_PLAY = 1;
 
     public function meansAnotherPlayCameFirst(): bool

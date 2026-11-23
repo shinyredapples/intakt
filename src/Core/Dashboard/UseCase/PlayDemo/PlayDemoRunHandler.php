@@ -69,7 +69,14 @@ final readonly class PlayDemoRunHandler
     private function refuseWithout(PlayDemoRun $run, string $reason): void
     {
         $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'reason' => $reason]);
-        $this->captions->publishTheRefusal($run->play, $reason);
+        $this->publish($run, $reason);
+    }
+
+    private function publish(PlayDemoRun $run, string $reason): void
+    {
+        if ('' !== $run->sign()) {
+            $this->captions->publishTheRefusal($run->sign(), $reason);
+        }
     }
 
     // Play stands for the whole demo, so a demo project removed with intakt:demo:remove comes back instead of refusing the run; run by the replay under its lock, after the recording was accepted, so a Play that loses the lock changes nothing.
@@ -84,12 +91,6 @@ final readonly class PlayDemoRunHandler
     private function refuse(PlayDemoRun $run, Throwable $failure): void
     {
         $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'exception' => $failure]);
-
-        // Kept off the page when an earlier Play is the reason, because that Play's run is the one in progress.
-        if ($failure instanceof ReplayIsRefused && $failure->meansAnotherPlayCameFirst()) {
-            return;
-        }
-
-        $this->captions->publishTheRefusal($run->play, DemoRefusal::of($failure)->sentence());
+        $this->publish($run, DemoRefusal::of($failure)->sentence());
     }
 }

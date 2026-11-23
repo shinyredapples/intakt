@@ -17,6 +17,7 @@ enum DemoRefusal
     case Malformed;
     case Refused;
     case Stopped;
+    case AnotherPlayFirst;
 
     public static function of(Throwable $failure): self
     {
@@ -24,6 +25,7 @@ enum DemoRefusal
             $failure instanceof IOException => self::Unreadable,
             $failure instanceof RecordingIsMalformed => self::Malformed,
             $failure instanceof ReplayStopped => self::Stopped,
+            $failure instanceof ReplayIsRefused && $failure->meansAnotherPlayCameFirst() => self::AnotherPlayFirst,
             $failure instanceof ReplayIsRefused => self::Refused,
             default => throw $failure,
         };
@@ -36,6 +38,7 @@ enum DemoRefusal
             self::Malformed => 'The demo recording is not a valid recording. The install log names the problem.',
             self::Refused => 'The replay was refused. The install log names the reason.',
             self::Stopped => 'The replay stopped before it ended. The install log names the reason.',
+            self::AnotherPlayFirst => 'An earlier Play is playing the run or has already played it. Follow it in the review list.',
         };
     }
 }

@@ -12,4 +12,10 @@ final readonly class PlayDemoRun implements CommandMessage
     public function __construct(public string $play)
     {
     }
+
+    // Empty for a message queued before Plays carried a sign, because unserializing it leaves the property uninitialized and its page has no box to update.
+    public function sign(): string
+    {
+        return $this->play ?? '';
+    }
 }

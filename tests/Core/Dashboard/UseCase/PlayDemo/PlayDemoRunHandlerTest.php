@@ -90,15 +90,31 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertStringContainsString('"project":"'.CreateDemoProjectCommand::NAME.'"', $this->rows()[0]->event->payload);
     }
 
-    public function testASecondPlayRefusedBecauseTheFirstIsInTheLedgerKeepsItsReasonOffThePages(): void
+    public function testASecondPlayRefusedBecauseTheFirstIsInTheLedgerTellsOnlyItsOwnPageThatAnEarlierPlayCameFirst(): void
     {
         $handler = $this->handler($this->recordingFile());
         $handler($this->play());
         $played = count($this->shellStreams());
+        $second = str_repeat('e', 32);
 
-        $handler($this->play());
+        $handler(new PlayDemoRun($second));
 
-        self::assertSame([], array_slice($this->shellStreams(), $played));
+        $later = array_slice($this->shellStreams(), $played);
+        self::assertCount(1, $later);
+        self::assertStringContainsString('target="demo-play-'.$second.'"', $later[0]);
+        self::assertStringContainsString(DemoRefusal::AnotherPlayFirst->sentence(), $later[0]);
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testAPlayQueuedBeforePlaysCarriedASignIsRefusedWithoutAnErrorAndPublishesNothing(): void
+    {
+        $queued = unserialize(sprintf('O:%d:"%s":0:{}', strlen(PlayDemoRun::class), PlayDemoRun::class));
+        self::assertInstanceOf(PlayDemoRun::class, $queued);
+
+        $this->handler($this->recordingFile(), '')($queued);
+
+        self::assertSame([], $this->shellStreams());
+        self::assertSame([], $this->rows());
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
@@ -193,6 +209,8 @@ final class PlayDemoRunHandlerTest extends TestCase
 
         self::assertSame([], $this->marks->replays());
         self::assertSame([], $this->rows());
+        self::assertSame([DemoRefusal::AnotherPlayFirst->sentence()], $this->refusalReasons());
+        self::assertStringContainsString('target="demo-play-'.self::PLAY.'"', $this->shellStreams()[0]);
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
