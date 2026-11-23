@@ -98,6 +98,20 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 - **It costs the project's share.** Writing the draft uses a little of that project's share of the week. When the share or the accounts are used up, the box says so and your draft waits until there is room; it is not thrown away.
 - **Whoever can open the dashboard.** Like the buttons on a card, the box asks for no login ([steering budgets and pauses](#steering-budgets-and-pauses)): whoever can open the dashboard can use it and read your words and the drafts. No other website can use it, and an agent or a job can't either as long as it can't reach the dashboard (see the same section for when that holds). Your words are handed to the AI marked as text to read, not as orders. That makes it harder for text you paste from elsewhere to steer the AI, but it is no guarantee: that is why nothing is filed until you have read the draft and approved it yourself.
 
+## Asking a question
+
+*(Planned.)* You wonder why a task is stuck, or where the tokens went this week. Instead of reading the board, the history and the code yourself, you ask the **Ask** panel.
+
+1. Type your question, for example "why is #868 stuck?" or "where do tokens go across projects?".
+2. Choose one project, or all projects. The panel shows the most the question may cost before it runs.
+3. Read the answer. Every fact in it says which project it is about.
+4. If the answer means work, choose **Draft a task**: the [New task box](#starting-a-task-from-the-dashboard) opens with the text filled in, and you go on from there.
+
+- **It only reads.** The AI behind the panel can read a project's code, its history, the board, the plan, the CI results and the costs, and nothing else. It cannot change anything, and its answer is for you to read, never an order to Intakt.
+- **One project at a time.** For a question about all projects, each project is read on its own, and no project's code is opened next to another's.
+- **It costs the project's share.** A question uses a little of its project's share of the week; a question about all projects is split between them. Your questions and answers stay in the panel, per project.
+- **Whoever can open the dashboard** can ask, as with the New task box above.
+
 ## Waiting on you
 
 This is the only column that needs you. Its cards and the notifications on your phone are planned: today no card waits in it, and what waits for you is listed on the Waiting on you page (below). Once they come, a card here and a notification on your phone are the same thing: each card was sent to you once, and nothing is sent that has no card. Each card says exactly what to do, with a link: the label to add, the text to post, the setting to change. Typical cards:
