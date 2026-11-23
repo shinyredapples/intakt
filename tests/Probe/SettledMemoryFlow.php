@@ -14,19 +14,19 @@ use Symfony\AI\Platform\Result\VectorResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\Vector\Vector;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
-use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use Symfony\Component\Dotenv\Dotenv;
 
-// Runs through bin/probe: the booted instance's environment, cache directory and SQLite memory file, read and written through the container's own services.
+// Run through bin/probe, because only a booted instance gives the install's environment, cache directory and SQLite memory file.
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 
 new Dotenv()->bootEnv(dirname(__DIR__, 2).'/.env');
-$kernel = new Kernel((string) $_SERVER['APP_ENV'], (bool) $_SERVER['APP_DEBUG']);
+$environment = $_SERVER['APP_ENV'] ?? 'test';
+assert(is_string($environment));
+$kernel = new Kernel($environment, false);
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
-assert($container instanceof TestContainer);
 
 // The probe runs offline and the instance has no embedding account, so the scripted platform stands in for the one the install would call.
 $container->set(EmbeddingsNotConfigured::class, MockPlatformFactory::createPlatform(
@@ -37,7 +37,7 @@ echo 'embedding platform: scripted (MockPlatformFactory in place of EmbeddingsNo
 
 $console = new Application($kernel);
 $console->setAutoExit(false);
-// The same command an install runs to create the memory table; "memory" is the store's name in config/packages/ai.php.
+// The command an install runs, because the table must exist before the first write; "memory" is the store's name in config/packages/ai.php.
 $setup = $console->run(new ArrayInput(['command' => 'ai:store:setup', 'store' => 'memory', '--no-interaction' => true]), new ConsoleOutput());
 
 $index = $container->get(MemoryIndex::class);
