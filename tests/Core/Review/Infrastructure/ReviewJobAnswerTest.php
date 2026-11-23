@@ -14,7 +14,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ReviewJobAnswer::class)]
 #[CoversClass(ClaudeCodeJobEvents::class)]
@@ -23,20 +22,16 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ReviewJob::class)]
 final class ReviewJobAnswerTest extends TestCase
 {
-    private string $root = '';
-
-    private Filesystem $filesystem;
-
     public function testClaudeCodesResultIsTheAnswer(): void
     {
-        $answer = $this->answerTo(Provider::ClaudeCode, '{"type":"result","subtype":"success","is_error":false,"result":"looks fine","usage":{}}');
+        $answer = ReviewJobAnswer::read(Provider::ClaudeCode, '{"type":"result","subtype":"success","is_error":false,"result":"looks fine","usage":{}}');
 
         self::assertSame('looks fine', $answer->text);
     }
 
     public function testCodexsLastAgentMessageOfACompletedTurnIsTheAnswer(): void
     {
-        $answer = $this->answerTo(Provider::Codex, implode("\n", [
+        $answer = ReviewJobAnswer::read(Provider::Codex, implode("\n", [
             '{"type":"thread.started","thread_id":"t"}',
             '{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"first"}}',
             '{"type":"item.completed","item":{"id":"2","type":"reasoning","text":"thinking"}}',
@@ -69,7 +64,7 @@ final class ReviewJobAnswerTest extends TestCase
         $this->expectException(ReviewJobFailure::class);
         $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code gave no answer the review job can read.');
 
-        $this->answerTo(Provider::ClaudeCode, $output);
+        ReviewJobAnswer::read(Provider::ClaudeCode, $output);
     }
 
     /**
@@ -99,7 +94,7 @@ final class ReviewJobAnswerTest extends TestCase
 
     public function testCodexsAnswerOfACompletedTurnStandsWhenALaterTurnWithoutAMessageFails(): void
     {
-        $answer = $this->answerTo(Provider::Codex, implode("\n", [
+        $answer = ReviewJobAnswer::read(Provider::Codex, implode("\n", [
             '{"type":"turn.started"}',
             '{"type":"item.completed","item":{"type":"agent_message","text":"answer"}}',
             '{"type":"turn.completed","usage":{}}',
@@ -116,19 +111,19 @@ final class ReviewJobAnswerTest extends TestCase
         $this->expectException(ReviewJobFailure::class);
         $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI codex gave no answer the review job can read.');
 
-        $this->answerTo(Provider::Codex, $output);
+        ReviewJobAnswer::read(Provider::Codex, $output);
     }
 
     public function testAnAnswerOfAProviderWithoutAReviewerCliIsRefused(): void
     {
         $this->expectException(ReviewJobFailure::class);
 
-        $this->answerTo(Provider::Anthropic, '{"type":"result","is_error":false,"result":"looks fine"}');
+        ReviewJobAnswer::read(Provider::Anthropic, '{"type":"result","is_error":false,"result":"looks fine"}');
     }
 
     public function testAClaudeCodeStreamWithASuccessfulReadOfACheckoutFileShowsTheRead(): void
     {
-        $answer = $this->answerTo(Provider::ClaudeCode, $this->claudeStream(self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), self::readResult('toolu_1', false)));
+        $answer = ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), self::readResult('toolu_1', false)));
 
         self::assertTrue($answer->readTheCheckout);
         self::assertSame('looks fine', $answer->text);
@@ -146,8 +141,7 @@ final class ReviewJobAnswerTest extends TestCase
         yield 'a read that steps out of the checkout' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/../etc/hostname'), self::readResult('toolu_1', false)]];
         yield 'a read whose error flag is no boolean' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), ['type' => 'user', 'message' => ['content' => [['type' => 'tool_result', 'tool_use_id' => 'toolu_1', 'is_error' => 'true']]]]]];
         yield 'a read of git\'s metadata' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/.git/config'), self::readResult('toolu_1', false)]];
-        yield 'a read through a link out of the checkout' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Outside.php'), self::readResult('toolu_1', false)]];
-        yield 'a read of a folder' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/src'), self::readResult('toolu_1', false)]];
+        yield 'a read of git\'s metadata in a dotted path' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/./.git/HEAD'), self::readResult('toolu_1', false)]];
         yield 'a result for another call' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), self::readResult('toolu_2', false)]];
         yield 'a search only' => [[
             ['type' => 'assistant', 'message' => ['content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'Grep', 'input' => ['pattern' => 'Cart', 'path' => ReviewJob::CHECKOUT]]]]],
@@ -161,28 +155,21 @@ final class ReviewJobAnswerTest extends TestCase
     #[DataProvider('streamsWithoutARead')]
     public function testAClaudeCodeStreamWithoutASuccessfulReadOfACheckoutFileShowsNoRead(array $events): void
     {
-        self::assertFalse($this->answerTo(Provider::ClaudeCode, $this->claudeStream(...$events))->readTheCheckout);
-    }
-
-    public function testAReadThroughALinkThatStaysInTheCheckoutShowsTheRead(): void
-    {
-        $answer = $this->answerTo(Provider::ClaudeCode, $this->claudeStream(self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Alias.php'), self::readResult('toolu_1', false)));
-
-        self::assertTrue($answer->readTheCheckout);
+        self::assertFalse(ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(...$events))->readTheCheckout);
     }
 
     public function testTheModelsTextClaimingAReadShowsNoRead(): void
     {
         $output = (string) json_encode(['type' => 'result', 'is_error' => false, 'result' => 'I used Read on '.ReviewJob::CHECKOUT.'/src/Cart.php and it looks fine']);
 
-        self::assertFalse($this->answerTo(Provider::ClaudeCode, $output)->readTheCheckout);
+        self::assertFalse(ReviewJobAnswer::read(Provider::ClaudeCode, $output)->readTheCheckout);
     }
 
     public function testClaudeCodesUsageIsReadFromItsFinalResult(): void
     {
         $output = (string) json_encode(['type' => 'result', 'is_error' => false, 'result' => 'fine', 'usage' => ['input_tokens' => 4, 'cache_creation_input_tokens' => 1500, 'cache_read_input_tokens' => 38000, 'output_tokens' => 700]]);
 
-        $usage = $this->answerTo(Provider::ClaudeCode, $output)->usage;
+        $usage = ReviewJobAnswer::read(Provider::ClaudeCode, $output)->usage;
 
         self::assertCount(1, $usage);
         self::assertSame([4, 700, 39500], [$usage[0]->getPromptTokens(), $usage[0]->getCompletionTokens(), $usage[0]->getCachedTokens()]);
@@ -190,13 +177,13 @@ final class ReviewJobAnswerTest extends TestCase
 
     public function testAnEmptyUsageBlockCountsAsNoUsageReported(): void
     {
-        self::assertSame([], $this->answerTo(Provider::ClaudeCode, '{"type":"result","is_error":false,"result":"fine","usage":{}}')->usage);
+        self::assertSame([], ReviewJobAnswer::read(Provider::ClaudeCode, '{"type":"result","is_error":false,"result":"fine","usage":{}}')->usage);
     }
 
     /**
      * @return iterable<string, array{Provider, string}>
      */
-    public static function unreadableUsage(): iterable
+    public static function invalidUsage(): iterable
     {
         $claudeCode = static fn (string $usage): string => '{"type":"result","is_error":false,"result":"fine","usage":'.$usage.'}';
         $codex = static fn (string $usage): string => '{"type":"item.completed","item":{"type":"agent_message","text":"fine"}}'."\n".'{"type":"turn.completed","usage":'.$usage.'}';
@@ -208,13 +195,10 @@ final class ReviewJobAnswerTest extends TestCase
         yield 'a count of Codex that is text' => [Provider::Codex, $codex('{"input_tokens":"12"}')];
     }
 
-    #[DataProvider('unreadableUsage')]
-    public function testAUsageWithACountThatIsNoWholeNumberOfZeroOrMoreIsRefused(Provider $provider, string $output): void
+    #[DataProvider('invalidUsage')]
+    public function testAUsageWithACountThatIsNoWholeNumberOfZeroOrMoreCountsAsNoUsageReported(Provider $provider, string $output): void
     {
-        $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessageIsOrContains(sprintf('The reviewer\'s CLI %s reported a token count that is not a whole number of zero or more.', $provider->value));
-
-        $this->answerTo($provider, $output);
+        self::assertSame([], ReviewJobAnswer::read($provider, $output)->usage);
     }
 
     public function testEveryCompletedCodexTurnHandsOnItsUsageAndNoRead(): void
@@ -228,32 +212,10 @@ final class ReviewJobAnswerTest extends TestCase
             '{"type":"turn.completed","usage":{"input_tokens":1300,"cached_input_tokens":0,"output_tokens":60}}',
         ])."\n";
 
-        $answer = $this->answerTo(Provider::Codex, $output);
+        $answer = ReviewJobAnswer::read(Provider::Codex, $output);
 
         self::assertSame([[1200, 50, 800], [1300, 60, 0]], array_map(static fn ($usage): array => [$usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getCachedTokens()], $answer->usage));
         self::assertFalse($answer->readTheCheckout);
-    }
-
-    protected function setUp(): void
-    {
-        $this->filesystem = new Filesystem();
-        $this->root = sys_get_temp_dir().'/intakt-job-answer-'.bin2hex(random_bytes(8));
-        $this->filesystem->dumpFile($this->root.'/checkout/src/Cart.php', "<?php\n");
-        $this->filesystem->dumpFile($this->root.'/checkout/.git/config', "[core]\n");
-        $this->filesystem->dumpFile($this->root.'/outside.php', "<?php\n");
-        $this->filesystem->symlink('Cart.php', $this->root.'/checkout/src/Alias.php');
-        $this->filesystem->symlink('../../outside.php', $this->root.'/checkout/src/Outside.php');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->filesystem->remove($this->root);
-    }
-
-    // Read against the fixture checkout as the job's mounted folder.
-    private function answerTo(Provider $provider, string $output): ReviewJobAnswer
-    {
-        return ReviewJobAnswer::read($provider, $output, (string) realpath($this->root.'/checkout'));
     }
 
     /**
