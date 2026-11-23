@@ -12,6 +12,12 @@ final class ShellLexer
     // Because bash reads a `'` in a `${ }` inside double quotes as a plain character, such an expansion is kept apart from an unquoted one.
     private const int QUOTED_EXPANSION = 2;
     private const array QUOTED_FRAMES = [self::DOUBLE_QUOTES, self::QUOTED_EXPANSION];
+    private const string NAME_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_';
+    private const string SPECIAL_PARAMETERS = '@*#?-$!';
+    // Because a pattern of `#`, `%` or `/` is quoted on its own even inside double quotes, a `'` after one of them opens a string.
+    private const string PATTERN_OPERATORS = '#%/';
+    // Because a subscript lookahead stops where another token can start, no byte is read by more than one lookahead.
+    private const string SUBSCRIPT_ENDS = ']}$"\'\\';
     // Because a `#` starts a comment only at the start of a word, these are the characters a word starts after.
     private const string WORD_BREAKS = " \t\n;&|()<>";
     private const string DOUBLE_QUOTED_SPECIALS = '\\"$';
@@ -83,7 +89,7 @@ final class ShellLexer
         return match (true) {
             '\\' === $char => $offset + 2,
             '"' === $char => $this->afterClosing($offset),
-            $this->expansionOpensAt($offset) => $this->afterOpening(self::QUOTED_EXPANSION, $offset + 2),
+            $this->expansionOpensAt($offset) => $this->afterOpening($this->expansionKindAt($offset + 2), $offset + 2),
             default => $offset + 1 + strcspn($this->source, self::DOUBLE_QUOTED_SPECIALS, $offset + 1),
         };
     }
@@ -123,7 +129,7 @@ final class ShellLexer
         return match (true) {
             "'" === $char => $this->afterSingleQuoted($offset + 1),
             '"' === $char => $this->afterOpening(self::DOUBLE_QUOTES, $offset + 1),
-            $this->expansionOpensAt($offset) => $this->afterOpening($this->expansionKindHere(), $offset + 2),
+            $this->expansionOpensAt($offset) => $this->afterOpening($this->expansionKindAt($offset + 2), $offset + 2),
             '$' === $char && "'" === ($this->source[$offset + 1] ?? '') => $this->afterAnsiCQuoted($offset + 2),
             default => $offset + 1,
         };
@@ -155,9 +161,25 @@ final class ShellLexer
         return false === $end ? $this->length : $end + 1;
     }
 
-    private function expansionKindHere(): int
+    private function expansionKindAt(int $offset): int
     {
-        return in_array(array_last($this->frames), self::QUOTED_FRAMES, true) ? self::QUOTED_EXPANSION : self::EXPANSION;
+        $quoted = in_array(array_last($this->frames), self::QUOTED_FRAMES, true);
+
+        return $quoted && !$this->patternOperatorFollows($offset) ? self::QUOTED_EXPANSION : self::EXPANSION;
+    }
+
+    private function patternOperatorFollows(int $offset): bool
+    {
+        $offset += strspn($this->source, '!', $offset, 1);
+        $name = strspn($this->source, self::NAME_CHARACTERS, $offset);
+        $offset += 0 === $name ? strspn($this->source, self::SPECIAL_PARAMETERS, $offset, 1) : $name;
+
+        if ('[' === ($this->source[$offset] ?? '')) {
+            $offset += 1 + strcspn($this->source, self::SUBSCRIPT_ENDS, $offset + 1);
+            $offset += ']' === ($this->source[$offset] ?? '') ? 1 : 0;
+        }
+
+        return str_contains(self::PATTERN_OPERATORS, $this->source[$offset] ?? '}');
     }
 
     private function afterAnsiCQuoted(int $offset): int

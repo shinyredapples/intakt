@@ -47,6 +47,11 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment after a nested expansion in double quotes' => ["echo \"\${a:-\${b:-it's}}\" # TODO later\n", [1 => 'TODO']];
         yield 'a comment after double quotes nested in a quoted expansion' => ["echo \"\${a:-\"it's\"}\" # TODO later\n", [1 => 'TODO']];
         yield 'a comment after an ANSI-C string in a quoted expansion' => ["echo \"\${a:-\$'}'}\" # TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a quoted double quote in a prefix pattern of a quoted expansion' => ["value='\"hello'\nprintf '%s\\n' \"\${value#'\"'}\"\n# TODO later\n", [3 => 'TODO']];
+        yield 'a comment after a quoted double quote in a longest suffix pattern of a quoted expansion' => ["echo \"\${value%%'\"'}\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a quoted double quote in a substitution pattern of a quoted expansion' => ["echo \"\${value//'\"'/x}\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a quoted double quote in a pattern of a quoted array expansion' => ["echo \"\${list[1]#'\"'}\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after an apostrophe in a quoted length expansion and string' => ["echo \"\${#value} don't\" # TODO later\n", [1 => 'TODO']];
         yield 'a comment after a line continuation' => ["echo a \\\n# TODO later\n", [2 => 'TODO']];
         yield 'a comment after a multi-line string' => ["echo '\n#'\n# TODO later\n", [3 => 'TODO']];
     }
@@ -81,6 +86,8 @@ final class ShellCommentsTest extends TestCase
         yield 'a marker in double quotes inside an unquoted expansion' => ["echo \${a:-\" # TODO later\"}\n"];
         yield 'a marker after a quoted brace in an unquoted expansion' => ["echo \${a:-'}' # TODO later}\n"];
         yield 'a marker after an apostrophe in a quoted expansion' => ["echo \"\${a:-don't} # TODO later\"\n"];
+        yield 'a marker in a single-quoted pattern of a quoted expansion' => ["echo \"\${path#'# TODO later'}\"\n"];
+        yield 'a marker after an apostrophe in a quoted default after a pattern operator inside' => ["echo \"\${a:-x#don't} # TODO later\"\n"];
         yield 'a marker after the comment start' => ["# see the TODO list\n"];
         yield 'a reasoned exception' => ["# TODO(#123): retry once the forge sends it\n"];
         yield 'a marker in a command name' => ["TODO=1 run\n"];
@@ -118,6 +125,13 @@ final class ShellCommentsTest extends TestCase
 
         self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
         self::assertSame([1 => 'TODO'], $this->markersOn($script(1000)));
+    }
+
+    public function testManyUnclosedSubscriptsInQuotedExpansionsAreScannedInLinearTime(): void
+    {
+        $script = static fn (int $size): string => 'echo '.str_repeat('"${a[x', $size).str_repeat(']}"', $size)." # TODO later\n";
+
+        self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
     }
 
     /**
