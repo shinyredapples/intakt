@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Symfony\Component\Uid\Uuid;
@@ -90,26 +91,28 @@ final readonly class LedgerBuildSteps
         }
 
         // Only the task row of an unnamed run, because without a run id only the task step tells that a new run began.
-        return null !== $run || BuildStep::Task->value === (LedgerPayload::of($recorded)['step'] ?? null) ? [$run, null] : null;
+        return null !== $run || BuildStep::Task->value === PayloadFields::of($recorded)->text('step') ? [$run, null] : null;
     }
 
     // Null for a row written before runs were named, and false for a run that is no UUID (an explicit null included): the build never writes one, so the row's run cannot be told and the row is left out.
     private function runOf(RecordedEvent $recorded): string|false|null
     {
-        $payload = LedgerPayload::of($recorded);
+        $payload = PayloadFields::of($recorded);
 
-        if (!array_key_exists('run', $payload)) {
+        if (!$payload->has('run')) {
             return null;
         }
 
-        return is_string($payload['run']) && Uuid::isValid($payload['run']) ? strtolower($payload['run']) : false;
+        $run = $payload->text('run');
+
+        return null !== $run && Uuid::isValid($run) ? strtolower($run) : false;
     }
 
     private function isRowOf(RecordedEvent $recorded, string $project, string $task): bool
     {
-        $payload = LedgerPayload::of($recorded);
+        $payload = PayloadFields::of($recorded);
 
-        return $project === ($payload['project'] ?? null) && $task === ($payload['task'] ?? null);
+        return $project === $payload->text('project') && $task === $payload->text('task');
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
@@ -118,14 +121,14 @@ final readonly class LedgerBuildSteps
      */
     private function stepOf(RecordedEvent $recorded): ?array
     {
-        $payload = LedgerPayload::of($recorded);
-        $project = $payload['project'] ?? null;
-        $task = $payload['task'] ?? null;
-        $step = is_string($payload['step'] ?? null) ? BuildStep::tryFrom($payload['step']) : null;
-        $outcome = is_string($payload['outcome'] ?? null) ? BuildStepOutcome::tryFrom($payload['outcome']) : null;
-        $failure = $payload['failure'] ?? null;
+        $payload = PayloadFields::of($recorded);
+        $project = $payload->text('project');
+        $task = $payload->text('task');
+        $step = BuildStep::tryFrom($payload->text('step') ?? '');
+        $outcome = BuildStepOutcome::tryFrom($payload->text('outcome') ?? '');
+        $failure = $payload->text('failure');
 
-        if (!is_string($project) || '' === $project || !is_string($task) || '' === $task || null === $step || null === $outcome) {
+        if (null === $project || '' === $project || null === $task || '' === $task || null === $step || null === $outcome) {
             return null;
         }
 
@@ -134,7 +137,7 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        if (!is_string($failure) && null !== $failure) {
+        if (null === $failure && !$payload->lacks('failure')) {
             return null;
         }
 

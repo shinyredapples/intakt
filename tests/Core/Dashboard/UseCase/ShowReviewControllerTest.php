@@ -17,7 +17,6 @@ use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -26,6 +25,7 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
@@ -60,7 +60,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(Cost::class)]
 #[UsesClass(RoundLedgerReading::class)]
 #[UsesClass(TokenUsageRow::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(ListReviewsController::class)]

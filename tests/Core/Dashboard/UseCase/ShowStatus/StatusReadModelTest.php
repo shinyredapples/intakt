@@ -23,7 +23,6 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -35,6 +34,7 @@ use Intakt\Core\Dashboard\UseCase\ShowStatus\ProjectStatuses;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\StatusReadModel;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -69,7 +69,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(LedgerFailingHeads::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(LedgerPayloads::class)]
@@ -451,6 +451,13 @@ final class StatusReadModelTest extends TestCase
 
         self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
         self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
+    }
+
+    public function testANextReadWithANulByteOfAWaitingHeadIsReportedAsNone(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', "2026-10-28T12:01:00+00:00\0");
+
+        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
     }
 
     public function testARedHeadIsARedGuardDecision(): void
