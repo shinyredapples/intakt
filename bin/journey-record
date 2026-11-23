@@ -33,3 +33,13 @@ done
 for resource in milestones issues pulls; do
     mv "$partial/$resource.json" "$folder/$resource.json"
 done
+
+# bin/pages settles the highlights statuses from this file alone, so its absence keeps them as written and never costs
+# the journey page; it is derived from the issues just recorded, which list pull requests too, merged ones as closed.
+rm -f "$folder/issue-states.json"
+
+if jq -c '[.[][] | objects | {number, state}]' "$folder/issues.json" > "$partial/issue-states.json"; then
+    mv "$partial/issue-states.json" "$folder/issue-states.json"
+else
+    echo 'cannot derive issue-states.json: the highlights statuses stay as written' >&2
+fi

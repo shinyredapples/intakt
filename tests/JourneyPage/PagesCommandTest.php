@@ -85,13 +85,8 @@ final class PagesCommandTest extends TestCase
     public function testWithoutAnyIssueStateTheHighlightsPageKeepsEveryStatusAsWrittenAndStatesNoRule(): void
     {
         $this->writeFeatureRows();
-        $api = $this->root.'/api-without-states';
-        mkdir($api);
-        file_put_contents($api.'/issues.json', '[[]]');
-
-        foreach (['milestones', 'pulls'] as $name) {
-            copy(self::FIXTURES.'/api/'.$name.'.json', $api.'/'.$name.'.json');
-        }
+        $api = $this->recordingWithoutStates();
+        file_put_contents($api.'/'.IssueStates::FILE, '[]');
 
         $run = $this->runPages($api);
 
@@ -100,6 +95,19 @@ final class PagesCommandTest extends TestCase
         self::assertStringContainsString('| Open | what | done | #14 |', $page);
         self::assertStringContainsString('| Shut | what | in progress | #10 |', $page);
         self::assertStringNotContainsString('A feature row reads', $page);
+    }
+
+    public function testWithoutAStateFileTheSiteIsStillBuiltWithEveryStatusAsWritten(): void
+    {
+        $this->writeFeatureRows();
+
+        $run = $this->runPages($this->recordingWithoutStates());
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        $page = $this->site('highlights/index.md');
+        self::assertStringContainsString('| Open | what | done | #14 |', $page);
+        self::assertStringNotContainsString('A feature row reads', $page);
+        self::assertStringContainsString('| Pull requests merged |', $this->site('journey/index.md'));
     }
 
     public function testWithARecordedIssueStateFileTheHighlightsPageShowsSettledStatuses(): void
@@ -111,6 +119,7 @@ final class PagesCommandTest extends TestCase
         self::assertStringContainsString('| Shut | what | done | #10 |', $page);
         self::assertStringContainsString('| Open | what | in progress | #14 |', $page);
         self::assertStringContainsString('| Planned | what | planned | #10 |', $page);
+        self::assertStringContainsString('| Unnamed | what | in progress | T1 |', $page);
     }
 
     public function testTheFrontPageAndItsAssetsAreCopiedUnchangedToTheSiteRoot(): void
@@ -236,8 +245,17 @@ final class PagesCommandTest extends TestCase
 
     private function writeFeatureRows(): void
     {
-        $rows = "## Tooling\n| Shut | what | in progress | #10 |\n| Open | what | done | #14 |\n| Planned | what | planned | #10 |\n";
+        $rows = "## Tooling\n| Shut | what | in progress | #10 |\n| Open | what | done | #14 |\n| Planned | what | planned | #10 |\n| Unnamed | what | in progress | T1 |\n";
         new Filesystem()->dumpFile($this->root.'/docs/highlights.d/2-rows.md', $rows);
+    }
+
+    private function recordingWithoutStates(): string
+    {
+        $api = $this->root.'/api-without-states';
+        new Filesystem()->mirror(self::FIXTURES.'/api', $api);
+        unlink($api.'/'.IssueStates::FILE);
+
+        return $api;
     }
 
     private function runPages(string $recorded = self::FIXTURES.'/api'): Process

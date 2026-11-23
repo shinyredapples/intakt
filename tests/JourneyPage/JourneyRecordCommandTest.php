@@ -25,7 +25,7 @@ final class JourneyRecordCommandTest extends TestCase
         self::assertTrue(is_executable(self::COMMAND));
     }
 
-    public function testItWritesOneFileForEachResourceTheRecordedApiReads(): void
+    public function testItWritesOneFileForEachResourceTheRecordedApiReadsAndTheStateFile(): void
     {
         $this->stubGh(self::ANSWERING_GH);
 
@@ -52,6 +52,29 @@ final class JourneyRecordCommandTest extends TestCase
         $this->runRecord();
 
         self::assertSame('[[{"path":"'.JourneyResource::PullRequests->path(self::REPOSITORY).'"}]]'."\n", new RecordedApi($this->root.'/recorded')->pages(JourneyResource::PullRequests));
+    }
+
+    public function testTheStateFileHoldsTheNumberAndStateOfEveryRecordedIssue(): void
+    {
+        $this->stubGh("#!/bin/sh\nprintf '[[{\"number\":3,\"state\":\"open\",\"title\":\"a\"}],[{\"number\":4,\"state\":\"closed\"}]]\\n'\n");
+
+        $this->runRecord();
+
+        self::assertSame([3 => true, 4 => false], new IssueStates()->openByNumber($this->root.'/recorded'));
+    }
+
+    public function testAFailingStateDerivationKeepsTheRecordingAndLeavesNoStateFile(): void
+    {
+        $this->stubGh(self::ANSWERING_GH);
+        file_put_contents($this->root.'/recorded/'.IssueStates::FILE, '[]');
+        file_put_contents($this->root.'/stub/jq', "#!/bin/sh\nexit 1\n");
+        chmod($this->root.'/stub/jq', 0o755);
+
+        $run = $this->runRecord();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertStringContainsString('the highlights statuses stay as written', $run->getErrorOutput());
+        self::assertSame(array_values(array_diff($this->expectedFiles(), [IssueStates::FILE])), $this->recordedFiles());
     }
 
     public function testAGhThatFailsOnTheSecondResourceLeavesNoFileInTheFolder(): void
@@ -140,7 +163,7 @@ final class JourneyRecordCommandTest extends TestCase
      */
     private function expectedFiles(): array
     {
-        $files = array_map(static fn (JourneyResource $resource): string => $resource->value.'.json', JourneyResource::cases());
+        $files = [...array_map(static fn (JourneyResource $resource): string => $resource->value.'.json', JourneyResource::cases()), IssueStates::FILE];
         sort($files);
 
         return $files;

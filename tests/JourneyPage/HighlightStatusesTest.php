@@ -40,6 +40,11 @@ final class HighlightStatusesTest extends TestCase
         self::assertSame('| Clock | what | in progress | #1, #9 |', $this->settle('| Clock | what | in progress | #1, #9 |', [1 => false]));
     }
 
+    public function testARowWithOneOpenIssueAndANumberTheRecordingDoesNotHoldIsShownAsInProgress(): void
+    {
+        self::assertSame('| Clock | what | in progress | #14, #99 |', $this->settle('| Clock | what | done | #14, #99 |', [14 => true]));
+    }
+
     public function testRowsInTheFoundInTheBetaTableAreNeverChanged(): void
     {
         $page = "## Found in the beta\n| Bug | in progress | T26 (#636) | filed |\n| Bug | what | in progress | #636 |\n";

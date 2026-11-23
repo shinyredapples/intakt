@@ -58,10 +58,11 @@ final readonly class HighlightStatuses
         preg_match_all('/(?<![\w\/.-])#(\d+)/', $where, $matches);
         $open = array_map(static fn (string $number): ?bool => $openByNumber[(int) $number] ?? null, $matches[1]);
 
-        if ([] === $open || in_array(null, $open, true)) {
-            return null;
+        // One known open issue settles the row; a number the states lack only keeps it from reading done.
+        if (in_array(true, $open, true)) {
+            return 'in progress';
         }
 
-        return in_array(true, $open, true) ? 'in progress' : 'done';
+        return [] === $open || in_array(null, $open, true) ? null : 'done';
     }
 }
