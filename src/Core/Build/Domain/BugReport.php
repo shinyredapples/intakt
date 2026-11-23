@@ -83,7 +83,7 @@ final readonly class BugReport
         return explode("\n", (string) preg_replace(self::COMMENT, '', implode("\n", $kept)));
     }
 
-    // The pattern of the line that closes the block this line opens, or null for a line that opens none.
+    // A fence closes only with the same character at least as often, because CommonMark lets a longer fence hold a shorter one.
     private static function closingOf(string $line): ?string
     {
         if (1 === preg_match(self::EXTERNAL_OPENS, $line)) {
@@ -98,7 +98,7 @@ final readonly class BugReport
     }
 
     /**
-     * @return ?array{string, string} the label and the text after it on its line
+     * @return ?array{string, string}
      */
     private static function labelOf(string $line): ?array
     {

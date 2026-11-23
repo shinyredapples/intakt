@@ -181,7 +181,9 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
         // The scripted job would have asked another question, so this one proves the job never ran.
         self::assertStringContainsString('missing: Must keep working.', $this->question());
-        self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null}', (string) $this->connection()->fetchOne('SELECT payload FROM ledger_event ORDER BY position DESC LIMIT 1'));
+        $payload = $this->connection()->fetchOne('SELECT payload FROM ledger_event ORDER BY position DESC LIMIT 1');
+        self::assertIsString($payload);
+        self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null}', $payload);
     }
 
     public function testABugTaskWithAnEmptyPartIsParkedWithAQuestionNamingIt(): void
