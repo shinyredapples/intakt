@@ -50,12 +50,13 @@ final readonly class TestMethodNameRule implements Rule
     }
 
     /**
-     * @param array{file: string, method: string, runnable: bool} $method
-     * @param list<string>                                        $providers
+     * @param array{file: string, method: string, runnable: bool, overrides: list<string>} $method
+     * @param list<string>                                                                 $providers
      */
     private function isJudged(array $method, array $providers): bool
     {
-        return $method['runnable'] && str_starts_with($method['file'], $this->root.'/tests/') && !in_array($method['method'], $providers, true);
+        // a method that implements or overrides a provider an ancestor names is that provider
+        return $method['runnable'] && str_starts_with($method['file'], $this->root.'/tests/') && [] === array_intersect([$method['method'], ...$method['overrides']], $providers);
     }
 
     private function readsAsSentence(string $name): bool

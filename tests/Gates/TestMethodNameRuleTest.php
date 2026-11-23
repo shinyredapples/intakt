@@ -23,7 +23,7 @@ final class TestMethodNameRuleTest extends PhpStanRuleTestCase
 {
     public function testATestMethodWithFewerThanThreeWordsFailsStaticAnalysisWithHowToComply(): void
     {
-        $this->assertRuleRejects('short-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testItSends() does not read as a sentence: name it test followed by at least three words in camel case');
+        $this->assertRuleRejects('short-test-method', 'tests/MailerTest.php:11 intakt.testName Test method testItSends() does not read as a sentence: name it test followed by at least three words in camel case');
     }
 
     public function testATestMethodNamedAsASentenceOfThreeOrMoreWordsPassesStaticAnalysis(): void
@@ -33,17 +33,17 @@ final class TestMethodNameRuleTest extends PhpStanRuleTestCase
 
     public function testAnAcronymCountsAsOneWordSoTwoWordsFail(): void
     {
-        $this->assertRuleRejects('acronym-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testMCPWorks()');
+        $this->assertRuleRejects('acronym-test-method', 'tests/MailerTest.php:11 intakt.testName Test method testMCPWorks()');
     }
 
     public function testAnUnderscoreBetweenTheWordsFailsStaticAnalysis(): void
     {
-        $this->assertRuleRejects('underscore-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testIt_Sends_Now()');
+        $this->assertRuleRejects('underscore-test-method', 'tests/MailerTest.php:11 intakt.testName Test method testIt_Sends_Now()');
     }
 
     public function testADigitCountsAsPartOfItsWordSoTwoWordsFail(): void
     {
-        $this->assertRuleRejects('digit-word-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testItSends2()');
+        $this->assertRuleRejects('digit-word-test-method', 'tests/MailerTest.php:11 intakt.testName Test method testItSends2()');
     }
 
     public function testADataProviderAndAHelperWithoutThePrefixAreNotJudged(): void
@@ -58,17 +58,37 @@ final class TestMethodNameRuleTest extends PhpStanRuleTestCase
 
     public function testAProviderLikeMethodThatNoDataProviderNamesIsJudged(): void
     {
-        $this->assertRuleRejects('unnamed-provider-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testCases()');
+        $this->assertRuleRejects('unnamed-provider-test-method', 'tests/MailerTest.php:11 intakt.testName Test method testCases()');
+    }
+
+    public function testAProviderImplementedInASubclassOfTheTestCaseThatNamesItIsNotJudged(): void
+    {
+        $this->assertRuleAccepts('subclass-data-provider');
+    }
+
+    public function testAProviderLikeMethodOfASubclassThatNoParentNamesIsJudged(): void
+    {
+        $this->assertRuleRejects('subclass-unnamed-provider', 'tests/MailerTest.php:25 intakt.testName Test method testCases()');
+    }
+
+    public function testATestPrefixedMethodOfAnInterfaceAndItsTestDoubleIsNotJudged(): void
+    {
+        $this->assertRuleAccepts('interface-and-double-test-method');
+    }
+
+    public function testAShortTestMethodOfAnAbstractTestCaseIsJudged(): void
+    {
+        $this->assertRuleRejects('abstract-test-case-test-method', 'tests/MailerTestCase.php:11 intakt.testName Test method testShort()');
     }
 
     public function testAMethodMarkedAsTestWithoutThePrefixIsJudged(): void
     {
-        $this->assertRuleRejects('test-attribute-method', 'tests/MailerTest.php:12 intakt.testName Test method works()');
+        $this->assertRuleRejects('test-attribute-method', 'tests/MailerTest.php:13 intakt.testName Test method works()');
     }
 
     public function testAMethodMarkedAsTestWithoutThePrefixFailsEvenWithThreeWords(): void
     {
-        $this->assertRuleRejects('sentence-test-attribute-method', 'tests/MailerTest.php:12 intakt.testName Test method aStaleLockIsReleased()');
+        $this->assertRuleRejects('sentence-test-attribute-method', 'tests/MailerTest.php:13 intakt.testName Test method aStaleLockIsReleased()');
     }
 
     public function testAMethodMarkedAsTestWithThePrefixAndThreeWordsPassesStaticAnalysis(): void
@@ -78,7 +98,7 @@ final class TestMethodNameRuleTest extends PhpStanRuleTestCase
 
     public function testALowercaseLetterAfterThePrefixFailsStaticAnalysis(): void
     {
-        $this->assertRuleRejects('lowercase-after-prefix-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testitSendsNow()');
+        $this->assertRuleRejects('lowercase-after-prefix-test-method', 'tests/MailerTest.php:11 intakt.testName Test method testitSendsNow()');
     }
 
     public function testAnAttributeOfAnotherNamespaceNamedDataProviderExemptsNothing(): void

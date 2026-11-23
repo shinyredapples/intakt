@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Sample;
 
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
 
-final class MailerTest
+final class MailerTest extends TestCase
 {
     #[Test]
     public function works(): void

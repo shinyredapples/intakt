@@ -15,9 +15,10 @@ use PHPStan\Type\Constant\ConstantStringType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<ClassMethod, array{file: string, line: int, name: string, method: string, runnable: bool, provides: list<string>}>
+ * @implements Collector<ClassMethod, array{file: string, line: int, name: string, method: string, runnable: bool, provides: list<string>, overrides: list<string>}>
  */
 final readonly class TestMethodCollector implements Collector
 {
@@ -29,7 +30,7 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
-     * @return array{file: string, line: int, name: string, method: string, runnable: bool, provides: list<string>}|null
+     * @return array{file: string, line: int, name: string, method: string, runnable: bool, provides: list<string>, overrides: list<string>}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -42,14 +43,34 @@ final readonly class TestMethodCollector implements Collector
         }
 
         $name = $node->name->toString();
-        $runnable = $node->isPublic() && (str_starts_with($name, self::PREFIX) || [] !== $this->attributesOf($node, $scope, Test::class));
+        $runnable = $this->isTestCase($class) && $node->isPublic() && (str_starts_with($name, self::PREFIX) || [] !== $this->attributesOf($node, $scope, Test::class));
         $provides = $this->providersNamedOn($node, $scope, $class);
 
         if (!$runnable && [] === $provides) {
             return null;
         }
 
-        return ['file' => $file, 'line' => $node->name->getStartLine(), 'name' => $name, 'method' => $class->getName().'::'.$name, 'runnable' => $runnable, 'provides' => $provides];
+        return ['file' => $file, 'line' => $node->name->getStartLine(), 'name' => $name, 'method' => $class->getName().'::'.$name, 'runnable' => $runnable, 'provides' => $provides, 'overrides' => $runnable ? $this->ancestorMethods($class, $name) : []];
+    }
+
+    // because PHPUnit runs only the methods of a TestCase, so a test-prefixed method an interface or a test double declares is no test
+    private function isTestCase(ClassReflection $class): bool
+    {
+        return !$class->isInterface() && in_array(TestCase::class, $class->getParentClassesNames(), true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function ancestorMethods(ClassReflection $class, string $name): array
+    {
+        $ancestors = [...$class->getParents(), ...$class->getInterfaces()];
+
+        foreach ([$class, ...$class->getParents()] as $user) {
+            array_push($ancestors, ...array_values($user->getTraits()));
+        }
+
+        return array_values(array_unique(array_map(static fn (ClassReflection $ancestor): string => $ancestor->getName().'::'.$name, $ancestors)));
     }
 
     /**
@@ -120,6 +141,9 @@ final readonly class TestMethodCollector implements Collector
                     $method = $class->getNativeMethod($name);
                     // named by the class that declares it, the way a judged method is, so a provider a parent class or an imported trait declares is found
                     $methods[] = $method->getDeclaringClass()->getName().'::'.$method->getName();
+                } else {
+                    // PHPUnit resolves the name on the concrete test class, so a subclass that implements it overrides this name
+                    $methods[] = $class->getName().'::'.$name;
                 }
             }
         }

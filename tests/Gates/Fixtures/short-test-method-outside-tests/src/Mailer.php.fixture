@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Sample;
 
-final class Mailer
+use PHPUnit\Framework\TestCase;
+
+final class Mailer extends TestCase
 {
     public function testItSends(): void
     {

@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Sample;
 
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
 
-final class MailerTest
+final class MailerTest extends TestCase
 {
     public static function testCases(): iterable
     {
