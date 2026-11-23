@@ -33,6 +33,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -242,9 +243,119 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertCount(3, $live->events);
     }
 
+    public function testAPoolThatRefusesTheDeleteStillPushesTheBoardAndIsLogged(): void
+    {
+        $live = new PublishedLiveEvents();
+        $pool = $this->poolOver(new ArrayAdapter(), new ArrayObject(['delete' => true, 'save' => false]));
+
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
+
+        self::assertCount(1, $live->events);
+        self::assertSame([['warning', 'The last pushed board could not be forgotten.']], $this->logged());
+    }
+
+    public function testAPoolThatRefusesTheRecordStillPushesTheBoardAndIsLogged(): void
+    {
+        $live = new PublishedLiveEvents();
+        $pool = $this->poolOver(new ArrayAdapter(), new ArrayObject(['delete' => false, 'save' => true]));
+
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
+
+        self::assertCount(1, $live->events);
+        self::assertSame([['warning', 'The last pushed board could not be recorded.']], $this->logged());
+    }
+
+    public function testAPoolThatTakesTheDeleteAndTheRecordLogsNothing(): void
+    {
+        $live = new PublishedLiveEvents();
+        $pool = $this->poolOver(new ArrayAdapter(), new ArrayObject(['delete' => false, 'save' => false]));
+
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
+
+        self::assertSame([], $this->logged());
+    }
+
+    public function testAReturnToAnEarlierBoardIsPushedOnceTheRecordThePoolCouldNotDeleteHasExpired(): void
+    {
+        $clock = new MockClock();
+        $live = new PublishedLiveEvents();
+
+        $this->returnToTheFirstBoardAfterARefusingPool($live, $clock, 60);
+
+        self::assertCount(3, $live->events);
+    }
+
+    public function testAReturnToAnEarlierBoardIsHeldBackWhileTheRecordThePoolCouldNotDeleteLasts(): void
+    {
+        $clock = new MockClock();
+        $live = new PublishedLiveEvents();
+
+        $this->returnToTheFirstBoardAfterARefusingPool($live, $clock, 59);
+
+        self::assertCount(2, $live->events);
+    }
+
+    public function testAnUnchangedBoardIsPushedAgainOnceItsRecordHasExpired(): void
+    {
+        $clock = new MockClock();
+        $live = new PublishedLiveEvents();
+        $headline = $this->headlineOn(new DashboardLedger(), $live, new ArrayAdapter(clock: $clock));
+
+        $headline->publishTheBoard();
+        $clock->sleep(60);
+        $headline->publishTheBoard();
+
+        self::assertCount(2, $live->events);
+    }
+
     protected function setUp(): void
     {
         $this->log = new BufferingLogger();
+    }
+
+    protected function tearDown(): void
+    {
+        // Emptied, because a buffering logger prints what it still holds when it is destroyed.
+        $this->log->cleanLogs();
+        parent::tearDown();
+    }
+
+    // The first board is recorded, a second one is pushed while the pool refuses both the delete and the record, and the first board comes back once the pool works again.
+    private function returnToTheFirstBoardAfterARefusingPool(PublishedLiveEvents $live, MockClock $clock, int $secondsLater): void
+    {
+        $refused = new ArrayObject(['delete' => false, 'save' => false]);
+        $pool = $this->poolOver(new ArrayAdapter(clock: $clock), $refused);
+        $idle = new DashboardLedger();
+        $active = new DashboardLedger();
+        $active->startRoundOf('change-1', 'r1', 1);
+
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+        $refused->exchangeArray(['delete' => true, 'save' => true]);
+        $this->headlineOn($active, $live, $pool)->publishTheBoard();
+        $refused->exchangeArray(['delete' => false, 'save' => false]);
+        $clock->sleep($secondsLater);
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+    }
+
+    /**
+     * @param ArrayObject<string, bool> $refused
+     */
+    private function poolOver(ArrayAdapter $stored, ArrayObject $refused): CacheItemPoolInterface
+    {
+        $pool = self::createStub(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturnCallback($stored->getItem(...));
+        $pool->method('deleteItem')->willReturnCallback(static fn (string $key): bool => true !== $refused['delete'] && $stored->deleteItem($key));
+        $pool->method('save')->willReturnCallback(static fn (CacheItemInterface $item): bool => true !== $refused['save'] && $stored->save($item));
+
+        return $pool;
+    }
+
+    /**
+     * @return list<array{mixed, mixed}>
+     */
+    private function logged(): array
+    {
+        return array_values(array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [null, null], $this->log->cleanLogs()));
     }
 
     private function pushedDoneColumnOf(int $judged): Crawler

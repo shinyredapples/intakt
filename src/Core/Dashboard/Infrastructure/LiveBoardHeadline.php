@@ -28,6 +28,9 @@ final readonly class LiveBoardHeadline
     // One for the install, because every worker pushes to the same shell topic and only a board that differs from the last pushed one is pushed again.
     private const string LAST_PUSHED = 'last-pushed-board';
 
+    // Short, because a pool that refuses a delete keeps an older board as the last pushed one, and only the expiry ends that: a return to that board is held back for at most this long, at the price of one repeat push of an unchanged board per period.
+    private const int REMEMBERED_SECONDS = 60;
+
     public function __construct(
         private LedgerReviewPages $pages,
         private Environment $twig,
@@ -89,7 +92,7 @@ final readonly class LiveBoardHeadline
             return $signature;
         }
 
-        // Forgotten before the push, because a push the hub refuses or a record the pool refuses would otherwise leave an older board as the last pushed one, and a return to that board would be skipped while pages show the newer one.
+        // Forgotten before the push, because a push the hub refuses or a record the pool refuses would otherwise leave an older board as the last pushed one, and a return to that board would be skipped while pages show the newer one. A pool that refuses the delete too keeps the older board only until its record expires.
         $this->forgotten();
 
         if ($this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->streamOf($board)))) {
@@ -117,10 +120,17 @@ final readonly class LiveBoardHeadline
     private function forgotten(): void
     {
         try {
-            $this->lastPushed->deleteItem(self::LAST_PUSHED);
+            $forgotten = $this->lastPushed->deleteItem(self::LAST_PUSHED);
             // Boundary: logs a pool that cannot be written and goes on, because the push itself matters more than its memory.
         } catch (Throwable $failure) {
             $this->logger->warning('The last pushed board could not be forgotten.', ['exception' => $failure]);
+
+            return;
+        }
+
+        // A pool reports a refused delete by returning false, not by throwing, and the older board then stays the last pushed one until it expires.
+        if (!$forgotten) {
+            $this->logger->warning('The last pushed board could not be forgotten.');
         }
     }
 
@@ -139,10 +149,17 @@ final readonly class LiveBoardHeadline
     {
         try {
             $item = $this->lastPushed->getItem(self::LAST_PUSHED);
-            $this->lastPushed->save($item->set($signature));
+            $recorded = $this->lastPushed->save($item->set($signature)->expiresAfter(self::REMEMBERED_SECONDS));
             // Boundary: logs a pool that cannot be written and goes on, because the board is already pushed and a missing record costs one repeat push.
         } catch (Throwable $failure) {
             $this->logger->warning('The last pushed board could not be recorded.', ['exception' => $failure]);
+
+            return;
+        }
+
+        // A pool reports a refused write by returning false, not by throwing.
+        if (!$recorded) {
+            $this->logger->warning('The last pushed board could not be recorded.');
         }
     }
 }
