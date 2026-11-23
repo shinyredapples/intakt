@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\DocsAllowances;
 use Intakt\Gates\DocsGate;
 use Intakt\Gates\DocsRatchetList;
+use Intakt\Gates\DocsTargetBranch;
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\IndentedCodeBlocks;
 use Intakt\Gates\MarkdownPage;
@@ -21,6 +23,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(MarkdownParagraph::class)]
 #[CoversClass(IndentedCodeBlocks::class)]
 #[CoversClass(UnneededDocsEntries::class)]
+#[CoversClass(DocsAllowances::class)]
+#[CoversClass(DocsTargetBranch::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(Workspace::class)]
 final class DocsGateTest extends SandboxTestCase

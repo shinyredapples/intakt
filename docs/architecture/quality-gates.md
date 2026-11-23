@@ -59,7 +59,9 @@ A page of `docs/user/` or `docs/guide/` has at most 1,500 words. A page of `docs
 
 Compared with its copy on the target branch, the list fails the gate when an entry is new or a ceiling is higher. It also fails when the change left an entry unneeded: a key that matches no oversized paragraph any more, a ceiling above the page's words or for a page within the limit, an excuse for a page that no longer needs one. So the list only shrinks, and a shortened wall cannot come back.
 
-An edited paragraph gets a new key, so it must meet the limit. The target branch moves on while a change waits, so a wall it already has that its own list does not count is not this change's doing: such a paragraph passes while unchanged, such a page while it does not grow beyond its size there, and such an architecture page while its summary problem stays. A wall the target branch's list counts passes only while this list still counts it.
+An edited paragraph gets a new key, so it must meet the limit.
+
+The target branch moves on while a change waits, so a wall it already has that its own list does not count is not this change's doing (`DocsAllowances`): such a paragraph passes while unchanged, such a page while it does not grow beyond its size there, and such an architecture page while its summary problem stays. A wall the target branch's list counts passes only while this list still counts it.
 
 The ratchet checks are skipped without git history, and when the target branch has neither the list nor `config/gates/src/DocsGate.php` (the change that brings the gate). A target branch with the gate but without the list fails. Like the other gates that start only `git`, its tests run it in the test process through `Sandbox::runGate()`.
 

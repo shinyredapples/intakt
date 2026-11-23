@@ -94,13 +94,8 @@ final readonly class UnneededDocsEntries
      */
     private function unneededExcuses(DocsRatchetList $list, array $documents): array
     {
-        $unneeded = array_filter($list->summaries, fn (string $page): bool => !$this->needsSummaryExcuse($documents[$page] ?? null));
+        $unneeded = array_filter($list->summaries, static fn (string $page): bool => true !== ($documents[$page] ?? null)?->breaksTheSummaryRule());
 
         return array_values(array_map(static fn (string $page): string => DocsRatchetList::PATH.': '.$page.' no longer needs its "In short" excuse; remove it from the list', $unneeded));
-    }
-
-    private function needsSummaryExcuse(?MarkdownPage $page): bool
-    {
-        return $page instanceof MarkdownPage && $page->words() > DocsGate::SUMMARY_THRESHOLD_WORDS && (!$page->hasSummaryFirst() || $page->summaryWords() > DocsGate::SUMMARY_WORDS);
     }
 }

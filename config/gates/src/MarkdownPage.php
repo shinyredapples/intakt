@@ -72,6 +72,11 @@ final readonly class MarkdownPage
         return self::wordsIn(preg_replace('/^ {0,3}#{1,6}(?=\s)/m', '', implode("\n", $this->lines)) ?? '');
     }
 
+    public function breaksTheSummaryRule(): bool
+    {
+        return $this->words() > DocsGate::SUMMARY_THRESHOLD_WORDS && (!$this->hasSummaryFirst() || $this->summaryWords() > DocsGate::SUMMARY_WORDS);
+    }
+
     // Because a summary only helps when the reader meets it first: nothing but blank lines may stand between the title and it.
     public function hasSummaryFirst(): bool
     {
