@@ -14,8 +14,7 @@ final readonly class Redaction
 
     public const string MASK = "\0";
 
-    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`).
-    // Each shape is matched on its own, because one match consumes its text: `sk-` running on into `-eyJ...` would otherwise hide the token that starts inside it.
+    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`); each shape is matched on its own, because one match consumes its text, and `sk-` running on into `-eyJ...` would hide the token that starts inside it.
     private const array SECRET_SHAPES = [
         '~-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)~s',
         '~(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})~',
