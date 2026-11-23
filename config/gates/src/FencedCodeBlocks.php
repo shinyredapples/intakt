@@ -34,7 +34,7 @@ final readonly class FencedCodeBlocks
         return $lines;
     }
 
-    private function fenceAfter(string $line, ?string $fence): ?string
+    public function fenceAfter(string $line, ?string $fence): ?string
     {
         if (null === $fence) {
             return 1 === preg_match(self::OPENING_FENCE, $line, $marker) ? $marker[1] : null;
