@@ -606,6 +606,22 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAnIntersectionBoundNoCarrierSatisfiesPasses(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Review/Domain/LocalFactory.php', "<?php\nnamespace Intakt\\Core\\Review\\Domain;\n\nuse Countable;\n\ntrait LocalFactory\n{\n    /** @param class-string<HasPlace&Countable> \$class */\n    private function build(string \$class): HasPlace&Countable\n    {\n        return new \$class();\n    }\n}\n\nfinal class FactoryUser\n{\n    use LocalFactory;\n\n    public function fixture(): HasPlace&Countable\n    {\n        return \$this->build(CountedPlace::class);\n    }\n}\n\nfinal class CountedPlace implements HasPlace, Countable\n{\n    public function place(): string { return ''; }\n    public function moveTo(string \$place): void {}\n    public function count(): int { return 0; }\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnIntersectionBoundACarrierSatisfiesIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builder.php', "<?php\nnamespace Intakt\\Sample;\n\nuse Intakt\\Core\\Review\\Domain\\HasPlace;\nuse Intakt\\Core\\Review\\Domain\\RoundReviewer;\n\nfinal class Builder\n{\n    /** @param class-string<HasPlace&RoundReviewer> \$class */\n    public function build(string \$class): HasPlace\n    {\n        return new \$class();\n    }\n}\n");
+
+        self::assertStringContainsString('src/Sample/Builder.php:12 intakt.reviewerRole new RoundReviewer() outside', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testATraitATraitOfAClassUsesIsJudgedInThatClass(): void
     {
         $sandbox = $this->emptySandbox();

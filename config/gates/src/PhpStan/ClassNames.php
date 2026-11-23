@@ -75,16 +75,42 @@ final readonly class ClassNames
         return array_values(array_filter($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, $candidate))));
     }
 
-    // because a `class-string<HasPlace>` may name any class that implements HasPlace, a candidate counts as named when a name is the candidate itself or one of its parent classes or interfaces
+    // because a `class-string<HasPlace>` may name any class that implements HasPlace, but a `class-string<HasPlace&Countable>` only one that implements both, a candidate counts as named when it is, or extends or implements, every class of one member of the expression's union
     /**
-     * @param list<string> $names
      * @param list<string> $candidates
      *
      * @return list<string>
      */
-    public function standingFor(array $names, array $candidates): array
+    public function standingFor(Name|Expr|Class_ $class, array $candidates, Scope $scope): array
     {
-        return array_values(array_filter($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, $candidate) || new ObjectType($name)->isSuperTypeOf(new ObjectType($candidate))->yes())));
+        $members = match (true) {
+            $class instanceof Name => [[$scope->resolveName($class)]],
+            $class instanceof Expr => $this->unionMembersOf($scope->getType($class)),
+            default => [],
+        };
+
+        return array_values(array_filter($candidates, static fn (string $candidate): bool => array_any($members, static fn (array $classes): bool => [] !== $classes && array_all($classes, static fn (string $name): bool => 0 === strcasecmp($name, $candidate) || new ObjectType($name)->isSuperTypeOf(new ObjectType($candidate))->yes()))));
+    }
+
+    // because an intersection such as `HasPlace&Countable` is one member whose classes a candidate must all satisfy, while each member of a union is judged on its own
+    /**
+     * @return list<list<string>>
+     */
+    private function unionMembersOf(Type $type): array
+    {
+        $members = [];
+
+        foreach (TypeUtils::flattenTypes($type) as $member) {
+            foreach (TypeUtils::flattenTypes($member->getObjectTypeOrClassStringObjectType()) as $object) {
+                $members[] = $object->getObjectClassNames();
+            }
+
+            foreach ($member->getConstantStrings() as $name) {
+                $members[] = [$this->withoutLeadingBackslash($name->getValue())];
+            }
+        }
+
+        return $members;
     }
 
     // because PHP accepts at most one leading backslash in a class string
