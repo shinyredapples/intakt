@@ -49,6 +49,9 @@ final class YamlCommentsTest extends TestCase
         yield 'a comment after a plain value continued by a line starting with a quote' => ["key: plain text\n  'continued # TODO later\n", [2 => 'TODO']];
         yield 'a comment after a plain sequence entry continued by a line starting with a quote' => ["- plain\n  \"continued # TODO later\n", [2 => 'TODO']];
         yield 'a comment after a quoted value on the next mapping line' => ["a: plain\nb: '# x' # TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a flow entry whose colon touches a quote' => ["key: [a:'b, c] # TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a flow mapping with a colon before a flow indicator' => ["key: {a:, b: '# x'} # TODO later\n", [1 => 'TODO']];
+        yield 'a comment on the first line after a byte order mark' => ["\u{FEFF}# TODO later\nkey: 1\n", [1 => 'TODO']];
     }
 
     /**
@@ -78,6 +81,9 @@ final class YamlCommentsTest extends TestCase
         yield 'a marker in a block scalar of a compact mapping' => ["- key: |\n    # TODO later\n  next: value\n"];
         yield 'a marker in a quoted value on a line nested under a key' => ["a:\n  b: '# TODO later'\n"];
         yield 'a marker in a quoted flow entry' => ["key: [a, '# TODO later']\n"];
+        yield 'a marker in a block scalar after bare carriage returns' => ["- |\r  # TODO later\r"];
+        yield 'a marker in a block scalar after carriage return line ends' => ["- |\r\n  # TODO later\r\n"];
+        yield 'a marker in a quoted flow value after a touching quoted key' => ["key: {\"a\":'# TODO later'}\n"];
         yield 'a marker after the comment start' => ["# see the TODO list\n"];
         yield 'a reasoned exception' => ["key: 1 # TODO(#123): drop once the image is pinned\n"];
         yield 'a marker in a value' => ["TODO: 1\n"];

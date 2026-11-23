@@ -16,8 +16,11 @@ final class ShellLexer
     private const int SUBSTITUTION = 4;
     private const int ARITHMETIC = 5;
     private const int ARITHMETIC_GROUP = 6;
-    private const int CASE = 7;
-    private const array HOLDS_CODE = [self::SUBSHELL, self::BACKTICKS, self::SUBSTITUTION, self::CASE];
+    private const int CASE_SUBJECT = 7;
+    private const int CASE_PATTERN = 8;
+    private const int CASE_BODY = 9;
+    private const array CASE_FRAMES = [self::CASE_SUBJECT, self::CASE_PATTERN, self::CASE_BODY];
+    private const array HOLDS_CODE = [self::SUBSHELL, self::BACKTICKS, self::SUBSTITUTION, ...self::CASE_FRAMES];
     private const string STARTS_A_COMMAND = ';&|';
     // Because a command follows these reserved words, a `case` or `((` right after them opens one.
     private const array LEADS_A_COMMAND = ['!', '{', 'do', 'elif', 'else', 'if', 'then', 'time', 'until', 'while'];
@@ -31,6 +34,7 @@ final class ShellLexer
     private readonly ShellHereDocuments $hereDocuments;
     private bool $wordStarts = true;
     private bool $commandStarts = true;
+    private bool $arithmeticMayStart = false;
 
     /**
      * @var list<int>
@@ -120,6 +124,7 @@ final class ShellLexer
         $this->frames[] = $frame;
         $this->wordStarts = in_array($frame, self::HOLDS_CODE, true);
         $this->commandStarts = $this->wordStarts;
+        $this->arithmeticMayStart = false;
 
         return $end;
     }
@@ -173,6 +178,7 @@ final class ShellLexer
         return match (true) {
             '#' === $char && $this->wordStarts => $this->afterComment($offset),
             "\n" === $char => $this->afterLineEnd($offset + 1),
+            ';' === $char && $this->endsACaseBranch($offset) => $this->afterCaseBranch($offset),
             '<' === $char && '<' === ($this->source[$offset + 1] ?? '') => $this->afterDoubleLessThan($offset + 2),
             '(' === $char => $this->afterOpeningParenthesis($offset),
             ')' === $char => $this->afterClosingParenthesis($offset + 1),
@@ -187,27 +193,72 @@ final class ShellLexer
         };
     }
 
-    // Because a `case` pattern ends at a `)` that closes nothing, the lexer follows the `case` and `esac` words that stand as a command.
+    // Because a `;;`, `;&` or `;;&` ends a branch of a `case` command, the next word is a pattern again.
+    private function endsACaseBranch(int $offset): bool
+    {
+        return self::CASE_BODY === array_last($this->frames) && str_contains(';&', $this->source[$offset + 1] ?? '');
+    }
+
+    private function afterCaseBranch(int $offset): int
+    {
+        $this->frames[array_key_last($this->frames)] = self::CASE_PATTERN;
+
+        return $this->startingACommand($offset + (str_starts_with(substr($this->source, $offset, 3), ';;&') ? 3 : 2));
+    }
+
+    // Because a `case` pattern ends at a `)` that closes nothing, the lexer follows a `case` command from its subject through its patterns and branches to its `esac`.
     private function afterPlainWordPart(int $offset, int $end): int
     {
-        $word = $this->wordStarts && $this->commandStarts && $this->endsAWord($end) ? substr($this->source, $offset, $end - $offset) : '';
+        $word = $this->wordStarts && $this->endsAWord($end) ? substr($this->source, $offset, $end - $offset) : '';
+        $frame = array_last($this->frames);
 
-        if ('case' === $word) {
-            $this->frames[] = self::CASE;
-        } elseif ('esac' === $word && self::CASE === array_last($this->frames)) {
-            array_pop($this->frames);
-        } elseif (in_array($word, self::LEADS_A_COMMAND, true)) {
-            $this->wordStarts = false;
-
-            return $end;
-        }
-
-        return $this->afterWordPart($end);
+        return match (true) {
+            self::CASE_PATTERN === $frame => $this->afterPatternWord($word, $end),
+            'in' === $word && self::CASE_SUBJECT === $frame => $this->afterCaseSubject($end),
+            $this->commandStarts => $this->afterCommandWord($word, $frame, $end),
+            default => $this->afterWordPart($end),
+        };
     }
 
     private function endsAWord(int $end): bool
     {
         return $end >= $this->length || str_contains(self::WORD_BREAKS, $this->source[$end]);
+    }
+
+    private function afterPatternWord(string $word, int $end): int
+    {
+        if ('esac' === $word) {
+            array_pop($this->frames);
+        }
+
+        return $this->afterWordPart($end);
+    }
+
+    private function afterCaseSubject(int $end): int
+    {
+        $this->frames[array_key_last($this->frames)] = self::CASE_PATTERN;
+
+        return $this->afterWordPart($end);
+    }
+
+    // Because a command follows a reserved word such as `then`, the command start lasts over it, while after `for` a `((` opens arithmetic.
+    private function afterCommandWord(string $word, ?int $frame, int $end): int
+    {
+        match (true) {
+            'case' === $word => $this->frames[] = self::CASE_SUBJECT,
+            'esac' === $word && self::CASE_BODY === $frame => array_pop($this->frames),
+            default => null,
+        };
+
+        if (!in_array($word, [...self::LEADS_A_COMMAND, 'for'], true)) {
+            return $this->afterWordPart($end);
+        }
+
+        $this->wordStarts = false;
+        $this->commandStarts = 'for' !== $word;
+        $this->arithmeticMayStart = 'for' === $word;
+
+        return $end;
     }
 
     // Because the shell reads the text between backticks before it parses it, a comment there ends at the closing backtick.
@@ -231,7 +282,7 @@ final class ShellLexer
     // Because a `case` command is no substitution, its frame does not hold back a here-document body.
     private function nesting(): int
     {
-        return count(array_filter($this->frames, static fn (int $frame): bool => self::CASE !== $frame));
+        return count(array_filter($this->frames, static fn (int $frame): bool => !in_array($frame, self::CASE_FRAMES, true)));
     }
 
     private function afterDoubleLessThan(int $offset): int
@@ -243,29 +294,39 @@ final class ShellLexer
         return $this->afterWordPart($this->hereDocuments->afterOperator($offset, $this->nesting()));
     }
 
-    // Because `((` where a command starts opens arithmetic, a `<<` in it is a shift and no here-document.
+    // Because `((` where a command starts or after `for` opens arithmetic, a `<<` in it is a shift, a `(` before a pattern opens nothing, and `<(` or `>(` is part of its word.
     private function afterOpeningParenthesis(int $offset): int
     {
-        if ($this->commandStarts && '(' === ($this->source[$offset + 1] ?? '')) {
-            return $this->open(self::ARITHMETIC, $offset + 2);
-        }
-
-        return $this->open(self::SUBSHELL, $offset + 1);
+        return match (true) {
+            self::CASE_PATTERN === array_last($this->frames) => $this->startingAWord($offset + 1),
+            ($this->commandStarts || $this->arithmeticMayStart) && '(' === ($this->source[$offset + 1] ?? '') => $this->open(self::ARITHMETIC, $offset + 2),
+            0 < $offset && str_contains('<>', $this->source[$offset - 1]) => $this->open(self::SUBSTITUTION, $offset + 1),
+            default => $this->open(self::SUBSHELL, $offset + 1),
+        };
     }
 
-    // Because a `$( )` is part of the word around it, a `#` right after it is text, while a `)` that closes nothing, as in a `case` pattern, starts a command.
+    // Because a `$( )`, `<( )` or `>( )` is part of the word around it, a `#` right after it is text, while a `)` that closes nothing, as after a `case` pattern, starts a command.
     private function afterClosingParenthesis(int $end): int
     {
         return match (array_last($this->frames)) {
+            self::CASE_PATTERN => $this->afterCasePattern($end),
             self::SUBSTITUTION => $this->closed($end),
             self::SUBSHELL => $this->startingAWord($this->closed($end)),
             default => $this->startingACommand($end),
         };
     }
 
+    private function afterCasePattern(int $end): int
+    {
+        $this->frames[array_key_last($this->frames)] = self::CASE_BODY;
+
+        return $this->startingACommand($end);
+    }
+
     private function startingACommand(int $end): int
     {
         $this->commandStarts = true;
+        $this->arithmeticMayStart = false;
 
         return $this->startingAWord($end);
     }
@@ -281,6 +342,7 @@ final class ShellLexer
     {
         $this->wordStarts = false;
         $this->commandStarts = false;
+        $this->arithmeticMayStart = false;
 
         return $end;
     }

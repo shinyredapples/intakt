@@ -11,6 +11,9 @@ final class YamlLexer
     private const string ENDS_A_PLAIN_RUN = " \t\r\n#:,[]{}";
     private const string BLOCK_SCALAR_HEADER = '~\G[|>]([0-9+-]*+)(?=[ \t\r\n]|\z)~';
     private const string DOCUMENT_MARKER = '~\G(?:---|\.\.\.)(?=[ \t\r\n]|\z)~';
+    private const string BYTE_ORDER_MARK = "\u{FEFF}";
+    // Because in a flow collection a `:` followed by any other character belongs to a plain scalar, as in `a:'b`.
+    private const string ENDS_A_FLOW_KEY = " \t\r\n,[]{}";
 
     private readonly int $length;
     private bool $valueStarts = true;
@@ -21,6 +24,7 @@ final class YamlLexer
     private bool $plainScalarOpen = false;
     private bool $blockScalarFollows = false;
     private ?int $blockScalarIndent = null;
+    private bool $jsonNodeEnded = false;
 
     /**
      * @var list<array{int, string}>
@@ -37,7 +41,7 @@ final class YamlLexer
      */
     public function comments(): array
     {
-        $offset = $this->afterLineStart(0);
+        $offset = $this->afterLineStart(str_starts_with($this->source, self::BYTE_ORDER_MARK) ? strlen(self::BYTE_ORDER_MARK) : 0);
 
         while ($offset < $this->length) {
             $offset = $this->afterToken($offset);
@@ -77,12 +81,18 @@ final class YamlLexer
         $char = $this->source[$offset];
 
         return match (true) {
-            "\n" === $char => $this->afterLineEnd($offset + 1),
+            "\n" === $char, $this->isABareCarriageReturn($offset) => $this->afterLineEnd($offset + 1),
             str_contains(self::BLANKS, $char) => $offset + strspn($this->source, self::BLANKS, $offset),
             '#' === $char && $this->followsABreak($offset) => $this->afterComment($offset),
             $this->valueStarts => $this->afterValueStart($offset, $char),
             default => $this->afterPlainCharacter($offset, $char),
         };
+    }
+
+    // Because YAML also breaks a line at a carriage return that no line feed follows.
+    private function isABareCarriageReturn(int $offset): bool
+    {
+        return "\r" === $this->source[$offset] && "\n" !== ($this->source[$offset + 1] ?? '');
     }
 
     private function afterLineEnd(int $offset): int
@@ -102,15 +112,15 @@ final class YamlLexer
 
         while ($offset < $this->length) {
             $indent = strspn($this->source, ' ', $offset);
-            $lineEnd = $offset + strcspn($this->source, "\n", $offset);
-            $text = $offset + $indent + strspn($this->source, self::BLANKS, $offset + $indent);
+            $lineEnd = $offset + strcspn($this->source, "\r\n", $offset);
+            $text = $offset + $indent + strspn($this->source, " \t", $offset + $indent);
 
             if ($text < $lineEnd && $indent < ($contentIndent ?? $this->parentIndent + 1)) {
                 return $offset;
             }
 
             $contentIndent ??= $text < $lineEnd ? $indent : null;
-            $offset = $lineEnd + 1;
+            $offset = $lineEnd + ("\r\n" === substr($this->source, $lineEnd, 2) ? 2 : 1);
         }
 
         return $this->length;
@@ -119,7 +129,7 @@ final class YamlLexer
     // Because a `#` right after other text, as in `a#b`, belongs to a plain scalar.
     private function followsABreak(int $offset): bool
     {
-        return 0 === $offset || str_contains(self::BLANKS."\n", $this->source[$offset - 1]);
+        return $this->lineStart === $offset || str_contains(self::BLANKS."\n", $this->source[$offset - 1]);
     }
 
     private function afterComment(int $offset): int
@@ -137,8 +147,8 @@ final class YamlLexer
         $this->nodeColumn = $offset - $this->lineStart;
 
         return match (true) {
-            "'" === $char => $this->afterScalar($this->afterSingleQuoted($offset + 1)),
-            '"' === $char => $this->afterScalar($this->afterDoubleQuoted($offset + 1)),
+            "'" === $char => $this->afterJsonNode($this->afterSingleQuoted($offset + 1)),
+            '"' === $char => $this->afterJsonNode($this->afterDoubleQuoted($offset + 1)),
             '[' === $char, '{' === $char => $this->openFlow($offset + 1),
             '!' === $char, '&' === $char => $offset + strcspn($this->source, self::BLANKS."\n", $offset),
             str_contains('-?', $char) && $this->blankFollows($offset) => $this->afterEntryIndicator($offset + 1),
@@ -161,8 +171,10 @@ final class YamlLexer
         return $this->length;
     }
 
-    private function afterScalar(int $end): int
+    // Because a `:` may touch the value after a quoted scalar or a flow collection, as in `{"a":"b"}`.
+    private function afterJsonNode(int $end): int
     {
+        $this->jsonNodeEnded = true;
         $this->valueStarts = false;
         $this->plainScalarOpen = false;
 
@@ -207,18 +219,20 @@ final class YamlLexer
         $this->blockScalarFollows = true;
         $explicit = (int) preg_replace('~\D~', '', $indicators);
         $this->blockScalarIndent = 0 < $explicit ? $this->parentIndent + $explicit : null;
+        $this->valueStarts = false;
+        $this->plainScalarOpen = false;
 
-        return $this->afterScalar($end);
+        return $end;
     }
 
-    // Because in a flow collection a `:` may touch the value, as in `{"a":"b"}`, while in a block mapping it needs a blank after it and makes its key the parent of the value.
+    // Because in a flow collection a `:` ends a key before a blank or a flow indicator or right after a quoted key, while in a block mapping it needs a blank after it and makes its key the parent of the value.
     private function afterPlainCharacter(int $offset, string $char): int
     {
         return match (true) {
-            ':' === $char && 0 < $this->flowDepth => $this->startingAValue($offset + 1),
-            ':' === $char && $this->blankFollows($offset) => $this->afterMappingIndicator($offset + 1),
+            ':' === $char && 0 < $this->flowDepth && ($this->jsonNodeEnded || str_contains(self::ENDS_A_FLOW_KEY, $this->source[$offset + 1] ?? ' ')) => $this->startingAValue($offset + 1),
+            ':' === $char && 0 === $this->flowDepth && $this->blankFollows($offset) => $this->afterMappingIndicator($offset + 1),
             0 < $this->flowDepth && ',' === $char => $this->startingAValue($offset + 1),
-            0 < $this->flowDepth && (']' === $char || '}' === $char) => $this->afterScalar($this->closedFlow($offset + 1)),
+            0 < $this->flowDepth && (']' === $char || '}' === $char) => $this->afterJsonNode($this->closedFlow($offset + 1)),
             default => $this->afterPlainRun($offset + max(1, strcspn($this->source, self::ENDS_A_PLAIN_RUN, $offset))),
         };
     }
@@ -227,6 +241,7 @@ final class YamlLexer
     {
         $this->valueStarts = true;
         $this->plainScalarOpen = false;
+        $this->jsonNodeEnded = false;
 
         return $end;
     }
@@ -249,6 +264,7 @@ final class YamlLexer
     {
         $this->valueStarts = false;
         $this->plainScalarOpen = true;
+        $this->jsonNodeEnded = false;
 
         return $end;
     }

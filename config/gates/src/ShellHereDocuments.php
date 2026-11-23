@@ -23,7 +23,7 @@ final class ShellHereDocuments
     {
         $tabsStripped = '-' === ($this->source[$offset] ?? '');
         $offset += (int) $tabsStripped;
-        $start = $offset + strspn($this->source, " \t", $offset);
+        $start = $this->afterBlanks($offset);
         [$delimiter, $end] = $this->delimiterAt($start);
 
         if ($start < $end) {
@@ -52,6 +52,18 @@ final class ShellHereDocuments
         return $offset;
     }
 
+    // Because a backslash before a line feed joins the lines, it may stand between the operator and the delimiter.
+    private function afterBlanks(int $offset): int
+    {
+        do {
+            $offset += strspn($this->source, " \t", $offset);
+            $joined = "\\\n" === substr($this->source, $offset, 2);
+            $offset += $joined ? 2 : 0;
+        } while ($joined);
+
+        return $offset;
+    }
+
     // Because quoting any part of the delimiter only keeps the body from being expanded, the delimiter line is matched after quote removal.
     /**
      * @return array{string, int}
@@ -75,13 +87,13 @@ final class ShellHereDocuments
         return [$delimiter, $offset];
     }
 
-    // Because inside double quotes a backslash escapes only `$`, a backtick, `"` and itself, any other backslash stays in the delimiter.
+    // Because inside double quotes a backslash escapes only `$`, a backtick, `"` and itself, any other backslash stays in the delimiter, while a backslash before a line feed joins the lines in both places.
     private function withoutQuotes(string $part): string
     {
         return match ($part[0]) {
             "'" => substr($part, 1, -1),
-            '"' => (string) preg_replace('~\\\\([$`"\\\\])~', '$1', substr($part, 1, -1)),
-            '\\' => substr($part, 1),
+            '"' => (string) preg_replace(['~\\\\\n~', '~\\\\([$`"\\\\])~'], ['', '$1'], substr($part, 1, -1)),
+            '\\' => ltrim(substr($part, 1), "\n"),
             default => $part,
         };
     }

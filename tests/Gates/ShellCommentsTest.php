@@ -67,6 +67,14 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment after a here-document whose double-quoted delimiter holds an escaped quote' => ["cat <<\"a\\\"b\"\ntext\na\"b\n# TODO real comment\n", [4 => 'TODO']];
         yield 'a comment in a command substitution before a pending here-document body' => ["cat <<EOF \"\$(\nprintf '%s' arg\n# TODO real comment\n)\"\n# FIXME body text\nEOF\n", [3 => 'TODO']];
         yield 'a comment after a here-document inside a command substitution' => ["a=\$(cat <<EOF\n# inside\nEOF\n)\n# TODO later\n", [5 => 'TODO']];
+        yield 'a comment after an arithmetic for loop with a left shift' => ["for (( i = 1; i < 1 << 3; i++ )); do\n  echo \$i\ndone\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after an arithmetic for loop with a touching left shift' => ["for ((i=1; i<<1; i++)); do break; done\n# TODO finish\n", [2 => 'TODO']];
+        yield 'a comment after a for loop over a variable named case' => ["for case in a; do true; done\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment in a case branch after a nested case and a parenthesized pattern' => ["a=\"\$(case x in\n  (x) case y in y) true ;; esac ;;\n  z) true # TODO finish\n  ;;\nesac)\"\n", [3 => 'TODO']];
+        yield 'a comment after a subshell in a case branch' => ["case \$a in\n  (x) (cd y) ;;\nesac\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment in a case branch after a continuing branch end' => ["a=\$(case \$b in\n  x) true ;;&\n  y) true # TODO later\n  ;;\nesac)\n", [3 => 'TODO']];
+        yield 'a comment after a here-document whose delimiter follows a backslash and a line feed' => ["cat <<\\\nEOF\n# FIXME body\nEOF\n# TODO finish\n", [5 => 'TODO']];
+        yield 'a comment after a here-document whose delimiter holds a backslash and a line feed' => ["cat <<E\\\nOF\n# FIXME body\nEOF\n# TODO finish\n", [5 => 'TODO']];
     }
 
     /**
@@ -99,6 +107,8 @@ final class ShellCommentsTest extends TestCase
         yield 'a marker in a base literal of an arithmetic expansion' => ["echo \$((16#ff))\n"];
         yield 'a marker after a command substitution in the same word' => ["printf '%s\\n' \$(printf word)#TODO\n"];
         yield 'a marker after a backtick substitution in the same word' => ["echo `printf word`#TODO\n"];
+        yield 'a marker after a process substitution in the same word' => ["printf '%s\\n' <(printf word)#TODO\n"];
+        yield 'a marker after an output process substitution in the same word' => ["tee >(cat)#TODO\n"];
         yield 'a marker after the comment start' => ["# see the TODO list\n"];
         yield 'a reasoned exception' => ["# TODO(#123): drop once the image ships bash 5\n"];
         yield 'a marker in code' => ["TODO=1\n"];
