@@ -217,7 +217,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
     /**
      * @param Closure(Throwable): Throwable $rejected
-     * @param array<string, mixed> $options
+     * @param array<string, mixed>          $options
      */
     private function typedWhenRead(DeferredResult $answer, Closure $rejected, array $options): DeferredResult
     {
