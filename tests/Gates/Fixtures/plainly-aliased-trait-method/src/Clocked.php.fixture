@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Psr\Clock\ClockInterface;
+use Psr\Container\ContainerInterface;
+
+trait ReadsServices
+{
+    public function has(ContainerInterface $container): bool
+    {
+        return $container->has('clock');
+    }
+}
+
+final readonly class Clocked
+{
+    use ReadsServices { has as public hasService; }
+
+    public function __construct(private ClockInterface $clock)
+    {
+    }
+
+    public function now(): string
+    {
+        return $this->clock->now()->format('c');
+    }
+}

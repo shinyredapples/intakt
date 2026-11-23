@@ -100,7 +100,7 @@ final class DemoTourJourneyTest extends JourneyTestCase
         self::assertSame('Step 5 of 5', $page->filter('#tour-caption .tour-dots')->attr('aria-label'));
         self::assertSame('#review-verdict[data-round="'.self::SECOND.'"]', $page->filter('#tour-caption')->attr('data-tour-at'));
         // The recorded demo run keeps no quorum decision, so the card's words say the outcome was not recorded; the stage only needs the card itself.
-        self::assertSame(['0 to fix · 0 urgent', 1], [$page->filter('#review-verdict .verdict-count')->text(), $page->filter($page->filter('#tour-caption')->attr('data-tour-at'))->count()]);
+        self::assertSame(['0 to fix', 1], [$page->filter('#review-verdict .verdict-count')->text(), $page->filter($page->filter('#tour-caption')->attr('data-tour-at'))->count()]);
         self::assertSame(TourStage::RoundEnds->sentence(), $page->filter('#tour-caption .tour-line')->text());
     }
 
