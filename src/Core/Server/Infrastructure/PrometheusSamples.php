@@ -44,11 +44,11 @@ final readonly class PrometheusSamples
     {
         $total = round(array_sum(array_map(fn (string $name): float => $this->totals[$name] ?? 0.0, $names)));
 
-        return self::fitsInt($total) ? (int) $total : null;
+        return $this->fitsInt($total) ? (int) $total : null;
     }
 
     // PHP_INT_MAX turns into 2^63 as a float, so the upper bound must be strict against -PHP_INT_MIN.
-    private static function fitsInt(float $total): bool
+    private function fitsInt(float $total): bool
     {
         return $total >= (float) PHP_INT_MIN && $total < -(float) PHP_INT_MIN;
     }
