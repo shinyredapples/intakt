@@ -319,10 +319,10 @@ final class MainHistoryTest extends TestCase
             $fields[] = substr($blob, $offset + 4, (int) hexdec(bin2hex(substr($blob, $offset, 4))));
         }
         self::assertCount(3, $fields);
-        $fields[$number] = "\x00".$fields[$number];
+        $padded = array_map(static fn (string $field, int $index): string => $index === $number ? "\x00".$field : $field, $fields, array_keys($fields));
 
         try {
-            $this->historyWithPeers([$type.' '.$key], [self::key($type, $fields)]);
+            $this->historyWithPeers([$type.' '.$key], [self::key($type, $padded)]);
             self::fail('A padded copy of the owner key must be refused.');
         } catch (OwnerKeyRefused $refused) {
             self::assertStringStartsWith('Peer key 1 is not one SSH public key', $refused->getMessage());
