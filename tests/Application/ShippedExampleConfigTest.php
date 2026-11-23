@@ -15,38 +15,38 @@ final class ShippedExampleConfigTest extends TestCase
     public function testEveryModelTheShippedExampleMapsOrPinsHasAPriceInTheExample(): void
     {
         $config = $this->example();
-        $models = [$config['codex']['model']];
-        foreach ($config['projects'] as $project) {
-            foreach ($project['tiers'] as $tier) {
-                $models[] = $tier['model'];
-                foreach ($tier['substitutes'] ?? [] as $substitute) {
-                    $models[] = $substitute['model'];
+        $models = [$this->text($config, 'codex', 'model')];
+        foreach ($this->map($config, 'projects') as $project) {
+            foreach ($this->map($project, 'tiers') as $tier) {
+                $models[] = $this->text($tier, 'model');
+                foreach ($this->substitutes($tier) as $substitute) {
+                    $models[] = $this->text($substitute, 'model');
                 }
             }
         }
 
-        $unpriced = array_values(array_diff(array_unique($models), array_keys($config['budget']['prices'])));
+        $unpriced = array_values(array_diff(array_unique($models), array_map(strval(...), array_keys($this->map($config, 'budget', 'prices')))));
 
         self::assertSame([], $unpriced);
     }
 
     public function testTheShippedExamplePricesItsOpenAiModelsAtTheSampleProjectsListPrices(): void
     {
-        $example = $this->example()['budget']['prices'];
-        $sample = Yaml::parseFile($this->root().'/config/sample-project.yaml')['prices'];
+        $example = $this->example();
+        $sample = $this->sample();
 
         foreach (['gpt-6.2-sol', 'gpt-6.1-terra', 'gpt-6-luna'] as $model) {
-            self::assertSame($sample[$model], $example[$model], $model);
+            self::assertSame($this->at($sample, 'prices', $model), $this->at($example, 'budget', 'prices', $model), $model);
         }
-        self::assertSame(['input' => 2, 'output' => 10], $example['gpt-6.2-sol']);
-        self::assertSame(['input' => 1, 'output' => 5], $example['gpt-6.1-terra']);
+        self::assertSame(['input' => 2, 'output' => 10], $this->at($example, 'budget', 'prices', 'gpt-6.2-sol'));
+        self::assertSame(['input' => 1, 'output' => 5], $this->at($example, 'budget', 'prices', 'gpt-6.1-terra'));
     }
 
     public function testTheShippedExampleMapsTheBetaLightTierToGpt6LunaOnOpenAi(): void
     {
         self::assertSame(
             ['provider' => 'openai', 'model' => 'gpt-6-luna'],
-            $this->example()['projects']['beta']['tiers']['light'],
+            $this->at($this->example(), 'projects', 'beta', 'tiers', 'light'),
         );
     }
 
@@ -60,7 +60,7 @@ final class ShippedExampleConfigTest extends TestCase
                 'standard' => ['provider' => 'anthropic', 'model' => 'claude-sonnet-5-5'],
                 'light' => ['provider' => 'anthropic', 'model' => 'claude-haiku-5-5'],
             ],
-            $config['projects']['alpha']['tiers'],
+            $this->at($config, 'projects', 'alpha', 'tiers'),
         );
         self::assertSame(
             [
@@ -68,22 +68,62 @@ final class ShippedExampleConfigTest extends TestCase
                 'standard' => ['provider' => 'openai', 'model' => 'gpt-6.1-terra'],
                 'light' => ['provider' => 'openai', 'model' => 'gpt-6-luna'],
             ],
-            $config['projects']['beta']['tiers'],
+            $this->at($config, 'projects', 'beta', 'tiers'),
         );
-        self::assertSame('gpt-6.2-sol', $config['codex']['model']);
+        self::assertSame('gpt-6.2-sol', $this->at($config, 'codex', 'model'));
     }
 
     public function testTheShippedExampleAndTheSampleProjectCarryTheSamePriceDate(): void
     {
-        $sample = Yaml::parseFile($this->root().'/config/sample-project.yaml');
-
-        self::assertSame($sample['price_date'], $this->example()['budget']['price_date']);
+        self::assertSame($this->at($this->sample(), 'price_date'), $this->at($this->example(), 'budget', 'price_date'));
     }
 
-    /** @return array<string, mixed> */
-    private function example(): array
+    private function example(): mixed
     {
         return Yaml::parseFile($this->root().'/config/intakt.example.yaml');
+    }
+
+    private function text(mixed $value, string ...$path): string
+    {
+        $text = $this->at($value, ...$path);
+        self::assertIsString($text);
+
+        return $text;
+    }
+
+    /** @return array<array-key, mixed> */
+    private function map(mixed $value, string ...$path): array
+    {
+        $map = $this->at($value, ...$path);
+        self::assertIsArray($map);
+
+        return $map;
+    }
+
+    /** @return array<array-key, mixed> */
+    private function substitutes(mixed $tier): array
+    {
+        self::assertIsArray($tier);
+        $substitutes = $tier['substitutes'] ?? [];
+        self::assertIsArray($substitutes);
+
+        return $substitutes;
+    }
+
+    private function sample(): mixed
+    {
+        return Yaml::parseFile($this->root().'/config/sample-project.yaml');
+    }
+
+    private function at(mixed $value, string ...$path): mixed
+    {
+        foreach ($path as $key) {
+            self::assertIsArray($value);
+            self::assertArrayHasKey($key, $value);
+            $value = $value[$key];
+        }
+
+        return $value;
     }
 
     private function root(): string
