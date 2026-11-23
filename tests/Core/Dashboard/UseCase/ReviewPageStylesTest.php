@@ -46,6 +46,36 @@ final class ReviewPageStylesTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/gap:\s*\d+px;/', $rules['.urgency-bar'] ?? '');
     }
 
+    // A zero basis let a long reviewer label take the whole row on a desktop, so the verdict column reserves its width and the faces wrap in what is left.
+    public function testOnADesktopTheVerdictColumnKeepsAWidthTheReviewerFacesCannotSqueeze(): void
+    {
+        $rules = $this->rulesOf($this->outsideMediaQueries($this->sheet('review.css')));
+
+        self::assertMatchesRegularExpression('/flex:\s*1 0 14rem;/', $rules['.verdict-card .verdict-text'] ?? '');
+        self::assertMatchesRegularExpression('/min-width:\s*0;/', $rules['.verdict-reviewers'] ?? '');
+    }
+
+    // Below 600 px the reviewers sit on their own row, so the verdict column there shares the row with the owl alone as before.
+    public function testOnAPhoneTheVerdictColumnGivesUpItsReservedWidth(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock($this->sheet('review.css')));
+
+        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.verdict-card .verdict-text'] ?? '');
+        self::assertMatchesRegularExpression('/width:\s*100%;/', $rules['.verdict-reviewers'] ?? '');
+    }
+
+    private function outsideMediaQueries(string $sheet): string
+    {
+        return (string) preg_replace('/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/', '', $sheet);
+    }
+
+    private function phoneBlock(string $sheet): string
+    {
+        self::assertSame(1, preg_match('/@media \(max-width: 599px\) \{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/', $sheet, $block));
+
+        return $block[1];
+    }
+
     private function sheet(string $name): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/'.$name);
