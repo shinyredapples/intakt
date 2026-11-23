@@ -124,6 +124,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Uid\UuidV7;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\Exception\LockStorageException;
@@ -838,7 +840,24 @@ final class BuildTaskTest extends TestCase
         self::assertCount(7, $runs);
         self::assertCount(1, array_unique(array_slice($runs, 0, 6)));
         self::assertNotSame($runs[0], $runs[6]);
-        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $runs[6]);
+    }
+
+    public function testARunStartedLaterCarriesARunIdThatSortsAfterTheEarlierRunsId(): void
+    {
+        $ledger = new InMemoryLedger();
+        $clock = new MockClock('2026-11-23 10:00:00');
+        (void) $this->taskOf($ledger, [], $clock)->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf($ledger, [], $clock)->run($this->request(7, $this->remote->path));
+        $clock->sleep(1);
+
+        (void) $this->taskOf($ledger, [], $clock)->run($this->request(7, $this->remote->path));
+
+        $runs = array_column($ledger->payloads(), 'run');
+        self::assertCount(3, $runs);
+        self::assertContainsOnlyInstancesOf(UuidV7::class, array_map(Uuid::fromString(...), $runs));
+        self::assertLessThan(0, strcmp($runs[0], $runs[1]));
+        self::assertLessThan(0, strcmp($runs[1], $runs[2]));
+        self::assertSame('2026-11-23 10:00:01', Uuid::fromString($runs[2])->getDateTime()->format('Y-m-d H:i:s'));
     }
 
     public function testTheTaskIsReadThroughTheSingleIssueReadNeverTheListing(): void
@@ -1042,9 +1061,9 @@ final class BuildTaskTest extends TestCase
     /**
      * @param list<ListedIssue> $issues
      */
-    private function taskOf(InMemoryLedger $ledger, array $issues): BuildTask
+    private function taskOf(InMemoryLedger $ledger, array $issues, MockClock $clock = new MockClock()): BuildTask
     {
-        return $this->buildTask($this->listing($issues), $this->checkout(), $ledger);
+        return $this->buildTask($this->listing($issues), $this->checkout(), $ledger, $clock);
     }
 
     /**
@@ -1182,7 +1201,7 @@ final class BuildTaskTest extends TestCase
         return $this->checkoutIn($this->mirrors);
     }
 
-    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
+    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger, MockClock $clock = new MockClock()): BuildTask
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
@@ -1195,7 +1214,7 @@ final class BuildTaskTest extends TestCase
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured));
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $clock);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

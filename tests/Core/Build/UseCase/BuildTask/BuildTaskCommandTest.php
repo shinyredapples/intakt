@@ -373,7 +373,7 @@ final class BuildTaskCommandTest extends TestCase
         $repositories = self::createStub(ConfiguredRepositories::class);
         $repositories->method('nameOf')->willReturn($this->configuredRepository);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories));
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new MockClock());
     }
 
     /**

@@ -33,6 +33,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use InvalidArgumentException;
 use LogicException;
 use NoDiscard;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Filesystem\Exception\IOException;
 
 // Because the build lane calls this for one task at a time, a run stops at the first failed step and never retries it: sending a failure back to the builder is the next task.
@@ -49,6 +50,7 @@ final readonly class BuildTask
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
         private PushRemoteCheck $remoteCheck,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -66,7 +68,7 @@ final readonly class BuildTask
             throw PushRemoteRefused::because($refusal);
         }
 
-        $run = BuildRun::startedFor($request);
+        $run = BuildRun::startedFor($request, $this->clock->now());
         $task = $this->readTask($request);
 
         if (!$task instanceof ListedIssue) {

@@ -18,6 +18,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(LedgerPayload::class)]
 final class ShowTaskControllerTest extends DashboardPageTestCase
 {
+    // Time-ordered, as the build takes them, so the newer run's id sorts after the older run's.
+    private const string OLDER_RUN = '019a8f00-0000-7000-8000-000000000001';
+
+    private const string NEWER_RUN = '019a8f00-0000-7000-8000-000000000002';
+
     public function testATaskThatStoppedAtTheMirrorShowsTheMirrorStepFailedWithItsReason(): void
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
@@ -241,11 +246,11 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
     public function testAnOlderRunThatEndsAStepAfterTheNewerRunFailedItLeavesTheNewerRunsFailureShown(): void
     {
-        $this->stepOfRun('older', 'task');
-        $this->stepOfRun('newer', 'task');
-        $this->stepOfRun('newer', 'mirror', 'fetch refused');
-        $this->stepOfRun('older', 'mirror');
-        $this->stepOfRun('older', 'clone');
+        $this->stepOfRun(self::OLDER_RUN, 'task');
+        $this->stepOfRun(self::NEWER_RUN, 'task');
+        $this->stepOfRun(self::NEWER_RUN, 'mirror', 'fetch refused');
+        $this->stepOfRun(self::OLDER_RUN, 'mirror');
+        $this->stepOfRun(self::OLDER_RUN, 'clone');
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
@@ -255,9 +260,9 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
     public function testTheRunStartedLastIsTheLatestRunThoughAnOlderRunWroteTheLastRow(): void
     {
-        $this->stepOfRun('older', 'task');
-        $this->stepOfRun('newer', 'task');
-        $this->stepOfRun('older', 'mirror');
+        $this->stepOfRun(self::OLDER_RUN, 'task');
+        $this->stepOfRun(self::NEWER_RUN, 'task');
+        $this->stepOfRun(self::OLDER_RUN, 'mirror');
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
