@@ -123,9 +123,22 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         self::assertSame('tests/AttributeTest.php:13 intakt.testMethodSentence Test method Intakt\Sample\AttributeTest::works() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-test-attribute'));
     }
 
-    public function testAnArticleBeforeAnAcronymCountsAsAWordOfItsOwn(): void
+    public function testARunOfCapitalsCountsAsOneWordEvenWhenItStartsWithAnArticle(): void
     {
-        self::assertSame('tests/ArticleTest.php:21 intakt.testMethodSentence Test method Intakt\Sample\ArticleTest::testURLWorks() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-article-before-acronym'));
+        $finding = ' is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().';
+
+        self::assertSame(
+            'tests/CapitalRunTest.php:11 intakt.testMethodSentence Test method Intakt\Sample\CapitalRunTest::testASCIIWorks()'.$finding."\n"
+            .'tests/CapitalRunTest.php:16 intakt.testMethodSentence Test method Intakt\Sample\CapitalRunTest::testAURLWorks()'.$finding,
+            $this->ruleFindingsOf('test-method-capital-run'),
+        );
+    }
+
+    public function testAChangedFilesRunReportsAShortStaticTestMethodThatReturnsVoid(): void
+    {
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=1');
+
+        $this->assertRuleRejects('test-method-static-test', 'Intakt\Sample\StaticTest::testRun()');
     }
 
     public function testAShortTestMethodOfAnAnonymousTestCasePassesStaticAnalysis(): void

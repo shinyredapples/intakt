@@ -24,8 +24,8 @@ use PHPUnit\Framework\TestCase;
  */
 final readonly class TestMethodCollector implements Collector
 {
-    // an acronym or a capital with the lowercase letters and digits after it is one word, so HTTPRequest and Its192Px are two words each; A and I, the one-letter English words, are a word of their own in front of an acronym, so AURL is two
-    private const string WORD = '[AI](?=[A-Z]{2,}(?![a-z]))|[A-Z]{2,}(?![a-z])[0-9]*|[A-Z][a-z0-9]*';
+    // an acronym or a capital with the lowercase letters and digits after it is one word, so HTTPRequest and Its192Px are two words each; a run of capitals stays one word even when it starts with A or I, because only a dictionary could tell an article in AURL from the acronym ASCII
+    private const string WORD = '[A-Z]{2,}(?![a-z])[0-9]*|[A-Z][a-z0-9]*';
 
     private const int SENTENCE_WORDS = 3;
 
@@ -112,7 +112,13 @@ final readonly class TestMethodCollector implements Collector
         $trait = $scope->getTraitReflection();
         $file = $trait?->getFileName() ?? $scope->getFile();
 
-        return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $method->isStatic()];
+        return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method)];
+    }
+
+    // PHPUnit wants a provider static and returning an iterable, so a static method declared to return a type that cannot be iterated, such as void, can only be a test
+    private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
+    {
+        return $method->isStatic() && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
     }
 
     // the class that declares the named method, because a provider a parent class or a trait declares is one declaration however many subclasses name it

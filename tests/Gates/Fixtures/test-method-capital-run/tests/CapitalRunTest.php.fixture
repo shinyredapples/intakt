@@ -6,19 +6,24 @@ namespace Intakt\Sample;
 
 use PHPUnit\Framework\TestCase;
 
-final class ArticleTest extends TestCase
+final class CapitalRunTest extends TestCase
 {
+    public function testASCIIWorks(): void
+    {
+        self::assertTrue(true);
+    }
+
     public function testAURLWorks(): void
     {
         self::assertTrue(true);
     }
 
-    public function testIDIsSet(): void
+    public function testAUrlIsSent(): void
     {
         self::assertTrue(true);
     }
 
-    public function testURLWorks(): void
+    public function testIDIsSet(): void
     {
         self::assertTrue(true);
     }
