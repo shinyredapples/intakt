@@ -69,6 +69,27 @@ final class CheckedLockFilesTest extends TestCase
         self::assertNull($this->lockFilesOf($head));
     }
 
+    public function testABranchThatMergedANewerMainLockFileIsKeyedByThatLockFile(): void
+    {
+        $this->givenMainHolds("{\"packages\": []}\n");
+        $this->history->commit('Work on the task');
+        $this->givenMainMovesOn('composer.lock', "{\"packages\": [\"psr/log\"]}\n");
+
+        $head = $this->history->merge('main');
+
+        self::assertSame(['composer.json' => "{}\n", 'composer.lock' => "{\"packages\": [\"psr/log\"]}\n"], $this->bytesOf($head));
+    }
+
+    public function testAMirrorWithoutMainKeysTheHeadByItsOwnLockFiles(): void
+    {
+        $this->history->commitFile('composer.json', "{}\n", 'Add the manifest');
+        $head = $this->history->commitFile('composer.lock', "{\"packages\": []}\n", 'Add the lock file');
+        $this->history->push('task');
+        $this->history->inMirror('update-ref', '-d', 'refs/heads/main');
+
+        self::assertSame(['composer.json' => "{}\n", 'composer.lock' => "{\"packages\": []}\n"], $this->bytesOf($head));
+    }
+
     public function testAMissingLockFileGetsNoReuse(): void
     {
         $this->history->checkout('main');

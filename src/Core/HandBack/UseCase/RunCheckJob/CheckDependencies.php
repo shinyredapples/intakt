@@ -14,6 +14,7 @@ use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use NoDiscard;
+use Symfony\Component\Filesystem\Exception\IOException;
 
 // Null whenever the check installs its dependencies itself, as every check did before snapshots, so a reuse that cannot be proven safe only costs time.
 final readonly class CheckDependencies
@@ -54,17 +55,32 @@ final readonly class CheckDependencies
         }
 
         $inputs = new LockInputs(array_map(static fn (CheckedLockFile $file): string => $file->bytes, $files), $platform);
-        $lease = $this->snapshots->lease($inputs->key()) ?? $this->leaseOfANewInstall($inputs, $step, $job->image);
+        $lease = $this->leaseOf($inputs) ?? $this->leaseOfANewInstall($inputs, $step, $job->image);
 
         return $lease instanceof DependencySnapshotLease ? new CheckSnapshot($lease, $step, $files, $platform) : null;
     }
 
+    private function leaseOf(LockInputs $inputs): ?DependencySnapshotLease
+    {
+        try {
+            return $this->snapshots->lease($inputs->key());
+        } catch (IOException) {
+            // A store that cannot be opened only costs the reuse, because the check then installs its dependencies itself.
+            return null;
+        }
+    }
+
+    /**
+     * @throws DockerEngineFailed
+     * @throws JobRefused
+     * @throws JobEventNotRecorded
+     */
     private function leaseOfANewInstall(LockInputs $inputs, DependencyStep $step, string $image): ?DependencySnapshotLease
     {
         if (!$this->jobs->installed($inputs, $step, $image)) {
             return null;
         }
 
-        return $this->snapshots->lease($inputs->key());
+        return $this->leaseOf($inputs);
     }
 }

@@ -192,6 +192,14 @@ final class CheckDependenciesTest extends TestCase
         self::assertSame(['probe'], $this->ranKinds());
     }
 
+    public function testAnUnavailableSnapshotStoreLeavesTheCheckToInstallItself(): void
+    {
+        $head = $this->head();
+        new Filesystem()->dumpFile(new CheckJobsFor($this->folder)->snapshotsFolder(), 'occupied');
+
+        self::assertNull($this->leaseFor($head));
+    }
+
     protected function setUp(): void
     {
         $this->history = new BuildHistory();
