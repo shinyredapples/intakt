@@ -28,6 +28,12 @@ Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replac
 - **Intakt:** a probe job has no network at all; the PHP gate's check job may reach the package registry hosts the gate names ([Check job](check-job.md)) and nothing else; any other job names the exact hosts it may reach, sits on an internal network of its own, and its only way out is a proxy of its own that allows `CONNECT` to port 443 of those hosts and nothing else (it does not check that TLS runs inside the tunnel); each refused request is recorded in the ledger (`job_egress_refused`). Built in `Core/Job` ([Egress](job-containers.md#egress)). The parity item for this behavior stays open until it has run on a host with a Docker daemon.
 - **Why:** the allowlist is a property of the job, not of the machine or a user account, so two jobs never share one.
 
+## Room learned per account from the first reading
+
+- **The loop:** learned on 2026-11-13, at full load, that two accounts of one vendor differ: on one a five-hour window lasted five builders about 90 minutes, on the other only the weekly window counted. Its planner was fixed that day.
+- **Intakt:** the planner learns each account's room from that account's own readings from the start and never assumes two accounts of one vendor are alike ([accounts differ](../design/05-architecture/06-budget-and-model-planner.md#accounts-differ)). Planned in T81; nothing of it is built yet.
+- **Why:** a rule found by running out of room is designed in, so Intakt does not learn it again.
+
 ## A start check and a reduced mode instead of failing halfway
 
 - **Intakt:** every job first checks that what it was told it can do works (a probe file written and read back in its output directory and work area, each input readable, each allowlisted host reachable through its proxy). A failed check is logged, recorded in the ledger with its reason (`job_start_check_failed`), and the job runs in its reduced mode, told so through `INTAKT_REDUCED_MODE`. Built in `docker/job/start-check.sh` and `Core/Job` ([Start check](job-containers.md#start-check)).
