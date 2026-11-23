@@ -483,9 +483,9 @@ final class DocsGateTest extends SandboxTestCase
     }
 
     /**
-     * @param array<string, array<string, int>> $paragraphs
-     * @param array<string, int>                $pages
-     * @param array<string, int>                $summaries
+     * @param array<string, array<array-key, int>> $paragraphs
+     * @param array<string, int>                   $pages
+     * @param array<string, int>                   $summaries
      */
     private function list(array $paragraphs = [], array $pages = [], array $summaries = []): string
     {

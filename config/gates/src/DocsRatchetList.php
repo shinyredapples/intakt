@@ -13,9 +13,9 @@ final readonly class DocsRatchetList
     private const string KEY = '/^[0-9a-f]{16}$/';
 
     /**
-     * @param array<string, array<string, int>> $paragraphs
-     * @param array<string, int>                $pages
-     * @param array<string, int>                $summaries
+     * @param array<array-key, array<array-key, int>> $paragraphs because PHP turns a key of digits alone into an integer
+     * @param array<string, int>                      $pages
+     * @param array<string, int>                      $summaries
      */
     private function __construct(
         public array $paragraphs,
@@ -45,7 +45,7 @@ final readonly class DocsRatchetList
     }
 
     /**
-     * @return array<string, array<string, int>>
+     * @return array<array-key, array<array-key, int>>
      */
     private static function paragraphsIn(mixed $section): array
     {
