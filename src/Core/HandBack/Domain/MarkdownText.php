@@ -55,16 +55,11 @@ final readonly class MarkdownText
     // Outside a list, an item whose marker line is empty, or an ordered item not numbered 1, does not interrupt a paragraph, so right after a paragraph line it is text (https://spec.commonmark.org/0.31.2/#list-items). The line above is a paragraph line unless it is blank, an ATX heading or a thematic break.
     public static function continuesAParagraph(string $lineAbove, string $line): bool
     {
-        if (!self::isParagraphLine($lineAbove) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
+        if ('' === trim($lineAbove) || 1 === preg_match(self::ATX_HEADING, $lineAbove) || self::isThematicBreak($lineAbove) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
             return false;
         }
 
         return null === $match[4] || (null !== $match[3] && 1 !== (int) $match[3]);
-    }
-
-    public static function isParagraphLine(string $line): bool
-    {
-        return '' !== trim($line) && 1 !== preg_match(self::ATX_HEADING, $line) && !self::isThematicBreak($line);
     }
 
     public static function isThematicBreak(string $line): bool

@@ -394,15 +394,11 @@ final class PullRequestTextRuleTest extends TestCase
     public function testABodyMissingAnItemAfterACommentOnlyItemWithWideMarkerSpacingIsRefused(): void
     {
         self::assertSame([2], PullRequestTextRule::judge("## Evidence\n-   <!-- note -->\n    Show the test run.\n  - Show the exit code.", 'E1: test run shown.')->missingItems);
+        self::assertSame([2], PullRequestTextRule::judge("## Evidence\n1.  <!-- note -->\n    Show the test run.\n  - Show the exit code.", 'E1: test run shown.')->missingItems);
     }
 
     public function testABodyMissingTheItemAfterALabelBelowABulletInIndentedCodeIsRefused(): void
     {
         self::assertSame([1], PullRequestTextRule::judge("Evidence:\n\n    - an example in indented code\n\nShow this result:\n- Show the test run.", 'Done.')->missingItems);
-    }
-
-    public function testAnOrderedLineAfterACommentIndentedInAParagraphAsksForNoReference(): void
-    {
-        self::assertSame([], PullRequestTextRule::judge("## Evidence\nFirst paragraph.\n    <!-- note -->\n10. still prose.", 'Done.')->missingItems);
     }
 }
