@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
+use Closure;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\BranchPullRequest;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -18,6 +19,7 @@ final class RecordedPullRequestBranches implements PullRequestBranches
     /** @var list<int> */
     public array $leftOut = [];
     public ?ForgeReadFailed $failure = null;
+    public ?Closure $during = null;
 
     public function __construct(
         private readonly RecordedIssueReads $issues,
@@ -27,6 +29,11 @@ final class RecordedPullRequestBranches implements PullRequestBranches
     public function openOf(string $project): array
     {
         ++$this->reads;
+        if ($this->during instanceof Closure) {
+            ($this->during)();
+        }
+
+
         if ($this->failure instanceof ForgeReadFailed) {
             throw $this->failure;
         }

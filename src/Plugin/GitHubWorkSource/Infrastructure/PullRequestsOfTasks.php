@@ -27,7 +27,7 @@ final readonly class PullRequestsOfTasks
     ) {
     }
 
-    // The lowest open pull request of each task that has one, found by closing keyword (from the plan) or by branch, and only one whose author and last editor have write access, because anyone can open a pull request on a branch named after a task.
+    // The lowest open pull request of each task that has one, found by closing keyword (from the plan) or by branch, and only one whose author and last editor have write access now, because anyone can open a pull request on a branch named after a task, and a plan kept from an unchanged listing does not see access withdrawn since.
     /**
      * @param list<QueuedIssue> $tasks
      *
@@ -43,14 +43,28 @@ final readonly class PullRequestsOfTasks
         $steers = $this->accessAskedOncePerAccount($project);
         $reworks = [];
         foreach ($tasks as $task) {
-            $byBranch = array_find($this->onTheBranchOf($task->number(), $open), fn (BranchPullRequest $pull): bool => $this->isTrusted($project, $pull, $steers));
-            $found = array_filter([$plan->pullRequests[$task->number()] ?? null, $byBranch?->number], static fn (?int $number): bool => null !== $number);
-            if ([] !== $found) {
-                $reworks[$task->number()] = min($found);
+            $found = array_find($this->candidatesOf($task->number(), $plan, $open), fn (BranchPullRequest $pull): bool => $this->isTrusted($project, $pull, $steers));
+            if ($found instanceof BranchPullRequest) {
+                $reworks[$task->number()] = $found->number;
             }
         }
 
         return $reworks;
+    }
+
+    // Lowest number first, so the first trusted one is the task's pull request. The closing one is always among the open ones, because the listing's open pull requests were checked against them.
+    /**
+     * @param list<BranchPullRequest> $open
+     *
+     * @return list<BranchPullRequest>
+     */
+    private function candidatesOf(int $task, IntakePlan $plan, array $open): array
+    {
+        $closing = $plan->pullRequests[$task] ?? null;
+        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => $pull->number === $closing || TaskBranchName::names($pull->branch, $task)));
+        usort($candidates, static fn (BranchPullRequest $a, BranchPullRequest $b): int => $a->number <=> $b->number);
+
+        return $candidates;
     }
 
     // Checked against the tick's complete listing, because pages that shift while they are read can skip a pull request, and a skipped one would let its task be built afresh.
@@ -79,16 +93,6 @@ final readonly class PullRequestsOfTasks
         return function (string $account) use ($project, &$answers): bool {
             return $answers[$account] ??= $this->accounts->steers($project, $account);
         };
-    }
-
-    /**
-     * @param list<BranchPullRequest> $open
-     *
-     * @return list<BranchPullRequest>
-     */
-    private function onTheBranchOf(int $task, array $open): array
-    {
-        return array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => TaskBranchName::names($pull->branch, $task)));
     }
 
     // The author is asked first, because a pull request whose author has no write access counts for nothing and its history need not be read; its history is the one it was listed with, so an edit since fails the read instead of passing unchecked.

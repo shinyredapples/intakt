@@ -165,11 +165,13 @@ final readonly class GitHubWorkSource implements WorkSource
         };
     }
 
-    // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see, and a pull request may be open that it did not see.
+    // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see, and a pull request may be open that it did not see. The pull requests are read before the failures, so a failure recorded during that forge read is still seen.
     private function pickUnlessFailed(string $project, QueuedIssue $issue, IntakePlan $plan): ?WorkPick
     {
         try {
-            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($this->taskOf($issue, $this->pullRequests->reworksOf($project, $plan, [$issue])));
+            $task = $this->taskOf($issue, $this->pullRequests->reworksOf($project, $plan, [$issue]));
+
+            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($task);
         } catch (ProjectHeldByAnotherWriter $held) {
             $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
 

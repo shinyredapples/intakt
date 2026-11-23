@@ -228,6 +228,28 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertEquals(new Task(7, 'Task 7', null), $this->source()->nextWork('alpha', WorkerState::Free)->task);
     }
 
+    public function testAPullRequestClosingTheTaskWhoseAuthorLostWriteAccessSinceTheListingDoesNotMakeTheTaskARework(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7', 'bea')]);
+        $source = $this->source();
+        self::assertSame(12, $source->queue('alpha')->ready()[0]->reworkOf);
+        $this->writers = ['ana'];
+        $this->reads->listsUnchanged();
+
+        self::assertNull($source->queue('alpha')->ready()[0]->reworkOf);
+    }
+
+    public function testATaskMarkedFailedWhileItsBranchesAreReadIsNeverPicked(): void
+    {
+        $this->reads->lists([Issues::task(7)]);
+        $source = $this->source();
+        $this->branches->during = static fn () => $source->failedForGood('alpha', 7, 'failed during the branch read');
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::NoTaskReady, $pick->nothing);
+    }
+
     public function testABranchReadThatFailsPicksNothingThisTick(): void
     {
         $this->branches->failure = new ForgeReadFailed('GitHub answered 502 to a read.');
