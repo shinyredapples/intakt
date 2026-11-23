@@ -1,9 +1,10 @@
-{#- facts: list of {text?, icon?, mono?, markup?, elapsed?, frozen_at?}, spaced by gaps, never by middle dots. `markup` is a macro's output printed after the text, for a figure a live update replaces by its own id. `elapsed` marks an elapsed time: it holds the time of a drop, hidden until the connection controller shows it. `frozen_at` shows that time as given, with no target. -#}
+{#- facts: list of {text?, icon?, mono?, label?, markup?, elapsed?, frozen_at?}, spaced by gaps, never by middle dots. `markup` is a macro's output printed after the text, for a figure a live update replaces by its own id. `label` names the figure in `markup` as a word of its own, so a long figure wraps beside it and the label does not break. `elapsed` marks an elapsed time: it holds the time of a drop, hidden until the connection controller shows it. `frozen_at` shows that time as given, with no target. -#}
 <p class="meta">
     {%- for fact in facts -%}
         <span{% if fact.mono|default(false) %} class="mono"{% endif %}>
             {%- if fact.icon is defined %}{{ include('dashboard/components/icon.html.twig', {name: fact.icon, small: true}, with_context = false) }}{% endif %}
             {{- fact.text ?? '' -}}
+            {%- if fact.label is defined %}<span class="fact-label">{{ fact.label }}</span> {% endif -%}
             {%- if fact.markup is defined %}{{ fact.markup }}{% endif -%}
             {%- if fact.frozen_at is defined %}<span class="frozen-at">at {{ fact.frozen_at }}</span>
             {%- elseif fact.elapsed|default(false) %}<span class="frozen-at" data-connection-target="frozen" hidden></span>{% endif -%}
