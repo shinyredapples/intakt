@@ -137,21 +137,6 @@ final class RunCheckJobDependenciesTest extends TestCase
 
     private bool $linkOut = false;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->checks = new CheckJobsFor($this->history->folder);
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_dir($this->checks->snapshotsFolder())) {
-            new Filesystem()->chmod($this->checks->snapshotsFolder(), 0o700, 0o000, true);
-        }
-
-        $this->history->remove();
-    }
-
     public function testACheckWhoseLockInputsHaveNoSnapshotRunsTheInstallJobAndSavesItsInstallUnderTheKey(): void
     {
         $this->givenMainLocks(self::LOCK);
@@ -364,6 +349,21 @@ final class RunCheckJobDependenciesTest extends TestCase
             self::assertTrue($this->pinHeldDuringTheCheck);
             self::assertTrue($this->pinIsFree());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->checks = new CheckJobsFor($this->history->folder);
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_dir($this->checks->snapshotsFolder())) {
+            new Filesystem()->chmod($this->checks->snapshotsFolder(), 0o700, 0o000, true);
+        }
+
+        $this->history->remove();
     }
 
     private function givenMainLocks(string $lock): void
