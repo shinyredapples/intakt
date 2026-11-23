@@ -25,14 +25,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(ListedProject::class)]
 final class ListProjectsOnTheInstallTest extends KernelTestCase
 {
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-    }
-
     public function testAConfiguredProjectFlaggedAsReplayIsListedWithTheReplayMark(): void
     {
         $this->configure(['demo']);
@@ -46,6 +38,14 @@ final class ListProjectsOnTheInstallTest extends KernelTestCase
         $this->configure(['alpha']);
 
         self::assertSame(ReplayMark::Live, $this->tool()()->projects[0]->mark);
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
     /**

@@ -34,17 +34,6 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
     private LockFactory $locks;
     private DateTimeImmutable $lastReading;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->locks = new LockFactory(new InMemoryStore());
-        $this->lastReading = new MockClock('2026-11-02 08:00:00 UTC')->now();
-    }
-
     public function testAnOutageIsNoticedToTheOwnerOnce(): void
     {
         $notices = $this->noticesTelling(1);
@@ -115,6 +104,17 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         $notices->noticeOnce($this->outageOf(new Account(Provider::Anthropic, 'main'), $this->lastReading));
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->lastReading = new MockClock('2026-11-02 08:00:00 UTC')->now();
+    }
+
     private function noticesTelling(int $times): DoctrineOutageNotices
     {
         $logger = $this->createMock(LoggerInterface::class);
@@ -123,13 +123,13 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         return new DoctrineOutageNotices($this->entities, $this->locks, $logger);
     }
 
-    private function outageOf(Account $account, DateTimeImmutable $lastReadingAt): UsageReadingsStayedAway
-    {
-        return new UsageReadingsStayedAway($account, $lastReadingAt, $lastReadingAt->modify('+4 hours'));
-    }
-
     private function claude(string $name): Account
     {
         return new Account(Provider::ClaudeCode, $name);
+    }
+
+    private function outageOf(Account $account, DateTimeImmutable $lastReadingAt): UsageReadingsStayedAway
+    {
+        return new UsageReadingsStayedAway($account, $lastReadingAt, $lastReadingAt->modify('+4 hours'));
     }
 }

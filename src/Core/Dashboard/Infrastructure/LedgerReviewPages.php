@@ -13,8 +13,10 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
@@ -31,6 +33,7 @@ final readonly class LedgerReviewPages
         private RoundEndings $endings,
         private ReplayMarks $marks,
         private LedgerBuildSteps $buildSteps = new LedgerBuildSteps(),
+        private CountedQuotes $quotes = new CountedQuotes(),
     ) {
     }
 
@@ -44,8 +47,8 @@ final readonly class LedgerReviewPages
             return null;
         }
 
-        $added = $this->addUnseen($rounds, $this->ledger->readMentioning($members), []);
-        $this->addUnseen($rounds, $this->ledger->readMentioning($rounds->callsOf($members)), $added);
+        $added = $this->addUnseen($rounds, $this->ledger->readMentioning(new Mentions(...$members)), []);
+        $this->addUnseen($rounds, $this->ledger->readMentioning(new Mentions(...$rounds->callsOf($members))), $added);
 
         return $rounds->reviewOf($round);
     }
@@ -84,7 +87,7 @@ final readonly class LedgerReviewPages
     {
         $started = null;
 
-        foreach ($this->ledger->readMentioning([$round]) as $recorded) {
+        foreach ($this->ledger->readMentioning(new Mentions($round)) as $recorded) {
             $row = $this->payloads->reviewerRowOf($recorded);
 
             if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
@@ -127,7 +130,7 @@ final readonly class LedgerReviewPages
 
     private function rounds(RecordedEvents $events): LedgerRounds
     {
-        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures, $this->endings, $this->marks);
+        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures, $this->endings, $this->marks, $this->quotes);
 
         foreach ($events as $recorded) {
             $rounds->add($recorded);

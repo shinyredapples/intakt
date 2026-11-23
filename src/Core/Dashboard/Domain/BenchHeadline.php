@@ -12,6 +12,8 @@ final readonly class BenchHeadline
         public int $planted,
         public int $falseAlarms,
         public string $ranOn,
+        // Null unless the bench page states it once, so the totals are never split by a guessed count.
+        public ?int $runs,
     ) {
     }
 

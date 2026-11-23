@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\ModelPrice;
 use Intakt\Core\Review\Contract\SampleProjectData;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -17,22 +18,12 @@ use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 #[CoversClass(SampleProjectData::class)]
+#[UsesClass(ModelPrice::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
 final class SampleProjectDataTest extends TestCase
 {
     private string $directory;
-
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-sample-data-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
 
     public function testTheShippedFileNamesAModelAndAPriceForEveryProviderAndTier(): void
     {
@@ -40,10 +31,10 @@ final class SampleProjectDataTest extends TestCase
 
         foreach ([Provider::Anthropic, Provider::OpenAi, Provider::OpenAiCompatible] as $provider) {
             foreach (Tier::cases() as $tier) {
-                self::assertArrayHasKey('input', $data->price($data->model($provider, $tier)));
+                self::assertArrayHasKey('input', iterator_to_array($data->price($data->model($provider, $tier))));
             }
         }
-        self::assertArrayHasKey('output', $data->price($data->secondLab()));
+        self::assertArrayHasKey('output', iterator_to_array($data->price($data->secondLab())));
     }
 
     public function testTheShippedRouterUrlHasNoVersionPathBecauseTheBridgeAppendsIt(): void
@@ -57,7 +48,7 @@ final class SampleProjectDataTest extends TestCase
 
         self::assertSame(
             ['https://router.example.test', '2030-01-02', 'made-up-strong', 'made-up-second-lab', ['input' => 0.5, 'output' => 2]],
-            [$data->routerUrl()->toRawString(), $data->priceDate(), $data->model(Provider::Anthropic, Tier::Strong), $data->secondLab(), $data->price('made-up-strong')],
+            [$data->routerUrl()->toRawString(), $data->priceDate(), $data->model(Provider::Anthropic, Tier::Strong), $data->secondLab(), iterator_to_array($data->price('made-up-strong'))],
         );
     }
 
@@ -140,6 +131,17 @@ final class SampleProjectDataTest extends TestCase
         $this->expectException(ParseException::class);
 
         new SampleProjectData($this->file())->routerUrl();
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-sample-data-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     /**

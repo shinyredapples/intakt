@@ -19,17 +19,6 @@ final class ChangeTextTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('src/orders.js', "function orderLog(customerName) {}\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheChangeHoldsTheDiffAndTheFilesItTouches(): void
     {
         $diff = $this->diffOf('src/orders.js');
@@ -61,6 +50,17 @@ final class ChangeTextTest extends TestCase
         $diff = $this->diffOf('src/orders.js');
 
         self::assertSame($diff, new ChangeText(new DiffPaths())->of($diff, $this->repository->path.'/gone'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('src/orders.js', "function orderLog(customerName) {}\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function diffOf(string $path): string

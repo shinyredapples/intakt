@@ -18,6 +18,9 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReviewerStarted;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
@@ -98,6 +101,26 @@ final class ReviewerStopsTest extends TestCase
         self::assertNull($this->stopsOn($ledger)->requestStopOfRound('round-9'));
     }
 
+    public function testAReviewerInARoundThatEndedWithoutAJudgesCallCannotBeAskedToStop(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->startReviewer('round-1', 'security');
+
+        self::assertNull($this->endedStopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
+        self::assertCount(0, iterator_to_array($ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
+    }
+
+    public function testARoundThatEndedWithoutAJudgesCallHasNoRoundToStop(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->startReviewer('round-1', 'security');
+
+        self::assertNull($this->endedStopsOn($ledger)->requestStopOfRound('round-1'));
+        self::assertCount(0, iterator_to_array($ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
+    }
+
     public function testTwoStopsFromTwoUnnumberedRoundPagesOfOneReviewShareTheLock(): void
     {
         $ledger = new DashboardLedger();
@@ -117,6 +140,16 @@ final class ReviewerStopsTest extends TestCase
 
     private function stopsOn(Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): ReviewerStops
     {
-        return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())), $ledger, new RoundLock($locks, new RequestStack([new Request()])));
+        return $this->stopsWith($ledger, $locks, new FixedRoundEndings());
+    }
+
+    private function endedStopsOn(Ledger $ledger): ReviewerStops
+    {
+        return $this->stopsWith($ledger, new LockFactory(new InMemoryStore()), new FixedRoundEndings(new RoundEnding(RoundEnds::NoOutcomeInTime, 'No outcome in time.')));
+    }
+
+    private function stopsWith(Ledger $ledger, LockFactory $locks, RoundEndings $endings): ReviewerStops
+    {
+        return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks(new ReplayMarkBus())), $ledger, new RoundLock($locks, new RequestStack([new Request()])));
     }
 }

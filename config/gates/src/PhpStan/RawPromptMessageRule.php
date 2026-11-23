@@ -78,15 +78,31 @@ final readonly class RawPromptMessageRule implements Rule
         return $finding instanceof IdentifierRuleError ? [$finding] : [];
     }
 
+    public function isJudgedFile(string $file): bool
+    {
+        return array_any(self::JUDGED_FOLDERS, fn (string $folder): bool => str_starts_with($file, $this->root.$folder));
+    }
+
     private function isJudged(Scope $scope): bool
     {
         // because a trait's own file decides, not the file of the class that uses it
         return $this->isJudgedFile($scope->getTraitReflection()?->getFileName() ?? $scope->getFile());
     }
 
-    public function isJudgedFile(string $file): bool
+    private function constructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
     {
-        return array_any(self::JUDGED_FOLDERS, fn (string $folder): bool => str_starts_with($file, $this->root.$folder));
+        $messageClass = $this->classNames->namedAmong($construction->class, self::MESSAGE_CLASSES, $scope)[0] ?? null;
+
+        if (null !== $messageClass && !$this->isInClass($scope, self::ASSEMBLY)) {
+            return $this->rawMessage('new '.substr($messageClass, (int) strrpos($messageClass, '\\') + 1).'()');
+        }
+
+        return $this->carriers->constructionFinding($construction, $scope);
+    }
+
+    private function isInClass(Scope $scope, string $class): bool
+    {
+        return 0 === strcasecmp($scope->getClassReflection()?->getName() ?? '', $class);
     }
 
     private function factoryFinding(StaticCall $call, Scope $scope): ?IdentifierRuleError
@@ -132,6 +148,14 @@ final readonly class RawPromptMessageRule implements Rule
         return $this->factoryNamed($array->getValueTypes()[$method]);
     }
 
+    /**
+     * @param list<string> $names
+     */
+    private function namesMessage(array $names): bool
+    {
+        return [] !== $this->classNames->matching($names, [self::MESSAGE]);
+    }
+
     // a method name known only at run time may be a factory, so any type that may be a string counts as one, `?string` too
     private function factoryNamed(Type $method): ?string
     {
@@ -150,30 +174,6 @@ final readonly class RawPromptMessageRule implements Rule
         }
 
         return $this->rawMessage('Message::'.$parts[1].'()');
-    }
-
-    /**
-     * @param list<string> $names
-     */
-    private function namesMessage(array $names): bool
-    {
-        return [] !== $this->classNames->matching($names, [self::MESSAGE]);
-    }
-
-    private function constructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
-    {
-        $messageClass = $this->classNames->namedAmong($construction->class, self::MESSAGE_CLASSES, $scope)[0] ?? null;
-
-        if (null !== $messageClass && !$this->isInClass($scope, self::ASSEMBLY)) {
-            return $this->rawMessage('new '.substr($messageClass, (int) strrpos($messageClass, '\\') + 1).'()');
-        }
-
-        return $this->carriers->constructionFinding($construction, $scope);
-    }
-
-    private function isInClass(Scope $scope, string $class): bool
-    {
-        return 0 === strcasecmp($scope->getClassReflection()?->getName() ?? '', $class);
     }
 
     private function rawMessage(string $construct): IdentifierRuleError

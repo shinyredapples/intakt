@@ -1,5 +1,6 @@
+{#- The raw model id in the heading's title, because the docs, the CLI and MCP name reviewers by it while the heading names the model and its AI lab. -#}
 <div class="live" id="reviewer-{{ reviewer }}">
-    <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 24}, with_context = false) }}<h3>{{ heading }} live</h3></div>
+    <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 24}, with_context = false) }}<h3{% if model is not null and model is not same as('') %} title="{{ model }}"{% endif %}>{{ heading }} live</h3></div>
     <ul class="live-calls" id="reviewer-{{ reviewer }}-activity"></ul>
     <div class="live-text" id="reviewer-{{ reviewer }}-text"></div>
 </div>

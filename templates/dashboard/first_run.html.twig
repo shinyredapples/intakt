@@ -1,144 +1,118 @@
 {% extends 'dashboard/base.html.twig' %}
 
-{% block title %}Set up - Intakt{% endblock %}
+{% block title %}Start - Intakt{% endblock %}
 
 {% block content_width %} wide{% endblock %}
 
 {% block body %}
-{%- set titles = ['AI providers', 'A project', 'First review', 'Your own agent'] -%}
-{%- set states = first_run.states -%}
-<div class="setup">
-    <div class="page-head">
-        {{ include('dashboard/components/character.html.twig', {character: first_run.firstReview.mascot, size: 144}, with_context = false) }}
-        <div>
-            <h1>Set up Intakt</h1>
-            <p class="lead">What this install has set up and what is still missing, read from the running install.</p>
-        </div>
-    </div>
-    {%- set demo_ready = demo is same as(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\DemoReadiness::Ready')) %}
-    {%- if demo_ready and first_run.choices is null %}
-    <div class="play-demo-offer step-nav">
-        <p>No provider key yet? Watch a recorded review run instead, with a caption that names each stage.</p>
-        {{ _self.play_demo() }}
-    </div>
-    {%- endif %}
-    <ol class="steps" aria-label="Setup progress">
-        {%- for title in titles %}
-        {%- if loop.index0 === first_run.current %}
-        <li class="{{ states[loop.index0].value }} current" aria-current="step">{{ loop.index }} {{ title }}</li>
-        {%- else %}
-        <li class="{{ states[loop.index0].value }}">{{ loop.index }} {{ title }}</li>
+{%- set character = 'dashboard/components/character.html.twig' -%}
+{%- set demo_ready = demo is same as(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\DemoReadiness::Ready')) %}
+{#- With a recording ready, watching it is the one primary action: a visitor without a key needs only that button. -#}
+{%- set step_button = demo_ready ? 'secondary' : 'primary' %}
+<div class="setup first-run">
+    {#- The answer first: the recorded review, one tap away. The octopus conducts here and nowhere else on the page. -#}
+    <section class="fr-hero" id="see-review" aria-labelledby="see-review-h">
+        {{ include(character, {character: first_run.firstReview.mascot, size: 144}, with_context = false) }}
+        <h1 id="see-review-h">See a real review</h1>
+        {%- if demo_ready %}
+        <p class="fr-when">1 minute · no key</p>
+        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo">
+            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
+            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
+        </form>
         {%- endif %}
-        {%- endfor %}
+        <p class="next">{{ demo.firstRunLine(first_run) }}</p>
+    </section>
+
+    <ol class="fr-seq" aria-label="What you will see">
+        <li>{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 48}, with_context = false) }}<strong>Read</strong><span>Two AI labs</span></li>
+        <li>{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}<strong>Check</strong><span>The owl</span></li>
+        <li>{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Developer'), size: 48}, with_context = false) }}<strong>To fix</strong><span>Only what matters</span></li>
     </ol>
-    <p class="step-count">{{ first_run.done }} of {{ first_run.needed }} steps done</p>
 
-    {%- set choices = first_run.choices %}
-    {%- if choices is not null %}
-    <section class="step choices" id="demo-choices" aria-labelledby="demo-choices-h">
-        <h2 id="demo-choices-h">Two ways to see a review</h2>
-        <div class="choice" id="choice-recorded">
-            <h3>Watch a recorded real review now</h3>
-            <p class="recorded-when">{{ demo.sentence }}</p>
-            {%- if demo_ready %}
-            {{ _self.play_demo() }}
-            {%- endif %}
-        </div>
-        <div class="choice" id="choice-live">
-            <h3>Paste one provider key or Hugging Face token and run the demo review</h3>
-            <p class="next">{{ choices.liveReviewNext }}</p>
-        </div>
-    </section>
-    {%- endif %}
+    <section class="fr-own" aria-labelledby="fr-own-h">
+        <h2 id="fr-own-h">Use your own project</h2>
+        <ol class="own-steps">
+            {%- set step = first_run.providers %}
+            <li class="card step{{ _self.current(first_run, 0) }}" id="step-providers" data-state="{{ step.state.value }}"{{ _self.aria_current(first_run, 0) }}>
+                {{ _self.head('1. Add a key here', step.state, first_run, 0) }}
+                <p class="lead">{{ step.sentence }}</p>
+                {%- if step.offersKeyForm %}
+                <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::KEEP_PROVIDER_KEY')) }}" class="keep-provider-key">
+                    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::TOKEN_ID')) }}">
+                    <label for="provider-key">A key or token for {{ step.keyLabels|join(', ', ' or ') }}</label>
+                    <input type="password" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" autocomplete="off" required>
+                    <div class="step-nav">
+                        {{ include('dashboard/components/button.html.twig', {kind: step_button, type: 'submit', label: 'Keep the key'}, with_context = false) }}
+                    </div>
+                    <p class="next">Intakt asks the provider once, then keeps the key here.</p>
+                </form>
+                {%- endif %}
+                {%- if step.keyless is not empty %}
+                <ul class="keyless">
+                    {%- for message in step.keyless %}
+                    <li>{{ message }}</li>
+                    {%- endfor %}
+                </ul>
+                {%- endif %}
+                {%- if step.firstProject is not null %}
+                <p class="tiers-of">The tiers of the project {{ step.firstProject }}:</p>
+                <table class="ledger tiers">
+                    <thead><tr><th scope="col">Tier</th><th scope="col">Provider</th><th scope="col">Model or problem</th></tr></thead>
+                    <tbody>
+                        {%- for line in step.tiers %}
+                        <tr><td>{{ line.tier }}</td><td>{{ line.provider }}</td><td>{{ line.modelOrProblem }}</td></tr>
+                        {%- endfor %}
+                    </tbody>
+                </table>
+                {%- endif %}
+            </li>
 
-    {%- set step = first_run.providers %}
-    <section class="step" id="step-providers" data-state="{{ step.state.value }}" aria-labelledby="step-providers-h">
-        <h2 id="step-providers-h">1 {{ titles[0] }} {{ _self.state(step.state) }}</h2>
-        <p class="lead">{{ step.sentence }}</p>
-        {%- if step.offersKeyForm %}
-        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::KEEP_PROVIDER_KEY')) }}" class="keep-provider-key step-nav">
-            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::TOKEN_ID')) }}">
-            <label for="provider-key">A key or token for {{ step.keyLabels|join(', ', ' or ') }}</label>
-            <input type="password" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" autocomplete="off" required>
-            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Keep the key'}, with_context = false) }}
-        </form>
-        {%- endif %}
-        {%- if step.keyless is not empty %}
-        <ul class="keyless">
-            {%- for message in step.keyless %}
-            <li>{{ message }}</li>
-            {%- endfor %}
-        </ul>
-        {%- endif %}
-        {%- if step.firstProject is not null %}
-        <p class="tiers-of">The tiers of the project {{ step.firstProject }}:</p>
-        <table class="ledger tiers">
-            <thead><tr><th scope="col">Tier</th><th scope="col">Provider</th><th scope="col">Model or problem</th></tr></thead>
-            <tbody>
-                {%- for line in step.tiers %}
-                <tr><td>{{ line.tier }}</td><td>{{ line.provider }}</td><td>{{ line.modelOrProblem }}</td></tr>
-                {%- endfor %}
-            </tbody>
-        </table>
-        {%- endif %}
-    </section>
+            {%- set step = first_run.project %}
+            <li class="card step{{ _self.current(first_run, 1) }}" id="step-project" data-state="{{ step.state.value }}"{{ _self.aria_current(first_run, 1) }}>
+                {{ _self.head('2. Add a project', step.state, first_run, 1) }}
+                <p class="lead">{{ step.sentence }}</p>
+                {%- if step.panels is not empty %}
+                <div class="list">
+                    {%- for panel in step.panels %}
+                    {{ include('dashboard/components/list_row.html.twig', {title: panel.project, explanation: panel.description}, with_context = false) }}
+                    {%- endfor %}
+                </div>
+                {%- endif %}
+            </li>
 
-    {%- set step = first_run.project %}
-    <section class="step" id="step-project" data-state="{{ step.state.value }}" aria-labelledby="step-project-h">
-        <h2 id="step-project-h">2 {{ titles[1] }} {{ _self.state(step.state) }}</h2>
-        <p class="lead">{{ step.sentence }}</p>
-        {%- if step.panels is not empty %}
-        <div class="list">
-            {%- for panel in step.panels %}
-            {{ include('dashboard/components/list_row.html.twig', {title: panel.project, explanation: panel.description}, with_context = false) }}
-            {%- endfor %}
-        </div>
-        {%- endif %}
-    </section>
-
-    {%- set step = first_run.firstReview %}
-    <section class="step" id="step-first-review" data-state="{{ step.state.value }}" aria-labelledby="step-first-review-h">
-        <h2 id="step-first-review-h">3 {{ titles[2] }} {{ _self.state(step.state) }}</h2>
-        <p class="lead">{{ step.sentence }}</p>
-        {%- if step.round is not null %}
-        <div class="step-nav">
-            <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: step.round}) }}">Open the review</a>
-        </div>
-        {%- elseif step.sampleCanStart %}
-        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review step-nav">
-            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
-            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
-        </form>
-        {%- endif %}
-    </section>
-
-    {%- set step = first_run.agent %}
-    <section class="step" id="step-agent" data-state="{{ step.state.value }}" aria-labelledby="step-agent-h">
-        <h2 id="step-agent-h">4 {{ titles[3] }} {{ _self.state(step.state) }}</h2>
-        <p class="lead">{{ step.sentence }}</p>
-        <p>The MCP address: <code class="mono address">{{ step.address }}</code></p>
-        <p>The client line for Claude Code:</p>
-        <pre class="command"><code class="client-line">{{ step.clientLine }}</code></pre>
-        {%- if step.hasToken %}
-        {%- if step.tokenCommand is not null %}
-        <p class="token-from">This command prints the line with the token filled in:</p>
-        <pre class="command"><code class="token-command">{{ step.tokenCommand }}</code></pre>
-        {%- else %}
-        <p class="token-from">Replace &lt;the token&gt; with the value of MCP_OWNER_TOKEN.</p>
-        {%- endif %}
-        {%- endif %}
+            {%- set step = first_run.firstReview %}
+            <li class="card step{{ _self.current(first_run, 2) }}" id="step-first-review" data-state="{{ step.state.value }}"{{ _self.aria_current(first_run, 2) }}>
+                {{ _self.head('3. First review', step.state, first_run, 2) }}
+                <p class="lead">{{ step.sentence }}</p>
+                {%- if step.round is not null %}
+                <div class="step-nav">
+                    <a class="btn {{ step_button }}" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: step.round}) }}">Open the review</a>
+                </div>
+                {%- elseif step.sampleCanStart %}
+                <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
+                    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
+                    <div class="step-nav">
+                        {{ include('dashboard/components/button.html.twig', {kind: step_button, type: 'submit', label: 'Start the first review'}, with_context = false) }}
+                    </div>
+                    <p class="next">Two reviewers read the sample change; its live page opens.</p>
+                </form>
+                {%- endif %}
+            </li>
+        </ol>
     </section>
 </div>
 {% endblock %}
 
-{% macro state(state) -%}
-{{ include('dashboard/components/chip.html.twig', {label: state.words, dot: state.dot, on_page: true}, with_context = false) }}
+{#- The current card carries the character of the role who does it, so the reader sees whose step is next. -#}
+{% macro head(title, state, first_run, index) -%}
+<h3>{%- if first_run.current is same as(index) %}<span class="step-role">{{ include('dashboard/components/character.html.twig', {character: first_run.currentCharacter, size: 48}, with_context = false) }}</span>{% endif %}{{ title }} {{ include('dashboard/components/chip.html.twig', {label: state.words, dot: state.dot}, with_context = false) }}</h3>
 {%- endmacro %}
 
-{#- A secondary button, because the page's one primary action stays the next setup step. -#}
-{% macro play_demo() -%}
-<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo">
-    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
-    {{ include('dashboard/components/button.html.twig', {kind: 'secondary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
-</form>
+{% macro current(first_run, index) -%}
+{%- if first_run.current is same as(index) %} current{% endif -%}
+{%- endmacro %}
+
+{% macro aria_current(first_run, index) -%}
+{%- if first_run.current is same as(index) %} aria-current="step"{% endif -%}
 {%- endmacro %}

@@ -1,0 +1,24 @@
+{#- The items, or the empty state when none waits, in one box, because the split page sets the box beside the panels. -#}
+<div class="wait-main" id="waiting-list">
+{% if items is empty %}
+{{ include('dashboard/components/empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building and reviewing. When it needs a decision, it shows up here.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
+{% else %}
+<div class="wait-list">
+{% for item in items %}
+<article class="wait-item needs" aria-labelledby="wait-{{ loop.index }}">
+    {{ include('dashboard/components/character.html.twig', {character: item.character, size: 48}, with_context = false) }}
+    <h2 class="wait-lead" id="wait-{{ loop.index }}">{{ item.lead }}</h2>
+    {{ include('dashboard/components/meta.html.twig', {facts: [
+        {text: item.character.label},
+        {text: 'All projects'},
+        {icon: 'clock', text: item.waitingFor(now)},
+    ]}, with_context = false) }}
+    <p class="conseq">{{ item.consequence }}</p>
+    <div class="wait-acts">
+        <a class="wait-act primary" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">{{ include('dashboard/components/icon.html.twig', {name: item.link is null ? 'board' : 'link'}, with_context = false) }}<span><b>{{ item.linkLabel }}</b><small>{{ item.linkOutcome }}</small></span></a>
+    </div>
+</article>
+{% endfor %}
+</div>
+{% endif %}
+</div>

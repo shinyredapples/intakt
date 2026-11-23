@@ -33,11 +33,6 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     private const int FIRST_CASE_LINE = 23;
     private const int TRAIT_CASE_LINE = 14;
 
-    protected function ruleFor(string $root): RawPromptMessageRule
-    {
-        return new RawPromptMessageRule($root);
-    }
-
     /**
      * @return iterable<string, array{list<string>}>
      */
@@ -394,6 +389,11 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         $sandbox->write($path, $this->classWithCases($class, self::BUILDER_PARAMETERS, [$expression]));
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    protected function ruleFor(string $root): RawPromptMessageRule
+    {
+        return new RawPromptMessageRule($root);
     }
 
     /**

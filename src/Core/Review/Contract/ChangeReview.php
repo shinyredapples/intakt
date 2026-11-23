@@ -11,7 +11,6 @@ final readonly class ChangeReview
     /**
      * @param list<PanelVerdict>    $verdicts
      * @param list<Finding>         $actList
-     * @param list<string>          $reasons
      * @param list<ReviewerOutcome> $reviewers
      */
     public function __construct(
@@ -23,7 +22,7 @@ final readonly class ChangeReview
         public RoundTokens $tokens,
         public Cost $cost,
         // Why the round is blocked, in plain words, because a blocked round has no findings to show.
-        public array $reasons = [],
+        public BlockReasons $reasons = new BlockReasons(),
         public RoundEnds $end = RoundEnds::Judged,
         public array $reviewers = [],
     ) {
@@ -32,6 +31,6 @@ final readonly class ChangeReview
     // Blocked whatever the verdicts say, because they do not stand for the change: a reviewer still out could change the quorum, or the checkout changed under the reviewers.
     public function blockedFor(RoundEnds $end, string $reason): self
     {
-        return clone ($this, ['decision' => Decision::Blocked, 'actList' => [], 'reasons' => [$reason, ...$this->reasons], 'end' => $end]);
+        return clone ($this, ['decision' => Decision::Blocked, 'actList' => [], 'reasons' => $this->reasons->withFirst($reason), 'end' => $end]);
     }
 }

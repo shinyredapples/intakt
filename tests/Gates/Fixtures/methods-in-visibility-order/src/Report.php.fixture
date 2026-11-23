@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+abstract readonly class Report
+{
+    private const string FRAME = '[%s]';
+
+    public function __construct(private string $name)
+    {
+    }
+
+    public function zone(): string
+    {
+        return 'UTC';
+    }
+
+    public function render(): string
+    {
+        return $this->framed($this->title());
+    }
+
+    abstract protected function title(): string;
+
+    private function framed(string $text): string
+    {
+        return sprintf(self::FRAME, $text.$this->name);
+    }
+}

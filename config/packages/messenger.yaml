@@ -18,7 +18,8 @@ framework:
                 options:
                     auto_setup: false
                     redeliver_timeout: 5400
-                # max_retries counts only for exceptions that are not recoverable; a recoverable one (a held or rate-limited reviewer, a limited judge call) always comes back, after the delay it names.
+                # max_retries counts only for exceptions that are not recoverable; a recoverable one (a held or rate-limited reviewer, a limited judge call, an escalation review call on a busy account or rate limited) always comes back, after the delay it names.
+                # An escalation review call the provider failed transiently is the one bounded recoverable failure: BoundTransientEscalationFailures counts it in its own stamp and gives it these max_retries and delays, however many forced retries came before, then parks it.
                 # max_delay caps the wait of a recoverable one that names no delay (a busy account, a limit without a reset), because it never runs out of retries and the doubling would otherwise stall a round for days.
                 retry_strategy:
                     max_retries: 2
@@ -37,6 +38,10 @@ framework:
             Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings: async
             Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict: async
             Intakt\Core\Review\Contract\RoundOpened: async
+            # Queued in the judging's transaction on the Doctrine queue, so it commits with the recurrence and its strong-tier call runs outside the judging's locks.
+            Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1: async
+            # Dispatched by the failure stamp of a parked escalation; queued, so a record that finds the key's lock held comes back instead of being lost.
+            Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalation: async
             # Queued in the watch tick's transaction, so the worker's lookup of the judged round runs only after the hand-over line has committed.
             Intakt\Core\Review\Contract\PublishHandedOverChange: async
             # A replay sleeps at the recorded pace for minutes, so it runs in a queue worker and never in a web worker.

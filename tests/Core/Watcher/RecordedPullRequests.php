@@ -75,6 +75,11 @@ final readonly class RecordedPullRequests implements OpenChanges, HeadChecks, Au
         };
     }
 
+    private function file(): string
+    {
+        return is_file($this->recording) ? $this->recording : throw new LogicException('WATCHER_RECORDING names no recording file.');
+    }
+
     private function momentOf(string $recorded): DateTimeImmutable
     {
         $moment = DateTimeImmutable::createFromFormat('Y-m-d\TH:i:sP', $recorded, new DateTimeZone('UTC'));
@@ -91,10 +96,5 @@ final readonly class RecordedPullRequests implements OpenChanges, HeadChecks, Au
         $recorded = json_decode((string) file_get_contents($this->file()), true, flags: JSON_THROW_ON_ERROR);
 
         return $recorded;
-    }
-
-    private function file(): string
-    {
-        return is_file($this->recording) ? $this->recording : throw new LogicException('WATCHER_RECORDING names no recording file.');
     }
 }

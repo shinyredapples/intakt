@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -48,6 +49,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Review\Contract\RecordedAnswer;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -82,6 +84,7 @@ use Throwable;
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(TierPlatform::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(SendFailures::class)]
 #[UsesClass(EveryEndpointUnreachable::class)]
@@ -103,11 +106,6 @@ final class ReviewerRetryVendorTest extends KernelTestCase
      * @var list<bool>
      */
     private array $askedToNameFindings = [];
-
-    protected function setUp(): void
-    {
-        $this->ledger = new InMemoryLedger();
-    }
 
     public function testAReviewerWhoseEndpointCouldNotBeReachedIsAskedOnceMoreAndThatVerdictCounts(): void
     {
@@ -259,26 +257,9 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         self::assertSame([false], $this->askedToNameFindings);
     }
 
-    /**
-     * @param Closure(): ResultInterface $first
-     * @param Closure(): ResultInterface $second
-     */
-    private function answering(Closure $first, Closure $second): Closure
+    protected function setUp(): void
     {
-        return function (Model $model, array|string|object $input) use ($first, $second): ResultInterface {
-            $this->askedToNameFindings[] = $this->asksToNameFindings($input);
-
-            return 1 === count($this->askedToNameFindings) ? $first() : $second();
-        };
-    }
-
-    // Read from the encoded input, because the platform hands its model client the normalized messages, never the message bag.
-    /**
-     * @param array<mixed>|string|object $input
-     */
-    private function asksToNameFindings(array|string|object $input): bool
-    {
-        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
+        $this->ledger = new InMemoryLedger();
     }
 
     private function unreachable(): never
@@ -322,6 +303,28 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
     }
 
+    /**
+     * @param Closure(): ResultInterface $first
+     * @param Closure(): ResultInterface $second
+     */
+    private function answering(Closure $first, Closure $second): Closure
+    {
+        return function (Model $model, array|string|object $input) use ($first, $second): ResultInterface {
+            $this->askedToNameFindings[] = $this->asksToNameFindings($input);
+
+            return 1 === count($this->askedToNameFindings) ? $first() : $second();
+        };
+    }
+
+    // Read from the encoded input, because the platform hands its model client the normalized messages, never the message bag.
+    /**
+     * @param array<mixed>|string|object $input
+     */
+    private function asksToNameFindings(array|string|object $input): bool
+    {
+        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
+    }
+
     private function thrownBy(Closure $call): ?Throwable
     {
         try {
@@ -333,25 +336,25 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         return null;
     }
 
-    private function request(): ReviewRequest
-    {
-        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
-
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
     // Optionally on accounts, because config/packages/ai.php puts an AccountFailoverPlatform in front of every configured provider and its failover can hide a transport error thrown while sending, which the retry depends on.
     private function vendor(Closure $answer, bool $onAccounts = false): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         if ($onAccounts) {
-            $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], new NoCooldowns(), new MockClock(self::NOW), new NullLogger());
+            $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], new NoCooldowns(), new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns());
         }
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(): ReviewRequest
+    {
+        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }
