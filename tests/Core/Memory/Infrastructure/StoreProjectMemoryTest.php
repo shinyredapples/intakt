@@ -235,8 +235,7 @@ final class StoreProjectMemoryTest extends TestCase
         $store = new Store();
         // Every text embeds to the same vector, so only the plain-code file match and the cap decide the result.
         $platform = MockPlatformFactory::createPlatform(fn (Model $model, array|string|object $input): VectorResult => $this->embedderDown
-            ? throw new RuntimeException('embedder down')
-            : new VectorResult(array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input])));
+            ? throw new RuntimeException('embedder down') : new VectorResult(array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input])));
         $vectorizer = new Vectorizer($platform, 'embedder');
         $documents = new MemoryDocuments();
 

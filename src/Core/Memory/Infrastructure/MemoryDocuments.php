@@ -88,6 +88,11 @@ final readonly class MemoryDocuments
         );
     }
 
+    public function toEntry(VectorDocumentInterface $document): MemoryEntry
+    {
+        return new MemoryEntry($this->entryProject($document), $this->entryText($document), $this->entryFiles($document));
+    }
+
     private function isSettled(VectorDocumentInterface $document): bool
     {
         return self::SETTLED === ($document->getMetadata()[self::KIND] ?? null);
@@ -98,11 +103,6 @@ final readonly class MemoryDocuments
         $value = $document->getMetadata()[$key] ?? null;
 
         return is_string($value) ? $value : throw new StoredMemoryIsMalformed($document->getId(), $key);
-    }
-
-    public function toEntry(VectorDocumentInterface $document): MemoryEntry
-    {
-        return new MemoryEntry($this->entryProject($document), $this->entryText($document), $this->entryFiles($document));
     }
 
     private function entryProject(VectorDocumentInterface $document): string
