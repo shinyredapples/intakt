@@ -4,7 +4,7 @@
 
 ## The owl has spoken
 
-The review page stops moving. The owl's card reads "Changes needed", with "5 to fix · 2 urgent" under it. Below it are the To fix cards. You have a list, and you want to know which item to open first and whether each one is real. This chapter reads the verdict with you, top to bottom.
+The review page stops moving. The owl's card reads "Changes needed", with "5 to fix" in large type, an urgency bar and the counts in words under it (for example "2 urgent, 2 should fix, 1 nice to have"), and one meerkat per reviewer marked with a check (approved) or a cross (changes needed); a reviewer without a verdict shows a dash and its status in words. A line under the faces says whether the reviewers agree; it appears only when at least one reviewer gave a verdict. Below it the findings stand in three groups: Urgent, Should fix and Nice to have. You have a list, and you want to know which item to open first and whether each one is real. This chapter reads the verdict with you, top to bottom.
 
 ## The judge's call
 
@@ -18,7 +18,7 @@ Plain code decides the outcome from the votes and the list, never from how a rev
 
 ## The list To fix
 
-Each card on the list is one thing to change. On the main view a card shows the urgency, the first sentence, the rest of the text cut to one line, and the place. Press a card to open the finding in the **Full record**, where the id, the other reviewers' reports and the owl's call are.
+On the main view, each row is one thing to change. It sits in its urgency's group and shows only the first sentence and the place. On a desktop the three groups stand side by side; on a phone they stack, Urgent first. A group with nothing in it says "None". Press a row to open the finding in the **Full record**, where the id, the whole text, the other reviewers' reports and the owl's call are.
 
 ![Five finding cards from the list To fix: F1, P1, the discount check changed from "amount >= 100" to "amount > 100", at src/discount.js:3, also reported as F6, Fix now; F2, P1, command injection through customerName and execSync, at src/report.js:4, also reported as F5 and F7, Fix now; F3 and F4, P2, new functions without tests; F8, P3, a base charge written twice in src/shipping.js:6, Fix now](../assets/guide/findings.webp)
 
@@ -41,7 +41,7 @@ A dropped finding still shows on the page, apart from the others, marked **Quote
 
 ## What the owl may drop, and what it may not
 
-The owl marks each finding to fix now, to defer to a follow-up, or to reject. Its power has a limit: a P1 or P2 finding stays on the list whatever the owl marks it. Only a P3 leaves the list when the owl defers or rejects it. Those cards read **Dropped: deferred to a follow-up issue** or **Dropped: rejected or not marked by the judge**.
+The owl marks each finding to fix now, to defer to a follow-up, or to reject. Its power has a limit: a P1 or P2 finding stays on the list whatever the owl marks it. Only a P3 leaves the list when the owl defers or rejects it. A P3 finding a reviewer marks as a gap in a `bin/check` gate is never on the list: it goes to the follow-ups, even when the owl says to fix it now, and only a reject drops it. Those cards read **Dropped: deferred to a follow-up issue** or **Dropped: rejected or not marked by the judge**.
 
 ## The next pass keeps the ids
 

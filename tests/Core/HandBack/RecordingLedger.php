@@ -22,6 +22,11 @@ final class RecordingLedger implements Ledger
     /** @var list<RecordedEvent> */
     private array $recorded = [];
 
+    public int $fullReads = 0;
+
+    /** @var list<LedgerEventKind> */
+    public array $kindsRequested = [];
+
     /**
      * @param ?Closure(): void $onRead
      */
@@ -46,6 +51,8 @@ final class RecordingLedger implements Ledger
     #[Override]
     public function readInOrder(): RecordedEvents
     {
+        ++$this->fullReads;
+
         if ($this->onRead instanceof Closure) {
             ($this->onRead)();
         }
@@ -60,9 +67,36 @@ final class RecordingLedger implements Ledger
     }
 
     #[Override]
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind && $subject === $recorded->event->subject)));
+    }
+
+    #[Override]
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind && null === $recorded->event->subject)));
+    }
+
+    #[Override]
     public function readMentioning(Mentions $texts): RecordedEvents
     {
+        if ($this->onRead instanceof Closure) {
+            ($this->onRead)();
+        }
+
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
+    }
+
+    #[Override]
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        $this->kindsRequested = array_values($kinds);
+        if ($this->onRead instanceof Closure) {
+            ($this->onRead)();
+        }
+
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => in_array($recorded->event->kind, $kinds, true) && array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
     }
 
     /**

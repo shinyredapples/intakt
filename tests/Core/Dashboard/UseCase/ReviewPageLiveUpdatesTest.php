@@ -14,7 +14,6 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -26,6 +25,7 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -54,6 +54,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use stdClass;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
@@ -61,6 +62,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
@@ -69,7 +73,7 @@ use Twig\Environment;
 #[UsesClass(LivePageRendering::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerTokens::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
@@ -327,7 +331,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertSame(['Checked, but the outcome was not recorded', '1 to fix · 0 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Checked, but the outcome was not recorded', '1 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
     public function testThePushedOwlsCardStatesTheJudgesCallAndCountsTheFindingsToFix(): void
@@ -337,7 +341,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['Changes needed', '2 to fix · 0 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '2 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
     public function testThePushedOwlsCardCountsTheFindingsToFixAsTheCardsItShows(): void
@@ -347,7 +351,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertStringStartsWith($updated->filter('#review-to-fix .fix-card')->count().' to fix', $updated->filter('#review-verdict .verdict-count')->text());
+        self::assertStringStartsWith($updated->filter('#review-to-fix .fix-row')->count().' to fix', $updated->filter('#review-verdict .verdict-count')->text());
     }
 
     public function testAPageOpenedBeforeTheRoundStartsShowsOneNumberPerFindingWithTheMergedIdsAsSecondaryTextOnceTheRoundIsJudged(): void
@@ -363,15 +367,15 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         );
     }
 
-    public function testAPageOpenedBeforeTheRoundStartsShowsOneToFixCardPerFindingOnceTheRoundIsJudged(): void
+    public function testAPageOpenedBeforeTheRoundStartsShowsOneRowPerFindingInItsUrgencysGroupOnceTheRoundIsJudged(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
 
         $this->givenTheRoundIsJudgedAsOneEntryPerCause($round);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame([['Urgent', 'Text of F1.'], ['Should fix', 'Text of F2.']], $updated->filter('#review-to-fix .fix-card')->each(static fn (Crawler $card): array => [$card->filter('.urgency')->text(), $card->filter('.fix-title')->text()]));
-        self::assertSame('2 to fix · 1 urgent', $updated->filter('#review-verdict .verdict-count')->text());
+        self::assertSame([['Urgent', ['Text of F1.']], ['Should fix', ['Text of F2.']], ['Nice to have', []]], $updated->filter('#review-to-fix .fix-group')->each(static fn (Crawler $group): array => [$group->filter('.fix-group-name')->text(), $group->filter('.fix-title')->each(static fn (Crawler $title): string => $title->text())]));
+        self::assertSame('2 to fix', $updated->filter('#review-verdict .verdict-count')->text());
     }
 
     public function testAJudgedRoundOfOneEntryPerCausePushedToAPageOpenedBeforeItStartsShowsTheFindingsAsAReloadDoes(): void
@@ -385,14 +389,14 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($reloaded->filter('#round-'.$id.'-judged')->html(), $updated->filter('#round-'.$id.'-judged')->html());
     }
 
-    public function testAJudgedRoundWithNothingToFixPushesAnApprovedCardThatCountsZeroAndNoToFixCard(): void
+    public function testAJudgedRoundWithNothingToFixPushesAnApprovedCardThatCountsZeroAndNoFindingGroups(): void
     {
         [$round, , $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
 
         $this->givenTheRoundIsJudgedWith($round, []);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['Approved', '0 to fix · 0 urgent', 0, 0], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text(), $updated->filter('.fix-card')->count(), $updated->filter('.state-block')->count()]);
+        self::assertSame(['Approved', '0 to fix', 0, 0], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text(), $updated->filter('.fix-group')->count(), $updated->filter('.state-block')->count()]);
     }
 
     // A round started without a recorded quorum has no outcome, and a policy must never be guessed.
@@ -426,8 +430,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'Fix now'], ['F2', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertSame(['/reviews/'.$id.'/record#round-'.$id.'-finding-F1'], $updated->filter('#review-to-fix a.fix-card')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
-        self::assertSame(['Should fix', 'Text of F1.'], [$updated->filter('#review-to-fix .urgency')->text(), $updated->filter('#review-to-fix .fix-title')->text()]);
+        self::assertSame(['/reviews/'.$id.'/record#round-'.$id.'-finding-F1'], $updated->filter('#review-to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame('Text of F1.', $updated->filter('#review-to-fix .fix-group.should-fix .fix-title')->text());
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
         self::assertSame('Checked.', $updated->filter('#round-'.$id.'-state')->text());
         self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-head-state .chip')->text());
@@ -485,20 +489,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($this->browser->request('GET', '/reviews/'.$id)->filter('#review-verdict')->outerHtml(), $updated->filter('#review-verdict')->outerHtml());
     }
 
-    public function testAVerdictWithFindingsPushedToTheMainViewSwapsTheStateBlockForTheToFixCardsAsAReloadDoes(): void
+    public function testAVerdictWithFindingsPushedToTheMainViewSwapsTheStateBlockForTheFindingGroupsAsAReloadDoes(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
         $id = $round->toRfc4122();
         $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
         $page = $this->browser->request('GET', '/reviews/'.$id);
-        self::assertSame([1, 0], [$page->filter('.state-block')->count(), $page->filter('.fix-card')->count()]);
+        self::assertSame([1, 0], [$page->filter('.state-block')->count(), $page->filter('.fix-row')->count()]);
 
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
         $reloaded = $this->browser->request('GET', '/reviews/'.$id);
-        self::assertSame([0, 2], [$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-card')->count()]);
-        self::assertSame([$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-card')->count()], [$updated->filter('.state-block')->count(), $updated->filter('.fix-card')->count()]);
+        self::assertSame([0, 2], [$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-row')->count()]);
+        self::assertSame([$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-row')->count()], [$updated->filter('.state-block')->count(), $updated->filter('.fix-row')->count()]);
         self::assertSame($reloaded->filter('#review-to-fix')->outerHtml(), $updated->filter('#review-to-fix')->outerHtml());
     }
 
@@ -659,7 +663,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($next, new RoundProgress(0, 2, true));
 
         $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
-        self::assertSame([0, 0, 0], [$updated->filter('.state-block')->count(), $updated->filter('a.sb-finding')->count(), $updated->filter('.fix-card')->count()]);
+        self::assertSame([0, 0, 0], [$updated->filter('.state-block')->count(), $updated->filter('a.sb-finding')->count(), $updated->filter('.fix-row')->count()]);
     }
 
     public function testAJudgedRoundWhoseFindingsWereNotRecordedSaysSoInTheLiveUpdateAsOnLoad(): void
@@ -736,6 +740,30 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-reviewer-'.$id.'-correctness-state .chip')->text());
         self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-state .chip')->text());
         self::assertStringNotContainsString('verdict', $updated->filter('#round-'.$id.'-reviewers')->text());
+    }
+
+    public function testARoundStartedFromTheDashboardShowsAStartingStateUntilItsFirstReviewerArrives(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $commands = self::createStub(MessageBusInterface::class);
+        $commands->method('dispatch')->willReturnCallback(function (): Envelope {
+            $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+
+            return new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]);
+        });
+        self::getContainer()->set('command.bus', $commands);
+        $form = $this->browser->request('GET', '/reviews/round-1')->filter('form.start-review');
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $form->filter('input[name=_token]')->attr('value'), 'number' => '2']);
+        $page = $this->browser->followRedirect();
+
+        $starting = $page->filter('#round-round-2-now-none');
+        self::assertSame('Starting the review: each reviewer appears here as soon as it begins.', $starting->text());
+        self::assertSame('status', $starting->attr('role'));
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-2', 'reviewer' => 'round-2-correctness', 'text' => 'Looking']));
+        self::assertCount(0, $updated->filter('#round-round-2-now-none'));
+        self::assertCount(1, $updated->filter('#round-round-2-now-reviewer-round-2-correctness-state'));
     }
 
     public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
@@ -1147,7 +1175,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame(['No reviewer has started yet.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['Starting the review: each reviewer appears here as soon as it begins.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testOneListenerAuthorizesEveryUnfinishedRoundOfThePage(): void

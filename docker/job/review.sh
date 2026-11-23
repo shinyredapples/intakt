@@ -174,7 +174,7 @@ require_no_change() {
 run_claude_code() {
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
     export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
-    claude -p --model "$model" --output-format json --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
+    claude -p --model "$model" --output-format stream-json --verbose --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
         --setting-sources '' --strict-mcp-config --no-session-persistence
 }
 

@@ -3,11 +3,14 @@
 
 declare(strict_types=1);
 
+use Intakt\Tests\JourneyPage\HighlightStatuses;
+use Intakt\Tests\JourneyPage\IssueStates;
 use Intakt\Tests\JourneyPage\MermaidTimeline;
 use Symfony\Component\Process\Process;
 
 const USAGE = "usage: bin/pages <folder> [--recorded=<folder with the recorded API answers>]\n";
 const JOURNEY_LINK = "How Intakt was built, with its milestones, token use and issue flow: [the journey](../journey/).\n";
+const SETTLED_RULE = "A feature row reads done when every issue and pull request its Where cell names is closed or merged, and in progress when one is open; rows written planned and rows naming none keep their written status.\n";
 
 $autoload = __DIR__.'/../vendor/autoload.php';
 
@@ -64,11 +67,14 @@ $readSource = static function (string $file): string {
     return $content;
 };
 
+// Without a readable recording no state is known, so the rows keep their written status and the page states no rule.
+$states = null === $recorded ? [] : new IssueStates()->openByNumber(substr($recorded, strlen('--recorded=')));
+$highlightsText = $readSource($root.'/docs/highlights.md');
 $journey = $readSource($root.'/docs/journey.md');
-$highlights = explode("\n", $readSource($root.'/docs/highlights.md'), 2);
+$highlights = explode("\n", [] === $states ? $highlightsText : new HighlightStatuses()->settled($highlightsText, $states), 2);
 // Pages serves the journey page at /journey/, so its drawings lie beside it, and its Jekyll does not render Mermaid.
 $files = [
-    'highlights/index.md' => $highlights[0]."\n\n".JOURNEY_LINK.($highlights[1] ?? ''),
+    'highlights/index.md' => $highlights[0]."\n\n".JOURNEY_LINK.([] === $states ? '' : "\n".SETTLED_RULE).($highlights[1] ?? ''),
     // Correct only because docs/journey.md links nothing under journey/ but the *.svg drawings copied below (PagesCommandTest pins it).
     'journey/index.md' => (string) preg_replace(MermaidTimeline::BLOCK, '![Timeline](timeline.svg)', str_replace('](journey/', '](', $journey)),
 ];

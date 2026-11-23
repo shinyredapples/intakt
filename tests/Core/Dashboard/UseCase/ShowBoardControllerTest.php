@@ -34,6 +34,7 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
@@ -62,6 +63,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(Headline::class)]
 #[UsesClass(RefuseForeignHost::class)]
 #[UsesClass(LedgerFailingHeads::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(FailingHead::class)]
 #[UsesClass(FailingMains::class)]
 #[UsesClass(FailingMain::class)]

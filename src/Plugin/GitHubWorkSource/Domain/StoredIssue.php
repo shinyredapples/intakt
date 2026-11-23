@@ -91,6 +91,12 @@ final class StoredIssue
         $this->vouchedLabels = $vouching->labels;
     }
 
+    public function forgetVouching(): void
+    {
+        $this->trusted = null;
+        $this->vouchedLabels = [];
+    }
+
     // Kept only while the update time and what steers both stand, because an edit in the second of the earlier listing keeps the update time and the history vouched for the earlier labels and references.
     public function keepVouchingOf(self $stored): void
     {
@@ -102,12 +108,10 @@ final class StoredIssue
         $this->vouchedLabels = $stored->vouchedLabels;
     }
 
-    // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body.
+    // Compared as the queued item, because the pick asks the same of it and a row whose listing went unchanged keeps the numbers without the body.
     public function isListedAs(IssueHistory $history, IssueReferences $references): bool
     {
-        $body = $history->body;
-
-        return $this->hasLabels($history->currentLabels) && $this->namesNumbers($references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
+        return $this->queued()->isListedAs($history, $references);
     }
 
     public function isVouched(): bool
@@ -158,6 +162,11 @@ final class StoredIssue
     public function updatedAt(): DateTimeImmutable
     {
         return $this->instant($this->updatedAt);
+    }
+
+    public function isPullRequest(): bool
+    {
+        return $this->pullRequest;
     }
 
     // In any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.
