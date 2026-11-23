@@ -133,6 +133,22 @@ final class PrRunPassedTest extends SandboxTestCase
         self::assertSame('', $result->output);
     }
 
+    #[DataProvider('emptyArguments')]
+    public function testAnEmptyArgumentIsAUsageError(string $arguments): void
+    {
+        $result = $this->sandboxWithRuns([])->runScript('chmod +x bin/gh; PATH="$PWD/bin:$PATH"; sh '.escapeshellarg(self::SCRIPT).' '.$arguments, ['GITHUB_REPOSITORY' => 'example/intakt']);
+
+        self::assertSame(2, $result->exitCode);
+        self::assertSame('', $result->output);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function emptyArguments(): iterable
+    {
+        yield 'an empty commit' => ["'' pushed"];
+        yield 'an empty tree' => ["abc ''"];
+    }
+
     /** @param list<array<string, mixed>> $runs */
     private function sandboxWithRuns(array $runs): Sandbox
     {

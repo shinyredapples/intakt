@@ -9,7 +9,8 @@
 # skips every job behind the fork guard and still ends green.
 # Needs GH_TOKEN with actions: read and GITHUB_REPOSITORY. A failing API call exits non-zero, never prints no or yes.
 set -eu
-if [ "$#" -ne 2 ]; then
+# An empty argument (a failed command substitution in the caller) must not ask about the record of an empty tree.
+if [ "$#" -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
     echo "usage: pr-run-passed.sh <sha> <tree>" >&2
     exit 2
 fi

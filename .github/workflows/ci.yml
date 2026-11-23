@@ -466,7 +466,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
       # Decided in a step, not by a paths filter, so the job reports on every pull request. The base is the pull request's
-      # merge base, or on main the commit before the push. A push to main whose commit passed as the head of a pull request into
+      # merge base, or on a full push run the head's first parent. A push to main whose commit passed as the head of a pull request into
       # main skips this job; a later full run's check starts from its own first parent, so the upgrade across the skipped
       # change stays unchecked. The rest of what the check misses is left to the nightly full run on main (#2126). A failing
       # git fails the step.
