@@ -65,7 +65,7 @@ final readonly class HandBackRoutes
         $last = null;
 
         try {
-            // The branch as append() stores it, quotes and escapes included; the text only narrows the read, isOf() decides.
+            // The branch as append() stores it, quotes and escapes included, because a raw branch would not match the stored text; it only narrows the read, isOf() decides.
             $mention = new Mentions(json_encode($task['branch'], JSON_THROW_ON_ERROR));
 
             foreach ($this->ledger->readOfKindsMentioning($mention, ...self::ROUND) as $recorded) {
