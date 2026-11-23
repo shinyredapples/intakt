@@ -85,6 +85,12 @@ final class GitHubWorkSourceTest extends KernelTestCase
     private array $writers = ['ana', 'bea'];
     private string $labelApplier = 'ana';
     private ?ForgeReadFailed $historyFailure = null;
+    /** @var array<int, array<string, string>> */
+    private array $appliersOf = [];
+    /** @var ?list<string> */
+    private ?array $appliedInOrder = null;
+    /** @var array<int, string> */
+    private array $editedBodies = [];
     /** @var list<string> */
     private array $asked = [];
     /** @var list<int> */
@@ -177,6 +183,94 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads->lists([Issues::task(5)]);
 
         self::assertSame(NothingPicked::NoTaskReady, $this->source()->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
+    public function testAWaitAddedInTheSecondOfTheListingAfterThePlanKeepsTheTaskFromBeingPicked(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->editedBodies = [5 => 'Waits for #6'];
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+        self::assertSame('GitHub holds #5 with other labels, waits or closing references than it was planned with, so its history is not of the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testATextRewordedWithoutAWaitOrClosingReferenceStillPicksTheTask(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+        $this->editedBodies = [5 => 'The same task, said in other words.'];
+
+        self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testAnEligibilityLabelAppliedAgainWithoutWriteAccessInTheSecondOfTheListingPicksNothing(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->appliersOf = [5 => ['intakt' => 'triager']];
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertNull($pick->task);
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+        self::assertSame('The labels of #5 are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testAPriorityLabelAppliedAgainWithoutWriteAccessInTheSecondOfTheListingPicksNothing(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt', 'priority:urgent']), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->appliersOf = [5 => ['priority:urgent' => 'triager']];
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+        self::assertSame('The labels of #5 are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testTwoNonPriorityLabelsAppliedAgainInTheOtherOrderByAWriterStillPickTheTask(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt', 'docs'])]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+        $this->appliedInOrder = ['docs', 'intakt'];
+
+        self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testPriorityLabelsAppliedAgainInTheOtherOrderByAWriterPickNothing(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt', 'priority:low', 'priority:high']), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->appliedInOrder = ['intakt', 'priority:high', 'priority:low'];
+
+        self::assertSame(NothingPicked::TrustNotChecked, $source->nextWork('alpha', WorkerState::Free)->nothing);
+        self::assertSame('The labels of #5 are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testALabelAppliedWithoutWriteAccessSinceBeforeTheListingDoesNotKeepTheTaskFromBeingPicked(): void
+    {
+        $this->appliersOf = [5 => ['docs' => 'triager']];
+        $this->reads->lists([Issues::task(5, ['intakt', 'docs'])]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+
+        self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
     }
 
     public function testAWriterHoldingTheDatabaseWhenThePickReadsTheFailuresPicksNothingAndLogsTheReason(): void
@@ -414,7 +508,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             $listed = $this->reads->lastListed[$number];
 
-            return new IssueHistory($this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->labelApplier), $listed->labels), $listed->body, $listed->labels);
+            return new IssueHistory($this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$number][$label] ?? $this->labelApplier), $this->appliedInOrder ?? $listed->labels), $this->editedBodies[$number] ?? $listed->body, $listed->labels);
         });
 
         return $this->sourceOver($this->reads, $histories);
@@ -502,6 +596,6 @@ final class GitHubWorkSourceTest extends KernelTestCase
         });
         $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules('intakt'), new IssueReferences(), $this->logger);
 
-        return new GitHubWorkSource($listing, $histories, $accounts, $this->store, $this->logger);
+        return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, $this->logger);
     }
 }
