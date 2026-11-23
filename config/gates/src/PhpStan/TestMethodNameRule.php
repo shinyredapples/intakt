@@ -55,7 +55,7 @@ final readonly class TestMethodNameRule implements Rule
      */
     private function isJudged(array $method, array $providers): bool
     {
-        // a method that implements or overrides a provider an ancestor names is that provider
+        // because PHPUnit calls a provider an ancestor names on the concrete class, so the method that implements or overrides it is that provider
         return $method['runnable'] && str_starts_with($method['file'], $this->root.'/tests/') && [] === array_intersect([$method['method'], ...$method['overrides']], $providers);
     }
 
