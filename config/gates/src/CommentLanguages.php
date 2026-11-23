@@ -10,8 +10,8 @@ final readonly class CommentLanguages
     private const array JAVASCRIPT_EXTENSIONS = ['.js', '.mjs', '.cjs'];
     private const array SHELL_EXTENSIONS = ['.sh', '.bash'];
     private const array YAML_EXTENSIONS = ['.yml', '.yaml'];
-    // Because a script such as `bin/journey-record` has no extension, its hashbang naming a POSIX-style shell is what makes it a shell script.
-    private const string SHELL_HASHBANG = '~\A#![ \t]*+/\S*?/(?:env[ \t]++)?(?:ba|da|k|z)?sh(?=\s|\z)~';
+    // Because a script such as `bin/journey-record` has no extension, its hashbang naming a POSIX-style shell, directly or through `env` and its options such as `-S`, is what makes it a shell script.
+    private const string SHELL_HASHBANG = '~\A#![ \t]*+/\S*?/(?:env[ \t]++(?:-\S*+[ \t]++)*+)?(?:ba|da|k|z)?sh(?=\s|\z)~';
     private const int HASHBANG_BYTES = 256;
 
     public function __construct(

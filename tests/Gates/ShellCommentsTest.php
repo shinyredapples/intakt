@@ -52,6 +52,17 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment in backticks' => ["a=`date # TODO later`\n", [1 => 'TODO']];
         yield 'a comment after a parameter with a single quote inside double quotes' => ["echo \"\${a:-it's}\" # TODO later\n", [1 => 'TODO']];
         yield 'a comment after carriage return line ends' => ["true\r\n# TODO later\r\n", [2 => 'TODO']];
+        yield 'a comment after an arithmetic left shift' => ["x=\$(( 1 << 2 ))\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after an arithmetic left shift without blanks' => ["n=\$((1<<2))\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after an arithmetic left shift in double quotes' => ["echo \"\$((1 << 2))\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after an arithmetic command with a shift assignment' => ["(( x <<= 1 ))\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment in a case branch inside a quoted command substitution' => ["a=\"\$(case \$b in\n  x) echo # TODO later\n  ;;\nesac)\"\n", [2 => 'TODO']];
+        yield 'a comment after a case inside a command substitution' => ["a=\$(case \$b in x) echo ;; esac) # TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a here-document with an empty quoted delimiter' => ["cat <<''\n# TODO body text\n\n# FIXME real comment\n", [4 => 'FIXME']];
+        yield 'a comment after a here-document whose quoted delimiter holds a quote' => ["cat <<'a\"b'\ntext\na\"b\n# TODO real comment\n", [4 => 'TODO']];
+        yield 'a comment after a here-document whose double-quoted delimiter holds an escaped quote' => ["cat <<\"a\\\"b\"\ntext\na\"b\n# TODO real comment\n", [4 => 'TODO']];
+        yield 'a comment in a command substitution before a pending here-document body' => ["cat <<EOF \"\$(\nprintf '%s' arg\n# TODO real comment\n)\"\n# FIXME body text\nEOF\n", [3 => 'TODO']];
+        yield 'a comment after a here-document inside a command substitution' => ["a=\$(cat <<EOF\n# inside\nEOF\n)\n# TODO later\n", [5 => 'TODO']];
     }
 
     /**
@@ -82,6 +93,8 @@ final class ShellCommentsTest extends TestCase
         yield 'a marker in a here-document with stripped tabs' => ["cat <<-EOF\n\t# TODO later\n\tEOF\n"];
         yield 'a marker in a double-quoted string inside a command substitution' => ["a=\$(echo \"# TODO later\")\n"];
         yield 'a marker in a base literal of an arithmetic expansion' => ["echo \$((16#ff))\n"];
+        yield 'a marker after a command substitution in the same word' => ["printf '%s\\n' \$(printf word)#TODO\n"];
+        yield 'a marker after a backtick substitution in the same word' => ["echo `printf word`#TODO\n"];
         yield 'a marker after the comment start' => ["# see the TODO list\n"];
         yield 'a reasoned exception' => ["# TODO(#123): drop once the image ships bash 5\n"];
         yield 'a marker in code' => ["TODO=1\n"];

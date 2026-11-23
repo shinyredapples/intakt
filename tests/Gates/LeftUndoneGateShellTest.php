@@ -70,6 +70,7 @@ final class LeftUndoneGateShellTest extends SandboxTestCase
         yield 'a .bash script' => ['tools/deploy.bash', '#!/usr/bin/env bash'];
         yield 'an extensionless script with a sh hashbang' => ['bin/deploy', '#!/bin/sh -e'];
         yield 'an extensionless script with an env bash hashbang' => ['bin/deploy', '#!/usr/bin/env bash'];
+        yield 'an extensionless script with an env split-string bash hashbang' => ['bin/deploy', '#!/usr/bin/env -S bash -e'];
     }
 
     #[DataProvider('shellScripts')]

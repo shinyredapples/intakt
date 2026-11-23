@@ -44,6 +44,11 @@ final class YamlCommentsTest extends TestCase
         yield 'a comment after a document marker' => ["--- # TODO later\nkey: 1\n", [1 => 'TODO']];
         yield 'a comment after a multi-line quoted value' => ["key: \"a\n  # x\n  b\" # TODO later\n", [3 => 'TODO']];
         yield 'a comment after carriage return line ends' => ["key: 1\r\n# TODO later\r\n", [2 => 'TODO']];
+        yield 'a comment after an empty block scalar in a compact mapping' => ["- key: |\n  # TODO real comment\n  next: value\n", [2 => 'TODO']];
+        yield 'a comment after a block scalar with an explicit indentation' => ["key: |2\n    text\n  more\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after a plain value continued by a line starting with a quote' => ["key: plain text\n  'continued # TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a plain sequence entry continued by a line starting with a quote' => ["- plain\n  \"continued # TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a quoted value on the next mapping line' => ["a: plain\nb: '# x' # TODO later\n", [2 => 'TODO']];
     }
 
     /**
@@ -69,6 +74,9 @@ final class YamlCommentsTest extends TestCase
         yield 'a marker in a literal block scalar' => ["key: |\n  # TODO later\n"];
         yield 'a marker in a folded block scalar with indicators' => ["key: >2-\n    # TODO later\n"];
         yield 'a marker in a block scalar sequence entry' => ["- |\n  # TODO later\n"];
+        yield 'a marker in a block scalar with an explicit indentation below its first line' => ["key: |2\n    text\n  # TODO scalar text\n"];
+        yield 'a marker in a block scalar of a compact mapping' => ["- key: |\n    # TODO later\n  next: value\n"];
+        yield 'a marker in a quoted value on a line nested under a key' => ["a:\n  b: '# TODO later'\n"];
         yield 'a marker in a quoted flow entry' => ["key: [a, '# TODO later']\n"];
         yield 'a marker after the comment start' => ["# see the TODO list\n"];
         yield 'a reasoned exception' => ["key: 1 # TODO(#123): drop once the image is pinned\n"];
