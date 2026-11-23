@@ -24,7 +24,7 @@
 .verdict-card .verdict-words { margin: 2px 0 4px; font-size: var(--t28); overflow-wrap: anywhere; }
 .verdict-card .verdict-count { margin: 0; font-size: var(--t17); }
 .verdict-card .verdict-count .figure { font-weight: 700; font-size: var(--t28); }
-/* The verdict column asks for 14rem, so the reviewers wrap to their own row when the columns do not fit (a long label or larger text) instead of squeezing the verdict; it may still shrink, because at a 32 px font 14rem alone can be wider than the card. */
+/* The 14rem basis makes the reviewers wrap before the verdict is squeezed; the column still shrinks, because at large text 14rem can be wider than the card. */
 .verdict-card .verdict-text { flex: 1 1 14rem; min-width: 0; }
 /* The gaps share at most half the bar, because a fixed gap per segment overflows a phone once there are about a hundred findings; --n is the segment count the card sets. */
 .urgency-bar { display: flex; gap: min(3px, calc(50% / var(--n, 1))); height: 10px; margin: var(--s8) 0; }

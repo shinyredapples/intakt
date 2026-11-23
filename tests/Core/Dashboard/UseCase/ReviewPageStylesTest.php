@@ -56,7 +56,7 @@ final class ReviewPageStylesTest extends TestCase
         self::assertMatchesRegularExpression('/min-width:\s*0;/', $rules['.verdict-reviewers'] ?? '');
     }
 
-    // Media queries in px do not follow the browser's font size: at a 32 px default font 14rem is 448 px, more than the card has at an 800 px viewport with the rail expanded, so the card wraps at every width and the column can shrink.
+    // Media queries in px do not follow the browser's font size: at a 32 px default font 14rem is 448 px, and with the 96 px owl and the gap the two columns need more than the card has at an 800 px viewport with the rail expanded, so the card wraps at every width and the column can shrink.
     public function testAtLargerTextTheVerdictCardWrapsAndItsVerdictColumnShrinksInsteadOfOverflowing(): void
     {
         $rules = $this->rulesOf($this->outsideMediaQueries($this->sheet('review.css')));
