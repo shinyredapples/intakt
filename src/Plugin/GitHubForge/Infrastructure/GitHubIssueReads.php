@@ -182,7 +182,17 @@ final readonly class GitHubIssueReads implements IssueReads
             throw $this->refused($status);
         }
 
-        return ['status' => $status, 'body' => $answer['body'], 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->nextLinks->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
+        return ['status' => $status, 'body' => $answer['body'], 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->nextLinks->namesNext($headers['link'] ?? [], $this->targetOf($path, $options)), 'date' => $headers['date'][0] ?? null];
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function targetOf(string $path, array $options): string
+    {
+        $query = $options['query'] ?? null;
+
+        return is_array($query) && [] !== $query ? $path.'?'.http_build_query($query) : $path;
     }
 
     /**
