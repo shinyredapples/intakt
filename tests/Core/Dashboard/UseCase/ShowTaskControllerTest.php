@@ -20,10 +20,12 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(LedgerPayload::class)]
 final class ShowTaskControllerTest extends DashboardPageTestCase
 {
-    // Time-ordered, as the build takes them, so the newer run's id sorts after the older run's.
-    private const string OLDER_RUN = '019a8f00-0000-7000-8000-000000000001';
+    // The newer run's id sorts first, so only the order of the rows can tell which run started last.
+    private const string OLDER_RUN = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000002';
 
-    private const string NEWER_RUN = '019a8f00-0000-7000-8000-000000000002';
+    private const string NEWER_RUN = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000001';
+
+    private const string NAMED_RUN = '3c9a7b52-1e4d-4f6a-8b2c-5d7e9f0a1b3c';
 
     public function testATaskThatStoppedAtTheMirrorShowsTheMirrorStepFailedWithItsReason(): void
     {
@@ -275,7 +277,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
         $this->ledger->failBuildStep('42', 'mirror', 'git fetch exited with 128');
-        $this->stepOfRun('named', 'task');
+        $this->stepOfRun(self::NAMED_RUN, 'task');
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
@@ -284,9 +286,9 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
     public function testASecondRowOfAStepInTheSameNamedRunIsLeftOut(): void
     {
-        $this->stepOfRun('named', 'task');
-        $this->stepOfRun('named', 'mirror');
-        $this->stepOfRun('named', 'mirror', 'fetch refused');
+        $this->stepOfRun(self::NAMED_RUN, 'task');
+        $this->stepOfRun(self::NAMED_RUN, 'mirror');
+        $this->stepOfRun(self::NAMED_RUN, 'mirror', 'fetch refused');
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
@@ -294,11 +296,12 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertSame('Mirror Passed', $page->filter('#step-mirror .round-head')->text());
     }
 
-    public function testARowWhoseRunIsNotTextIsLeftOut(): void
+    public function testARowWhoseRunIsNoUuidIsLeftOut(): void
     {
-        $this->stepOfRun('named', 'task');
+        $this->stepOfRun(self::NAMED_RUN, 'task');
         $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => 7, 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'fetch refused']);
         $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => '', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'fetch refused']);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => 'named', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'fetch refused']);
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 

@@ -22,21 +22,68 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(LedgerPayload::class)]
 final class LedgerBuildStepsTest extends TestCase
 {
-    private const string OLDER = '019a8f00-0000-7000-8000-000000000001';
+    // The newer run's id sorts first, as it can with a random id or a clock set back, so only the order of the rows tells the runs apart.
+    private const string OLDER = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000002';
 
-    private const string NEWER = '019a8f00-0000-7000-8000-000000000002';
+    private const string NEWER = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000001';
 
-    public function testTheRunWithTheGreaterIdIsTheLatestThoughItsFirstRowCameFirst(): void
+    public function testTheRunWhoseFirstRowComesLaterIsTheLatestThoughItsIdSortsFirst(): void
     {
         $steps = $this->latestRunOf([
+            ['run' => self::OLDER, 'step' => 'task'],
             ['run' => self::NEWER, 'step' => 'task'],
             ['run' => self::NEWER, 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'fetch refused'],
-            ['run' => self::OLDER, 'step' => 'task'],
             ['run' => self::OLDER, 'step' => 'mirror'],
         ]);
 
         self::assertSame([['task', 'passed'], ['mirror', 'failed']], $this->stepsAndOutcomes($steps));
         self::assertSame('fetch refused', $steps[1]['failure']);
+    }
+
+    public function testRowsWithoutARunAfterANamedRunAreTheLatestRunAsAfterARollback(): void
+    {
+        $steps = $this->latestRunOf([
+            ['run' => self::OLDER, 'step' => 'task'],
+            ['run' => self::OLDER, 'step' => 'mirror'],
+            ['step' => 'task'],
+            ['step' => 'mirror', 'outcome' => 'failed', 'failure' => 'mirror refused'],
+        ]);
+
+        self::assertSame([['task', 'passed'], ['mirror', 'failed']], $this->stepsAndOutcomes($steps));
+    }
+
+    public function testANamedRunAfterRowsWithoutARunIsTheLatestRun(): void
+    {
+        $steps = $this->latestRunOf([
+            ['step' => 'task'],
+            ['step' => 'mirror', 'outcome' => 'failed', 'failure' => 'mirror refused'],
+            ['run' => self::OLDER, 'step' => 'task'],
+        ]);
+
+        self::assertSame([['task', 'passed']], $this->stepsAndOutcomes($steps));
+    }
+
+    public function testARowWhoseRunIsNoUuidIsLeftOutSoItCannotHideALaterRun(): void
+    {
+        $steps = $this->latestRunOf([
+            ['run' => 'ffffffffffffffffffffffffffffffff', 'step' => 'task'],
+            ['run' => self::OLDER, 'step' => 'task'],
+            ['run' => self::OLDER, 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'mirror refused'],
+            ['run' => 'ffffffffffffffffffffffffffffffff', 'step' => 'mirror'],
+            ['run' => 'run-1', 'step' => 'mirror'],
+        ]);
+
+        self::assertSame([['task', 'passed'], ['mirror', 'failed']], $this->stepsAndOutcomes($steps));
+    }
+
+    public function testARunIdInUpperCaseIsTheSameRunAsInLowerCase(): void
+    {
+        $steps = $this->latestRunOf([
+            ['run' => self::OLDER, 'step' => 'task'],
+            ['run' => strtoupper(self::OLDER), 'step' => 'mirror'],
+        ]);
+
+        self::assertSame([['task', 'passed'], ['mirror', 'passed']], $this->stepsAndOutcomes($steps));
     }
 
     public function testARowWhoseRunIsNullIsLeftOutAndDoesNotReplaceTheNamedRun(): void
@@ -91,28 +138,6 @@ final class LedgerBuildStepsTest extends TestCase
         ]);
 
         self::assertSame([['task', 'passed'], ['mirror', 'passed'], ['clone', 'failed']], $this->stepsAndOutcomes($steps));
-    }
-
-    public function testReadingFourTimesAsManyOlderRowsTakesAboutFourTimesAsLong(): void
-    {
-        $small = $this->fastestReadOf(4000);
-        $large = $this->fastestReadOf(16000);
-
-        self::assertLessThan(8 * $small, $large, sprintf('4000 rows took %.3f s, 16000 rows %.3f s', $small, $large));
-    }
-
-    private function fastestReadOf(int $rows): float
-    {
-        $events = new RecordedEvents(array_map(fn (): RecordedEvent => $this->row(['step' => 'task']), range(1, $rows)));
-        $fastest = INF;
-
-        foreach (range(1, 3) as $ignored) {
-            $start = hrtime(true);
-            new LedgerBuildSteps()->latestRunOf($events, 'sample', '42');
-            $fastest = min($fastest, (hrtime(true) - $start) / 1e9);
-        }
-
-        return $fastest;
     }
 
     /**

@@ -9,12 +9,11 @@ use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Symfony\Component\Uid\Uuid;
 
 // The latest step of a task decides, because a build run stops at its first failed step and a new run of the task starts again at its first step.
 final readonly class LedgerBuildSteps
 {
-    private const string NAMED = 'named:';
-
     /**
      * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
      */
@@ -89,7 +88,7 @@ final readonly class LedgerBuildSteps
         return null === $run && $this->isTaskRowOf($recorded, $project, $task) ? [null, null] : null;
     }
 
-    // Null for a row written before runs were named, and false for a run that is not a non-empty string (an explicit null included): the build never writes one, so the row's run cannot be told and the row is left out.
+    // Null for a row written before runs were named, and false for a run that is no UUID (an explicit null included): the build never writes one, so the row's run cannot be told and the row is left out.
     private function runOf(RecordedEvent $recorded): string|false|null
     {
         $payload = LedgerPayload::of($recorded);
@@ -98,8 +97,7 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        // Prefixed because PHP turns a numeric string key into an integer key, and the runs are sorted by their keys as text.
-        return is_string($payload['run']) && '' !== $payload['run'] ? self::NAMED.$payload['run'] : false;
+        return is_string($payload['run']) && Uuid::isValid($payload['run']) ? strtolower($payload['run']) : false;
     }
 
     private function isTaskRowOf(RecordedEvent $recorded, string $project, string $task): bool

@@ -33,12 +33,16 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use InvalidArgumentException;
 use LogicException;
 use NoDiscard;
-use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
+use Symfony\Component\Lock\LockFactory;
 
 // Because the build lane calls this for one task at a time, a run stops at the first failed step and never retries it: sending a failure back to the builder is the next task.
 final readonly class BuildTask
 {
+    // Fixed words, because the message of a lock store's failure can name where the store keeps its locks.
+    public const string START_NOT_LOCKED = 'the start of the run could not be locked';
+
     public function __construct(
         private IssueReads $issues,
         private BuildCheckout $checkout,
@@ -50,7 +54,7 @@ final readonly class BuildTask
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
         private PushRemoteCheck $remoteCheck,
-        private ClockInterface $clock,
+        private LockFactory $locks,
     ) {
     }
 
@@ -68,16 +72,40 @@ final readonly class BuildTask
             throw PushRemoteRefused::because($refusal);
         }
 
-        $run = BuildRun::startedFor($request, $this->clock->now());
-        $task = $this->readTask($request);
+        $run = BuildRun::startedFor($request);
+        $task = $this->startInOrder($run, $request);
 
         if (!$task instanceof ListedIssue) {
-            $this->record($run, BuildStep::Task, $task);
-
             return new BuildTaskOutcome(BuildStep::Task, $task, null);
         }
 
         return $this->runSteps($request, $run, $task);
+    }
+
+    // Under a lock of the task from the issue read until its row is recorded, because the task page takes the run whose task row comes last in the ledger as the run started last, so a run that started earlier must not record its task row after a later one.
+    /**
+     * @throws BuildStepNotRecorded
+     */
+    private function startInOrder(BuildRun $run, BuildTaskRequest $request): ListedIssue|string
+    {
+        $lock = $this->locks->createLock($run->startLockKey(), ttl: null);
+
+        try {
+            $lock->acquire(true);
+        } catch (LockFailure) {
+            $this->record($run, BuildStep::Task, self::START_NOT_LOCKED);
+
+            return self::START_NOT_LOCKED;
+        }
+
+        try {
+            $task = $this->readTask($request);
+            $this->record($run, BuildStep::Task, $task instanceof ListedIssue ? null : $task);
+
+            return $task;
+        } finally {
+            $lock->release();
+        }
     }
 
     // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
@@ -110,9 +138,12 @@ final readonly class BuildTask
         $results = [];
 
         foreach (BuildStep::cases() as $step) {
+            // Read and recorded by startInOrder() before the other steps, because they need the task it returns.
+            if (BuildStep::Task === $step) {
+                continue;
+            }
+
             $result = match ($step) {
-                // Read before the other steps, because they need the task it returns.
-                BuildStep::Task => null,
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),

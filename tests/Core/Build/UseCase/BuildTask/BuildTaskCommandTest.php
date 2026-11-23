@@ -77,6 +77,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -373,7 +375,7 @@ final class BuildTaskCommandTest extends TestCase
         $repositories = self::createStub(ConfiguredRepositories::class);
         $repositories->method('nameOf')->willReturn($this->configuredRepository);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new MockClock());
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
     }
 
     /**

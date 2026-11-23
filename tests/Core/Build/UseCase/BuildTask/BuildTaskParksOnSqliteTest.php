@@ -65,7 +65,8 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -132,7 +133,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
             array_map(static fn (array $row): array => [...$row, 'task' => is_numeric($row['task']) ? (int) $row['task'] : $row['task']], $this->connection()->fetchAllAssociative('SELECT project, task, question, recommendation FROM build_parked_task')),
         );
         $payloads = array_map(static fn (mixed $payload): string => is_string($payload) ? $payload : '', $this->connection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'));
-        $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
+        $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
                 '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}',
@@ -193,7 +194,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new MockClock());
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
     }
 
     private function ledger(): Ledger
