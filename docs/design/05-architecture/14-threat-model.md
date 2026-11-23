@@ -103,6 +103,14 @@ The Tech lead (`tech_lead`, formerly the planner) writing a plan for a build on 
 - **Holds:** the credential of the one account it runs on only (an automation token, or a login file mounted read-only).
 - **Checks:** its output is a plan capped in size, which reaches the Developer fenced as another model's advice, never as the task ([Budget and model planner](06-budget-and-model-planner.md)). It is advice only: it cannot pick a model, make a task eligible or approve anything, and the build it informs is checked, reviewed and merged like any other, so a steered plan can only produce a build that the same gates judge.
 
+<a id="build-brief"></a>
+
+### Tech lead: the build brief
+The brief the Tech lead adds to a task's plan before its first build ([Choosing work](03-choosing-work.md), step 4).
+- **Reads:** what the plan's call reads: the task text with its fenced external blocks, and the code at main; both are untrusted.
+- **Can:** write the brief (the change, the files and interfaces, a verify command, a done-when) as part of the plan; it has the plan call's tools and holds its credential, nothing more.
+- **Checks:** plain code checks only its shape (a verify command, a done-when, at most eight lines of change), so a passing brief is well-formed, not trusted. It reaches the Developer fenced as another model's advice, never as the task, like the plan above. Its verify command is the one new input: plain code never runs it, and the Developer may run it only inside its sandbox, with the permissions and network limits any command the Developer chooses has, so a steered command can do nothing the Developer could not do on its own. The done-when is only compared with the pull request text at hand-back; a missing one sends the text back, and a stated one grants nothing, because the change is still checked, reviewed and merged like any other.
+
 <a id="triage-and-sizing"></a>
 
 ### Tech lead: readiness and sizing
