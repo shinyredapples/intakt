@@ -6,7 +6,7 @@ namespace Intakt\Gates;
 
 final readonly class ShellComments implements CommentLanguage
 {
-    // Because a shell comment keeps its `#`, as a PHP comment token does, its hashes are syntax, also repeated, so `# # TODO` counts.
+    // Because a shell comment keeps its `#`, as a PHP comment token does, its hashes are syntax, also repeated after a blank.
     private const string LINE_SYNTAX = '~\G(?:\s++|#++)~';
 
     public function lineSyntax(): string

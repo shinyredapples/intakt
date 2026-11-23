@@ -8,12 +8,14 @@ use Closure;
 use Intakt\Gates\LeftUndoneComments;
 use Intakt\Gates\ShellComments;
 use Intakt\Gates\ShellLexer;
+use Intakt\Gates\ShellLiterals;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ShellComments::class)]
 #[CoversClass(ShellLexer::class)]
+#[CoversClass(ShellLiterals::class)]
 #[CoversClass(LeftUndoneComments::class)]
 final class ShellCommentsTest extends TestCase
 {
@@ -60,6 +62,9 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment after carriage return line ends' => ["true\r\n# TODO later\r\n", [2 => 'TODO']];
     }
 
+    /**
+     * @param array<int, string> $markers
+     */
     #[DataProvider('scriptsWithAMarkerComment')]
     public function testAMarkerInAShellCommentIsReportedOnItsGitLine(string $script, array $markers): void
     {

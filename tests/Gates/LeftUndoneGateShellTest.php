@@ -15,6 +15,7 @@ use Intakt\Gates\PhpComments;
 use Intakt\Gates\Scope;
 use Intakt\Gates\ShellComments;
 use Intakt\Gates\ShellLexer;
+use Intakt\Gates\ShellLiterals;
 use Intakt\Gates\TwigComments;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -26,6 +27,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(ShellComments::class)]
 #[CoversClass(LeftUndoneComments::class)]
 #[UsesClass(ShellLexer::class)]
+#[UsesClass(ShellLiterals::class)]
 #[UsesClass(JavaScriptComments::class)]
 #[UsesClass(PhpComments::class)]
 #[UsesClass(TwigComments::class)]
