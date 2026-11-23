@@ -236,8 +236,8 @@ final class CountedVoteTest extends TestCase
 
     public function testADeferredP3CountsAsApprovalThoughAnotherReviewersP3DifferingOnlyInTheGateGapMarkerIsOnTheActList(): void
     {
-        $deferred = new Finding('a', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null);
-        $acted = new Finding('b', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+        $deferred = new Finding('a', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+        $acted = new Finding('b', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null);
 
         [$first, $second, $vote] = $this->countedFromLedger($deferred, $acted);
 
