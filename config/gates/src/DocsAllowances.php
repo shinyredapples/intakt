@@ -27,7 +27,7 @@ final readonly class DocsAllowances
         $this->unsummarizedOnTarget = array_map(static fn (DocsPage $page): int => $page->words, array_filter($targetPages, static fn (DocsPage $page): bool => null !== $page->summaryProblem));
     }
 
-    // A wall the target branch already had may stay as often as it was there or as the list counts it, whichever is more, but only on its own page.
+    // Because only what a change adds or alters must meet the limit, a wall may stay as often as the target branch or the list has it, but only on its own page.
     public function paragraphsOf(string $page, string $key): int
     {
         return max($this->list->paragraphCount($page, $key), $this->oversizedOnTarget[$page][$key] ?? 0);

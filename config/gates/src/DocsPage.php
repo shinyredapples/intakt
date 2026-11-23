@@ -6,7 +6,7 @@ namespace Intakt\Gates;
 
 final readonly class DocsPage
 {
-    // Chosen by replaying the gate over main and the pull requests merged in the two weeks before it, see docs/architecture/quality-gates.md.
+    // Because a replay over main and two weeks of merged pull requests chose these limits, docs/architecture/quality-gates.md gives its figures.
     public const int PARAGRAPH_WORDS = 80;
     public const int PAGE_WORDS = 1500;
     public const int SUMMARY_PAGE_WORDS = 1500;

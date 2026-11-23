@@ -6,7 +6,7 @@ namespace Intakt\Gates;
 
 final readonly class DocsGate implements Gate
 {
-    // The gate's own file on the target branch tells a first run, which has no list to compare with, from a list that went missing.
+    // Because a first run has no list to compare with, the gate's own file on the target branch tells it from a list that went missing.
     private const string GATE_FILE = 'config/gates/src/DocsGate.php';
 
     public function __construct(

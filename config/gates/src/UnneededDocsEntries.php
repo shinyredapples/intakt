@@ -58,7 +58,7 @@ final readonly class UnneededDocsEntries
 
     /**
      * @param array<string, int> $ceilings
-     * @param array<string, int> $needing  the words of each page that still needs its entry
+     * @param array<string, int> $needing
      *
      * @return list<string>
      */

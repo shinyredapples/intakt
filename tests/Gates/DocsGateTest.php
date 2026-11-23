@@ -315,6 +315,15 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($result->isPassing(), implode("\n", $result->findings));
     }
 
+    public function testDroppingTheCeilingOfAPageStillOverTheLimitFails(): void
+    {
+        $sandbox = $this->targetWith([self::GUIDE => $this->page(1600), DocsRatchetList::PATH => $this->list(pages: [self::GUIDE => 1601])]);
+
+        $result = $this->changeTo($sandbox, [self::GUIDE => $this->page(1590), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertSame(['ratchet/docs.json: the page ceiling of docs/guide/start.md was dropped or lowered below the page: restore it to 1591'], $result->findings);
+    }
+
     public function testAListEntryThatRisesFails(): void
     {
         $sandbox = $this->targetWith([DocsRatchetList::PATH => $this->list()]);
@@ -413,55 +422,9 @@ final class DocsGateTest extends SandboxTestCase
         return $sandbox;
     }
 
-    /**
-     * @param array<string, string> $files
-     */
-    private function changeTo(Sandbox $sandbox, array $files): GateResult
-    {
-        foreach ($files as $path => $contents) {
-            $sandbox->write($path, $contents);
-        }
-
-        $sandbox->commitAll('docs: change the pages');
-
-        return $sandbox->gateResult($this->gate());
-    }
-
-    private function gate(): DocsGate
-    {
-        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
-    }
-
     private function wall(string $name): string
     {
         return 'Wall '.$name.' '.$this->words(79);
-    }
-
-    private function copies(string $name, int $count): string
-    {
-        return implode("\n\n", array_fill(0, $count, $this->wall($name)));
-    }
-
-    private function keyOf(string $name): string
-    {
-        return new MarkdownParagraph($this->wall($name), 0, 1)->key();
-    }
-
-    private function words(int $count): string
-    {
-        return trim(str_repeat('word ', $count));
-    }
-
-    // One title word, then paragraphs of 50 words, so the page has one word more than asked.
-    private function page(int $words): string
-    {
-        $paragraphs = array_fill(0, intdiv($words, 50), $this->words(50));
-
-        if (0 !== $words % 50) {
-            $paragraphs[] = $this->words($words % 50);
-        }
-
-        return "# Title\n\n".implode("\n\n", $paragraphs);
     }
 
     /**
@@ -476,5 +439,51 @@ final class DocsGateTest extends SandboxTestCase
             'pages' => (object) $pages,
             'summaries' => (object) $summaries,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * @param array<string, string> $files
+     */
+    private function changeTo(Sandbox $sandbox, array $files): GateResult
+    {
+        foreach ($files as $path => $contents) {
+            $sandbox->write($path, $contents);
+        }
+
+        $sandbox->commitAll('docs: change the pages');
+
+        return $sandbox->gateResult($this->gate());
+    }
+
+    private function words(int $count): string
+    {
+        return trim(str_repeat('word ', $count));
+    }
+
+    private function keyOf(string $name): string
+    {
+        return new MarkdownParagraph($this->wall($name), 0, 1)->key();
+    }
+
+    private function copies(string $name, int $count): string
+    {
+        return implode("\n\n", array_fill(0, $count, $this->wall($name)));
+    }
+
+    // One title word, then paragraphs of 50 words, so the page has one word more than asked.
+    private function page(int $words): string
+    {
+        $paragraphs = array_fill(0, intdiv($words, 50), $this->words(50));
+
+        if (0 !== $words % 50) {
+            $paragraphs[] = $this->words($words % 50);
+        }
+
+        return "# Title\n\n".implode("\n\n", $paragraphs);
+    }
+
+    private function gate(): DocsGate
+    {
+        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
     }
 }

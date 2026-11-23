@@ -56,20 +56,28 @@ final readonly class DocsRatchetList
         $paragraphs = [];
 
         foreach ($section as $page => $keys) {
-            if (!is_array($keys) || [] === $keys) {
-                throw new DocsListInvalid('"paragraphs" of '.$page.' must map at least one key to a count');
-            }
-
-            foreach (array_keys($keys) as $key) {
-                if (1 !== preg_match(self::KEY, (string) $key)) {
-                    throw new DocsListInvalid('"paragraphs" of '.$page.' holds '.$key.', which is no key of 16 lowercase hex characters');
-                }
-            }
-
-            $paragraphs[(string) $page] = self::countsIn('paragraphs of '.$page, $keys);
+            $paragraphs[(string) $page] = self::keysOf((string) $page, $keys);
         }
 
         return $paragraphs;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private static function keysOf(string $page, mixed $keys): array
+    {
+        if (!is_array($keys) || [] === $keys) {
+            throw new DocsListInvalid('"paragraphs" of '.$page.' must map at least one key to a count');
+        }
+
+        foreach (array_keys($keys) as $key) {
+            if (1 !== preg_match(self::KEY, (string) $key)) {
+                throw new DocsListInvalid('"paragraphs" of '.$page.' holds '.$key.', which is no key of 16 lowercase hex characters');
+            }
+        }
+
+        return self::countsIn('paragraphs of '.$page, $keys);
     }
 
     /**

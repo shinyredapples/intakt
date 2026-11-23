@@ -20,8 +20,8 @@ final readonly class DocsListChanges
             ...$this->droppedParagraphs($base, $head, $pages),
             ...$this->grownCeilings('page', $base->pages, $head->pages),
             ...$this->grownCeilings('summary', $base->summaries, $head->summaries),
-            ...$this->droppedCeilings('page', $base->pages, $head->pages, $this->wordsOf(array_filter($pages, static fn (DocsPage $page): bool => $page->isOverPageLimit()))),
-            ...$this->droppedCeilings('summary', $base->summaries, $head->summaries, $this->wordsOf(array_filter($pages, static fn (DocsPage $page): bool => null !== $page->summaryProblem))),
+            ...$this->droppedCeilings('page', $this->neededCeilings($base->pages, $this->wordsOf(array_filter($pages, static fn (DocsPage $page): bool => $page->isOverPageLimit()))), $head->pages),
+            ...$this->droppedCeilings('summary', $this->neededCeilings($base->summaries, $this->wordsOf(array_filter($pages, static fn (DocsPage $page): bool => null !== $page->summaryProblem))), $head->summaries),
         ];
     }
 
@@ -99,20 +99,34 @@ final readonly class DocsListChanges
 
     /**
      * @param array<string, int> $before
+     * @param array<string, int> $needing
+     *
+     * @return array<string, int>
+     */
+    private function neededCeilings(array $before, array $needing): array
+    {
+        $needed = [];
+
+        foreach ($before as $page => $ceiling) {
+            $needed[$page] = min($ceiling, $needing[$page] ?? 0);
+        }
+
+        return $needed;
+    }
+
+    /**
+     * @param array<string, int> $needed
      * @param array<string, int> $after
-     * @param array<string, int> $needing the words of each page that still needs its entry
      *
      * @return list<string>
      */
-    private function droppedCeilings(string $kind, array $before, array $after, array $needing): array
+    private function droppedCeilings(string $kind, array $needed, array $after): array
     {
         $findings = [];
 
-        foreach ($before as $page => $ceiling) {
-            $needed = min($ceiling, $needing[$page] ?? 0);
-
-            if (($after[$page] ?? 0) < $needed) {
-                $findings[] = self::LIST.'the '.$kind.' ceiling of '.$page.' was dropped or lowered below the page: restore it to '.$needed;
+        foreach ($needed as $page => $ceiling) {
+            if (($after[$page] ?? 0) < $ceiling) {
+                $findings[] = self::LIST.'the '.$kind.' ceiling of '.$page.' was dropped or lowered below the page: restore it to '.$ceiling;
             }
         }
 
