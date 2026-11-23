@@ -268,15 +268,6 @@ final readonly class ReviewedRound
         return ReplayMark::Replay === $round->mark;
     }
 
-    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty list for `$this->outcomes`.
-    /**
-     * @return list<ReviewerOutcome>
-     */
-    private function outcomesIn(self $round): array
-    {
-        return $round->outcomes;
-    }
-
     /**
      * @return list<ReviewOutcome>
      */
@@ -293,6 +284,15 @@ final readonly class ReviewedRound
         }
 
         return $verdicts;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty list for `$this->outcomes`.
+    /**
+     * @return list<ReviewerOutcome>
+     */
+    private function outcomesIn(self $round): array
+    {
+        return $round->outcomes;
     }
 
     // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.
