@@ -404,6 +404,16 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame([2, 2, true, [FinishedState::Verdict, FinishedState::Verdict]], [$last->reviewersFinished, $last->reviewers, $last->judged, array_values($last->finished)]);
     }
 
+    public function testACompleteRoundWhoseEveryFindingTheQuoteCheckDropsWaitsOnNoJudge(): void
+    {
+        self::assertSame([true, false], $this->findingsToJudgeOnceComplete($this->quotingMissingCode(Severity::P2)));
+    }
+
+    public function testACompleteRoundWithAFindingTheQuoteCheckKeepsWaitsOnTheJudge(): void
+    {
+        self::assertSame([true, true], $this->findingsToJudgeOnceComplete($this->finding('A', Severity::P2)));
+    }
+
     public function testEveryProgressAChangeReviewReportsHasNoMoreFinishedThanStartedReviewers(): void
     {
         $progress = new RecordingProgress();
@@ -549,6 +559,25 @@ final class ReviewChangeTest extends KernelTestCase
         };
 
         return $this->reviewChange($work)->review($this->request($round));
+    }
+
+    // Every reviewer answers and no judge runs, so the round stays complete until the upper wait; the first report is before the round completes and the last one after.
+    /**
+     * @return array{bool, bool}
+     */
+    private function findingsToJudgeOnceComplete(Finding $finding): array
+    {
+        $progress = new RecordingProgress();
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$finding], [], [])]);
+        $work = function () use ($vendor): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, $vendor);
+            }
+        };
+
+        $this->reviewChange($work, sleepsFor: self::A_REVIEW_CEILING)->review($this->request(), $progress);
+
+        return [$progress->reported[0]->findingsToJudge, array_last($progress->reported)->findingsToJudge];
     }
 
     private function reviewChange(Closure $work, ?MessageBusInterface $bus = null, ?int $sleepsFor = null): ReviewChange

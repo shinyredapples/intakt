@@ -26,6 +26,11 @@ final readonly class RoundProgress
     ) {
     }
 
+    public function withNothingToJudge(): self
+    {
+        return clone ($this, ['findingsToJudge' => false]);
+    }
+
     public function isSameAs(?self $other): bool
     {
         return $other instanceof self && $other->reviewersStarted === $this->reviewersStarted && $other->reviewersFinished === $this->reviewersFinished && $other->reviewers === $this->reviewers && $other->judged === $this->judged && $other->finished === $this->finished;
