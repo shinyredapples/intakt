@@ -68,6 +68,12 @@ final readonly class NoServiceLocatorRule implements Rule
         ];
     }
 
+    // compared case-insensitively because PHP matches class names in any letter case
+    private static function isNamed(Name $name, string $class): bool
+    {
+        return 0 === strcasecmp(ltrim($name->toString(), '\\'), $class);
+    }
+
     /**
      * @return list<IdentifierRuleError>
      */
@@ -161,12 +167,6 @@ final readonly class NoServiceLocatorRule implements Rule
     private function locatorAmong(array $classes): ?string
     {
         return array_find(self::LOCATORS, static fn (string $locator): bool => array_any($classes, static fn (string $class): bool => 0 === strcasecmp(ltrim($class, '\\'), $locator)));
-    }
-
-    // compared case-insensitively because PHP matches class names in any letter case
-    private static function isNamed(Name $name, string $class): bool
-    {
-        return 0 === strcasecmp(ltrim($name->toString(), '\\'), $class);
     }
 
     /**

@@ -19,11 +19,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoRequiredAttributeRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NoRequiredAttributeRule
-    {
-        return new NoRequiredAttributeRule($root);
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -64,5 +59,10 @@ final class NoRequiredAttributeRuleTest extends PhpStanRuleTestCase
     public function testAnAttributeOfAnotherClassNamedRequiredPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('own-required-attribute');
+    }
+
+    protected function ruleFor(string $root): NoRequiredAttributeRule
+    {
+        return new NoRequiredAttributeRule($root);
     }
 }

@@ -17,11 +17,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoServiceLocatorRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NoServiceLocatorRule
-    {
-        return new NoServiceLocatorRule($root, self::createReflectionProvider());
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -104,5 +99,10 @@ final class NoServiceLocatorRuleTest extends PhpStanRuleTestCase
     public function testATestHelperTakingTheContainerPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('container-in-a-test-helper');
+    }
+
+    protected function ruleFor(string $root): NoServiceLocatorRule
+    {
+        return new NoServiceLocatorRule($root, self::createReflectionProvider());
     }
 }
