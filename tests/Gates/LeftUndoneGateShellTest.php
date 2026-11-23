@@ -14,6 +14,7 @@ use Intakt\Gates\LeftUndoneTokens;
 use Intakt\Gates\PhpComments;
 use Intakt\Gates\Scope;
 use Intakt\Gates\ShellComments;
+use Intakt\Gates\ShellHereDocuments;
 use Intakt\Gates\ShellLexer;
 use Intakt\Gates\ShellLiterals;
 use Intakt\Gates\TwigComments;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(LeftUndoneComments::class)]
 #[UsesClass(ShellLexer::class)]
 #[UsesClass(ShellLiterals::class)]
+#[UsesClass(ShellHereDocuments::class)]
 #[UsesClass(JavaScriptComments::class)]
 #[UsesClass(PhpComments::class)]
 #[UsesClass(TwigComments::class)]

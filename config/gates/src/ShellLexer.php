@@ -23,6 +23,7 @@ final class ShellLexer
     private const string CASE_END = 'esac';
 
     private readonly ShellLiterals $literals;
+    private readonly ShellHereDocuments $documents;
     private bool $wordStart = true;
     private bool $commandStart = true;
     private bool $functionName = false;
@@ -46,6 +47,7 @@ final class ShellLexer
     public function __construct(string $source)
     {
         $this->literals = new ShellLiterals($source);
+        $this->documents = new ShellHereDocuments($source);
     }
 
     /**
@@ -106,7 +108,7 @@ final class ShellLexer
         $depth = count($this->frames);
 
         foreach ($this->pendingDocuments[$depth] ?? [] as $document) {
-            $offset = $this->literals->afterDocumentBody($offset, $document);
+            $offset = $this->documents->afterBody($offset, $document);
         }
 
         unset($this->pendingDocuments[$depth]);

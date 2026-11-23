@@ -81,22 +81,6 @@ final readonly class ShellLiterals
         return [$delimiter, $offset, $quoted];
     }
 
-    /**
-     * @param array{delimiter: string, joinsLines: bool, stripsTabs: bool} $document
-     */
-    public function afterDocumentBody(int $offset, array $document): int
-    {
-        while ($offset < $this->length) {
-            [$line, $offset] = $this->documentLineAt($offset, $document);
-
-            if ($line === $document['delimiter']) {
-                return $offset;
-            }
-        }
-
-        return $this->length;
-    }
-
     public function afterDoubleQuotedText(int $offset): int
     {
         while (($offset += strcspn($this->source, '"\\$`', $offset)) < $this->length) {
@@ -173,40 +157,5 @@ final readonly class ShellLiterals
         $end = false === $end ? $this->length : $end;
 
         return [substr($this->source, $offset + 1, $end - $offset - 1), min($end + 1, $this->length), true];
-    }
-
-    /**
-     * @param array{delimiter: string, joinsLines: bool, stripsTabs: bool} $document
-     *
-     * @return array{string, int}
-     */
-    private function documentLineAt(int $offset, array $document): array
-    {
-        // Because only whether the line equals the delimiter matters, a line grows in place to no more than one byte past it, so a long chain of joined lines under a long delimiter is read in linear time.
-        $kept = strlen($document['delimiter']) + 1;
-        $line = '';
-
-        do {
-            $end = $offset + strcspn($this->source, "\n", $offset);
-            $start = '' === $line && $document['stripsTabs'] ? $offset + strspn($this->source, "\t", $offset, $end - $offset) : $offset;
-            $continues = $document['joinsLines'] && $end < $this->length && $this->endsInAnEscape($start, $end);
-            $room = $kept - strlen($line);
-
-            if ($room > 0) {
-                $line .= substr($this->source, $start, min($end - $start - ($continues ? 1 : 0), $room));
-            }
-
-            $offset = $end + 1;
-        } while ($continues);
-
-        return [$line, min($offset, $this->length)];
-    }
-
-    // Because a backslash escapes the next one, only an odd run of backslashes before the line end joins the next line.
-    private function endsInAnEscape(int $start, int $end): bool
-    {
-        $line = substr($this->source, $start, $end - $start);
-
-        return 1 === (strlen($line) - strlen(rtrim($line, '\\'))) % 2;
     }
 }
