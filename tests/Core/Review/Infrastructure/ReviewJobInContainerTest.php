@@ -23,6 +23,8 @@ use Intakt\Core\Job\Infrastructure\OrphanedJobs;
 use Intakt\Core\Job\Infrastructure\StartCheckLog;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
+use Intakt\Core\Review\Infrastructure\ClaudeCodeJobEvents;
+use Intakt\Core\Review\Infrastructure\ReportedUsage;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewJobImages;
@@ -38,6 +40,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 // The review job through the container runner, its engine client and its egress proxy, with only the Docker daemon scripted, because the build sandbox has none.
 #[CoversClass(ReviewJob::class)]
 #[UsesClass(ReviewJobAnswer::class)]
+#[UsesClass(ClaudeCodeJobEvents::class)]
+#[UsesClass(ReportedUsage::class)]
 #[UsesClass(ReviewJobImages::class)]
 #[UsesClass(ReviewJobRequest::class)]
 #[UsesClass(ResolvedModel::class)]

@@ -38,6 +38,28 @@ final class UsageWindowTest extends TestCase
         self::assertSame(UsageWindow::FiveHour, UsageWindow::told(300, new DateTimeImmutable('2026-11-02T09:00:00Z'), $this->answeredAt()));
     }
 
+    public function testAWindowStatedAsFiveHoursWithNoResetIsTheFiveHourWindow(): void
+    {
+        self::assertSame(UsageWindow::FiveHour, UsageWindow::told(300, null, $this->answeredAt()));
+    }
+
+    public function testAWindowWithNeitherAStatedLengthNorAResetIsNone(): void
+    {
+        self::assertNull(UsageWindow::told(null, null, $this->answeredAt()));
+    }
+
+    public function testAWindowStatedAsFiveHoursIsTheFiveHourWindowEvenWithAResetSixDaysAhead(): void
+    {
+        self::assertSame(UsageWindow::FiveHour, UsageWindow::told(300, $this->sixDaysAfterTheAnswer(), $this->answeredAt()));
+    }
+
+    public function testAResetSixDaysAheadOfAWindowStatedAsFiveHoursIsRefusedAsBeyondTheWindow(): void
+    {
+        $window = UsageWindow::told(300, $this->sixDaysAfterTheAnswer(), $this->answeredAt());
+
+        self::assertSame(ReadingOutcome::ResetBeyondWindow, $window?->refusalOfReset($this->sixDaysAfterTheAnswer(), $this->answeredAt()));
+    }
+
     public function testAWindowStatedAsAWeekIsTheWeeklyWindowWhateverItsReset(): void
     {
         self::assertSame(UsageWindow::Weekly, UsageWindow::told(10080, new DateTimeImmutable('2026-11-02T09:00:00Z'), $this->answeredAt()));
@@ -91,5 +113,10 @@ final class UsageWindowTest extends TestCase
     private function answeredAt(): DateTimeImmutable
     {
         return new DateTimeImmutable('2026-11-02T08:00:00Z');
+    }
+
+    private function sixDaysAfterTheAnswer(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-08T08:00:00Z');
     }
 }

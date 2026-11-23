@@ -465,7 +465,7 @@ M7 holds T39, T47 to T69, T75 to T80, T82, T89, T90, T92 to T97, T102, T103 and 
 - **Waits for:** T48, T49. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
 
 ### T51 Pre-push check job and the Evidence list
-- **Description:** A check job applies the bundle in a fresh clone with a fresh dependency cache and runs the project's check command through `Plugin/Gate` (the PHP gate reads the list `bin/check --static-gates` prints and runs the gates it names as static, or the configured command). The pull request text must reference every top-level Evidence item of the task (E1..EN) and stay under the body cap; a miss goes back once on its own count, with the commits kept. A file that loses most of its content fails unless the plan names it.
+- **Description:** A check job applies the bundle in a fresh clone (it may copy a saved install with the same lock files and platform into it) and runs the project's check command through `Plugin/Gate` (the PHP gate reads the list `bin/check --static-gates` prints and runs the gates it names as static, or the configured command). The pull request text must reference every top-level Evidence item of the task (E1..EN) and stay under the body cap; a miss goes back once on its own count, with the commits kept. A file that loses most of its content fails unless the plan names it.
 - **Reference:** `test_evidence.py`, `test_round.py` (a second Evidence miss goes to the reviewers; a body over the cap goes back once), `test_fixpass_logic.py`.
 - **Acceptance:** each case above; the check's result leaves the container through the output directory only.
 - **Evidence:** a red and a green check job on the sample repository.
