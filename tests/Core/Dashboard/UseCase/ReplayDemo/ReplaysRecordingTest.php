@@ -212,6 +212,27 @@ final class ReplaysRecordingTest extends TestCase
         );
     }
 
+    public function testAReplayedReviewerStartIsFoundUnderItsRound(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, self::ROUND), false));
+    }
+
+    public function testAReplayedReviewerStartIsNotAmongTheStartsWithoutASubject(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([], iterator_to_array($this->ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted), false));
+    }
+
+    public function testAReplayedRowOfAnotherKindKeepsNoSubject(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([null, null, null, null], array_map(static fn (RecordedEvent $row): ?string => $row->event->subject, array_values(array_filter($this->appended(), static fn (RecordedEvent $row): bool => LedgerEventKind::ReviewerStarted !== $row->event->kind))));
+    }
+
     public function testARowThatNamesNoProjectIsAppendedAsItsStoredText(): void
     {
         $recording = $this->recordedRun();
