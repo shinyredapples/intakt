@@ -69,6 +69,6 @@ final class RecordedAdminApi
 
         return $this->reachable
             ? new MockResponse($answer['body'], ['http_code' => $answer['status']])
-            : new MockResponse('', ['error' => 'Failed to connect to localhost port 2019']);
+            : new MockResponse('', ['error' => sprintf('Failed to connect to localhost port 2019 for "%s".', $url)]);
     }
 }

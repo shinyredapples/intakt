@@ -51,10 +51,10 @@ final class InfrastructureRowTest extends TestCase
 
     public function testDownMetricsShowOneDownStateForQueueDepthAndRestarts(): void
     {
-        $row = InfrastructureRow::of(new ServerReading(new WorkerThreads(0, 2), new EndpointDown('/metrics answered 500'), new EndpointDown('/mercure/health/ready did not answer')), $this->unchanged(...));
+        $row = InfrastructureRow::of(new ServerReading(new WorkerThreads(0, 2), new EndpointDown('/metrics answered 500'), HubHealth::Healthy), $this->unchanged(...));
 
         self::assertSame(['Threads busy', 'Threads idle', 'Server metrics', 'Hub'], array_map(static fn (InfrastructureFigure $figure): string => $figure->label, $row->figures));
-        self::assertSame([FigureState::Fine, FigureState::Fine, FigureState::Down, FigureState::Down], array_map(static fn (InfrastructureFigure $figure): FigureState => $figure->state, $row->figures));
+        self::assertSame([FigureState::Fine, FigureState::Fine, FigureState::Down, FigureState::Fine],array_map(static fn (InfrastructureFigure $figure): FigureState => $figure->state, $row->figures));
     }
 
     public function testAnUnhealthyHubIsMarkedUnhealthyAndNotDown(): void

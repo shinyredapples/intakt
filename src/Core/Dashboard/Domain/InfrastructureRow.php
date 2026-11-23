@@ -26,8 +26,9 @@ final readonly class InfrastructureRow
     ) {
     }
 
-    // Redacted, because the reason of a down source can quote an exception, which can carry a credential.
     /**
+     * Redacted as well, because the reason of a down source is free text the board does not control.
+     *
      * @param Closure(string): string $redact
      */
     public static function of(ServerReading $reading, Closure $redact): self

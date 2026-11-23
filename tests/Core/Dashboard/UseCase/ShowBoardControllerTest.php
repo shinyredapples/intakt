@@ -1126,7 +1126,17 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame(['Worker threads', 'Server metrics', 'Hub'], $row->filter('.infra-figure.down dt')->each(static fn (Crawler $label): string => $label->text()));
-        self::assertStringContainsString('/frankenphp/threads did not answer: Failed to connect to localhost port 2019', $row->filter('.infra-figure.down dd')->first()->text());
+        self::assertSame('down (/frankenphp/threads did not answer)', $row->filter('.infra-figure.down dd')->first()->text());
+    }
+
+    public function testACredentialInTheQueryOfTheAdminApiUrlNeverReachesTheInfrastructureRow(): void
+    {
+        $this->server = new RecordedAdminApi()->unreachable()->status('http://127.0.0.1:2019?password=synthetic-query-password');
+
+        $this->browser->request('GET', '/');
+
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('synthetic-query-password', (string) $this->browser->getResponse()->getContent());
     }
 
     public function testTheBoardShowsTheInfrastructureRowAsDownInsteadOfFailingWhenTheAdminApiUrlIsNotOnLocalhost(): void

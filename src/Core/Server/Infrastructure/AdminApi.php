@@ -35,8 +35,9 @@ final readonly class AdminApi
             $response = $this->http->request('GET', $url, self::OPTIONS);
 
             return ['status' => $response->getStatusCode(), 'body' => $response->getContent(false)];
-        } catch (ExceptionInterface $failure) {
-            return new EndpointDown(sprintf('%s did not answer: %s', $path, $failure->getMessage()));
+        } catch (ExceptionInterface) {
+            // Without the transport's message, because it quotes the whole URL and the reason is shown on the board.
+            return new EndpointDown($path.' did not answer');
         }
     }
 
