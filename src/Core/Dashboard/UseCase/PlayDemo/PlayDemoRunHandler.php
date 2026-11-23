@@ -74,8 +74,8 @@ final readonly class PlayDemoRunHandler
 
     private function publish(PlayDemoRun $run, string $reason): void
     {
-        if ('' !== $run->play) {
-            $this->captions->publishTheRefusal($run->play, $reason);
+        if ('' !== $run->sign()) {
+            $this->captions->publishTheRefusal($run->sign(), $reason);
         }
     }
 
