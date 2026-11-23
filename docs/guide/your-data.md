@@ -44,7 +44,7 @@ A new version of Intakt may change how its database is laid out. It does that by
 
 **If something is wrong:** stop the new version and go back to the previous version on the copy you made in step 2. Never start the previous version on the data the new version has already updated.
 
-The steps above are how you upgrade today. Planned: Intakt updates itself, with the old and the new version running side by side on the same data for a while, and running jobs finish on the version they started on ([draining and updates](the-engine-room.md#draining-and-updates)). A new version then only adds data the old one ignores, so going back to the old version needs no copy and loses nothing recorded since.
+The steps above are how you upgrade today. Planned: Intakt updates itself, with the old and the new version running side by side on the same data for a while, and running jobs finish on the version they started on ([draining and updates](the-engine-room.md#draining-and-updates)). A new version then only adds data the old one ignores, so going back to the old version needs no copy and loses nothing recorded since. Each version says which older versions it can be installed from directly; that range is its rollback window, and every version in it is tested on the data the new one writes before the new one is published. An install older than that takes the versions in between first, one full update at a time, so it never goes back to a version that was not tested.
 
 Planned: a version that changes stored data so the old version could not read it says so, and only that kind of update pauses all work while it switches. Such an update first copies the data, and if it fails before work resumes, Intakt goes back to the old version on that copy.
 
