@@ -19,7 +19,7 @@ final class ProjectCopy
         # The content, not the inode, because the copy has inodes of its own.
         if ! cmp -s vendor/composer/installed.json "$0"/vendor/composer/installed.json 2>/dev/null; then
             rm -rf vendor vendor.partial
-            # A copy, not a symlink, because a symlink would resolve the project to the real checkout; not hard links either, because each link changes the inode of the checkout's file, which bin/check --reuse counts.
+            # A copy, not a symlink, because a symlink would resolve the project to the real checkout; not hard links either, because each link changes the change time of the checkout file's inode, which bin/check --reuse counts.
             # Built under another name, because a copy that stops partway must never count as vendor.
             cp -a "$0"/vendor vendor.partial
             mv vendor.partial vendor

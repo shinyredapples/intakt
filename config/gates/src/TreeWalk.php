@@ -51,8 +51,8 @@ final readonly class TreeWalk
      *
      * @throws UnexpectedValueException
      */
-    // Because a folder the walk skips still tells by its own times and inode that it was moved away and back, it counts without what it holds; behind a link, the folder it leads to tells that, not the link.
-    public function folderAlone(string $path, string $key): iterable
+    // Because a folder the walk skips still tells by its own times and inode that it was moved away and back, it counts without what it holds; behind a link, the folder it leads to tells that, not the link, and so do the folders above it within $root, since moving one of them away also takes the gates' input away.
+    public function folderAlone(string $path, string $key, string $root): iterable
     {
         yield $key => $this->settledStatusOf($path);
 
@@ -67,6 +67,11 @@ final readonly class TreeWalk
         }
 
         yield $key."\0" => $this->settledStatusOf($target);
+
+        for ($folder = dirname($target); str_starts_with($folder, $root.'/'); $folder = dirname($folder)) {
+            // Because the key of the folder a link leads to ends in a zero byte, a relative path after it never passes for that key nor for a path in the tree.
+            yield $key."\0".substr($folder, strlen($root) + 1) => $this->settledStatusOf($folder);
+        }
     }
 
     /**

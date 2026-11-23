@@ -129,7 +129,7 @@ final readonly class TreeFingerprint
             $found[] = $walk->entries($root.'/'.$path, $path, [$root]);
 
             foreach ($this->foldersAbove($path) as $folder) {
-                $found[] = $walk->folderAlone($root.'/'.$folder, $folder);
+                $found[] = $walk->folderAlone($root.'/'.$folder, $folder, $root);
             }
         }
 

@@ -334,6 +334,28 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    // Because moving a folder above the one a link points at leaves both the link and that folder alone, only the folders above it in the checked tree tell that the gates may have read the tree while it was away.
+    public function testAFolderAboveTheOneALinkLeadsToWithinTheTreeMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home, $parent] = $this->trackedNoteUnderVarBehindALinkWithinTheTree();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        rename($parent, $parent.'-aside');
+        rename($parent.'-aside', $parent);
+
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testATrackedFileBehindALinkWithinTheTreeLeftAloneWhileTheGatesRanRecordsAPass(): void
+    {
+        [$root, $home] = $this->trackedNoteUnderVarBehindALinkWithinTheTree();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        self::assertTrue($tree->recordPass());
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testATrackedFileUnderAnIgnoredVarBehindALinkLeftAloneWhileTheGatesRanRecordsAPass(): void
     {
         [$root, $home] = $this->trackedNoteUnderVarBehindALink();
@@ -602,6 +624,23 @@ final class PassedTreeTest extends SandboxTestCase
         $root->symlink('var/notes', $target);
 
         return [$root, $home, $target];
+    }
+
+    /**
+     * @return array{Sandbox, Sandbox, string}
+     */
+    private function trackedNoteUnderVarBehindALinkWithinTheTree(): array
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('var/notes/example.md', "clean\n");
+        $root->git('add', '--force', 'var/notes/example.md');
+        $root->commitAll('docs: track a note under var');
+        $parent = $root->root.'/var/backing/parent';
+        mkdir($parent, 0o777, true);
+        rename($root->root.'/var/notes', $parent.'/notes');
+        $root->symlink('var/notes', $parent.'/notes');
+
+        return [$root, $home, $parent];
     }
 
     private function pass(Sandbox $root, Sandbox $home, string ...$arguments): void
