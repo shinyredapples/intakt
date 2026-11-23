@@ -39,12 +39,13 @@ final readonly class DocsGate implements Gate
 
         try {
             $documents = $this->documentsOf($workspace);
-            $base = $this->baseListOf($workspace);
+            $mergeBase = $this->mergeBaseOf($workspace);
+            $base = null === $mergeBase ? null : $this->baseListOf($workspace, $mergeBase);
         } catch (ScopeFailure $failure) {
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $findings = $this->limitFindings($documents, $list);
+        $findings = $this->limitFindings($workspace, $documents, $list, $mergeBase, $base ?? DocsRatchetList::empty());
 
         if ($base instanceof DocsRatchetList) {
             array_push($findings, ...$list->growthOver($base), ...new UnneededDocsEntries()->in($list, $documents));
@@ -90,18 +91,17 @@ final readonly class DocsGate implements Gate
         return str_ends_with($path, '.md') && ('README.md' === $path || str_starts_with($path, 'docs/'));
     }
 
-    private function baseListOf(Workspace $workspace): ?DocsRatchetList
+    private function mergeBaseOf(Workspace $workspace): ?string
     {
         if (!$workspace->hasGit()) {
             return null;
         }
 
-        $mergeBase = $workspace->mergeBase();
+        return $workspace->mergeBase() ?? throw new ScopeFailure('no base branch found, pass --base=<ref>');
+    }
 
-        if (null === $mergeBase) {
-            throw new ScopeFailure('no base branch found, pass --base=<ref>');
-        }
-
+    private function baseListOf(Workspace $workspace, string $mergeBase): ?DocsRatchetList
+    {
         $shown = $workspace->git(['show', $mergeBase.':'.DocsRatchetList::PATH]);
 
         if (!$shown->succeeded()) {
@@ -126,35 +126,58 @@ final readonly class DocsGate implements Gate
      *
      * @return list<string>
      */
-    private function limitFindings(array $documents, DocsRatchetList $list): array
+    private function limitFindings(Workspace $workspace, array $documents, DocsRatchetList $list, ?string $mergeBase, DocsRatchetList $targetList): array
     {
         $findings = [];
 
         foreach ($documents as $path => $page) {
-            array_push(
-                $findings,
-                ...$this->paragraphFindings($path, $page, $list),
-                ...$this->pageLengthFindings($path, $page, $list),
-                ...$this->summaryFindings($path, $page, $list),
-            );
+            $pageFindings = $this->pageFindings($path, $page, $list, null, $targetList);
+
+            if ([] !== $pageFindings && null !== $mergeBase) {
+                $pageFindings = $this->pageFindings($path, $page, $list, $this->targetVersionOf($workspace, $mergeBase, $path), $targetList);
+            }
+
+            array_push($findings, ...$pageFindings);
         }
 
         return $findings;
     }
 
+    private function targetVersionOf(Workspace $workspace, string $mergeBase, string $path): ?MarkdownPage
+    {
+        $shown = $workspace->git(['show', $mergeBase.':'.$path]);
+
+        return $shown->succeeded() ? new MarkdownPage($shown->output) : null;
+    }
+
+    // Because the target branch moves on while a change waits, a wall it already has that its list never counted is not this change's doing.
     /**
      * @return list<string>
      */
-    private function paragraphFindings(string $path, MarkdownPage $page, DocsRatchetList $list): array
+    private function pageFindings(string $path, MarkdownPage $page, DocsRatchetList $list, ?MarkdownPage $target, DocsRatchetList $targetList): array
+    {
+        return [
+            ...$this->paragraphFindings($path, $page, $list, $target, $targetList),
+            ...$this->pageLengthFindings($path, $page, $list, $target, $targetList),
+            ...$this->summaryFindings($path, $page, $list, $target, $targetList),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function paragraphFindings(string $path, MarkdownPage $page, DocsRatchetList $list, ?MarkdownPage $target, DocsRatchetList $targetList): array
     {
         $findings = [];
         $seen = [];
+        $onTarget = null === $target ? [] : array_count_values(array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->key(), $this->oversizedParagraphsOf($target)));
 
         foreach ($this->oversizedParagraphsOf($page) as $paragraph) {
             $key = $paragraph->key();
             $seen[$key] = ($seen[$key] ?? 0) + 1;
+            $carried = max(0, ($onTarget[$key] ?? 0) - $targetList->allowanceOf($path, $key));
 
-            if ($seen[$key] > $list->allowanceOf($path, $key)) {
+            if ($seen[$key] > $list->allowanceOf($path, $key) + $carried) {
                 $findings[] = $path.':'.$paragraph->line.': paragraph of '.$paragraph->words().' words, the limit is '.self::PARAGRAPH_WORDS.'; split it into short paragraphs or move the detail to docs/reference/';
             }
         }
@@ -173,13 +196,17 @@ final readonly class DocsGate implements Gate
     /**
      * @return list<string>
      */
-    private function pageLengthFindings(string $path, MarkdownPage $page, DocsRatchetList $list): array
+    private function pageLengthFindings(string $path, MarkdownPage $page, DocsRatchetList $list, ?MarkdownPage $target, DocsRatchetList $targetList): array
     {
         if (!array_any(self::PAGE_LIMITED_FOLDERS, static fn (string $folder): bool => str_starts_with($path, $folder))) {
             return [];
         }
 
         $limit = $list->ceilingOf($path) ?? self::PAGE_WORDS;
+
+        if ($target instanceof MarkdownPage && null === $targetList->ceilingOf($path)) {
+            $limit = max($limit, $target->words());
+        }
 
         if ($page->words() <= $limit) {
             return [];
@@ -191,9 +218,13 @@ final readonly class DocsGate implements Gate
     /**
      * @return list<string>
      */
-    private function summaryFindings(string $path, MarkdownPage $page, DocsRatchetList $list): array
+    private function summaryFindings(string $path, MarkdownPage $page, DocsRatchetList $list, ?MarkdownPage $target, DocsRatchetList $targetList): array
     {
         if (!str_starts_with($path, 'docs/architecture/') || $page->words() <= self::SUMMARY_THRESHOLD_WORDS || $list->excusesSummary($path)) {
+            return [];
+        }
+
+        if ($target instanceof MarkdownPage && !$targetList->excusesSummary($path) && [] !== $this->summaryFindings($path, $target, DocsRatchetList::empty(), null, $targetList)) {
             return [];
         }
 

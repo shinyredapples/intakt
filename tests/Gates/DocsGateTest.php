@@ -384,6 +384,87 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('ratchet checks skipped, no git history', $sandbox->runGate(new DocsGate())->noteOf('docs'));
     }
 
+    public function testAnUnlistedOversizedParagraphAlreadyOnTheTargetBranchPasses(): void
+    {
+        $sandbox = $this->startedChange(['docs/user/start.md' => "# Start\n\n".$this->words(120)."\n", DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->write('docs/user/other.md', "# Other\n\nShort.\n");
+        $sandbox->commitAll('docs: add a page');
+
+        $run = $sandbox->runGate(new DocsGate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
+    }
+
+    public function testAnOversizedParagraphOfATargetBranchWithoutTheGatePasses(): void
+    {
+        $sandbox = $this->startedChange(['docs/user/start.md' => "# Start\n\n".$this->words(120)."\n"]);
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf([]));
+        $sandbox->commitAll('docs: add the list');
+
+        $run = $sandbox->runGate(new DocsGate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
+    }
+
+    public function testEditingAnUnlistedOversizedParagraphOfTheTargetBranchFails(): void
+    {
+        $sandbox = $this->startedChange(['docs/user/start.md' => "# Start\n\n".$this->words(120)."\n", DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->write('docs/user/start.md', "# Start\n\n".$this->words(121)."\n");
+        $sandbox->commitAll('docs: grow the paragraph');
+
+        self::assertStringContainsString('docs/user/start.md:3: paragraph of 121 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testRemovingAListedParagraphThatIsStillThereFails(): void
+    {
+        $paragraph = $this->words(120);
+        $sandbox = $this->startedChange(['docs/user/start.md' => "# Start\n\n".$paragraph."\n", DocsRatchetList::PATH => $this->listOf(['docs/user/start.md' => [$paragraph]])]);
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf([]));
+        $sandbox->commitAll('docs: empty the list');
+
+        self::assertStringContainsString('docs/user/start.md:3: paragraph of 120 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testAnUnlistedLongGuidePageOfTheTargetBranchPassesWhileItDoesNotGrow(): void
+    {
+        $sandbox = $this->startedChange(['docs/guide/long.md' => "# Long\n\n".$this->chapters(2000), DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->write('docs/guide/long.md', "# Long\n\n".$this->chapters(1900));
+        $sandbox->commitAll('docs: shorten the page');
+
+        $run = $sandbox->runGate(new DocsGate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
+    }
+
+    public function testAnUnlistedLongGuidePageOfTheTargetBranchThatGrowsFails(): void
+    {
+        $sandbox = $this->startedChange(['docs/guide/long.md' => "# Long\n\n".$this->chapters(2000), DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->write('docs/guide/long.md', "# Long\n\n".$this->chapters(2100));
+        $sandbox->commitAll('docs: grow the page');
+
+        self::assertStringContainsString('docs/guide/long.md: page of 2102 words, the limit is 2002', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testAnUnlistedArchitecturePageOfTheTargetBranchWithoutInShortPasses(): void
+    {
+        $sandbox = $this->startedChange(['docs/architecture/big.md' => "## Big\n\n".$this->chapters(1600), DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->write('docs/architecture/big.md', "## Big\n\n".$this->chapters(1700));
+        $sandbox->commitAll('docs: grow the page');
+
+        $run = $sandbox->runGate(new DocsGate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
+    }
+
+    public function testRemovingTheSummaryExcuseOfAPageStillWithoutInShortFails(): void
+    {
+        $sandbox = $this->startedChange(['docs/architecture/big.md' => "## Big\n\n".$this->chapters(1600), DocsRatchetList::PATH => $this->listOf([], [], ['docs/architecture/big.md'])]);
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf([]));
+        $sandbox->commitAll('docs: drop the excuse');
+
+        self::assertStringContainsString('docs/architecture/big.md: a page over 1500 words opens with an "In short" section', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
     public function testAListThatIsNotValidFailsTheGate(): void
     {
         $sandbox = $this->changeWith([DocsRatchetList::PATH => '{"paragraphs": []}']);
