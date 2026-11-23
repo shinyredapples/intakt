@@ -27,14 +27,13 @@ final readonly class ReviewJobAnswer
     ) {
     }
 
-    // The checkout is the host folder the job mounted, resolved to its real path.
     /**
      * @throws ReviewJobFailure
      */
-    public static function read(Provider $provider, string $output, string $checkout): self
+    public static function read(Provider $provider, string $output): self
     {
         $events = self::events($output) ?? [];
-        $claudeCode = new ClaudeCodeJobEvents($events, $checkout);
+        $claudeCode = new ClaudeCodeJobEvents($events);
         $text = match ($provider) {
             Provider::ClaudeCode => $claudeCode->answer(),
             Provider::Codex => self::codexMessage($events),
@@ -101,12 +100,10 @@ final readonly class ReviewJobAnswer
      * @param list<array<mixed>> $events
      *
      * @return list<TokenUsageInterface>
-     *
-     * @throws ReviewJobFailure
      */
     private static function codexUsage(array $events): array
     {
-        return ReportedUsage::in(Provider::Codex, new TokenUsageExtractor(), array_filter($events, static fn (array $event): bool => 'turn.completed' === ($event[self::TYPE] ?? null)));
+        return ReportedUsage::in(new TokenUsageExtractor(), array_filter($events, static fn (array $event): bool => 'turn.completed' === ($event[self::TYPE] ?? null)));
     }
 
     /**
