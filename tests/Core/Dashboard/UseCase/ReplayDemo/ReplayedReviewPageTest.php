@@ -58,13 +58,13 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         self::assertSame(['Changes needed', '5 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
-    public function testThePageOpenWhileTheShippedRecordingPlaysGetsOneToFixCardPerFindingToFix(): void
+    public function testThePageOpenWhileTheShippedRecordingPlaysGetsOneRowPerFindingToFixInItsUrgencysGroup(): void
     {
         [$round, $page] = $this->aPageOpenedOnceTheReplayStarted();
 
         $updated = $this->streamedTo($page, $round);
 
-        self::assertSame(['Urgent', 'Urgent', 'Should fix', 'Should fix', 'Nice to have'], $updated->filter('#review-to-fix .fix-card .urgency')->each(static fn (Crawler $urgency): string => $urgency->text()));
+        self::assertSame([['Urgent', 2], ['Should fix', 2], ['Nice to have', 1]], $updated->filter('#review-to-fix .fix-group')->each(static fn (Crawler $group): array => [$group->filter('.fix-group-name')->text(), $group->filter('.fix-row')->count()]));
     }
 
     public function testThePageOpenWhileTheShippedRecordingPlaysNoLongerShowsTheNowBoxAfterTheVerdict(): void

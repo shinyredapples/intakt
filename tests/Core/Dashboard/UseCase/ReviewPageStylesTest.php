@@ -11,12 +11,22 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class ReviewPageStylesTest extends TestCase
 {
-    // Because DESIGN.md defines a list row as a title and one line of explanation.
-    public function testAToFixCardsExplanationIsCutToOneLine(): void
+    // The owner's decision for #3573: the three urgency groups side by side on a desktop and stacked on a phone, so the rule sits only in the wide block.
+    public function testTheFindingGroupsStandSideBySideOnlyOnAWideScreen(): void
+    {
+        $sheet = $this->sheet('review.css');
+        preg_match('/@media \(min-width: 1024px\) \{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/', $sheet, $wide);
+
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/', $this->rulesOf($wide[1] ?? '')['.to-fix'] ?? '');
+        self::assertDoesNotMatchRegularExpression('/grid-template-columns/', $this->rulesOf($this->outsideMediaQueries($sheet))['.to-fix'] ?? '');
+    }
+
+    // A long path must wrap inside its column instead of widening the group at 390 px.
+    public function testARowsPlaceTakesItsOwnLineAndWraps(): void
     {
         $rules = $this->rulesOf($this->sheet('review.css'));
 
-        self::assertMatchesRegularExpression('/-webkit-line-clamp:\s*1;\s*line-clamp:\s*1;\s*overflow:\s*hidden;/', $rules['.fix-more'] ?? '');
+        self::assertMatchesRegularExpression('/flex-basis:\s*100%;.*overflow-wrap:\s*anywhere;/', $rules['.fix-place'] ?? '');
     }
 
     // The change id is a fact that is itself mono, so a rule on a mono span inside a fact alone would leave it on one line at 390 px.
