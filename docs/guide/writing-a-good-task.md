@@ -120,15 +120,15 @@ Labels on the issue tell Intakt how to treat the task. Only people with write ac
 
 | Label | Effect |
 |---|---|
-| `intakt` | Intakt may build this task |
-| `idea` | for discussion only: Intakt never builds or plans it, even if `intakt` is also set |
+| the project's eligibility label (`intakt` by default) | Intakt may build this task |
+| `idea` | for discussion only: Intakt never builds or plans it, even if the eligibility label is also set |
 | `priority:urgent`, `high`, `normal`, `low` | the order in the queue (no label means `normal`) |
 | `class:core`, `feature`, `tooling`, `process` | what kind of work it is |
 | `model:strong`, `standard`, `light` | start with a stronger or cheaper AI model |
 | `plan:required`, `plan:skip` | the Tech lead writes a plan for your approval first, or not |
 | `review:full`, `review:<role>` | all the Code reviewers every round, or a specialist reviewer (for example `review:security`) |
 
-To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add `intakt`.
+To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add the project's eligibility label (`intakt` unless the project names another).
 
 ## Asking and answering
 
