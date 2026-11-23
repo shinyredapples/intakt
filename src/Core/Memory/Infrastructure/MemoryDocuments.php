@@ -98,13 +98,6 @@ final readonly class MemoryDocuments
         return self::SETTLED === ($document->getMetadata()[self::KIND] ?? null);
     }
 
-    private function string(VectorDocumentInterface $document, string $key): string
-    {
-        $value = $document->getMetadata()[$key] ?? null;
-
-        return is_string($value) ? $value : throw new StoredMemoryIsMalformed($document->getId(), $key);
-    }
-
     private function entryProject(VectorDocumentInterface $document): string
     {
         $project = $document->getMetadata()[self::PROJECT] ?? null;
@@ -117,6 +110,13 @@ final readonly class MemoryDocuments
         $text = $document->getMetadata()[self::ENTRY] ?? null;
 
         return is_string($text) ? $text : throw new StoredMemoryIsMalformed($document->getId(), self::ENTRY);
+    }
+
+    private function string(VectorDocumentInterface $document, string $key): string
+    {
+        $value = $document->getMetadata()[$key] ?? null;
+
+        return is_string($value) ? $value : throw new StoredMemoryIsMalformed($document->getId(), $key);
     }
 
     private function entryFiles(VectorDocumentInterface $document): Paths
