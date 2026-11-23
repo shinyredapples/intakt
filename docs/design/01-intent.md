@@ -7,7 +7,7 @@ Status: decided design (see Decisions); nothing is built yet.
 ## Terms
 
 - **Product owner** (short: the **owner**): the person who owns the project. Sets goals and priorities, makes the taste decisions, and holds the two approval floors (the approval system itself, and secrets and permissions).
-- **Team:** the model roles that do the work, with traditional team titles: Tech lead, Designer, Developer, Code reviewers, Security engineer, AI engineer and Maintainer, plus the opt-in Test engineer. What each one does, and what each was formerly called, is in the team table of the [Overview](05-architecture/01-overview.md#the-team). Machinery keeps technical names (orchestrator, scheduler, watchdog, checks, dashboard).
+- **Team:** the model roles that do the work, with traditional team titles: Tech lead, Designer, Developer, Code reviewers, Technical writer, Security engineer, AI engineer and Maintainer, plus the opt-in Test engineer. What each one does, and what each was formerly called, is in the team table of the [Overview](05-architecture/01-overview.md#the-team). Machinery keeps technical names (orchestrator, scheduler, watchdog, checks, dashboard).
 - **Spec:** what a project or feature should do, written by the owner or drafted with Intakt in the foundation flow.
 - **Plan:** the spec broken into milestones and tasks, with dependencies and what may run in parallel.
 - **Task:** one buildable unit of the plan, with acceptance criteria and the evidence its change must show, sized to be built and reviewed. Lanes build tasks, Code reviewers review their changes, routing rules choose their models.
@@ -21,7 +21,7 @@ This is the only statement of it; every readiness rule in the design points here
 
 1. It states one outcome, an observable result and acceptance criteria.
 2. It fits the size contract, or it has been split into parts that do ([Choosing work](05-architecture/03-choosing-work.md)).
-3. It has a plan: the files, the approach and the risks. For a task of a project with a user interface whose paths or labels match the Designer's triggers, the plan also holds the Designer's additions: the flows, every state (empty, loading, error, success), the copy, the three widths (phone, tablet, desktop) and the accessibility needs ([The Designer](05-architecture/07-reviews.md#the-designer-planned)).
+3. It has a plan: the files, the approach and the risks. For a task of a project with a user interface whose paths or labels match the Designer's triggers, the plan also holds the Designer's additions: the flows, every state (empty, loading, error, success), the copy, the three widths (phone, tablet, desktop) and the accessibility needs ([The Designer](05-architecture/07-reviews.md#the-designer-planned)). Before the first build the plan also carries a brief that passes its plain-code check ([Choosing work](05-architecture/03-choosing-work.md), step 4).
 4. Every item of its Evidence list can be produced inside a job's sandbox; evidence only the owner or the orchestrator can produce is marked as such.
 5. It names the docs the change will touch.
 6. It names what it waits for (`Waits for #n`) and, for a split part, its source.

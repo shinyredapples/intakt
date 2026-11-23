@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManager;
@@ -16,6 +17,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Platform\Contract\Redactor;
@@ -47,6 +49,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
 #[CoversClass(BootResults::class)]
@@ -62,24 +65,13 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(HeldCredentialRedactor::class)]
 #[UsesClass(FailingMains::class)]
 #[UsesClass(FailingMain::class)]
+#[UsesClass(PayloadFields::class)]
 final class BootResultsTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
     private MockClock $clock;
     private DashboardLedger $ledger;
     private LockFactory $locks;
-
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->entities = $entities;
-        $this->clock = new MockClock('2026-11-13T10:00:00+00:00');
-        $this->ledger = new DashboardLedger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
 
     public function testMainsBootResultIsReusedForTheSameCommitAndToolFingerprint(): void
     {
@@ -432,11 +424,22 @@ final class BootResultsTest extends KernelTestCase
         self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
     }
 
+    public function testAFailingMainIsFoundFromTheBootLinesOfTheProjectOnly(): void
+    {
+        $ledger = $this->createMock(Ledger::class);
+        $ledger->expects(self::once())->method('readOfKindsMentioning')->with(new Mentions('"project":"acme"'), LedgerEventKind::BootResultComputed, LedgerEventKind::MainBootFailed)->willReturn(new RecordedEvents([
+            new RecordedEvent(new UuidV7(), new LedgerEvent(LedgerEventKind::MainBootFailed, '{"project":"acme","main":"abc","tool_fingerprint":"tools-1","reason":"No status."}'), new DateTimeImmutable('2026-10-27 12:00:00')),
+        ]));
+        $ledger->expects(self::never())->method('readMentioning');
+
+        self::assertEquals(new FailingMain('acme', 'abc', 'tools-1', 'No status.'), new WatcherLedger($ledger)->failingMainOf('acme'));
+    }
+
     public function testAnAlertTheLedgerRefusedIsRecordedOnceWhenTheLedgerRecovers(): void
     {
         $refusals = 1;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($this->ledger->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($this->ledger->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(function (LedgerEvent $event) use (&$refusals): AppendResult {
             return LedgerEventKind::MainBootFailed === $event->kind && $refusals-- > 0 ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event);
         });
@@ -474,7 +477,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertInstanceOf(Ledger::class, $stored);
         $failures = 1;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($stored->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($stored->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
             $appended = $stored->append($event);
 
@@ -511,7 +514,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertInstanceOf(Ledger::class, $stored);
         $failures = 1;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($stored->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($stored->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
             $appended = $stored->append($event);
 
@@ -701,7 +704,7 @@ final class BootResultsTest extends KernelTestCase
     public function testAStoredResultTheLedgerRefusesToRecordIsStillAnsweredAndIsLogged(): void
     {
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($this->ledger->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($this->ledger->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(fn (LedgerEvent $event): AppendResult => str_contains($event->payload, '"read_from"') ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event));
         $bus = new BootingBus(BootOutcome::failed('A fails.'));
         $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry(), $this->locks);
@@ -756,8 +759,8 @@ final class BootResultsTest extends KernelTestCase
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback($this->ledger->append(...));
-        $ledger->method('readMentioning')->willReturnCallback(function (Mentions $texts) use ($results): RecordedEvents {
-            $before = $this->ledger->readMentioning($texts);
+        $ledger->method('readOfKindsMentioning')->willReturnCallback(function (Mentions $texts, LedgerEventKind ...$kinds) use ($results): RecordedEvents {
+            $before = $this->ledger->readOfKindsMentioning($texts, ...$kinds);
             // Run here, because only a hit between this worker's read of the board and its append forces the order of the race.
             $results->ofMain($this->key('b', 'tools-1'), $this->source());
 
@@ -769,6 +772,18 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertCount(1, array_filter(iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed)), static fn (RecordedEvent $recorded): bool => str_contains($recorded->event->payload, '"read_from"')));
         self::assertSame([], $this->bannerReasons());
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
+        $this->clock = new MockClock('2026-11-13T10:00:00+00:00');
+        $this->ledger = new DashboardLedger();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     /**

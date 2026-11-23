@@ -98,6 +98,35 @@ final readonly class WatcherStart
         $this->container->rebuild([self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
     }
 
+    /**
+     * @return list<array{0: string, 1: string, 2: string, 3: string}>
+     */
+    private function ledgerLines(string $configuration): array
+    {
+        $events = ($this->console)(['intakt:ledger:events'], [self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
+        $lines = [];
+
+        foreach (explode(PHP_EOL, $events) as $line) {
+            $fields = explode(' ', $line, 4);
+
+            if (4 === count($fields)) {
+                $lines[] = $fields;
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param list<array{0: string, 1: string, 2: string, 3: string}> $lines
+     *
+     * @return array<string,true>
+     */
+    private function eventIdsIn(array $lines): array
+    {
+        return array_fill_keys(array_column($lines, 1), true);
+    }
+
     private function tick(string $configuration, string $recording): void
     {
         $limit = $this->intervalSeconds() + self::TICK_MARGIN_SECONDS;
@@ -131,35 +160,6 @@ final readonly class WatcherStart
         }
 
         return array_last(array_filter($rounds, static fn (?string $round): bool => null !== $round));
-    }
-
-    /**
-     * @return list<array{0: string, 1: string, 2: string, 3: string}>
-     */
-    private function ledgerLines(string $configuration): array
-    {
-        $events = ($this->console)(['intakt:ledger:events'], [self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
-        $lines = [];
-
-        foreach (explode(PHP_EOL, $events) as $line) {
-            $fields = explode(' ', $line, 4);
-
-            if (4 === count($fields)) {
-                $lines[] = $fields;
-            }
-        }
-
-        return $lines;
-    }
-
-    /**
-     * @param list<array{0: string, 1: string, 2: string, 3: string}> $lines
-     *
-     * @return array<string,true>
-     */
-    private function eventIdsIn(array $lines): array
-    {
-        return array_fill_keys(array_column($lines, 1), true);
     }
 
     private function roundOf(string $payload, string $head): ?string

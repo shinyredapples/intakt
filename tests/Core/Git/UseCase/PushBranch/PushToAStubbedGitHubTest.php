@@ -97,17 +97,6 @@ final class PushToAStubbedGitHubTest extends TestCase
     private PushScenario $scenario;
     private ScriptedGitHub $github;
 
-    protected function setUp(): void
-    {
-        $this->scenario = new PushScenario();
-        $this->github = new ScriptedGitHub();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-    }
-
     public function testABranchWhoseForeignPullRequestIsListedAfterThisAppsOwnIsNotPushed(): void
     {
         $this->github->openPulls = [
@@ -151,5 +140,16 @@ final class PushToAStubbedGitHubTest extends TestCase
 
         self::assertNull($this->scenario->remoteTip());
         self::assertSame([], $this->scenario->ledger->kinds());
+    }
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+        $this->github = new ScriptedGitHub();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
     }
 }

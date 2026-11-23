@@ -42,21 +42,6 @@ final class ProtectedHeadsOfMirrorsTest extends TestCase
 
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        mkdir($this->mirrors);
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('bin/check', 'one');
-        $this->repository->checkoutNewBranch('feat/side');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->mirrors);
-        $this->repository->remove();
-    }
-
     public function testAHeadIsCheckedAgainstTheListOfItsOwnProject(): void
     {
         $head = $this->repository->commitFile('bin/check', 'two');
@@ -102,6 +87,21 @@ final class ProtectedHeadsOfMirrorsTest extends TestCase
         $this->expectException(CommitNameRefused::class);
 
         $_ = $this->heads([])->checked('alpha', 'feat/side');
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        mkdir($this->mirrors);
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('bin/check', 'one');
+        $this->repository->checkoutNewBranch('feat/side');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->mirrors);
+        $this->repository->remove();
     }
 
     /**

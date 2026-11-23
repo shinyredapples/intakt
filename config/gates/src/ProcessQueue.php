@@ -58,6 +58,44 @@ final readonly class ProcessQueue
     }
 
     /**
+     * @param Closure(int): array{list<string>, array<string, string>} $job
+     *
+     * @return array{list<string>, array<string, string>}
+     */
+    private function built(Closure $job, int $worker): array
+    {
+        return $job($worker);
+    }
+
+    /**
+     * @param array{list<string>, array<string, string>} $built
+     *
+     * @return array{Process|ProcessResult, string}
+     */
+    private function started(array $built, string $directory, int|float $deadline): array
+    {
+        [$command, $environment] = $built;
+        $left = ($deadline - hrtime(true)) / 1_000_000_000;
+
+        // Because building the job may itself have used up the rest of the pass.
+        if ($left <= 0) {
+            return [$this->notStarted(), ''];
+        }
+
+        // Because the limits are whole seconds, the reason of a job timeout equal to the overall limit is the job's own, not a pass that started a moment before it; the process still stops at the time left.
+        $ownTimeout = $this->seconds <= ceil($left);
+        $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->seconds, $left));
+
+        try {
+            $process->start();
+        } catch (ExceptionInterface) {
+            return [new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$command[0]), ''];
+        }
+
+        return [$process, $ownTimeout ? 'timed out after '.$this->seconds.' seconds' : $this->overallLimit()];
+    }
+
+    /**
      * @param array<int, mixed> $running
      *
      * @return list<int>
@@ -97,6 +135,18 @@ final readonly class ProcessQueue
     /**
      * @template Name of array-key
      *
+     * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs
+     *
+     * @return array<Name, ProcessResult>
+     */
+    private function neverStarted(array $jobs): array
+    {
+        return array_fill_keys(array_keys($jobs), $this->notStarted());
+    }
+
+    /**
+     * @template Name of array-key
+     *
      * @param array<int, array{Name, Process|ProcessResult, string}> $running
      *
      * @return array<int, array{Name, ProcessResult}>
@@ -116,18 +166,6 @@ final readonly class ProcessQueue
         return $finished;
     }
 
-    /**
-     * @template Name of array-key
-     *
-     * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs
-     *
-     * @return array<Name, ProcessResult>
-     */
-    private function neverStarted(array $jobs): array
-    {
-        return array_fill_keys(array_keys($jobs), $this->notStarted());
-    }
-
     private function notStarted(): ProcessResult
     {
         return new ProcessResult(ProcessRunner::TIMED_OUT, '', $this->overallLimit()."\n");
@@ -136,44 +174,6 @@ final readonly class ProcessQueue
     private function overallLimit(): string
     {
         return 'timed out: the test pass reached its overall limit of '.$this->overallSeconds.' seconds';
-    }
-
-    /**
-     * @param Closure(int): array{list<string>, array<string, string>} $job
-     *
-     * @return array{list<string>, array<string, string>}
-     */
-    private function built(Closure $job, int $worker): array
-    {
-        return $job($worker);
-    }
-
-    /**
-     * @param array{list<string>, array<string, string>} $built
-     *
-     * @return array{Process|ProcessResult, string}
-     */
-    private function started(array $built, string $directory, int|float $deadline): array
-    {
-        [$command, $environment] = $built;
-        $left = ($deadline - hrtime(true)) / 1_000_000_000;
-
-        // Because building the job may itself have used up the rest of the pass.
-        if ($left <= 0) {
-            return [$this->notStarted(), ''];
-        }
-
-        // Because the limits are whole seconds, the reason of a job timeout equal to the overall limit is the job's own, not a pass that started a moment before it; the process still stops at the time left.
-        $ownTimeout = $this->seconds <= ceil($left);
-        $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->seconds, $left));
-
-        try {
-            $process->start();
-        } catch (ExceptionInterface) {
-            return [new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$command[0]), ''];
-        }
-
-        return [$process, $ownTimeout ? 'timed out after '.$this->seconds.' seconds' : $this->overallLimit()];
     }
 
     private function finished(Process $process, string $limit): ?ProcessResult

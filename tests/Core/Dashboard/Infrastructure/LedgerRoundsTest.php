@@ -47,6 +47,7 @@ use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\Severity;
@@ -111,10 +112,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RoundEnding::class)]
 final class LedgerRoundsTest extends TestCase
 {
+    private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
     private ?RoundCosts $costs = null;
     private ?RoundEndings $endings = null;
-
-    private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
 
     public function testAStartWithANumberThatIsNoIntegerIsSkipped(): void
     {
@@ -827,6 +827,23 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame($ending, $review?->rounds[0]->ending);
     }
 
+    public function testTheUnjudgedRoundsOfSeveralReviewsInOneReadShareOneLookupOfRoundEndings(): void
+    {
+        $lookup = $this->createMock(RoundEndingLookup::class);
+        $lookup->expects(self::exactly(4))->method('ofUnjudged')->willReturn(null);
+        $endings = $this->createMock(RoundEndings::class);
+        $endings->expects(self::once())->method('lookup')->willReturn($lookup);
+        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->noCosts(), new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks(new ReplayMarkBus()));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, self::START));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, '{"round":"r2","project":"alpha","reviewers":2,"change":"feat/thing","number":1}'));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, '{"round":"r3","project":"alpha","reviewers":2,"change":"feat/other","number":2}'));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, '{"round":"r4","project":"alpha","reviewers":2,"change":"feat/other","number":2}'));
+
+        $reviews = $rounds->reviews();
+
+        self::assertSame([2, 2], array_map(static fn (Review $review): int => count($review->rounds), $reviews));
+    }
+
     public function testAJudgedRoundGetsNoEndingEvenWhenTheReviewModuleNamesOne(): void
     {
         $ending = new RoundEnding(RoundEnds::NoOutcomeInTime, 'no outcome in time');
@@ -881,25 +898,6 @@ final class LedgerRoundsTest extends TestCase
         return $this->row(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded('r1', $reviewer, $findings));
     }
 
-    private function noCosts(): RoundCosts
-    {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-
-        return $costs;
-    }
-
-    private function reviewOf(string $round, RecordedEvent ...$events): ?Review
-    {
-        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords(), $this->endings ?? new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
-
-        foreach ($events as $event) {
-            $rounds->add($event);
-        }
-
-        return $rounds->reviewOf($round);
-    }
-
     private function quorumStart(int $reviewers, QuorumPolicy $quorum): RecordedEvent
     {
         return $this->row(LedgerEventKind::ReviewStarted, new ReviewStarted('r1', 'alpha', $reviewers, 'feat/thing', 1, 'Add the thing.', quorum: $quorum));
@@ -923,6 +921,25 @@ final class LedgerRoundsTest extends TestCase
     private function event(LedgerEventKind $kind, string $payload, ?DateTimeImmutable $at = null): RecordedEvent
     {
         return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+    }
+
+    private function reviewOf(string $round, RecordedEvent ...$events): ?Review
+    {
+        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords(), $this->endings ?? new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+
+        foreach ($events as $event) {
+            $rounds->add($event);
+        }
+
+        return $rounds->reviewOf($round);
+    }
+
+    private function noCosts(): RoundCosts
+    {
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::none());
+
+        return $costs;
     }
 
     // Serialized as the writers do, so the reader is shown the row it meets in production.

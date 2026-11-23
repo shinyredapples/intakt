@@ -48,25 +48,6 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
 
     private PublishedLiveEvents $updates;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->flagAsReplay(CreateDemoProjectCommand::NAME);
-        $this->givenTheDownloadedScriptsExist();
-        $this->updates = new PublishedLiveEvents();
-        $this->browser->disableReboot();
-        // No stored summary, as for a replayed round, so the round's own streams are the only updates.
-        self::getContainer()->set(SessionSummaries::class, self::createStub(SessionSummaries::class));
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $this->removeTheStandIns();
-        parent::tearDown();
-    }
-
     public function testThePageOpenWhileTheShippedRecordingPlaysGetsTheOwlsCardWhenTheReplayReachesTheJudge(): void
     {
         [$round, $page] = $this->aPageOpenedOnceTheReplayStarted();
@@ -74,16 +55,16 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         $updated = $this->streamedTo($page, $round);
 
         self::assertSame($round, $updated->filter('section#review-verdict')->attr('data-round'));
-        self::assertSame(['Changes needed', '5 to fix · 2 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '5 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
-    public function testThePageOpenWhileTheShippedRecordingPlaysGetsOneToFixCardPerFindingToFix(): void
+    public function testThePageOpenWhileTheShippedRecordingPlaysGetsOneRowPerFindingToFixInItsUrgencysGroup(): void
     {
         [$round, $page] = $this->aPageOpenedOnceTheReplayStarted();
 
         $updated = $this->streamedTo($page, $round);
 
-        self::assertSame(['Urgent', 'Urgent', 'Should fix', 'Should fix', 'Nice to have'], $updated->filter('#review-to-fix .fix-card .urgency')->each(static fn (Crawler $urgency): string => $urgency->text()));
+        self::assertSame([['Urgent', 2], ['Should fix', 2], ['Nice to have', 1]], $updated->filter('#review-to-fix .fix-group')->each(static fn (Crawler $group): array => [$group->filter('.fix-group-name')->text(), $group->filter('.fix-row')->count()]));
     }
 
     public function testThePageOpenWhileTheShippedRecordingPlaysNoLongerShowsTheNowBoxAfterTheVerdict(): void
@@ -109,6 +90,25 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         self::assertCount(1, array_filter($ofRound, static fn (LiveEvent $event): bool => str_contains($event->turboStream, 'target="review-verdict"')));
     }
 
+    #[Override]
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->flagAsReplay(CreateDemoProjectCommand::NAME);
+        $this->givenTheDownloadedScriptsExist();
+        $this->updates = new PublishedLiveEvents();
+        $this->browser->disableReboot();
+        // No stored summary, as for a replayed round, so the round's own streams are the only updates.
+        self::getContainer()->set(SessionSummaries::class, self::createStub(SessionSummaries::class));
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->removeTheStandIns();
+        parent::tearDown();
+    }
+
     /**
      * @return array{string, Crawler}
      */
@@ -129,6 +129,14 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         return [$round, $page];
     }
 
+    private function shipped(): Recording
+    {
+        $text = file_get_contents(dirname(__DIR__, 5).self::SHIPPED);
+        self::assertIsString($text);
+
+        return new RecordingFormat(StoredSerializerFactory::create())->read($text);
+    }
+
     // At a pace no clock waits for, because the mock clock's sleep only moves its moment; the judged state goes out through the shipped renderer and templates.
     private function replays(): ReplaysRecording
     {
@@ -143,14 +151,6 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         $marks = new ReplayMarks(new MarkAnsweringQueries(ReplayMark::Replay));
 
         return new ReplaysRecording($this->ledger, $this->updates, new MockClock('2026-11-22T09:00:00+00:00'), new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), new ReplayedJudgedState($pages, $rounds));
-    }
-
-    private function shipped(): Recording
-    {
-        $text = file_get_contents(dirname(__DIR__, 5).self::SHIPPED);
-        self::assertIsString($text);
-
-        return new RecordingFormat(StoredSerializerFactory::create())->read($text);
     }
 
     // The main view and the Full record as one document, because a listener holds both and each stream targets the parts of one of them.

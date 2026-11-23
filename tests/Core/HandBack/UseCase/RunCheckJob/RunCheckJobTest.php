@@ -17,6 +17,7 @@ use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\LostContent;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
@@ -25,6 +26,9 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\Job\Contract\JobCause;
@@ -39,13 +43,14 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\HandBack\CheckJobsFor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunCheckJob::class)]
 #[CoversClass(LostContentCheck::class)]
@@ -80,6 +85,11 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobResult::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
+#[UsesClass(CheckDependencies::class)]
+#[UsesClass(CheckedLockFiles::class)]
+#[UsesClass(DependencyJobs::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyStep::class)]
 final class RunCheckJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
@@ -87,16 +97,6 @@ final class RunCheckJobTest extends TestCase
     private BuildHistory $history;
 
     private ?JobSpec $ran = null;
-
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
 
     public function testAJobWhoseOutputSaysPassedPassesTheCheck(): void
     {
@@ -467,12 +467,14 @@ final class RunCheckJobTest extends TestCase
         self::assertSame([['important.txt', 120, 0]], $this->lostIn($outcome));
     }
 
-    private function givenMainHolds(string $path, string $content): void
+    protected function setUp(): void
     {
-        $this->history->checkout('main');
-        $this->history->commitFile($path, $content, 'Add '.$path);
-        $this->history->push('main');
-        $this->history->startBranch('task', 'main');
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     /**
@@ -507,16 +509,7 @@ final class RunCheckJobTest extends TestCase
 
     private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob
     {
-        $git = new RepositoryGit(new HardenedGit());
-
-        return new RunCheckJob(
-            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
-            new LostContentCheck($git),
-            $runner,
-            $gate ?? new PhpGate(),
-            new Filesystem(),
-            self::SCRIPT,
-        );
+        return new CheckJobsFor($this->history->folder)->runCheckJob($runner, $gate);
     }
 
     private function ranSpec(): JobSpec
@@ -526,16 +519,24 @@ final class RunCheckJobTest extends TestCase
         return $this->ran;
     }
 
+    private function lines(int $count): string
+    {
+        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
+    }
+
+    private function givenMainHolds(string $path, string $content): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile($path, $content, 'Add '.$path);
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+    }
+
     /**
      * @return list<array{string, int, int}>
      */
     private function lostIn(CheckJobOutcome $outcome): array
     {
         return array_map(static fn (LostContent $lost): array => [$lost->path, $lost->linesBefore, $lost->linesAfter], $outcome->lostContent);
-    }
-
-    private function lines(int $count): string
-    {
-        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
     }
 }

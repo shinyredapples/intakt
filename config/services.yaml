@@ -94,6 +94,10 @@ services:
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
+    Intakt\Core\Memory\Infrastructure\StoreMemoryIndex:
+        arguments:
+            $vectorizer: '@ai.vectorizer.memory'
+            $store: '@ai.store.sqlite.memory'
     # Reviewers get the read side only; the Retriever is the AI bundle's, over the same store.
     Intakt\Core\Review\Infrastructure\OptionalProjectMemory:
         arguments:
@@ -170,6 +174,8 @@ when@test:
         - { resource: '../tests/Journeys/services.yaml', ignore_errors: not_found }
         # The pinned provider cooldowns under a public test name, so their test proves the store the container builds even when no provider is enabled to take it.
         - { resource: '../tests/Core/Ai/services.yaml', ignore_errors: not_found }
+        # The eligibility labels under a public test name, so their test proves the label the container hands the work source while nothing calls it.
+        - { resource: '../tests/Plugin/GitHubWorkSource/services.yaml', ignore_errors: not_found }
     services:
         # The development definition above, through its anchor, so an opted-in test profile keeps messenger also with APP_DEBUG=0.
         data_collector.messenger: *messenger_data_collector

@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
@@ -48,6 +49,7 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 // Through a worker and the real reviewer agent, so the stop is proven from the ledger row of the request to the verdict and the ledger row of the stop.
 #[Group('persistence')]
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[CoversClass(ReviewerMoves::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(Verdict::class)]
@@ -62,11 +64,6 @@ final class StopReviewerTest extends KernelTestCase
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
 
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testAStopRequestedThirtySecondsBeforeTheRunBeganCancelsItAndTheLedgerRecordsTheStop(): void
     {
@@ -208,6 +205,11 @@ final class StopReviewerTest extends KernelTestCase
         self::assertSame([$message->reviewerId], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     private function started(): ReviewWithReviewer
     {
         $this->fixture->start(1);
@@ -252,16 +254,6 @@ final class StopReviewerTest extends KernelTestCase
     }
 
     /**
-     * @return list<LedgerEventKind>
-     */
-    private function stopRows(): array
-    {
-        $kinds = [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped];
-
-        return array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, $kinds, true)));
-    }
-
-    /**
      * @return list<mixed>
      */
     private function payloadValues(LedgerEventKind $kind, string $key): array
@@ -272,5 +264,15 @@ final class StopReviewerTest extends KernelTestCase
 
             return $payload[$key] ?? null;
         }, array_values(iterator_to_array($this->fixture->ledger()->readOfKind($kind))));
+    }
+
+    /**
+     * @return list<LedgerEventKind>
+     */
+    private function stopRows(): array
+    {
+        $kinds = [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped];
+
+        return array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, $kinds, true)));
     }
 }

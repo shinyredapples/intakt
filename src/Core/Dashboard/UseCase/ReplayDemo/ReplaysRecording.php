@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 
+use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -44,7 +45,7 @@ final readonly class ReplaysRecording
      * @throws ReplayIsRefused
      * @throws ReplayStopped
      */
-    public function replay(Recording $recording, float $factor): void
+    public function replay(Recording $recording, float $factor, ?Closure $whenAccepted = null): void
     {
         // Without a lease, because a replay at the recorded pace can outlast any lease and the lock is released when it ends.
         $lock = $this->locks->createLock(self::LOCK, ttl: null);
@@ -54,21 +55,15 @@ final readonly class ReplaysRecording
         }
 
         try {
-            $this->refuseADemoProjectThatIsNoReplay();
             $this->refuseUpdatesWithoutTopic($recording);
             $this->refuseRoundsTheLedgerHolds($recording);
             $this->refuseCallsTheLedgerHolds($recording);
+            // After every refusal of the recording and under the lock, because it may write the demo project's replay mark and a refused or locked-out replay must write nothing.
+            $whenAccepted?->__invoke();
+            $this->refuseADemoProjectThatIsNoReplay();
             $this->playAtTheRecordedPace($recording, $factor);
         } finally {
             $lock->release();
-        }
-    }
-
-    // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.
-    private function refuseADemoProjectThatIsNoReplay(): void
-    {
-        if (ReplayMark::Replay !== $this->marks->ofProject(CreateDemoProjectCommand::NAME)) {
-            throw ReplayIsRefused::becauseTheDemoProjectIsNoReplay(CreateDemoProjectCommand::NAME);
         }
     }
 
@@ -110,6 +105,14 @@ final readonly class ReplaysRecording
         }
     }
 
+    // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.
+    private function refuseADemoProjectThatIsNoReplay(): void
+    {
+        if (ReplayMark::Replay !== $this->marks->ofProject(CreateDemoProjectCommand::NAME)) {
+            throw ReplayIsRefused::becauseTheDemoProjectIsNoReplay(CreateDemoProjectCommand::NAME);
+        }
+    }
+
     // Each step's moment counts from the replay's start, so the time an append takes is not added to the gaps that follow it.
     private function playAtTheRecordedPace(Recording $recording, float $factor): void
     {
@@ -125,7 +128,7 @@ final readonly class ReplaysRecording
             if ($step instanceof CapturedUpdate) {
                 $this->updates->publish(new LiveEvent($step->topic, $step->data));
             } else {
-                $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
+                $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor), $this->subjectOf($step)), $recording, $number++);
             }
 
             $this->judged->publishEach($judgedAfter[$index] ?? []);
@@ -149,16 +152,9 @@ final readonly class ReplaysRecording
         return [...$steps, ...$events, ...$updates];
     }
 
-    private function append(LedgerEvent $event, Recording $recording, int $number): void
+    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
     {
-        $result = $this->ledger->append($event);
-
-        if (!$result->succeeded()) {
-            throw ReplayStopped::at($recording, $number, (string) $result->failure);
-        }
-
-        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
-        $this->captions->publishTheStage();
+        return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
     }
 
     // A step recorded before the first one follows at once, because the ledger and the capture keep the recorded order.
@@ -187,9 +183,22 @@ final readonly class ReplaysRecording
         return json_encode($row, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }
 
-    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
+    // A reviewer start carries its round as the subject, as a live round writes it, because a reader of one round's starts by subject must find a replayed round's starts too.
+    private function subjectOf(RecordedLedgerEvent $event): ?string
     {
-        return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
+        return LedgerEventKind::ReviewerStarted === $event->kind ? self::roundOf($event->payload) : null;
+    }
+
+    private function append(LedgerEvent $event, Recording $recording, int $number): void
+    {
+        $result = $this->ledger->append($event);
+
+        if (!$result->succeeded()) {
+            throw ReplayStopped::at($recording, $number, (string) $result->failure);
+        }
+
+        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
+        $this->captions->publishTheStage();
     }
 
     private static function roundOf(string $payload): ?string

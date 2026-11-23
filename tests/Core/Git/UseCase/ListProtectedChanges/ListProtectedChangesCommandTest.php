@@ -50,21 +50,6 @@ final class ListProtectedChangesCommandTest extends TestCase
 
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        mkdir($this->mirrors);
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('bin/check', 'one');
-        $this->repository->checkoutNewBranch('feat/side');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->mirrors);
-        $this->repository->remove();
-    }
-
     public function testTheCommandListsTheProtectedPathsOfTheProjectAndExitsWithZero(): void
     {
         $this->repository->commitFile('bin/check', 'two');
@@ -126,6 +111,21 @@ final class ListProtectedChangesCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('"../outside" is not a protected path', $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        mkdir($this->mirrors);
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('bin/check', 'one');
+        $this->repository->checkoutNewBranch('feat/side');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->mirrors);
+        $this->repository->remove();
     }
 
     /**

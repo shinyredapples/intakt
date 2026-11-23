@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use DateTimeZone;
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\DriverManager;
@@ -35,7 +36,9 @@ use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Plugin\GitHubWorkSource\CommitOnValidatorLoad;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
+use Intakt\Tests\Plugin\GitHubWorkSource\WriteLockOfAServer;
 use Intakt\Tests\Plugin\GitHubWorkSource\WriterBetweenWriteAndCommit;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
@@ -69,16 +72,6 @@ final class IntakeStoreTest extends KernelTestCase
 
     private EntityManagerInterface $entities;
     private IntakeStore $store;
-
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->store = new IntakeStore($entities);
-    }
 
     public function testAStoredIssueIsReadBackAsTheItemItWasStoredFrom(): void
     {
@@ -395,6 +388,53 @@ final class IntakeStoreTest extends KernelTestCase
         }
     }
 
+    #[TestWith(['pdo_sqlite'])]
+    #[TestWith(['sqlite3'])]
+    public function testAPickReadWhoseCommitAReaderRefusedLeavesNoTransactionOpenAndTheNextOneReads(string $driver): void
+    {
+        $this->withAStoreAndAReaderOnOneFile($driver, function (IntakeStore $store, Connection $own, Connection $reader): void {
+            $reader->beginTransaction();
+            $reader->fetchOne('SELECT COUNT(*) FROM work_source_validator');
+            $held = null;
+            try {
+                $store->failuresUnderTheListingLock('alpha');
+            } catch (ProjectHeldByAnotherWriter $held) {
+            }
+
+            $reader->rollBack();
+
+            self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+            self::assertInstanceOf(RetryableException::class, $held->getPrevious());
+            self::assertSame(0, $own->getTransactionNestingLevel());
+            self::assertSame([], $store->failuresUnderTheListingLock('alpha'));
+            $store->failForGood('alpha', 7, 'recorded afterwards');
+            self::assertSame([7 => 'recorded afterwards'], $store->failuresUnderTheListingLock('alpha'));
+        });
+    }
+
+    #[TestWith(['pdo_sqlite'])]
+    #[TestWith(['sqlite3'])]
+    public function testAFailureWhoseCommitAReaderRefusedIsNotReadBackAndCanBeRecordedAgain(string $driver): void
+    {
+        $this->withAStoreAndAReaderOnOneFile($driver, function (IntakeStore $store, Connection $own, Connection $reader): void {
+            $reader->beginTransaction();
+            $reader->fetchOne('SELECT COUNT(*) FROM work_source_validator');
+            $refused = null;
+            try {
+                $store->failForGood('alpha', 7, 'uncommitted');
+            } catch (RetryableException $refused) {
+            }
+
+            $reader->rollBack();
+
+            self::assertInstanceOf(RetryableException::class, $refused);
+            self::assertSame([], $store->failuresOf('alpha'));
+            self::assertSame(0, $own->getTransactionNestingLevel());
+            $store->failForGood('alpha', 7, 'recorded afterwards');
+            self::assertSame([7 => 'recorded afterwards'], $store->failuresOf('alpha'));
+        });
+    }
+
     public function testAWriteRefusedWhileAnotherWorkersCommitWaitsForThisOneIsNamedAsHeld(): void
     {
         $file = (string) tempnam(sys_get_temp_dir(), 'intake');
@@ -513,6 +553,76 @@ final class IntakeStoreTest extends KernelTestCase
         self::assertSame(0, $connection->getTransactionNestingLevel());
     }
 
+    public function testADeadlockWhileThePickReadsTheFailuresUnderTheListingLockIsNamedAsHeld(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $events = new EventManager();
+        $manager = new EntityManager($connection, $this->entities->getConfiguration(), $events);
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        $store = new IntakeStore($manager);
+        self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([], null)));
+        // Rolled back here, because a server such as InnoDB aborts the victim's transaction itself before it reports the deadlock, so the rollback that follows is refused.
+        $events->addEventListener([Events::postLoad], new CommitOnValidatorLoad(static function () use ($connection): void {
+            $native = $connection->getNativeConnection();
+            if ($native instanceof PDO) {
+                $native->rollBack();
+            }
+
+            throw new DeadlockException(Exception::new(new PDOException('Deadlock found when trying to get lock')), null);
+        }));
+
+        $held = null;
+        try {
+            $store->failuresUnderTheListingLock('alpha');
+        } catch (ProjectHeldByAnotherWriter $held) {
+        }
+
+        self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+        self::assertInstanceOf(DeadlockException::class, $held->getPrevious());
+        self::assertSame(0, $connection->getTransactionNestingLevel());
+    }
+
+    public function testADeadlockRecordingAFailureLeavesNoTransactionOpenSoTheRetryIsStored(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $events = new EventManager();
+        $manager = new EntityManager($connection, $this->entities->getConfiguration(), $events);
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        $store = new IntakeStore($manager);
+        self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([StoredIssue::of('alpha', new ItemReading(Issues::task(5), [], [], []))], null)));
+        $store->failForGood('alpha', 5, 'original reason');
+        // On preUpdate, because only preUpdate runs inside the unit of work's own nested transaction, whose refused rollback used to leave a level open.
+        $deadlock = new readonly class($connection) {
+            public function __construct(private Connection $connection)
+            {
+            }
+
+            public function preUpdate(): never
+            {
+                $native = $this->connection->getNativeConnection();
+                if ($native instanceof PDO) {
+                    $native->rollBack();
+                }
+
+                throw new DeadlockException(Exception::new(new PDOException('Deadlock found when trying to get lock')), null);
+            }
+        };
+        $events->addEventListener([Events::preUpdate], $deadlock);
+
+        $failure = null;
+        try {
+            $store->failForGood('alpha', 5, 'not committed');
+        } catch (DeadlockException $failure) {
+        }
+        $events->removeEventListener([Events::preUpdate], $deadlock);
+
+        self::assertInstanceOf(DeadlockException::class, $failure);
+        self::assertSame(0, $connection->getTransactionNestingLevel());
+        self::assertSame([5 => 'original reason'], $store->failuresOf('alpha'));
+        $store->failForGood('alpha', 5, 'retry stored');
+        self::assertSame([5 => 'retry stored'], $store->failuresOf('alpha'));
+    }
+
     public function testAFirstWriteThatFailsWhileNoOtherWorkerStoredAListingLetsTheFailureThrough(): void
     {
         $inserting = new class {
@@ -626,6 +736,7 @@ final class IntakeStoreTest extends KernelTestCase
 
         $failures = $this->store->failuresOf('alpha');
         $plan = new IntakeRules('intakt')->planOf(array_map(static fn (StoredIssue $issue): QueuedIssue => $issue->queued(), $this->store->issuesOf('alpha')), $failures);
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
         self::assertSame([7 => 'the build ran out of attempts'], $failures);
         self::assertSame([], $plan->ready);
         self::assertSame(['depends on #7, which failed for good: the build ran out of attempts'], array_map(static fn ($held): string => $held->reason, $plan->held));
@@ -650,11 +761,153 @@ final class IntakeStoreTest extends KernelTestCase
         $this->store->failForGood('alpha', 7, 'reason');
     }
 
+    public function testAListedPullRequestCannotFailForGoodAndLeavesNoFailure(): void
+    {
+        $this->record('alpha', [$this->stored(Issues::task(1)), $this->stored(Issues::pullRequest(12, 'Closes #1'))], null);
+
+        $refused = null;
+        try {
+            $this->store->failForGood('alpha', 12, 'not a task');
+        } catch (TaskNotQueued $refused) {
+        }
+
+        self::assertInstanceOf(TaskNotQueued::class, $refused);
+        self::assertSame([], $this->store->failuresOf('alpha'));
+    }
+
+    public function testForgettingAnItemDropsItsVouchingAndTheValidatorSoTheNextListingIsAFullOne(): void
+    {
+        $this->record('alpha', [$this->vouched(Issues::task(7)), $this->vouched(Issues::task(8))], 'W/"a"');
+
+        $this->store->forgetVouchingOf('alpha', 7);
+
+        self::assertSame([[7, false], [8, true]], array_map(static fn (StoredIssue $issue): array => [$issue->number(), $issue->isVouched()], $this->store->issuesOf('alpha')));
+        self::assertEquals(new SyncState(null, 2), $this->store->syncStateOf('alpha'));
+    }
+
+    public function testAListingReadBeforeAnItemWasForgottenCannotWriteItsVouchingBack(): void
+    {
+        $this->record('alpha', [$this->vouched(Issues::task(7))], 'W/"a"');
+        $readBefore = $this->store->syncStateOf('alpha');
+
+        $this->store->forgetVouchingOf('alpha', 7);
+
+        self::assertFalse($this->store->recordIfStill('alpha', $readBefore, new ListingRows([$this->vouched(Issues::task(7))], 'W/"a"')));
+        self::assertFalse(array_first($this->store->issuesOf('alpha'))?->isVouched());
+    }
+
+    public function testForgettingAnItemReadsTheSyncRowWithAWriteLock(): void
+    {
+        $this->onAServerPlatform(static function (IntakeStore $store, WriteLockOfAServer $statements): void {
+            $store->forgetVouchingOf('alpha', 7);
+
+            self::assertCount(1, $statements->writeLockedReadsOf('work_source_validator'));
+        });
+    }
+
+    public function testForgettingAnItemWhileAnotherWriterHoldsTheProjectIsNamedAsHeld(): void
+    {
+        $this->withAStoreAndAReaderOnOneFile('pdo_sqlite', static function (IntakeStore $store, Connection $own, Connection $other): void {
+            $other->executeStatement('BEGIN EXCLUSIVE');
+
+            try {
+                $store->forgetVouchingOf('alpha', 7);
+                self::fail('The forget was expected to be refused.');
+            } catch (ProjectHeldByAnotherWriter $held) {
+                self::assertSame('Another writer holds the intake rows of project "alpha" and has not committed them.', $held->getMessage());
+            } finally {
+                $other->executeStatement('ROLLBACK');
+            }
+        });
+    }
+
+    public function testRecordingAFailureReadsTheSyncRowWithAWriteLock(): void
+    {
+        $this->onAServerPlatform(static function (IntakeStore $store, WriteLockOfAServer $statements): void {
+            $store->failForGood('alpha', 7, 'reason');
+
+            self::assertCount(1, $statements->writeLockedReadsOf('work_source_validator'));
+        });
+    }
+
+    public function testThePickReadOfTheFailuresReadsTheSyncRowWithAWriteLock(): void
+    {
+        $this->onAServerPlatform(static function (IntakeStore $store, WriteLockOfAServer $statements): void {
+            self::assertSame([], $store->failuresUnderTheListingLock('alpha'));
+
+            self::assertCount(1, $statements->writeLockedReadsOf('work_source_validator'));
+        });
+    }
+
     public function testAnEntityManagerWhoseEventsCannotBeSharedIsRefused(): void
     {
         $this->expectException(LogicException::class);
 
         new IntakeStore(self::createStub(EntityManagerInterface::class))->issuesOf('alpha');
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->store = new IntakeStore($entities);
+    }
+
+    // The journal mode is left at SQLite's default, because only there a reader's shared lock lets a write through and refuses its COMMIT.
+    /**
+     * @param callable(IntakeStore, Connection, Connection): void $scenario
+     */
+    private function withAStoreAndAReaderOnOneFile(string $driver, callable $scenario): void
+    {
+        if ('sqlite3' === $driver && !extension_loaded('sqlite3')) {
+            self::markTestSkipped('The sqlite3 extension is not loaded.');
+        }
+
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $options = ['driver' => 'sqlite3' === $driver ? 'sqlite3' : 'pdo_sqlite', 'path' => $file];
+        $own = DriverManager::getConnection($options);
+        $reader = DriverManager::getConnection($options);
+        try {
+            $own->executeStatement('PRAGMA busy_timeout=0');
+            $manager = new EntityManager($own, $this->entities->getConfiguration(), new EventManager());
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class), $manager->getClassMetadata(TaskFailure::class)]);
+            $store = new IntakeStore($manager);
+            self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], null)));
+
+            $scenario($store, $own, $reader);
+        } finally {
+            $reader->close();
+            $own->close();
+            unlink($file);
+        }
+    }
+
+    // The statements are counted from the call under test on, because recording the listing reads the same row with the same lock.
+    /**
+     * @param callable(IntakeStore, WriteLockOfAServer): void $scenario
+     */
+    private function onAServerPlatform(callable $scenario): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $schema = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $statements = new WriteLockOfAServer();
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file], new Configuration()->setMiddlewares([$statements]));
+        try {
+            $manager = new EntityManager($schema, $this->entities->getConfiguration(), new EventManager());
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class), $manager->getClassMetadata(TaskFailure::class)]);
+            $store = new IntakeStore(new EntityManager($connection, $this->entities->getConfiguration(), new EventManager()));
+            self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], null)));
+            $statements->statements = [];
+
+            $scenario($store, $statements);
+        } finally {
+            $connection->close();
+            $schema->close();
+            unlink($file);
+        }
     }
 
     private function heldWhileRecording(IntakeStore $loser, SyncState $readBefore): ?ProjectHeldByAnotherWriter
@@ -666,16 +919,6 @@ final class IntakeStoreTest extends KernelTestCase
         }
 
         return null;
-    }
-
-    /**
-     * @param list<StoredIssue> $issues
-     */
-    private function record(string $project, array $issues, ?string $validator): void
-    {
-        $readBefore = $this->store->syncStateOf($project);
-
-        self::assertTrue($this->store->recordIfStill($project, $readBefore, new ListingRows($issues, $validator)));
     }
 
     private function stored(ListedIssue $listed, string $project = 'alpha'): StoredIssue
@@ -692,5 +935,15 @@ final class IntakeStoreTest extends KernelTestCase
         $issue->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => in_array($account, self::WRITERS, true)));
 
         return $issue;
+    }
+
+    /**
+     * @param list<StoredIssue> $issues
+     */
+    private function record(string $project, array $issues, ?string $validator): void
+    {
+        $readBefore = $this->store->syncStateOf($project);
+
+        self::assertTrue($this->store->recordIfStill($project, $readBefore, new ListingRows($issues, $validator)));
     }
 }

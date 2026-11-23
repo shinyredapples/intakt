@@ -44,17 +44,6 @@ final class ReviewerAgentTest extends WebTestCase
 
     private ReviewCheckout $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     public function testTheModelReadsAFileAtTheHeadThroughTheTools(): void
     {
         $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 'src/Cart.php']));
@@ -270,6 +259,17 @@ final class ReviewerAgentTest extends WebTestCase
             self::assertTrue($tool->getEffectHints()->readOnlyHint, $tool->getName());
             self::assertArrayHasKey(DenyPathsOutsideCheckout::PATH_ARGUMENT, $tool->getParameters()['properties'] ?? [], $tool->getName());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
     }
 
     // Because the toolbox is built per checkout and is no container service, the collector is built from this run's traceable platform and toolbox instead of a profiled request.

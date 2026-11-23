@@ -32,6 +32,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -59,18 +60,6 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
     private InMemoryStore $locks;
 
     private PublishedLiveEvents $live;
-
-    protected function setUp(): void
-    {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $entities = $container->get('doctrine')->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        AppendOnlyTriggers::in($entities->getConnection());
-        $this->locks = new InMemoryStore();
-        $this->live = new PublishedLiveEvents();
-    }
 
     public function testTheCommandDeletesTheDemoProjectsLedgerRowsAndItsReplayMark(): void
     {
@@ -193,6 +182,18 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertSame([], $this->live->events);
     }
 
+    protected function setUp(): void
+    {
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $entities = $container->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        AppendOnlyTriggers::in($entities->getConnection());
+        $this->locks = new InMemoryStore();
+        $this->live = new PublishedLiveEvents();
+    }
+
     private function lastPushedBoard(): Crawler
     {
         $last = array_last($this->live->events);
@@ -205,16 +206,6 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
     {
         $this->commands()->dispatch(new FlagProjectAsReplay(CreateDemoProjectCommand::NAME));
         $this->givenAReview(CreateDemoProjectCommand::NAME, 'demo-round', 'demo-call');
-    }
-
-    // Shaped as a replay writes them, because only the start and the started usage name the project and the removal must find the others by round or call.
-    private function givenAReview(string $project, string $round, string $call): void
-    {
-        $this->append(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 1, 'change' => 'sample-change', 'number' => 1]);
-        $this->append(LedgerEventKind::ReviewerStarted, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard']);
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard', 'round' => $round, 'model' => 'claude-opus-5-5']);
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'claude-opus-5-5', 'total' => 10]]]);
-        $this->append(LedgerEventKind::VerdictReceived, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard', 'decision' => 'approve', 'findings' => 0]);
     }
 
     /**
@@ -247,7 +238,7 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertInstanceOf(LedgerReviewPages::class, $pages);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new NullLogger());
+        return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new ArrayAdapter(), new NullLogger());
     }
 
     /**
@@ -285,6 +276,16 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertInstanceOf(MessageBusInterface::class, $commands);
 
         return $commands;
+    }
+
+    // Shaped as a replay writes them, because only the start and the started usage name the project and the removal must find the others by round or call.
+    private function givenAReview(string $project, string $round, string $call): void
+    {
+        $this->append(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 1, 'change' => 'sample-change', 'number' => 1]);
+        $this->append(LedgerEventKind::ReviewerStarted, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard', 'round' => $round, 'model' => 'claude-opus-5-5']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'claude-opus-5-5', 'total' => 10]]]);
+        $this->append(LedgerEventKind::VerdictReceived, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard', 'decision' => 'approve', 'findings' => 0]);
     }
 
     private function flat(CommandTester $tester): string

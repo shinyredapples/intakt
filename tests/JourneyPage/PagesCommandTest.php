@@ -24,33 +24,6 @@ final class PagesCommandTest extends TestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-pages-'.bin2hex(random_bytes(6));
-        $files = new Filesystem();
-        $files->mkdir([$this->root.'/docs/journey', $this->root.'/docs/highlights.d']);
-
-        foreach (['pages', 'highlights', 'journey'] as $command) {
-            $files->copy(self::BIN.'/'.$command, $this->root.'/bin/'.$command);
-        }
-
-        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
-
-        foreach (self::FRONT_PAGE as $path => $content) {
-            $files->dumpFile($this->root.'/docs/pages/'.$path, $content);
-        }
-
-        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
-        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
-        $files->dumpFile($this->root.'/docs/highlights.d/layout.md', "# Highlights\n\n## Tooling\n\n| Feature | Status |\n|---|---|\n");
-        $files->dumpFile($this->root.'/docs/highlights.d/1-clock.md', "## Tooling\n| Clock | done |\n");
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testThePagesCommandIsExecutable(): void
     {
         self::assertTrue(is_executable(self::BIN.'/pages'));
@@ -106,7 +79,47 @@ final class PagesCommandTest extends TestCase
     {
         $this->runPages();
 
-        self::assertStringStartsWith("# Highlights\n\nHow Intakt was built, with its milestones, token use and issue flow: [the journey](../journey/).\n\n## Tooling\n", $this->site('highlights/index.md'));
+        self::assertStringStartsWith("# Highlights\n\nHow Intakt was built, with its milestones, token use and issue flow: [the journey](../journey/).\n\nA feature row reads done when every issue and pull request its Where cell names is closed or merged, and in progress when one is open; rows written planned and rows naming none keep their written status.\n\n## Tooling\n", $this->site('highlights/index.md'));
+    }
+
+    public function testWithoutAnyIssueStateTheHighlightsPageKeepsEveryStatusAsWrittenAndStatesNoRule(): void
+    {
+        $this->writeFeatureRows();
+        $api = $this->recordingWithoutStates();
+        file_put_contents($api.'/'.IssueStates::FILE, '[]');
+
+        $run = $this->runPages($api);
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        $page = $this->site('highlights/index.md');
+        self::assertStringContainsString('| Open | what | done | #14 |', $page);
+        self::assertStringContainsString('| Shut | what | in progress | #10 |', $page);
+        self::assertStringNotContainsString('A feature row reads', $page);
+    }
+
+    public function testWithoutAStateFileTheSiteIsStillBuiltWithEveryStatusAsWritten(): void
+    {
+        $this->writeFeatureRows();
+
+        $run = $this->runPages($this->recordingWithoutStates());
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        $page = $this->site('highlights/index.md');
+        self::assertStringContainsString('| Open | what | done | #14 |', $page);
+        self::assertStringNotContainsString('A feature row reads', $page);
+        self::assertStringContainsString('| Pull requests merged |', $this->site('journey/index.md'));
+    }
+
+    public function testWithARecordedIssueStateFileTheHighlightsPageShowsSettledStatuses(): void
+    {
+        $this->writeFeatureRows();
+        $this->runPages(self::FIXTURES.'/api');
+
+        $page = $this->site('highlights/index.md');
+        self::assertStringContainsString('| Shut | what | done | #10 |', $page);
+        self::assertStringContainsString('| Open | what | in progress | #14 |', $page);
+        self::assertStringContainsString('| Planned | what | planned | #10 |', $page);
+        self::assertStringContainsString('| Unnamed | what | in progress | T1 |', $page);
     }
 
     public function testTheFrontPageAndItsAssetsAreCopiedUnchangedToTheSiteRoot(): void
@@ -201,6 +214,48 @@ final class PagesCommandTest extends TestCase
 
         self::assertSame(2, $run->getExitCode());
         self::assertSame("usage: bin/pages <folder> [--recorded=<folder with the recorded API answers>]\n", $run->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-pages-'.bin2hex(random_bytes(6));
+        $files = new Filesystem();
+        $files->mkdir([$this->root.'/docs/journey', $this->root.'/docs/highlights.d']);
+
+        foreach (['pages', 'highlights', 'journey'] as $command) {
+            $files->copy(self::BIN.'/'.$command, $this->root.'/bin/'.$command);
+        }
+
+        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
+
+        foreach (self::FRONT_PAGE as $path => $content) {
+            $files->dumpFile($this->root.'/docs/pages/'.$path, $content);
+        }
+
+        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
+        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
+        $files->dumpFile($this->root.'/docs/highlights.d/layout.md', "# Highlights\n\n## Tooling\n\n| Feature | Status |\n|---|---|\n");
+        $files->dumpFile($this->root.'/docs/highlights.d/1-clock.md', "## Tooling\n| Clock | done |\n");
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
+    }
+
+    private function writeFeatureRows(): void
+    {
+        $rows = "## Tooling\n| Shut | what | in progress | #10 |\n| Open | what | done | #14 |\n| Planned | what | planned | #10 |\n| Unnamed | what | in progress | T1 |\n";
+        new Filesystem()->dumpFile($this->root.'/docs/highlights.d/2-rows.md', $rows);
+    }
+
+    private function recordingWithoutStates(): string
+    {
+        $api = $this->root.'/api-without-states';
+        new Filesystem()->mirror(self::FIXTURES.'/api', $api);
+        unlink($api.'/'.IssueStates::FILE);
+
+        return $api;
     }
 
     private function runPages(string $recorded = self::FIXTURES.'/api'): Process

@@ -28,19 +28,6 @@ final readonly class IntakeRules
         return array_values(array_filter($items, fn (QueuedIssue $item): bool => $this->isCandidate($item) || $this->steersAsPullRequest($item, $waited)));
     }
 
-    private function isCandidate(QueuedIssue $item): bool
-    {
-        return !$item->isPullRequest() && $item->hasLabel($this->eligibilityLabel) && !$item->hasLabel(WorkLabels::IDEA);
-    }
-
-    /**
-     * @param list<int> $waited
-     */
-    private function steersAsPullRequest(QueuedIssue $item, array $waited): bool
-    {
-        return $item->isPullRequest() && ([] !== $item->closedBy() || in_array($item->number(), $waited, true));
-    }
-
     // The failures hold every task of the project that failed for good, open or closed, because a closed failure still holds its dependents.
     /**
      * @param list<QueuedIssue>  $items
@@ -53,10 +40,12 @@ final readonly class IntakeRules
 
         $ready = [];
         $held = [];
+        $dependsOn = [];
         foreach (array_filter($items, $this->isEligible(...)) as $task) {
             $reason = $this->holdReason($task, $open, $failures);
             if (null === $reason) {
                 $ready[] = $task;
+                $dependsOn[$task->number()] = $this->targetsOf($task, $open);
 
                 continue;
             }
@@ -66,7 +55,20 @@ final readonly class IntakeRules
 
         usort($ready, fn (QueuedIssue $a, QueuedIssue $b): int => $this->key($a, $pullRequests) <=> $this->key($b, $pullRequests));
 
-        return new IntakePlan($ready, $held, $pullRequests);
+        return new IntakePlan($ready, $held, $pullRequests, $dependsOn);
+    }
+
+    private function isCandidate(QueuedIssue $item): bool
+    {
+        return !$item->isPullRequest() && $item->hasLabel($this->eligibilityLabel) && !$item->hasLabel(WorkLabels::IDEA);
+    }
+
+    /**
+     * @param list<int> $waited
+     */
+    private function steersAsPullRequest(QueuedIssue $item, array $waited): bool
+    {
+        return $item->isPullRequest() && ([] !== $item->closedBy() || in_array($item->number(), $waited, true));
     }
 
     /**

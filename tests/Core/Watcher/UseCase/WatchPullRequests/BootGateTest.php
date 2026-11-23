@@ -83,19 +83,6 @@ final class BootGateTest extends KernelTestCase
     private bool $trustCheckDown = false;
     private Ledger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->entities = $entities;
-        $this->main = BootOutcome::booted();
-        $this->head = BootOutcome::booted();
-        $this->mainCommit = new CommitId(str_repeat('f', 40));
-    }
-
     public function testAHeadThatFailsToBootWhileMainBootsIsSentBackAsAFailedBoot(): void
     {
         $this->head = BootOutcome::failed('The server did not start.');
@@ -244,6 +231,19 @@ final class BootGateTest extends KernelTestCase
         self::assertLoggedError('error', 'The boot gate failed, so the review starts without it.');
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
+        $this->main = BootOutcome::booted();
+        $this->head = BootOutcome::booted();
+        $this->mainCommit = new CommitId(str_repeat('f', 40));
+    }
+
     private function gate(): BootGate
     {
         $bus = self::createStub(MessageBusInterface::class);
@@ -256,14 +256,6 @@ final class BootGateTest extends KernelTestCase
         $results = new BootResults($bus, $this->entities, new MockClock('2026-11-13T10:00:00+00:00'), new WatcherLedger(new DashboardLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore()));
 
         return new BootGate($bus, $this->authors(), $results, new WatcherLedger($this->ledger), $logger);
-    }
-
-    private function authors(): AuthorTrust
-    {
-        $authors = self::createStub(AuthorTrust::class);
-        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
-
-        return $authors;
     }
 
     private function answer(object $query): CommitId|BootOutcome|string
@@ -279,6 +271,14 @@ final class BootGateTest extends KernelTestCase
             $query instanceof BootHarness => $this->main,
             default => $this->head,
         };
+    }
+
+    private function authors(): AuthorTrust
+    {
+        $authors = self::createStub(AuthorTrust::class);
+        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
+
+        return $authors;
     }
 
     private function project(): WatchedProject

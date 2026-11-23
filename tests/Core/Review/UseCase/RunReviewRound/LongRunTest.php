@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
@@ -27,6 +28,7 @@ use Symfony\AI\Platform\PlatformInterface;
 // Plan T25: a long run, a reviewer that keeps asking for tools or a provider that refuses late in the conversation, must end as changes or blocked with a reason; scripted by call counters through the real vendor stack, so no run waits.
 #[Group('persistence')]
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(UsageLedger::class)]
@@ -40,11 +42,6 @@ final class LongRunTest extends KernelTestCase
     private const int TOOL_ROUNDS = 5;
 
     private ScriptedRound $run;
-
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
-    }
 
     public function testAReviewerStillAskingForToolsAtTheRoundLimitOnItsRetryTooFailsAndBlocksTheRoundWithThatReason(): void
     {
@@ -115,6 +112,11 @@ final class LongRunTest extends KernelTestCase
         self::assertSame([], [...$review->reasons]);
         self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
         self::assertSame([self::TOOL_ROUNDS + 1], $this->usageRowsOfEndingEvents());
+    }
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     /**

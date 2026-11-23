@@ -6,9 +6,9 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
@@ -21,7 +21,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(ShowReviewController::class)]
 #[CoversClass(RoundFinding::class)]
 #[UsesClass(LedgerRounds::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(CountedQuotes::class)]
 #[UsesClass(QuotesCounted::class)]
 #[UsesClass(QuoteNearLines::class)]
@@ -382,22 +382,6 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->getCrawler()->filter('#round-round-1 [data-dropped]'));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function quotesIn(Crawler $disclosure): array
-    {
-        return $disclosure->filter('.fc-quote-list > li > code')->each(static fn (Crawler $code): string => $code->text());
-    }
-
-    /**
-     * @return list<array{string, string}>
-     */
-    private function nearLinesIn(Crawler $quote): array
-    {
-        return $quote->filter('.fc-near-lines > li')->each(static fn (Crawler $line): array => [$line->filter('.fc-near-place')->text(), $line->filter('code')->text()]);
-    }
-
     public function testADroppedFindingCanBeReachedByFindingNavigation(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -426,6 +410,22 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(0, $crawler->filter('[data-dropped]'));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function quotesIn(Crawler $disclosure): array
+    {
+        return $disclosure->filter('.fc-quote-list > li > code')->each(static fn (Crawler $code): string => $code->text());
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function nearLinesIn(Crawler $quote): array
+    {
+        return $quote->filter('.fc-near-lines > li')->each(static fn (Crawler $line): array => [$line->filter('.fc-near-place')->text(), $line->filter('code')->text()]);
     }
 
     /**

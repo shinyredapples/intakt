@@ -33,6 +33,7 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
@@ -69,14 +70,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $this->round = new RecordedRoundUpdates();
-        $this->live = new PublishedLiveEvents();
-        $this->log = new BufferingLogger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
+    private ArrayAdapter $lastPushed;
 
     public function testAStartedReviewerPublishesTheBoardHeadlineOnTheShellTopic(): void
     {
@@ -201,6 +195,16 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. The Code reviewers are reviewing 2 changes.', $this->headlineIn(1));
     }
 
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $this->round = new RecordedRoundUpdates();
+        $this->live = new PublishedLiveEvents();
+        $this->log = new BufferingLogger();
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->lastPushed = new ArrayAdapter();
+    }
+
     private function updates(): BoardHeadlineRoundUpdates
     {
         return new BoardHeadlineRoundUpdates($this->round, $this->headline($this->ledger, $this->live));
@@ -211,7 +215,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return new LiveBoardHeadline($this->pagesOn($ledger), $twig, $live, $this->locks, $this->log);
+        return new LiveBoardHeadline($this->pagesOn($ledger), $twig, $live, $this->locks, $this->lastPushed, $this->log);
     }
 
     private function pagesOn(Ledger $ledger): LedgerReviewPages

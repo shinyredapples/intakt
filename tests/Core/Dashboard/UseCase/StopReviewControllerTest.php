@@ -9,7 +9,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -18,10 +18,10 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
 use Intakt\Core\Dashboard\UseCase\StopReview\StopReviewController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -29,7 +29,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ReviewerStops::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
@@ -40,13 +40,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(RoundLock::class)]
 final class StopReviewControllerTest extends DashboardPageTestCase
 {
-    // The container keeps the ledger double across the page that hands out the token and the post that uses it.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->browser->disableReboot();
-    }
-
     public function testARunningReviewerRowShowsAStopFormForItsReviewerId(): void
     {
         $this->runningReviewer();
@@ -152,7 +145,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/'.$round.'/reviewers/'.$round.'-security/stop');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', FormIsRefused::class));
         self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
@@ -165,7 +158,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/'.$round.'/reviewers/'.$round.'-security/stop', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in a round still in review."', NotFoundHttpException::class));
         self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
@@ -176,7 +169,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', FormIsRefused::class));
         $this->holdReviewLock('round-1')->release();
     }
 
@@ -219,7 +212,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', FormIsRefused::class));
         $this->assertNothingRequested();
     }
 
@@ -230,7 +223,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', FormIsRefused::class));
         $this->assertNothingRequested();
     }
 
@@ -253,7 +246,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in a round still in review."', NotFoundHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -265,7 +258,20 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in a round still in review."', NotFoundHttpException::class));
+        $this->assertNothingRequested();
+    }
+
+    public function testAReviewerOfARoundThatEndedWithoutAJudgesCallRecordsNothing(): void
+    {
+        $this->runningReviewer();
+        $token = $this->token();
+        self::clockAt('2026-10-30T12:00:00+00:00');
+
+        $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in a round still in review."', NotFoundHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -276,7 +282,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/conversation-9/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in a round still in review."', NotFoundHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -288,6 +294,13 @@ final class StopReviewControllerTest extends DashboardPageTestCase
 
         self::assertResponseStatusCodeSame(405);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/reviews/round-1/reviewers/round-1-security/stop": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class));
+    }
+
+    // The container keeps the ledger double across the page that hands out the token and the post that uses it.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->browser->disableReboot();
     }
 
     private function runningReviewer(): void

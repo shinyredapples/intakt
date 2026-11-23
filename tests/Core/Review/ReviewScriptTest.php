@@ -38,36 +38,6 @@ final class ReviewScriptTest extends TestCase
     private string $prompt = '';
     private string $head = '';
 
-    protected function setUp(): void
-    {
-        if (0 === posix_geteuid()) {
-            self::markTestSkipped('This user ignores file permissions (superuser), so no checkout is read-only.');
-        }
-        $this->folder = sys_get_temp_dir().'/intakt-review-script-'.bin2hex(random_bytes(6));
-        $this->source = $this->folder.'/source';
-        $this->checkout = $this->folder.'/checkout';
-        $this->output = $this->folder.'/output';
-        $this->work = $this->folder.'/job';
-        $this->bin = $this->folder.'/bin';
-        $this->prompt = $this->folder.'/prompt.md';
-        new Filesystem()->mkdir([$this->source, $this->output, $this->work, $this->bin]);
-        file_put_contents($this->prompt, "Review the head.\n");
-        $this->git($this->source, 'init', '--quiet', '--initial-branch=main');
-        $this->head = $this->commitFiles(['.gitignore' => "vendor/\n", 'AGENTS.md' => "Rules.\n", 'src/Code.php' => "<?php\n"]);
-        $this->git($this->folder, 'clone', '--quiet', $this->source, $this->checkout);
-        $this->givenTheCli('claude', 'echo "{\"type\":\"result\"}"');
-        $this->givenTheCli('codex', 'echo "{\"type\":\"turn.completed\"}"');
-    }
-
-    protected function tearDown(): void
-    {
-        if ('' === $this->folder) {
-            return;
-        }
-        $this->changeTheCheckoutsModes(static fn (int $mode): int => $mode | 0o200);
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testAClaudeCodeReviewOfACleanCheckoutRunsTheCliInTheCheckoutWithThePromptAndOnlyFileReads(): void
     {
         $this->givenTheCli('claude', 'printf "%s\n" "$@" > "$RECORD/arguments"; pwd > "$RECORD/directory"; cat > "$RECORD/input"; echo answered');
@@ -76,7 +46,7 @@ final class ReviewScriptTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'json', '--tools', 'Read,Grep,Glob', '--allowedTools', 'Read,Grep,Glob', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence'],
+            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'stream-json', '--verbose', '--tools', 'Read,Grep,Glob', '--allowedTools', 'Read,Grep,Glob', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence'],
             $this->recordedLines('arguments'),
         );
         self::assertSame([$this->checkout], $this->recordedLines('directory'));
@@ -571,6 +541,36 @@ final class ReviewScriptTest extends TestCase
         self::assertFileExists($this->folder.'/ran');
     }
 
+    protected function setUp(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('This user ignores file permissions (superuser), so no checkout is read-only.');
+        }
+        $this->folder = sys_get_temp_dir().'/intakt-review-script-'.bin2hex(random_bytes(6));
+        $this->source = $this->folder.'/source';
+        $this->checkout = $this->folder.'/checkout';
+        $this->output = $this->folder.'/output';
+        $this->work = $this->folder.'/job';
+        $this->bin = $this->folder.'/bin';
+        $this->prompt = $this->folder.'/prompt.md';
+        new Filesystem()->mkdir([$this->source, $this->output, $this->work, $this->bin]);
+        file_put_contents($this->prompt, "Review the head.\n");
+        $this->git($this->source, 'init', '--quiet', '--initial-branch=main');
+        $this->head = $this->commitFiles(['.gitignore' => "vendor/\n", 'AGENTS.md' => "Rules.\n", 'src/Code.php' => "<?php\n"]);
+        $this->git($this->folder, 'clone', '--quiet', $this->source, $this->checkout);
+        $this->givenTheCli('claude', 'echo "{\"type\":\"result\"}"');
+        $this->givenTheCli('codex', 'echo "{\"type\":\"turn.completed\"}"');
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' === $this->folder) {
+            return;
+        }
+        $this->changeTheCheckoutsModes(static fn (int $mode): int => $mode | 0o200);
+        new Filesystem()->remove($this->folder);
+    }
+
     /**
      * @param array<string, string> $files
      */
@@ -771,9 +771,9 @@ final class ReviewScriptTest extends TestCase
         return trim($git->getOutput());
     }
 
-    private function recorded(string $name): string
+    private function outputFile(string $name): string
     {
-        return (string) file_get_contents($this->folder.'/'.$name);
+        return is_file($this->output.'/'.$name) ? (string) file_get_contents($this->output.'/'.$name) : '';
     }
 
     /**
@@ -784,8 +784,8 @@ final class ReviewScriptTest extends TestCase
         return explode("\n", rtrim($this->recorded($name), "\n"));
     }
 
-    private function outputFile(string $name): string
+    private function recorded(string $name): string
     {
-        return is_file($this->output.'/'.$name) ? (string) file_get_contents($this->output.'/'.$name) : '';
+        return (string) file_get_contents($this->folder.'/'.$name);
     }
 }

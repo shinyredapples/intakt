@@ -31,19 +31,6 @@ final class HardenedGitCallTest extends TestCase
 
     private string $workingDirectory;
 
-    protected function setUp(): void
-    {
-        $this->workingDirectory = (string) getcwd();
-        $this->sandbox = Sandbox::empty();
-        $this->sandbox->startRepository();
-    }
-
-    protected function tearDown(): void
-    {
-        chdir($this->workingDirectory);
-        $this->sandbox->remove();
-    }
-
     public function testARelativeDirectoryIsPinnedAsAnAbsoluteWorkTree(): void
     {
         $this->sandbox->write('note.txt', "public\n");
@@ -179,6 +166,19 @@ final class HardenedGitCallTest extends TestCase
         } catch (RepositoryAttributesRefused $refused) {
             self::assertStringContainsString('/.git/info/attributes exists', $refused->getMessage());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->workingDirectory = (string) getcwd();
+        $this->sandbox = Sandbox::empty();
+        $this->sandbox->startRepository();
+    }
+
+    protected function tearDown(): void
+    {
+        chdir($this->workingDirectory);
+        $this->sandbox->remove();
     }
 
     private function logWithTheHardenedEnvironment(): string

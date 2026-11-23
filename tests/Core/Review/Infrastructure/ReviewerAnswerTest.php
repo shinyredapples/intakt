@@ -8,6 +8,8 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
@@ -22,7 +24,7 @@ use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 #[UsesClass(Evidence::class)]
 final class ReviewerAnswerTest extends TestCase
 {
-    // Taken from main before the answer document existed, because the schema the reviewers get must not change with it.
+    // Taken from main before the answer document existed, because the schema the reviewers get must not change with it; only the gate_gap marker was added since, on purpose.
     private const string SCHEMA_FROM_MAIN = __DIR__.'/fixtures/verdict-schema.json';
 
     public function testTheVerdictJsonSchemaMatchesTheOneTakenFromMain(): void
@@ -38,7 +40,7 @@ final class ReviewerAnswerTest extends TestCase
 
         $verdict = new ReviewerAnswer(Decision::Changes, [$finding], ['b'], ['later'])->toVerdict();
 
-        self::assertEquals(new Verdict(Decision::Changes, [$finding], ['b'], ['later']), $verdict);
+        self::assertEquals(new Verdict(Decision::Changes, [$finding], [new ResolvedFinding('b')], [new FollowUpNote('later')]), $verdict);
     }
 
     public function testAnAnswerNamingAFailureIdStillClaimsItOnceMapped(): void

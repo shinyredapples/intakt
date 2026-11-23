@@ -23,6 +23,8 @@ use Intakt\Core\Job\Infrastructure\OrphanedJobs;
 use Intakt\Core\Job\Infrastructure\StartCheckLog;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
+use Intakt\Core\Review\Infrastructure\ClaudeCodeJobEvents;
+use Intakt\Core\Review\Infrastructure\ReportedUsage;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewJobImages;
@@ -38,6 +40,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 // The review job through the container runner, its engine client and its egress proxy, with only the Docker daemon scripted, because the build sandbox has none.
 #[CoversClass(ReviewJob::class)]
 #[UsesClass(ReviewJobAnswer::class)]
+#[UsesClass(ClaudeCodeJobEvents::class)]
+#[UsesClass(ReportedUsage::class)]
 #[UsesClass(ReviewJobImages::class)]
 #[UsesClass(ReviewJobRequest::class)]
 #[UsesClass(ResolvedModel::class)]
@@ -77,19 +81,6 @@ final class ReviewJobInContainerTest extends TestCase
     /** @var array<string, mixed> */
     private array $networkWhileRunning = [];
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-review-container-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/checkout');
-        $this->engine = new FakeDockerEngine();
-        $this->ledger = new InMemoryLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testTheReviewerGetsTheCheckoutOfTheHeadAsAReadOnlyMount(): void
     {
         $answer = $this->reviewInContainer();
@@ -126,6 +117,19 @@ final class ReviewJobInContainerTest extends TestCase
         self::assertNotNull($this->ran);
         self::assertSame([LedgerEventKind::JobEgressRefused, LedgerEventKind::JobEnded], $this->ledger->kinds());
         self::assertSame(['job' => $this->ran->id->value, 'method' => 'CONNECT', 'target' => 'outside.example:443'], $this->ledger->payloads()[0]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-review-container-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/checkout');
+        $this->engine = new FakeDockerEngine();
+        $this->ledger = new InMemoryLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function reviewInContainer(string $proxyLog = ''): ReviewJobAnswer

@@ -15,4 +15,6 @@ cp -R fixtures/sample-repository/pull-request/. "$TARGET"
 git -C "$TARGET" add --all && git -C "$TARGET" commit -m "Add shipping, a report and change the discount"
 ```
 
+`pull-request-text/` holds a task for the sample with a pull request text that references every Evidence item and one that does not, for `intakt:check:pull-request-text`.
+
 `bench/` holds the changes of the review bench: `bench/<change>/tree/` is applied on top of `base/` on its own branch, `task.md` is the task text and `expectations.json` lists the planted defects (empty for a clean change). See `docs/architecture/sample-repository.md`.

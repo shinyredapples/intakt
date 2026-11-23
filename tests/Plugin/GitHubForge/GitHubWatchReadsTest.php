@@ -14,6 +14,7 @@ use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -63,6 +64,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(CiRunOrigin::class)]
 #[UsesClass(CiState::class)]
 #[UsesClass(CommitId::class)]
+#[UsesClass(CommitIdMalformed::class)]
 #[UsesClass(ForgeCredentialsRefused::class)]
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(OpenChange::class)]
@@ -102,11 +104,6 @@ final class GitHubWatchReadsTest extends TestCase
     private MockClock $clock;
     // Close after the recorded runs' creation, because a queued suite past the ceiling is left out.
     private string $ciNow = '2026-11-02 09:10:00 UTC';
-
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
 
     public function testBelowTheReserveASecondListingInOneTickMakesNoRequestAndWaitsForTheReset(): void
     {
@@ -565,6 +562,16 @@ final class GitHubWatchReadsTest extends TestCase
         $this->state();
     }
 
+    public function testAWorkflowRunWhoseCheckSuiteIdIsNullLinksNoSuiteAndTheHeadIsStillRead(): void
+    {
+        $this->runs = 'runs_with_a_null_check_suite_id.json';
+        $this->suites = 'suites_green.json';
+
+        $names = array_map(static fn (CiRun $run): string => $run->origin->name, $this->state()->runs);
+
+        self::assertSame(['10', 'suite:401'], $names);
+    }
+
     public function testACheckSuiteWithoutItsIdRaisesAReadFailure(): void
     {
         $this->suites = 'suites_without_id.json';
@@ -740,9 +747,33 @@ final class GitHubWatchReadsTest extends TestCase
     {
         $this->listing = 'pulls_bad_moment.json';
 
-        $this->expectException(ForgeReadFailed::class);
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a moment this forge cannot read.'));
 
         $this->reads()->listOpen('alpha', null);
+    }
+
+    public function testAListedPullRequestWithAMalformedHeadRaisesAReadFailureCausedByTheMalformedCommitId(): void
+    {
+        $this->listing = 'pulls_malformed_head.json';
+
+        try {
+            $this->reads()->listOpen('alpha', null);
+            self::fail('A malformed head is no change this forge can read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertInstanceOf(CommitIdMalformed::class, $failure->getPrevious());
+        }
+    }
+
+    public function testAListedPullRequestAtAnotherHostRaisesAReadFailureCausedByTheUnknownChange(): void
+    {
+        $this->listing = 'pulls_foreign_address.json';
+
+        try {
+            $this->reads()->listOpen('alpha', null);
+            self::fail('A pull request at another host is no change this forge can read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertInstanceOf(ChangeNotFound::class, $failure->getPrevious());
+        }
     }
 
     public function testAProjectWithoutAGitHubRepositoryRaisesAReadFailureBeforeAnyRequest(): void
@@ -753,6 +784,11 @@ final class GitHubWatchReadsTest extends TestCase
         } catch (ForgeReadFailed) {
             self::assertSame([], $this->requested);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
     /**
@@ -766,14 +802,6 @@ final class GitHubWatchReadsTest extends TestCase
     private function state(): CiState
     {
         return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function listingRequests(): array
-    {
-        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
     }
 
     private function reads(): GitHubWatchReads
@@ -795,6 +823,14 @@ final class GitHubWatchReadsTest extends TestCase
         return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments(), new MockClock($this->ciNow)), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
+    /**
+     * @return list<string>
+     */
+    private function listingRequests(): array
+    {
+        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
+    }
+
     private function answer(string $url): ResponseInterface
     {
         if ($this->failWith > 0) {
@@ -810,18 +846,6 @@ final class GitHubWatchReadsTest extends TestCase
             str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->runs), ['response_headers' => $this->budget()]),
             default => new MockResponse($this->fixture($this->suites), ['response_headers' => $this->budget()]),
         };
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function budget(): array
-    {
-        return null === $this->remaining ? [] : [
-            'x-ratelimit-limit' => '5000',
-            'x-ratelimit-remaining' => (string) $this->remaining,
-            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
-        ];
     }
 
     private function listingPage(string $url): MockResponse
@@ -866,5 +890,17 @@ final class GitHubWatchReadsTest extends TestCase
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
 
         return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function budget(): array
+    {
+        return null === $this->remaining ? [] : [
+            'x-ratelimit-limit' => '5000',
+            'x-ratelimit-remaining' => (string) $this->remaining,
+            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
+        ];
     }
 }

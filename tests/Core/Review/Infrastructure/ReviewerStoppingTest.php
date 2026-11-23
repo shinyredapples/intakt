@@ -41,13 +41,6 @@ final class ReviewerStoppingTest extends TestCase
     /** @var list<string> */
     private array $reached = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $this->round = new UuidV7();
-        $this->reviewer = new UuidV7();
-    }
-
     public function testAPendingStopRequestCancelsTheRunAtItsFirstProgressUpdate(): void
     {
         $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
@@ -144,15 +137,22 @@ final class ReviewerStoppingTest extends TestCase
         self::assertSame(ExecutionStatus::Completed, $this->statusAfterRunning(new ReviewerConversation('You review.', new UuidV7(), reviewerId: $this->reviewer)));
     }
 
-    private function conversation(UuidV7 $conversation): ReviewerConversation
+    protected function setUp(): void
     {
-        return new ReviewerConversation('You review.', $conversation, $this->round, $this->reviewer);
+        $this->ledger = new DashboardLedger();
+        $this->round = new UuidV7();
+        $this->reviewer = new UuidV7();
     }
 
     private function record(LedgerEventKind $kind, Uuid $reviewer): void
     {
         $appended = $this->ledger->append(new LedgerEvent($kind, $this->payloadOf($kind, $reviewer)));
         self::assertTrue($appended->succeeded());
+    }
+
+    private function conversation(UuidV7 $conversation): ReviewerConversation
+    {
+        return new ReviewerConversation('You review.', $conversation, $this->round, $this->reviewer);
     }
 
     // A stop row carries role and tier, because RoundLedger writes it so and a row without them no longer reads back.

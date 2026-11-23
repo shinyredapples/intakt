@@ -25,10 +25,12 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RouteHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
+use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -62,17 +64,6 @@ final class RouteHandBackTest extends TestCase
     private BuildHistory $history;
 
     private RecordingLedger $ledger;
-
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->ledger = new RecordingLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
 
     public function testATokenInThePullRequestTextIsSentBackWithTheReasonAndWithoutItsValue(): void
     {
@@ -205,6 +196,40 @@ final class RouteHandBackTest extends TestCase
         $this->route('Uses the key '.$this->fakeKey());
     }
 
+    public function testALedgerThatCannotBeReadIsReportedAsARoundNotRecordedAndRecordsNothing(): void
+    {
+        $this->history->commit('First');
+        $this->ledger = new RecordingLedger(onRead: static fn () => throw new PDOException('no such table: ledger_event'));
+
+        try {
+            $this->route('Uses the key '.$this->fakeKey());
+            self::fail('the hand-back was routed without reading the ledger');
+        } catch (HandBackRoundNotRecorded $failure) {
+            self::assertStringContainsString('could not be read: no such table: ledger_event', $failure->getMessage());
+            self::assertSame([], $this->ledger->kinds());
+        }
+    }
+
+    public function testALineOfAnotherKindAboutTheSameBranchDoesNotCount(): void
+    {
+        $this->history->commit('First');
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::PullRequestTextSentBack, json_encode(['repository' => realpath($this->history->mirror), 'branch' => 'task'], JSON_THROW_ON_ERROR)));
+
+        $result = $this->route('Uses the key '.$this->fakeKey());
+
+        self::assertSame(HandBackRoute::SentBack, $result instanceof FailedHandBack ? $result->route : null);
+    }
+
+    public function testRoutingReadsOnlyTheThreeHandBackKindsAndNeverTheWholeLedger(): void
+    {
+        $this->history->commit('First');
+
+        $this->route('Uses the key '.$this->fakeKey());
+
+        self::assertSame(0, $this->ledger->fullReads);
+        self::assertEqualsCanonicalizing([LedgerEventKind::HandBackAccepted, LedgerEventKind::HandBackSentBack, LedgerEventKind::HandBackHandedOver], $this->ledger->kindsRequested);
+    }
+
     public function testAMissingScannerFailsClosedOnThePullRequestTextAndRecordsNothing(): void
     {
         $this->history->commit('First');
@@ -215,6 +240,17 @@ final class RouteHandBackTest extends TestCase
         } catch (HandBackNotChecked) {
             self::assertSame([], $this->ledger->kinds());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->ledger = new RecordingLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     // Built at run time and random, so neither this file nor the repository's history holds a key the secrets gates would find.

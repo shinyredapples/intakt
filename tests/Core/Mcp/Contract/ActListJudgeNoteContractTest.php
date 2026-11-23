@@ -32,24 +32,6 @@ final class ActListJudgeNoteContractTest extends KernelTestCase
 
     private string $roundId;
 
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $fixture = new RoundFixture(self::getContainer());
-        $round = $fixture->start(1);
-        $this->roundId = $round->id()->toRfc4122();
-        $findings = [
-            new Finding('A', Severity::P1, 'src/Cart.php', 12, null, 'The total skips the discount.', FixableBy::Builder, false, null, null),
-            new Finding('B', Severity::P2, 'src/Cart.php', 40, null, 'The rounding is untested.', FixableBy::Builder, false, null, null),
-        ];
-        $fixture->deliver($fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-        $judgement = new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'The discount is applied in Checkout before the total is read.'), new JudgedFinding('F2', Mark::Act)]);
-        $fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($this->roundId));
-        $this->client = new McpServerClient($kernel);
-        $this->client->initialize('2025-11-25');
-    }
-
     public function testARejectedP1StaysOnTheActListWithTheJudgesNoteFenced(): void
     {
         $act = $this->actList();
@@ -66,6 +48,24 @@ final class ActListJudgeNoteContractTest extends KernelTestCase
 
         self::assertIsArray($act[1] ?? null);
         self::assertArrayNotHasKey('judge_note', $act[1]);
+    }
+
+    protected function setUp(): void
+    {
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $fixture = new RoundFixture(self::getContainer());
+        $round = $fixture->start(1);
+        $this->roundId = $round->id()->toRfc4122();
+        $findings = [
+            new Finding('A', Severity::P1, 'src/Cart.php', 12, null, 'The total skips the discount.', FixableBy::Builder, false, null, null),
+            new Finding('B', Severity::P2, 'src/Cart.php', 40, null, 'The rounding is untested.', FixableBy::Builder, false, null, null),
+        ];
+        $fixture->deliver($fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'The discount is applied in Checkout before the total is read.'), new JudgedFinding('F2', Mark::Act)]);
+        $fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($this->roundId));
+        $this->client = new McpServerClient($kernel);
+        $this->client->initialize('2025-11-25');
     }
 
     /**

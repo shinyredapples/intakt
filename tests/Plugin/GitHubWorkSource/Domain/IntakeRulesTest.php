@@ -132,6 +132,13 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([1], $this->readyOf([$waiting, $pullRequest]));
     }
 
+    public function testAReadyTaskWaitingOnAPullRequestDependsOnTheTasksThePullRequestCloses(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50, #4'])), $this->row(Issues::pullRequest(50, 'Closes #3'))]);
+
+        self::assertSame([1 => [3, 4]], $plan->dependsOn);
+    }
+
     public function testAWaitOnAPullRequestWhoseTaskFailedForGoodIsHeldWithTheReason(): void
     {
         $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #3'))], [3 => 'cannot build']);
@@ -297,6 +304,22 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([2], $this->numbers($plan->ready));
     }
 
+    public function testATaskCarryingOnlyTheLoopsLabelIsNotEligible(): void
+    {
+        $rules = new IntakeRules('intakt');
+        $task = Issues::task(1, ['ready']);
+
+        self::assertSame([], $this->numbers($rules->planOf([$this->row($task)], [])->ready));
+        self::assertSame([], $this->numbers($rules->itemsNeedingHistory($this->unread($task))));
+    }
+
+    public function testATaskCarryingTheProjectsLabelBesideTheLoopsLabelIsEligible(): void
+    {
+        $plan = new IntakeRules('intakt')->planOf([$this->row(Issues::task(1, ['ready', 'intakt']))], []);
+
+        self::assertSame([1], $this->numbers($plan->ready));
+    }
+
     public function testAWaitOnAPullRequestWithoutAClosingKeywordHoldsTheTaskWhenOnlyTheHistoryTheRuleAsksForIsRead(): void
     {
         $plan = $this->plan($this->readAsTheRuleAsks(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50']), Issues::pullRequest(50, 'A refactoring.')));
@@ -325,16 +348,6 @@ final class IntakeRulesTest extends TestCase
         );
 
         self::assertSame([1, 50, 51, 52], $this->numbers(new IntakeRules('intakt')->itemsNeedingHistory($items)));
-    }
-
-    /**
-     * @param list<QueuedIssue> $rows
-     *
-     * @return list<int>
-     */
-    private function readyOf(array $rows): array
-    {
-        return $this->numbers($this->plan($rows)->ready);
     }
 
     /**
@@ -381,6 +394,16 @@ final class IntakeRulesTest extends TestCase
     private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
     {
         return $this->vouched($this->unread($listed)[0], $listed, $history);
+    }
+
+    /**
+     * @param list<QueuedIssue> $rows
+     *
+     * @return list<int>
+     */
+    private function readyOf(array $rows): array
+    {
+        return $this->numbers($this->plan($rows)->ready);
     }
 
     // Without a history the author last edited the item and applied every label, because most cases are about something else.

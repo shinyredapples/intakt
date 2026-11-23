@@ -57,11 +57,6 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(PhpGate::class)]
 final class ToolTimeLimitConfigTest extends KernelTestCase
 {
-    protected static function getKernelClass(): string
-    {
-        return ToolTimeLimitKernel::class;
-    }
-
     public function testTheBuildJobTakesItsToolTimeLimitFromTheInstallSetting(): void
     {
         self::bootKernel();
@@ -89,5 +84,10 @@ final class ToolTimeLimitConfigTest extends KernelTestCase
 
         self::assertInstanceOf(JobSpec::class, $ran);
         self::assertSame((string) ToolTimeLimitKernel::LIMIT, $ran->command[11]);
+    }
+
+    protected static function getKernelClass(): string
+    {
+        return ToolTimeLimitKernel::class;
     }
 }

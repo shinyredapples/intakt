@@ -61,14 +61,6 @@ final class ReplaysRecordingTest extends TestCase
 
     private ReplayMark $demoProject = ReplayMark::Replay;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock(self::START);
-        $this->ledger = new ClockedLedger($this->clock);
-        $this->locks = new InMemoryStore();
-        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
-    }
-
     public function testReplayingARecordingPublishesEveryCapturedUpdateWithItsRecordedTopicAndStreamInCaptureOrder(): void
     {
         $recording = $this->recordedRun();
@@ -220,6 +212,27 @@ final class ReplaysRecordingTest extends TestCase
         );
     }
 
+    public function testAReplayedReviewerStartIsFoundUnderItsRound(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, self::ROUND), false));
+    }
+
+    public function testAReplayedReviewerStartIsNotAmongTheStartsWithoutASubject(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([], iterator_to_array($this->ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted), false));
+    }
+
+    public function testAReplayedRowOfAnotherKindKeepsNoSubject(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([null, null, null, null], array_map(static fn (RecordedEvent $row): ?string => $row->event->subject, array_values(array_filter($this->appended(), static fn (RecordedEvent $row): bool => LedgerEventKind::ReviewerStarted !== $row->event->kind))));
+    }
+
     public function testARowThatNamesNoProjectIsAppendedAsItsStoredText(): void
     {
         $recording = $this->recordedRun();
@@ -324,7 +337,7 @@ final class ReplaysRecordingTest extends TestCase
             $this->replays()->replay($this->recordedRun(), 1.0);
             self::fail('The replay went on after a failed append.');
         } catch (ReplayStopped $stopped) {
-            self::assertStringEndsWith('The events it wrote stay in the ledger: remove them with intakt:demo:remove, then run intakt:demo:create, before replaying this recording.', $stopped->getMessage());
+            self::assertStringEndsWith('The events it wrote stay in the ledger: remove them with intakt:demo:remove, then press Play, which creates the demo project again (a console replay needs intakt:demo:create first).', $stopped->getMessage());
         }
     }
 
@@ -416,22 +429,17 @@ final class ReplaysRecordingTest extends TestCase
         self::assertTrue(new LockFactory($this->locks)->createLock(ReplaysRecording::LOCK)->acquire());
     }
 
-    private function replays(): ReplaysRecording
+    protected function setUp(): void
     {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()));
+        $this->clock = new MockClock(self::START);
+        $this->ledger = new ClockedLedger($this->clock);
+        $this->locks = new InMemoryStore();
+        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
     }
 
     private function marks(): ReplayMarks
     {
         return new ReplayMarks(new MarkAnsweringQueries($this->demoProject));
-    }
-
-    /**
-     * @return list<RecordedEvent>
-     */
-    private function appended(): array
-    {
-        return iterator_to_array($this->ledger->readInOrder(), false);
     }
 
     // Written through the stored serializer and read back from a file, as the record command leaves it, so the rows are the text a live review stores.
@@ -453,13 +461,9 @@ final class ReplaysRecordingTest extends TestCase
         ])));
     }
 
-    /**
-     * @param list<RecordedLedgerEvent> $events
-     * @param list<CapturedUpdate>      $updates
-     */
-    private function recording(array $events, array $updates = []): Recording
+    private function replays(): ReplaysRecording
     {
-        return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, $updates);
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()));
     }
 
     private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
@@ -474,6 +478,23 @@ final class ReplaysRecordingTest extends TestCase
             self::TOPIC,
             sprintf('<turbo-stream action="replace" target="round-state"><template>at %d ms</template></turbo-stream>', $millisecondsAfterStart),
         );
+    }
+
+    /**
+     * @param list<RecordedLedgerEvent> $events
+     * @param list<CapturedUpdate>      $updates
+     */
+    private function recording(array $events, array $updates = []): Recording
+    {
+        return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, $updates);
+    }
+
+    /**
+     * @return list<RecordedEvent>
+     */
+    private function appended(): array
+    {
+        return iterator_to_array($this->ledger->readInOrder(), false);
     }
 
     private static function withProject(string $payload, string $project): string

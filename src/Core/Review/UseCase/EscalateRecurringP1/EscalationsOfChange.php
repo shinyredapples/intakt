@@ -30,14 +30,14 @@ final readonly class EscalationsOfChange implements ChangeEscalations
         LedgerEventKind::EscalationFailed->value => EscalationReviewFailed::class,
     ];
 
+    private const int READS = 3;
+
     public function __construct(
         private ReviewRounds $rounds,
         private Ledger $ledger,
         private LedgerPayloads $payloads,
     ) {
     }
-
-    private const int READS = 3;
 
     #[Override]
     public function outcomeAtLatestHead(string $project, string $change): ?EscalationOutcome
@@ -73,17 +73,6 @@ final readonly class EscalationsOfChange implements ChangeEscalations
         }
 
         return null;
-    }
-
-    /**
-     * @param list<RecurringP1Found|EscalationVerdictKept|EscalationVerdictReused|EscalationReviewFailed> $events
-     */
-    private function outcomeIn(array $events, string $change): ?EscalationOutcome
-    {
-        $this->refuseWhilePending($events, $change);
-        $outcomes = array_map(static fn (EscalationVerdictKept|EscalationVerdictReused $escalation): EscalationOutcome => $escalation->outcome, $this->verdictsIn($events));
-
-        return in_array(EscalationOutcome::Confirmed, $outcomes, true) ? EscalationOutcome::Confirmed : array_first($outcomes);
     }
 
     /**
@@ -127,6 +116,39 @@ final readonly class EscalationsOfChange implements ChangeEscalations
         }
     }
 
+    /**
+     * @param array<string, true> $rounds
+     *
+     * @return list<RecurringP1Found|EscalationVerdictKept|EscalationVerdictReused|EscalationReviewFailed>
+     */
+    private function eventsOf(array $rounds): array
+    {
+        $events = [];
+
+        // Only the events naming one of the rounds, because the ledger holds the events of every round.
+        foreach ($this->ledger->readMentioning(new Mentions(...array_map(strval(...), array_keys($rounds)))) as $recorded) {
+            $class = self::KINDS[$recorded->event->kind->value] ?? null;
+            $event = null === $class ? null : $this->payloads->of($recorded, $class);
+
+            if (($event instanceof RecurringP1Found || $event instanceof EscalationVerdictKept || $event instanceof EscalationVerdictReused || $event instanceof EscalationReviewFailed) && isset($rounds[$event->round])) {
+                $events[] = $event;
+            }
+        }
+
+        return $events;
+    }
+
+    /**
+     * @param list<RecurringP1Found|EscalationVerdictKept|EscalationVerdictReused|EscalationReviewFailed> $events
+     */
+    private function outcomeIn(array $events, string $change): ?EscalationOutcome
+    {
+        $this->refuseWhilePending($events, $change);
+        $outcomes = array_map(static fn (EscalationVerdictKept|EscalationVerdictReused $escalation): EscalationOutcome => $escalation->outcome, $this->verdictsIn($events));
+
+        return in_array(EscalationOutcome::Confirmed, $outcomes, true) ? EscalationOutcome::Confirmed : array_first($outcomes);
+    }
+
     // A recurrence without a reviewed, reused or failed escalation is still queued, so its outcome is not known yet and is never read as no escalation.
     /**
      * @param list<RecurringP1Found|EscalationVerdictKept|EscalationVerdictReused|EscalationReviewFailed> $events
@@ -156,27 +178,5 @@ final readonly class EscalationsOfChange implements ChangeEscalations
     private function verdictsIn(array $events): array
     {
         return array_values(array_filter($events, static fn (object $event): bool => $event instanceof EscalationVerdictKept || $event instanceof EscalationVerdictReused));
-    }
-
-    /**
-     * @param array<string, true> $rounds
-     *
-     * @return list<RecurringP1Found|EscalationVerdictKept|EscalationVerdictReused|EscalationReviewFailed>
-     */
-    private function eventsOf(array $rounds): array
-    {
-        $events = [];
-
-        // Only the events naming one of the rounds, because the ledger holds the events of every round.
-        foreach ($this->ledger->readMentioning(new Mentions(...array_map(strval(...), array_keys($rounds)))) as $recorded) {
-            $class = self::KINDS[$recorded->event->kind->value] ?? null;
-            $event = null === $class ? null : $this->payloads->of($recorded, $class);
-
-            if (($event instanceof RecurringP1Found || $event instanceof EscalationVerdictKept || $event instanceof EscalationVerdictReused || $event instanceof EscalationReviewFailed) && isset($rounds[$event->round])) {
-                $events[] = $event;
-            }
-        }
-
-        return $events;
     }
 }

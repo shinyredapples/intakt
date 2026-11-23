@@ -22,13 +22,6 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(FindingUrgency::class)]
 final class ReviewFullRecordTest extends DashboardPageTestCase
 {
-    // Kept across the two views' requests, so the second one reads the same ledger.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->browser->disableReboot();
-    }
-
     public function testTheMainViewRendersNoneOfTheMovedSectionsAndLinksToTheFullRecordOnce(): void
     {
         $this->givenAChangesRoundWithOneFindingToFix();
@@ -59,8 +52,8 @@ final class ReviewFullRecordTest extends DashboardPageTestCase
         $main = $this->browser->request('GET', '/reviews/round-1');
         $record = $this->browser->request('GET', '/reviews/round-1/record');
 
-        self::assertSame([1, 0], [$main->filter('.fix-card')->count(), $main->filter('.finding-card')->count()]);
-        self::assertSame([0, 1, 0], [$record->filter('.fix-card')->count(), $record->filter('.finding-card')->count(), $record->filter('.verdict-card')->count()]);
+        self::assertSame([1, 0], [$main->filter('.fix-row')->count(), $main->filter('.finding-card')->count()]);
+        self::assertSame([0, 1, 0], [$record->filter('.fix-row')->count(), $record->filter('.finding-card')->count(), $record->filter('.verdict-card')->count()]);
     }
 
     public function testWhileAPassIsInReviewTheMainViewKeepsTheNowBlockAndTheFullRecordTheLiveLog(): void
@@ -81,7 +74,7 @@ final class ReviewFullRecordTest extends DashboardPageTestCase
         $this->givenAChangesRoundWithOneFindingToFix();
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
         self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
-        $link = (string) $this->browser->request('GET', '/reviews/round-2')->filter('.to-fix a.fix-card')->attr('href');
+        $link = (string) $this->browser->request('GET', '/reviews/round-2')->filter('.to-fix a.fix-row')->attr('href');
         self::assertSame('/reviews/round-1/record#round-round-1-finding-F1', $link);
 
         $record = $this->browser->request('GET', $link);
@@ -105,6 +98,13 @@ final class ReviewFullRecordTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/round-9/record');
 
         self::assertResponseStatusCodeSame(404);
+    }
+
+    // Kept across the two views' requests, so the second one reads the same ledger.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->browser->disableReboot();
     }
 
     private function givenAChangesRoundWithOneFindingToFix(): void

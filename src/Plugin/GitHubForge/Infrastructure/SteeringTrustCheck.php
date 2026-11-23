@@ -95,6 +95,16 @@ final readonly class SteeringTrustCheck
         return $this->permissionFrom($this->github->ofInstallation($path, $this->installationToken()), $login);
     }
 
+    // No other credential is tried, because a fallback would let a lost App identity still decide who steers.
+    private function installationToken(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $failure) {
+            throw TrustNotChecked::becauseNoCredential($failure->getMessage());
+        }
+    }
+
     /**
      * @param array<mixed> $answer
      *
@@ -111,15 +121,5 @@ final readonly class SteeringTrustCheck
         }
 
         return ['writes' => self::LEVELS[$level], 'bot' => 'Bot' === $type];
-    }
-
-    // No other credential is tried, because a fallback would let a lost App identity still decide who steers.
-    private function installationToken(): string
-    {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $failure) {
-            throw TrustNotChecked::becauseNoCredential($failure->getMessage());
-        }
     }
 }

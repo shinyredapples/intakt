@@ -73,13 +73,6 @@ final readonly class WorkflowFileScan
         return array_values(array_filter($findings));
     }
 
-    private function listedTrigger(WorkflowScalar|WorkflowMapping|WorkflowSequence $event): ?WorkflowFinding
-    {
-        return $event instanceof WorkflowScalar
-            ? $this->trigger($event->text, $event->line)
-            : new WorkflowFinding(WorkflowRisk::Unreadable, $event->line, 'a trigger that is not a single name');
-    }
-
     private function trigger(string $event, int $line): ?WorkflowFinding
     {
         return match (true) {
@@ -87,6 +80,13 @@ final readonly class WorkflowFileScan
             null === ContainedTrigger::tryFrom($event) => new WorkflowFinding(WorkflowRisk::Trigger, $line, sprintf('the trigger %s may run with the base repository\'s rights', $event)),
             default => null,
         };
+    }
+
+    private function listedTrigger(WorkflowScalar|WorkflowMapping|WorkflowSequence $event): ?WorkflowFinding
+    {
+        return $event instanceof WorkflowScalar
+            ? $this->trigger($event->text, $event->line)
+            : new WorkflowFinding(WorkflowRisk::Unreadable, $event->line, 'a trigger that is not a single name');
     }
 
     /**
@@ -152,23 +152,6 @@ final readonly class WorkflowFileScan
         return array_values(array_filter($findings));
     }
 
-    private function label(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $label): ?WorkflowFinding
-    {
-        return match (true) {
-            !$label instanceof WorkflowScalar || '' === $label->text => new WorkflowFinding(WorkflowRisk::Unreadable, $label->line, sprintf('a runner label of the job %s that is not a single name', $job)),
-            // Unreadable rather than a runner finding, because the scan never reads a variable's value: an unset variable is a read that failed, not a hosted runner.
-            str_contains($label->text, '${{') => new WorkflowFinding(WorkflowRisk::Unreadable, $label->line, sprintf('the job %s takes its runner from an expression the scan does not read, whose value can change without a commit', $job)),
-            null === HostedRunnerLabel::tryFrom($label->text) => new WorkflowFinding(WorkflowRisk::Runner, $label->line, sprintf('the job %s runs on %s, not a GitHub-hosted runner label', $job, $this->oneLine($label->text))),
-            default => null,
-        };
-    }
-
-    // A label from a block value keeps its line breaks, which would split the finding's line in the command's output.
-    private function oneLine(string $label): string
-    {
-        return str_replace("\n", '\n', trim($label));
-    }
-
     // A group or label is still read from a variable when it sits in a mapping, so an expression anywhere in it is a failed read too.
     /**
      * @return list<WorkflowFinding>
@@ -181,5 +164,23 @@ final readonly class WorkflowFileScan
             str_contains($value->text, '${{') => [new WorkflowFinding(WorkflowRisk::Unreadable, $value->line, sprintf('the job %s takes its runner from an expression the scan does not read, whose value can change without a commit', $job))],
             default => [],
         };
+    }
+
+    private function label(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $label): ?WorkflowFinding
+    {
+        return match (true) {
+            // A blank label is no name either, because trimmed for the detail it would read as "runs on , not a GitHub-hosted runner label".
+            !$label instanceof WorkflowScalar || '' === trim($label->text) => new WorkflowFinding(WorkflowRisk::Unreadable, $label->line, sprintf('a runner label of the job %s that is not a single name', $job)),
+            // Unreadable rather than a runner finding, because the scan never reads a variable's value: an unset variable is a read that failed, not a hosted runner.
+            str_contains($label->text, '${{') => new WorkflowFinding(WorkflowRisk::Unreadable, $label->line, sprintf('the job %s takes its runner from an expression the scan does not read, whose value can change without a commit', $job)),
+            null === HostedRunnerLabel::tryFrom($label->text) => new WorkflowFinding(WorkflowRisk::Runner, $label->line, sprintf('the job %s runs on %s, not a GitHub-hosted runner label', $job, $this->oneLine($label->text))),
+            default => null,
+        };
+    }
+
+    // A label from a block value keeps its line breaks, which would split the finding's line in the command's output.
+    private function oneLine(string $label): string
+    {
+        return str_replace("\n", '\n', trim($label));
     }
 }

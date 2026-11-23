@@ -8,6 +8,8 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -15,6 +17,7 @@ use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Kernel;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -39,6 +42,7 @@ use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 #[CoversClass(Verdict::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[CoversClass(ReviewerAnswer::class)]
 #[UsesClass(Kernel::class)]
 #[UsesClass(Finding::class)]
@@ -63,7 +67,7 @@ final class VerdictParserTest extends KernelTestCase
             requirement: '...',
             evidence: new Evidence('...', '...'),
         );
-        self::assertEquals(new Verdict(Decision::Changes, [$finding], ['F1', 'F2'], ['...']), $verdict);
+        self::assertEquals(new Verdict(Decision::Changes, [$finding], [new ResolvedFinding('F1'), new ResolvedFinding('F2')], [new FollowUpNote('...')]), $verdict);
     }
 
     public function testEveryDecisionMaps(): void
@@ -98,6 +102,20 @@ final class VerdictParserTest extends KernelTestCase
         $output = VerdictDocument::fromTheDesign()->withFinding('repeat', true)->json();
 
         self::assertTrue($this->reviewer()->verdictFor($output)->findings[0]->repeat);
+    }
+
+    public function testAFindingTheReviewerMarksAsAGateGapMapsWithTheMarker(): void
+    {
+        $output = VerdictDocument::fromTheDesign()->withFinding('gate_gap', true)->json();
+
+        self::assertTrue($this->reviewer()->verdictFor($output)->findings[0]->gate_gap);
+    }
+
+    public function testAFindingWithoutTheGateGapMarkerMapsAsNotAGateGap(): void
+    {
+        $output = VerdictDocument::fromTheDesign()->withoutFinding('gate_gap')->json();
+
+        self::assertFalse($this->reviewer()->verdictFor($output)->findings[0]->gate_gap);
     }
 
     public function testAFindingWithoutPlaceOrRequirementOrEvidenceMaps(): void
@@ -135,18 +153,18 @@ final class VerdictParserTest extends KernelTestCase
         $this->reviewer()->verdictFor($output);
     }
 
-    public function testAWrongTypeIsRefusedWithTheSameTextAsWhenTheContractVerdictWasTheTarget(): void
+    public function testAWrongTypeIsRefusedWithTheContractVerdictNamedInItsText(): void
     {
         $output = '{"verdict":"approve","findings":[],"resolved":false,"follow_ups":[]}';
         $before = '';
         try {
-            self::getContainer()->get('serializer')->deserialize($output, Verdict::class, JsonEncoder::FORMAT, [
+            self::getContainer()->get('serializer')->deserialize($output, ReviewerAnswer::class, JsonEncoder::FORMAT, [
                 AbstractNormalizer::ALLOW_EXTRA_ATTRIBUTES => false,
                 AbstractNormalizer::REQUIRE_ALL_PROPERTIES => true,
                 JsonDecode::ASSOCIATIVE => false,
             ]);
         } catch (ExceptionInterface $refused) {
-            $before = sprintf('Cannot deserialize the content into the "%s" class. %s', Verdict::class, $refused->getMessage());
+            $before = sprintf('Cannot deserialize the content into the "%s" class. %s', Verdict::class, strtr($refused->getMessage(), [ReviewerAnswer::class => Verdict::class]));
         }
 
         $this->expectException(VerdictUnreadable::class);

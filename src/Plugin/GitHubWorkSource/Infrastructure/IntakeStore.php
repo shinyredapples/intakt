@@ -48,23 +48,6 @@ final readonly class IntakeStore
         return $this->readOf($project, fn (): SyncState => $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? SyncState::neverSynced());
     }
 
-    // Named as held, because another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
-    /**
-     * @template T
-     *
-     * @param callable(): T $read
-     *
-     * @return T
-     */
-    private function readOf(string $project, callable $read): mixed
-    {
-        try {
-            return $read();
-        } catch (RetryableException $refusal) {
-            throw ProjectHeldByAnotherWriter::of($project, $refusal);
-        }
-    }
-
     // Written only while the stored generation is still the one read before the listing, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
     #[NoDiscard]
     public function recordIfStill(string $project, SyncState $readBefore, ListingRows $rows): bool
@@ -97,11 +80,147 @@ final readonly class IntakeStore
         }
     }
 
-    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held.
+    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it. A stored pull request is refused like a missing row, because the listing stores a pull request only for the rules to read and never queues one.
+    public function failForGood(string $project, int $number, string $reason): void
+    {
+        $this->underTheListingLock($project, function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
+            $task = $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]);
+            if (!$task instanceof StoredIssue || $task->isPullRequest()) {
+                throw TaskNotQueued::named($project, $number);
+            }
+
+            $failure = $manager->find(TaskFailure::class, ['project' => $project, 'number' => $number]);
+            if ($failure instanceof TaskFailure) {
+                $failure->replace($reason);
+
+                return;
+            }
+
+            $manager->persist(new TaskFailure($project, $number, $reason));
+        });
+    }
+
+    // The validator goes too, because with it the forge answers the next listing as unchanged and the row would never be read again; the generation moves, so a listing read before this loses its write instead of storing the forgotten vouching again.
+    public function forgetVouchingOf(string $project, int $number): void
+    {
+        $this->readOf($project, fn (): mixed => $this->underTheListingLock($project, static function (EntityManagerInterface $manager) use ($project, $number): null {
+            $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number])?->forgetVouching();
+            $manager->find(IntakeValidator::class, $project)?->advance(null);
+
+            return null;
+        }));
+    }
+
     /**
-     * @param callable(EntityManagerInterface): bool $write
+     * @return array<int, string>
      */
-    private function inTransaction(EntityManagerInterface $manager, callable $write): bool
+    public function failuresOf(string $project): array
+    {
+        return $this->readOf($project, fn (): array => $this->reasonsOf($this->ownManager(), $project));
+    }
+
+    // Read once the lock is held, because a failure recorded since the plan was made must keep its task from being picked: the pick is ordered before any failure that commits after this read.
+    /**
+     * @return array<int, string>
+     */
+    public function failuresUnderTheListingLock(string $project): array
+    {
+        return $this->readOf($project, fn (): array => $this->underTheListingLock($project, fn (EntityManagerInterface $manager): array => $this->reasonsOf($manager, $project)));
+    }
+
+    // A reader on SQLite's default journal lets the lock's write through and refuses only the COMMIT, so the transaction SQLite then keeps open is rolled back before the refusal is thrown: left open, every later transaction on the connection would be refused as already active, and an uncommitted failure would be read back as recorded.
+    /**
+     * @template T
+     *
+     * @param callable(EntityManagerInterface): T $work
+     *
+     * @return T
+     */
+    private function underTheListingLock(string $project, callable $work): mixed
+    {
+        try {
+            return $this->inTransaction($this->ownManager(), function (EntityManagerInterface $manager) use ($project, $work): mixed {
+                $this->lockTheSyncRow($manager, $project);
+
+                return $work($manager);
+            });
+        } catch (RetryableException $refusal) {
+            $this->rollBackARefusedCommit();
+
+            throw $refusal;
+        }
+    }
+
+    // SQLite has no row lock, and in WAL mode a transaction reads from the snapshot of its first read, so a failure could commit between the row read and the failure read and be missed. A write that changes no row, sent before any read, takes SQLite's write lock and reads the latest commit; a server database changes nothing for it and relies on the row lock.
+    private function lockTheSyncRow(EntityManagerInterface $manager, string $project): void
+    {
+        $sync = $manager->getClassMetadata(IntakeValidator::class);
+        $column = $sync->getColumnName('project');
+        $manager->getConnection()->createQueryBuilder()
+            ->update($sync->getTableName())
+            ->set($column, $column)
+            ->where('1 = 0')
+            ->executeStatement();
+        $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function reasonsOf(EntityManagerInterface $manager, string $project): array
+    {
+        $failures = [];
+        foreach ($this->rowsOf($manager, TaskFailure::class, $project) as $failure) {
+            $failures[$failure->number()] = $failure->reason();
+        }
+
+        return $failures;
+    }
+
+    /**
+     * @param list<StoredIssue> $issues
+     *
+     * @return array<int, StoredIssue>
+     */
+    private function listed(string $project, array $issues): array
+    {
+        $listed = [];
+        foreach ($issues as $issue) {
+            if ($issue->project() !== $project) {
+                throw new InvalidArgumentException(sprintf('Issue #%d belongs to project "%s", not to "%s".', $issue->number(), $issue->project(), $project));
+            }
+
+            $listed[$issue->number()] = $issue;
+        }
+
+        return $listed;
+    }
+
+    // The rows become those of one complete listing, so an item it no longer shows was closed and its row goes; failures stay, because a closed task that failed for good still holds the tasks that wait on it.
+    /**
+     * @param array<int, StoredIssue> $listed
+     */
+    private function replaceRows(EntityManagerInterface $manager, string $project, array $listed): void
+    {
+        $stored = $this->storedIssuesOf($manager, $project);
+        foreach ($listed as $number => $issue) {
+            $this->keep($manager, $stored[$number] ?? null, $issue);
+        }
+
+        foreach (array_diff_key($stored, $listed) as $closed) {
+            $manager->remove($closed);
+        }
+    }
+
+    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held, and a refused nested rollback would leave its level open on the shared connection.
+    /**
+     * @template T
+     *
+     * @param callable(EntityManagerInterface): T $write
+     *
+     * @return T
+     */
+    private function inTransaction(EntityManagerInterface $manager, callable $write): mixed
     {
         $connection = $manager->getConnection();
         $outer = $connection->getTransactionNestingLevel();
@@ -120,18 +239,6 @@ final readonly class IntakeStore
         }
     }
 
-    // Looked for in the previous exceptions too, because the flush runs its statements in a nested transaction of its own and rolls it back in a finally block: when the server already aborted the whole transaction, that rollback is refused and thrown instead, with the statement's refusal at the end of its chain.
-    private function refusalBehind(Throwable $failure): Throwable
-    {
-        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-            if ($cause instanceof RetryableException) {
-                return $cause;
-            }
-        }
-
-        return $failure;
-    }
-
     // Back to the level the write started at, because the flush leaves its nested level counted when its own rollback was refused. A refused rollback is ignored, so the failure that ended the write is still thrown.
     private function rollBackAfter(Connection $connection, int $outer): void
     {
@@ -142,6 +249,18 @@ final readonly class IntakeStore
                 $this->leaveALostSavepoint($connection, $level);
             }
         }
+    }
+
+    // Looked for in the previous exceptions too, because the flush runs its statements in a nested transaction of its own and rolls it back in a finally block: when the server already aborted the whole transaction, that rollback is refused and thrown instead, with the statement's refusal at the end of its chain.
+    private function refusalBehind(Throwable $failure): Throwable
+    {
+        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            if ($cause instanceof RetryableException) {
+                return $cause;
+            }
+        }
+
+        return $failure;
     }
 
     // DBAL counts the outermost transaction as ended before it asks the driver, but a nested one only after its savepoint rolled back. A commit of the nested level counts it as ended also when the release of its savepoint is refused, and it keeps nothing, because the level above is rolled back next.
@@ -200,75 +319,6 @@ final readonly class IntakeStore
         throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
     }
 
-    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
-    public function failForGood(string $project, int $number, string $reason): void
-    {
-        $this->ownManager()->wrapInTransaction(static function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
-            if (!$manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
-                throw TaskNotQueued::named($project, $number);
-            }
-
-            $failure = $manager->find(TaskFailure::class, ['project' => $project, 'number' => $number]);
-            if ($failure instanceof TaskFailure) {
-                $failure->replace($reason);
-
-                return;
-            }
-
-            $manager->persist(new TaskFailure($project, $number, $reason));
-        });
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public function failuresOf(string $project): array
-    {
-        return $this->readOf($project, function () use ($project): array {
-            $failures = [];
-            foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
-                $failures[$failure->number()] = $failure->reason();
-            }
-
-            return $failures;
-        });
-    }
-
-    /**
-     * @param list<StoredIssue> $issues
-     *
-     * @return array<int, StoredIssue>
-     */
-    private function listed(string $project, array $issues): array
-    {
-        $listed = [];
-        foreach ($issues as $issue) {
-            if ($issue->project() !== $project) {
-                throw new InvalidArgumentException(sprintf('Issue #%d belongs to project "%s", not to "%s".', $issue->number(), $issue->project(), $project));
-            }
-
-            $listed[$issue->number()] = $issue;
-        }
-
-        return $listed;
-    }
-
-    // The rows become those of one complete listing, so an item it no longer shows was closed and its row goes; failures stay, because a closed task that failed for good still holds the tasks that wait on it.
-    /**
-     * @param array<int, StoredIssue> $listed
-     */
-    private function replaceRows(EntityManagerInterface $manager, string $project, array $listed): void
-    {
-        $stored = $this->storedIssuesOf($manager, $project);
-        foreach ($listed as $number => $issue) {
-            $this->keep($manager, $stored[$number] ?? null, $issue);
-        }
-
-        foreach (array_diff_key($stored, $listed) as $closed) {
-            $manager->remove($closed);
-        }
-    }
-
     // A query and not a repository: the shared configuration's repository factory keeps every manager it built a repository for, with the rows that manager loaded, for the life of the worker.
     /**
      * @template T of StoredIssue|TaskFailure
@@ -313,6 +363,23 @@ final readonly class IntakeStore
         }
 
         return $issues;
+    }
+
+    // Named as held, because another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
+    /**
+     * @template T
+     *
+     * @param callable(): T $read
+     *
+     * @return T
+     */
+    private function readOf(string $project, callable $read): mixed
+    {
+        try {
+            return $read();
+        } catch (RetryableException $refusal) {
+            throw ProjectHeldByAnotherWriter::of($project, $refusal);
+        }
     }
 
     private function keep(EntityManagerInterface $manager, ?StoredIssue $stored, StoredIssue $issue): void

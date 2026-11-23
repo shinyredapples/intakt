@@ -39,21 +39,6 @@ final class HardenedGitTest extends TestCase
 
     private string $workingDirectory;
 
-    protected function setUp(): void
-    {
-        $this->environment = $_ENV;
-        $this->workingDirectory = (string) getcwd();
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $_ENV = $this->environment;
-        chdir($this->workingDirectory);
-        $this->repository->remove();
-    }
-
     public function testTheCommandDisablesHooksFsmonitorExternalDiffAttributesSignaturesAndOutputEncodings(): void
     {
         $command = new HardenedGit()->call($this->repository->path, 'status')->command;
@@ -397,6 +382,21 @@ final class HardenedGitTest extends TestCase
 
         self::assertSame($missing, $call->directory);
         self::assertContains('--git-dir='.$missing, [...$call->command]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->environment = $_ENV;
+        $this->workingDirectory = (string) getcwd();
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV = $this->environment;
+        chdir($this->workingDirectory);
+        $this->repository->remove();
     }
 
     /**

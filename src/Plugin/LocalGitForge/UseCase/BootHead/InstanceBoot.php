@@ -69,27 +69,6 @@ final readonly class InstanceBoot
         }
     }
 
-    // One empty home beside each snapshot, removed with it, so what Composer or the commit's code writes there (an auth.json, a config) reaches neither the install's home nor the next boot; without a filesystem sandbox (a later part) the commit's code can still compute the install's real home and read it, only what the environment and Composer hand over is removed here.
-    /**
-     * @param Closure(): BootOutcome $work
-     */
-    private function withScratchHomeOf(string $snapshot, Closure $work): BootOutcome
-    {
-        $filesystem = new Filesystem();
-        $filesystem->mkdir($this->homeOf($snapshot), 0o700);
-
-        try {
-            return $work();
-        } finally {
-            $filesystem->remove($this->homeOf($snapshot));
-        }
-    }
-
-    private function homeOf(string $snapshot): string
-    {
-        return $snapshot.self::SCRATCH_HOME_SUFFIX;
-    }
-
     private function forgeFor(ChangeSource $source): LocalGitForge
     {
         return new LocalGitForge(LocalRepository::existingAt($source->repository, $source->base), new NameStatusParser());
@@ -127,20 +106,25 @@ final readonly class InstanceBoot
         return $this->outcomeOf($boot);
     }
 
-    // A link is refused, because writing the harness through it would change a file outside the snapshot.
-    private function hasPlainBinFolder(string $snapshot): bool
-    {
-        $bin = $snapshot.'/'.dirname(self::HARNESS);
-
-        return !is_link($bin) && (is_dir($bin) || !file_exists($bin));
-    }
-
-    // Removed before it is written, because the commit's own bin/instance may be a link, which writing would follow.
-    private function placeHarness(string $snapshot, FileContent $harness): void
+    // One empty home beside each snapshot, removed with it, so what Composer or the commit's code writes there (an auth.json, a config) reaches neither the install's home nor the next boot; without a filesystem sandbox (a later part) the commit's code can still compute the install's real home and read it, only what the environment and Composer hand over is removed here.
+    /**
+     * @param Closure(): BootOutcome $work
+     */
+    private function withScratchHomeOf(string $snapshot, Closure $work): BootOutcome
     {
         $filesystem = new Filesystem();
-        $filesystem->remove($snapshot.'/'.self::HARNESS);
-        $filesystem->dumpFile($snapshot.'/'.self::HARNESS, $harness->content);
+        $filesystem->mkdir($this->homeOf($snapshot), 0o700);
+
+        try {
+            return $work();
+        } finally {
+            $filesystem->remove($this->homeOf($snapshot));
+        }
+    }
+
+    private function homeOf(string $snapshot): string
+    {
+        return $snapshot.self::SCRATCH_HOME_SUFFIX;
     }
 
     /**
@@ -158,6 +142,22 @@ final readonly class InstanceBoot
         }
 
         return $process;
+    }
+
+    // A link is refused, because writing the harness through it would change a file outside the snapshot.
+    private function hasPlainBinFolder(string $snapshot): bool
+    {
+        $bin = $snapshot.'/'.dirname(self::HARNESS);
+
+        return !is_link($bin) && (is_dir($bin) || !file_exists($bin));
+    }
+
+    // Removed before it is written, because the commit's own bin/instance may be a link, which writing would follow.
+    private function placeHarness(string $snapshot, FileContent $harness): void
+    {
+        $filesystem = new Filesystem();
+        $filesystem->remove($snapshot.'/'.self::HARNESS);
+        $filesystem->dumpFile($snapshot.'/'.self::HARNESS, $harness->content);
     }
 
     /**

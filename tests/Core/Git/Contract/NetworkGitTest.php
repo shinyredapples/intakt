@@ -25,17 +25,6 @@ final class NetworkGitTest extends TestCase
 {
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-network-'.bin2hex(random_bytes(6));
-        mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testACallThatSucceedsRunsOnceAndNeverSleeps(): void
     {
         $clock = new RecordingClock();
@@ -169,9 +158,15 @@ final class NetworkGitTest extends TestCase
         self::assertSame(2, $attempts);
     }
 
-    private function listRemote(string $remote): GitCall
+    protected function setUp(): void
     {
-        return new GitCall(new GitCommand('git', 'ls-remote', '--', $remote), $this->directory, GitEnvironment::of(GIT_CONFIG_GLOBAL: '/dev/null'));
+        $this->directory = sys_get_temp_dir().'/intakt-network-'.bin2hex(random_bytes(6));
+        mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function errorOutputOf(GitCall $call): string
@@ -186,5 +181,10 @@ final class NetworkGitTest extends TestCase
     {
         $process = new Process(['git', 'init', '--quiet', '--bare', $path]);
         $process->mustRun();
+    }
+
+    private function listRemote(string $remote): GitCall
+    {
+        return new GitCall(new GitCommand('git', 'ls-remote', '--', $remote), $this->directory, GitEnvironment::of(GIT_CONFIG_GLOBAL: '/dev/null'));
     }
 }

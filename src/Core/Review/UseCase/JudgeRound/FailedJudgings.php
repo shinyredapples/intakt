@@ -70,7 +70,36 @@ final readonly class FailedJudgings
         return $failed;
     }
 
-    private function isParked(string $roundId): bool
+    // The first record of each round, read once, so a caller deciding many rounds does not read the ledger once per round.
+    /**
+     * @return array<string, DateTimeImmutable>
+     */
+    public function recordedTimes(): array
+    {
+        $times = [];
+
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgingFailed) as $recorded) {
+            $round = $this->payloads->of($recorded, JudgingFailed::class)?->round;
+
+            if (null !== $round && !isset($times[$round])) {
+                $times[$round] = $recorded->recordedAt;
+            }
+        }
+
+        return $times;
+    }
+
+    // Bounded like isParked(), because a caller that decides many rounds reads the transport once and must not list it whole.
+    /**
+     * @return array<string, true>
+     */
+    public function parked(): array
+    {
+        return $this->parkedRounds(self::PARKED_MESSAGES_READ);
+    }
+
+    // The failure transport alone, so a caller that already read the ledger record does not read the ledger a second time.
+    public function isParked(string $roundId): bool
     {
         return isset($this->parkedRounds(self::PARKED_MESSAGES_READ)[$roundId]);
     }

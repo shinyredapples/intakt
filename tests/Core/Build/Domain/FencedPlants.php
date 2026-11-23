@@ -63,6 +63,15 @@ final readonly class FencedPlants
         return array_merge([], ...array_map(static fn ($property): array => self::plantsIn($property->getValue($value)), $properties));
     }
 
+    private static function outsideFences(string $prompt): string
+    {
+        foreach (self::realFencesIn($prompt) as [$fenced]) {
+            $prompt = str_replace($fenced, '', $prompt);
+        }
+
+        return $prompt;
+    }
+
     // A part of a plant can leak on its own (a task's first line used as a title), so each line, without the "\r" a copied title drops, is checked too.
     private static function assertNoLineIsOutside(string $plant, string $outside): void
     {
@@ -71,15 +80,6 @@ final readonly class FencedPlants
                 Assert::assertStringNotContainsString($line, $outside, 'A line of a plant reaches the prompt outside a fence.');
             }
         }
-    }
-
-    private static function outsideFences(string $prompt): string
-    {
-        foreach (self::realFencesIn($prompt) as [$fenced]) {
-            $prompt = str_replace($fenced, '', $prompt);
-        }
-
-        return $prompt;
     }
 
     // Only a fence whose boundary is the one its text gets counts, so a forged fence in the prompt hides nothing.

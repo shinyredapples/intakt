@@ -18,6 +18,7 @@ use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
@@ -28,6 +29,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
@@ -49,6 +51,10 @@ use Intakt\Core\HandBack\Contract\CheckVerdict;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackChecks;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
+use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
+use Intakt\Core\HandBack\Contract\PullRequestTextRound;
+use Intakt\Core\HandBack\Contract\PullRequestTextTask;
+use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -80,17 +86,24 @@ use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(BuildTaskCommand::class)]
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTask::class)]
 #[UsesClass(BuildTaskOutcome::class)]
 #[UsesClass(BuildTaskRequest::class)]
+#[UsesClass(BuildRun::class)]
 #[UsesClass(BuildStepNotRecorded::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(HandBackCheck::class)]
 #[UsesClass(HandBackFile::class)]
 #[UsesClass(PrePushCheck::class)]
+#[UsesClass(PullRequestTextCheck::class)]
+#[UsesClass(PullRequestTextTask::class)]
+#[UsesClass(PullRequestTextOutcome::class)]
+#[UsesClass(PullRequestTextVerdict::class)]
 #[UsesClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
@@ -149,23 +162,6 @@ final class BuildTaskCommandTest extends TestCase
     private PushedBranch|RefusedPush $pushed;
 
     private ?string $configuredRepository = null;
-
-    protected function setUp(): void
-    {
-        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
-        $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
-        $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
-        $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        $this->options = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1'];
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
 
     public function testItPrintsEachPassedStepAndTheEscapedTitle(): void
     {
@@ -325,6 +321,23 @@ final class BuildTaskCommandTest extends TestCase
         yield 'no image' => ['7', '--image', 'The --image option is required.'];
     }
 
+    protected function setUp(): void
+    {
+        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
+        $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
+        $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
+        $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        $this->options = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1'];
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
+
     private function displayOfTitle(string $title): string
     {
         $listed = Issues::task(7);
@@ -340,6 +353,14 @@ final class BuildTaskCommandTest extends TestCase
     private function execute(InMemoryLedger $ledger, BuildCheckout $checkout, array $input): CommandTester
     {
         return $this->tester($this->buildTask($this->listing(Issues::task(7)), $checkout, $ledger), $input);
+    }
+
+    private function listing(ListedIssue $task): IssueReads
+    {
+        $reads = self::createStub(IssueReads::class);
+        $reads->method('readOpen')->willReturn($task);
+
+        return $reads;
     }
 
     private function buildTask(IssueReads $issues, BuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
@@ -363,15 +384,13 @@ final class BuildTaskCommandTest extends TestCase
         $repositories = self::createStub(ConfiguredRepositories::class);
         $repositories->method('nameOf')->willReturn($this->configuredRepository);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories));
-    }
+        $texts = self::createStub(PullRequestTextRound::class);
+        $texts->method('route')->willReturn(new PullRequestTextOutcome(PullRequestTextVerdict::Passed, 0, [], 0));
+        // A folder that exists, because the text round resolves the mirror's path and a stubbed checkout names none.
+        $mirror = self::createStub(BuildCheckout::class);
+        $mirror->method('mirrorOf')->willReturn($this->folder);
 
-    private function listing(ListedIssue $task): IssueReads
-    {
-        $reads = self::createStub(IssueReads::class);
-        $reads->method('readOpen')->willReturn($task);
-
-        return $reads;
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
     }
 
     /**

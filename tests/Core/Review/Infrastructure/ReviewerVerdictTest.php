@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
@@ -20,6 +22,7 @@ use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -34,6 +37,7 @@ use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -47,6 +51,7 @@ use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -84,10 +89,12 @@ use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[CoversClass(ReviewerPrompt::class)]
 #[CoversClass(FencedToolbox::class)]
 #[CoversClass(PromptCut::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[CoversClass(StrictVerdictStreamListener::class)]
 #[UsesClass(FinalStreamedUsage::class)]
 #[CoversClass(ReviewerRuns::class)]
@@ -166,23 +173,6 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private string $diff = 'diff --git a/a b/a';
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-        $this->conversations = new InMemoryMessageStore();
-        $this->conversation = new UuidV7();
-        $this->round = new UuidV7();
-        $this->updates = new RecordedRoundUpdates();
-        $this->catalog = new UnstreamedModelCatalog();
-        $this->ledger = new InMemoryLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     public function testAProviderThatStreamsOnlyWhenAskedPublishesTheReadAnswerAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
     {
         $this->catalog = new FallbackModelCatalog();
@@ -253,7 +243,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], VerdictDocument::fromTheDesign()->json());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertPlatformCallCount(2);
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);
@@ -985,6 +975,23 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('interface CartRepository', $this->sent[2]);
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+        $this->conversations = new InMemoryMessageStore();
+        $this->conversation = new UuidV7();
+        $this->round = new UuidV7();
+        $this->updates = new RecordedRoundUpdates();
+        $this->catalog = new UnstreamedModelCatalog();
+        $this->ledger = new InMemoryLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
+    }
+
     // Because the toolbox is built per review and the platform per test, the collector is built from this run's platform instead of a profiled request.
     protected static function getAiDataCollector(): DataCollector
     {
@@ -1048,7 +1055,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         // Collected in finally, so a case whose answer is refused can still count the calls and tool calls it made.
         try {
-            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open, $this->roundNumber), new ReviewerConversation('You review for correctness.', $this->conversation, $this->inARound ? $this->round : null)), $platform, 'reviewer-model');
+            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open, $this->roundNumber), new ReviewerConversation('You review for correctness.', $this->conversation, $this->inARound ? $this->round : null)), $platform, new ResolvedModel(Provider::Anthropic, 'reviewer-model'));
         } finally {
             $collector = new DataCollector($platform instanceof TraceablePlatform ? [$platform] : [], [$toolbox], [$toolbox], [], [], []);
             $collector->lateCollect();

@@ -83,8 +83,8 @@ final readonly class GitHubCiRuns
     {
         $bySuite = [];
         foreach ($workflowRuns as $run) {
-            // A run without the key links no suite, so that suite keeps an origin of its own and nothing replaces it.
-            if (!array_key_exists('check_suite_id', $run)) {
+            // A run without the key, or with a null one, links no suite, so that suite keeps an origin of its own and nothing replaces it.
+            if (null === ($run['check_suite_id'] ?? null)) {
                 continue;
             }
 
@@ -93,6 +93,26 @@ final readonly class GitHubCiRuns
         }
 
         return $bySuite;
+    }
+
+    /**
+     * @param array<mixed>             $suite
+     * @param array<int, array<mixed>> $runsBySuite
+     */
+    private function suiteOf(RepositoryAddress $repository, array $suite, array $runsBySuite): CiRun
+    {
+        $id = $this->positive($suite, 'id');
+        $run = $runsBySuite[$id] ?? null;
+        if (null === $run) {
+            // Named by its own ID, because one app's unlinked suites are no proof of one check and must not replace each other.
+            return new CiRun(new CiRunOrigin('suite:'.$id, self::CHECK_SUITE_EVENT, $this->changeOf($repository, $suite)), $this->stateOf($suite), $this->createdAt($suite));
+        }
+
+        // The run's whole origin, because GitHub often leaves a suite's own pull requests empty and two pull requests must not look like one.
+        $origin = $this->workflowOriginOf($repository, $run);
+
+        // Named apart from the runs, so that only a newer suite replaces a suite and a run never replaces its own suite; numbered by its run to order a same-second tie.
+        return new CiRun(new CiRunOrigin(self::LINKED_SUITE_PREFIX.$origin->name, $origin->event, $origin->change), $this->linkedSuiteStateOf($suite, $run), $this->createdAt($suite), $this->runNumberOf($run));
     }
 
     /**
@@ -118,62 +138,12 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param array<mixed>             $suite
-     * @param array<int, array<mixed>> $runsBySuite
-     */
-    private function suiteOf(RepositoryAddress $repository, array $suite, array $runsBySuite): CiRun
-    {
-        $id = $this->positive($suite, 'id');
-        $run = $runsBySuite[$id] ?? null;
-        if (null === $run) {
-            // Named by its own ID, because one app's unlinked suites are no proof of one check and must not replace each other.
-            return new CiRun(new CiRunOrigin('suite:'.$id, self::CHECK_SUITE_EVENT, $this->changeOf($repository, $suite)), $this->stateOf($suite), $this->createdAt($suite));
-        }
-
-        // The run's whole origin, because GitHub often leaves a suite's own pull requests empty and two pull requests must not look like one.
-        $origin = $this->workflowOriginOf($repository, $run);
-
-        // Named apart from the runs, so that only a newer suite replaces a suite and a run never replaces its own suite; numbered by its run to order a same-second tie.
-        return new CiRun(new CiRunOrigin(self::LINKED_SUITE_PREFIX.$origin->name, $origin->event, $origin->change), $this->linkedSuiteStateOf($suite, $run), $this->createdAt($suite), $this->runNumberOf($run));
-    }
-
-    /**
-     * @param array<mixed> $run
-     */
-    private function workflowOriginOf(RepositoryAddress $repository, array $run): CiRunOrigin
-    {
-        // Named by the workflow's ID, because two workflows may share a display name and must not replace each other's runs.
-        return new CiRunOrigin((string) $this->positive($run, 'workflow_id'), $this->text($run, 'event'), $this->changeOf($repository, $run));
-    }
-
-    /**
      * @param array<mixed> $entry
      */
     private function workflowRunStateOf(array $entry): CiRunState
     {
         // Only a queued first attempt never started, because a queued rerun keeps the first attempt's creation time.
         return 'queued' === $this->text($entry, 'status') && 1 === $this->positive($entry, 'run_attempt') && !$this->withoutItsPullRequest($entry) ? CiRunState::Queued : $this->stateOf($entry);
-    }
-
-    /**
-     * @param array<mixed> $suite
-     * @param array<mixed> $run
-     */
-    private function linkedSuiteStateOf(array $suite, array $run): CiRunState
-    {
-        // Only a queued suite with no check run never started, because one with a check run or without a count may still finish red.
-        return 'queued' === $this->text($suite, 'status') && 0 === ($suite['latest_check_runs_count'] ?? null) && !$this->withoutItsPullRequest($run) ? CiRunState::Queued : $this->stateOf($suite);
-    }
-
-    /**
-     * @param array<mixed> $entry
-     */
-    private function runNumberOf(array $entry): ?int
-    {
-        $number = $this->positive($entry, 'run_number');
-
-        // Left out for a pull request run without its pull request, because two unknown pull requests are not one origin and a same-second tie must not order them.
-        return $this->withoutItsPullRequest($entry) ? null : $number;
     }
 
     /**
@@ -216,14 +186,6 @@ final readonly class GitHubCiRuns
     /**
      * @param array<mixed> $entry
      */
-    private function createdAt(array $entry): DateTimeImmutable
-    {
-        return $this->moments->parse($this->text($entry, 'created_at'));
-    }
-
-    /**
-     * @param array<mixed> $entry
-     */
     private function stateOf(array $entry): CiRunState
     {
         if ('completed' !== $this->text($entry, 'status')) {
@@ -235,6 +197,44 @@ final readonly class GitHubCiRuns
             'cancelled' => CiRunState::Cancelled,
             default => CiRunState::Failed,
         };
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function createdAt(array $entry): DateTimeImmutable
+    {
+        return $this->moments->parse($this->text($entry, 'created_at'));
+    }
+
+    /**
+     * @param array<mixed> $run
+     */
+    private function workflowOriginOf(RepositoryAddress $repository, array $run): CiRunOrigin
+    {
+        // Named by the workflow's ID, because two workflows may share a display name and must not replace each other's runs.
+        return new CiRunOrigin((string) $this->positive($run, 'workflow_id'), $this->text($run, 'event'), $this->changeOf($repository, $run));
+    }
+
+    /**
+     * @param array<mixed> $suite
+     * @param array<mixed> $run
+     */
+    private function linkedSuiteStateOf(array $suite, array $run): CiRunState
+    {
+        // Only a queued suite with no check run never started, because one with a check run or without a count may still finish red.
+        return 'queued' === $this->text($suite, 'status') && 0 === ($suite['latest_check_runs_count'] ?? null) && !$this->withoutItsPullRequest($run) ? CiRunState::Queued : $this->stateOf($suite);
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function runNumberOf(array $entry): ?int
+    {
+        $number = $this->positive($entry, 'run_number');
+
+        // Left out for a pull request run without its pull request, because two unknown pull requests are not one origin and a same-second tie must not order them.
+        return $this->withoutItsPullRequest($entry) ? null : $number;
     }
 
     /**

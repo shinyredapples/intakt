@@ -67,7 +67,6 @@ final readonly class DependencyJobs
 
     /**
      * @throws DockerEngineFailed
-     * @throws JobRefused
      * @throws JobEventNotRecorded
      */
     public function platformIn(string $image, DependencyStep $step, string $head): ?string
@@ -83,7 +82,8 @@ final readonly class DependencyJobs
 
         try {
             return $this->platformOf($this->jobs->run($spec));
-        } catch (JobOutputRefused) {
+        } catch (JobOutputRefused|JobRefused) {
+            // Any refusal of the probe only costs the reuse, so the check installs itself.
             return null;
         }
     }
@@ -132,18 +132,6 @@ final readonly class DependencyJobs
 
         // A saved snapshot stays in the store for the next check, but this one installs itself, because an install folder it could not remove is a folder error like any other.
         return $installed && $removed;
-    }
-
-    private function removed(string $folder): bool
-    {
-        try {
-            $this->filesystem->remove($folder);
-
-            return true;
-        } catch (IOException) {
-            // Not thrown, because the next install of the key removes the leftover in its prepare and this check only loses the reuse.
-            return false;
-        }
     }
 
     private function platformOf(JobResult $result): ?string
@@ -210,6 +198,18 @@ final readonly class DependencyJobs
             return true;
         } catch (IOException) {
             // The store refuses an install it cannot keep whole and read-only, a link out of it included, so the check installs itself.
+            return false;
+        }
+    }
+
+    private function removed(string $folder): bool
+    {
+        try {
+            $this->filesystem->remove($folder);
+
+            return true;
+        } catch (IOException) {
+            // Not thrown, because the next install of the key removes the leftover in its prepare and this check only loses the reuse.
             return false;
         }
     }

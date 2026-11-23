@@ -35,11 +35,6 @@ final class TourCaptionStylesTest extends TestCase
         self::assertLessThanOrEqual($this->pixels('/--bar:\s*(\d+)px;/', $this->rule(self::SHOWN)) - 2 * 4, $tab);
     }
 
-    private function pixels(string $pattern, string $text): int
-    {
-        return 1 === preg_match($pattern, $text, $found) ? (int) $found[1] : self::fail($pattern);
-    }
-
     private function rule(string $selector): string
     {
         $text = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
@@ -49,5 +44,10 @@ final class TourCaptionStylesTest extends TestCase
         $found = array_filter($rules, static fn (array $rule): bool => trim($rule[1]) === $selector);
 
         return [] === $found ? self::fail($selector) : implode(' ', array_column($found, 2));
+    }
+
+    private function pixels(string $pattern, string $text): int
+    {
+        return 1 === preg_match($pattern, $text, $found) ? (int) $found[1] : self::fail($pattern);
     }
 }

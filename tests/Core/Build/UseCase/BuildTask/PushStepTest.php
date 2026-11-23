@@ -78,17 +78,6 @@ final class PushStepTest extends TestCase
     private PushScenario $scenario;
     private string $forge;
 
-    protected function setUp(): void
-    {
-        $this->scenario = new PushScenario();
-        $this->forge = $this->scenario->localGitForge();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-    }
-
     public function testABranchTheLocalGitForgeAcceptsIsPushedAndGivesNoFailure(): void
     {
         $failure = $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
@@ -166,6 +155,17 @@ final class PushStepTest extends TestCase
 
         self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', (string) $failure);
         self::assertNull($this->scenario->remoteTip($this->forge));
+    }
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+        $this->forge = $this->scenario->localGitForge();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
     }
 
     private function stepOf(BranchPush $branches): PushStep

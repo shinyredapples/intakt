@@ -22,6 +22,8 @@ use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
+use Intakt\Core\Build\Contract\BuildServices;
+use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
@@ -62,56 +64,6 @@ final class ProjectTiersTest extends KernelTestCase
     {
         self::compiledContainers()->remove();
         parent::tearDownAfterClass();
-    }
-
-    protected function setUp(): void
-    {
-        $this->containers = self::compiledContainers();
-
-        foreach (self::KEYS as $name) {
-            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
-            $this->unsetVariable($name);
-        }
-
-        $this->file = sys_get_temp_dir().'/intakt-projects-'.bin2hex(random_bytes(4)).'.yaml';
-        file_put_contents($this->file, <<<'YAML'
-            projects:
-                alpha-one:
-                    mode: reviewer-for-loop
-                    tiers:
-                        strong: { provider: anthropic, model: big }
-                        light: { provider: anthropic, model: small }
-                    review:
-                        quorum: all
-                        reviewers:
-                            - { role: correctness, tier: strong, provider: anthropic, prompt: Check the logic., budget: 3 }
-                    watch: { repository: repos/alpha, base: main, task: Review the pull request. }
-                beta:
-                    tiers:
-                        strong: { provider: openai, model: other }
-            YAML);
-        $_SERVER['INTAKT_CONFIG'] = $this->file;
-        $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->saved as $name => $before) {
-            $this->unsetVariable($name);
-            if (null !== $before['server']) {
-                $_SERVER[$name] = $before['server'];
-            }
-            if (null !== $before['env']) {
-                $_ENV[$name] = $before['env'];
-            }
-            if (false !== $before['process']) {
-                putenv($name.'='.$before['process']);
-            }
-        }
-
-        parent::tearDown();
-        $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove($this->file);
     }
 
     public function testTheContainerBuildsWithTwoProjectsThatMapTiersDifferently(): void
@@ -164,7 +116,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $container = $this->bootedContainer();
 
-        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.']], $container->getParameter(WatcherServices::PROJECTS));
+        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.', 'eligibility_label' => 'intakt']], $container->getParameter(WatcherServices::PROJECTS));
         self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
     }
 
@@ -223,6 +175,30 @@ final class ProjectTiersTest extends KernelTestCase
         $this->expectExceptionMessageMatches('/"image" under "intakt\.projects\.beta" must be configured/');
 
         $this->bootedContainer();
+    }
+
+    public function testAProjectBuildSectionReachesTheRoutingAndAProjectWithoutOneGetsTheDefaults(): void
+    {
+        file_put_contents($this->file, <<<'YAML'
+            projects:
+                alpha-one:
+                    build:
+                        tier: strong
+                        sensitive_paths: ['config/gates/**']
+                    tiers:
+                        strong: { provider: anthropic, model: big }
+                beta:
+                    tiers:
+                        strong: { provider: openai, model: other }
+            YAML);
+        $escalateOn = array_column(Setback::cases(), 'value');
+
+        $routing = $this->bootedContainer()->getParameter(BuildServices::ROUTING);
+
+        self::assertSame([
+            'alpha-one' => ['tier' => 'strong', 'sensitive_paths' => ['config/gates/**'], 'escalate_on' => $escalateOn],
+            'beta' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => $escalateOn],
+        ], $routing);
     }
 
     public function testAProjectsValueThatIsNoMapStopsTheBoot(): void
@@ -381,6 +357,85 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame($model, $platform->getModelCatalog()->getModel($model)->getName());
     }
 
+    public function testWithItsSectionEveryListedCodexAccountGetsAPlatformOfItsOwn(): void
+    {
+        file_put_contents($this->file, <<<'YAML'
+            codex: { model: gpt-6.2-sol, effort: high }
+            accounts:
+                codex: [default, team]
+            projects:
+                alpha-one:
+                    tiers:
+                        strong: { provider: codex, model: gpt-6.2-sol }
+            YAML);
+
+        $container = $this->bootedContainer();
+
+        self::assertInstanceOf(PlatformInterface::class, $container->get(Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT))));
+        self::assertInstanceOf(PlatformInterface::class, $container->get(Provider::Codex->platformId(new Account(Provider::Codex, 'team'))));
+        self::assertSame(['default', 'team'], $this->parameterList($container, AiServices::ACCOUNTS)['codex'] ?? null);
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::DISABLED_PROVIDERS));
+    }
+
+    public function testWithoutItsSectionCodexIsLeftOutWithoutADisabledMessage(): void
+    {
+        $container = $this->bootedContainer();
+
+        self::assertFalse($container->has(Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT))));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::ACCOUNTS));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::DISABLED_PROVIDERS));
+    }
+
+    protected function setUp(): void
+    {
+        $this->containers = self::compiledContainers();
+
+        foreach (self::KEYS as $name) {
+            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
+            $this->unsetVariable($name);
+        }
+
+        $this->file = sys_get_temp_dir().'/intakt-projects-'.bin2hex(random_bytes(4)).'.yaml';
+        file_put_contents($this->file, <<<'YAML'
+            projects:
+                alpha-one:
+                    mode: reviewer-for-loop
+                    tiers:
+                        strong: { provider: anthropic, model: big }
+                        light: { provider: anthropic, model: small }
+                    review:
+                        quorum: all
+                        reviewers:
+                            - { role: correctness, tier: strong, provider: anthropic, prompt: Check the logic., budget: 3 }
+                    watch: { repository: repos/alpha, base: main, task: Review the pull request. }
+                beta:
+                    tiers:
+                        strong: { provider: openai, model: other }
+            YAML);
+        $_SERVER['INTAKT_CONFIG'] = $this->file;
+        $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
+        }
+
+        parent::tearDown();
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove($this->file);
+    }
+
     private function bootedStartGuard(): StartGuard
     {
         $guard = $this->bootedContainer()->get('test.intakt.start_guard');
@@ -430,35 +485,6 @@ final class ProjectTiersTest extends KernelTestCase
         $parameter = $this->bootedContainer()->getParameter(ReviewServices::PANELS);
 
         return new ConfiguredPanels($parameter);
-    }
-
-    public function testWithItsSectionEveryListedCodexAccountGetsAPlatformOfItsOwn(): void
-    {
-        file_put_contents($this->file, <<<'YAML'
-            codex: { model: gpt-6.2-sol, effort: high }
-            accounts:
-                codex: [default, team]
-            projects:
-                alpha-one:
-                    tiers:
-                        strong: { provider: codex, model: gpt-6.2-sol }
-            YAML);
-
-        $container = $this->bootedContainer();
-
-        self::assertInstanceOf(PlatformInterface::class, $container->get(Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT))));
-        self::assertInstanceOf(PlatformInterface::class, $container->get(Provider::Codex->platformId(new Account(Provider::Codex, 'team'))));
-        self::assertSame(['default', 'team'], $this->parameterList($container, AiServices::ACCOUNTS)['codex'] ?? null);
-        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::DISABLED_PROVIDERS));
-    }
-
-    public function testWithoutItsSectionCodexIsLeftOutWithoutADisabledMessage(): void
-    {
-        $container = $this->bootedContainer();
-
-        self::assertFalse($container->has(Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT))));
-        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::ACCOUNTS));
-        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::DISABLED_PROVIDERS));
     }
 
     /**

@@ -45,6 +45,16 @@ final readonly class KernelHttpClient implements ClientInterface
         );
     }
 
+    /**
+     * @param array<list<string|null>> $headers
+     *
+     * @return array<list<string>>
+     */
+    private function headersOf(array $headers): array
+    {
+        return array_map(static fn (array $values): array => array_map(strval(...), $values), $headers);
+    }
+
     private function bodyOf(HttpResponse $response): string
     {
         if (!$response instanceof StreamedResponse) {
@@ -62,15 +72,5 @@ final readonly class KernelHttpClient implements ClientInterface
         ob_end_clean();
 
         return $body;
-    }
-
-    /**
-     * @param array<list<string|null>> $headers
-     *
-     * @return array<list<string>>
-     */
-    private function headersOf(array $headers): array
-    {
-        return array_map(static fn (array $values): array => array_map(strval(...), $values), $headers);
     }
 }

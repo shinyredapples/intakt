@@ -89,6 +89,7 @@ use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\QueuedEscalations;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -150,6 +151,14 @@ final readonly class RoundFixture
     public function start(int $reviewers): ReviewRound
     {
         return $this->round($this->startOn($this->bus, $reviewers));
+    }
+
+    // On a panel the test hands in, so a round can run the reviewers a real configuration names.
+    public function startOnPanel(Panel $panel): ReviewRound
+    {
+        $command = new RunReviewRound(new ReviewTarget($this->subject(), SampleIdentity::of(self::TASK, $panel)), $panel, new RequestedRound(self::CHANGE));
+
+        return $this->round($this->startWith($command, $this->bus));
     }
 
     public function startOn(MessageBusInterface $queue, int $reviewers): string
@@ -276,11 +285,6 @@ final readonly class RoundFixture
         return new KeptVerdicts($this->entities, new MockClock('2026-11-21 10:00:00'));
     }
 
-    private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
-    {
-        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
-    }
-
     // A new handler on every delivery, because a restarted worker has one too and a redelivery must find the kept verdict in the database, not in the handler; other locks stand for a key lock that expired.
     public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews, ?LockFactory $locks = null): void
     {
@@ -377,6 +381,12 @@ final readonly class RoundFixture
         return $this->rounds($entities);
     }
 
+    // On a clock the test controls, so a test can make the clock go back between two ids.
+    public function transactionsAt(ClockInterface $clock): ReviewRounds
+    {
+        return new ReviewRounds($this->entities, $clock, $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger));
+    }
+
     public function round(string $id): ReviewRound
     {
         $this->entities->clear();
@@ -438,9 +448,9 @@ final readonly class RoundFixture
         return new ReviewerLeases($entities, $moves, $this->clock);
     }
 
-    private function roundLedger(Ledger $ledger): RoundLedger
+    private function subject(): ReviewSubject
     {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class), new FindingKeys());
+        return new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF);
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
@@ -453,19 +463,24 @@ final readonly class RoundFixture
         return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt($head, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
     }
 
-    private function subject(): ReviewSubject
-    {
-        return new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF);
-    }
-
     private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds
     {
         return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities), $this->roundLedger($ledger ?? $this->ledger));
     }
 
+    private function roundLedger(Ledger $ledger): RoundLedger
+    {
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class), new FindingKeys());
+    }
+
     private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
     {
         return new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round'));
+    }
+
+    private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
+    {
+        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
     }
 
     private function panelOf(int $reviewers): Panel

@@ -65,16 +65,7 @@ final readonly class CountedVote
         };
     }
 
-    // Only by the judge's own defer or reject mark, because a finding the quote check dropped was never judged and a judge answer that could not be read marks nothing, and neither may turn a changes verdict into an approval; from the ledger's finding, because its severity is the one the judge and the act list go by.
-    /**
-     * @param list<Finding> $matches
-     */
-    private function isJudgedFollowUp(array $matches): bool
-    {
-        return [] !== $matches && array_all($matches, fn (Finding $reported): bool => Severity::P3 === $reported->severity && in_array($reported->id, $this->setAsideIds, true));
-    }
-
-    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by every field the ledger keeps except its id and the repeat flag (severity, file, line, symbol, text, requirement, fixable_by, regression, and evidence by its probe and output), because the ledger gives it an id of its own (the stored verdict already holds the severity the goalpost rule left it), so another reviewer's finding differing in any kept field never counts for this one. The ledger does not record which reviewer reported which id, so two reports alike in every kept field both match, and every match stays in view so no act mark is missed.
+    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by every field the ledger keeps except its id and the repeat flag (severity, file, line, symbol, text, requirement, fixable_by, regression, gate_gap, and evidence by its probe and output), because the ledger gives it an id of its own (the stored verdict already holds the severity the goalpost rule left it), so another reviewer's finding differing in any kept field never counts for this one. The ledger does not record which reviewer reported which id, so two reports alike in every kept field both match, and every match stays in view so no act mark is missed.
     /**
      * @return list<Finding>
      */
@@ -92,7 +83,17 @@ final readonly class CountedVote
             && $finding->requirement === $reported->requirement
             && $finding->fixable_by === $reported->fixable_by
             && $finding->regression === $reported->regression
+            && $finding->gate_gap === $reported->gate_gap
             && $finding->evidence?->probe === $reported->evidence?->probe
             && $finding->evidence?->output === $reported->evidence?->output));
+    }
+
+    // Only by the judge's own defer or reject mark, because a finding the quote check dropped was never judged and a judge answer that could not be read marks nothing, and neither may turn a changes verdict into an approval; from the ledger's finding, because its severity is the one the judge and the act list go by.
+    /**
+     * @param list<Finding> $matches
+     */
+    private function isJudgedFollowUp(array $matches): bool
+    {
+        return [] !== $matches && array_all($matches, fn (Finding $reported): bool => Severity::P3 === $reported->severity && in_array($reported->id, $this->setAsideIds, true));
     }
 }

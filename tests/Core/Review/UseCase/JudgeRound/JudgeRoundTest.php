@@ -110,17 +110,6 @@ final class JudgeRoundTest extends KernelTestCase
     private RoundFixture $fixture;
     private ?TemporaryRepository $checkout = null;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->checkout?->remove();
-        parent::tearDown();
-    }
-
     public function testACompletedRoundIsQueuedForJudgingOnce(): void
     {
         $round = $this->completedRound();
@@ -178,6 +167,37 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([$reviewer => 'changes'], $this->judgeDonePayloads()[0]['votes']);
     }
 
+    public function testAGateGapP3TheJudgeMarksActIsRecordedAsAFollowUpAndNotOnTheActList(): void
+    {
+        $gateGap = new Finding('A', Severity::P3, null, null, null, 'The cs gate misses this case.', FixableBy::Builder, false, 'cs', null, gate_gap: true);
+        $round = $this->roundReporting([$gateGap, $this->finding('B', Severity::P3)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F2'], 'follow_ups' => ['F1']]], $this->judgeCalls());
+    }
+
+    public function testAReviewerWhoseOnlyFindingIsAGateGapP3TheJudgeMarksActVotesApprove(): void
+    {
+        $round = $this->roundReporting([new Finding('A', Severity::P3, null, null, null, 'The cs gate misses this case.', FixableBy::Builder, false, 'cs', null, gate_gap: true)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([$reviewer => 'approve'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
+    public function testAGateGapP1TheJudgeMarksActStaysOnTheActListAndItsReviewerVotesChanges(): void
+    {
+        $round = $this->roundReporting([new Finding('A', Severity::P1, null, null, null, 'The cs gate misses this case.', FixableBy::Builder, false, null, null, gate_gap: true)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => []]], $this->judgeCalls());
+        self::assertSame([$reviewer => 'changes'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
     public function testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList(): void
     {
         $round = $this->completedRound();
@@ -195,7 +215,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false]],
             $this->judgeDonePayloads()[0]['findings'],
         );
     }
@@ -535,7 +555,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => '`grepName` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => []]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`grepName` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [], 'gate_gap' => false]],
             $this->judgeDonePayloads()[0]['dropped'],
         );
     }
@@ -558,7 +578,7 @@ final class JudgeRoundTest extends KernelTestCase
         }
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '$thing = [redacted] Thing();']]]]]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '$thing = [redacted] Thing();']]]], 'gate_gap' => false]],
             $this->judgeDonePayloads()[0]['dropped'],
         );
     }
@@ -571,7 +591,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => 'newThing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => 'new']]]]]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => 'newThing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => 'new']]]], 'gate_gap' => false]],
             $this->judgeDonePayloads()[0]['dropped'],
         );
     }
@@ -592,7 +612,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
-        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null]], $this->judgeDonePayloads()[0]['findings']);
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null, 'gate_gap' => false]], $this->judgeDonePayloads()[0]['findings']);
     }
 
     public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
@@ -603,7 +623,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame(['F2' => 'F1'], $payload['same_cause']);
-        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null]], $payload['findings']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null, 'gate_gap' => false]], $payload['findings']);
     }
 
     public function testTwoFindingsInOneHunkWithDifferentCausesAreRecordedAsTwoEntries(): void
@@ -714,6 +734,17 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame('the judge saw [redacted] in the diff', $redacted);
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->checkout?->remove();
+        parent::tearDown();
+    }
+
     private function completedRound(): ReviewRound
     {
         $round = $this->fixture->start(2);
@@ -723,17 +754,6 @@ final class JudgeRoundTest extends KernelTestCase
         foreach ($this->fixture->bus->messages as $message) {
             $this->fixture->deliver($message, $vendor);
         }
-
-        return $this->fixture->round($round->id()->toRfc4122());
-    }
-
-    /**
-     * @param list<Finding> $findings
-     */
-    private function roundReporting(array $findings): ReviewRound
-    {
-        $round = $this->fixture->start(1);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
 
         return $this->fixture->round($round->id()->toRfc4122());
     }
@@ -763,8 +783,8 @@ final class JudgeRoundTest extends KernelTestCase
     private function twoSeparateEntries(int $lineOfB): array
     {
         return [
-            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null],
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'gate_gap' => false],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null, 'gate_gap' => false],
         ];
     }
 
@@ -833,5 +853,16 @@ final class JudgeRoundTest extends KernelTestCase
     private function finding(string $id, Severity $severity): Finding
     {
         return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+
+        return $this->fixture->round($round->id()->toRfc4122());
     }
 }

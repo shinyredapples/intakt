@@ -9,7 +9,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -18,6 +18,7 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelWithoutReviewers;
@@ -33,7 +34,6 @@ use stdClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
@@ -44,7 +44,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(ReviewStarts::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
@@ -55,13 +55,6 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(RoundLock::class)]
 final class StartReviewControllerTest extends DashboardPageTestCase
 {
-    // The container keeps the ledger double and the bus mock across the page that hands out the token and the post that uses it.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->browser->disableReboot();
-    }
-
     public function testTheButtonStartsTheNextRoundOfTheListedChangeAndRedirectsBackWithAToastNamingItsNumber(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
@@ -167,15 +160,6 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertSame(['Start round 2'], $crawler->filter('.task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
     }
 
-    // The start form stays rendered for the judged round's stream, so the in-review marker is what keeps it from showing beside Stop.
-    private function assertOnlyStopIsOffered(Crawler $crawler): void
-    {
-        self::assertSame(['round-round-1-now-runs', 'round-round-1-now-stop', 'start-review'], $crawler->filter('.task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
-        self::assertSame(['stop-round'], $crawler->filter('#round-round-1-now-stop > *')->each(static fn (Crawler $child): string => (string) $child->attr('class')));
-        self::assertSame('Stop', trim($crawler->filter('form.stop-round button')->text()));
-        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
-    }
-
     // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.
     public function testAStalePageAsksForTheNumberItShowedAndNotTheNextOneInTheLedger(): void
     {
@@ -199,7 +183,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => 'two']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form names no round number, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form names no round number, so nothing was started."', FormIsRefused::class));
     }
 
     public function testAMissingTokenDispatchesNothing(): void
@@ -210,7 +194,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
     }
 
     public function testAWrongTokenDispatchesNothing(): void
@@ -221,7 +205,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
     }
 
     public function testARoundThatIsNotNextRedirectsBackWithAnErrorLineAndNoTrace(): void
@@ -344,7 +328,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/'.$round.'/start', ['number' => '2']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
         self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
@@ -413,7 +397,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $held->release();
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
     }
 
     public function testARefusedStartShowsNoToast(): void
@@ -481,28 +465,28 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('form.start-review'));
     }
 
+    // The container keeps the ledger double and the bus mock across the page that hands out the token and the post that uses it.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->browser->disableReboot();
+    }
+
+    // The start form stays rendered for the judged round's stream, so the in-review marker is what keeps it from showing beside Stop.
+    private function assertOnlyStopIsOffered(Crawler $crawler): void
+    {
+        self::assertSame(['round-round-1-now-runs', 'round-round-1-now-stop', 'start-review'], $crawler->filter('.task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
+        self::assertSame(['stop-round'], $crawler->filter('#round-round-1-now-stop > *')->each(static fn (Crawler $child): string => (string) $child->attr('class')));
+        self::assertSame('Stop', trim($crawler->filter('form.stop-round button')->text()));
+        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+    }
+
     private function commandBus(): MessageBusInterface&MockObject
     {
         $commands = $this->createMock(MessageBusInterface::class);
         self::getContainer()->set('command.bus', $commands);
 
         return $commands;
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function numbersStartedFor(string $change): array
-    {
-        $numbers = [];
-        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewStarted) as $row) {
-            $payload = json_decode($row->event->payload, true);
-            if (is_array($payload) && $change === ($payload['change'] ?? null) && is_int($payload['number'] ?? null)) {
-                $numbers[] = $payload['number'];
-            }
-        }
-
-        return $numbers;
     }
 
     /**
@@ -529,6 +513,22 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         } finally {
             $kernel->shutdown();
         }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function numbersStartedFor(string $change): array
+    {
+        $numbers = [];
+        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewStarted) as $row) {
+            $payload = json_decode($row->event->payload, true);
+            if (is_array($payload) && $change === ($payload['change'] ?? null) && is_int($payload['number'] ?? null)) {
+                $numbers[] = $payload['number'];
+            }
+        }
+
+        return $numbers;
     }
 
     // Read from a page's form, because the token belongs to the browser's session.

@@ -42,6 +42,17 @@ final readonly class ReviewerMemory
         return $notes instanceof FencedText ? $this->assembly->user(self::LEAD, $notes) : null;
     }
 
+    private function fenced(string $notes): FencedText
+    {
+        return $this->fence->wrap(UntrustedSource::ProjectMemory, $notes);
+    }
+
+    // Measured as the whole message, introduction included, because the cap holds for what the model receives.
+    private function bytesOf(FencedText $notes): int
+    {
+        return strlen($this->assembly->userText(self::LEAD, $notes));
+    }
+
     // The separators still add bytes the memory does not count, so the least relevant entries are dropped until the whole briefing fits; a lone top entry is shortened instead, because the most relevant note is worth more than none.
     /**
      * @param list<MemoryEntry> $entries
@@ -65,14 +76,6 @@ final readonly class ReviewerMemory
         return null;
     }
 
-    private function shortened(MemoryEntry $entry): FencedText
-    {
-        $room = self::MAX_BYTES - $this->bytesOf($this->fenced('')) - strlen(self::SHORTENED);
-
-        // mb_strcut cuts at a character boundary, so the text stays valid UTF-8.
-        return $this->fenced(mb_strcut($entry->text, 0, $room, 'UTF-8').self::SHORTENED);
-    }
-
     /**
      * @param non-empty-list<MemoryEntry> $entries
      */
@@ -81,14 +84,11 @@ final readonly class ReviewerMemory
         return $this->fenced(implode("\n\n", array_map(static fn (MemoryEntry $entry): string => $entry->text, $entries)));
     }
 
-    private function fenced(string $notes): FencedText
+    private function shortened(MemoryEntry $entry): FencedText
     {
-        return $this->fence->wrap(UntrustedSource::ProjectMemory, $notes);
-    }
+        $room = self::MAX_BYTES - $this->bytesOf($this->fenced('')) - strlen(self::SHORTENED);
 
-    // Measured as the whole message, introduction included, because the cap holds for what the model receives.
-    private function bytesOf(FencedText $notes): int
-    {
-        return strlen($this->assembly->userText(self::LEAD, $notes));
+        // mb_strcut cuts at a character boundary, so the text stays valid UTF-8.
+        return $this->fenced(mb_strcut($entry->text, 0, $room, 'UTF-8').self::SHORTENED);
     }
 }

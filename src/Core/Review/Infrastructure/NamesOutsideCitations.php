@@ -65,6 +65,12 @@ final readonly class NamesOutsideCitations
         return $places;
     }
 
+    // Folded for a quick check, so most names of the checkout skip the regular expression. Simple case folding, not lower case, because the caseless regular expression treats every letter of a fold set as one (ς and σ, ſ and s), and lower case keeps such letters apart, so the check would skip a name the expression finds. A name that is not UTF-8 is lowered by bytes, because mb_convert_case cannot read it.
+    private function folded(string $text): string
+    {
+        return mb_check_encoding($text, 'UTF-8') ? mb_convert_case($text, MB_CASE_FOLD_SIMPLE, 'UTF-8') : strtolower($text);
+    }
+
     // Byte offsets, because a name's place is compared with the citations' places found in the same bytes; null when the pattern or the text is not UTF-8, so the caller stays on the safe side.
     /**
      * @return list<array{int, int}>|null
@@ -85,11 +91,5 @@ final readonly class NamesOutsideCitations
     private static function isInside(array $place, array $cited): bool
     {
         return array_any($cited, static fn (array $citation): bool => $citation[0] <= $place[0] && $place[1] <= $citation[1]);
-    }
-
-    // Folded for a quick check, so most names of the checkout skip the regular expression. Simple case folding, not lower case, because the caseless regular expression treats every letter of a fold set as one (ς and σ, ſ and s), and lower case keeps such letters apart, so the check would skip a name the expression finds. A name that is not UTF-8 is lowered by bytes, because mb_convert_case cannot read it.
-    private function folded(string $text): string
-    {
-        return mb_check_encoding($text, 'UTF-8') ? mb_convert_case($text, MB_CASE_FOLD_SIMPLE, 'UTF-8') : strtolower($text);
     }
 }

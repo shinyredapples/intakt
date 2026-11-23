@@ -25,6 +25,7 @@ use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
@@ -59,6 +60,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
@@ -75,11 +77,6 @@ final class ToolUsingReviewerJudgedTest extends KernelTestCase
      * @var list<MockResponse>
      */
     private array $responses = [];
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testTheFindingsOfAChangesAnswerAfterAToolCallReachTheJudge(): void
     {
@@ -121,6 +118,11 @@ final class ToolUsingReviewerJudgedTest extends KernelTestCase
 
         self::assertSame([Decision::Approve], $this->recordedDecisions());
         self::assertSame(0, $judge->calls);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     // The tool reads a file of the fixture's checkout, so the second request carries a real tool result.

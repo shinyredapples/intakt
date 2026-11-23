@@ -7,6 +7,7 @@ namespace Intakt\Tests\JourneyPage;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversNothing]
@@ -20,23 +21,12 @@ final class JourneyRecordCommandTest extends TestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-journey-record-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir([$this->root.'/stub', $this->root.'/recorded']);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheJourneyRecordCommandIsExecutable(): void
     {
         self::assertTrue(is_executable(self::COMMAND));
     }
 
-    public function testItWritesOneFileForEachResourceTheRecordedApiReads(): void
+    public function testItWritesOneFileForEachResourceTheRecordedApiReadsAndTheStateFile(): void
     {
         $this->stubGh(self::ANSWERING_GH);
 
@@ -63,6 +53,57 @@ final class JourneyRecordCommandTest extends TestCase
         $this->runRecord();
 
         self::assertSame('[[{"path":"'.JourneyResource::PullRequests->path(self::REPOSITORY).'"}]]'."\n", new RecordedApi($this->root.'/recorded')->pages(JourneyResource::PullRequests));
+    }
+
+    public function testTheStateFileHoldsTheNumberAndStateOfEveryRecordedIssue(): void
+    {
+        $this->stubGh("#!/bin/sh\nprintf '[[{\"number\":3,\"state\":\"open\",\"title\":\"a\"}],[{\"number\":4,\"state\":\"closed\"}]]\\n'\n");
+
+        $this->runRecord();
+
+        self::assertSame([3 => true, 4 => false], new IssueStates()->openByNumber($this->root.'/recorded'));
+    }
+
+    public function testAFailingStateDerivationKeepsTheRecordingAndLeavesNoStateFile(): void
+    {
+        $this->stubGh(self::ANSWERING_GH);
+        file_put_contents($this->root.'/recorded/'.IssueStates::FILE, '[]');
+        file_put_contents($this->root.'/stub/jq', "#!/bin/sh\nexit 1\n");
+        chmod($this->root.'/stub/jq', 0o755);
+
+        $run = $this->runRecord();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertStringContainsString('the highlights statuses stay as written', $run->getErrorOutput());
+        self::assertSame(array_values(array_diff($this->expectedFiles(), [IssueStates::FILE])), $this->recordedFiles());
+    }
+
+    public function testAStateFilePathThatCannotBeReplacedKeepsTheRecording(): void
+    {
+        $this->stubGh(self::ANSWERING_GH);
+        mkdir($this->root.'/recorded/'.IssueStates::FILE);
+
+        $run = $this->runRecord();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertStringContainsString('cannot replace issue-states.json', $run->getErrorOutput());
+        self::assertFileExists($this->root.'/recorded/issues.json');
+        self::assertDirectoryExists($this->root.'/recorded/'.IssueStates::FILE);
+    }
+
+    public function testAnEarlierStateFileThatCannotBeRemovedFailsTheRunInsteadOfBeingPublished(): void
+    {
+        $this->stubGh("#!/bin/sh\nprintf '[[{\"number\":14,\"state\":\"open\"}]]\\n'\n");
+        file_put_contents($this->root.'/recorded/'.IssueStates::FILE, '[{"number":14,"state":"closed"}]');
+        $realRm = new ExecutableFinder()->find('rm');
+        file_put_contents($this->root.'/stub/rm', "#!/bin/sh\nfor argument in \"\$@\"; do case \"\$argument\" in */issue-states.json) exit 1;; esac; done\nexec '".$realRm."' \"\$@\"\n");
+        chmod($this->root.'/stub/rm', 0o755);
+
+        $run = $this->runRecord();
+
+        self::assertSame(1, $run->getExitCode(), $run->getErrorOutput());
+        self::assertStringContainsString('stale states would be published', $run->getErrorOutput());
+        self::assertFileExists($this->root.'/recorded/issues.json');
     }
 
     public function testAGhThatFailsOnTheSecondResourceLeavesNoFileInTheFolder(): void
@@ -116,6 +157,17 @@ final class JourneyRecordCommandTest extends TestCase
         self::assertSame("usage: bin/journey-record <folder>\n", $run->getErrorOutput());
     }
 
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-journey-record-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir([$this->root.'/stub', $this->root.'/recorded']);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
+    }
+
     private function stubGh(string $script): void
     {
         file_put_contents($this->root.'/stub/gh', $script);
@@ -140,7 +192,7 @@ final class JourneyRecordCommandTest extends TestCase
      */
     private function expectedFiles(): array
     {
-        $files = array_map(static fn (JourneyResource $resource): string => $resource->value.'.json', JourneyResource::cases());
+        $files = [...array_map(static fn (JourneyResource $resource): string => $resource->value.'.json', JourneyResource::cases()), IssueStates::FILE];
         sort($files);
 
         return $files;

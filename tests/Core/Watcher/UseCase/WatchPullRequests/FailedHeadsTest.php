@@ -17,9 +17,9 @@ use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
@@ -59,7 +59,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(HeldCredentials::class)]
 #[UsesClass(Redaction::class)]
 #[UsesClass(LedgerFailingHeads::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
 #[UsesClass(DoctrineInstallWideFailures::class)]
@@ -81,24 +81,6 @@ final class FailedHeadsTest extends KernelTestCase
     private EntityManagerInterface $entities;
     private PendingHeads $pending;
     private DoctrineHolds $holds;
-
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
-        $this->entities = $entities;
-        $this->pending = new PendingHeads($entities, $this->clock);
-        $this->holds = new DoctrineHolds($entities, $this->clock);
-    }
-
-    protected function tearDown(): void
-    {
-        unset($_SERVER[self::HELD_NAME]);
-        parent::tearDown();
-    }
 
     public function testTheSameHeadListedAgainWhileItsFourthFailureIsRecordedStaysDueWithoutFailures(): void
     {
@@ -295,6 +277,24 @@ final class FailedHeadsTest extends KernelTestCase
         self::assertSame(1, $this->pending->failuresOf('alpha', $first));
         self::assertSame(1, $this->pending->failuresOf('alpha', $next));
         self::assertLoggedErrors(2, 'The install-wide failure record failed; the head still backs off alone.');
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
+        $this->entities = $entities;
+        $this->pending = new PendingHeads($entities, $this->clock);
+        $this->holds = new DoctrineHolds($entities, $this->clock);
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER[self::HELD_NAME]);
+        parent::tearDown();
     }
 
     /**

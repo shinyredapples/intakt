@@ -2,13 +2,13 @@
 
 You steer Intakt from GitHub (labels and comments on issues and pull requests, from any device) or from the dashboard. This page lists every way to tell it what you want. Intakt is still being built, so this describes the decided design ([labels](../design/05-architecture/04-labels.md), [questions and steering](../design/05-architecture/05-questions-and-steering.md)).
 
-**Who can steer:** only people with write access to the repository. A label or comment from anyone else is ignored, whatever it says. Bot accounts never steer, even with write access, except Intakt's own and that of its maintainer agent, and those two only while they have write access themselves.
+**Who can steer:** only people with write access to the repository. A label or comment from anyone else is ignored, whatever it says. Bot accounts never steer, even with write access, except Intakt's own and that of its maintainer agent, and those two only while they have write access themselves. How the maintainers of Intakt's own repository handle an issue or pull request from someone without write access today is in the [contributor guide](../../CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled).
 
 ## Labels on a task
 
 ```mermaid
 flowchart LR
-  issue[An issue] -- "intakt (and no idea)" --> eligible[Intakt may build it]
+  issue[An issue] -- "the eligibility label (and no idea)" --> eligible[Intakt may build it]
   issue -- idea --> discussion[For discussion only]
   eligible -- "priority:" --> order[Its place in the queue]
   eligible -- "model:" --> tier[Which AI model starts]
@@ -18,8 +18,8 @@ flowchart LR
 
 | Label | What it does |
 |---|---|
-| `intakt` | Intakt may build this task |
-| `idea` | for discussion only: Intakt never builds or plans it, even if `intakt` is also set |
+| the project's eligibility label (`intakt` by default) | Intakt may build this task |
+| `idea` | for discussion only: Intakt never builds or plans it, even if the eligibility label is also set |
 | `priority:urgent`, `high`, `normal`, `low` | its place in the queue; no label means `normal`. An urgent task may start even when the builders are paused for review |
 | `class:core`, `feature`, `tooling`, `process` | what kind of work it is; Intakt proposes one when it is missing |
 | `model:strong`, `standard`, `light` | the AI model it starts on; Intakt can still move it up if it struggles |
@@ -30,7 +30,7 @@ flowchart LR
 | `hands-off` | you work on this issue or pull request yourself: Intakt stays off it |
 | `take-over` | Intakt works on an issue or pull request it did not create |
 
-To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add `intakt`.
+To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add the project's eligibility label (`intakt` unless the project names another).
 
 Intakt also writes `status:` labels (`queued`, `building`, `in-review`, `waiting-on-you`, ...) so the issue list shows where each task stands. Those are for reading only: changing one does nothing, and Intakt puts it back.
 
@@ -41,17 +41,27 @@ Every issue or pull request has one driver: Intakt or you. Two labels switch it 
 - **To give it back,** remove `hands-off`. Intakt takes the item as it now stands, tells the builder what was committed by hand (to build on, not undo), and has every reviewer look at the whole thing once. Your hand-made commits do not use up a round of the review limit. A dependency bot's pull request (an automatic update of the packages your project uses) is the exception: removing `hands-off` from it gives the builder nothing to work on. It simply goes back to the usual way such updates are handled: the bot itself brings it up to date, you approve it, and a failing check becomes a task of its own ([how](how-intakt-works.md#updates-from-a-dependency-bot)).
 - **To hand Intakt something it did not create,** add `take-over` to the issue or pull request. A pull request someone else opened gets its review findings fixed by the builder, then is reviewed and merged like Intakt's own. (Planned, like the rest of this flow: today Intakt refuses to push to a branch with an open pull request someone else opened, the check `refuseForeignChange`, so take-over will need its own way past that check.) If it comes from a fork Intakt cannot push to and is small enough to review, Intakt makes a new pull request that links the original, keeps each original author as a co-author, and leaves one comment on the original. Two kinds of pull request are not taken over. One that changes the protected rules: Intakt says so once, naming the files, and leaves it to you. And a dependency bot's: Intakt says so once, and the pull request stays on the usual way for bot updates (the bot keeps it up to date, you approve it, a failing check becomes a task of its own), so the builder never edits it. A pull request someone else opened that is too big to review is not split until you add `take-over`; until then it gets one comment asking its author to split it. Your own too-big pull requests, and the maintainer agent's, are split without the label ([how](how-intakt-works.md#when-something-gets-stuck)). An issue written by someone without write access becomes a task the same way; its text is still treated as information, never as orders, and if it is edited afterwards you add the label again.
 
+Until `take-over` is built, outside work is handled this way ([contributor guide](../../CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled)):
+- An issue from someone without write access is not built as it stands. A maintainer opens a task of their own from it, with the issue's text copied between `<!-- external -->` and `<!-- /external -->`.
+- A pull request from someone without write access, in a repository Intakt watches, is reviewed once CI on its head is green, with no label needed. When that repository's CI skips its jobs on a fork's pull request, as Intakt's own CI does, the skipped jobs count as green, so the review follows the approved run. The review only reads it (its code is never started), and a maintainer merges it by hand.
+
 Until a dashboard button exists, the labels are the control.
 
 ## Checking which reviewers a change would get
 
 You can ask Intakt which reviewers a change would get, before any review runs and without spending anything on a model. Run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php`, adding `--label=review:full` to see the full panel. It lists the reviewers and the rule for agreeing. Extra reviewers for big or sensitive changes come from the rules in your configuration file. For now you type the size, paths and labels in yourself: Intakt does not yet read them from a pull request.
 
+## Checking which model tier a build would get
+
+You can also ask which tier (strong, standard or light) a build would start on, without spending anything on a model. Run `php bin/console intakt:build:tier <project> --label=model:light --path=config/gates/phpstan.neon`. It prints the tier and the reason: `default`, `label` or `sensitive-path` (`setback` and `confirmed-escalation` come from `--setback` and `--change`). A sensitive path beats a `model:` label: a build that touches one of the paths your project lists as sensitive gets the strong tier whatever the label says. The full order is in [which tier a build runs on](../user/README.md#which-tier-a-build-runs-on).
+
+Today only a task's first build starts on the chosen tier, picked from its labels. Rebuilding a sent-back change on the chosen tier is still planned.
+
 ## Lines in the task text
 
 | Line | What it does |
 |---|---|
-| `Waits for #12` | don't start until #12 is done |
+| `Waits for #12` | don't start until #12 is done; a line inside an `<!-- external -->` block (text copied from outside) never counts (planned) |
 | `Source: <branch>@<sha>` | build from an earlier piece of work (for a task split from a bigger change); counts only from someone with write access, and only when that commit is on that branch; a line inside an `<!-- external -->` block (text copied from outside) never counts |
 
 ## Answering a question

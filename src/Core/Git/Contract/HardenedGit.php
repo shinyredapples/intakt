@@ -109,32 +109,6 @@ final readonly class HardenedGit
         return $environment;
     }
 
-    /**
-     * @param list<string> $options
-     * @param list<string> $arguments
-     *
-     * @return list<string>
-     */
-    private function command(array $options, array $arguments, string $emptyTree): array
-    {
-        // A refs/replace/ ref would swap in another object, and a lazy fetch would start the transport of a promisor remote the repository names.
-        return ['git', '--no-replace-objects', '--no-lazy-fetch', ...$options, '--attr-source='.$emptyTree, ...$this->settings(), ...$arguments];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function settings(): array
-    {
-        $settings = [];
-        foreach (self::SETTINGS as $name => $value) {
-            $settings[] = '-c';
-            $settings[] = $name.'='.$value;
-        }
-
-        return $settings;
-    }
-
     private function absolute(string $directory): string
     {
         // Because the process changes into the directory before git reads GIT_WORK_TREE, a relative one would be resolved twice; a missing one stays as it is, and the call itself fails there.
@@ -198,6 +172,32 @@ final readonly class HardenedGit
         $this->refuseInfoAttributes($repository, $path);
 
         return self::EMPTY_TREES[$format] ?? self::EMPTY_TREES['sha1'];
+    }
+
+    /**
+     * @param list<string> $options
+     * @param list<string> $arguments
+     *
+     * @return list<string>
+     */
+    private function command(array $options, array $arguments, string $emptyTree): array
+    {
+        // A refs/replace/ ref would swap in another object, and a lazy fetch would start the transport of a promisor remote the repository names.
+        return ['git', '--no-replace-objects', '--no-lazy-fetch', ...$options, '--attr-source='.$emptyTree, ...$this->settings(), ...$arguments];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function settings(): array
+    {
+        $settings = [];
+        foreach (self::SETTINGS as $name => $value) {
+            $settings[] = '-c';
+            $settings[] = $name.'='.$value;
+        }
+
+        return $settings;
     }
 
     /**

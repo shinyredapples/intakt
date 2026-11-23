@@ -73,17 +73,6 @@ final readonly class RunBuildJobCommand
         return Tier::tryFrom($value) ?? throw TierNotKnown::named($value);
     }
 
-    private function failed(SymfonyStyle $io, BuildJobOutcome $outcome): int
-    {
-        foreach ($this->endOfLog($outcome->log) as $line) {
-            $io->writeln(OutputFormatter::escape($line));
-        }
-
-        $io->error('failed: '.$outcome->verdict->reason());
-
-        return Command::FAILURE;
-    }
-
     private function asked(SymfonyStyle $io, BuildQuestion $question): int
     {
         $io->writeln('question: '.$this->oneLine($question->question));
@@ -95,6 +84,17 @@ final readonly class RunBuildJobCommand
         $io->writeln('recommendation: '.$this->oneLine($question->recommendation));
 
         return Command::SUCCESS;
+    }
+
+    private function failed(SymfonyStyle $io, BuildJobOutcome $outcome): int
+    {
+        foreach ($this->endOfLog($outcome->log) as $line) {
+            $io->writeln(OutputFormatter::escape($line));
+        }
+
+        $io->error('failed: '.$outcome->verdict->reason());
+
+        return Command::FAILURE;
     }
 
     // The builder wrote the text, so a line break or control could forge a line and an invisible character hide a difference; each is printed as its code point and a backslash doubled, so two different choices never print the same.

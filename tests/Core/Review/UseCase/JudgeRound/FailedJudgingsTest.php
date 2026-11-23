@@ -41,33 +41,6 @@ final class FailedJudgingsTest extends KernelTestCase
     private DoctrineTransport $failed;
     private DoctrineTransport $async;
 
-    protected function setUp(): void
-    {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
-        $this->configuredDsn = is_string($configured) ? $configured : null;
-        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
-
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $failed = $container->get('messenger.transport.failed');
-        $async = $container->get('messenger.transport.async');
-        assert($failed instanceof DoctrineTransport && $async instanceof DoctrineTransport);
-        $this->failed = $failed;
-        $this->async = $async;
-        $this->failed->setup();
-    }
-
-    protected function tearDown(): void
-    {
-        if (null === $this->configuredDsn) {
-            unset($_ENV[self::TRANSPORT_DSN]);
-        } else {
-            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
-        }
-
-        parent::tearDown();
-    }
-
     public function testAParkedJudgingOfTheRoundIsAFailedJudging(): void
     {
         $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
@@ -190,6 +163,33 @@ final class FailedJudgingsTest extends KernelTestCase
 
         self::assertSame([self::ROUND => true], $this->judgings($this->failed)->failedRounds());
         self::assertSame(2, $this->failed->getMessageCount());
+    }
+
+    protected function setUp(): void
+    {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
+        $this->configuredDsn = is_string($configured) ? $configured : null;
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $failed = $container->get('messenger.transport.failed');
+        $async = $container->get('messenger.transport.async');
+        assert($failed instanceof DoctrineTransport && $async instanceof DoctrineTransport);
+        $this->failed = $failed;
+        $this->async = $async;
+        $this->failed->setup();
+    }
+
+    protected function tearDown(): void
+    {
+        if (null === $this->configuredDsn) {
+            unset($_ENV[self::TRANSPORT_DSN]);
+        } else {
+            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+        }
+
+        parent::tearDown();
     }
 
     private function parkPublications(int $count): void
