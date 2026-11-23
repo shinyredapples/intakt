@@ -136,6 +136,13 @@ final class LedgerFailingHeadsTest extends TestCase
         self::assertSame([], $this->failing());
     }
 
+    public function testAFailureWhoseNextTryHoldsANulByteIsNotListed(): void
+    {
+        $this->ledger->failHeadRetryingAt('alpha', '7', "2026-10-28T12:08:00+00:00\0");
+
+        self::assertSame([], $this->failing());
+    }
+
     protected function setUp(): void
     {
         $this->ledger = new DashboardLedger();

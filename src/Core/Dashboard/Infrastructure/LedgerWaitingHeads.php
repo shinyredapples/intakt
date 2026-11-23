@@ -87,7 +87,8 @@ final readonly class LedgerWaitingHeads
     // Read and written again, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
     private function momentOf(?string $moment): ?string
     {
-        $parsed = null === $moment ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
+        // The parser throws on a NUL byte instead of refusing it, so such a moment is malformed before it is parsed.
+        $parsed = null === $moment || str_contains($moment, "\0") ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
         return false === $parsed ? null : $parsed->format(DATE_ATOM);
     }

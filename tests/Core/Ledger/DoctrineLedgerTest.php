@@ -24,6 +24,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 
@@ -167,6 +168,20 @@ final class DoctrineLedgerTest extends KernelTestCase
         $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning(new Mentions('r-1'), ...array_fill(0, 1000, LedgerEventKind::JudgeDone))));
 
         self::assertSame(['{"round":"r-1"}'], $payloads);
+    }
+
+    // Counted in the bound values, because the engine's own parameter limit differs between builds and may admit the repeated kinds.
+    public function testAReadByOneKindRepeatedBindsTheKindOnce(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $queries = self::getContainer()->get('doctrine.debug_data_holder');
+        self::assertInstanceOf(DebugDataHolder::class, $queries);
+        $queries->reset();
+
+        $ledger->readOfKindsMentioning(new Mentions('r-1'), LedgerEventKind::JudgeDone, LedgerEventKind::JudgeDone, LedgerEventKind::JudgeDone);
+
+        $bound = array_merge(...array_map(static fn (array $query): array => array_values((array) $query['params']), array_merge(...array_values($queries->getData()))));
+        self::assertSame(1, count(array_keys($bound, LedgerEventKind::JudgeDone->value, true)));
     }
 
     public function testAReadByNoKindOrNoTextReadsNothing(): void
