@@ -46,6 +46,18 @@ final class RefusingVerdictsFirst implements Ledger
     }
 
     #[Override]
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->inner->readOfKindAbout($kind, $subject);
+    }
+
+    #[Override]
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->inner->readOfKindWithoutSubject($kind);
+    }
+
+    #[Override]
     public function readMentioning(Mentions $texts): RecordedEvents
     {
         return $this->inner->readMentioning($texts);
