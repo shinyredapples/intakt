@@ -67,8 +67,12 @@ final class LedgerBuildStepsTest extends TestCase
     {
         $steps = array_column(BuildStep::cases(), 'value');
         $rows = array_map(static fn (int $index): array => ['step' => $steps[$index * 5 % count($steps)]], range(0, 2000));
+        $lastRun = array_map(static fn (string $step): array => ['step' => $step], $steps);
 
-        self::assertLessThanOrEqual(count($steps), count($this->latestRunOf($rows)));
+        $latest = $this->latestRunOf([...$rows, ...$lastRun]);
+
+        self::assertLessThanOrEqual(count($steps), count($latest));
+        self::assertSame(array_map(static fn (string $step): array => [$step, 'passed'], $steps), $this->stepsAndOutcomes($latest));
     }
 
     public function testRowsWithoutARunAfterANamedRunAreTheLatestRunAsAfterARollback(): void
