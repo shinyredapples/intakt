@@ -22,6 +22,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Validator\Validation;
 
 #[CoversClass(Verdict::class)]
 #[UsesClass(Finding::class)]
@@ -115,9 +116,9 @@ final class VerdictTest extends TestCase
     public function testAnIntaktFailureFindingHasATitleOfThreeToSixWordsAndTheKindOther(Verdict $failure): void
     {
         $finding = $failure->findings[0];
-        $words = count(explode(' ', (string) $finding->title));
+        $violations = Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator()->validateProperty($finding, 'title');
 
-        self::assertSame([true, FindingKind::Other], [$words >= 3 && $words <= 6, $finding->kind]);
+        self::assertSame([0, FindingKind::Other], [count($violations), $finding->kind]);
     }
 
     #[DataProvider('failureIds')]
