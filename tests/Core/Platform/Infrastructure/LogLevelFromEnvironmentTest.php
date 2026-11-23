@@ -30,18 +30,6 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
     /** @var array{server: array<mixed>, env: array<mixed>} */
     private array $previous = ['server' => [], 'env' => []];
 
-    protected function setUp(): void
-    {
-        $this->previous = ['server' => $_SERVER, 'env' => $_ENV];
-    }
-
-    protected function tearDown(): void
-    {
-        $this->restore($_SERVER, $this->previous['server']);
-        $this->restore($_ENV, $this->previous['env']);
-        parent::tearDown();
-    }
-
     public function testAnUnsetLogLevelGivesWarning(): void
     {
         $level = $this->levelFrom(null);
@@ -120,6 +108,18 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
         $this->expectExceptionMessage('INTAKT_LOG_LEVEL is "loud"');
 
         self::getContainer()->get('logger');
+    }
+
+    protected function setUp(): void
+    {
+        $this->previous = ['server' => $_SERVER, 'env' => $_ENV];
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restore($_SERVER, $this->previous['server']);
+        $this->restore($_ENV, $this->previous['env']);
+        parent::tearDown();
     }
 
     private function levelFrom(?string $value): string

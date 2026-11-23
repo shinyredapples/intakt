@@ -23,10 +23,10 @@ final readonly class LogLevelFromEnvironment implements EnvVarProcessorInterface
             return self::DEFAULT_LEVEL;
         }
 
-        $accepted = self::acceptedLevels();
+        $accepted = $this->acceptedLevels();
 
         if (!in_array($level, $accepted, true)) {
-            throw new InvalidArgumentException(sprintf('%s is "%s", which is not a log level: use one of %s.', self::variableOf($name), $level, implode(', ', $accepted)));
+            throw new InvalidArgumentException(sprintf('%s is "%s", which is not a log level: use one of %s.', $this->variableOf($name), $level, implode(', ', $accepted)));
         }
 
         return $level;
@@ -40,13 +40,13 @@ final readonly class LogLevelFromEnvironment implements EnvVarProcessorInterface
     /**
      * @return list<string>
      */
-    private static function acceptedLevels(): array
+    private function acceptedLevels(): array
     {
         return array_values(array_map(strval(...), new ReflectionClass(LogLevel::class)->getConstants()));
     }
 
     // The name arrives with the processors still to run, such as "default::INTAKT_LOG_LEVEL", and the message names the variable alone.
-    private static function variableOf(string $name): string
+    private function variableOf(string $name): string
     {
         return array_last(explode(':', $name));
     }
