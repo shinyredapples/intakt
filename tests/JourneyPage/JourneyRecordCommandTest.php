@@ -7,6 +7,7 @@ namespace Intakt\Tests\JourneyPage;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversNothing]
@@ -88,6 +89,21 @@ final class JourneyRecordCommandTest extends TestCase
         self::assertStringContainsString('cannot replace issue-states.json', $run->getErrorOutput());
         self::assertFileExists($this->root.'/recorded/issues.json');
         self::assertDirectoryExists($this->root.'/recorded/'.IssueStates::FILE);
+    }
+
+    public function testAnEarlierStateFileThatCannotBeRemovedFailsTheRunInsteadOfBeingPublished(): void
+    {
+        $this->stubGh("#!/bin/sh\nprintf '[[{\"number\":14,\"state\":\"open\"}]]\\n'\n");
+        file_put_contents($this->root.'/recorded/'.IssueStates::FILE, '[{"number":14,"state":"closed"}]');
+        $realRm = new ExecutableFinder()->find('rm');
+        file_put_contents($this->root.'/stub/rm', "#!/bin/sh\nfor argument in \"\$@\"; do case \"\$argument\" in */issue-states.json) exit 1;; esac; done\nexec '".$realRm."' \"\$@\"\n");
+        chmod($this->root.'/stub/rm', 0o755);
+
+        $run = $this->runRecord();
+
+        self::assertSame(1, $run->getExitCode(), $run->getErrorOutput());
+        self::assertStringContainsString('stale states would be published', $run->getErrorOutput());
+        self::assertFileExists($this->root.'/recorded/issues.json');
     }
 
     public function testAGhThatFailsOnTheSecondResourceLeavesNoFileInTheFolder(): void
