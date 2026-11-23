@@ -291,10 +291,33 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
         $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
         $this->branches->during = function (): void {
-            $this->editedBodies[12] = 'Closes #7';
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Closes #7';
         };
 
         self::assertEquals(new Task(7, 'Task 7', 12), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    // The update time has whole seconds, so both reads show the same one: only the body the branch listing returns tells that the pull request closes the task now.
+    public function testAPullRequestEditedToCloseTheTaskInTheSecondItWasListedInMakesTheTaskARework(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Closes #7';
+        };
+
+        self::assertEquals(new Task(7, 'Task 7', 12), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    public function testAPullRequestEditedInTheSecondItWasListedInToCloseAnotherTaskDoesNotMakeTheTaskARework(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Closes #9';
+            $this->historiesRead = [];
+        };
+
+        self::assertEquals(new Task(7, 'Task 7', null), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+        self::assertNotContains(12, $this->historiesRead);
     }
 
     public function testAPullRequestEditedWhileTheBranchesAreReadToCloseNoTaskDoesNotMakeTheTaskARework(): void
@@ -302,7 +325,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
         $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
         $this->branches->during = function (): void {
-            $this->editedBodies[12] = 'Refers to #7 without closing it.';
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Refers to #7 without closing it.';
         };
 
         self::assertEquals(new Task(7, 'Task 7', null), $this->source()->nextWork('alpha', WorkerState::Free)->task);
@@ -313,7 +336,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
         $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
         $this->branches->during = function (): void {
-            $this->editedBodies[12] = 'Closes #7';
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Closes #7';
             $this->editorOf[12] = 'mallory';
         };
 
@@ -325,11 +348,13 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads->lists([Issues::task(7), Issues::task(8), Issues::pullRequest(12, 'Closes #9', 'bea')]);
         $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
         $this->branches->during = function (): void {
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Closes #7, closes #8';
             $this->historiesRead = [];
         };
 
-        $this->source()->queue('alpha');
+        $queue = $this->source()->queue('alpha');
 
+        self::assertSame([12, 12], array_map(static fn (Task $task): ?int => $task->reworkOf, $queue->ready()));
         self::assertSame([12], $this->historiesRead);
     }
 
@@ -983,6 +1008,6 @@ final class GitHubWorkSourceTest extends KernelTestCase
         });
         $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(['alpha' => ['eligibility_label' => $this->eligibilityLabel]]), new IssueReferences(), $this->logger);
 
-        return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, new PullRequestsOfTasks($this->branches, $histories, $accounts), $this->logger);
+        return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, new PullRequestsOfTasks($this->branches, $histories, $accounts, new IssueReferences()), $this->logger);
     }
 }

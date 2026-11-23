@@ -21,6 +21,9 @@ final class RecordedPullRequestBranches implements PullRequestBranches
     public array $leftOut = [];
     /** @var array<int, DateTimeImmutable> */
     public array $updatedAtOf = [];
+    // The body a pull request has when the branches are read, when a test edits it after the issue listing; the listed body otherwise.
+    /** @var array<int, string> */
+    public array $bodyOf = [];
     public ?ForgeReadFailed $failure = null;
     public ?Closure $during = null;
 
@@ -43,6 +46,6 @@ final class RecordedPullRequestBranches implements PullRequestBranches
         $pulls = array_filter($this->issues->lastListed, fn (ListedIssue $issue): bool => $issue->isPullRequest && !in_array($issue->number, $this->leftOut, true));
         ksort($pulls);
 
-        return array_values(array_map(fn (ListedIssue $pull): BranchPullRequest => new BranchPullRequest($pull->number, $this->branchOf[$pull->number] ?? 'chore/tidy-up', $pull->author, $this->updatedAtOf[$pull->number] ?? $pull->updatedAt), $pulls));
+        return array_values(array_map(fn (ListedIssue $pull): BranchPullRequest => new BranchPullRequest($pull->number, $this->branchOf[$pull->number] ?? 'chore/tidy-up', $pull->author, $this->updatedAtOf[$pull->number] ?? $pull->updatedAt, $this->bodyOf[$pull->number] ?? $pull->body), $pulls));
     }
 }

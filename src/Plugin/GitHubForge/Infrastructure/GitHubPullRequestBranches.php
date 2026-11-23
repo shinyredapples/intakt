@@ -116,7 +116,18 @@ final readonly class GitHubPullRequestBranches implements PullRequestBranches
             throw new ForgeReadFailed('GitHub listed a pull request without a number.');
         }
 
-        return new BranchPullRequest($number, $this->text($pull, 'head', 'ref'), $this->text($pull, 'user', 'login'), $this->moments->parse($this->text($pull, 'updated_at')));
+        return new BranchPullRequest($number, $this->text($pull, 'head', 'ref'), $this->text($pull, 'user', 'login'), $this->moments->parse($this->text($pull, 'updated_at')), $this->bodyOf($pull));
+    }
+
+    // The key is required though GitHub answers null for a pull request without a description, because an answer that leaves the body out would pass for one that closes no task.
+    /**
+     * @param array<mixed> $pull
+     */
+    private function bodyOf(array $pull): string
+    {
+        $body = array_key_exists('body', $pull) ? ($pull['body'] ?? '') : null;
+
+        return is_string($body) ? $body : throw new ForgeReadFailed('GitHub listed a pull request without "body".');
     }
 
     private function bearer(): string

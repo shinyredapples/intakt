@@ -26,6 +26,7 @@ final readonly class PullRequestsOfTasks
         private PullRequestBranches $branches,
         private IssueHistories $histories,
         private SteeringAccounts $accounts,
+        private IssueReferences $references,
     ) {
     }
 
@@ -65,7 +66,7 @@ final readonly class PullRequestsOfTasks
     private function allOpenOf(string $project, IntakePlan $plan): array
     {
         $open = $this->branches->openOf($project);
-        $missing = array_diff(array_keys($plan->openPullRequests), array_map(static fn (BranchPullRequest $pull): int => $pull->number, $open));
+        $missing = array_diff($plan->openPullRequests,array_map(static fn (BranchPullRequest $pull): int => $pull->number, $open));
         if ([] !== $missing) {
             throw new ForgeReadFailed(sprintf('GitHub did not list the branch of open pull request #%d, which the listing of this tick shows open, so the pull requests by branch may be incomplete.', min($missing)));
         }
@@ -94,7 +95,7 @@ final readonly class PullRequestsOfTasks
         };
     }
 
-    // Every pull request the plan holds as closing the task, every one on its branch and every one updated since the tick's listing, lowest number first, so the first that counts is the task's pull request, and a higher one stands in when a lower one lost its trust. An updated one may close the task by an edit the plan has not seen, so only its body read now can tell. The closing ones are always among the open ones, because the listing's open pull requests were checked against them.
+    // Every pull request the plan holds as closing the task, every one on its branch and every one whose body in the branch listing closes it, lowest number first, so the first that counts is the task's pull request, and a higher one stands in when a lower one lost its trust. The body decides and not the update time, because the branch listing is read after the tick's listing and an edit in the second of that listing keeps the update time. The closing ones are always among the open ones, because the listing's open pull requests were checked against them.
     /**
      * @param list<BranchPullRequest> $open
      *
@@ -103,17 +104,10 @@ final readonly class PullRequestsOfTasks
     private function candidatesOf(int $task, IntakePlan $plan, array $open): array
     {
         $closing = $plan->closingPullRequests[$task] ?? [];
-        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => in_array($pull->number, $closing, true) || TaskBranchName::names($pull->branch, $task) || self::updatedSinceListing($pull, $plan)));
+        $candidates = array_values(array_filter($open, fn (BranchPullRequest $pull): bool => in_array($pull->number, $closing, true) || TaskBranchName::names($pull->branch, $task) || in_array($task, $this->references->closedBy($pull->body), true)));
         usort($candidates, static fn (BranchPullRequest $a, BranchPullRequest $b): int => $a->number <=> $b->number);
 
         return $candidates;
-    }
-
-    private static function updatedSinceListing(BranchPullRequest $pull, IntakePlan $plan): bool
-    {
-        $listedAt = $plan->openPullRequests[$pull->number] ?? null;
-
-        return null === $listedAt || $listedAt->getTimestamp() !== $pull->updatedAt->getTimestamp();
     }
 
     // The author is asked first, because the history of one whose author has no write access need not be read; its history is the one the branch listing showed, so an edit since fails the read instead of passing unchecked.
@@ -134,7 +128,7 @@ final readonly class PullRequestsOfTasks
     // A trusted pull request that is not on the task's branch must close the task in the history just read, not only in the plan, because a trusted edit between the tick's listing and the branch read can point it at another task.
     private function closesNow(int $task, BranchPullRequest $pull, IssueHistory $history): bool
     {
-        return TaskBranchName::names($pull->branch, $task) || in_array($task, new IssueReferences()->closedBy($history->body), true);
+        return TaskBranchName::names($pull->branch, $task) || in_array($task, $this->references->closedBy($history->body), true);
     }
 
     // One the plan gives to the task and that no longer closes it fails the read, because the next listing settles which task it closes now; one the plan does not give to the task is simply another task's.

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use DateTimeImmutable;
+use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\BranchPullRequest;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
@@ -31,8 +33,32 @@ final class GitHubPullRequestBranchesTest extends TestCase
 
         $listed = $api->pullRequestBranches()->openOf('alpha');
 
-        self::assertEquals([new BranchPullRequest(12, 'feat/7-add-intake', 'bea', new DateTimeImmutable('2026-11-10T10:00:00Z'))], $listed);
+        self::assertEquals([new BranchPullRequest(12, 'feat/7-add-intake', 'bea', new DateTimeImmutable('2026-11-10T10:00:00Z'), 'Closes #7')], $listed);
         self::assertSame(['GET https://api.github.com/repos/acme/widgets/pulls?state=open&per_page=100&page=1'], $api->requests);
+    }
+
+    public function testAPullRequestWithoutADescriptionIsListedWithAnEmptyBody(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page([[...$this->pull(12, 'feat/7'), 'body' => null]])];
+
+        self::assertSame('', $api->pullRequestBranches()->openOf('alpha')[0]->body);
+    }
+
+    public function testAPullRequestListedWithoutTheBodyKeyFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page([array_diff_key($this->pull(12, 'feat/7'), ['body' => true])])];
+
+        self::assertSame('GitHub listed a pull request without "body".', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAPullRequestWhoseBodyIsNotTextFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page([[...$this->pull(12, 'feat/7'), 'body' => ['Closes #7']]])];
+
+        self::assertSame('GitHub listed a pull request without "body".', $this->failureOf($api)->getMessage());
     }
 
     public function testAFullPageIsFollowedByTheNextUntilAShortPage(): void
@@ -103,6 +129,24 @@ final class GitHubPullRequestBranchesTest extends TestCase
         self::assertSame('GitHub answered 502 to a read.', $this->failureOf($api)->getMessage());
     }
 
+    public function testAPageGitHubAnswersUnauthorizedFailsTheListingAsRefusedCredentials(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '401'];
+
+        self::assertInstanceOf(ForgeCredentialsRefused::class, $this->failureOf($api)->getPrevious());
+    }
+
+    public function testARateLimitedLaterPageFailsTheListingAsRateLimited(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(array_map(fn (int $number): array => $this->pull($number, 'fix/'.$number), range(1, 100))), 2 => '429'];
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $api->pullRequestBranches()->openOf('alpha');
+    }
+
     public function testAProjectWithoutARepositoryFailsBeforeAnyRead(): void
     {
         $api = new RecordedIssueApi();
@@ -122,7 +166,7 @@ final class GitHubPullRequestBranchesTest extends TestCase
      */
     private function pull(int $number, string $branch, string $author = 'ana'): array
     {
-        return ['number' => $number, 'head' => ['ref' => $branch], 'user' => ['login' => $author], 'updated_at' => '2026-11-10T10:00:00Z'];
+        return ['number' => $number, 'head' => ['ref' => $branch], 'user' => ['login' => $author], 'updated_at' => '2026-11-10T10:00:00Z', 'body' => 'Closes #7'];
     }
 
     /**
