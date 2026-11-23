@@ -144,7 +144,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
         $documents = new MemoryDocuments();
 
         return [
-            new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $store, $documents),
+            new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $vectorizer, $store, $documents),
             new StoreProjectMemory(new Retriever($store, $vectorizer), $documents),
         ];
     }

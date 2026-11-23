@@ -96,6 +96,7 @@ services:
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
     Intakt\Core\Memory\Infrastructure\StoreMemoryIndex:
         arguments:
+            $vectorizer: '@ai.vectorizer.memory'
             $store: '@ai.store.sqlite.memory'
     # Reviewers get the read side only; the Retriever is the AI bundle's, over the same store.
     Intakt\Core\Review\Infrastructure\OptionalProjectMemory:
