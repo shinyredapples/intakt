@@ -8,12 +8,12 @@ use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerQueuedRounds;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,8 +22,8 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(LedgerQueuedRounds::class)]
 #[CoversClass(QueuedRound::class)]
-#[UsesClass(LedgerPayload::class)]
 #[UsesClass(LedgerPayloads::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(RoundStart::class)]
