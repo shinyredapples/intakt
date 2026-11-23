@@ -136,8 +136,8 @@ final readonly class ReviewedRound
     // One line on whether the reviewers agree, from their own outcomes and not the round's, so a split reads as a split; empty while none has given one.
     public function agreement(): string
     {
-        $given = array_values(array_filter(array_map(static fn (ReviewerOutcome $reviewer): ?ReviewOutcome => $reviewer->outcome(), $this->outcomes)));
-        $kinds = array_unique(array_map(static fn (ReviewOutcome $outcome): string => $outcome->plainWords(), $given));
+        $given = $this->outcomesGivenIn($this);
+        $kinds = array_values(array_unique(array_map(static fn (ReviewOutcome $outcome): string => $outcome->plainWords(), $given)));
 
         if ([] === $given) {
             return '';
@@ -263,6 +263,25 @@ final readonly class ReviewedRound
     private function isReplayMarked(self $round): bool
     {
         return ReplayMark::Replay === $round->mark;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty list for `$this->outcomes`.
+    /**
+     * @return list<ReviewOutcome>
+     */
+    private function outcomesGivenIn(self $round): array
+    {
+        $given = [];
+
+        foreach ($round->outcomes as $reviewer) {
+            $outcome = $reviewer->outcome();
+
+            if ($outcome instanceof ReviewOutcome) {
+                $given[] = $outcome;
+            }
+        }
+
+        return $given;
     }
 
     // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.
