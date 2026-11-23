@@ -13,6 +13,7 @@ final readonly class CommentLanguages
         private PhpComments $php = new PhpComments(),
         private TwigComments $twig = new TwigComments(),
         private JavaScriptComments $javaScript = new JavaScriptComments(),
+        private ShellComments $shell = new ShellComments(),
     ) {
     }
 
@@ -26,7 +27,11 @@ final readonly class CommentLanguages
             return $this->twig;
         }
 
-        return $this->isJavaScriptFileInScope($path) ? $this->javaScript : null;
+        if ($this->isJavaScriptFileInScope($path)) {
+            return $this->javaScript;
+        }
+
+        return $this->isShellScriptInScope($path) ? $this->shell : null;
     }
 
     private function isTwigTemplateInScope(string $path): bool
@@ -37,6 +42,12 @@ final readonly class CommentLanguages
     private function isJavaScriptFileInScope(string $path): bool
     {
         return array_any(self::JAVASCRIPT_EXTENSIONS, static fn (string $extension): bool => str_ends_with($path, $extension)) && $this->isOutsideTheExcludedFolders($path);
+    }
+
+    // Because a script without the extension cannot be told from other extensionless files by its path, only `.sh` files are read as shell.
+    private function isShellScriptInScope(string $path): bool
+    {
+        return str_ends_with($path, '.sh') && $this->isOutsideTheExcludedFolders($path);
     }
 
     private function isOutsideTheExcludedFolders(string $path): bool
