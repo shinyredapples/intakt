@@ -42,10 +42,10 @@ final readonly class OwnerKey
     /**
      * @throws OwnerKeyRefused
      */
-    public static function fromLine(string $line, int $position): self
+    public static function fromLine(string $line, string $signer, int $position): self
     {
         if (1 !== preg_match(self::PUBLIC_KEY, $line, $parts) || !self::isAWholeKey((string) base64_decode($parts['key'], true), $parts['type'])) {
-            throw OwnerKeyRefused::notAPublicKey($position);
+            throw OwnerKeyRefused::notAPublicKey($signer, $position);
         }
 
         // Without the comment, because only the type and the key bytes decide who signed.

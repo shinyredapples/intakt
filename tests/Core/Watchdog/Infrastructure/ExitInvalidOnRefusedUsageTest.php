@@ -15,6 +15,7 @@ use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
+use Intakt\Core\Watchdog\UseCase\CheckMain\TrustedKeys;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -40,6 +41,7 @@ use Symfony\Component\HttpKernel\Log\Logger;
 #[UsesClass(CheckMainCommand::class)]
 #[UsesClass(CheckMain::class)]
 #[UsesClass(CheckMainInput::class)]
+#[UsesClass(TrustedKeys::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(MainHistory::class)]
 #[UsesClass(OwnerKey::class)]
@@ -57,6 +59,7 @@ final class ExitInvalidOnRefusedUsageTest extends TestCase
         $head = str_repeat('a', 40);
         yield 'a recorded merge without its value' => [['repository' => '.', 'last-seen-head' => $head, '--recorded-merge' => null]];
         yield 'an owner key without its value' => [['repository' => '.', 'last-seen-head' => $head, '--owner-key' => null]];
+        yield 'a peer key without its value' => [['repository' => '.', 'last-seen-head' => $head, '--peer-key' => null]];
         yield 'a missing last seen head' => [['repository' => '.']];
         yield 'an unknown option' => [['repository' => '.', 'last-seen-head' => $head, '--merge' => $head]];
     }

@@ -89,6 +89,70 @@ final class MainHistoryTest extends TestCase
         self::assertSame(SignatureStatus::OwnerSigned, $this->history([$this->publicKey('owner')])->signatureOf($signed));
     }
 
+    public function testACommitSignedByAGivenPeerKeyIsPeerSigned(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        self::assertSame(SignatureStatus::PeerSigned, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAPeerKeyIsPeerSignedWithoutAnyOwnerKey(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        self::assertSame(SignatureStatus::PeerSigned, $this->historyWithPeers([], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByTheOwnerKeyStaysOwnerSignedWhenPeerKeysAreGiven(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        self::assertSame(SignatureStatus::OwnerSigned, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAnOwnerKeyIsNeverPeerSignedWhenOnlyPeerKeysAreGiven(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->historyWithPeers([], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAPeerKeyIsNeverOwnerSignedWhenOnlyOwnerKeysAreGiven(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->historyWithPeers([$this->publicKey('owner')], [])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAKeyNeitherOwnerNorPeerGaveIsAnUnknownKey(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('stranger'), 'Foreign change');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerReadsAsOwnerSigned(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        self::assertSame(SignatureStatus::OwnerSigned, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')])->signatureOf($signed));
+    }
+
+    public function testAMalformedPeerKeyIsRefusedNamingItAsAPeerKeyAndItsPosition(): void
+    {
+        $this->expectException(OwnerKeyRefused::class);
+        $this->expectExceptionMessage('Peer key 2 is not one SSH public key');
+
+        $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer'), 'cert-authority ssh-ed25519 A']);
+    }
+
     public function testACommitSignedByAKeyTheOwnerDidNotRegisterIsAnUnknownKeyViolation(): void
     {
         $seen = $this->repository->commitEmpty('Seen');
@@ -805,6 +869,15 @@ final class MainHistoryTest extends TestCase
     private function history(array $ownerKeys): MainHistory
     {
         return new MainHistory(new HardenedGit(), $this->repository->path, $ownerKeys, new Filesystem());
+    }
+
+    /**
+     * @param list<string> $ownerKeys
+     * @param list<string> $peerKeys
+     */
+    private function historyWithPeers(array $ownerKeys, array $peerKeys): MainHistory
+    {
+        return new MainHistory(new HardenedGit(), $this->repository->path, $ownerKeys, new Filesystem(), $peerKeys);
     }
 
     private function publicKey(string $name): string
