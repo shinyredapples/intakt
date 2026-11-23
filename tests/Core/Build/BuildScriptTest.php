@@ -23,7 +23,7 @@ final class BuildScriptTest extends TestCase
     private const int WATCHDOG_DEADLINE = 5;
     // The script's own bound on git bundle create, repeated here because the script is shell and holds it as a literal.
     private const int BUNDLE_TIME_LIMIT = 30;
-    // The script's fixed system folders, repeated here for the same reason.
+    // The script's fixed system folders, repeated here because the script is shell and holds them as a literal.
     private const string SYSTEM_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
     private BuildHistory $history;
@@ -979,7 +979,7 @@ final class BuildScriptTest extends TestCase
 
     public function testAnImageWithoutAGitInItsSystemFoldersEndsTheJobBeforeTheSession(): void
     {
-        // Only the fixture folder stays among the system folders, and it holds a timeout but no git.
+        // A folder that does not exist replaces the system folders, so that only the fixture folder, which holds a timeout and no git, is searched.
         $this->givenTheTimeout("shift 3\nexec \"\$@\"");
         $this->givenTheCli('touch "$RECORD/ran"');
         $this->systemPath = $this->history->folder.'/no-such-folder';
