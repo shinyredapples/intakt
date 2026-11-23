@@ -104,6 +104,26 @@ final class FailingMainsTest extends TestCase
         self::assertSame([], $this->failing());
     }
 
+    public function testAComputedFailedLineMarksItsPairAsSeenSoALaterComputedBootedLineOfThePairDoesNotClearTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'B fails.', 'b');
+        $this->ledger->computeFailedMain('alpha', 'a', 'A fails.');
+
+        $this->ledger->bootMain('alpha', 'a');
+
+        self::assertSame(['B fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
+    }
+
+    public function testAComputedCrashedLineDoesNotMarkItsPairAsSeenSoTheBootedLineAfterTheBackoffClearsTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'B fails.', 'b');
+        $this->ledger->computeMain('alpha', 'a', 'crashed');
+
+        $this->ledger->bootMain('alpha', 'a');
+
+        self::assertSame([], $this->failing());
+    }
+
     public function testACrashReadFromTheStoreNeitherRaisesNorClearsTheItem(): void
     {
         $this->ledger->failMainBoot('alpha', 'A fails.', 'a');

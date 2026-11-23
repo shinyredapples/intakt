@@ -26,12 +26,12 @@ final class ReviewsPageQueriesTest extends WebTestCase
 
     private RoundFixture $fixture;
 
-    // Sixteen, because the shell reads the owner notices once for the You count, whatever the rounds.
-    public function testTheReviewsPageWithThreeRoundsRunsSixteenQueries(): void
+    // Ten, as for one round, because the endings of the unjudged rounds come from one lookup per page read and the shell reads the owner notices once for the You count, whatever the rounds.
+    public function testTheReviewsPageWithThreeRoundsRunsTenQueries(): void
     {
         $this->givenRounds(3);
 
-        self::assertSame(16, $this->queriesOfTheReviewsPage());
+        self::assertSame(10, $this->queriesOfTheReviewsPage());
     }
 
     protected function setUp(): void

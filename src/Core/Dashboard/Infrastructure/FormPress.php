@@ -6,7 +6,6 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
@@ -19,10 +18,11 @@ final readonly class FormPress
 
     public function refuseWithoutToken(Request $request, string $tokenId, string $refusal): void
     {
-        $token = $request->request->get('_token');
+        // all() and not get(), because get() throws a plain bad request for an array before the page could show the refusal.
+        $token = $request->request->all()['_token'] ?? null;
 
         if (!is_string($token) || !$this->tokens->isTokenValid(new CsrfToken($tokenId, $token))) {
-            throw new BadRequestHttpException($refusal);
+            throw new FormIsRefused($refusal);
         }
     }
 
