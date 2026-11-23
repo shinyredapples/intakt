@@ -132,7 +132,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
             array_map(static fn (array $row): array => [...$row, 'task' => is_numeric($row['task']) ? (int) $row['task'] : $row['task']], $this->connection()->fetchAllAssociative('SELECT project, task, question, recommendation FROM build_parked_task')),
         );
         $payloads = array_map(static fn (mixed $payload): string => is_string($payload) ? $payload : '', $this->connection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'));
-        $run = 1 === preg_match('/"run":"([0-9a-f]{32})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
+        $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
                 '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}',
