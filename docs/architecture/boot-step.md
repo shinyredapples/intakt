@@ -2,7 +2,7 @@
 
 ## In short
 
-The boot step boots one commit with its `bin/instance` and answers `booted`, `failed` or `crashed`, never an exception. `BootResults` caches main's result per project, main commit and tool fingerprint in `watcher_boot_result`, records `boot_result_computed`, raises `main_boot_failed` once per failing pair, and keeps the board's banner in step with main. `BootGate` runs before a green head's round: it boots nothing for an untrusted author (`head_boot_skipped`), and sends a head back like red CI only when main boots and the head fails. A failing or crashing main, a crashed head boot or a gate that throws lets the round start. In the watcher a refused head is recorded `head_red` and its round's verdicts are withdrawn.
+The boot step boots one commit and answers `booted`, `failed` or `crashed`, never an exception. Main boots with its own `bin/instance`; a pull request head boots with main's `bin/instance`, so a head that changes the harness does not certify itself. `BootResults` caches main's result per project, main commit and tool fingerprint in `watcher_boot_result`, records `boot_result_computed`, raises `main_boot_failed` once per failing pair, and keeps the board's banner in step with main. `BootGate` runs before a green head's round: it boots nothing for an untrusted author (`head_boot_skipped`), and sends a head back like red CI only when main boots and the head fails. A failing or crashing main, a crashed head boot or a gate that throws lets the round start. A refused head is recorded `head_red`.
 
 ## Details
 

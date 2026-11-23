@@ -2,7 +2,7 @@
 
 ## In short
 
-`StatusReadModel::json()` builds one JSON document per install, valid against `docs/user/status.schema.json`: the install-wide holds, the message queues and, per project, its replay mark, the review and build lanes, the watcher's guard decisions, the changes waiting for the owner, the Needs-you items and the last outcomes. It reads the ledger once and hands that snapshot to every section, and it queues no message, so a stopped consumer still yields a status. Failure causes are redacted. `intakt:status --format=json` prints it as one line, and `GET /status` answers the same bytes on the loopback-only dashboard port.
+`StatusReadModel::json()` builds one JSON document per install, valid against `docs/user/status.schema.json`: the install-wide holds, the message queues and, per project, its replay mark, the review and build lanes, the watcher's guard decisions, the changes waiting for the owner, the Needs-you items and the last outcomes. It reads the ledger once and hands that snapshot to every section, and sends nothing to a transport (its only dispatches are synchronous queries), so a stopped `messenger:consume` still yields a status. Failure causes are redacted. `intakt:status --format=json` prints it as one line, and `GET /status` answers the same bytes on the loopback-only dashboard port.
 
 ## Details
 
