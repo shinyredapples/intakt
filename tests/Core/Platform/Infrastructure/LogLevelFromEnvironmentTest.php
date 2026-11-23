@@ -27,6 +27,8 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
 {
     private const string VARIABLE = 'INTAKT_LOG_LEVEL';
 
+    private const string UNKNOWN_LEVEL_MESSAGE = 'INTAKT_LOG_LEVEL is "loud", which is not a log level: use one of emergency, alert, critical, error, warning, notice, info, debug.';
+
     /** @var array{server: array<mixed>, env: array<mixed>} */
     private array $previous = ['server' => [], 'env' => []];
 
@@ -57,15 +59,14 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
      */
     public static function psrLevels(): iterable
     {
-        foreach (new ReflectionClass(LogLevel::class)->getConstants() as $level) {
-            yield (string) $level => [(string) $level];
+        foreach (array_filter(new ReflectionClass(LogLevel::class)->getConstants(), is_string(...)) as $level) {
+            yield $level => [$level];
         }
     }
 
     public function testAnUnknownLogLevelFailsWithAMessageNamingEveryAcceptedLevel(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('INTAKT_LOG_LEVEL is "loud", which is not a log level: use one of emergency, alert, critical, error, warning, notice, info, debug.');
+        $this->expectExceptionObject(new InvalidArgumentException(self::UNKNOWN_LEVEL_MESSAGE));
 
         $this->levelFrom('loud');
     }
@@ -104,8 +105,7 @@ final class LogLevelFromEnvironmentTest extends KernelTestCase
     {
         $_SERVER[self::VARIABLE] = $_ENV[self::VARIABLE] = 'loud';
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('INTAKT_LOG_LEVEL is "loud"');
+        $this->expectExceptionObject(new InvalidArgumentException(self::UNKNOWN_LEVEL_MESSAGE));
 
         self::getContainer()->get('logger');
     }

@@ -17,16 +17,17 @@ final readonly class LogLevelFromEnvironment implements EnvVarProcessorInterface
 
     public function getEnv(string $prefix, string $name, Closure $getEnv): string
     {
-        $level = (string) $getEnv($name);
+        $value = $getEnv($name);
 
-        if ('' === $level) {
+        if (null === $value || '' === $value) {
             return self::DEFAULT_LEVEL;
         }
 
         $accepted = $this->acceptedLevels();
+        $level = array_find($accepted, static fn (string $level): bool => $level === $value);
 
-        if (!in_array($level, $accepted, true)) {
-            throw new InvalidArgumentException(sprintf('%s is "%s", which is not a log level: use one of %s.', $this->variableOf($name), $level, implode(', ', $accepted)));
+        if (null === $level) {
+            throw new InvalidArgumentException(sprintf('%s is "%s", which is not a log level: use one of %s.', $this->variableOf($name), is_scalar($value) ? $value : get_debug_type($value), implode(', ', $accepted)));
         }
 
         return $level;
@@ -42,10 +43,10 @@ final readonly class LogLevelFromEnvironment implements EnvVarProcessorInterface
      */
     private function acceptedLevels(): array
     {
-        return array_values(array_map(strval(...), new ReflectionClass(LogLevel::class)->getConstants()));
+        return array_values(array_filter(new ReflectionClass(LogLevel::class)->getConstants(), is_string(...)));
     }
 
-    // The name arrives with the processors still to run, such as "default::INTAKT_LOG_LEVEL", and the message names the variable alone.
+    // Needed because the name arrives with the processors still to run, such as "default::INTAKT_LOG_LEVEL", and the reader looks for the variable alone.
     private function variableOf(string $name): string
     {
         return array_last(explode(':', $name));
