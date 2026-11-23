@@ -10,9 +10,10 @@ use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
-// Payloads are decoded to arrays here, because the Watcher module writes its lines without payload classes, so the card needs nothing from it.
+// Payloads are read by field here, because the Watcher module writes its lines without payload classes, so the card needs nothing from it.
 final readonly class LedgerFailingHeads
 {
     private const array FAILED = [LedgerEventKind::HeadFailed, LedgerEventKind::HeadHandedOver];
@@ -52,17 +53,17 @@ final readonly class LedgerFailingHeads
                 continue;
             }
 
-            $payload = LedgerPayload::of($recorded);
-            $project = $payload['project'] ?? null;
-            $change = $payload['change'] ?? null;
+            $payload = PayloadFields::of($recorded);
+            $project = $payload->text('project');
+            $change = $payload->text('change');
 
-            if (!is_string($project) || !is_string($change)) {
+            if (null === $project || null === $change) {
                 continue;
             }
 
             // Keyed by project, then pull request, so no name either side sends can make two keys meet.
             unset($failing[$project][$change]);
-            $handedOver[$project][$change] = $this->handedOverHead($kind, $payload['head'] ?? null, $handedOver[$project][$change] ?? null);
+            $handedOver[$project][$change] = $this->handedOverHead($kind, $payload->text('head'), $handedOver[$project][$change] ?? null);
             $failing[$project] = ($failing[$project] ?? []) + $this->readableFailure($kind, $project, $payload);
         }
 
@@ -70,10 +71,10 @@ final readonly class LedgerFailingHeads
     }
 
     // Kept through later lines of the same commit until the item ends, because a moved head is a new item that has not been handed over.
-    private function handedOverHead(LedgerEventKind $kind, mixed $head, ?string $handedOver): ?string
+    private function handedOverHead(LedgerEventKind $kind, ?string $head, ?string $handedOver): ?string
     {
         return match (true) {
-            !is_string($head) => null,
+            null === $head => null,
             LedgerEventKind::HeadHandedOver === $kind => $head,
             in_array($kind, self::ENDED, true) => null,
             $head === $handedOver => $head,
@@ -82,27 +83,26 @@ final readonly class LedgerFailingHeads
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
      * @return array<string, FailingHead>
      */
-    private function readableFailure(LedgerEventKind $kind, string $project, array $payload): array
+    private function readableFailure(LedgerEventKind $kind, string $project, PayloadFields $payload): array
     {
-        $change = $payload['change'] ?? null;
-        $cause = $payload['cause'] ?? null;
-        $failures = $payload['failures'] ?? null;
-        $retryAt = $this->momentOf($payload['retry_at'] ?? null);
+        $change = $payload->text('change');
+        $cause = $payload->text('cause');
+        $failures = $payload->number('failures');
+        $retryAt = $this->momentOf($payload->text('retry_at'));
 
-        if (!in_array($kind, self::FAILED, true) || !is_string($change) || !is_string($cause) || !is_int($failures) || !$retryAt instanceof DateTimeImmutable) {
+        if (!in_array($kind, self::FAILED, true) || null === $change || null === $cause || null === $failures || !$retryAt instanceof DateTimeImmutable) {
             return [];
         }
 
         return [$change => new FailingHead($project, $change, new HeadFault($cause, $failures, $retryAt))];
     }
 
-    private function momentOf(mixed $moment): ?DateTimeImmutable
+    private function momentOf(?string $moment): ?DateTimeImmutable
     {
-        $parsed = is_string($moment) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC')) : false;
+        // The parser throws on a NUL byte instead of refusing it, so such a moment is malformed before it is parsed.
+        $parsed = null === $moment || str_contains($moment, "\0") ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
         return false === $parsed ? null : $parsed;
     }
