@@ -52,7 +52,7 @@ final readonly class TeamWindow
             return 'No reading yet';
         }
 
-        $reading = $this->used().'% used, read '.Elapsed::ago($this->use->ageInSeconds);
+        $reading = $this->used().'% used, read '.Ago::inWords($this->use->ageInSeconds);
 
         return $this->isKept() ? 'Last known '.$reading : ucfirst($reading);
     }

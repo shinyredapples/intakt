@@ -16,6 +16,6 @@ final readonly class ReviewRow
 
     public function startedAgo(): string
     {
-        return Elapsed::ago($this->now->getTimestamp() - $this->review->startedAt->getTimestamp());
+        return Ago::inWords($this->now->getTimestamp() - $this->review->startedAt->getTimestamp());
     }
 }

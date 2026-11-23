@@ -23,7 +23,7 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
-use Intakt\Core\Dashboard\Domain\Elapsed;
+use Intakt\Core\Dashboard\Domain\Ago;
 use Intakt\Core\Dashboard\Domain\TeamAccount;
 use Intakt\Core\Dashboard\Domain\TeamAccountState;
 use Intakt\Core\Dashboard\Domain\TeamRole;
@@ -43,7 +43,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(TeamRoster::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
-#[UsesClass(Elapsed::class)]
+#[UsesClass(Ago::class)]
 #[UsesClass(TeamAccount::class)]
 #[UsesClass(TeamAccountState::class)]
 #[UsesClass(TeamRole::class)]
