@@ -217,17 +217,6 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertInstanceOf(VendorAccountOut::class, $rejected);
     }
 
-    private function failureOf(AccountLimitedVendor $vendor): Throwable
-    {
-        try {
-            $_ = $vendor->review('intakt', Tier::Standard, $this->request());
-        } catch (Throwable $failure) {
-            return $failure;
-        }
-
-        self::fail('The review was expected to fail.');
-    }
-
     private function failing(Throwable $failure): Vendor
     {
         $vendor = self::createStub(Vendor::class);
@@ -247,6 +236,17 @@ final class AccountLimitedVendorTest extends TestCase
         $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn($secondsUntilAnAccountIsFree);
 
         return $cooldowns;
+    }
+
+    private function failureOf(AccountLimitedVendor $vendor): Throwable
+    {
+        try {
+            $_ = $vendor->review('intakt', Tier::Standard, $this->request());
+        } catch (Throwable $failure) {
+            return $failure;
+        }
+
+        self::fail('The review was expected to fail.');
     }
 
     private function tier(): TierResolver

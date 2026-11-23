@@ -117,6 +117,14 @@ final class JourneyAlarmTaskTest extends TestCase
     }
 
     /**
+     * @return list<string>
+     */
+    private function numberedLines(int $count): array
+    {
+        return array_map(static fn (int $line): string => 'line '.$line, range(1, $count));
+    }
+
+    /**
      * @param list<string> $lines
      */
     private function taskAfter(array $lines, string ...$findings): JourneyAlarmTask
@@ -124,13 +132,5 @@ final class JourneyAlarmTaskTest extends TestCase
         $gate = json_encode(['gate' => 'journeys', 'ok' => false, 'findings' => $findings], JSON_THROW_ON_ERROR);
 
         return new JourneyAlarmTask(JourneyRun::fromOutput(implode("\n", [...$lines, $gate, '{"result":"fail","failed":["journeys"]}'])."\n"), null);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function numberedLines(int $count): array
-    {
-        return array_map(static fn (int $line): string => 'line '.$line, range(1, $count));
     }
 }

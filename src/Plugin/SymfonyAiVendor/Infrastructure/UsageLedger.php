@@ -65,19 +65,6 @@ final readonly class UsageLedger
     }
 
     /**
-     * @param Closure(string): UsageStarted $row
-     *
-     * @throws UsageNotRecorded
-     */
-    private function started(Closure $row): UsageReservation
-    {
-        $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        $this->record($row($reservation->call));
-
-        return $reservation;
-    }
-
-    /**
      * @throws UsageNotRecorded
      */
     public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
@@ -100,6 +87,19 @@ final readonly class UsageLedger
     {
         $usages = $this->readRounds($reservation, ...$rounds)['usages'];
         $this->record(new UsageUnsettled($reservation->call, 'unsettled', $failure::class, $usages), $failure);
+    }
+
+    /**
+     * @param Closure(string): UsageStarted $row
+     *
+     * @throws UsageNotRecorded
+     */
+    private function started(Closure $row): UsageReservation
+    {
+        $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
+        $this->record($row($reservation->call));
+
+        return $reservation;
     }
 
     /**
@@ -139,14 +139,6 @@ final readonly class UsageLedger
         return array_values(array_map(fn (TokenUsageInterface $part): TokenUsageRow => $this->asRow($part, $account), $usages));
     }
 
-    // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
-    private function accountOf(DeferredResult $result): ?string
-    {
-        $account = $result->getMetadata()->get(Account::METADATA);
-
-        return is_string($account) ? $account : null;
-    }
-
     // An answer that fails to map leaves no metadata on the deferred result, yet its tokens were spent, so they are read from the raw answer.
     private function tokenUsageOf(DeferredResult $result): ?TokenUsageInterface
     {
@@ -156,6 +148,14 @@ final readonly class UsageLedger
             ?? $this->convertedUsageOf($result->getRawResult());
 
         return $usage instanceof TokenUsageInterface ? $usage : null;
+    }
+
+    // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
+    private function accountOf(DeferredResult $result): ?string
+    {
+        $account = $result->getMetadata()->get(Account::METADATA);
+
+        return is_string($account) ? $account : null;
     }
 
     // A stream carries the last usage it reported on its own metadata, which the deferred result and the extractor do not see, so it is read first; a result that fails to convert has no stream.

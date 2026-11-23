@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -35,6 +36,7 @@ final readonly class ReplaysRecording
         private LockFactory $locks,
         private ReplayMarks $marks,
         private TourCaptionUpdates $captions,
+        private ReplayedJudgedState $judged,
     ) {
     }
 
@@ -114,18 +116,19 @@ final readonly class ReplaysRecording
         $steps = $this->timelineOf($recording);
         $start = $this->clock->now();
         $number = 0;
+        $judgedAfter = new JudgedRoundEnds()->of($steps);
 
-        foreach ($steps as $step) {
+        foreach ($steps as $index => $step) {
             $due = $this->secondsBetween($this->momentOf($steps[0]), $this->momentOf($step)) / $factor;
             $this->clock->sleep(max(0.0, $due - $this->secondsBetween($start, $this->clock->now())));
 
             if ($step instanceof CapturedUpdate) {
                 $this->updates->publish(new LiveEvent($step->topic, $step->data));
-
-                continue;
+            } else {
+                $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
             }
 
-            $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
+            $this->judged->publishEach($judgedAfter[$index] ?? []);
         }
     }
 
@@ -146,16 +149,9 @@ final readonly class ReplaysRecording
         return [...$steps, ...$events, ...$updates];
     }
 
-    private function append(LedgerEvent $event, Recording $recording, int $number): void
+    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
     {
-        $result = $this->ledger->append($event);
-
-        if (!$result->succeeded()) {
-            throw ReplayStopped::at($recording, $number, (string) $result->failure);
-        }
-
-        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
-        $this->captions->publishTheStage();
+        return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
     }
 
     // A step recorded before the first one follows at once, because the ledger and the capture keep the recorded order.
@@ -184,9 +180,16 @@ final readonly class ReplaysRecording
         return json_encode($row, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }
 
-    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
+    private function append(LedgerEvent $event, Recording $recording, int $number): void
     {
-        return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
+        $result = $this->ledger->append($event);
+
+        if (!$result->succeeded()) {
+            throw ReplayStopped::at($recording, $number, (string) $result->failure);
+        }
+
+        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
+        $this->captions->publishTheStage();
     }
 
     private static function roundOf(string $payload): ?string

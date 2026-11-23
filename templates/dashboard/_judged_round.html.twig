@@ -15,7 +15,7 @@
         <li class="finding-card" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">
             <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
             <div class="fc-body">
-                <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
+                {{ include('dashboard/_finding_card_text.html.twig', {finding: finding}, with_context = false) }}
                 <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
                 {% if finding.merged is not empty %}
                 <p class="fc-merged">Also reported as <span class="mono">{{ finding.merged|join(', ') }}</span></p>
@@ -32,7 +32,7 @@
         <li class="finding-card" id="round-{{ reviewed.round }}-dropped-{{ finding.id }}" data-finding="{{ finding.id }}" data-dropped="{{ finding.id }}">
             <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
             <div class="fc-body">
-                <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
+                {{ include('dashboard/_finding_card_text.html.twig', {finding: finding}, with_context = false) }}
                 <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
                 <p class="fc-call">Quote not found in the code</p>
                 {#- The quotes are the ones the quote check counted (RoundFinding::$quotes), never read again from the text here, so the list matches the count in the reason. -#}

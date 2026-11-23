@@ -23,17 +23,6 @@ final class ComposerCooldownPolicyTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-cooldown-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAnUpdateWithTheRepositoryPolicyLeavesOutAReleaseInsideTheCooldown(): void
     {
         $this->projectRequiringAPackageReleasedAt(self::INSIDE_THE_PERIOD);
@@ -62,6 +51,17 @@ final class ComposerCooldownPolicyTest extends TestCase
         self::assertSame('3 days', $policy['cooldown']['period'] ?? null);
         self::assertTrue($policy['cooldown']['block'] ?? null);
         self::assertSame('fail', $policy['cooldown']['audit'] ?? null);
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-cooldown-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function projectRequiringAPackageReleasedAt(string $newerRelease): void

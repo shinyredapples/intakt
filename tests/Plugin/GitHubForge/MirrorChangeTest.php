@@ -25,18 +25,6 @@ final class MirrorChangeTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('bin/check', "old\n");
-        $this->repository->checkoutNewBranch('head');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheChangeIsTheHeadsCommitAndEverythingItAddsSinceItForkedFromMain(): void
     {
         $head = $this->repository->commitFile('bin/check', "new\n");
@@ -118,8 +106,20 @@ final class MirrorChangeTest extends TestCase
         $this->read('other');
     }
 
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('bin/check', "old\n");
+        $this->repository->checkoutNewBranch('head');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
+
     private function read(string $head): HeldChange
     {
-        return new MirrorChange(new HardenedGit())->of($this->repository->path.'/.git', $head);
+        return new MirrorChange(new HardenedGit(), new BinaryFiles())->of($this->repository->path.'/.git', $head);
     }
 }

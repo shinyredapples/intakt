@@ -33,18 +33,18 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded($this->summary());
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
-        self::assertSame(['h2', 'div', 'section'], $crawler->filter('aside.log-pane')->children()->each(static fn (Crawler $part): string => $part->nodeName()));
-        self::assertCount(1, $crawler->filter('aside.log-pane > .log-main #round-round-2-live'));
-        self::assertSame('Session summary', $crawler->filter('aside.log-pane > section.log-summary')->attr('aria-label'));
+        self::assertSame(['h2', 'div', 'section'], $crawler->filter('section.log-pane')->children()->each(static fn (Crawler $part): string => $part->nodeName()));
+        self::assertCount(1, $crawler->filter('section.log-pane > .log-main #round-round-2-live'));
+        self::assertSame('Session summary', $crawler->filter('section.log-pane > section.log-summary')->attr('aria-label'));
     }
 
     public function testTheSummaryCountsTheToolCallsByKindWithTheirTotal(): void
     {
         $this->givenTheRunningRoundRecorded($this->summary());
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame([['Directory listings', '1'], ['File reads', '4'], ['Total', '5']], $this->pairsOf($crawler->filter('.log-summary .ls-tools')));
     }
@@ -54,7 +54,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         $this->ledger->useTokens('round-1', 1000, 300);
         $this->givenTheRunningRoundRecorded($this->summary());
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame([['This round', '0.6100 USD, price date unknown'], ['Review so far', 'unknown, no price for model-a']], $this->pairsOf($crawler->filter('.log-summary .ls-cost')));
     }
@@ -63,7 +63,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded($this->summary());
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['src/PushGate.php', 'tests/PushGateTest.php'], $crawler->filter('.log-summary .ls-files li .mono')->each(static fn (Crawler $file): string => $file->text()));
     }
@@ -72,7 +72,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded($this->summary());
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame([
             'F1 P1 Read the status per push. Checked, resolved',
@@ -85,7 +85,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded($this->summary());
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         $buttons = $crawler->filter('.log-summary .ls-findings li .mono button[type="button"]');
         self::assertSame(['F1', 'F2', 'F4'], $buttons->each(static fn (Crawler $button): string => (string) $button->attr('data-highlight-finding')));
@@ -95,7 +95,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded($this->summary());
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['F1', 'F2'], $crawler->filter('#round-round-1 ul.finding-cards li[data-finding]')->each(static fn (Crawler $card): string => (string) $card->attr('data-finding')));
     }
@@ -104,7 +104,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded($this->summary(reported: [$this->finding('F2', Severity::P3, 'Name the cache window again.')]));
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['F1 P1 Read the status per push. Checked, resolved', 'F2 P3 Name the cache window. Open'], $this->linesOf($crawler->filter('.log-summary .ls-findings li')));
     }
@@ -113,7 +113,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], [], false));
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['No tool call yet.', 'No file read yet.', 'No finding to check, and none reported yet. Reported findings appear once every reviewer is in.'], $this->linesOf($crawler->filter('.log-summary p.muted')));
     }
@@ -131,7 +131,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded(null);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame('No session summary: Intakt holds no record of this round\'s tool calls and findings.', $crawler->filter('.log-summary p')->text());
         self::assertCount(0, $crawler->filter('.log-summary h3'));
@@ -151,7 +151,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), ['<b>x</b>.php'], [$this->finding('F1', Severity::P2, '<script>alert(1)</script>')], [], [], false));
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame('<b>x</b>.php', $crawler->filter('.ls-files .mono')->text());
         self::assertStringContainsString('<script>alert(1)</script>', $crawler->filter('.ls-findings li')->text());
@@ -162,7 +162,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
     {
         $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [$this->finding('F1', Severity::P2, 'Call `Lock::acquire()` first.')], [], [], false));
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['Lock::acquire()'], $crawler->filter('.ls-findings .ls-text code')->each(static fn (Crawler $code): string => $code->text()));
         self::assertStringNotContainsString('`', $crawler->filter('.ls-findings')->text());
@@ -177,7 +177,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [$this->finding('F2', Severity::P2, 'Broken.')], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertCount(1, $crawler->filter('.ls-findings button[data-highlight-finding="F2"]'));
         self::assertSame(['F1'], $crawler->filter('#round-round-1 li[data-finding~="F2"] .fc-id')->each(static fn (Crawler $id): string => $id->text()));
@@ -199,18 +199,6 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none; min-width: 4ch;[^}]*white-space: nowrap;/', $sheet);
     }
 
-    private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
-    {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'act']);
-        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
-        $this->ledger->startReviewer('round-2', 'correctness');
-
-        $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturnMap([['round-2', $summary]]);
-        self::getContainer()->set(SessionSummaries::class, $summaries);
-    }
-
     /**
      * @param list<Finding>|null $reported
      */
@@ -228,6 +216,18 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
             [$checked],
             false,
         );
+    }
+
+    private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'act']);
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'correctness');
+
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturnMap([['round-2', $summary]]);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
     }
 
     private function finding(string $id, Severity $severity, string $text): Finding

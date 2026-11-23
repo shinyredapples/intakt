@@ -8,6 +8,9 @@
 {% set rail_section = 'projects' %}
 
 {% block body %}
+{# One template for the review's two views: the main view with one message, and with record the Full record, which holds the timeline, the tables, the figures and the live log (owner decision for #3360). #}
+{# The page's own stylesheet, linked here because the shared layout belongs to the frame. #}
+<link rel="stylesheet" href="{{ asset('styles/review.css') }}">
 {{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
     {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
     {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
@@ -20,23 +23,31 @@
 {% set open = review.openFindings %}
 {% set can_start = review.source is not null and review.nextNumber is not null %}
 {% set chip = 'dashboard/components/chip.html.twig' %}
+{% set term_tpl = 'dashboard/components/term.html.twig' %}
 {# Each round carries its own mark, because a replay round can follow a live round of the same change. #}
 {% set replay_chip = {label: 'Replay', on_page: true, extra: 'replay-mark'} %}
 <div class="page-head">
     <div>
-        <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
-        {# Only once the latest round is judged or ended, because a round in review has no answer yet and the state block below says where it stands. #}
-        {% if latest.isJudged or latest.hasEnded %}
-        {{ include('dashboard/_verdict_card.html.twig', {latest: latest, open: open, judged: judged.round ?? null}, with_context = false) }}
-        {% endif %}
+        <h1>{{ record ? 'Full record of' : 'Review of' }} {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
+        {% if record %}
         {% if review.everyRoundIsAReplay %}
         <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
         {% endif %}
+        {% else %}
         {% if review.source is not null %}
         <p class="task-sentence">{{ review.source.task }}</p>
         {% else %}
         <p class="task-sentence muted">Task not recorded.</p>
         {% endif %}
+        {# Only once the latest round is judged or ended, because a round in review has no answer yet and the state block below says where it stands; the empty holder lets the judged round's live update put the card in. #}
+        {% if latest.isJudged or latest.hasEnded %}
+        {{ include('dashboard/_verdict_card.html.twig', {latest: latest, open: open}, with_context = false) }}
+        {% else %}
+        <div id="review-verdict" hidden></div>
+        {% endif %}
+        {{ include('dashboard/_review_path.html.twig', {steps: review.path}, with_context = false) }}
+        {% endif %}
+        {% if record %}
         {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
@@ -46,11 +57,14 @@
             {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
-        {% if not can_start %}
+        {% endif %}
+        {% if record %}
+        <p class="record-back"><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round}) }}">Back to the review</a></p>
+        {% elseif not can_start %}
         <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
         {% endif %}
     </div>
-    {% if can_start or active is not null %}
+    {% if not record and (can_start or active is not null) %}
     <div class="actions task-actions">
         {% if active is not null %}
         {# Marks the round as in review until it is judged or ended, also while no reviewer runs, so the start of the next round stays hidden; the judged round's live update removes it. #}
@@ -60,6 +74,7 @@
             <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_ROUND'), {round: active.round}) }}" class="stop-round">
                 <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopRoundController::TOKEN_ID')) }}">
                 {{ include('dashboard/components/button.html.twig', {kind: 'danger', type: 'submit', label: 'Stop', confirm: 'Click again to stop the round'}, with_context = false) }}
+                <p class="next-step">The reviewers stop and this round ends without a verdict.</p>
             </form>
         </div>
         {% endif %}
@@ -68,15 +83,17 @@
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">
             <input type="hidden" name="number" value="{{ review.nextNumber }}">
             {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start round ' ~ review.nextNumber}, with_context = false) }}
+            <p class="next-step">The reviewers read the change again.</p>
         </form>
         {% endif %}
     </div>
     {% endif %}
 </div>
-{% if active is not null %}
-<section class="state-block" aria-labelledby="state-block-title">
+{% if not record and active is not null %}
+{# The newest round's judged live update removes it by its id, because the To fix cards take its place as on a reload. #}
+<section class="state-block" id="review-state-block" aria-labelledby="state-block-title">
     <div class="sb-head">
-        <h2 id="state-block-title">Now: round {{ active.number ?? '(number not recorded)' }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
+        <h2 id="state-block-title">Now: {{ include(term_tpl, {term: 'pass', words: 'Review pass ' ~ (active.number ?? '(number not recorded)'), ask: true}, with_context = false) }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
     <div class="sb-grid">
         <div>
             <h3>Reviewers</h3>
@@ -90,8 +107,8 @@
             </ul>
         </div>
         <div>
-            <h3>Open findings</h3>
-            {# Its own partial, because the judged round's live update replaces it with that round's findings to fix. #}
+            <h3>{{ include(term_tpl, {term: 'fix', words: 'To fix', ask: true}, with_context = false) }}</h3>
+            {# The newest round's judged live update removes the whole state block, this list with it, and puts in the To fix cards. #}
             {{ include('dashboard/_now_findings.html.twig', {round: active.round, open: open, judged: judged.round ?? null}, with_context = false) }}
         </div>
         <div>
@@ -102,13 +119,26 @@
     </div>
 </section>
 {% endif %}
-{% if active is not null %}
+{% if not record %}
+{# The To fix cards only while no round is in review, because the state block lists the findings to fix then, so they never show twice on one screen; the empty holder lets the newest round's judged live update put them in. #}
+{% if active is null and open is not empty %}
+{{ include('dashboard/_to_fix.html.twig', {open: open, judged: judged.round}, with_context = false) }}
+{% else %}
+<div id="review-to-fix" hidden></div>
+{% endif %}
+<a class="full-record" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW_RECORD'), {round: round}) }}">
+    <span class="full-record-text"><b>Full record</b><small>Timeline, reviewers, tokens and cost</small></span>
+    {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'fix-chev'}, with_context = false) }}
+</a>
+{% endif %}
+{% if record and active is not null %}
 <div class="ttabs"><div class="seg" role="tablist" aria-label="Task views">
     {# Only the chosen tab is a Tab stop, because the arrow keys move between the tabs (the ARIA tabs pattern, decision 1 of #2638). #}
     <button type="button" role="tab" id="timeline-tab" aria-selected="true" tabindex="0" aria-controls="timeline-pane" data-pane="timeline">Timeline</button>
     <button type="button" role="tab" id="live-log-tab" aria-selected="false" tabindex="-1" aria-controls="live-log-pane" data-pane="log">Live log</button>
 </div></div>
 {% endif %}
+{% if record %}
 <div class="task-grid" data-pane="timeline">
 {# A tab panel only while the tabs exist, so its label never names a tab the page lacks. A pane is rendered as a phone shows it; assets/task-panes.js names it by its data-heading while both panes are shown. #}
 <section class="tl-pane" id="timeline-pane"{% if active is not null %} role="tabpanel" aria-labelledby="timeline-tab" tabindex="0" data-heading="timeline-title"{% else %} aria-labelledby="timeline-title"{% endif %}>
@@ -116,16 +146,17 @@
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
 <section class="section round" id="round-{{ reviewed.round }}">
-    {# Only the newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down. A judged round followed by a round still in review stays closed, because only the newest round opens. #}
-    <details class="ev"{% if loop.last %} open{% endif %}>
+    {# The newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down; the round the address names opens too, because a finding link of the main view names the pass that holds the finding, so its anchor never lands inside a folded pass. #}
+    <details class="ev"{% if loop.last or reviewed.round == round %} open{% endif %}>
         <summary class="ev-head">
-            <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+            {# No "?" in a summary, because a focusable term would nest a control in the disclosure's own control; the round body explains the words. #}
+            <h2>Review pass {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
             {% if reviewed.speedFactor is not null %}<span class="muted small replay-factor">Played {{ reviewed.speedFactor|number_format(6, '.', '')|trim('0', 'right')|trim('.', 'right') }} times as fast as recorded</span>{% endif %}
             {% set outcome = reviewed.reviewOutcome %}
-            {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}{% endif %}
+            {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true, plain: true}, with_context = false) }}{% endif %}
             {# Plain muted text, because the outcome is the headline and the process state only says where the round stands. #}
-            <span class="muted small state-judged">{{ reviewed.state.value|capitalize }}</span>
+            <span class="muted small state-judged" title="Judged">Checked</span>
             {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. #}
             <span class="muted small">{% if outcome is null %}outcome not recorded, {% endif %}{% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
             {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
@@ -139,7 +170,7 @@
 {% else %}
 <section class="section round" id="round-{{ reviewed.round }}">
     <div class="round-head">
-        <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+        <h2>Review pass {{ reviewed.number ?? '(number not recorded)' }}</h2>
         {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
         {% if reviewed.speedFactor is not null %}<span class="muted small replay-factor">Played {{ reviewed.speedFactor|number_format(6, '.', '')|trim('0', 'right')|trim('.', 'right') }} times as fast as recorded</span>{% endif %}
         <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, outcome: reviewed.reviewOutcome, plain: true}, with_context = false) }}</span>
@@ -153,8 +184,9 @@
 {% endfor %}
 </section>
 {% if active is not null %}
-<aside class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab" tabindex="0" data-heading="live-log-title">
-    <h2 id="live-log-title">Live log of round {{ active.number ?? '(number not recorded)' }}</h2>
+{# A section, because axe refuses role="tabpanel" on an aside. #}
+<section class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab" tabindex="0" data-heading="live-log-title">
+    <h2 id="live-log-title">Live log of review pass {{ active.number ?? '(number not recorded)' }}</h2>
     <div class="log-main">
     {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}
     <p class="muted log-empty">Each reviewer's tool calls and text appear here as it works.</p>
@@ -165,7 +197,8 @@
     </div>
     </div>
     {{ include('dashboard/_session_summary.html.twig', {round: active.round, summary: summary, review_cost: review.cost}, with_context = false) }}
-</aside>
+</section>
 {% endif %}
 </div>
+{% endif %}
 {% endblock %}

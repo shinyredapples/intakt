@@ -7,7 +7,7 @@ use Intakt\Tests\JourneyPage\MermaidTimeline;
 use Symfony\Component\Process\Process;
 
 const USAGE = "usage: bin/pages <folder> [--recorded=<folder with the recorded API answers>]\n";
-const JOURNEY_LINK = "How Intakt was built, with its milestones, token use and issue flow: [the journey](journey/).\n";
+const JOURNEY_LINK = "How Intakt was built, with its milestones, token use and issue flow: [the journey](../journey/).\n";
 
 $autoload = __DIR__.'/../vendor/autoload.php';
 
@@ -53,17 +53,47 @@ foreach ([['bin/highlights'], ['bin/journey', ...(null === $recorded ? [] : [$re
     }
 }
 
-$journey = (string) file_get_contents($root.'/docs/journey.md');
-$highlights = explode("\n", (string) file_get_contents($root.'/docs/highlights.md'), 2);
+$readSource = static function (string $file): string {
+    $content = @file_get_contents($file);
+
+    if (false === $content) {
+        fwrite(STDERR, 'cannot read '.$file."\n");
+        exit(1);
+    }
+
+    return $content;
+};
+
+$journey = $readSource($root.'/docs/journey.md');
+$highlights = explode("\n", $readSource($root.'/docs/highlights.md'), 2);
 // Pages serves the journey page at /journey/, so its drawings lie beside it, and its Jekyll does not render Mermaid.
 $files = [
-    'index.md' => $highlights[0]."\n\n".JOURNEY_LINK.($highlights[1] ?? ''),
+    'highlights/index.md' => $highlights[0]."\n\n".JOURNEY_LINK.($highlights[1] ?? ''),
     // Correct only because docs/journey.md links nothing under journey/ but the *.svg drawings copied below (PagesCommandTest pins it).
     'journey/index.md' => (string) preg_replace(MermaidTimeline::BLOCK, '![Timeline](timeline.svg)', str_replace('](journey/', '](', $journey)),
 ];
 
+// The front page and its assets have no front matter, so Jekyll copies them unchanged and runs no Liquid on them.
+$sources = [$root.'/docs/pages/index.html'];
+
+if (is_dir($root.'/docs/pages/assets')) {
+    // Walks every subfolder of assets/, so each file keeps its relative path under the site's assets/.
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/docs/pages/assets', FilesystemIterator::SKIP_DOTS)) as $asset) {
+        $sources[] = $asset->getPathname();
+    }
+}
+
+foreach ($sources as $file) {
+    $files[substr($file, strlen($root.'/docs/pages/'))] = $readSource($file);
+}
+
 foreach (glob($root.'/docs/journey/*.svg') ?: [] as $drawing) {
-    $files['journey/'.basename($drawing)] = (string) file_get_contents($drawing);
+    $files['journey/'.basename($drawing)] = $readSource($drawing);
+}
+
+if (is_file($folder.'/index.md')) {
+    fwrite(STDERR, $folder."/index.md is left from the old layout and the front page replaces it: remove it or build into a fresh folder\n");
+    exit(1);
 }
 
 $changed = array_filter($files, static fn (string $content, string $path): bool => !is_file($folder.'/'.$path) || file_get_contents($folder.'/'.$path) !== $content, ARRAY_FILTER_USE_BOTH);
@@ -73,9 +103,11 @@ if ([] === $changed) {
     exit(0);
 }
 
-if (!is_dir($folder.'/journey') && !@mkdir($folder.'/journey', recursive: true)) {
-    fwrite(STDERR, 'cannot make '.$folder."/journey\n");
-    exit(1);
+foreach (array_unique(array_map(dirname(...), array_keys($changed))) as $subfolder) {
+    if (!is_dir($folder.'/'.$subfolder) && !@mkdir($folder.'/'.$subfolder, recursive: true)) {
+        fwrite(STDERR, 'cannot make '.$folder.'/'.$subfolder."\n");
+        exit(1);
+    }
 }
 
 foreach ($changed as $path => $content) {

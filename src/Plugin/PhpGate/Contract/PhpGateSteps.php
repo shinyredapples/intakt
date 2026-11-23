@@ -7,7 +7,7 @@ namespace Intakt\Plugin\PhpGate\Contract;
 // The PHP gate's own steps, kept in its contract so the docs and a project's configured command can be compared with one home.
 final readonly class PhpGateSteps
 {
-    // The dependencies first, because the check job's clone has no vendor folder and an empty Composer cache.
+    // The dependencies first, because the check job's clone holds no installed packages unless it copied a dependency snapshot, and this install then makes the files that depend on the tree.
     public const string INSTALL = 'composer install --no-interaction --no-progress';
 
     public const string CHECK = 'bin/check --fast';
@@ -30,7 +30,7 @@ final readonly class PhpGateSteps
     // Read inside the job image, so the version is the one the check runs on and not the orchestrator's.
     public const string PHP_VERSION_PROBE = "php -r 'echo PHP_VERSION;'";
 
-    // Package names are shown JSON-escaped, without JSON_UNESCAPED_UNICODE, so that no character of a name (U+0085 and U+2028 included) can break the one-line message. A refused address is never shown, because a URL can hold credentials that would then reach the check's log. Path types are lowercased, because Composer lowercases a downloader type before choosing it.
+    // A pre-install-cmd script is refused because a check that copied a snapshot would run it with the vendor folder already in place, while a check without one runs it before any package exists. The vendor folder is resolved by its path segments, because Composer reports it as written and the folder need not exist yet; one outside the folder Composer runs in would leave nothing of the install to keep. Package names are shown JSON-escaped, without JSON_UNESCAPED_UNICODE, so that no character of a name (U+0085 and U+2028 included) can break the one-line message. A refused address is never shown, because a URL can hold credentials that would then reach the check's log. Path types are lowercased, because Composer lowercases a downloader type before choosing it.
     private const string LOCK_GUARD_SCRIPT = <<<'SH_WRAP'
     php -r '$refused = (int) $argv[2];
     $refuse = static function (string $what) use ($refused): never { fwrite(STDERR, $what."\n"); exit($refused); };
@@ -46,12 +46,21 @@ final readonly class PhpGateSteps
     $answer = $argv[1] ?? "";
     $vendor = str_ends_with($answer, "\nx") ? substr($answer, 0, -2) : "";
     if ("" === $vendor) { $refuse("composer config could not report the vendor folder, so it is unknown whether the folder holds an install."); }
+    if (str_starts_with($vendor, "/")) { $refuse("The vendor folder ".$show($vendor)." is an absolute path, so the install would not stay in the folder Composer runs in."); }
+    $inside = [];
+    foreach (explode("/", $vendor) as $part) {
+        if ("" === $part || "." === $part) { continue; }
+        if (".." !== $part) { $inside[] = $part; continue; }
+        if ([] === $inside) { $refuse("The vendor folder ".$show($vendor)." resolves outside the folder Composer runs in."); }
+        array_pop($inside);
+    }
+    if ([] === $inside) { $refuse("The vendor folder ".$show($vendor)." resolves to the folder Composer runs in itself."); }
     $manifest = $read("composer.json");
     $config = is_array($manifest) ? ($manifest["config"] ?? null) : null;
     if (is_array($config) && array_key_exists("lock", $config) && true !== $config["lock"]) { fwrite(STDERR, "composer.json sets config.lock to something other than true, so Composer ignores composer.lock.\n"); exit(1); }
     if (is_file($vendor."/composer/installed.json")) { $refuse("The vendor folder already holds an install (".$show($vendor."/composer/installed.json")."), which may hold more than the lock."); }
     $scripts = is_array($manifest) ? ($manifest["scripts"] ?? []) : [];
-    foreach (["pre-package-install", "post-package-install", "pre-package-update", "post-package-update"] as $event) {
+    foreach (["pre-install-cmd", "pre-package-install", "post-package-install", "pre-package-update", "post-package-update"] as $event) {
         if (is_array($scripts) && array_key_exists($event, $scripts)) { $refuse("composer.json defines the script ".$show($event).", which the locked install would skip."); }
     }
     $lock = $read("composer.lock");

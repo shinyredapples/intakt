@@ -93,6 +93,22 @@ final readonly class GateResult
         return is_string($decoded) ? $decoded : '';
     }
 
+    private function shorten(string $finding): string
+    {
+        $oneLine = trim((string) preg_replace('/\s+/', ' ', self::scrubbed($finding)));
+
+        if (self::measure($oneLine) <= self::MAXIMUM_FINDING_LENGTH) {
+            return $oneLine;
+        }
+
+        // The environment gate reports a missing mbstring through here, so the cut must work without it.
+        if (!function_exists('mb_strimwidth')) {
+            return implode('', array_slice(self::characters($oneLine), 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
+        }
+
+        return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...', 'UTF-8');
+    }
+
     /**
      * @param list<string> $findings
      *
@@ -124,22 +140,6 @@ final readonly class GateResult
         }
 
         return $list;
-    }
-
-    private function shorten(string $finding): string
-    {
-        $oneLine = trim((string) preg_replace('/\s+/', ' ', self::scrubbed($finding)));
-
-        if (self::measure($oneLine) <= self::MAXIMUM_FINDING_LENGTH) {
-            return $oneLine;
-        }
-
-        // The environment gate reports a missing mbstring through here, so the cut must work without it.
-        if (!function_exists('mb_strimwidth')) {
-            return implode('', array_slice(self::characters($oneLine), 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
-        }
-
-        return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...', 'UTF-8');
     }
 
     // Because shorten() cuts by display width, the cut check measures the same way, and by characters where mbstring is missing.

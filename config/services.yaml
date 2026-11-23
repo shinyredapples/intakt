@@ -18,10 +18,14 @@ parameters:
     !php/const Intakt\Core\Job\Contract\JobServices::DOCKER_SOCKET: /var/run/docker.sock
     # Built from docker/egress-proxy on the engine's host, because it is the per-job proxy every job with an allowlist goes through.
     !php/const Intakt\Core\Job\Contract\JobServices::EGRESS_PROXY_IMAGE: intakt-egress-proxy
-    # The build slots that run at once on this host (at least 1); with more than one slot, max(2, processors / slots), at most 8, is a ceiling for the gates each builder's bin/check runs at once, handed over only when it is below what bin/check picks from the job's limits, which today's limits never allow (docs/user/README.md#running-a-build).
+    # The build slots that run at once on this host (at least 1); with more than one slot, max(2, processors / slots), at most 8, is a ceiling for the gates each builder's bin/check runs at once, handed over only when it is below what bin/check picks from the job's limits, which today's limits never allow (docs/reference/user-manual.md#running-a-build).
     !php/const Intakt\Core\Build\Contract\BuildServices::SLOTS: 1
-    # The seconds one tool call of the builder's session may run (at least 1, below the session's 3000-second allowance), above the slowest bin/check --fast, because checks of 7 to 9 minutes on a shared host ran past the CLI's 10-minute default and went to the background (docs/user/README.md#running-a-build).
+    # The seconds one tool call of the builder's session may run (at least 1, below the session's 3000-second allowance), above the slowest bin/check --fast, because checks of 7 to 9 minutes on a shared host ran past the CLI's 10-minute default and went to the background (docs/reference/user-manual.md#running-a-build).
     !php/const Intakt\Core\Build\Contract\BuildServices::TOOL_TIME_LIMIT: 1500
+    # Trusted dependency installs live here, written only by the orchestrator's own process and never mounted into a build job (docs/architecture/check-job.md#the-dependency-snapshot-store).
+    !php/const Intakt\Core\HandBack\Contract\HandBackServices::DEPENDENCY_SNAPSHOTS_DIRECTORY: '%kernel.project_dir%/var/dependency-snapshots'
+    # The snapshots the store keeps (at least 1); the least recently used one past the count is evicted unless a check holds it.
+    !php/const Intakt\Core\HandBack\Contract\HandBackServices::DEPENDENCY_SNAPSHOT_COUNT: 10
     # One bare mirror per project lives here, rebuilt from the remote if lost.
     !php/const Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY: '%kernel.project_dir%/var/mirrors'
     # The orchestrator's own private key, under var/data because that is where the image keeps its volume; it is never mounted into a job.
@@ -140,8 +144,8 @@ services:
 
 when@dev:
     services:
-        # Messenger defines its collector only with APP_DEBUG=1; the same definition here keeps messenger in a saved development profile also with APP_DEBUG=0.
-        data_collector.messenger:
+        # Messenger defines its collector only with APP_DEBUG=1; this definition, shared with when@test through its anchor so the two cannot drift, keeps messenger in a saved development profile and an opted-in test profile also with APP_DEBUG=0.
+        data_collector.messenger: &messenger_data_collector
             class: Symfony\Component\Messenger\DataCollector\MessengerDataCollector
             tags:
                 - { name: data_collector, id: messenger, template: '@WebProfiler/Collector/messenger.html.twig', priority: 100 }
@@ -167,11 +171,8 @@ when@test:
         # The pinned provider cooldowns under a public test name, so their test proves the store the container builds even when no provider is enabled to take it.
         - { resource: '../tests/Core/Ai/services.yaml', ignore_errors: not_found }
     services:
-        # Messenger defines its collector only with APP_DEBUG=1; the same definition here keeps messenger in an opted-in test profile also with APP_DEBUG=0.
-        data_collector.messenger:
-            class: Symfony\Component\Messenger\DataCollector\MessengerDataCollector
-            tags:
-                - { name: data_collector, id: messenger, template: '@WebProfiler/Collector/messenger.html.twig', priority: 100 }
+        # The development definition above, through its anchor, so an opted-in test profile keeps messenger also with APP_DEBUG=0.
+        data_collector.messenger: *messenger_data_collector
         # In the worker's own cache directory, because the tests gate runs workers side by side and a lock one worker holds would skip another's notice.
         Symfony\Component\Lock\Store\FlockStore:
             arguments: ['%kernel.cache_dir%/locks']

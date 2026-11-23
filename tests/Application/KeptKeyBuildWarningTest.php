@@ -41,12 +41,6 @@ final class KeptKeyBuildWarningTest extends TestCase
         echo getenv('INTAKT_CONFIG'), "\n", getenv('APP_RUNTIME_ENV');
         PHP;
 
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
-        $this->removeTheVaultsFolderWhenEmpty();
-    }
-
     public function testAVaultLoaderThatFailsWhileTheContainerIsBuiltIsReportedOnStandardError(): void
     {
         $vault = new SodiumVault($this->vaultDirectory());
@@ -74,6 +68,32 @@ final class KeptKeyBuildWarningTest extends TestCase
         $this->assertTheBuildRanWithTheTestsOwnSettings($build);
     }
 
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
+        $this->removeTheVaultsFolderWhenEmpty();
+    }
+
+    private function vaultDirectory(): string
+    {
+        return dirname(__DIR__, 2).'/config/secrets/'.$this->vaultEnvironment();
+    }
+
+    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
+    private function removeTheVaultsFolderWhenEmpty(): void
+    {
+        $vaults = dirname($this->vaultDirectory());
+        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
+            rmdir($vaults);
+        }
+    }
+
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    private function keptKeyDirectory(): string
+    {
+        return sys_get_temp_dir().'/kept-key-build-warning-test';
+    }
+
     // Every case builds through here, so none can read the operator's project file, vault or decryption key.
     private function build(string|false $decryptionSecret): Process
     {
@@ -95,29 +115,9 @@ final class KeptKeyBuildWarningTest extends TestCase
         self::assertSame(self::PROJECT_FILE."\n".$this->vaultEnvironment(), $build->getOutput());
     }
 
-    private function vaultDirectory(): string
-    {
-        return dirname(__DIR__, 2).'/config/secrets/'.$this->vaultEnvironment();
-    }
-
-    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
-    private function removeTheVaultsFolderWhenEmpty(): void
-    {
-        $vaults = dirname($this->vaultDirectory());
-        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
-            rmdir($vaults);
-        }
-    }
-
     // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
     private function vaultEnvironment(): string
     {
         return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
-    }
-
-    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
-    private function keptKeyDirectory(): string
-    {
-        return sys_get_temp_dir().'/kept-key-build-warning-test';
     }
 }

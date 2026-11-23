@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
+use Intakt\Core\Dashboard\Infrastructure\GlossaryExplanations;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
@@ -82,34 +83,6 @@ final class MercureHubTest extends TestCase
 
     private string $round;
 
-    protected function setUp(): void
-    {
-        $this->startTheHub();
-        $this->round = Uuid::v7()->toRfc4122();
-        $this->client = HttpClient::create();
-        $logger = new BufferingLogger();
-        // Registered because the judged stream renders a component, which asks for its options through this function.
-        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
-        $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
-        $this->updates = new MercureRoundUpdates(
-            new MercureLiveUpdates(new Hub($this->url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
-            $twig,
-            self::createStub(SessionSummaries::class),
-            new LedgerReviewPages(new DashboardLedger(), new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), self::createStub(RoundCosts::class), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())),
-            new LockFactory(new InMemoryStore()),
-            $logger,
-        );
-    }
-
-    protected function tearDown(): void
-    {
-        $this->hub?->stop(5);
-
-        if (null !== $this->storage) {
-            new Filesystem()->remove($this->storage);
-        }
-    }
-
     public function testEventsPublishedByARoundReachASubscribedClientInOrder(): void
     {
         $stream = $this->subscribe(self::FROM_THE_START);
@@ -117,7 +90,7 @@ final class MercureHubTest extends TestCase
 
         $this->publishThree();
 
-        self::assertSame(['1 of 2 reviewers finished.', '2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($stream, 3)));
+        self::assertSame(['1 of 2 reviewers finished.', '2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($stream, 3)));
     }
 
     public function testAClientThatReconnectsWithLastEventIdReceivesTheEventsItMissed(): void
@@ -131,7 +104,7 @@ final class MercureHubTest extends TestCase
         $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
         $second = $this->subscribe($seen[0]['id']);
 
-        self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
+        self::assertSame(['2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($second, 2)));
     }
 
     // The dashboard's connection controller reconnects with a new EventSource, which cannot set the Last-Event-ID header.
@@ -151,7 +124,7 @@ final class MercureHubTest extends TestCase
             'timeout' => self::SECONDS_TO_WAIT,
         ]);
 
-        self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
+        self::assertSame(['2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($second, 2)));
     }
 
     public function testAClientWithoutASubscriberTokenReceivesNothing(): void
@@ -168,11 +141,34 @@ final class MercureHubTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
     }
 
-    private function publishThree(): void
+    protected function setUp(): void
     {
-        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(1, 2, false));
-        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, false));
-        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
+        $this->startTheHub();
+        $this->round = Uuid::v7()->toRfc4122();
+        $this->client = HttpClient::create();
+        $logger = new BufferingLogger();
+        // Registered because the judged stream renders a component, which asks for its options through this function.
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
+        $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
+        // Registered because the judged stream explains "checked" with its glossary term.
+        $twig->addFunction(new TwigFunction('glossary_explanation', new GlossaryExplanations()->of(...)));
+        $this->updates = new MercureRoundUpdates(
+            new MercureLiveUpdates(new Hub($this->url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
+            $twig,
+            self::createStub(SessionSummaries::class),
+            new LedgerReviewPages(new DashboardLedger(), new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), self::createStub(RoundCosts::class), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())),
+            new LockFactory(new InMemoryStore()),
+            $logger,
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        $this->hub?->stop(5);
+
+        if (null !== $this->storage) {
+            new Filesystem()->remove($this->storage);
+        }
     }
 
     private function subscribe(string $lastEventId): ResponseInterface
@@ -193,6 +189,13 @@ final class MercureHubTest extends TestCase
                 return;
             }
         }
+    }
+
+    private function publishThree(): void
+    {
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(1, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
     }
 
     /**

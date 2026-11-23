@@ -77,19 +77,6 @@ final readonly class Scope
     }
 
     /**
-     * @param list<string> $paths
-     *
-     * @return list<string>
-     */
-    private function inScope(array $paths): array
-    {
-        $inScope = array_filter(array_unique($paths), fn (string $path): bool => $this->includes($path) && is_file($this->root.'/'.$path));
-        sort($inScope);
-
-        return $inScope;
-    }
-
-    /**
      * @return list<string>
      */
     public function repositoryFiles(): array
@@ -110,6 +97,19 @@ final readonly class Scope
     }
 
     /**
+     * @param list<string> $paths
+     *
+     * @return list<string>
+     */
+    private function inScope(array $paths): array
+    {
+        $inScope = array_filter(array_unique($paths), fn (string $path): bool => $this->includes($path) && is_file($this->root.'/'.$path));
+        sort($inScope);
+
+        return $inScope;
+    }
+
+    /**
      * @return list<string>
      */
     private function walkDirectory(): array
@@ -124,6 +124,22 @@ final readonly class Scope
         }
 
         return array_values(array_filter($files, static fn (string $path): bool => !str_starts_with($path, 'vendor/')));
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return list<string>
+     */
+    private function gitLines(array $arguments): array
+    {
+        $result = $this->runner->git($arguments, $this->root);
+
+        if (!$result->succeeded()) {
+            throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());
+        }
+
+        return array_values(array_filter(explode("\0", $result->output), static fn (string $path): bool => '' !== $path));
     }
 
     /**
@@ -162,12 +178,6 @@ final readonly class Scope
         return $entries;
     }
 
-    private function modeOf(string $path): string
-    {
-        // Git records only the owner's execute bit, so that bit alone decides the mode it would see.
-        return 0 !== ((int) fileperms($this->root.'/'.$path) & 0o100) ? '100755' : '100644';
-    }
-
     /**
      * @param list<string> $paths
      *
@@ -191,19 +201,9 @@ final readonly class Scope
         return $blobs;
     }
 
-    /**
-     * @param list<string> $arguments
-     *
-     * @return list<string>
-     */
-    private function gitLines(array $arguments): array
+    private function modeOf(string $path): string
     {
-        $result = $this->runner->git($arguments, $this->root);
-
-        if (!$result->succeeded()) {
-            throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());
-        }
-
-        return array_values(array_filter(explode("\0", $result->output), static fn (string $path): bool => '' !== $path));
+        // Git records only the owner's execute bit, so that bit alone decides the mode it would see.
+        return 0 !== ((int) fileperms($this->root.'/'.$path) & 0o100) ? '100755' : '100644';
     }
 }

@@ -66,17 +66,6 @@ final class KeepProviderKeyControllerTest extends WebTestCase
 
     private string $directory = '';
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/'.uniqid('keep-key-page-', true);
-    }
-
-    protected function tearDown(): void
-    {
-        parent::tearDown();
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAPostWithoutAValidFormTokenIsRefusedAndKeepsNoKey(): void
     {
         $browser = $this->browser(KeyCheckOutcome::Accepted);
@@ -180,9 +169,15 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         }
     }
 
-    private function key(): string
+    protected function setUp(): void
     {
-        return 'sk-ant-'.self::BODY;
+        $this->directory = sys_get_temp_dir().'/'.uniqid('keep-key-page-', true);
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        new Filesystem()->remove($this->directory);
     }
 
     private function file(): KeptProviderKeyFile
@@ -210,6 +205,11 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         $container->set(EnabledAccounts::class, $accounts);
 
         return $browser;
+    }
+
+    private function key(): string
+    {
+        return 'sk-ant-'.self::BODY;
     }
 
     private function post(KernelBrowser $browser, string $key): void

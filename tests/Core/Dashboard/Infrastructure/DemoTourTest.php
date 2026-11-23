@@ -47,11 +47,6 @@ final class DemoTourTest extends TestCase
     /** @var list<string> */
     private array $replays = [self::DEMO];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testOutsideTheComposeDemoThereIsNoCaptionAtAll(): void
     {
         $this->startRound('r1', 1);
@@ -226,11 +221,21 @@ final class DemoTourTest extends TestCase
         }
     }
 
+    public function testTheLastStageSaysTheRoundIsCheckedInTheReviewPagesPlainWords(): void
+    {
+        self::assertSame('Checked: To fix lists what still needs changing.', TourStage::RoundEnds->sentence());
+    }
+
     public function testEveryStageSentenceIsAtMostNineWords(): void
     {
         foreach (TourStage::cases() as $stage) {
             self::assertLessThanOrEqual(9, substr_count($stage->sentence(), ' ') + 1, $stage->value);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     private function caption(): TourCaption
@@ -241,14 +246,14 @@ final class DemoTourTest extends TestCase
         return $caption;
     }
 
-    private function tour(string $composeService = 'intakt'): DemoTour
-    {
-        return TourCaptionsOn::tour($this->ledger, new ReplayMarks(new ReplayMarkBus($this->replays)), $composeService);
-    }
-
     private function startRound(string $round, int $number): void
     {
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => self::DEMO, 'reviewers' => 2, 'change' => 'sample-change', 'number' => $number]);
+    }
+
+    private function tour(string $composeService = 'intakt'): DemoTour
+    {
+        return TourCaptionsOn::tour($this->ledger, new ReplayMarks(new ReplayMarkBus($this->replays)), $composeService);
     }
 
     private function startReviewer(string $round, string $role): void

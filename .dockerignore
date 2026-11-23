@@ -9,6 +9,7 @@ var
 vendor
 tests
 docs
+!docs/bench.md
 upstream
 mate
 Dockerfile

@@ -62,13 +62,6 @@ final class TierPlatformPinnedProviderTest extends TestCase
 
     private AccountWindowsOnAClock $accounts;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-19T12:00:00+00:00');
-        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
-        $this->accounts = new AccountWindowsOnAClock($this->clock, [self::ROUTER->value => [Account::DEFAULT]]);
-    }
-
     public function testATierWhosePinnedModelCoolsWhileItsAccountWindowReadsFreeGoesToTheSubstituteAtTheFirstSelection(): void
     {
         $this->pins->coolDown($this->pin(), 120);
@@ -135,6 +128,18 @@ final class TierPlatformPinnedProviderTest extends TestCase
         self::assertSame([Provider::Anthropic, 'other'], [$answering->provider, $answering->model]);
     }
 
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-19T12:00:00+00:00');
+        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
+        $this->accounts = new AccountWindowsOnAClock($this->clock, [self::ROUTER->value => [Account::DEFAULT]]);
+    }
+
+    private function pin(): PinnedProvider
+    {
+        return new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'router');
+    }
+
     private function router(PlatformInterface $account): AccountFailoverPlatform
     {
         return new AccountFailoverPlatform(self::ROUTER, [Account::DEFAULT => $account], $this->accounts, $this->clock, new NullLogger(), $this->pins);
@@ -158,11 +163,6 @@ final class TierPlatformPinnedProviderTest extends TestCase
         ]);
 
         return new TierPlatform(new ConfiguredTierResolver(['demo' => ['tiers' => ['strong' => $strong]]], []), $platforms, $this->accounts, new NullLogger());
-    }
-
-    private function pin(): PinnedProvider
-    {
-        return new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'router');
     }
 
     private function failureOf(callable $call): Throwable
