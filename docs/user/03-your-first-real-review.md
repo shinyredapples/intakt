@@ -42,6 +42,8 @@ Prefer the terminal? `docker compose exec intakt php bin/console intakt:demo` ru
 
 The top of the page tells the story so far. Under the title comes the task sentence, then a path from **Pass 1** to **Merge**, where the meerkat stands on the pass that is being read. The rounds, tokens and estimated cost are in the **Full record**, which a link at the bottom of the page opens.
 
+On a phone, a long model name in the cost wraps beside the word "Cost:", and the word stays whole.
+
 ![An earlier version of a live review page: "Review of sample-change in sample", the task sentence, the meerkat on Pass 1 of the path to Merge, the line with 1 round and 0 tokens so far, a Stop button, and the Now box: 0 of 2 reviewers finished, correctness on Kimi K3.1 Pro and security on DeepSeek V4 Pro both running, "No finding is open" under To fix, and the owl with "The judge has not judged this round yet"](../assets/guide/review-running.webp)
 
 While the round is in review, a box headed **Now** has three parts:
@@ -50,7 +52,7 @@ While the round is in review, a box headed **Now** has three parts:
 - **To fix** stays empty until the owl has judged.
 - **The judge's call** says the owl has not judged yet.
 
-To watch more, open the Full record: its live log shows each reviewer at work, the files it reads, the searches it runs, and finally its verdict and one line per finding. The page updates by itself; you never reload.
+To watch more, open the Full record: its live log shows each reviewer at work, the files it reads, the searches it runs, and finally its verdict and one line per finding. A reviewer's heading, its role and model, appears with that reviewer's first live update: a tool call, streamed text, an answer or a retry notice. When a reviewer is asked again, the new try's text replaces the old one and the heading already shown stays as it is; a reload shows the model of the latest try. Everything else updates by itself without a reload.
 
 ## While you wait
 
@@ -60,6 +62,6 @@ If you change your mind, the **Stop** button asks the running reviewers to stop.
 
 ## When the owl is done
 
-The Now box goes, and the owl's card and the **To fix** cards take its place. The card gives the owl's call, such as "Changes needed", with "5 to fix". The cards are the list where your next half hour goes; each one opens its finding in the Full record.
+The Now box goes, and the owl's card and the things to fix take its place. The card gives the owl's call, such as "Changes needed", with "5 to fix". Below it, the findings stand in three groups, **Urgent**, **Should fix** and **Nice to have**, one row each with its first sentence and its file and line. The rows are the list where your next half hour goes; each one opens its finding in the Full record.
 
 Next: [Reading the verdict](04-reading-the-verdict.md)

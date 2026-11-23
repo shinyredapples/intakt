@@ -23,7 +23,6 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -35,6 +34,7 @@ use Intakt\Core\Dashboard\UseCase\ShowStatus\ProjectStatuses;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\StatusReadModel;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -43,6 +43,7 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
@@ -68,7 +69,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(LedgerFailingHeads::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(LedgerPayloads::class)]
@@ -452,6 +453,35 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
     }
 
+    public function testANextReadOfAWaitingHeadThatPhpWouldRollOverIsReportedAsNone(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-30T12:01:00+00:00');
+
+        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+        self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
+    }
+
+    public function testANextReadWithANulByteOfAWaitingHeadIsReportedAsNone(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', "2026-10-28T12:01:00+00:00\0");
+
+        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+    }
+
+    public function testAnImpossibleCalendarDateAsTheNextReadOfAWaitingHeadIsReportedAsNone(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-30T00:00:00+00:00');
+
+        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+    }
+
+    public function testAValidNextReadOfAWaitingHeadIsReportedAsStored(): void
+    {
+        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-28T23:59:00+02:00');
+
+        self::assertSame(['2026-02-28T23:59:00+02:00'], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
+    }
+
     public function testARedHeadIsARedGuardDecision(): void
     {
         $this->ledger->recordRedHead('alpha', '9', 'c');
@@ -680,8 +710,10 @@ final class StatusReadModelTest extends TestCase
         $costs->method('costOf')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
         $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
+        $lookup = self::createStub(RoundEndingLookup::class);
+        $lookup->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
         $endings = self::createStub(RoundEndings::class);
-        $endings->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
+        $endings->method('lookup')->willReturn($lookup);
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
         $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
 

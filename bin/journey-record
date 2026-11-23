@@ -33,3 +33,20 @@ done
 for resource in milestones issues pulls; do
     mv "$partial/$resource.json" "$folder/$resource.json"
 done
+
+# bin/pages settles the highlights statuses from this file alone, so its absence keeps them as written and never costs
+# the journey page; it is derived from the issues just recorded, which list pull requests too, merged ones as closed.
+# A folder at that path only costs the statuses too, never the recording already in place; an earlier file that stays
+# readable would settle the statuses from stale states, so it fails the run.
+states="$folder/issue-states.json"
+
+if ! rm -f "$states" 2>/dev/null || [ -e "$states" ]; then
+    if [ -f "$states" ]; then
+        echo 'cannot remove the earlier issue-states.json: stale states would be published' >&2
+        exit 1
+    fi
+    echo 'cannot replace issue-states.json: the highlights statuses stay as written' >&2
+elif ! { jq -c '[.[][] | objects | {number, state}]' "$folder/issues.json" > "$partial/issue-states.json" \
+    && mv "$partial/issue-states.json" "$states"; }; then
+    echo 'cannot derive issue-states.json: the highlights statuses stay as written' >&2
+fi

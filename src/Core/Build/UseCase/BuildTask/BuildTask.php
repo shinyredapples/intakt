@@ -34,10 +34,17 @@ use InvalidArgumentException;
 use LogicException;
 use NoDiscard;
 use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
+use Symfony\Component\Lock\LockFactory;
 
 // Because the build lane calls this for one task at a time, a run stops at the first failed step and never retries it: sending a failure back to the builder is the next task.
 final readonly class BuildTask
 {
+    // Fixed words, because the message of a lock store's failure can name where the store keeps its locks.
+    public const string START_NOT_LOCKED = 'the start of the run could not be locked';
+
+    public const string START_BUSY = 'another run of this task is starting';
+
     public function __construct(
         private IssueReads $issues,
         private BuildCheckout $checkout,
@@ -45,10 +52,12 @@ final readonly class BuildTask
         private RunBuildJob $builds,
         private HandBackCheck $handBacks,
         private PrePushCheck $prePushChecks,
+        private PullRequestTextCheck $textChecks,
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
         private PushRemoteCheck $remoteCheck,
+        private LockFactory $locks,
     ) {
     }
 
@@ -66,15 +75,54 @@ final readonly class BuildTask
             throw PushRemoteRefused::because($refusal);
         }
 
-        $task = $this->readTask($request);
+        $run = BuildRun::startedFor($request);
+        $task = $this->startInOrder($run, $request);
 
         if (!$task instanceof ListedIssue) {
-            $this->record($request, BuildStep::Task, $task);
-
             return new BuildTaskOutcome(BuildStep::Task, $task, null);
         }
 
-        return $this->runSteps($request, $task);
+        return $this->runSteps($request, $run, $task);
+    }
+
+    // Under a lock of the task from the issue read until its row is recorded, because the task page takes the run whose task row comes last in the ledger as the run started last, so a run that started earlier must not record its task row after a later one; taken without waiting, so a stalled holder never blocks the next run, and a run that cannot take it records its failed task row outside the lock and runs no other step, which is right even when the holder records its task row afterwards, because the page then shows the holder, the run that goes on.
+    /**
+     * @throws BuildStepNotRecorded
+     */
+    private function startInOrder(BuildRun $run, BuildTaskRequest $request): ListedIssue|string
+    {
+        $lock = $this->locks->createLock($run->startLockKey(), ttl: null);
+
+        try {
+            $failure = $lock->acquire(blocking: false) ? null : self::START_BUSY;
+        } catch (ExceptionInterface) {
+            $failure = self::START_NOT_LOCKED;
+        }
+
+        if (null !== $failure) {
+            $this->record($run, BuildStep::Task, $failure);
+
+            return $failure;
+        }
+
+        try {
+            $task = $this->readTask($request);
+            $this->record($run, BuildStep::Task, $task instanceof ListedIssue ? null : $task);
+
+            return $task;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function record(BuildRun $run, BuildStep $step, ?string $failure): void
+    {
+        $payload = $run->stepPayload($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure);
+        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
+
+        if (!$result->succeeded()) {
+            throw BuildStepNotRecorded::for($run, $step, (string) $result->failure);
+        }
     }
 
     // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
@@ -89,41 +137,22 @@ final readonly class BuildTask
         return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
-    private function record(BuildTaskRequest $request, BuildStep $step, ?string $failure): void
-    {
-        // Because the title and body are untrusted text, the payload names the task by its number only.
-        $payload = json_encode([
-            'project' => $request->project,
-            'task' => (string) $request->issue,
-            'step' => $step->value,
-            'outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value,
-            'failure' => $failure,
-        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
-
-        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
-
-        if (!$result->succeeded()) {
-            throw BuildStepNotRecorded::for($request, $step, (string) $result->failure);
-        }
-    }
-
     /**
      * @throws BuildStepNotRecorded
      */
-    private function runSteps(BuildTaskRequest $request, ListedIssue $task): BuildTaskOutcome
+    private function runSteps(BuildTaskRequest $request, BuildRun $run, ListedIssue $task): BuildTaskOutcome
     {
         $results = [];
 
-        foreach (BuildStep::cases() as $step) {
+        // From the second step on, because startInOrder() reads and records the first, the task, which the other steps need.
+        foreach (array_slice(BuildStep::cases(), 1) as $step) {
             $result = match ($step) {
-                // Read before the other steps, because they need the task it returns.
-                BuildStep::Task => null,
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
-                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main.
-                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)),
+                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
+                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
                 BuildStep::Push => $this->push($request, $results),
             };
 
@@ -131,12 +160,12 @@ final readonly class BuildTask
             $results[$step->value] = $result;
 
             if ($result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion) {
-                return $this->park($request, $task, $result->question);
+                return $this->park($run, $task, $result->question);
             }
 
             $failure = $this->failureIn($result);
 
-            $this->record($request, $step, $failure);
+            $this->record($run, $step, $failure);
 
             if (null !== $failure) {
                 return new BuildTaskOutcome($step, $failure, $task);
@@ -203,14 +232,28 @@ final readonly class BuildTask
     /**
      * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
      */
+    private function textIn(array $results): string
+    {
+        // Never null, because the checks and the push run only after a build job that built, and such a job always hands back its text.
+        return $this->builtIn($results)->pullRequestText ?? throw new LogicException('the checks and the push run only after a build job that handed back its text');
+    }
+
+    private function bodyOf(string $text): string
+    {
+        return trim(explode("\n", $text, 2)[1] ?? '');
+    }
+
+    /**
+     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     */
     private function push(BuildTaskRequest $request, array $results): ?string
     {
         $accepted = $results[BuildStep::HandBackCheck->value] ?? null;
-        $text = $this->builtIn($results)->pullRequestText;
+        $text = $this->textIn($results);
 
-        // Never otherwise, because the push runs only after a hand-back check that accepted the head, and a build job that built always hands back its text.
-        if (!$accepted instanceof AcceptedHandBack || null === $text) {
-            throw new LogicException('the push runs only after an accepted hand-back of a build job that handed back its text');
+        // Never otherwise, because the push runs only after a hand-back check that accepted the head.
+        if (!$accepted instanceof AcceptedHandBack) {
+            throw new LogicException('the push runs only after an accepted hand-back');
         }
 
         $changeText = $this->changeTextOf($text);
@@ -219,12 +262,12 @@ final readonly class BuildTask
     }
 
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
-    private function park(BuildTaskRequest $request, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
+    private function park(BuildRun $run, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
     {
         try {
-            $this->parkedTasks->park($request->project, $request->issue, $question);
+            $this->parkedTasks->park($run, $question);
         } catch (TaskNotParked $notParked) {
-            $this->record($request, BuildStep::BuildJob, $notParked->getMessage());
+            $this->record($run, BuildStep::BuildJob, $notParked->getMessage());
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }
@@ -241,9 +284,9 @@ final readonly class BuildTask
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
     private function changeTextOf(string $text): ChangeText|string
     {
-        [$title, $body] = [...explode("\n", $text, 2), ''];
+        $title = explode("\n", $text, 2)[0];
 
-        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), trim($body));
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $this->bodyOf($text));
     }
 
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob

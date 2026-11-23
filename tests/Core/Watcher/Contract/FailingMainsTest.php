@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\Contract;
 
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(FailingMains::class)]
 #[CoversClass(FailingMain::class)]
+#[UsesClass(PayloadFields::class)]
 final class FailingMainsTest extends TestCase
 {
     private DashboardLedger $ledger;
@@ -100,6 +103,26 @@ final class FailingMainsTest extends TestCase
         $this->ledger->bootMain('alpha', 'b');
 
         $this->ledger->computeFailedMain('alpha', 'a', 'A fails.');
+
+        self::assertSame([], $this->failing());
+    }
+
+    public function testAComputedFailedLineMarksItsPairAsSeenSoALaterComputedBootedLineOfThePairDoesNotClearTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'B fails.', 'b');
+        $this->ledger->computeFailedMain('alpha', 'a', 'A fails.');
+
+        $this->ledger->bootMain('alpha', 'a');
+
+        self::assertSame(['B fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
+    }
+
+    public function testAComputedCrashedLineDoesNotMarkItsPairAsSeenSoTheBootedLineAfterTheBackoffClearsTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'B fails.', 'b');
+        $this->ledger->computeMain('alpha', 'a', 'crashed');
+
+        $this->ledger->bootMain('alpha', 'a');
 
         self::assertSame([], $this->failing());
     }
