@@ -224,6 +224,14 @@ final readonly class HardenedGit
     }
 
     /**
+     * @return array<string, string|false>
+     */
+    private function variables(?string $workTree, string $emptyTree): array
+    {
+        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($workTree, $emptyTree)];
+    }
+
+    /**
      * @param array<string, string|false> $variables
      */
     private function environmentOf(array $variables): GitEnvironment
@@ -234,14 +242,6 @@ final readonly class HardenedGit
         }
 
         return $environment;
-    }
-
-    /**
-     * @return array<string, string|false>
-     */
-    private function variables(?string $workTree, string $emptyTree): array
-    {
-        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($workTree, $emptyTree)];
     }
 
     /**
