@@ -18,9 +18,15 @@ final readonly class MarkdownPage
      */
     private array $lines;
 
+    /**
+     * @var array<int, true>
+     */
+    private array $quoted;
+
     public function __construct(string $text)
     {
         $lines = new FencedCodeBlocks()->blanked(explode("\n", str_replace("\r\n", "\n", $text)));
+        $this->quoted = array_map(static fn (): bool => true, array_filter($lines, static fn (string $line): bool => 1 === preg_match(self::QUOTE_MARKERS, $line)));
         $this->lines = new IndentedCodeBlocks()->blanked(array_map(static fn (string $line): string => preg_replace(self::QUOTE_MARKERS, '', $line) ?? $line, $lines));
     }
 
@@ -122,7 +128,8 @@ final readonly class MarkdownPage
 
     private function summaryLine(): ?int
     {
-        return array_find_key($this->lines, static fn (string $line): bool => 1 === preg_match(self::SUMMARY_HEADING, $line));
+        // Because a quoted heading belongs to the quotation, not to the page, only an unquoted "In short" is the page's summary.
+        return array_find_key($this->lines, fn (string $line, int $index): bool => !isset($this->quoted[$index]) && 1 === preg_match(self::SUMMARY_HEADING, $line));
     }
 
     private function levelOf(string $line): ?int
@@ -139,7 +146,8 @@ final readonly class MarkdownPage
         $inside = false;
 
         foreach ($this->lines as $index => $line) {
-            if ('' === trim($line)) {
+            // https://github.github.com/gfm/#tables-extension-: a blank line or another block, such as a heading or a list, ends the table.
+            if ('' === trim($line) || 1 === preg_match(self::HEADING, $line) || 1 === preg_match(self::LIST_ITEM, $line)) {
                 $inside = false;
                 continue;
             }

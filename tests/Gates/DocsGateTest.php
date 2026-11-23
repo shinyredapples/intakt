@@ -117,6 +117,20 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/highlights.d/1-row.md:2: paragraph of 81 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
+    public function testAHeadingDirectlyAfterATableEndsTheTable(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => "One | Two\n--- | ---\nx | y\n## Detail\n".$this->words(81)."\n"]);
+
+        self::assertStringContainsString('docs/guide/page.md:5: paragraph of 81 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testAListItemDirectlyAfterATableEndsTheTable(): void
+    {
+        $sandbox = $this->changeWith(['docs/guide/page.md' => "| One | Two |\n| --- | --- |\n| x | y |\n- ".$this->words(81)."\n"]);
+
+        self::assertStringContainsString('docs/guide/page.md:4: paragraph of 82 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
     public function testAnIndentedCodeBlockIsNotAParagraph(): void
     {
         $sandbox = $this->changeWith(['docs/guide/page.md' => "Code:\n\n    ".$this->words(90)."\n    ".$this->words(10)."\n"]);
@@ -361,6 +375,13 @@ final class DocsGateTest extends SandboxTestCase
         $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n## In short\n\n".$this->words(70)."\n\n## Detail\n\n".$this->chapters(1600)."\n## In short\n\n".$this->words(70)."\n"]);
 
         self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'), $sandbox->runGate(new DocsGate())->output());
+    }
+
+    public function testAQuotedInShortIsNotThePageSummary(): void
+    {
+        $sandbox = $this->changeWith(['docs/architecture/big.md' => "# Big\n\n> ## In short\n> A quotation.\n\n## Detail\n\n".$this->chapters(1600)]);
+
+        self::assertStringContainsString('docs/architecture/big.md: a page over 1500 words opens with an "In short" section', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
     public function testAShortArchitecturePageNeedsNoSummary(): void
