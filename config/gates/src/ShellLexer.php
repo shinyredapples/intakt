@@ -152,6 +152,85 @@ final class ShellLexer
         return self::SUBSTITUTION === $this->closedFrame() ? $this->afterText($offset + 1) : $this->atCommandStart($offset + 1);
     }
 
+    // Because a here-document opened in a substitution that closes on its own line, as in `$(cat <<EOF)`, is read at the enclosing line end.
+    private function closedFrame(): ?int
+    {
+        $frame = array_pop($this->frames);
+
+        if (self::SUBSTITUTION !== $frame) {
+            return $frame;
+        }
+
+        $scope = $this->substitutions--;
+
+        if (isset($this->pendingDocuments[$scope])) {
+            $this->pendingDocuments[$scope - 1] = [...$this->pendingDocuments[$scope - 1] ?? [], ...$this->pendingDocuments[$scope]];
+            unset($this->pendingDocuments[$scope]);
+        }
+
+        return $frame;
+    }
+
+    // Because a string and a `${ }` expansion nest in each other and both can hold a `$( )` of code, the text goes on in the innermost open one until code starts or the word goes on.
+    private function afterText(int $offset): int
+    {
+        while (null !== ($frame = array_last($this->frames)) && null !== $stops = self::TEXT_STOPS[$frame] ?? null) {
+            $offset += strcspn($this->literals->source, $stops, $offset);
+
+            if ($offset >= $this->literals->length) {
+                return $this->literals->length;
+            }
+
+            if ($this->substitutionOpensAt($offset)) {
+                return $this->openSubstitution($offset);
+            }
+
+            $offset = $this->afterTextCharacter($offset, $frame);
+        }
+
+        return $this->inWord($offset);
+    }
+
+    private function substitutionOpensAt(int $offset): bool
+    {
+        return '$(' === substr($this->literals->source, $offset, 2) && '(' !== ($this->literals->source[$offset + 2] ?? '');
+    }
+
+    private function openSubstitution(int $offset): int
+    {
+        $this->frames[] = self::SUBSTITUTION;
+        ++$this->substitutions;
+
+        return $this->atCommandStart($offset + 2);
+    }
+
+    // Because a `#` in `${#name}` or `${name#prefix}` is an operator and a brace in a quoted default such as `${name:-'}'}` closes nothing, an expansion ends only at a `}` outside the quotes and expansions inside it, while a plain `{` opens nothing, as in `${name:-{}`.
+    private function afterTextCharacter(int $offset, int $frame): int
+    {
+        $char = $this->literals->source[$offset];
+
+        if (self::TEXT_CLOSERS[$frame] === $char) {
+            array_pop($this->frames);
+
+            return $offset + 1;
+        }
+
+        return match ($char) {
+            '\\' => min($offset + 2, $this->literals->length),
+            "'" => $this->literals->afterSingleQuoted($offset + 1),
+            '`' => $this->literals->afterEscapedText($offset + 1, '`'),
+            '"' => $this->afterOpenedFrame($offset + 1, self::STRING),
+            default => '{' === ($this->literals->source[$offset + 1] ?? '') ? $this->afterOpenedFrame($offset + 2, self::PARAMETER) : $this->literals->afterExpansion($offset),
+        };
+    }
+
+    private function afterOpenedFrame(int $offset, int $frame): int
+    {
+        $this->frames[] = $frame;
+
+        return $offset;
+    }
+
     private function afterLessThan(int $offset): int
     {
         $source = $this->literals->source;
@@ -190,53 +269,6 @@ final class ShellLexer
         $this->frames[] = $frame;
 
         return $this->afterText($offset);
-    }
-
-    // Because a string and a `${ }` expansion nest in each other and both can hold a `$( )` of code, the text goes on in the innermost open one until code starts or the word goes on.
-    private function afterText(int $offset): int
-    {
-        while (null !== $stops = self::TEXT_STOPS[array_last($this->frames) ?? self::SUBSHELL] ?? null) {
-            $offset += strcspn($this->literals->source, $stops, $offset);
-
-            if ($offset >= $this->literals->length) {
-                return $this->literals->length;
-            }
-
-            if ($this->substitutionOpensAt($offset)) {
-                return $this->openSubstitution($offset);
-            }
-
-            $offset = $this->afterTextCharacter($offset, array_last($this->frames));
-        }
-
-        return $this->inWord($offset);
-    }
-
-    // Because a `#` in `${#name}` or `${name#prefix}` is an operator and a brace in a quoted default such as `${name:-'}'}` closes nothing, an expansion ends only at a `}` outside the quotes and expansions inside it, while a plain `{` opens nothing, as in `${name:-{}`.
-    private function afterTextCharacter(int $offset, int $frame): int
-    {
-        $char = $this->literals->source[$offset];
-
-        if (self::TEXT_CLOSERS[$frame] === $char) {
-            array_pop($this->frames);
-
-            return $offset + 1;
-        }
-
-        return match ($char) {
-            '\\' => min($offset + 2, $this->literals->length),
-            "'" => $this->literals->afterSingleQuoted($offset + 1),
-            '`' => $this->literals->afterEscapedText($offset + 1, '`'),
-            '"' => $this->afterOpenedFrame($offset + 1, self::STRING),
-            default => '{' === ($this->literals->source[$offset + 1] ?? '') ? $this->afterOpenedFrame($offset + 2, self::PARAMETER) : $this->literals->afterExpansion($offset),
-        };
-    }
-
-    private function afterOpenedFrame(int $offset, int $frame): int
-    {
-        $this->frames[] = $frame;
-
-        return $offset;
     }
 
     // Because a backslash before a line end joins two lines, the state of the command goes on across it.
@@ -289,57 +321,6 @@ final class ShellLexer
         return $this->inWord($end);
     }
 
-    private function afterDocumentDelimiter(int $offset, string $operator): int
-    {
-        [$delimiter, $end, $quoted] = $this->literals->documentDelimiterAt($offset);
-
-        if ('' !== $delimiter || $quoted) {
-            $this->pendingDocuments[$this->substitutions][] = ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator];
-        }
-
-        return $this->inWord($end);
-    }
-
-    // Because a `case` right before `)` or `|` is a pattern of the enclosing `case`, as in `case) :;;`, and opens no arms of its own.
-    private function aCasePatternEndsAt(int $end): bool
-    {
-        $next = $this->literals->source[$end + strspn($this->literals->source, ShellLiterals::BLANKS, $end)] ?? "\n";
-
-        return str_contains(self::CASE_PATTERN_ENDS, $next);
-    }
-
-    // Because a here-document opened in a substitution that closes on its own line, as in `$(cat <<EOF)`, is read at the enclosing line end.
-    private function closedFrame(): ?int
-    {
-        $frame = array_pop($this->frames);
-
-        if (self::SUBSTITUTION !== $frame) {
-            return $frame;
-        }
-
-        $scope = $this->substitutions--;
-
-        if (isset($this->pendingDocuments[$scope])) {
-            $this->pendingDocuments[$scope - 1] = [...$this->pendingDocuments[$scope - 1] ?? [], ...$this->pendingDocuments[$scope]];
-            unset($this->pendingDocuments[$scope]);
-        }
-
-        return $frame;
-    }
-
-    private function substitutionOpensAt(int $offset): bool
-    {
-        return '$(' === substr($this->literals->source, $offset, 2) && '(' !== ($this->literals->source[$offset + 2] ?? '');
-    }
-
-    private function openSubstitution(int $offset): int
-    {
-        $this->frames[] = self::SUBSTITUTION;
-        ++$this->substitutions;
-
-        return $this->atCommandStart($offset + 2);
-    }
-
     // Because a reserved word counts only as a whole word at the start of a command, any other run of characters is returned as no word.
     private function wholeWordAt(int $offset, int $end): ?string
     {
@@ -350,5 +331,24 @@ final class ShellLexer
         }
 
         return substr($this->literals->source, $offset, $end - $offset);
+    }
+
+    // Because a `case` right before `)` or `|` is a pattern of the enclosing `case`, as in `case) :;;`, and opens no arms of its own.
+    private function aCasePatternEndsAt(int $end): bool
+    {
+        $next = $this->literals->source[$end + strspn($this->literals->source, ShellLiterals::BLANKS, $end)] ?? "\n";
+
+        return str_contains(self::CASE_PATTERN_ENDS, $next);
+    }
+
+    private function afterDocumentDelimiter(int $offset, string $operator): int
+    {
+        [$delimiter, $end, $quoted] = $this->literals->documentDelimiterAt($offset);
+
+        if ('' !== $delimiter || $quoted) {
+            $this->pendingDocuments[$this->substitutions][] = ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator];
+        }
+
+        return $this->inWord($end);
     }
 }
