@@ -8,5 +8,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Contract;
 final readonly class WorkLabels
 {
     public const string IDEA = 'idea';
+    // The default only: each project may name its own eligibility label, apart from the earlier loop's.
+    public const string ELIGIBILITY = 'intakt';
     public const string PRIORITY_PREFIX = 'priority:';
 }
