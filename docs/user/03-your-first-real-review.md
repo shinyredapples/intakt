@@ -36,7 +36,7 @@ The page never shows the key again, only its provider and at most its last four 
 1. On the same page, press **Start the first review** in step 3.
 2. The live review page opens.
 
-Prefer the terminal? `docker compose exec intakt php bin/console intakt:demo` runs the same review and prints the outcome, the list of things to fix and the address of the review in the dashboard.
+Prefer the terminal? `docker compose exec intakt php bin/console intakt:demo` runs the same review and prints the outcome, the list of things to fix and the address of the review in the dashboard. While it runs, it says which reviewer or judge it waits on. When the model it waits on is rate-limited and no fallback is free, it stops with a message saying how long the limit lasts.
 
 ## What you see while it runs
 
