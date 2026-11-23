@@ -52,6 +52,16 @@ final class PayloadFieldsTest extends TestCase
         self::assertFalse(PayloadFields::of($this->recorded('{"failure":false}'))->lacks('failure'));
     }
 
+    public function testAFieldWrittenAsNullIsPresent(): void
+    {
+        self::assertTrue(PayloadFields::of($this->recorded('{"run":null}'))->has('run'));
+    }
+
+    public function testAFieldNotWrittenIsNotPresent(): void
+    {
+        self::assertFalse(PayloadFields::of($this->recorded('{"project":"a"}'))->has('run'));
+    }
+
     public function testAnUnreadablePayloadHasNoFields(): void
     {
         self::assertTrue(PayloadFields::of($this->recorded('{not json'))->lacks('project'));

@@ -41,6 +41,12 @@ final readonly class PayloadFields
         return is_int($value) ? $value : null;
     }
 
+    // Unlike lacks(), a field written as null is present, because some rows tell an explicit null apart from a field written before it existed.
+    public function has(string $field): bool
+    {
+        return array_key_exists($field, $this->fields);
+    }
+
     public function lacks(string $field): bool
     {
         return null === ($this->fields[$field] ?? null);

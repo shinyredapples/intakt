@@ -91,26 +91,28 @@ final readonly class LedgerBuildSteps
         }
 
         // Only the task row of an unnamed run, because without a run id only the task step tells that a new run began.
-        return null !== $run || BuildStep::Task->value === (LedgerPayload::of($recorded)['step'] ?? null) ? [$run, null] : null;
+        return null !== $run || BuildStep::Task->value === PayloadFields::of($recorded)->text('step') ? [$run, null] : null;
     }
 
     // Null for a row written before runs were named, and false for a run that is no UUID (an explicit null included): the build never writes one, so the row's run cannot be told and the row is left out.
     private function runOf(RecordedEvent $recorded): string|false|null
     {
-        $payload = LedgerPayload::of($recorded);
+        $payload = PayloadFields::of($recorded);
 
-        if (!array_key_exists('run', $payload)) {
+        if (!$payload->has('run')) {
             return null;
         }
 
-        return is_string($payload['run']) && Uuid::isValid($payload['run']) ? strtolower($payload['run']) : false;
+        $run = $payload->text('run');
+
+        return null !== $run && Uuid::isValid($run) ? strtolower($run) : false;
     }
 
     private function isRowOf(RecordedEvent $recorded, string $project, string $task): bool
     {
-        $payload = LedgerPayload::of($recorded);
+        $payload = PayloadFields::of($recorded);
 
-        return $project === ($payload['project'] ?? null) && $task === ($payload['task'] ?? null);
+        return $project === $payload->text('project') && $task === $payload->text('task');
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
