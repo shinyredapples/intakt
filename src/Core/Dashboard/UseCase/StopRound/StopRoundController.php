@@ -30,7 +30,7 @@ final readonly class StopRoundController
     public function __invoke(Request $request, string $round): Response
     {
         $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so nothing was stopped.');
-        $line = $this->stops->requestStopOfRound($round) ?? throw new NotFoundHttpException('The ledger shows no unjudged round with this id.');
+        $line = $this->stops->requestStopOfRound($round) ?? throw new NotFoundHttpException('The ledger shows no round still in review with this id.');
         $this->press->flash($request, $line);
 
         return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_REVIEW, ['round' => $round]), Response::HTTP_SEE_OTHER);

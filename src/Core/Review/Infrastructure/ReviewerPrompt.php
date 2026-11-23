@@ -51,7 +51,7 @@ final readonly class ReviewerPrompt
         TEXT;
 
     // Every field a finding needs, so a model that left "findings" empty sees the shape it must fill.
-    public const string EXAMPLE_FINDING = '{"id":"F1","severity":"P2","file":"src/Cart.php","line":12,"symbol":"Cart::total","text":"The total adds the discount instead of subtracting it.","fixable_by":"builder","repeat":false,"requirement":"Storytelling","evidence":null,"regression":false}';
+    public const string EXAMPLE_FINDING = '{"id":"F1","severity":"P2","file":"src/Cart.php","line":12,"symbol":"Cart::total","text":"The total adds the discount instead of subtracting it.","fixable_by":"builder","repeat":false,"requirement":"Storytelling","evidence":null,"regression":false,"gate_gap":false}';
 
     public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review gave no approval but its "findings" list was empty. A changes verdict must put every problem that must change into "findings", one object per problem with its file, line and rule, for example: '.self::EXAMPLE_FINDING.'. If nothing must change, answer approve.';
 
