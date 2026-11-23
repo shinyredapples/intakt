@@ -42,6 +42,11 @@ final readonly class NextLinks
         return array_merge([], ...array_map(fn (string $parameters): array => $this->relationsIn($parameters, $target), $values[1]));
     }
 
+    private function unreadable(): ForgeReadFailed
+    {
+        return new ForgeReadFailed('GitHub answered a Link header this forge cannot read.');
+    }
+
     // Only the first `rel` of a link counts, relation types compare without case and a quoted-pair stands for its character, because RFC 8288 and RFC 9110 say so.
     /**
      * @return list<string>
@@ -105,10 +110,5 @@ final readonly class NextLinks
         sort($pairs);
 
         return $pairs;
-    }
-
-    private function unreadable(): ForgeReadFailed
-    {
-        return new ForgeReadFailed('GitHub answered a Link header this forge cannot read.');
     }
 }
