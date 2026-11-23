@@ -58,6 +58,12 @@ accounts:
 
 The `team` account reads `ANTHROPIC_API_KEY_TEAM`. When one account hits a rate limit, the reviewer moves to the next.
 
+To check what you set up:
+
+1. Open the dashboard's **Team** page (`/team`).
+2. Find each enabled account once, with its state, and the API spend of today and this week for a key.
+3. Read the roles beside it: each reviewer role and the Developer, with the accounts that serve it.
+
 ## Who can open the dashboard
 
 The dashboard has no login. It answers only on `localhost`, and `compose.yaml` publishes its port on the loopback address only. If you publish it on another address, anyone who reaches it can use it. Keep it on your machine, or behind your own access control.

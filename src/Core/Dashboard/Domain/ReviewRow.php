@@ -8,26 +8,14 @@ use DateTimeImmutable;
 
 final readonly class ReviewRow
 {
-    private const int MINUTE = 60;
-    private const int HOUR = 3600;
-    private const int DAY = 86400;
-
     public function __construct(
         public ReviewSummary $review,
         private DateTimeImmutable $now,
     ) {
     }
 
-    // Whole units, rounded down, so a round never reads as older than it is; a clock behind the start reads as just now.
     public function startedAgo(): string
     {
-        $seconds = $this->now->getTimestamp() - $this->review->startedAt->getTimestamp();
-
-        return match (true) {
-            $seconds < self::MINUTE => 'just now',
-            $seconds < self::HOUR => intdiv($seconds, self::MINUTE).' min ago',
-            $seconds < self::DAY => intdiv($seconds, self::HOUR).' h ago',
-            default => intdiv($seconds, self::DAY).' d ago',
-        };
+        return Elapsed::ago($this->now->getTimestamp() - $this->review->startedAt->getTimestamp());
     }
 }

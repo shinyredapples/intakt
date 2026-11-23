@@ -1,11 +1,12 @@
-{#- used, reserved and forecast in percent of the track, laid end to end and cut at its end; labels beside the bar, never inside. last_known dims a value Intakt cannot read now and kept from its last reading. -#}
+{#- used, reserved and forecast in percent of the track, laid end to end and cut at its end; labels beside the bar, never inside. last_known dims a value Intakt cannot read now and kept from its last reading. used_only names only the used part, for a place with no reserved or forecast source, so a screen reader never hears an unknown share as 0%. -#}
 {%- set used = max(0, min(100, used)) -%}
 {%- set reserved = max(0, min(100 - used, reserved|default(0))) -%}
 {%- set forecast = max(0, min(100 - used - reserved, forecast|default(0))) -%}
 {%- set last_known = last_known|default(false) -%}
+{%- set used_only = used_only|default(false) -%}
 <div class="window">
     <div class="wl"><strong>{{ label }}</strong><span class="reset">{{ note }}</span></div>
-    <div class="bar{% if last_known %} last-known{% endif %}" role="img" aria-label="{{ last_known ? 'Last known: used' : 'Used' }} {{ used }}%, reserved {{ reserved }}%, forecast {{ forecast }}%">
+    <div class="bar{% if last_known %} last-known{% endif %}" role="img" aria-label="{{ last_known ? 'Last known: used' : 'Used' }} {{ used }}%{% if not used_only %}, reserved {{ reserved }}%, forecast {{ forecast }}%{% endif %}">
         <i class="used" style="width: {{ used }}%"></i>
         {%- if reserved > 0 %}<i class="reserved" style="left: {{ used }}%; width: {{ reserved }}%"></i>{% endif %}
         {%- if forecast > 0 %}<i class="forecast" style="left: {{ used + reserved }}%; width: {{ forecast }}%"></i>{% endif %}

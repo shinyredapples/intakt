@@ -25,11 +25,20 @@
         </div>
         <div>
             {% for window in team_account.windows %}
-            {{ include('dashboard/components/bar.html.twig', {label: window.label, note: window.note, used: window.used}, with_context = false) }}
+            {% if window.hasReading %}
+            {{ include('dashboard/components/bar.html.twig', {label: window.label, note: window.note, used: window.used, last_known: window.kept, used_only: true}, with_context = false) }}
             {% else %}
-            <p class="small muted">Pay per use: no usage window.</p>
+            <div class="window"><div class="wl"><strong>{{ window.label }}</strong><span class="reset">{{ window.note }}</span></div></div>
+            {% endif %}
             {% endfor %}
-            {% if team_account.windows is not empty %}{{ include('dashboard/components/bar_legend.html.twig', {}, with_context = false) }}{% endif %}
+            {% if team_account.spend is not null %}
+            {% set spend = team_account.spend %}
+            <dl class="tiles spend" aria-label="API spend of {{ team_account.label }}">
+                <div class="tile"><dt>API spend today</dt><dd>{{ spend.today.reading }}</dd></div>
+                <div class="tile"><dt>API spend this week</dt><dd>{{ spend.thisWeek.reading }}</dd></div>
+            </dl>
+            <p class="small muted">Pay per use: no usage window. Spend is estimated from the recorded usage{% if spend.thisWeek.usd is not null %}, {{ spend.thisWeek.priceDateReading }}{% endif %}.</p>
+            {% endif %}
         </div>
     </article>
     {% endfor %}
@@ -42,7 +51,7 @@
     {% else %}
     <div class="roles">
         {% for role in roles %}
-        <div class="role"><h3>{{ role.name }}</h3><p class="meta">{% for name in role.accounts %}<span>{{ name }}</span>{% endfor %}</p></div>
+        <div class="role"><h3>{{ role.name }}</h3><p class="meta">{% for name in role.accounts %}<span>{{ name }}</span>{% else %}<span>No enabled account</span>{% endfor %}</p></div>
         {% endfor %}
     </div>
     {% endif %}

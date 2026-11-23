@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use Intakt\Core\Ai\Contract\Provider;
+
 final readonly class TeamRole
 {
     /**
@@ -15,25 +17,22 @@ final readonly class TeamRole
     ) {
     }
 
+    // Every configured role, also one whose providers have no enabled account, because the owner must see a role nobody can serve.
     /**
-     * @param list<TeamAccount> $accounts
+     * @param array<string, list<Provider>> $providersByRole
+     * @param list<TeamAccount>             $accounts
      *
      * @return list<self>
      */
-    public static function servedBy(array $accounts): array
+    public static function of(array $providersByRole, array $accounts): array
     {
-        $byRole = [];
+        $roles = [];
 
-        foreach ($accounts as $account) {
-            foreach ($account->roles as $role) {
-                $byRole[$role][] = $account->name();
-            }
+        foreach ($providersByRole as $name => $providers) {
+            $serving = array_filter($accounts, static fn (TeamAccount $account): bool => in_array($account->account->provider, $providers, true));
+            $roles[] = new self((string) $name, array_values(array_map(static fn (TeamAccount $account): string => $account->label(), $serving)));
         }
 
-        return array_map(
-            static fn (string $name, array $names): self => new self($name, $names),
-            array_keys($byRole),
-            $byRole,
-        );
+        return $roles;
     }
 }

@@ -288,6 +288,14 @@ final class DashboardLedger implements Ledger
         $this->useRecordedTokens($round, ['prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]);
     }
 
+    // Started a day before it settles, so a read that keeps only this week's endings still finds the call's model.
+    public function spendOn(string $account, int $prompt, DateTimeImmutable $settledAt, string $model = 'model-a'): void
+    {
+        $call = Uuid::v7()->toRfc4122();
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => $model], $settledAt->modify('-1 day'));
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['account' => $account, 'model' => $model, 'prompt' => $prompt, 'completion' => 0, 'total' => $prompt]]], $settledAt);
+    }
+
     /**
      * @param array<string, int|string|null> $usage
      */

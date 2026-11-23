@@ -14,9 +14,9 @@ use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\TeamAccount;
 use Intakt\Core\Dashboard\Domain\TeamAccountState;
 use Intakt\Core\Dashboard\Domain\TeamRole;
+use Intakt\Core\Dashboard\Domain\TeamSpend;
 use Intakt\Core\Dashboard\Domain\TeamWindow;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
-use Intakt\Core\Review\Contract\ReviewerRoles;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -27,7 +27,8 @@ final readonly class ShowTeamController
         private EnabledAccounts $accounts,
         private AccountCooldowns $cooldowns,
         private MeasuredUse $use,
-        private ReviewerRoles $roles,
+        private LedgerAccountSpend $spend,
+        private TeamRoster $roster,
         private LivePageRendering $pages,
     ) {
     }
@@ -39,7 +40,7 @@ final readonly class ShowTeamController
 
         return new Response($this->pages->render($request, 'dashboard/team.html.twig', [
             'accounts' => $accounts,
-            'roles' => TeamRole::servedBy($accounts),
+            'roles' => TeamRole::of($this->roster->providersByRole(), $accounts),
             'rail_section' => 'team',
         ]));
     }
@@ -49,11 +50,12 @@ final readonly class ShowTeamController
      */
     private function accountsOfEveryProvider(): array
     {
+        $spend = $this->spend->ofEachAccount();
         $accounts = [];
 
         foreach (Provider::cases() as $provider) {
             foreach ($this->accounts->of($provider) as $account) {
-                $accounts[] = new TeamAccount($account, $this->stateOf($account), $this->windowsOf($account), $this->roles->servedBy($provider));
+                $accounts[] = new TeamAccount($account, $this->stateOf($account), $this->windowsOf($account), $this->spendOf($account, $spend));
             }
         }
 
@@ -79,12 +81,19 @@ final readonly class ShowTeamController
             return [];
         }
 
-        return array_map(
-            fn (UsageWindow $window): TeamWindow => new TeamWindow(
-                ucfirst(str_replace('-', ' ', $window->value)).' window',
-                $this->use->of($account, $window)?->usage->usedPercent,
-            ),
-            UsageWindow::cases(),
-        );
+        return array_map(fn (UsageWindow $window): TeamWindow => new TeamWindow($window, $this->use->of($account, $window)), UsageWindow::cases());
+    }
+
+    // Only a pay-per-use account has paid spend, because a subscription's calls are paid by its plan.
+    /**
+     * @param array<string, TeamSpend> $spend
+     */
+    private function spendOf(Account $account, array $spend): ?TeamSpend
+    {
+        if ($account->provider->spendsAPlan()) {
+            return null;
+        }
+
+        return $spend[$account->key()] ?? TeamSpend::none();
     }
 }
