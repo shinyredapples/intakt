@@ -98,36 +98,6 @@ final readonly class RolePromptCarriers
         return array_values(array_map(static fn (New_ $construction): int => $construction->getStartLine(), $runTime));
     }
 
-    // because inside an anonymous class `self`, `static` and `parent` name that class or the parent it names literally, never the class that uses the trait, and a carrier is final, so neither is one
-    /**
-     * @return array<int, true>
-     */
-    private function anonymousClassSelfConstructions(Trait_ $trait): array
-    {
-        $finder = new NodeFinder();
-        $ids = [];
-
-        foreach ($finder->findInstanceOf($trait->stmts, Class_::class) as $anonymous) {
-            foreach ($finder->findInstanceOf($anonymous->stmts, New_::class) as $construction) {
-                if ($this->namesTheAnonymousClass($construction->class)) {
-                    $ids[spl_object_id($construction)] = true;
-                }
-            }
-        }
-
-        return $ids;
-    }
-
-    // because `self::class`, `static::class` and `parent::class` name the same class as `self`, `static` and `parent`
-    private function namesTheAnonymousClass(Name|Expr|Class_ $class): bool
-    {
-        if ($class instanceof ClassConstFetch) {
-            return $class->class instanceof Name && $class->name instanceof Identifier && 'class' === $class->name->toLowerString() && $class->class->isSpecialClassName();
-        }
-
-        return $class instanceof Name && $class->isSpecialClassName();
-    }
-
     public function unusedTraitFinding(string $file, int $line): IdentifierRuleError
     {
         return RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->file($file)->line($line)->build();
@@ -151,34 +121,9 @@ final readonly class RolePromptCarriers
         return null === $carrier ? null : $this->misplaced($carrier)->build();
     }
 
-    /**
-     * @return list<New_>
-     */
-    private function constructionsIn(Trait_ $trait): array
+    private function isInClass(Scope $scope, string $class): bool
     {
-        return array_values(new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
-    }
-
-    private function namedTraitConstructionFinding(New_ $construction): ?IdentifierRuleError
-    {
-        $carrier = $this->classNames->matching($this->traitClassNamesOf($construction->class) ?? [], array_keys(self::BUILDERS))[0] ?? null;
-
-        return null === $carrier ? null : $this->misplaced($carrier)->line($construction->getStartLine())->build();
-    }
-
-    // null because `self`, `static` and `parent` name the using class, and the trait's scope is its file's, not its method's, so only a literal class name is known there and any other class may be a carrier
-    /**
-     * @return list<string>|null
-     */
-    private function traitClassNamesOf(Name|Expr|Class_ $class): ?array
-    {
-        return match (true) {
-            $class instanceof Class_ => [],
-            $class instanceof Name => $class->isSpecialClassName() ? null : [$class->toString()],
-            $class instanceof String_ => [$this->classNames->withoutLeadingBackslash($class->value)],
-            $class instanceof ClassConstFetch && $class->class instanceof Name && !$class->class->isSpecialClassName() && $class->name instanceof Identifier && 'class' === $class->name->toLowerString() => [$class->class->toString()],
-            default => null,
-        };
+        return 0 === strcasecmp($scope->getClassReflection()?->getName() ?? '', $class);
     }
 
     /**
@@ -221,14 +166,6 @@ final readonly class RolePromptCarriers
         return $rolePrompt;
     }
 
-    private function readsTheRoundReviewersRolePrompt(Expr $value, Scope $scope): bool
-    {
-        return $value instanceof MethodCall
-            && $value->name instanceof Identifier
-            && 'roleprompt' === $value->name->toLowerString()
-            && new ObjectType(self::ROUND_REVIEWER)->isSuperTypeOf($scope->getType($value->var))->yes();
-    }
-
     // because a retry starts a new conversation with the stopped one's role prompt, which the handler proved
     private function copiesAConversationsRolePrompt(Expr $value, Scope $scope): bool
     {
@@ -238,8 +175,71 @@ final readonly class RolePromptCarriers
             && new ObjectType(self::CONVERSATION)->isSuperTypeOf($scope->getType($value->var))->yes();
     }
 
-    private function isInClass(Scope $scope, string $class): bool
+    private function readsTheRoundReviewersRolePrompt(Expr $value, Scope $scope): bool
     {
-        return 0 === strcasecmp($scope->getClassReflection()?->getName() ?? '', $class);
+        return $value instanceof MethodCall
+            && $value->name instanceof Identifier
+            && 'roleprompt' === $value->name->toLowerString()
+            && new ObjectType(self::ROUND_REVIEWER)->isSuperTypeOf($scope->getType($value->var))->yes();
+    }
+
+    private function namedTraitConstructionFinding(New_ $construction): ?IdentifierRuleError
+    {
+        $carrier = $this->classNames->matching($this->traitClassNamesOf($construction->class) ?? [], array_keys(self::BUILDERS))[0] ?? null;
+
+        return null === $carrier ? null : $this->misplaced($carrier)->line($construction->getStartLine())->build();
+    }
+
+    /**
+     * @return list<New_>
+     */
+    private function constructionsIn(Trait_ $trait): array
+    {
+        return array_values(new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
+    }
+
+    // because inside an anonymous class `self`, `static` and `parent` name that class or the parent it names literally, never the class that uses the trait, and a carrier is final, so neither is one
+    /**
+     * @return array<int, true>
+     */
+    private function anonymousClassSelfConstructions(Trait_ $trait): array
+    {
+        $finder = new NodeFinder();
+        $ids = [];
+
+        foreach ($finder->findInstanceOf($trait->stmts, Class_::class) as $anonymous) {
+            foreach ($finder->findInstanceOf($anonymous->stmts, New_::class) as $construction) {
+                if ($this->namesTheAnonymousClass($construction->class)) {
+                    $ids[spl_object_id($construction)] = true;
+                }
+            }
+        }
+
+        return $ids;
+    }
+
+    // because `self::class`, `static::class` and `parent::class` name the same class as `self`, `static` and `parent`
+    private function namesTheAnonymousClass(Name|Expr|Class_ $class): bool
+    {
+        if ($class instanceof ClassConstFetch) {
+            return $class->class instanceof Name && $class->name instanceof Identifier && 'class' === $class->name->toLowerString() && $class->class->isSpecialClassName();
+        }
+
+        return $class instanceof Name && $class->isSpecialClassName();
+    }
+
+    // null because `self`, `static` and `parent` name the using class, and the trait's scope is its file's, not its method's, so only a literal class name is known there and any other class may be a carrier
+    /**
+     * @return list<string>|null
+     */
+    private function traitClassNamesOf(Name|Expr|Class_ $class): ?array
+    {
+        return match (true) {
+            $class instanceof Class_ => [],
+            $class instanceof Name => $class->isSpecialClassName() ? null : [$class->toString()],
+            $class instanceof String_ => [$this->classNames->withoutLeadingBackslash($class->value)],
+            $class instanceof ClassConstFetch && $class->class instanceof Name && !$class->class->isSpecialClassName() && $class->name instanceof Identifier && 'class' === $class->name->toLowerString() => [$class->class->toString()],
+            default => null,
+        };
     }
 }
