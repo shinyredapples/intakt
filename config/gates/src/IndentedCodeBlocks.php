@@ -42,6 +42,16 @@ final readonly class IndentedCodeBlocks
         return $this->listContextOf($line, $context, $previous);
     }
 
+    private function indentOf(string $line): int
+    {
+        return strlen(str_replace("\t", '    ', substr($line, 0, strspn($line, " \t"))));
+    }
+
+    private function opensBlock(string $previous): bool
+    {
+        return '' === trim($previous) || 1 === preg_match(MarkdownPage::HEADING, $previous);
+    }
+
     private function listContextOf(string $line, IndentedContext $context, string $previous): IndentedContext
     {
         if (1 === preg_match(MarkdownPage::LIST_ITEM, $line)) {
@@ -51,15 +61,5 @@ final readonly class IndentedCodeBlocks
         $leavesList = $this->opensBlock($previous) && '' !== trim($line) && 0 === $this->indentOf($line);
 
         return IndentedContext::ListItem === $context && !$leavesList ? IndentedContext::ListItem : IndentedContext::Text;
-    }
-
-    private function opensBlock(string $previous): bool
-    {
-        return '' === trim($previous) || 1 === preg_match(MarkdownPage::HEADING, $previous);
-    }
-
-    private function indentOf(string $line): int
-    {
-        return strlen(str_replace("\t", '    ', substr($line, 0, strspn($line, " \t"))));
     }
 }

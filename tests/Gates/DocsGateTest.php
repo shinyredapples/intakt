@@ -160,7 +160,7 @@ final class DocsGateTest extends SandboxTestCase
         $sandbox->write('docs/user/start.md', "Short.\n");
         $sandbox->commitAll('docs: shorten the paragraph');
 
-        self::assertStringContainsString('ratchet/docs.json: 1 paragraph key of docs/user/start.md no longer match an oversized paragraph; remove it', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+        self::assertStringContainsString('ratchet/docs.json: unneeded paragraph keys of docs/user/start.md: 1 match no oversized paragraph any more; remove them', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
     public function testAnEntryAddedToTheListFails(): void

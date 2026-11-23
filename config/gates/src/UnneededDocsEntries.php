@@ -30,7 +30,7 @@ final readonly class UnneededDocsEntries
             $unused = $this->unusedKeysOf($list, $page, $documents[$page] ?? null);
 
             if ($unused > 0) {
-                $findings[] = DocsRatchetList::PATH.': '.$unused.' paragraph key'.(1 === $unused ? '' : 's').' of '.$page.' no longer match an oversized paragraph; remove '.(1 === $unused ? 'it' : 'them').' from the list';
+                $findings[] = DocsRatchetList::PATH.': unneeded paragraph keys of '.$page.': '.$unused.' match no oversized paragraph any more; remove them from the list';
             }
         }
 
