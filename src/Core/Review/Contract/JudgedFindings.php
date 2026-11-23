@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Matched by id because the judge's answer is data, and prose of a finding is never read; a gate gap is never on the act list, because a gate that misses a case gets a gate issue and not a send-back (decision D4 of #845): marked reject it is rejected, and with any other mark or none it is a follow-up. Any other P1 or P2 is always on the act list whatever its mark (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and a P3 with no mark or marked reject is on neither list.
+// Matched by id because the judge's answer is data, and prose of a finding is never read; a gate gap is never on the act list, because a gate that misses a case gets a gate issue and not a send-back (decision D4 of #845): marked act or defer it is a follow-up, marked reject it is rejected, and without a mark it is on neither list, because only a judge's own mark may set a finding aside. Any other P1 or P2 is always on the act list whatever its mark (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and a P3 with no mark or marked reject is on neither list.
 #[Exclude]
 final readonly class JudgedFindings
 {
@@ -50,7 +50,7 @@ final readonly class JudgedFindings
 
         $markOf = static fn (Finding $finding): ?Mark => $marks[$finding->id] ?? null;
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => !$finding->gate_gap && (self::blocking($finding) || Mark::Act === $markOf($finding))));
-        $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => $finding->gate_gap ? Mark::Reject !== $markOf($finding) : !self::blocking($finding) && Mark::Defer === $markOf($finding)));
+        $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => $finding->gate_gap ? in_array($markOf($finding), [Mark::Act, Mark::Defer], true) : !self::blocking($finding) && Mark::Defer === $markOf($finding)));
         $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => ($finding->gate_gap || !self::blocking($finding)) && Mark::Reject === $markOf($finding)));
 
         return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings), $judgement->fallback());

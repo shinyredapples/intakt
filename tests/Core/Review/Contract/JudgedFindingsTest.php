@@ -204,12 +204,13 @@ final class JudgedFindingsTest extends TestCase
         self::assertEquals([new FollowUp($this->gateGap('a', Severity::P1))], $judged->followUps);
     }
 
-    public function testAGateGapWithoutAMarkIsAFollowUp(): void
+    public function testAGateGapP2WithoutAMarkIsNeitherOnTheActListNorAFollowUpNorRejected(): void
     {
         $judged = JudgedFindings::of($this->marks([]), [$this->gateGap('a', Severity::P2)]);
 
         self::assertSame([], $judged->actList);
-        self::assertEquals([new FollowUp($this->gateGap('a', Severity::P2))], $judged->followUps);
+        self::assertSame([], $judged->followUps);
+        self::assertSame([], $judged->rejected);
     }
 
     public function testTheJudgesNoteOnADeferredGateGapP2IsNotKept(): void
