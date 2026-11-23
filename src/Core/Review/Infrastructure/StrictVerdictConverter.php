@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
-use Symfony\AI\Platform\Exception\RuntimeException;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\AI\Platform\Model;
@@ -81,7 +80,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $this->inner->getTokenUsageExtractor();
     }
 
-    private function verdictFrom(string $content): ReviewerAnswer
+    private function verdictFrom(string $content): Verdict
     {
         return $this->text->verdictOf($content);
     }
@@ -125,7 +124,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     }
 
     // Checked here because Symfony AI's Validator subscriber checks only an object result, never one among parts.
-    private function validated(ReviewerAnswer $verdict): ReviewerAnswer
+    private function validated(Verdict $verdict): Verdict
     {
         $violations = $this->validator->validate($verdict);
 
