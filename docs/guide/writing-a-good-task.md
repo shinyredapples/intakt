@@ -8,7 +8,7 @@ This is the one place the guide states it; every other page that says when a tas
 
 1. It says one outcome, what you will be able to see, and acceptance points anyone can check.
 2. It is small enough to build and review in one go, or it has been split into parts that are.
-3. It has a plan: the files, the approach and the risks. For a project with screens, when the task touches them, the plan also covers what the Designer adds: the flows, every state (empty, loading, error, success), the wording, the phone, tablet and desktop widths, and accessibility (planned).
+3. It has a plan: the files, the approach and the risks. For a project with screens, when the task touches them, the plan also covers what the Designer adds: the flows, every state (empty, loading, error, success), the wording, the phone, tablet and desktop widths, and accessibility (planned). Before the first build the plan also carries a short brief (the change, the files it touches, the command that verifies it and what done looks like) that passes its check (planned).
 4. Every evidence item can be produced inside the Developer's sandbox, or is marked `(owner provides)` ([below](#evidence-the-developer-can-produce)).
 5. It names the docs the change will touch.
 6. It names what it waits for (`Waits for #n`) and, for a part of a split task, the task it came from.
