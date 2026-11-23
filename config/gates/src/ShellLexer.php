@@ -24,7 +24,7 @@ final class ShellLexer
     private const string SPECIAL_IN_CODE = " \t\n;&|()<>#'\"`\\$";
     private const string SPECIAL_IN_DOUBLE_QUOTES = '"`\$';
     private const string SPECIAL_IN_PARAMETER = "}'\"`\\$";
-    private const string SPECIAL_IN_ARITHMETIC = "()\"`\\$";
+    private const string SPECIAL_IN_ARITHMETIC = '()"`\$';
 
     private readonly int $length;
     private bool $wordStarts = true;
