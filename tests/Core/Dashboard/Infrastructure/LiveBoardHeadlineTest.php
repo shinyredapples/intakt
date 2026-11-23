@@ -223,21 +223,17 @@ final class LiveBoardHeadlineTest extends KernelTestCase
 
     public function testAReturnToAnEarlierBoardIsPushedWhenThePoolRefusedTheRecordOfTheNewerOne(): void
     {
-        $stored = new ArrayAdapter();
-        $refusing = new ArrayObject(['on' => false]);
-        $pool = self::createStub(CacheItemPoolInterface::class);
-        $pool->method('getItem')->willReturnCallback($stored->getItem(...));
-        $pool->method('deleteItem')->willReturnCallback($stored->deleteItem(...));
-        $pool->method('save')->willReturnCallback(static fn (CacheItemInterface $item): bool => true !== $refusing['on'] && $stored->save($item));
+        $refused = new ArrayObject(['delete' => false, 'save' => false]);
+        $pool = $this->poolOver(new ArrayAdapter(), $refused);
         $live = new PublishedLiveEvents();
         $idle = new DashboardLedger();
         $active = new DashboardLedger();
         $active->startRoundOf('change-1', 'r1', 1);
 
         $this->headlineOn($idle, $live, $pool)->publishTheBoard();
-        $refusing['on'] = true;
+        $refused['save'] = true;
         $this->headlineOn($active, $live, $pool)->publishTheBoard();
-        $refusing['on'] = false;
+        $refused['save'] = false;
         $this->headlineOn($idle, $live, $pool)->publishTheBoard();
 
         self::assertCount(3, $live->events);
