@@ -46,6 +46,12 @@ final readonly class DemoRuns
         return 1 === preg_match(self::PLAY_SHAPE, $play) ? self::FLASH_STARTED.$play : null;
     }
 
+    // The sign only when it has the shape Play makes, because a request names it and it becomes an element id.
+    public static function playOf(string $play): ?string
+    {
+        return 1 === preg_match(self::PLAY_SHAPE, $play) ? $play : null;
+    }
+
     /**
      * @return array{string, string}
      */
@@ -58,7 +64,7 @@ final readonly class DemoRuns
         }
 
         // Sent to a queue worker, because a replay sleeps at the recorded pace for minutes and must never hold a web worker.
-        $this->commands->dispatch(new PlayDemoRun());
+        $this->commands->dispatch(new PlayDemoRun($play));
 
         return [self::FLASH_STARTED.$play, 'The demo run is starting: the caption at the bottom of each page names the stage it is in.'];
     }

@@ -37,7 +37,9 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - No static properties (the gate does not judge abstract and anonymous classes): enforced by `bin/check` (`phpstan`).
 - No public setters (a setter is a method named `set`, in any letter case, followed by an uppercase letter, an underscore or the end of the name; one a vendor interface or parent declares is exempt): enforced by `bin/check` (`phpstan`).
 - No magic methods (any `__*` method; `__construct`, `__invoke` and `__toString` are fine): enforced by `bin/check` (`phpstan`).
-- `readonly` where possible, no static state (also none the gate cannot see, such as `static` variables or static properties of abstract classes), no service locator, constructor injection only.
+- No service locator in `src/` (no constructor parameter typed `Psr\Container\ContainerInterface`, Symfony's `ContainerInterface` or `ServiceLocator`, and no `#[AutowireLocator]`; tests may use the container): enforced by `bin/check` (`phpstan`).
+- Constructor injection only (`#[Required]` is refused): enforced by `bin/check` (`phpstan`).
+- `readonly` where possible, no static state (also none the gate cannot see, such as `static` variables or static properties of abstract classes).
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Worker mode: services keep no per-request state, also not in readonly properties, and `#[KeptForTheProcess]` marks only state that is the same for every request.
 - Small methods, early returns; split a service whose dependencies keep growing by responsibility, not by count.

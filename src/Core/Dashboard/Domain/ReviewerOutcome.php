@@ -59,6 +59,22 @@ final readonly class ReviewerOutcome
         return $lab instanceof AiLab && '' !== $name ? $name.' ('.$lab->value.')' : $this->model;
     }
 
+    // The lab alone, because a face has room for one short word; a model of no known lab keeps its id, so a recorded model never reads as missing.
+    public function faceLabel(): string
+    {
+        if (null === $this->model || '' === $this->model) {
+            return 'Model not recorded';
+        }
+
+        return AiLab::of($this->model)->value ?? $this->model;
+    }
+
+    // A reviewer without an outcome is still at work or was stopped, so its face says which in words rather than the ledger's state.
+    public function verdictInWords(): string
+    {
+        return $this->outcome()?->plainWords() ?? (ReviewerProgress::Stopped === $this->progressOf($this) ? 'Stopped' : 'No verdict yet');
+    }
+
     public function outcome(): ?ReviewOutcome
     {
         return ReviewOutcome::ofReviewer($this);
@@ -94,5 +110,11 @@ final readonly class ReviewerOutcome
     public function substitutedBy(string $provider, ?string $model): self
     {
         return clone ($this, ['substitute' => $provider, 'model' => $model ?? $this->model]);
+    }
+
+    // Read through a reviewer rather than `$this`, because PHPStan keeps the constructor's Running for `$this->progress` although `stopped()` sets it (upstream/phpstan-clone-with-readonly-constructor-type).
+    private function progressOf(self $reviewer): ReviewerProgress
+    {
+        return $reviewer->progress;
     }
 }

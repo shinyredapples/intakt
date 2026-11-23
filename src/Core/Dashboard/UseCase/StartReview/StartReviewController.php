@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\StartReview;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -41,6 +41,6 @@ final readonly class StartReviewController
     {
         $number = filter_var($request->request->get('number'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
-        return is_int($number) ? $number : throw new BadRequestHttpException('The form names no round number, so nothing was started.');
+        return is_int($number) ? $number : throw new FormIsRefused('The form names no round number, so nothing was started.');
     }
 }

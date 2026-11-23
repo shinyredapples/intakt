@@ -1,0 +1,7 @@
+{#- The legend's key for one urgency, a shape as well as a color (a triangle for urgent, a dot for should fix, a ring for nice to have, a dash for an urgency not recorded), so a reader who cannot tell the colors apart still matches a segment to its line. -#}
+<svg class="shape {{ urgency }}" viewBox="0 0 24 24" aria-hidden="true">
+    {%- if urgency == 'urgent' -%}<path d="M12 3l10 18H2z"/>
+    {%- elseif urgency == 'unranked' -%}<rect x="3" y="10" width="18" height="4" rx="2"/>
+    {%- else -%}<circle cx="12" cy="12" r="8"/>
+    {%- endif -%}
+</svg>
