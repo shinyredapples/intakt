@@ -27,6 +27,11 @@ final class FirstRunStylesTest extends TestCase
         self::assertLessThan($this->zIndex('.rail-in'), $row);
     }
 
+    public function testOnAPhoneTheSharedInputRuleIsAtLeastTheTouchFloorHigh(): void
+    {
+        self::assertGreaterThanOrEqual(44, $this->pixels('/height:\s*(\d+)px;/', $this->rule('.input, .select', $this->phoneBlock())));
+    }
+
     public function testAt1920TheSetupColumnIsCenteredInTheMainArea(): void
     {
         $main = 1920 - $this->pixels('/--rail:\s*(\d+)px/', $this->file('assets/styles/tokens.css'));
