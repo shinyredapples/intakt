@@ -39,7 +39,7 @@ final readonly class MarkdownListIndents
      */
     public function innermost(array $lists): int
     {
-        return [] === $lists ? 0 : $lists[array_key_last($lists)];
+        return [] === $lists ? 0 : array_last($lists);
     }
 
     public function outdented(string $line, int $columns): string
