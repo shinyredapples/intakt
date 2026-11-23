@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeepProviderKey;
@@ -38,7 +39,6 @@ use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionFactoryInterface;
-use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 #[CoversClass(KeepProviderKeyController::class)]

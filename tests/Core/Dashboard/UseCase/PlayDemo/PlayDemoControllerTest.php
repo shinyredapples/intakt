@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\PlayDemo;
 use Intakt\Core\Dashboard\Domain\TourCaption;
 use Intakt\Core\Dashboard\Domain\TourStage;
 use Intakt\Core\Dashboard\Infrastructure\DemoTour;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoRuns;
@@ -23,7 +24,6 @@ use Psr\Log\LogLevel;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
 
