@@ -18,6 +18,7 @@ const PAGES = {
   project: 'Project acme-shop',
   'add-project': 'Add a project',
   health: 'Projects: health',
+  journey: 'Project acme-shop: journey',
   team: 'Team and accounts',
   'add-account': 'Add an account',
   history: 'History: ledger',

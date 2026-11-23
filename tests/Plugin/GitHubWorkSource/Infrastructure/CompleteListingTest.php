@@ -12,6 +12,8 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
@@ -55,6 +57,8 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[CoversClass(CompleteListing::class)]
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeStore::class)]
+#[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(GitHubIssueReads::class)]
 #[UsesClass(IssueFields::class)]
 #[UsesClass(GitHubIssueHistories::class)]
@@ -315,6 +319,44 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([7], $this->numbersOf($plan->ready));
         self::assertSame([8, 7], $this->histories->read);
         self::assertTrue($this->rowOf(7)->queued()->isTrusted());
+    }
+
+    public function testATaskCarryingOnlyTheLoopsLabelIsNotPlannedForAProjectWhoseWatchNamesItsOwnLabel(): void
+    {
+        $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['intakt'])]);
+
+        $plan = $this->listingWatching(['alpha' => ['eligibility_label' => 'intakt']])->planOf('alpha');
+
+        self::assertInstanceOf(IntakePlan::class, $plan);
+        self::assertSame([8], $this->numbersOf($plan->ready));
+        self::assertSame([], $plan->held);
+        self::assertSame([8], $this->histories->read);
+    }
+
+    public function testEachProjectPlansOnlyTheTasksCarryingTheLabelItsWatchNames(): void
+    {
+        $watches = ['alpha' => ['eligibility_label' => 'intakt'], 'beta' => ['eligibility_label' => 'ready']];
+        $issues = [Issues::task(7, ['ready']), Issues::task(8, ['intakt'])];
+        $this->reads->lists($issues);
+        $alpha = $this->listingWatching($watches)->planOf('alpha');
+        $this->reads->lists($issues);
+
+        $beta = $this->listingWatching($watches)->planOf('beta');
+
+        self::assertInstanceOf(IntakePlan::class, $alpha);
+        self::assertInstanceOf(IntakePlan::class, $beta);
+        self::assertSame([[8], [7]], [$this->numbersOf($alpha->ready), $this->numbersOf($beta->ready)]);
+    }
+
+    public function testAProjectWithoutAWatchSectionLeavesTheListingShortWithoutAForgeCall(): void
+    {
+        $this->reads->lists([Issues::task(8, ['intakt'])]);
+
+        $plan = $this->listingWatching(['beta' => ['eligibility_label' => 'intakt']])->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame(0, $this->reads->listings);
+        self::assertSame(['Project "alpha" has no watch section, so it names no eligibility label.'], $this->shortListingReasons());
     }
 
     public function testAListingAnotherWorkerStoredMeanwhileIsWhatTheWaitsAreAnsweredFrom(): void
@@ -656,9 +698,17 @@ final class CompleteListingTest extends KernelTestCase
 
     private function listingOver(IssueReads $reads, IssueHistories $histories, string $label = 'intakt'): CompleteListing
     {
+        return $this->listingWatching(['alpha' => ['eligibility_label' => $label]], $reads, $histories);
+    }
+
+    /**
+     * @param array<string, array{eligibility_label?: string}> $watches
+     */
+    private function listingWatching(array $watches, ?IssueReads $reads = null, ?IssueHistories $histories = null): CompleteListing
+    {
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
 
-        return new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules($label), new IssueReferences(), $this->logger);
+        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, new EligibilityLabels($watches), new IssueReferences(), $this->logger);
     }
 }

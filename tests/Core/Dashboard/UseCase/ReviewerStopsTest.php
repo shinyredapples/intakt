@@ -64,13 +64,49 @@ final class ReviewerStopsTest extends TestCase
         self::assertSame(['success', 'Asked the reviewer to stop.'], $this->stopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
     }
 
-    public function testAReviewerWhoseStartedRowDoesNotDeserializeCannotBeAskedToStop(): void
+    public function testAReviewerWhoseStartedRowDoesNotDeserializeGetsTheNoReviewerRunsLine(): void
     {
         $ledger = new DashboardLedger();
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{"round":"round-1","reviewer":"round-1-security","role":"security","tier":"mighty"}'));
 
+        self::assertSame(['error', 'No reviewer runs in this round right now, so nothing was stopped.'], $this->stopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
+    }
+
+    public function testAStopForAReviewerWhenNoReviewerOfTheRoundRunsGivesTheNoReviewerRunsLineAndRecordsNothing(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->startReviewer('round-1', 'security');
+        $ledger->answer('round-1', 'security', 0);
+
+        self::assertSame(['error', 'No reviewer runs in this round right now, so nothing was stopped.'], $this->stopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
+        self::assertCount(0, iterator_to_array($ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
+    }
+
+    public function testAStopForAReviewerThatIsNotRunningWhileAnotherRunsHasNoReviewerToStop(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->startReviewer('round-1', 'security');
+        $ledger->answer('round-1', 'security', 0);
+        $ledger->startReviewer('round-1', 'style');
+
         self::assertNull($this->stopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
+        self::assertCount(0, iterator_to_array($ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
+    }
+
+    public function testARoundWhereOneStopRequestIsRefusedCountsItAndRecordsTheOther(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->startReviewer('round-1', 'security');
+        $ledger->startReviewer('round-1', 'style');
+
+        self::assertSame(['error', '1 of 2 stop requests could not be recorded in the ledger.'], $this->stopsOn(new ReviewerRefusingLedger($ledger, 'round-1-security'))->requestStopOfRound('round-1'));
+        $recorded = iterator_to_array($ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false);
+        self::assertCount(1, $recorded);
+        self::assertSame(['round' => 'round-1', 'reviewer' => 'round-1-style'], json_decode($recorded[0]->event->payload, true));
     }
 
     public function testARoundWhoseAppendsAreRefusedGivesAnErrorLineThatCountsTheRefusedRequests(): void

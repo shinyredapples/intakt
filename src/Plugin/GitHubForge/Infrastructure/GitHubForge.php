@@ -108,7 +108,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         $segments = array_map(rawurlencode(...), explode('/', $path));
         $content = $this->get($address->repositoryPath().'/contents/'.implode('/', $segments), self::RAW, ['ref' => $head->hash]);
 
-        return null === $content ? throw FileNotFoundAtHead::at($path, $head) : new FileContent($path, $head, $content);
+        return null === $content ? throw FileNotFoundAtHead::at($path, $head) : FileContent::ofBytes($path, $head, $content);
     }
 
     public function postReview(string $project, Change $change, ReviewComment $comment): void
