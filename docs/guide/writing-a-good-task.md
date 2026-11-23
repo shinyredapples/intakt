@@ -107,7 +107,7 @@ Planned: when the Tech lead sizes a task, it also checks each evidence item agai
 
 Small tasks are cheaper and safer: they are reviewed more thoroughly and go wrong less often.
 - **One outcome per task.** If you write "and" between two features, it is probably two tasks.
-- **Too big is not a problem you have to solve alone:** Intakt splits a large task into parts that each work on their own, and each part keeps the decisions that apply to it. Planned: if the Developer runs out of steps before it finishes a task, the Tech lead sizes it again with what that try showed, instead of trying again at the same size; a second time, the task comes to you or the Maintainer.
+- **Too big is not a problem you have to solve alone:** Intakt splits a large task into parts that each work on their own, and each part keeps the decisions that apply to it. Planned: if the Developer runs out of steps before it finishes a task, the Tech lead sizes it again with what that try showed, instead of trying again at the same size; if a second try also stops unfinished, the task comes to you or the Maintainer.
 - **Very small tasks** in the same area may be built together, to save a review.
 
 ## Steering with labels
