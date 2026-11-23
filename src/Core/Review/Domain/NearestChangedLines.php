@@ -53,8 +53,9 @@ final readonly class NearestChangedLines
             $closest = $this->closestTo($this->partsOf(implode(' ', $names)), $partsOfLines);
             $lines = array_map(fn (int $index): NearLine => new NearLine($changedLines[$index][0], $changedLines[$index][1], $this->cut($changedLines[$index][2])), array_slice($closest, 0, self::MAX_LINES_PER_QUOTE));
 
+            // The quote is kept whole, because it is the key the dashboard finds the lines by and a cut one would equal another quote's key.
             if ([] !== $lines) {
-                $recorded[] = new QuoteNearLines($this->cut(($this->redact)($quote)), $lines);
+                $recorded[] = new QuoteNearLines(mb_scrub(($this->redact)($quote), 'UTF-8'), $lines);
             }
         }
 
@@ -76,6 +77,17 @@ final readonly class NearestChangedLines
         }
 
         return array_values(array_filter($changedLines, static fn (array $changed): bool => $storable[$changed[0]]));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function partsOf(string $text): array
+    {
+        preg_match_all(self::WORD_PART, $text, $found);
+        $parts = array_map(strtolower(...), $found[0]);
+
+        return array_values(array_unique(array_filter($parts, static fn (string $part): bool => strlen($part) >= self::MIN_PART_LENGTH)));
     }
 
     /**
@@ -101,17 +113,6 @@ final readonly class NearestChangedLines
         usort($scored, static fn (array $a, array $b): int => $b[0] <=> $a[0]);
 
         return array_column($scored, 1);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function partsOf(string $text): array
-    {
-        preg_match_all(self::WORD_PART, $text, $found);
-        $parts = array_map(strtolower(...), $found[0]);
-
-        return array_values(array_unique(array_filter($parts, static fn (string $part): bool => strlen($part) >= self::MIN_PART_LENGTH)));
     }
 
     // Takes redacted text: a credential cut in two no longer has the shape the redaction knows, and neither does one whose bytes were scrubbed. Scrubbed, because a diff line may hold bytes that are not UTF-8 and the ledger row is JSON.

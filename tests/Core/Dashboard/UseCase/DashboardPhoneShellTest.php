@@ -28,13 +28,13 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertSame('Search', $search->filter('.ph-short')->text());
     }
 
-    // Because History and Settings, the pages under More, are not built yet, a More item would open an empty sheet.
-    public function testTheMoreItemIsLeftOutWhileNoPageUnderItIsBuilt(): void
+    // A phone's bar holds Now, You and Trends, so Projects is reached through More.
+    public function testTheMoreItemOpensTheSheetWithProjects(): void
     {
         $page = $this->browser->request('GET', '/projects');
 
-        self::assertCount(0, $page->filter('[data-more-toggle]'));
-        self::assertCount(0, $page->filter('[data-more-sheet]'));
+        self::assertCount(1, $page->filter('.rail-in button.nav.more[data-more-toggle]'));
+        self::assertSame(['Projects'], $page->filter('#more.menu[data-more-sheet] nav a')->each(static fn (Crawler $link): string => trim($link->text())));
     }
 
     public function testTheMoreItemOpensTheSheetOfThePagesUnderIt(): void
@@ -232,16 +232,6 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
     }
 
     /**
-     * @return array<string, string>
-     */
-    private function phoneRulesOf(string $sheet): array
-    {
-        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $sheet, $blocks);
-
-        return $this->rulesOf(implode("\n", $blocks[1]));
-    }
-
-    /**
      * @return list<string>
      */
     private function sheets(string ...$names): array
@@ -252,6 +242,16 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         $addresses = array_map(static fn (string $name): string => (string) $page->filter('link[rel="stylesheet"][href*="/'.$name.'-"]')->attr('href'), $names);
 
         return array_values(array_map($this->servedAsset(...), $addresses));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function phoneRulesOf(string $sheet): array
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $sheet, $blocks);
+
+        return $this->rulesOf(implode("\n", $blocks[1]));
     }
 
     private function servedAsset(string $address): string

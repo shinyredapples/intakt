@@ -44,11 +44,6 @@ final class FailedMessageTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAReviewerMessageThatReachesTheFailureTransportMarksTheReviewerBlockedAndCompletesTheRound(): void
     {
         $round = $this->fixture->start(2);
@@ -144,5 +139,10 @@ final class FailedMessageTest extends KernelTestCase
         ($this->fixture->failedMessages())(new WorkerMessageFailedEvent(new Envelope(new stdClass()), 'async', new RuntimeException('other')));
 
         self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($this->fixture->bus->messages[0]->reviewerId)->state());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 }

@@ -59,6 +59,16 @@ final readonly class FlagParameterRule implements Rule
         return array_values(array_map($this->finding(...), $flags));
     }
 
+    private function isBoolean(Identifier|Name|ComplexType|null $type): bool
+    {
+        return match (true) {
+            $type instanceof Identifier => in_array($type->toLowerString(), self::BOOLEAN_TYPES, true),
+            $type instanceof NullableType => $this->isBoolean($type->type),
+            $type instanceof UnionType => array_any($type->types, fn (Identifier|Name|IntersectionType $member): bool => $this->isBoolean($member)),
+            default => false,
+        };
+    }
+
     // a readonly service is still a service, so a boolean is data only when a readonly class the container skips keeps it as it is
     private function isValueObjectData(Param $parameter, FunctionLike $node, Scope $scope): bool
     {
@@ -83,6 +93,11 @@ final readonly class FlagParameterRule implements Rule
         }
 
         return ($parameter->isPromoted() ? 0 : 1) === $this->variableUses($statements, $name);
+    }
+
+    private function nameOf(Param $parameter): ?string
+    {
+        return $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : null;
     }
 
     private function isPlainAssignment(Stmt $statement, ClassReflection $class): bool
@@ -112,21 +127,6 @@ final readonly class FlagParameterRule implements Rule
     private function variableUses(array $statements, string $name): int
     {
         return count(new NodeFinder()->find($statements, fn (Node $found): bool => $found instanceof Variable && $found->name === $name));
-    }
-
-    private function isBoolean(Identifier|Name|ComplexType|null $type): bool
-    {
-        return match (true) {
-            $type instanceof Identifier => in_array($type->toLowerString(), self::BOOLEAN_TYPES, true),
-            $type instanceof NullableType => $this->isBoolean($type->type),
-            $type instanceof UnionType => array_any($type->types, fn (Identifier|Name|IntersectionType $member): bool => $this->isBoolean($member)),
-            default => false,
-        };
-    }
-
-    private function nameOf(Param $parameter): ?string
-    {
-        return $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : null;
     }
 
     private function finding(Param $parameter): IdentifierRuleError

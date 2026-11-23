@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\AI\Platform\Result\ToolCall;
+
 // The tools a reviewer reads the head with, named once here, because the live log shows each call in plain words and never by its tool name.
 enum ReviewTool: string
 {
@@ -14,11 +16,9 @@ enum ReviewTool: string
     private const string ROOT = '.';
 
     // The model writes the arguments, so a value that is not a usable string reads as the call without it instead of failing the update.
-    /**
-     * @param array<mixed> $arguments
-     */
-    public function callInWords(array $arguments): string
+    public function callInWords(ToolCall $call): string
     {
+        $arguments = $call->getArguments();
         $path = self::textOf($arguments['path'] ?? null);
 
         return match ($this) {
@@ -26,12 +26,6 @@ enum ReviewTool: string
             self::ListDirectory => self::isRoot($path) ? 'listed the repository root' : 'listed '.$path,
             self::SearchFiles => self::searchInWords(self::textOf($arguments['text'] ?? null), $path),
         };
-    }
-
-    // A trailing slash is trimmed because a model writes the root as `./` as often as `.`.
-    private static function isRoot(?string $path): bool
-    {
-        return null === $path || self::ROOT === rtrim($path, '/');
     }
 
     public function kindInWords(): string
@@ -43,15 +37,21 @@ enum ReviewTool: string
         };
     }
 
+    private static function textOf(mixed $argument): ?string
+    {
+        return is_string($argument) && '' !== trim($argument) ? trim($argument) : null;
+    }
+
+    // A trailing slash is trimmed because a model writes the root as `./` as often as `.`.
+    private static function isRoot(?string $path): bool
+    {
+        return null === $path || self::ROOT === rtrim($path, '/');
+    }
+
     private static function searchInWords(?string $text, ?string $path): string
     {
         $searched = null === $text ? 'searched the files' : sprintf('searched for "%s"', $text);
 
         return self::isRoot($path) ? $searched : $searched.' in '.$path;
-    }
-
-    private static function textOf(mixed $argument): ?string
-    {
-        return is_string($argument) && '' !== trim($argument) ? trim($argument) : null;
     }
 }

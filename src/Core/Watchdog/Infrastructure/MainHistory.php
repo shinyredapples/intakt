@@ -52,6 +52,8 @@ final readonly class MainHistory implements CommitHistory
         private string $repository,
         array $ownerKeys,
         private Filesystem $filesystem,
+        // Main's head read once for a whole check, because every read of one check must see the same main.
+        private ?string $pinnedTip = null,
     ) {
         $this->ownerKeys = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys));
     }
@@ -135,6 +137,17 @@ final readonly class MainHistory implements CommitHistory
      * @throws MainNotRead
      * @throws RuntimeException
      */
+    public function head(): string
+    {
+        $this->mustBeReadable();
+
+        return $this->tip();
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
     public function commitNameLength(): int
     {
         $this->mustBeReadable();
@@ -193,59 +206,10 @@ final readonly class MainHistory implements CommitHistory
      * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function ownGitDirectory(string $directory): string
-    {
-        // Asked of git, because a linked work tree or a submodule has a .git file that names its git directory, and only git reads that file the way git does (a path in it may hold a line break).
-        $answer = $this->run(['rev-parse', '--resolve-git-dir', $directory.'/.git'], ['GIT_WORK_TREE' => false]);
-        $resolved = $answer->isSuccessful() ? realpath($this->withoutLineBreak($answer->getOutput())) : false;
-
-        return false === $resolved ? '' : $resolved;
-    }
-
-    /**
-     * @param list<string> $arguments
-     *
-     * @throws MainNotRead
-     * @throws RuntimeException
-     */
-    private function discovered(array $arguments): string
-    {
-        // Without the pinned work tree, because HardenedGit names the folder itself as the work tree, and git would then call any folder inside a repository its top.
-        $answer = $this->run($arguments, ['GIT_WORK_TREE' => false]);
-        if (!$answer->isSuccessful()) {
-            throw MainNotRead::notTheRepository($this->directory(), '');
-        }
-
-        return $this->withoutLineBreak($answer->getOutput());
-    }
-
-    // Only git's one line break is removed, because a folder name may end in a space.
-    private function withoutLineBreak(string $output): string
-    {
-        return str_ends_with($output, "\n") ? substr($output, 0, -1) : $output;
-    }
-
-    /**
-     * @throws MainNotRead
-     * @throws RuntimeException
-     */
-    private function mustBeComplete(): void
-    {
-        $answer = $this->run(['rev-parse', '--is-shallow-repository']);
-        // A failed answer is refused too, because damaged shallow metadata makes git exit before it prints.
-        if (!$answer->isSuccessful() || 'false' !== trim($answer->getOutput())) {
-            throw MainNotRead::shallow($this->directory());
-        }
-    }
-
-    /**
-     * @throws MainNotRead
-     * @throws RuntimeException
-     */
     private function tip(): string
     {
         // show-ref --verify takes the exact ref only, because rev-parse would fall back to a tag named refs/heads/main once the branch is gone.
-        return trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
+        return $this->pinnedTip ?? trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
     }
 
     /**
@@ -268,6 +232,19 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function mustBeComplete(): void
+    {
+        $answer = $this->run(['rev-parse', '--is-shallow-repository']);
+        // A failed answer is refused too, because damaged shallow metadata makes git exit before it prints.
+        if (!$answer->isSuccessful() || 'false' !== trim($answer->getOutput())) {
+            throw MainNotRead::shallow($this->directory());
+        }
+    }
+
+    /**
      * @param list<string> $arguments
      * @param list<string> $options
      *
@@ -279,6 +256,48 @@ final readonly class MainHistory implements CommitHistory
         $answer = $this->run($arguments, options: $options);
 
         return $answer->isSuccessful() ? $answer->getOutput() : throw new ProcessFailedException($answer);
+    }
+
+    /**
+     * @throws MainNotRead
+     */
+    private function directory(): string
+    {
+        // Resolved here, because a relative path would otherwise be read against wherever the process happens to run.
+        $directory = realpath($this->repository);
+
+        // A file is no repository, because git cannot run inside it.
+        return false === $directory || !is_dir($directory) ? throw MainNotRead::missing($this->repository) : $directory;
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function discovered(array $arguments): string
+    {
+        // Without the pinned work tree, because HardenedGit names the folder itself as the work tree, and git would then call any folder inside a repository its top.
+        $answer = $this->run($arguments, ['GIT_WORK_TREE' => false]);
+        if (!$answer->isSuccessful()) {
+            throw MainNotRead::notTheRepository($this->directory(), '');
+        }
+
+        return $this->withoutLineBreak($answer->getOutput());
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function ownGitDirectory(string $directory): string
+    {
+        // Asked of git, because a linked work tree or a submodule has a .git file that names its git directory, and only git reads that file the way git does (a path in it may hold a line break).
+        $answer = $this->run(['rev-parse', '--resolve-git-dir', $directory.'/.git'], ['GIT_WORK_TREE' => false]);
+        $resolved = $answer->isSuccessful() ? realpath($this->withoutLineBreak($answer->getOutput())) : false;
+
+        return false === $resolved ? '' : $resolved;
     }
 
     /**
@@ -309,16 +328,10 @@ final readonly class MainHistory implements CommitHistory
         return $process;
     }
 
-    /**
-     * @throws MainNotRead
-     */
-    private function directory(): string
+    // Only git's one line break is removed, because a folder name may end in a space.
+    private function withoutLineBreak(string $output): string
     {
-        // Resolved here, because a relative path would otherwise be read against wherever the process happens to run.
-        $directory = realpath($this->repository);
-
-        // A file is no repository, because git cannot run inside it.
-        return false === $directory || !is_dir($directory) ? throw MainNotRead::missing($this->repository) : $directory;
+        return str_ends_with($output, "\n") ? substr($output, 0, -1) : $output;
     }
 
     // Only the lines up to the first empty line, because a signature header in the message is not a header.

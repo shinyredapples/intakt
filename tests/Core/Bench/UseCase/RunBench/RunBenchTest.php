@@ -30,6 +30,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -81,6 +82,7 @@ use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 #[UsesClass(BenchReview::class)]
 #[UsesClass(BenchReviewerResult::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ModelNames::class)]
 #[UsesClass(RoundLedgerReading::class)]
 #[UsesClass(RunClassifier::class)]
 #[UsesClass(DefectMatcher::class)]
@@ -104,18 +106,6 @@ final class RunBenchTest extends KernelTestCase
     private RoundFixture $fixture;
 
     private string $results;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->results = sys_get_temp_dir().'/intakt-bench-scripted-'.bin2hex(random_bytes(4));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
-        parent::tearDown();
-    }
 
     public function testTheResultFileOfAScriptedRunHoldsEachReviewersMatchedDefectsTokensAndDuration(): void
     {
@@ -169,6 +159,18 @@ final class RunBenchTest extends KernelTestCase
         self::assertSame([['free-shipping-boundary'], []], array_map(static fn (array $run): array => $run['reviewers'][0]['caught'], $freeShipping['runs']));
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->results = sys_get_temp_dir().'/intakt-bench-scripted-'.bin2hex(random_bytes(4));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
+        parent::tearDown();
+    }
+
     /**
      * @param positive-int         $repeat
      * @param list<VerdictPerRole> $answersPerRound
@@ -207,6 +209,16 @@ final class RunBenchTest extends KernelTestCase
         return $change['runs'][0];
     }
 
+    private function panel(): Panel
+    {
+        $members = array_map(
+            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
+            [1, 2],
+        );
+
+        return new Panel($members, QuorumPolicy::All);
+    }
+
     private function reviewChange(Vendor $vendor): ReviewChange
     {
         $delivered = 0;
@@ -235,15 +247,5 @@ final class RunBenchTest extends KernelTestCase
             $vendor,
             $this->fixture->noFailedJudgings(),
         );
-    }
-
-    private function panel(): Panel
-    {
-        $members = array_map(
-            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
-            [1, 2],
-        );
-
-        return new Panel($members, QuorumPolicy::All);
     }
 }

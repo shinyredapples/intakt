@@ -51,6 +51,60 @@ final readonly class FullReport
         return $file;
     }
 
+    private function contents(): ?string
+    {
+        $gates = [];
+        $whole = true;
+
+        foreach ($this->reports as $report) {
+            $gate = $this->ascii($report->kept ?? $report->line);
+
+            if (null === $gate) {
+                return null;
+            }
+
+            $gates[] = $gate;
+            $whole = $whole && (null !== $report->kept || !$report->lineIsCut());
+        }
+
+        return '{"whole":'.($whole ? 'true' : 'false').',"gates":['.implode(',', $gates).']}';
+    }
+
+    /**
+     * @phpstan-impure
+     */
+    // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
+    private function isLinked(): bool
+    {
+        return is_link($this->root.'/var') || is_link($this->root.'/'.self::FOLDER);
+    }
+
+    private function staysInside(string $folder): bool
+    {
+        $root = realpath($this->root);
+        $real = realpath($folder);
+
+        return false !== $root && false !== $real && str_starts_with($real, rtrim($root, '/').'/');
+    }
+
+    // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
+    /**
+     * @param resource $handle
+     */
+    private function writtenAs(string $file, $handle, string $contents): ?string
+    {
+        $written = @fwrite($handle, $contents);
+        $closed = @fclose($handle);
+
+        if (strlen($contents) === $written && $closed) {
+            return $file;
+        }
+
+        @unlink($this->root.'/'.$file);
+
+        return null;
+    }
+
     // Because a glob() pattern built from the checked path would read a tree named like tree[a] as a pattern, the literal folder is listed, and only generated names count, so a hand-made report and this run's own report always stay.
     private function pruneOlderReportsIn(string $folder, string $written): void
     {
@@ -94,60 +148,6 @@ final readonly class FullReport
         $generated = array_filter($names, static fn (string $name): bool => 1 === preg_match(self::GENERATED, $name));
 
         return array_values($generated);
-    }
-
-    // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
-    /**
-     * @param resource $handle
-     */
-    private function writtenAs(string $file, $handle, string $contents): ?string
-    {
-        $written = @fwrite($handle, $contents);
-        $closed = @fclose($handle);
-
-        if (strlen($contents) === $written && $closed) {
-            return $file;
-        }
-
-        @unlink($this->root.'/'.$file);
-
-        return null;
-    }
-
-    /**
-     * @phpstan-impure
-     */
-    // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
-    private function isLinked(): bool
-    {
-        return is_link($this->root.'/var') || is_link($this->root.'/'.self::FOLDER);
-    }
-
-    private function staysInside(string $folder): bool
-    {
-        $root = realpath($this->root);
-        $real = realpath($folder);
-
-        return false !== $root && false !== $real && str_starts_with($real, rtrim($root, '/').'/');
-    }
-
-    private function contents(): ?string
-    {
-        $gates = [];
-        $whole = true;
-
-        foreach ($this->reports as $report) {
-            $gate = $this->ascii($report->kept ?? $report->line);
-
-            if (null === $gate) {
-                return null;
-            }
-
-            $gates[] = $gate;
-            $whole = $whole && (null !== $report->kept || !$report->lineIsCut());
-        }
-
-        return '{"whole":'.($whole ? 'true' : 'false').',"gates":['.implode(',', $gates).']}';
     }
 
     // Because decoding and encoding again changes a result's shape (an empty object, numbered keys, a number too large for a float), the bytes are copied and only each character past ASCII becomes its \u escape, so no gate that reads the tree finds a long dash or broken byte in it.

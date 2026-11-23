@@ -43,6 +43,37 @@ final class WhoIsWorkingTest extends TestCase
         self::assertEquals([new Lane('r1-a', 'correctness', 'standard', 'alpha', 'feat/a', 2, $this->since(), 'r2feat/a')], $working->lanes());
     }
 
+    public function testTheStatusLineSaysQuietWhileNobodyWorks(): void
+    {
+        self::assertSame('Quiet · nobody working', new WhoIsWorking([])->statusLine());
+    }
+
+    public function testTheStatusLineCountsABuildInFlightWhileNoReviewerWorks(): void
+    {
+        self::assertSame('Running smoothly · 1 build running', new WhoIsWorking([], 1)->statusLine());
+    }
+
+    public function testTheStatusLineCountsTheReviewersAndTheBuildsInFlight(): void
+    {
+        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')])], 2);
+
+        self::assertSame('Running smoothly · 1 reviewer working, 2 builds running', $working->statusLine());
+    }
+
+    public function testTheStatusLineCountsOneReviewerInTheSingular(): void
+    {
+        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')])]);
+
+        self::assertSame('Running smoothly · 1 reviewer working', $working->statusLine());
+    }
+
+    public function testTheStatusLineCountsTheRunningReviewersOfEveryReview(): void
+    {
+        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')]), $this->review('feat/b', 2, [$this->running('r2-b')])]);
+
+        self::assertSame('Running smoothly · 2 reviewers working', $working->statusLine());
+    }
+
     /**
      * @param Closure(ReviewerOutcome): ReviewerOutcome $finish
      */
@@ -132,14 +163,6 @@ final class WhoIsWorkingTest extends TestCase
     /**
      * @param list<ReviewerOutcome> $outcomes
      */
-    private function review(string $change, int $number, array $outcomes): Review
-    {
-        return new Review([$this->round($change, $number, $outcomes)]);
-    }
-
-    /**
-     * @param list<ReviewerOutcome> $outcomes
-     */
     private function round(string $change, int $number, array $outcomes): ReviewedRound
     {
         return new ReviewedRound(new RoundStart('r'.$number.$change, 'alpha', 2), new RoundPlace($change, $number), $this->since(), null)->withOutcomes($outcomes);
@@ -148,6 +171,14 @@ final class WhoIsWorkingTest extends TestCase
     private function running(string $id): ReviewerOutcome
     {
         return new ReviewerOutcome($id, 'correctness', 'standard', $this->since());
+    }
+
+    /**
+     * @param list<ReviewerOutcome> $outcomes
+     */
+    private function review(string $change, int $number, array $outcomes): Review
+    {
+        return new Review([$this->round($change, $number, $outcomes)]);
     }
 
     private function since(): DateTimeImmutable

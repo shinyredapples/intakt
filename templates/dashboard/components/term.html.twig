@@ -1,3 +1,4 @@
-{#- A term that stays in the UI, with its one standard explanation (GlossaryTerm), shown on hover and focus. -#}
+{#- A term that stays in the UI, with its one standard explanation (GlossaryTerm), shown on hover and focus. ask adds a small "?" for a plain word whose explanation names the technical term (#3183). -#}
 {%- set tip_id = 'term-' ~ term ~ '-' ~ random() -%}
-<span class="term" tabindex="0" data-term="{{ term }}" aria-describedby="{{ tip_id }}">{{ words }}<span class="term-tip" role="tooltip" id="{{ tip_id }}">{{ glossary_explanation(term) }}</span></span>
+<span class="term{% if ask|default(false) %} term-ask{% endif %}" tabindex="0" data-term="{{ term }}" aria-describedby="{{ tip_id }}">{{ words }}{% if ask|default(false) %}<span class="term-q" aria-hidden="true">?</span>{% endif %}<span class="term-tip" role="tooltip" id="{{ tip_id }}">{{ glossary_explanation(term) }}</span></span>
+{#- Ends without a newline, so a term followed by a comma leaves no space before it. -#}

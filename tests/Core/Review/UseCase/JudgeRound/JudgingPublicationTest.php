@@ -67,27 +67,6 @@ final class JudgingPublicationTest extends KernelTestCase
     private ?string $configuredDsn;
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
-        $this->configuredDsn = is_string($configured) ? $configured : null;
-        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
-
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->transport('messenger.transport.async')->setup();
-    }
-
-    protected function tearDown(): void
-    {
-        if (null === $this->configuredDsn) {
-            unset($_ENV[self::TRANSPORT_DSN]);
-        } else {
-            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
-        }
-
-        parent::tearDown();
-    }
-
     public function testAJudgingThatFailsForGoodRecordsTheFailureAndQueuesThePublicationOnce(): void
     {
         $roundId = $this->completedRound();
@@ -291,6 +270,27 @@ final class JudgingPublicationTest extends KernelTestCase
         self::assertNull($received->last(DispatchOnFailureStamp::class));
     }
 
+    protected function setUp(): void
+    {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
+        $this->configuredDsn = is_string($configured) ? $configured : null;
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->transport('messenger.transport.async')->setup();
+    }
+
+    protected function tearDown(): void
+    {
+        if (null === $this->configuredDsn) {
+            unset($_ENV[self::TRANSPORT_DSN]);
+        } else {
+            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+        }
+
+        parent::tearDown();
+    }
+
     private function completedRound(): string
     {
         $vendor = $this->panel();
@@ -322,27 +322,6 @@ final class JudgingPublicationTest extends KernelTestCase
         self::assertLoggedError('critical', sprintf(self::REMOVED_AFTER_RETRIES, JudgeRound::class, JudgeRound::class, $failure->getMessage()));
     }
 
-    private function failureOf(string $roundId): Throwable
-    {
-        $failure = new RuntimeException('The judge is down.');
-
-        try {
-            $this->fixture->judge(new FailingJudge($failure))($this->judgingOf($roundId));
-        } catch (RuntimeException $thrown) {
-            return $thrown;
-        }
-
-        self::fail('The scripted judge answered.');
-    }
-
-    private function reportFailure(Envelope $judging, Throwable $failure): void
-    {
-        $received = $judging->with(new ReceivedStamp('async'));
-        $events = self::getContainer()->get('event_dispatcher');
-
-        $events->dispatch(new WorkerMessageFailedEvent($received, 'async', new HandlerFailedException($received, [JudgeRoundHandler::class => $failure])));
-    }
-
     private function judgingOf(string $roundId): JudgeRound
     {
         $judging = $this->judging($roundId)->getMessage();
@@ -362,6 +341,27 @@ final class JudgingPublicationTest extends KernelTestCase
         }
 
         self::fail('The round was not queued for judging.');
+    }
+
+    private function failureOf(string $roundId): Throwable
+    {
+        $failure = new RuntimeException('The judge is down.');
+
+        try {
+            $this->fixture->judge(new FailingJudge($failure))($this->judgingOf($roundId));
+        } catch (RuntimeException $thrown) {
+            return $thrown;
+        }
+
+        self::fail('The scripted judge answered.');
+    }
+
+    private function reportFailure(Envelope $judging, Throwable $failure): void
+    {
+        $received = $judging->with(new ReceivedStamp('async'));
+        $events = self::getContainer()->get('event_dispatcher');
+
+        $events->dispatch(new WorkerMessageFailedEvent($received, 'async', new HandlerFailedException($received, [JudgeRoundHandler::class => $failure])));
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\StreamChunks;
 use Intakt\Core\Review\Contract\StreamCutBy;
 use Intakt\Core\Review\Contract\StreamEndedEarly;
 use ReflectionClass;
@@ -39,7 +40,7 @@ final class StreamTally
 
     public function cut(StreamCutBy $by, string $message, ?Throwable $previous = null): StreamEndedEarly
     {
-        return new StreamEndedEarly($message, $by, $this->chunks, $this->last, $previous);
+        return new StreamEndedEarly($message, $by, $this->chunks, new StreamChunks(...$this->last), $previous);
     }
 
     // Only the kind and the start of its text, because the end of the stream is what a diagnosis needs, and the model's whole answer stays out of the finding.
@@ -55,16 +56,16 @@ final class StreamTally
         };
     }
 
+    private function quoted(string $text): string
+    {
+        return json_encode(mb_substr($text, 0, self::TEXT_SHOWN), self::JSON);
+    }
+
     // Only a scalar is shown, because a provider's metadata object may not encode.
     private function valueOf(MetadataDelta $delta): string
     {
         $value = $delta->getValue();
 
         return null === $value || is_scalar($value) ? (string) json_encode($value, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_UNESCAPED_SLASHES) : get_debug_type($value);
-    }
-
-    private function quoted(string $text): string
-    {
-        return json_encode(mb_substr($text, 0, self::TEXT_SHOWN), self::JSON);
     }
 }

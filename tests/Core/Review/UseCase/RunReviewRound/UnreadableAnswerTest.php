@@ -42,17 +42,12 @@ final class UnreadableAnswerTest extends KernelTestCase
 
     private ScriptedRound $run;
 
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
-    }
-
     public function testOneUnreadableAnswerThenAReadableOneGivesTheVerdict(): void
     {
         $review = $this->reviewedBy(1, 1, 'approve');
 
         self::assertSame(Decision::Approve, $review->decision);
-        self::assertSame([], $review->reasons);
+        self::assertSame([], [...$review->reasons]);
     }
 
     public function testTheUnreadableAnswerAndItsRetryAreEachSettledOnce(): void
@@ -67,7 +62,7 @@ final class UnreadableAnswerTest extends KernelTestCase
         $review = $this->reviewedBy(1, 2, 'approve');
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([self::FAILED], $review->reasons);
+        self::assertSame([self::FAILED], [...$review->reasons]);
         self::assertSame([], $review->verdicts);
         self::assertSame([], $review->actList);
     }
@@ -85,7 +80,7 @@ final class UnreadableAnswerTest extends KernelTestCase
         $review = $this->reviewedBy(2, 2, 'approve');
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([self::FAILED], $review->reasons);
+        self::assertSame([self::FAILED], [...$review->reasons]);
         self::assertCount(1, $review->verdicts);
     }
 
@@ -94,8 +89,13 @@ final class UnreadableAnswerTest extends KernelTestCase
         $review = $this->reviewedBy(2, 2, 'changes');
 
         self::assertSame(Decision::Changes, $review->decision);
-        self::assertSame([self::FAILED], $review->reasons);
+        self::assertSame([self::FAILED], [...$review->reasons]);
         self::assertCount(1, $review->verdicts);
+    }
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     // The reviewers are delivered one after the other, so the unreadable answers all go to the first reviewer and its retry.

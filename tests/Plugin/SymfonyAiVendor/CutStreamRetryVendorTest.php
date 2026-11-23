@@ -14,6 +14,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
@@ -48,6 +49,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -93,6 +95,7 @@ use Throwable;
 #[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 final class CutStreamRetryVendorTest extends KernelTestCase
 {
@@ -110,12 +113,6 @@ final class CutStreamRetryVendorTest extends KernelTestCase
      * @var list<bool>
      */
     private array $streamed = [];
-
-    protected function setUp(): void
-    {
-        $this->ledger = new InMemoryLedger();
-        $this->updates = new RecordedRoundUpdates();
-    }
 
     public function testAReviewerAskedAgainAfterACutStreamIsMarkedBeforeTheAnswerOfItsRetryAndTheCutAnswerIsNeverShown(): void
     {
@@ -238,7 +235,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
     {
         $cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), ['anthropic' => [Account::DEFAULT]]);
         $outage = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->json()), new ServerException(503));
-        $onlyAccount = static fn (PlatformInterface $platform): PlatformInterface => new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], $cooldowns, new MockClock(self::NOW), new NullLogger());
+        $onlyAccount = static fn (PlatformInterface $platform): PlatformInterface => new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], $cooldowns, new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns());
 
         $verdict = $this->vendor($outage, $onlyAccount, $cooldowns)->review('alpha', Tier::Strong, $this->request())->verdict;
 
@@ -246,6 +243,12 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         self::assertStringContainsString('The provider failed after the answer had started streaming.', $verdict->findings[0]->text);
         self::assertSame([true], $this->streamed);
         self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new InMemoryLedger();
+        $this->updates = new RecordedRoundUpdates();
     }
 
     /**
@@ -287,13 +290,6 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         return null;
     }
 
-    private function request(?ReviewerConversation $conversation = null): ReviewRequest
-    {
-        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
-
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), $conversation ?? new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
     /**
      * @param ?Closure(PlatformInterface): PlatformInterface $accounts
      */
@@ -307,5 +303,12 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(?ReviewerConversation $conversation = null): ReviewRequest
+    {
+        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), $conversation ?? new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }

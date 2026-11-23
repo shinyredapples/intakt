@@ -192,18 +192,6 @@ final class LedgerRounds
         return [$chosen, ...array_values($others)];
     }
 
-    // A spelling other than its canonical form, kept apart from rounds of its pull request, is history only, because storage numbers every new round of that pull request on the canonical row.
-    /**
-     * @param non-empty-list<ReviewedRound> $members
-     */
-    private function timelineOf(array $members): Timeline
-    {
-        $member = $members[0];
-        $keptApart = $member->change !== ChangeAddress::canonical($member->change) && count($members) < count($this->sameReviewAs($member));
-
-        return $keptApart ? Timeline::HistoryOnly : Timeline::Current;
-    }
-
     // A round number twice among the spellings of one pull request means two spellings were stored apart before the migration to the canonical address (Version20261122100000), each with a numbering of its own; only the chosen round's spelling is then its review, because mixing two numberings would make a legacy round the latest and offer a round number storage does not expect.
     /**
      * @param list<ReviewedRound> $rounds
@@ -219,12 +207,6 @@ final class LedgerRounds
         }
 
         return array_values(array_filter($rounds, static fn (ReviewedRound $round): bool => $round->change === $chosen->change));
-    }
-
-    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
-    private function markOf(ReviewedRound $round): ReplayMark
-    {
-        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
     }
 
     private function addUsage(RecordedEvent $recorded): void
@@ -276,15 +258,6 @@ final class LedgerRounds
     }
 
     /**
-     * @return list<RoundFinding>
-     */
-    private function droppedFindings(RecordedEvent $recorded): array
-    {
-        // The quotes come from the quote check itself, never from the card's own reading of the text, so the list is the one the recorded reason counted.
-        return array_map(fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason, $this->quotes->of($finding->text)), $this->payloads->droppedOf($recorded));
-    }
-
-    /**
      * @param list<JudgeDoneFinding> $findings
      *
      * @return list<RoundFinding>
@@ -299,6 +272,15 @@ final class LedgerRounds
             $judge->followUps->contains($finding->id) => $finding->calledBy(JudgeCall::FollowUp),
             default => $finding,
         }, [...$this->entriesOf($recorded), ...$this->markedOnly($judge, $recorded)]);
+    }
+
+    /**
+     * @return list<RoundFinding>
+     */
+    private function droppedFindings(RecordedEvent $recorded): array
+    {
+        // The quotes come from the quote check itself, never from the card's own reading of the text, so the list is the one the recorded reason counted.
+        return array_map(fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason, $this->quotes->of($finding->text), $finding->nearest), $this->payloads->droppedOf($recorded));
     }
 
     /**
@@ -357,6 +339,24 @@ final class LedgerRounds
     private function completed(ReviewedRound $round): ReviewedRound
     {
         return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
+    }
+
+    // A spelling other than its canonical form, kept apart from rounds of its pull request, is history only, because storage numbers every new round of that pull request on the canonical row.
+    /**
+     * @param non-empty-list<ReviewedRound> $members
+     */
+    private function timelineOf(array $members): Timeline
+    {
+        $member = $members[0];
+        $keptApart = $member->change !== ChangeAddress::canonical($member->change) && count($members) < count($this->sameReviewAs($member));
+
+        return $keptApart ? Timeline::HistoryOnly : Timeline::Current;
+    }
+
+    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
+    private function markOf(ReviewedRound $round): ReplayMark
+    {
+        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
     }
 
     // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.

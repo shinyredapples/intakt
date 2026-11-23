@@ -5,13 +5,13 @@
 {#- Always loaded, not only with live updates, because the charts' tooltip controller starts from it. -#}
 {% block importmap %}{{ importmap('app') }}{% endblock %}
 
-{#- A tile only for a figure there is, because a "No data" tile reads as a failure at a glance (juror walk-through of issue 3141). The label carries its explanation as a tooltip, never as a sentence under the tiles; a measured or estimated figure carries the same kind label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
-{% macro tile(label, figure, tip, at, kind = null, ran_on = null) %}
+{#- A tile only for a figure there is, because a "No data" tile reads as a failure at a glance (juror walk-through of issue 3141). The label carries its explanation as a tooltip and the caption under the figure says in a few visible words what it counts, so a keyboard or touch reader never depends on the tooltip; a role character sits in the corner of each tile, inside the caption's description element because a dl group holds only dt and dd, decorative because the label already names the figure; an estimated figure carries the same kind label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
+{% macro tile(label, figure, tip, at, caption, character, kind = null) %}
 {% if figure is not null %}
 <div class="tile" data-tile="{{ at }}">
     <dt>{{ _self.hint(label, tip, at) }}{% if kind is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: kind, at: at}, with_context = false) }}{% endif %}</dt>
-    {#- The run date is visible text, because the kind label is not a tab stop (D5 of #2206) and a keyboard user would never see it in a tooltip. -#}
-    <dd>{{ figure }}{% if ran_on is not null %}<time class="tile-date" datetime="{{ ran_on }}">Run of {{ ran_on }}</time>{% endif %}</dd>
+    <dd>{{ figure }}</dd>
+    <dd class="tile-caption">{{ caption }}{{ include('dashboard/components/character.html.twig', {character: character, size: 48}, with_context = false) }}</dd>
 </div>
 {% endif %}
 {% endmacro %}
@@ -33,7 +33,7 @@
 {% set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_TRENDS') %}
 {% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
 <div class="page-head trends-head">
-    <h1>Trends</h1>
+    <h1 class="sr-only">Trends</h1>
     {#- A toggle in the address, not a stored choice, so the address says what the figures count (D1 of #2858); pressed means the demo review is counted. -#}
     {% if trends.canLeaveOutTheDemo %}
     <form class="actions" method="get" action="{{ path(route) }}">
@@ -44,19 +44,26 @@
 </div>
 {% set cost = trends.costPerRound %}
 {% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
+{% set reviewer = enum('Intakt\\Core\\Dashboard\\Domain\\Character').CodeReviewer %}
+{% set judge = enum('Intakt\\Core\\Dashboard\\Domain\\Character').Judge %}
 {% if bench is not null or trends.anyReview %}
+{#- The page's one primary message, below a hidden h1 so the heading stays the page's name; the octopus joins it only when reviews follow, because the empty state below draws its own and the page shows one. -#}
+<div class="bench-headline" data-bench-headline>
+    {% if trends.anyReview %}{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Conducting, size: 96}, with_context = false) }}{% endif %}
+    {% if bench is not null %}<div>
+        <p class="bench-result">The review panel found {{ bench.found }} of {{ bench.planted }} planted defects</p>
+        <p class="bench-meta">{{ bench.falseAlarms }} {{ bench.falseAlarms == 1 ? 'false alarm' : 'false alarms' }} in all{% if bench.runs is not null %} {{ bench.runs }} {{ bench.runs == 1 ? 'run' : 'runs' }}{% endif %} {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Measured, at: 'bench'}, with_context = false) }} <time datetime="{{ bench.ranOn }}">Run of {{ bench.ranOn }}</time></p>
+    </div>{% endif %}
+</div>
+{% endif %}
+{% if trends.anyReview %}
 <dl class="tiles" aria-label="Review figures">
-    {% if bench is not null %}
-    {{ _self.tile('Defects found', bench.reading, 'Planted defects the review panel found on the review bench; ' ~ bench.falseAlarms ~ (bench.falseAlarms == 1 ? ' false alarm.' : ' false alarms.'), 'bench', kinds.Measured, bench.ranOn) }}
-    {% endif %}
-    {% if trends.anyReview %}
     {#- Not the glossary's round, which is a whole build, because this counts every review pass started, a review of its own included. -#}
-    {{ _self.tile('Passes', trends.roundsRun, 'Review passes started, whether run on their own or for a build.', 'passes') }}
-    {{ _self.tile('To fix', trends.seriousActFindings, 'P1 and P2 findings the judge kept for the builder to fix (the act list).', 'to-fix') }}
-    {{ _self.tile('One reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', 'Share of the findings kept to fix that only one reviewer of the pass reported, over passes with a full record of who reported what.', 'alone') }}
-    {{ _self.tile('Time to verdict', trends.medianTimeToVerdict, 'Median time from the start of a pass to its verdict.', 'verdict-time') }}
-    {{ _self.tile('Cost per pass', cost is null ? null : cost.reading, 'Mean of the passes with a cost estimate, ' ~ (cost is null ? '' : cost.priceDateReading) ~ '.', 'trends-cost', kinds.Estimated) }}
-    {% endif %}
+    {{ _self.tile('Passes', trends.roundsRun, 'Review passes started, whether run on their own or for a build.', 'passes', 'Reviews run so far', reviewer) }}
+    {{ _self.tile('To fix', trends.seriousActFindings, 'P1 and P2 findings the judge kept for the builder to fix (the act list).', 'to-fix', 'Serious, kept by the judge', judge) }}
+    {{ _self.tile('One reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', 'Share of the findings kept to fix that only one reviewer of the pass reported, over passes with a full record of who reported what.', 'alone', 'Findings no one else raised', reviewer) }}
+    {{ _self.tile('Time to verdict', trends.medianTimeToVerdict, 'Median time from the start of a pass to its verdict.', 'verdict-time', 'Median, start to verdict', judge) }}
+    {{ _self.tile('Cost per pass', cost is null ? null : cost.reading, 'Mean of the passes with a cost estimate, ' ~ (cost is null ? '' : cost.priceDateReading) ~ '.', 'trends-cost', 'Mean over priced passes', judge, kinds.Estimated) }}
 </dl>
 {% endif %}
 {% if not trends.anyReview %}
@@ -95,19 +102,16 @@
             </figure>
             {% endfor %}
         </div>
-        <details class="c-table">
-            <summary>Show as table</summary>
-            <table>
-                <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">One reviewer only</th></tr></thead>
-                <tbody>
-                {% for reviewer in drawnReviewers %}
-                {% for bar in reviewer.bars %}
-                <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
-                {% endfor %}
-                {% endfor %}
-                </tbody>
-            </table>
-        </details>
+        <table class="sr-only">
+            <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">One reviewer only</th></tr></thead>
+            <tbody>
+            {% for reviewer in drawnReviewers %}
+            {% for bar in reviewer.bars %}
+            <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
+            {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
         {{ _self.tip() }}
     </section>
     {% endif %}
@@ -116,17 +120,14 @@
         {{ _self.title('chart-judge', 'Checked findings', kinds.Counted) }}
         <p class="takeaway sr-only">{{ outcomes.takeaway }}</p>
         {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every checked pass', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
-        <details class="c-table">
-            <summary>Show as table</summary>
-            <table>
-                <thead><tr><th scope="col">Outcome</th><th scope="col">Findings</th></tr></thead>
-                <tbody>
-                {% for bar in outcomes.bars %}
-                <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </details>
+        <table class="sr-only">
+            <thead><tr><th scope="col">Outcome</th><th scope="col">Findings</th></tr></thead>
+            <tbody>
+            {% for bar in outcomes.bars %}
+            <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
         {{ _self.tip() }}
     </section>
     {% endif %}
@@ -147,18 +148,15 @@
             </figure>
             {% endif %}
         </div>
-        <details class="c-table">
-            <summary>Show as table</summary>
-            <table>
-                <thead><tr><th scope="col">Day</th><th scope="col">Passes</th>{% if costDrawn %}<th scope="col">Estimated cost (USD)</th>{% endif %}</tr></thead>
-                <tbody>
-                {% set costBars = perDay.costBars %}
-                {% for bar in perDay.roundBars %}
-                <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td>{% if costDrawn %}<td>{{ costBars[loop.index0].directLabel }}</td>{% endif %}</tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </details>
+        <table class="sr-only">
+            <thead><tr><th scope="col">Day</th><th scope="col">Passes</th>{% if costDrawn %}<th scope="col">Estimated cost (USD)</th>{% endif %}</tr></thead>
+            <tbody>
+            {% set costBars = perDay.costBars %}
+            {% for bar in perDay.roundBars %}
+            <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td>{% if costDrawn %}<td>{{ costBars[loop.index0].directLabel }}</td>{% endif %}</tr>
+            {% endfor %}
+            </tbody>
+        </table>
         {{ _self.tip() }}
     </section>
     {% endif %}

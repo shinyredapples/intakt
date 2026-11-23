@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
+use Intakt\Core\Review\Contract\StreamChunks;
 use Intakt\Core\Review\Contract\StreamCutBy;
 use Intakt\Core\Review\Contract\StreamEndedEarly;
 use Intakt\Core\Review\Infrastructure\AnthropicTextBlocks;
 use Intakt\Core\Review\Infrastructure\StreamedAnswer;
 use Intakt\Core\Review\Infrastructure\StreamTally;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\BadRequestException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
@@ -30,14 +32,10 @@ use Throwable;
 #[CoversClass(AnthropicTextBlocks::class)]
 #[CoversClass(StreamTally::class)]
 #[CoversClass(StreamEndedEarly::class)]
+#[UsesClass(StreamChunks::class)]
 final class StreamedAnswerTest extends TestCase
 {
     private TextSeenByLaterListeners $later;
-
-    protected function setUp(): void
-    {
-        $this->later = new TextSeenByLaterListeners();
-    }
 
     public function testTheTextStillStreamsPieceByPieceAndOnlyOnce(): void
     {
@@ -113,7 +111,7 @@ final class StreamedAnswerTest extends TestCase
 
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
         self::assertSame([StreamCutBy::ProviderFailureMidStream, 2], [$cut->by, $cut->chunks]);
-        self::assertSame(['TokenUsage', 'TextDelta "{\"verdict\":"'], $cut->lastChunks);
+        self::assertSame(['TokenUsage', 'TextDelta "{\"verdict\":"'], [...$cut->lastChunks]);
     }
 
     public function testAStreamThePlatformCutIsRaisedAgainWithItsMessageCauseAndTheChunksBeforeIt(): void
@@ -126,7 +124,7 @@ final class StreamedAnswerTest extends TestCase
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
         self::assertSame(['Completions stream ended before a finish reason was received.', $cause], [$cut->getMessage(), $cut->getPrevious()]);
         self::assertSame([StreamCutBy::Platform, 2], [$cut->by, $cut->chunks]);
-        self::assertSame(['TextDelta "{\"verdict\":"', 'MetadataDelta finish_reason=null'], $cut->lastChunks);
+        self::assertSame(['TextDelta "{\"verdict\":"', 'MetadataDelta finish_reason=null'], [...$cut->lastChunks]);
     }
 
     public function testAStreamThePlatformCutBeforeAnyChunkKeepsNone(): void
@@ -134,7 +132,7 @@ final class StreamedAnswerTest extends TestCase
         $cut = $this->thrownBy($this->brokenAfter([], new IncompleteStreamException('The stream ended before its last event.')));
 
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
-        self::assertSame([0, []], [$cut->chunks, $cut->lastChunks]);
+        self::assertSame([0, []], [$cut->chunks, [...$cut->lastChunks]]);
         self::assertStringContainsString('last chunks: none', $cut->described());
     }
 
@@ -146,7 +144,7 @@ final class StreamedAnswerTest extends TestCase
 
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
         self::assertSame(7, $cut->chunks);
-        self::assertSame(['TextDelta "3"', 'TextDelta "4"', 'TextDelta "5"', 'TextDelta "6"', 'TextDelta "7"'], $cut->lastChunks);
+        self::assertSame(['TextDelta "3"', 'TextDelta "4"', 'TextDelta "5"', 'TextDelta "6"', 'TextDelta "7"'], [...$cut->lastChunks]);
     }
 
     public function testAKeptChunkShowsOnlyTheFirstEightyCharactersOfItsText(): void
@@ -154,7 +152,7 @@ final class StreamedAnswerTest extends TestCase
         $cut = $this->thrownBy($this->brokenAfter([new ThinkingDelta(str_repeat('é', 79).'ab')], new IncompleteStreamException('Cut.')));
 
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
-        self::assertSame(['ThinkingDelta "'.str_repeat('é', 79).'a"'], $cut->lastChunks);
+        self::assertSame(['ThinkingDelta "'.str_repeat('é', 79).'a"'], [...$cut->lastChunks]);
     }
 
     public function testAKeptMetadataChunkShowsAScalarValueAndOnlyTheTypeOfAnyOther(): void
@@ -162,7 +160,7 @@ final class StreamedAnswerTest extends TestCase
         $cut = $this->thrownBy($this->brokenAfter([new MetadataDelta('finish_reason', 'stop'), new MetadataDelta('logprobs', ['a' => 1])], new IncompleteStreamException('Cut.')));
 
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
-        self::assertSame(['MetadataDelta finish_reason="stop"', 'MetadataDelta logprobs=array'], $cut->lastChunks);
+        self::assertSame(['MetadataDelta finish_reason="stop"', 'MetadataDelta logprobs=array'], [...$cut->lastChunks]);
     }
 
     public function testAFailureThatARetryCannotOvercomeStaysItselfAlsoMidStream(): void
@@ -170,6 +168,11 @@ final class StreamedAnswerTest extends TestCase
         $refused = new BadRequestException('Refused.');
 
         self::assertSame($refused, $this->thrownBy($this->brokenAfter([new TextDelta('{"verdict":')], $refused)));
+    }
+
+    protected function setUp(): void
+    {
+        $this->later = new TextSeenByLaterListeners();
     }
 
     /**
@@ -195,6 +198,22 @@ final class StreamedAnswerTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function textBlock(): array
+    {
+        return ['type' => 'content_block_start', 'content_block' => ['type' => 'text', 'text' => '']];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function text(string $text): array
+    {
+        return ['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => $text]];
     }
 
     /**
@@ -238,22 +257,6 @@ final class StreamedAnswerTest extends TestCase
                 yield new ToolCallStart('toolu_01', 'read_file');
             }
         }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function textBlock(): array
-    {
-        return ['type' => 'content_block_start', 'content_block' => ['type' => 'text', 'text' => '']];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function text(string $text): array
-    {
-        return ['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => $text]];
     }
 
     /**

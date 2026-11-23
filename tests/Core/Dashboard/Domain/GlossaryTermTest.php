@@ -32,6 +32,33 @@ final class GlossaryTermTest extends TestCase
         self::assertSame([], array_map(static fn (GlossaryTerm $term): string => $term->value, array_values($missing)));
     }
 
+    public function testTheToFixTermKeepsTheTechnicalNameActListInOneSentence(): void
+    {
+        self::assertSame('fix', GlossaryTerm::ToFix->value);
+        self::assertStringStartsWith('The act list: ', GlossaryTerm::ToFix->explanation());
+        self::assertSame(1, substr_count(GlossaryTerm::ToFix->explanation(), '.'));
+    }
+
+    public function testTheCheckedTermKeepsTheTechnicalNameJudgedInOneSentence(): void
+    {
+        self::assertSame('checked', GlossaryTerm::Checked->value);
+        self::assertStringStartsWith('Judged: ', GlossaryTerm::Checked->explanation());
+        self::assertSame(1, substr_count(GlossaryTerm::Checked->explanation(), '.'));
+    }
+
+    public function testTheToFixTermKeepsEveryQualifyingP1AndP2FindingWhateverTheJudgeMarked(): void
+    {
+        self::assertStringContainsString('every P1 and P2 finding that passed the quote check, whatever the judge marked', GlossaryTerm::ToFix->explanation());
+    }
+
+    public function testTheReviewPassTermKeepsTheTechnicalNameRoundWithoutClaimingABuildInOneSentence(): void
+    {
+        self::assertSame('pass', GlossaryTerm::ReviewPass->value);
+        self::assertStringStartsWith('A round: ', GlossaryTerm::ReviewPass->explanation());
+        self::assertStringNotContainsString('build', GlossaryTerm::ReviewPass->explanation());
+        self::assertSame(1, substr_count(GlossaryTerm::ReviewPass->explanation(), '.'));
+    }
+
     /**
      * @return list<string>
      */

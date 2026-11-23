@@ -1,0 +1,142 @@
+{
+    "type": "json_schema",
+    "json_schema": {
+        "name": "Verdict",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "verdict": {
+                    "type": "string",
+                    "enum": [
+                        "approve",
+                        "changes",
+                        "blocked"
+                    ]
+                },
+                "findings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                                "nullable": false,
+                                "minLength": 1
+                            },
+                            "severity": {
+                                "type": "string",
+                                "enum": [
+                                    "P1",
+                                    "P2",
+                                    "P3"
+                                ]
+                            },
+                            "file": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "line": {
+                                "type": [
+                                    "integer",
+                                    "null"
+                                ],
+                                "minimum": 1
+                            },
+                            "symbol": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "text": {
+                                "type": "string",
+                                "nullable": false,
+                                "minLength": 1
+                            },
+                            "fixable_by": {
+                                "type": "string",
+                                "enum": [
+                                    "builder",
+                                    "owner"
+                                ]
+                            },
+                            "repeat": {
+                                "type": "boolean"
+                            },
+                            "requirement": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "evidence": {
+                                "type": [
+                                    "object",
+                                    "null"
+                                ],
+                                "properties": {
+                                    "probe": {
+                                        "type": "string",
+                                        "nullable": false,
+                                        "minLength": 1
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "probe",
+                                    "output"
+                                ],
+                                "additionalProperties": false
+                            },
+                            "regression": {
+                                "type": "boolean"
+                            },
+                            "gate_gap": {
+                                "type": "boolean"
+                            }
+                        },
+                        "required": [
+                            "id",
+                            "severity",
+                            "file",
+                            "line",
+                            "symbol",
+                            "text",
+                            "fixable_by",
+                            "repeat",
+                            "requirement",
+                            "evidence",
+                            "regression",
+                            "gate_gap"
+                        ],
+                        "additionalProperties": false
+                    }
+                },
+                "resolved": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "follow_ups": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": [
+                "verdict",
+                "findings",
+                "resolved",
+                "follow_ups"
+            ],
+            "additionalProperties": false
+        },
+        "strict": true
+    }
+}

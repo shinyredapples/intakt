@@ -78,11 +78,6 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
     /** @var list<mixed> */
     private array $limits = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAChangesVerdictWithoutFindingsOnceGivesTheVerdictOfTheRetry(): void
     {
         $this->fixture->start(1);
@@ -147,6 +142,11 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
         self::assertSame(1, $this->calls);
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     private function emptyChanges(): string
     {
         return VerdictDocument::fromTheDesign()->with('resolved', [])->with('findings', [])->json();
@@ -155,13 +155,6 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
     private function changesWithAFinding(): string
     {
         return VerdictDocument::fromTheDesign()->with('resolved', [])->json();
-    }
-
-    private function deliverAll(SymfonyAiVendor $vendor): void
-    {
-        foreach ($this->fixture->bus->messages as $message) {
-            $this->fixture->deliver($message, $vendor);
-        }
     }
 
     /**
@@ -175,6 +168,13 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
 
             return $answer instanceof MaxOutputTokensException ? throw $answer : $answer;
         });
+    }
+
+    private function deliverAll(SymfonyAiVendor $vendor): void
+    {
+        foreach ($this->fixture->bus->messages as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
     }
 
     private function vendor(Closure $answer): SymfonyAiVendor

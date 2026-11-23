@@ -28,6 +28,7 @@ use Intakt\Core\Bench\UseCase\RunBench\RunBench;
 use Intakt\Core\Bench\UseCase\RunBench\RunBenchCommand;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -35,6 +36,8 @@ use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -90,10 +93,13 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(RunVerdict::class)]
 #[UsesClass(ChangeReview::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ModelNames::class)]
 #[UsesClass(RoundTokens::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(ChangeDescription::class)]
+#[UsesClass(BlockReasons::class)]
+#[UsesClass(Labels::class)]
 #[UsesClass(ChangeReviewRequest::class)]
 #[UsesClass(RequestedRound::class)]
 #[UsesClass(ReviewTerms::class)]
@@ -110,18 +116,6 @@ final class RunBenchCommandTest extends TestCase
     private string $workspace;
 
     private string $results;
-
-    // The checkouts go to a folder of the test, so it can see what the run leaves behind.
-    protected function setUp(): void
-    {
-        $this->workspace = sys_get_temp_dir().'/intakt-bench-run-'.bin2hex(random_bytes(4));
-        $this->results = $this->workspace.'-results';
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->workspace, $this->results]);
-    }
 
     public function testTheBenchCommandWithoutAProjectFailsAndWritesNoFile(): void
     {
@@ -295,6 +289,18 @@ final class RunBenchCommandTest extends TestCase
         self::assertSame([], glob($this->workspace.'/*'));
     }
 
+    // The checkouts go to a folder of the test, so it can see what the run leaves behind.
+    protected function setUp(): void
+    {
+        $this->workspace = sys_get_temp_dir().'/intakt-bench-run-'.bin2hex(random_bytes(4));
+        $this->results = $this->workspace.'-results';
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->workspace, $this->results]);
+    }
+
     private function checkoutsNow(): int
     {
         $entries = glob($this->workspace.'/*');
@@ -313,25 +319,6 @@ final class RunBenchCommandTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $input
-     */
-    private function runCommand(array $input, ChangeReviews $reviews): CommandTester
-    {
-        $panel = new Panel([new PanelReviewer(new ReviewerRole('role-1', 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1)], QuorumPolicy::All);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn($panel);
-        $command = new RunBenchCommand(
-            new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($reviews, new RunClassifier(new DefectMatcher())), $this->workspace),
-            new BenchReport(),
-            new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), new MockClock('2026-11-15 10:30:00'), $this->results),
-        );
-        $tester = new CommandTester($command);
-        $tester->execute($input);
-
-        return $tester;
-    }
-
-    /**
      * @return ResultDocument
      */
     private function resultDocument(): array
@@ -344,9 +331,9 @@ final class RunBenchCommandTest extends TestCase
 
     private function everySecondReviewFails(): ChangeReviews
     {
-        $failed = new ReviewerOutcome('role-1', Tier::Standard, null, 'stopped at its output limit', new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, ['big']);
+        $failed = new ReviewerOutcome('role-1', Tier::Standard, null, 'stopped at its output limit', new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, new ModelNames('big'));
 
-        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Blocked, [], [], new RoundTokens(1, 100, 0, 0, 0, 0, 100), Cost::none(), [], reviewers: [$failed]));
+        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Blocked, [], [], new RoundTokens(1, 100, 0, 0, 0, 0, 100), Cost::none(), new BlockReasons(), reviewers: [$failed]));
     }
 
     /**
@@ -354,9 +341,9 @@ final class RunBenchCommandTest extends TestCase
      */
     private function everySecondReviewFindsNothing(array $models = ['big']): ChangeReviews
     {
-        $nothing = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Approve, [], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, $models);
+        $nothing = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Approve, [], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, new ModelNames(...$models));
 
-        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Approve, [], [], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$nothing]));
+        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Approve, [], [], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), new BlockReasons(), reviewers: [$nothing]));
     }
 
     // The second run of each change gets the other answer, because the runs of a change follow each other.
@@ -376,11 +363,30 @@ final class RunBenchCommandTest extends TestCase
     private function reviews(): ChangeReviews
     {
         $finding = new Finding('F1', Severity::P1, 'src/shipping.js', $this->plantedLine(), null, 'Off by one.', FixableBy::Builder, false, null, null);
-        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, ['big']);
+        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, new ModelNames('big'));
         $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$reviewer]));
+        $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), new BlockReasons(), reviewers: [$reviewer]));
 
         return $reviews;
+    }
+
+    /**
+     * @param array<string, string> $input
+     */
+    private function runCommand(array $input, ChangeReviews $reviews): CommandTester
+    {
+        $panel = new Panel([new PanelReviewer(new ReviewerRole('role-1', 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1)], QuorumPolicy::All);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn($panel);
+        $command = new RunBenchCommand(
+            new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($reviews, new RunClassifier(new DefectMatcher())), $this->workspace),
+            new BenchReport(),
+            new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), new MockClock('2026-11-15 10:30:00'), $this->results),
+        );
+        $tester = new CommandTester($command);
+        $tester->execute($input);
+
+        return $tester;
     }
 
     private function plantedLine(): int

@@ -13,7 +13,7 @@ use Symfony\Component\Mercure\Update;
 final readonly class RoundStreamCheck
 {
     // Matched on these texts because the template of the round_changed stream prints them and the update carries no other flag.
-    private const string JUDGED = 'Judged.';
+    private const string JUDGED = 'Checked.';
     private const string PROGRESS = '/^(\d+) of (\d+) reviewers finished\.$/';
     // The actions Turbo inserts a stream's template for, because the template of any other action never reaches the page.
     private const array INSERTING = ['append', 'prepend', 'before', 'after', 'replace', 'update'];

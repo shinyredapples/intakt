@@ -159,14 +159,6 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
         self::assertSame(RateLimitExceededException::class, $ledger->payloads()[1]['failure']);
     }
 
-    private function request(): JudgeRequest
-    {
-        return new JudgeRequest('Add a cart.', [
-            new Finding('F1', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null),
-            new Finding('F2', Severity::P3, null, null, null, 'Nit.', FixableBy::Builder, false, null, null),
-        ], Uuid::fromString(self::ROUND), new Paths());
-    }
-
     private function vendor(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => [
@@ -181,5 +173,13 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), $usage, $limit, new MockClock('2026-10-27 12:00:00 UTC'), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(): JudgeRequest
+    {
+        return new JudgeRequest('Add a cart.', [
+            new Finding('F1', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null),
+            new Finding('F2', Severity::P3, null, null, null, 'Nit.', FixableBy::Builder, false, null, null),
+        ], Uuid::fromString(self::ROUND), new Paths());
     }
 }

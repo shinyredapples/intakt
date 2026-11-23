@@ -75,22 +75,6 @@ final class JourneyAlarmTest extends TestCase
     /** @var list<array{arguments: list<string>, input: string}> */
     private array $recorded = [];
 
-    protected function setUp(): void
-    {
-        $this->tokenBefore = getenv('GH_TOKEN');
-        putenv('GH_TOKEN=in-process-token');
-        $this->directory = sys_get_temp_dir().'/intakt-journey-alarm-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->directory.'/gh', self::FAKE_GH."\n");
-        chmod($this->directory.'/gh', 0o755);
-        $this->openIssues('[]');
-    }
-
-    protected function tearDown(): void
-    {
-        putenv(false === $this->tokenBefore ? 'GH_TOKEN' : 'GH_TOKEN='.$this->tokenBefore);
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAFirstRedRunCreatesExactlyOneUrgentReadyTaskNamingTheJourneyStepAndTail(): void
     {
         $alarm = $this->alarm([$this->fixture()]);
@@ -334,6 +318,22 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame([], $this->calls());
     }
 
+    protected function setUp(): void
+    {
+        $this->tokenBefore = getenv('GH_TOKEN');
+        putenv('GH_TOKEN=in-process-token');
+        $this->directory = sys_get_temp_dir().'/intakt-journey-alarm-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->directory.'/gh', self::FAKE_GH."\n");
+        chmod($this->directory.'/gh', 0o755);
+        $this->openIssues('[]');
+    }
+
+    protected function tearDown(): void
+    {
+        putenv(false === $this->tokenBefore ? 'GH_TOKEN' : 'GH_TOKEN='.$this->tokenBefore);
+        new Filesystem()->remove($this->directory);
+    }
+
     private function fixture(): string
     {
         return JourneyRunTest::ONE_BROKEN;
@@ -391,17 +391,17 @@ final class JourneyAlarmTest extends TestCase
         return array_map(static fn (array $issue): array => ['number' => $issue[0], 'body' => $issue[1]], array_values($issues));
     }
 
-    private function fixtureOutput(): string
-    {
-        return (string) file_get_contents($this->fixture());
-    }
-
     private function raise(?string $output = null, ?string $run = null): string
     {
         $github = new GitHubIssues(self::REPOSITORY, $this->fakeGh(...));
         $alarm = new JourneyAlarm($github, new LockFactory(new InMemoryStore()));
 
         return $alarm->raise(JourneyRun::fromOutput($output ?? $this->fixtureOutput()), null === $run ? null : Uri::parse($run));
+    }
+
+    private function fixtureOutput(): string
+    {
+        return (string) file_get_contents($this->fixture());
     }
 
     /**
