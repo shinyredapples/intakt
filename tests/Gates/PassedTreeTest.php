@@ -20,6 +20,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
+use UnexpectedValueException;
 
 #[CoversClass(PassedTree::class)]
 #[CoversClass(TreeFingerprint::class)]
@@ -347,6 +348,66 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    public function testALinkPartWayAlongTheRouteToATrackedFolderMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home, $alias] = $this->trackedNoteUnderVarBehindTwoLinks();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        rename($alias, $alias.'-aside');
+        rename($alias.'-aside', $alias);
+
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testAnAbsoluteLinkPartWayAlongTheRouteToATrackedFolderMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home, $alias] = $this->trackedNoteUnderVarBehindTwoLinks();
+        unlink($alias);
+        $root->symlink('var/backing/alias', $root->root.'/var/actual');
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        rename($alias, $alias.'-aside');
+        rename($alias.'-aside', $alias);
+
+        self::assertFalse($tree->recordPass());
+    }
+
+    public function testAFolderWhoseLinksLeadInALoopIsRefused(): void
+    {
+        $root = $this->emptySandbox();
+        mkdir($root->root.'/var');
+        $root->symlink('var/notes', 'loop');
+        $root->symlink('var/loop', 'notes');
+        $real = (string) realpath($root->root);
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('leads back into itself');
+
+        iterator_to_array(new TreeWalk([], null)->folderAlone($real.'/var/notes', 'var/notes', $real));
+    }
+
+    public function testAFolderWhoseLinkLeadsNowhereIsRefused(): void
+    {
+        $root = $this->emptySandbox();
+        mkdir($root->root.'/var');
+        $root->symlink('var/notes', 'missing/notes');
+        $real = (string) realpath($root->root);
+
+        $this->expectException(UnexpectedValueException::class);
+
+        iterator_to_array(new TreeWalk([], null)->folderAlone($real.'/var/notes', 'var/notes', $real));
+    }
+
+    public function testATrackedFolderBehindTwoLinksLeftAloneWhileTheGatesRanRecordsAPass(): void
+    {
+        [$root, $home] = $this->trackedNoteUnderVarBehindTwoLinks();
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        self::assertTrue($tree->recordPass());
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testATrackedFileBehindALinkWithinTheTreeLeftAloneWhileTheGatesRanRecordsAPass(): void
     {
         [$root, $home] = $this->trackedNoteUnderVarBehindALinkWithinTheTree();
@@ -641,6 +702,25 @@ final class PassedTreeTest extends SandboxTestCase
         $root->symlink('var/notes', $parent.'/notes');
 
         return [$root, $home, $parent];
+    }
+
+    /**
+     * @return array{Sandbox, Sandbox, string}
+     */
+    // Because var/notes leads through var/backing/alias, a link to ../actual, the folder it ends in has no ancestor that is the alias.
+    private function trackedNoteUnderVarBehindTwoLinks(): array
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('var/notes/example.md', "clean\n");
+        $root->git('add', '--force', 'var/notes/example.md');
+        $root->commitAll('docs: track a note under var');
+        mkdir($root->root.'/var/actual');
+        mkdir($root->root.'/var/backing');
+        rename($root->root.'/var/notes', $root->root.'/var/actual/notes');
+        $root->symlink('var/backing/alias', '../actual');
+        $root->symlink('var/notes', 'backing/alias/notes');
+
+        return [$root, $home, $root->root.'/var/backing/alias'];
     }
 
     private function pass(Sandbox $root, Sandbox $home, string ...$arguments): void

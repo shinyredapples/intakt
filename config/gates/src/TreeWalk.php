@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Generator;
 use UnexpectedValueException;
 
 final readonly class TreeWalk
 {
+    // Because Linux stops following links after 40 on one path, a route with more leads nowhere for the gates either.
+    private const int MOST_LINKS_ON_A_ROUTE = 40;
+
     /**
      * @param list<string> $skipped
      */
@@ -60,11 +64,7 @@ final readonly class TreeWalk
             return;
         }
 
-        $target = realpath($path);
-
-        if (false === $target) {
-            throw new UnexpectedValueException('a link leads nowhere: '.$path);
-        }
+        $target = yield from $this->route($path, $key, $root);
 
         yield $key."\0" => $this->settledStatusOf($target);
 
@@ -72,6 +72,65 @@ final readonly class TreeWalk
             // Because the key of the folder a link leads to ends in a zero byte, a relative path after it never passes for that key nor for a path in the tree.
             yield $key."\0".substr($folder, strlen($root) + 1) => $this->settledStatusOf($folder);
         }
+    }
+
+    /**
+     * @return Generator<string, string, mixed, string>
+     *
+     * @throws UnexpectedValueException
+     */
+    // Because realpath() hides the links part way along a route (a link to a folder behind another link), the route is followed one name at a time, and every folder and link it passes within $root counts, since moving one of them away also takes the gates' input away.
+    private function route(string $link, string $key, string $root): Generator
+    {
+        $folder = realpath(dirname($link));
+
+        if (false === $folder) {
+            throw new UnexpectedValueException('cannot read '.dirname($link));
+        }
+
+        $target = $this->targetOf($link);
+        $folder = str_starts_with($target, '/') ? '' : $folder;
+        $names = $this->namesOf($target);
+        $links = 1;
+
+        while ([] !== $names) {
+            $name = array_shift($names);
+
+            if ('..' === $name) {
+                $folder = rtrim(dirname('' === $folder ? '/' : $folder), '/');
+
+                continue;
+            }
+
+            $next = $folder.'/'.$name;
+
+            if (str_starts_with($next, $root.'/')) {
+                // Because the key of the folder a link leads to ends in one zero byte, a key with two before its path never passes for that key, for a folder above it, nor for a path in the tree.
+                yield $key."\0\0".substr($next, strlen($root) + 1) => $this->settledStatusOf($next);
+            }
+
+            if (!is_link($next)) {
+                $folder = $next;
+
+                continue;
+            }
+
+            if (++$links > self::MOST_LINKS_ON_A_ROUTE) {
+                throw new UnexpectedValueException('a link leads back into itself: '.$link);
+            }
+
+            $target = $this->targetOf($next);
+            $folder = str_starts_with($target, '/') ? '' : $folder;
+            $names = [...$this->namesOf($target), ...$names];
+        }
+
+        $end = '' === $folder ? '/' : $folder;
+
+        if (!file_exists($end)) {
+            throw new UnexpectedValueException('a link leads nowhere: '.$link);
+        }
+
+        return $end;
     }
 
     /**
@@ -91,6 +150,14 @@ final readonly class TreeWalk
         }
 
         return implode(' ', [$status['mode'], $status['size'], $status['mtime'], $status['ctime'], $status['ino']]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function namesOf(string $target): array
+    {
+        return array_values(array_filter(explode('/', $target), static fn (string $name): bool => '' !== $name && '.' !== $name));
     }
 
     /**
