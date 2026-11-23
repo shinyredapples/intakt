@@ -45,7 +45,7 @@ final class ReviewListStylesTest extends TestCase
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
         self::assertIsString($sheet);
         preg_match_all('/([^{}]+)\{([^{}]*)\}/', (string) preg_replace('~/\*.*?\*/~s', '', $sheet), $rules, PREG_SET_ORDER);
-        $found = array_filter($rules, static fn (array $rule): bool => trim($rule[1]) === $selector);
+        $found = array_filter($rules, static fn (array $rule): bool => trim($rule[1]) === $selector || in_array($selector, array_map(trim(...), explode(',', $rule[1])), true));
 
         return [] === $found ? self::fail($selector) : implode(' ', array_column($found, 2));
     }

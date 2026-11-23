@@ -34,9 +34,18 @@ Each chart carries a chip that says whether its figures are counted or estimated
 
 When you have played the demo run, a **Demo review** toggle sits at the top. Press it to count your own reviews only; press it again to bring the demo back.
 
+## Up next: the rounds going on now
+
+At the bottom of Trends, **Up next** lists the review rounds the board shows under In review, also before the first review and with the demo left out.
+
+- **In progress:** rounds whose reviewers have started, with the reviewers that did.
+- **Waiting to start:** rounds no reviewer has picked up yet. After them come pull requests the watcher queued that have not started yet, marked "Queued, not started yet".
+
+Click a round to open its review page. A queued pull request has no link until its round starts, because its review page does not exist before that. When nothing is going on, Up next says "Nothing running or queued.". The list shows the moment you opened the page: reload it to see newer rounds.
+
 ## Now: what is running right now
 
-Trends looks back. For the present moment, open **Now** in the menu. The board's status line sums it up in one phrase, such as "Running smoothly · 1 reviewer working" or "Quiet · nobody working".
+Trends mostly looks back. For the present moment, open **Now** in the menu. The board's status line sums it up in one phrase, such as "Running smoothly · 1 reviewer working" or "Quiet · nobody working".
 
 ![The board in dark mode: the sleeping octopus above the status line "Quiet, nobody working" with an arrow to the Status page, then the columns Waiting on you, In review and Done](../assets/guide/board.webp)
 
