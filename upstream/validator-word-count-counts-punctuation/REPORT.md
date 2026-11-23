@@ -21,7 +21,7 @@ Each value holds no word, so `min: 3` refuses it. ICU tells words from other par
 
 ## Effect in Intakt
 
-`src/Core/Review/Contract/Finding.php` puts `#[WordCount(min: 3, max: 6)]` on a finding's `title`, so a reviewer could pass `. . .` as a title. A `#[Callback]` (`Finding::refuseFewerThanThreeRealWords()`) also refuses a title with fewer than three space-separated words that hold a letter or digit (`VerdictParserTest`). A hyphenated word still counts as three toward the maximum of six.
+A finding's `title` in `src/Core/Review/Contract/Finding.php` must have 3 to 6 words. With `#[WordCount(min: 3, max: 6)]` a reviewer could pass `. . .` as a title, and a valid six-word title such as `The tidy-up step breaks cart discounts` was refused as too long, which makes the whole verdict unreadable. So the title does not use `WordCount`: a `#[Callback]` (`Finding::refuseOutsideThreeToSixWords()`) counts the parts between white space that hold a letter or digit and refuses fewer than three or more than six of them (`VerdictParserTest`).
 
 ## Upstream status
 

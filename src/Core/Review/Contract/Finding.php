@@ -12,7 +12,6 @@ use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\NotNull;
 use Symfony\Component\Validator\Constraints\Valid;
-use Symfony\Component\Validator\Constraints\WordCount;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 // Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping; excluded because that output builds it, not the container.
@@ -43,11 +42,9 @@ final readonly class Finding
         public bool $gate_gap = false,
         // Nullable only because a finding stored before reviewers named one has none, so NotNull still refuses a reviewer's answer without it; Symfony AI's schema keeps null in the type despite NotNull: upstream/ai-platform-not-null-promoted-property
         #[NotNull]
-        // NotBlank too, because WordCount lets an empty string pass.
         #[NotBlank]
-        #[WordCount(min: 3, max: 6)]
-        // WordCount counts a punctuation mark as a word: upstream/validator-word-count-counts-punctuation
-        #[Callback([self::class, 'refuseFewerThanThreeRealWords'])]
+        // Not Symfony's WordCount, because it counts a punctuation mark as a word, so "tidy-up" would be three: upstream/validator-word-count-counts-punctuation
+        #[Callback([self::class, 'refuseOutsideThreeToSixWords'])]
         #[Schema(description: 'The problem in 3 to 6 plain words, for example "'.self::TITLE_EXAMPLE.'".')]
         public ?string $title = null,
         #[NotNull]
@@ -62,18 +59,22 @@ final readonly class Finding
     ) {
     }
 
-    // A word made of punctuation alone is no word, so ". . ." is no title.
-    public static function refuseFewerThanThreeRealWords(?string $title, ExecutionContextInterface $context): void
+    // One meaning of a word for both limits: a part between spaces that holds a letter or a digit, so "tidy-up" and "src/Cart.php" are one word each and ". . ." is none.
+    public static function refuseOutsideThreeToSixWords(?string $title, ExecutionContextInterface $context): void
     {
         if (null === $title) {
             return;
         }
 
-        if (preg_match_all('/[^\s\p{L}\p{N}]*[\p{L}\p{N}]\S*/u', $title) >= 3) {
-            return;
+        $words = preg_match_all('/[^\s\p{L}\p{N}]*[\p{L}\p{N}]\S*/u', $title);
+
+        if ($words < 3) {
+            $context->buildViolation('At least three words of the title must hold a letter or a digit.')->addViolation();
         }
 
-        $context->buildViolation('At least three words of the title must hold a letter or a digit.')->addViolation();
+        if ($words > 6) {
+            $context->buildViolation('At most six words of the title may hold a letter or a digit.')->addViolation();
+        }
     }
 
     public function judgeNote(): ?string

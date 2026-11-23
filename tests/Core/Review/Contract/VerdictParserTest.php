@@ -155,20 +155,21 @@ final class VerdictParserTest extends KernelTestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, string}>
      */
     public static function titlesOutsideThreeToSixWords(): iterable
     {
-        yield 'two words' => ['Discount lost'];
-        yield 'seven words' => ['A cart of one hundred loses discounts'];
+        yield 'two words' => ['Discount lost', 'At least three words of the title must hold a letter or a digit.'];
+        yield 'seven words' => ['A cart of one hundred loses discounts', 'At most six words of the title may hold a letter or a digit.'];
+        yield 'seven words, one hyphenated' => ['The tidy-up step breaks all cart discounts', 'At most six words of the title may hold a letter or a digit.'];
     }
 
-    // Only the classes refuse these, because Symfony AI describes a word count in the description alone, which the schema file cannot hold an answer to.
+    // Only the classes refuse these, because the schema names the word count in the description alone, which the schema file cannot hold an answer to.
     #[DataProvider('titlesOutsideThreeToSixWords')]
-    public function testATitleOutsideThreeToSixWordsIsRefusedAsUnreadable(string $title): void
+    public function testATitleOutsideThreeToSixWordsIsRefusedAsUnreadable(string $title, string $message): void
     {
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessageMatches('/findings\[0\]\.title: This value is too (short|long)/');
+        $this->expectExceptionMessageMatches('/findings\[0\]\.title: '.preg_quote($message, '/').'/');
 
         $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
     }
@@ -193,6 +194,12 @@ final class VerdictParserTest extends KernelTestCase
         yield 'three real words and a lone dash' => ['Discount - is lost'];
         yield 'three real words padded with dots' => ['Discount is lost . .'];
         yield 'words outside ASCII' => ['Rabatt für Ärzte fehlt'];
+        yield 'six words, one hyphenated' => ['The tidy-up step breaks cart discounts'];
+        yield 'five words, one hyphenated' => ['The null-check misses empty carts'];
+        yield 'four words, a method name' => ['Cart::total() adds the discount'];
+        yield 'three words, a path' => ['src/Cart.php loses discounts'];
+        yield 'three hyphenated words' => ['a-b c-d e-f'];
+        yield 'six real words and a lone dash' => ['A large cart - loses its discount'];
     }
 
     /**
@@ -203,9 +210,10 @@ final class VerdictParserTest extends KernelTestCase
         yield 'punctuation alone' => ['. . .'];
         yield 'two real words and dots' => ['Cart . . broken'];
         yield 'two real words and marks' => ['Cart is ! ?'];
+        yield 'two real words with marks attached' => ['... cart, broken!'];
     }
 
-    // WordCount counts each of these marks as a word: upstream/validator-word-count-counts-punctuation
+    // Symfony's WordCount counts each of these marks as a word, which is why the title has a rule of its own: upstream/validator-word-count-counts-punctuation
     #[DataProvider('titlesWithFewerThanThreeRealWords')]
     public function testATitleWithFewerThanThreeRealWordsIsRefusedAsUnreadable(string $title): void
     {
