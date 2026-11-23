@@ -47,6 +47,18 @@ final class InMemoryLedger implements Ledger
     }
 
     #[Override]
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return new RecordedEvents([]);
+    }
+
+    #[Override]
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return new RecordedEvents([]);
+    }
+
+    #[Override]
     public function readMentioning(Mentions $texts): RecordedEvents
     {
         return new RecordedEvents([]);
@@ -69,6 +81,14 @@ final class InMemoryLedger implements Ledger
     public function kinds(): array
     {
         return array_map(static fn (LedgerEvent $event): LedgerEventKind => $event->kind, $this->events);
+    }
+
+    /**
+     * @return list<?string>
+     */
+    public function subjects(): array
+    {
+        return array_map(static fn (LedgerEvent $event): ?string => $event->subject, $this->events);
     }
 
     /**

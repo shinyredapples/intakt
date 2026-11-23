@@ -41,7 +41,7 @@ A dropped finding still shows on the page, apart from the others, marked **Quote
 
 ## What the owl may drop, and what it may not
 
-The owl marks each finding to fix now, to defer to a follow-up, or to reject. Its power has a limit: a P1 or P2 finding stays on the list whatever the owl marks it. Only a P3 leaves the list when the owl defers or rejects it. Those cards read **Dropped: deferred to a follow-up issue** or **Dropped: rejected or not marked by the judge**.
+The owl marks each finding to fix now, to defer to a follow-up, or to reject. Its power has a limit: a P1 or P2 finding stays on the list whatever the owl marks it. Only a P3 leaves the list when the owl defers or rejects it. A P3 finding a reviewer marks as a gap in a `bin/check` gate is never on the list: it goes to the follow-ups, even when the owl says to fix it now, and only a reject drops it. Those cards read **Dropped: deferred to a follow-up issue** or **Dropped: rejected or not marked by the judge**.
 
 ## The next pass keeps the ids
 

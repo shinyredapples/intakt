@@ -67,6 +67,17 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf(['kind' => $kind->value]);
     }
 
+    // The index finds the rows, and the comparison here keeps only the exact subject, because a database collation may ignore case (MySQL's default does).
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->eventsOf(array_filter($this->recordsOf(['kind' => $kind->value, 'subject' => $subject]), static fn (EventRecord $record): bool => $record->subject() === $subject));
+    }
+
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->recordedEventsOf(['kind' => $kind->value, 'subject' => null]);
+    }
+
     public function readMentioning(Mentions $texts): RecordedEvents
     {
         return $this->eventsMentioning($texts, static fn (QueryBuilder $query): QueryBuilder => $query);
@@ -124,11 +135,21 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     /**
-     * @param array<string, string> $criteria
+     * @param array<string, string|null> $criteria
      */
     private function recordedEventsOf(array $criteria): RecordedEvents
     {
-        return $this->eventsOf($this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']));
+        return $this->eventsOf($this->recordsOf($criteria));
+    }
+
+    /**
+     * @param array<string, string|null> $criteria
+     *
+     * @return list<EventRecord>
+     */
+    private function recordsOf(array $criteria): array
+    {
+        return $this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']);
     }
 
     /**
@@ -143,7 +164,7 @@ final readonly class DoctrineLedger implements Ledger
                 continue;
             }
 
-            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload()), $record->recordedAt());
+            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload(), $record->subject()), $record->recordedAt());
         }
 
         return new RecordedEvents($events);
@@ -154,6 +175,6 @@ final readonly class DoctrineLedger implements Ledger
     {
         $now = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
 
-        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind->value, $event->payload, $now);
+        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind->value, $event->payload, $now, $event->subject);
     }
 }

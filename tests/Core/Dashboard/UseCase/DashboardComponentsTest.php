@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 use Twig\Error\RuntimeError;
+use Twig\Markup;
 
 #[CoversNothing]
 final class DashboardComponentsTest extends KernelTestCase
@@ -267,6 +268,17 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame('at 11:12', $at->text());
         self::assertNull($at->attr('hidden'));
         self::assertNull($at->attr('data-connection-target'));
+    }
+
+    public function testALabelFactShowsTheLabelAsOneWholeElementFollowedByTheMarkup(): void
+    {
+        $meta = $this->render('meta', ['facts' => [['label' => 'Cost:', 'markup' => new Markup('<span id="summary-cost">0.0050 USD estimated, prices of 2026-11-13</span>', 'UTF-8')]]])->filter('.meta');
+
+        $label = $meta->filter('.meta > span > .fact-label');
+        self::assertCount(1, $label);
+        self::assertSame('Cost:', $label->text());
+        self::assertCount(1, $meta->filter('.fact-label + span#summary-cost'));
+        self::assertSame('Cost: 0.0050 USD estimated, prices of 2026-11-13', $meta->filter('.meta > span')->text(normalizeWhitespace: false));
     }
 
     public function testACardGivenAnOutcomeShowsItsChipOnItsOwnLineBetweenTheTopLineAndTheTitle(): void
