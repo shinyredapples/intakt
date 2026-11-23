@@ -40,7 +40,7 @@ Prefer the terminal? `docker compose exec intakt php bin/console intakt:demo` ru
 
 ## What you see while it runs
 
-The top of the page tells the story so far. Under the title comes the task sentence, then a path from **Pass 1** to **Merge**, where the meerkat stands on the pass that is being read. The rounds, tokens and estimated cost are in the **Full record**, which a link at the bottom of the page opens.
+The top of the page tells the story so far. Under the title comes the task sentence, then a path from **Pass 1** to **Merge**, where the meerkat stands on the pass that is being read. The rounds, tokens and estimated cost are in the **Full record**, which a link at the bottom of the page opens. On a phone, a long model name in the cost wraps beside the word "Cost:" and the word stays whole.
 
 ![An earlier version of a live review page: "Review of sample-change in sample", the task sentence, the meerkat on Pass 1 of the path to Merge, the line with 1 round and 0 tokens so far, a Stop button, and the Now box: 0 of 2 reviewers finished, correctness on Kimi K3.1 Pro and security on DeepSeek V4 Pro both running, "No finding is open" under To fix, and the owl with "The judge has not judged this round yet"](../assets/guide/review-running.webp)
 
