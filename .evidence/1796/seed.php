@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // Seeds an install for the mock comparison of #1796, because a fresh install has no review with a judged round and a running one.
-// Usage: APP_ENV=dev php .evidence/1796/seed.php (after bin/console doctrine:migrations:migrate).
+// Run it as APP_ENV=dev php .evidence/1796/seed.php after the migrations, because the dashboard of a dev install reads that environment's database.
 
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -15,7 +15,8 @@ use Symfony\Component\Dotenv\Dotenv;
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 new Dotenv()->bootEnv(dirname(__DIR__, 2).'/.env');
 
-$kernel = new Kernel((string) $_SERVER['APP_ENV'], false);
+$environment = $_SERVER['APP_ENV'] ?? 'dev';
+$kernel = new Kernel(is_string($environment) ? $environment : 'dev', false);
 $kernel->boot();
 // Built from the public Doctrine registry, because the Ledger service is private and only the test environment has a container that hands it out.
 $ledger = new DoctrineLedger($kernel->getContainer()->get('doctrine'), new NativeClock());
