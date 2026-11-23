@@ -98,7 +98,7 @@ final class EligibilityLabelOnTheContainerTest extends KernelTestCase
         self::assertInstanceOf(EligibilityLabels::class, $labels);
         $rules = new IntakeRules($labels->of('alpha'));
 
-        return array_map(static fn (QueuedIssue $row): int => $row->number(), $rules->planOf(array_map($this->vouched(...), $listed), [])->ready);
+        return array_map(static fn (QueuedIssue $row): int => $row->number(), $rules->planOf(array_values(array_map($this->vouched(...), $listed)), [])->ready);
     }
 
     private function vouched(ListedIssue $listed): QueuedIssue
