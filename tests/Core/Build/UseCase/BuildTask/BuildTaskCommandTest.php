@@ -29,6 +29,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
@@ -50,6 +51,10 @@ use Intakt\Core\HandBack\Contract\CheckVerdict;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackChecks;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
+use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
+use Intakt\Core\HandBack\Contract\PullRequestTextRound;
+use Intakt\Core\HandBack\Contract\PullRequestTextTask;
+use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -95,6 +100,10 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(HandBackCheck::class)]
 #[UsesClass(HandBackFile::class)]
 #[UsesClass(PrePushCheck::class)]
+#[UsesClass(PullRequestTextCheck::class)]
+#[UsesClass(PullRequestTextTask::class)]
+#[UsesClass(PullRequestTextOutcome::class)]
+#[UsesClass(PullRequestTextVerdict::class)]
 #[UsesClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
@@ -375,7 +384,13 @@ final class BuildTaskCommandTest extends TestCase
         $repositories = self::createStub(ConfiguredRepositories::class);
         $repositories->method('nameOf')->willReturn($this->configuredRepository);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
+        $texts = self::createStub(PullRequestTextRound::class);
+        $texts->method('route')->willReturn(new PullRequestTextOutcome(PullRequestTextVerdict::Passed, 0, [], 0));
+        // A folder that exists, because the text round resolves the mirror's path and a stubbed checkout names none.
+        $mirror = self::createStub(BuildCheckout::class);
+        $mirror->method('mirrorOf')->willReturn($this->folder);
+
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
     }
 
     /**

@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Memory\Contract\CodeSnapshot;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
 use Intakt\Core\Memory\Contract\RelevantMemory;
+use Intakt\Core\Memory\Contract\SettledMemory;
+use Intakt\Core\Memory\Contract\SettledQuery;
 use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Infrastructure\HeldCredentials;
 use Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter;
@@ -27,6 +30,9 @@ use Symfony\Component\HttpKernel\Log\Logger;
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(Paths::class)]
 #[UsesClass(RelevantMemory::class)]
+#[UsesClass(SettledMemory::class)]
+#[UsesClass(SettledQuery::class)]
+#[UsesClass(CodeSnapshot::class)]
 #[UsesClass(ProjectMemoryNeedsEmbeddingModel::class)]
 #[UsesClass(RedactedJsonFormatter::class)]
 #[UsesClass(Redaction::class)]
@@ -41,6 +47,13 @@ final class OptionalProjectMemoryTest extends TestCase
         $found = new OptionalProjectMemory($inner, self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 100));
 
         self::assertCount(1, $found->entries);
+    }
+
+    public function testSettledFindingsOfAMemoryThatCannotBeReadAreNone(): void
+    {
+        $found = new OptionalProjectMemory($this->failing(), self::createStub(LoggerInterface::class))->settledOn(new SettledQuery('alpha', new CodeSnapshot('a.php', '', 'h')));
+
+        self::assertEquals(SettledMemory::none(), $found);
     }
 
     public function testAMemoryThatCannotBeReadGivesNoEntries(): void
@@ -106,6 +119,7 @@ final class OptionalProjectMemoryTest extends TestCase
     {
         $inner = self::createStub(ProjectMemory::class);
         $inner->method('relevantTo')->willThrowException($failure ?? new LogicException('the store is not set up'));
+        $inner->method('settledOn')->willThrowException($failure ?? new LogicException('the store is not set up'));
 
         return $inner;
     }

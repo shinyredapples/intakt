@@ -142,3 +142,15 @@ services:
         class: Intakt\Gates\PhpStan\AbstractTraitSetterUseCollector
         tags:
             - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\NoServiceLocatorRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NoRequiredAttributeRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule

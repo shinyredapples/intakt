@@ -172,7 +172,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     {
         self::assertStringContainsString(self::ENDED_TEXT, $live->filter('#round-'.$round.'-state')->text());
         self::assertSame($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text(), $live->filter('#review-verdict .verdict-words')->text());
-        self::assertSame('0 to fix · 0 urgent', $live->filter('#review-verdict .verdict-count')->text());
+        self::assertSame('0 to fix', $live->filter('#review-verdict .verdict-count')->text());
         self::assertSame([0, 0], [$live->filter('.state-block')->count(), $judged->filter('.state-block')->count()]);
         self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
         self::assertSame(self::ALL_STARTED, $live->filter('#round-'.$round.'-started')->text());
