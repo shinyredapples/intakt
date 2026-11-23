@@ -12,7 +12,7 @@ use Doctrine\DBAL\Driver\Middleware\AbstractDriverMiddleware;
 use Doctrine\DBAL\Driver\Result;
 use Doctrine\DBAL\Driver\Statement;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
-use Doctrine\DBAL\Platforms\MySQL80Platform;
+use Doctrine\DBAL\Platforms\MySQLPlatform;
 use Doctrine\DBAL\ServerVersionProvider;
 
 // The ORM renders a pessimistic write lock as nothing on SQLite, so a SQLite connection cannot show whether a read asked for one. This one names a server platform, which renders the lock as `FOR UPDATE`, records every statement as the ORM sent it and hands SQLite the statement without the clause it cannot run.
@@ -58,7 +58,7 @@ final class WriteLockOfAServer implements Middleware
 
             public function getDatabasePlatform(ServerVersionProvider $versionProvider): AbstractPlatform
             {
-                return new MySQL80Platform();
+                return new MySQLPlatform();
             }
         };
     }
