@@ -26,7 +26,7 @@ enum GlossaryTerm: string
             self::Round => 'One build, its checks and its review. Sending work back starts the next round.',
             self::ProtectedFiles => 'Files that always need your approval to change, such as secret handling or CI. You choose them per project.',
             self::Reserve => "The smallest part of the week's capacity kept for this project, even when other projects are busy.",
-            self::ToFix => 'The act list: every P1 and P2 finding that passed the quote check, whatever the judge marked, and each P3 finding the judge kept, to fix before approval.',
+            self::ToFix => 'The act list: every P1 and P2 finding that passed the quote check, whatever the judge marked, and each P3 finding the judge kept, to fix before approval; a gate gap goes to the follow-ups instead.',
             self::Checked => "Judged: the judge weighed every reviewer's findings and gave the verdict.",
             self::ReviewPass => 'A round: one review of the change, by its reviewers and then the judge.',
         };
