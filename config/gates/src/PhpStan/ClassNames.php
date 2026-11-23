@@ -92,6 +92,12 @@ final readonly class ClassNames
         return array_values(array_filter($candidates, static fn (string $candidate): bool => array_any($members, static fn (array $classes): bool => [] !== $classes && array_all($classes, static fn (string $name): bool => 0 === strcasecmp($name, $candidate) || new ObjectType($name)->isSuperTypeOf(new ObjectType($candidate))->yes()))));
     }
 
+    // because PHP accepts at most one leading backslash in a class string
+    public function withoutLeadingBackslash(string $name): string
+    {
+        return str_starts_with($name, '\\') ? substr($name, 1) : $name;
+    }
+
     // because an intersection such as `HasPlace&Countable` is one member whose classes a candidate must all satisfy, while each member of a union is judged on its own
     /**
      * @return list<list<string>>
@@ -111,11 +117,5 @@ final readonly class ClassNames
         }
 
         return $members;
-    }
-
-    // because PHP accepts at most one leading backslash in a class string
-    public function withoutLeadingBackslash(string $name): string
-    {
-        return str_starts_with($name, '\\') ? substr($name, 1) : $name;
     }
 }
