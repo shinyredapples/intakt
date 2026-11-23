@@ -43,6 +43,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(PlayDemoRunHandler::class)]
 #[CoversClass(TourCaptionUpdates::class)]
 #[CoversClass(DemoRefusal::class)]
+#[CoversClass(PlayDemoRun::class)]
 #[UsesClass(ReplaysRecording::class)]
 #[UsesClass(RecordingFormat::class)]
 #[UsesClass(Recording::class)]
@@ -103,6 +104,17 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertCount(1, $later);
         self::assertStringContainsString('target="demo-play-'.$second.'"', $later[0]);
         self::assertStringContainsString(DemoRefusal::AnotherPlayFirst->sentence(), $later[0]);
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testAPlayKeepsItsSignThroughTheQueueSoItsRefusalReachesItsOwnBox(): void
+    {
+        $queued = unserialize(serialize($this->play()));
+        self::assertInstanceOf(PlayDemoRun::class, $queued);
+
+        $this->handler($this->recordingFile(), '')($queued);
+
+        self::assertStringContainsString('target="demo-play-'.self::PLAY.'"', $this->shellStreams()[0]);
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 

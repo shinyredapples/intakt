@@ -13,9 +13,20 @@ final readonly class PlayDemoRun implements CommandMessage
     {
     }
 
-    // Empty for a message queued before Plays carried a sign, because unserializing it leaves the property uninitialized and its page has no box to update.
-    public function sign(): string
+    /**
+     * @return array{play: string}
+     */
+    public function __serialize(): array
     {
-        return $this->play ?? '';
+        return ['play' => $this->play];
+    }
+
+    // Empty for a message queued before Plays carried a sign, because it holds no property and its page has no box to update.
+    /**
+     * @param array<array-key, mixed> $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->play = is_string($data['play'] ?? null) ? $data['play'] : '';
     }
 }

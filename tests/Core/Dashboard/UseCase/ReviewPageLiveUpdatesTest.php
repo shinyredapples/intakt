@@ -746,7 +746,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
-        $commands = $this->createStub(MessageBusInterface::class);
+        $commands = self::createStub(MessageBusInterface::class);
         $commands->method('dispatch')->willReturnCallback(function (): Envelope {
             $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
 
