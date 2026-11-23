@@ -37,7 +37,7 @@ final readonly class TestMethodSentenceRule implements Rule
 
         foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method, $static]) {
             // keyed by place because a trait's method is collected once for every test case that uses it, but is one name to fix
-            if (str_starts_with($file, $this->root.'/tests/') && !$this->isNamedProvider($class, $method, $providers) && !($static && $this->isChangedFilesRun())) {
+            if (str_starts_with($file, $this->root.'/tests/') && !$this->isNamedProvider($class, $method, $providers) && (!$static || !$this->isChangedFilesRun())) {
                 $findings[$file.':'.$line] = $this->finding($owner, $method)->file($file)->line($line)->build();
             }
         }
