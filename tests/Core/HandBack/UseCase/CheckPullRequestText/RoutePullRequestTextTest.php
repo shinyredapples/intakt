@@ -15,9 +15,9 @@ use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\FailedPullRequestText;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoundNotRecorded;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoute;
+use Intakt\Core\HandBack\Contract\FailedPullRequestText;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextTask;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
@@ -66,7 +66,7 @@ final class RoutePullRequestTextTest extends TestCase
         self::assertSame(PullRequestTextRoute::SentBack, $result->route);
         self::assertSame([2], $result->outcome->missingItems);
         self::assertSame([LedgerEventKind::PullRequestTextSentBack], $this->ledger->kinds());
-        self::assertSame(['repository' => __DIR__, 'branch' => 'task', 'verdict' => 'missing-evidence-reference', 'reason' => PullRequestTextVerdict::MissingEvidenceReference->reason(), 'missing' => [2], 'body_characters' => 22], $this->ledger->lastPayload());
+        self::assertSame(['task' => $this->task()->key, 'repository' => __DIR__, 'branch' => 'task', 'verdict' => 'missing-evidence-reference', 'reason' => PullRequestTextVerdict::MissingEvidenceReference->reason(), 'missing' => [2], 'body_characters' => 22], $this->ledger->lastPayload());
     }
 
     public function testASecondEvidenceMissInARowGoesToTheReviewers(): void
@@ -119,7 +119,7 @@ final class RoutePullRequestTextTest extends TestCase
 
     public function testAnotherBranchsSendBackDoesNotCountForThisTask(): void
     {
-        (void) $this->router()->route(PullRequestTextTask::resolved(__DIR__, 'other'), self::TASK, self::MISSING_E2);
+        (void) $this->router()->route(__DIR__, 'other', self::TASK, self::MISSING_E2);
 
         $result = $this->route(self::MISSING_E2);
 
@@ -130,9 +130,29 @@ final class RoutePullRequestTextTest extends TestCase
     {
         $this->route(self::MISSING_E2);
 
-        $result = $this->router()->route(PullRequestTextTask::resolved(__DIR__.'/../CheckPullRequestText', 'task'), self::TASK, self::MISSING_E2);
+        $result = $this->router()->route(__DIR__.'/../CheckPullRequestText', 'task', self::TASK, self::MISSING_E2);
 
         self::assertSame(PullRequestTextRoute::ToReviewers, $result instanceof FailedPullRequestText ? $result->route : null);
+    }
+
+    public function testABranchNameThatIsNotUtf8IsRecordedAndCountedAsItsOwnTask(): void
+    {
+        $passed = $this->router()->route(__DIR__, "topic-\xff", self::TASK, self::COMPLETE);
+        (void) $this->router()->route(__DIR__, "topic-\xff", self::TASK, self::MISSING_E2);
+        $second = $this->router()->route(__DIR__, "topic-\xff", self::TASK, self::MISSING_E2);
+
+        self::assertInstanceOf(PullRequestTextOutcome::class, $passed);
+        self::assertSame(PullRequestTextRoute::ToReviewers, $second instanceof FailedPullRequestText ? $second->route : null);
+        self::assertSame("topic-\u{FFFD}", $this->ledger->lastPayload()['branch']);
+    }
+
+    public function testTwoBranchNamesThatDifferOnlyInBytesThatAreNotUtf8AreTwoTasks(): void
+    {
+        (void) $this->router()->route(__DIR__, "topic-\xff", self::TASK, self::MISSING_E2);
+
+        $result = $this->router()->route(__DIR__, "topic-\xfe", self::TASK, self::MISSING_E2);
+
+        self::assertSame(PullRequestTextRoute::SentBack, $result instanceof FailedPullRequestText ? $result->route : null);
     }
 
     public function testALedgerThatRefusesTheLineIsARoundNotRecorded(): void
@@ -157,13 +177,13 @@ final class RoutePullRequestTextTest extends TestCase
     public function testTheTasksLinesAreReadWhileItsLockIsHeld(): void
     {
         $store = new InMemoryStore();
-        $key = 'intakt-pull-request-text-'.hash('sha256', json_encode([__DIR__, 'task'], JSON_THROW_ON_ERROR));
+        $key = 'intakt-pull-request-text-'.$this->task()->key;
         $heldWhileRead = null;
         $this->ledger = new RecordingLedger(onRead: static function () use ($store, $key, &$heldWhileRead): void {
             $heldWhileRead = !new LockFactory($store)->createLock($key)->acquire();
         });
 
-        (void) $this->router(new LockFactory($store))->route($this->task(), self::TASK, self::MISSING_E2);
+        (void) $this->router(new LockFactory($store))->route(__DIR__, 'task', self::TASK, self::MISSING_E2);
 
         self::assertTrue($heldWhileRead);
         self::assertTrue(new LockFactory($store)->createLock($key)->acquire());
@@ -175,7 +195,7 @@ final class RoutePullRequestTextTest extends TestCase
         $handBack = new LockFactory($store)->createLock('intakt-hand-back-'.hash('sha256', json_encode([__DIR__, 'task'], JSON_THROW_ON_ERROR)));
         $handBack->acquire();
 
-        $result = $this->router(new LockFactory($store))->route($this->task(), self::TASK, self::MISSING_E2);
+        $result = $this->router(new LockFactory($store))->route(__DIR__, 'task', self::TASK, self::MISSING_E2);
 
         self::assertInstanceOf(FailedPullRequestText::class, $result);
     }
@@ -203,7 +223,7 @@ final class RoutePullRequestTextTest extends TestCase
 
     private function route(string $body): PullRequestTextOutcome|FailedPullRequestText
     {
-        return $this->router()->route($this->task(), self::TASK, $body);
+        return $this->router()->route(__DIR__, 'task', self::TASK, $body);
     }
 
     private function task(): PullRequestTextTask

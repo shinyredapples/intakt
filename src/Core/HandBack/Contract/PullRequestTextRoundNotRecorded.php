@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\HandBack\UseCase\CheckPullRequestText;
+namespace Intakt\Core\HandBack\Contract;
 
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use RuntimeException;

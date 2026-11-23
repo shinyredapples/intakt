@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\UseCase\CheckPullRequestText;
 
+use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
+use Intakt\Core\HandBack\Contract\PullRequestTextRound;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use InvalidArgumentException;
@@ -15,27 +18,40 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
-#[AsCommand(name: 'intakt:check:pull-request-text', description: 'Check that a build\'s pull request text references every top-level Evidence item of the task and that its body stays under the cap; a miss is sent back once, a second in a row goes to the reviewers')]
+#[AsCommand(name: 'intakt:check:pull-request-text', description: 'Check that a build\'s pull request text references every top-level Evidence item of the task and that its body stays under the cap; with a repository and a branch, run the build\'s round, which sends a miss back once and a second in a row to the reviewers')]
 final readonly class CheckPullRequestTextCommand
 {
     public function __construct(
         private Filesystem $filesystem,
-        private RoutePullRequestText $round,
+        private PullRequestTextRound $round,
     ) {
     }
 
     public function __invoke(SymfonyStyle $io, #[MapInput] CheckPullRequestTextInput $input): int
     {
         try {
-            $task = PullRequestTextTask::resolved($input->repository, $input->branch);
-            $result = $this->round->route($task, $this->read($input->task), $this->bodyOf($this->read($input->pullRequestText)));
+            $result = $this->resultOf($input, $this->read($input->task), $this->bodyOf($this->read($input->pullRequestText)));
         } catch (InvalidArgumentException|ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
         }
 
-        return $result instanceof FailedPullRequestText ? $this->failed($io, $result) : $this->passed($io, $result);
+        return match (true) {
+            $result instanceof FailedPullRequestText => $this->failed($io, $result->outcome, $this->wordsOf($result->route)),
+            $result->passed() => $this->passed($io, $result),
+            default => $this->failed($io, $result, null),
+        };
+    }
+
+    // Recorded only when a repository names the task, because a person's own check must not use up the go-back of the build's next miss.
+    private function resultOf(CheckPullRequestTextInput $input, string $task, string $body): PullRequestTextOutcome|FailedPullRequestText
+    {
+        if (null === $input->repository) {
+            return PullRequestTextRule::judge($task, $body);
+        }
+
+        return $this->round->route($input->repository, $input->branch ?? '', $task, $body);
     }
 
     private function read(string $path): string
@@ -53,14 +69,17 @@ final readonly class CheckPullRequestTextCommand
         return trim(explode("\n", $pullRequestText, 2)[1] ?? '');
     }
 
-    private function failed(SymfonyStyle $io, FailedPullRequestText $failed): int
+    private function wordsOf(PullRequestTextRoute $route): string
     {
-        $outcome = $failed->outcome;
-        $route = match ($failed->route) {
+        return match ($route) {
             PullRequestTextRoute::SentBack => 'sent back to the builder',
             PullRequestTextRoute::ToReviewers => 'handed to the reviewers',
         };
-        $io->error(sprintf('failed, %s: %s', $route, $outcome->verdict->reason()));
+    }
+
+    private function failed(SymfonyStyle $io, PullRequestTextOutcome $outcome, ?string $route): int
+    {
+        $io->error(sprintf('failed%s: %s', null === $route ? '' : ', '.$route, $outcome->verdict->reason()));
 
         if ([] !== $outcome->missingItems) {
             $io->writeln('missing: '.implode(', ', array_map(static fn (int $item): string => 'E'.$item, $outcome->missingItems)));

@@ -12,6 +12,7 @@ final readonly class PullRequestTextTask
     private function __construct(
         public string $repository,
         public string $branch,
+        public string $key,
     ) {
     }
 
@@ -20,7 +21,8 @@ final readonly class PullRequestTextTask
      */
     public static function resolved(string $repository, string $branch): self
     {
-        $path = realpath($repository);
+        // Refused when empty, because realpath() resolves an empty path to the working folder.
+        $path = '' === $repository ? false : realpath($repository);
 
         if (false === $path) {
             throw new InvalidArgumentException(sprintf('the repository "%s" cannot be found', $repository));
@@ -30,6 +32,7 @@ final readonly class PullRequestTextTask
             throw new InvalidArgumentException('the branch is empty');
         }
 
-        return new self($path, $branch);
+        // Length-prefixed parts, because a path or a branch may hold any separator, and plain bytes, because Git takes a branch name that is not UTF-8.
+        return new self($path, $branch, hash('sha256', strlen($path).':'.$path.strlen($branch).':'.$branch));
     }
 }

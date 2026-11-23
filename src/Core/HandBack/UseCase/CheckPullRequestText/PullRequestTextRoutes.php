@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Core\HandBack\UseCase\CheckPullRequestText;
 
 use Closure;
+use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Symfony\Component\Lock\LockFactory;
 
 // The task's last pull request text line decides, so a miss right after a sent-back one goes to the reviewers, and a pass or a hand-off to the reviewers starts the count again; the hand-back round's lines are not read, so the two counts stay apart.
@@ -46,11 +50,12 @@ final readonly class PullRequestTextRoutes
     }
 
     /**
-     * @return array{repository: string, branch: string, verdict: string, reason: string, missing: list<positive-int>, body_characters: int}
+     * @return array{task: string, repository: string, branch: string, verdict: string, reason: string, missing: list<positive-int>, body_characters: int}
      */
     private function payloadOf(PullRequestTextTask $task, PullRequestTextOutcome $outcome): array
     {
         return [
+            'task' => $task->key,
             'repository' => $task->repository,
             'branch' => $task->branch,
             'verdict' => $outcome->verdict->value,
@@ -67,7 +72,8 @@ final readonly class PullRequestTextRoutes
      */
     private function append(LedgerEventKind $kind, array $payload): void
     {
-        $result = $this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+        // Bytes that are not UTF-8 in a path or a branch are shown substituted, because the task key, not these fields, tells one task's lines apart.
+        $result = $this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE)));
 
         if (!$result->succeeded()) {
             throw PullRequestTextRoundNotRecorded::for($kind->value, (string) $result->failure);
@@ -83,8 +89,8 @@ final readonly class PullRequestTextRoutes
      */
     private function locked(PullRequestTextTask $task, Closure $step): mixed
     {
-        // Held from the read to the append, because two rounds of one task read alike would both be sent back; a key of its own, so this round never waits on the hand-back round's lock; a list, because a branch or path may hold any separator.
-        $lock = $this->locks->createLock('intakt-pull-request-text-'.hash('sha256', json_encode([$task->repository, $task->branch], JSON_THROW_ON_ERROR)));
+        // Held from the read to the append, because two rounds of one task read alike would both be sent back; a key of its own, so this round never waits on the hand-back round's lock.
+        $lock = $this->locks->createLock('intakt-pull-request-text-'.$task->key);
         $lock->acquire(true);
 
         try {
@@ -98,7 +104,7 @@ final readonly class PullRequestTextRoutes
     {
         $last = null;
 
-        foreach ($this->ledger->readInOrder() as $recorded) {
+        foreach ($this->ledger->readMentioning(new Mentions($task->key)) as $recorded) {
             if (in_array($recorded->event->kind, self::ROUND, true) && $this->isOf($task, $recorded->event->payload)) {
                 $last = $recorded->event->kind;
             }
@@ -111,7 +117,7 @@ final readonly class PullRequestTextRoutes
     {
         $line = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
 
-        return is_array($line) && ($line['repository'] ?? null) === $task->repository && ($line['branch'] ?? null) === $task->branch;
+        return is_array($line) && ($line['task'] ?? null) === $task->key;
     }
 
     private function kindOf(PullRequestTextRoute $route): LedgerEventKind

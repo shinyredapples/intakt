@@ -17,9 +17,9 @@ use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\CheckPullRequestTextCommand;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\CheckPullRequestTextInput;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\FailedPullRequestText;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoundNotRecorded;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoute;
+use Intakt\Core\HandBack\Contract\FailedPullRequestText;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextTask;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
@@ -118,6 +118,8 @@ final class CheckPullRequestTextCommandTest extends TestCase
 
     public function testARepositoryThatCannotBeFoundFailsNamingItsPath(): void
     {
+        new Filesystem()->dumpFile($this->folder.'/task.md', self::TASK);
+        new Filesystem()->dumpFile($this->folder.'/PR.md', "feat: check it\n\n- E1: red\n");
         $tester = $this->tester();
         $tester->execute(['task' => $this->folder.'/task.md', 'pull-request-text' => $this->folder.'/PR.md', 'repository' => $this->folder.'/gone', 'branch' => 'task']);
 
@@ -134,6 +136,56 @@ final class CheckPullRequestTextCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('line was not recorded: the ledger is down', $this->flat($tester));
+    }
+
+    public function testACheckWithoutARepositoryRecordsNothingSoTheBuildsNextMissIsStillSentBack(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/task.md', self::TASK);
+        new Filesystem()->dumpFile($this->folder.'/PR.md', "feat: check it\n\n- E1: red\n");
+        $tester = $this->tester();
+        $tester->execute(['task' => $this->folder.'/task.md', 'pull-request-text' => $this->folder.'/PR.md']);
+        $own = $this->flat($tester);
+
+        $build = $this->executed(self::TASK, "feat: check it\n\n- E1: red\n");
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('[ERROR] failed: the pull request text does not reference', $own);
+        self::assertStringContainsString('missing: E2', $own);
+        self::assertStringContainsString('failed, sent back to the builder', $this->flat($build));
+        self::assertSame([LedgerEventKind::PullRequestTextSentBack], $this->ledger->kinds());
+    }
+
+    public function testAPassingCheckWithoutARepositoryRecordsNothing(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/task.md', self::TASK);
+        new Filesystem()->dumpFile($this->folder.'/PR.md', "feat: check it\n\n- E1: red\n- E2: green\n");
+        $tester = $this->tester();
+        $tester->execute(['task' => $this->folder.'/task.md', 'pull-request-text' => $this->folder.'/PR.md']);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame([], $this->ledger->kinds());
+    }
+
+    public function testARepositoryWithoutABranchFailsAndRecordsNothing(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/task.md', self::TASK);
+        new Filesystem()->dumpFile($this->folder.'/PR.md', "feat: check it\n\n- E1: red\n");
+        $tester = $this->tester();
+        $tester->execute(['task' => $this->folder.'/task.md', 'pull-request-text' => $this->folder.'/PR.md', 'repository' => $this->folder]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('the branch is empty', $this->flat($tester));
+        self::assertSame([], $this->ledger->kinds());
+    }
+
+    public function testABranchNameThatIsNotUtf8IsCheckedAndRecorded(): void
+    {
+        $sample = dirname(__DIR__, 5).'/fixtures/sample-repository';
+        $tester = $this->tester();
+        $tester->execute(['task' => $sample.'/pull-request-text/task.md', 'pull-request-text' => $sample.'/pull-request-text/complete.md', 'repository' => $sample, 'branch' => "topic-\xff"]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame([LedgerEventKind::PullRequestTextPassed], $this->ledger->kinds());
     }
 
     public function testTheSampleRepositorysTextsGiveAGreenAndARedResultAndASecondMissGoesToTheReviewers(): void

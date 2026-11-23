@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\HandBack\UseCase\CheckPullRequestText;
-
-use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
+namespace Intakt\Core\HandBack\Contract;
 
 final readonly class FailedPullRequestText
 {

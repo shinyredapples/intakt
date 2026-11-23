@@ -52,6 +52,7 @@ final readonly class BuildTask
         private RunBuildJob $builds,
         private HandBackCheck $handBacks,
         private PrePushCheck $prePushChecks,
+        private PullRequestTextCheck $textChecks,
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
@@ -150,8 +151,8 @@ final readonly class BuildTask
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
-                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main.
-                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)),
+                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
+                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
                 BuildStep::Push => $this->push($request, $results),
             };
 
@@ -231,14 +232,23 @@ final readonly class BuildTask
     /**
      * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
      */
+    private function textIn(array $results): string
+    {
+        // Never null, because the checks and the push run only after a build job that built, and such a job always hands back its text.
+        return $this->builtIn($results)->pullRequestText ?? throw new LogicException('the checks and the push run only after a build job that handed back its text');
+    }
+
+    /**
+     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     */
     private function push(BuildTaskRequest $request, array $results): ?string
     {
         $accepted = $results[BuildStep::HandBackCheck->value] ?? null;
-        $text = $this->builtIn($results)->pullRequestText;
+        $text = $this->textIn($results);
 
-        // Never otherwise, because the push runs only after a hand-back check that accepted the head, and a build job that built always hands back its text.
-        if (!$accepted instanceof AcceptedHandBack || null === $text) {
-            throw new LogicException('the push runs only after an accepted hand-back of a build job that handed back its text');
+        // Never otherwise, because the push runs only after a hand-back check that accepted the head.
+        if (!$accepted instanceof AcceptedHandBack) {
+            throw new LogicException('the push runs only after an accepted hand-back');
         }
 
         $changeText = $this->changeTextOf($text);
@@ -269,9 +279,14 @@ final readonly class BuildTask
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
     private function changeTextOf(string $text): ChangeText|string
     {
-        [$title, $body] = [...explode("\n", $text, 2), ''];
+        $title = explode("\n", $text, 2)[0];
 
-        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), trim($body));
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $this->bodyOf($text));
+    }
+
+    private function bodyOf(string $text): string
+    {
+        return trim(explode("\n", $text, 2)[1] ?? '');
     }
 
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
