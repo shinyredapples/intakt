@@ -42,9 +42,15 @@ final readonly class PrometheusSamples
     // FrankenPHP leaves a labeled series out until it first counts, so an absent one is zero.
     public function sum(string ...$names): ?int
     {
-        $total = array_sum(array_map(fn (string $name): float => $this->totals[$name] ?? 0.0, $names));
+        $total = round(array_sum(array_map(fn (string $name): float => $this->totals[$name] ?? 0.0, $names)));
 
-        return is_finite($total) ? (int) round($total) : null;
+        return self::fitsInt($total) ? (int) $total : null;
+    }
+
+    // PHP_INT_MAX turns into 2^63 as a float, so the upper bound must be strict against -PHP_INT_MIN.
+    private static function fitsInt(float $total): bool
+    {
+        return $total >= (float) PHP_INT_MIN && $total < -(float) PHP_INT_MIN;
     }
 
     // Accepted because the text format allows them, so an unrelated series cannot hide the counted ones.
