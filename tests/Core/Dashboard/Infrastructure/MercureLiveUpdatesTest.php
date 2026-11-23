@@ -99,6 +99,19 @@ final class MercureLiveUpdatesTest extends TestCase
         self::assertSame([], $this->posted);
     }
 
+    public function testAnEventTheHubTookIsReportedAsDelivered(): void
+    {
+        self::assertTrue($this->updates($this->hubThatAccepts())->publish(new LiveEvent(self::TOPIC, self::STREAM)));
+    }
+
+    public function testAnEventTheHubRefusedIsReportedAsNotDelivered(): void
+    {
+        $delivered = $this->updates(new MockHttpClient(new MockResponse('down', ['http_code' => 503])))->publish(new LiveEvent(self::TOPIC, self::STREAM));
+
+        self::assertFalse($delivered);
+        self::assertCount(1, $this->loggedWarnings());
+    }
+
     protected function setUp(): void
     {
         $this->log = new BufferingLogger();

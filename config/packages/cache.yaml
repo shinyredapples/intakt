@@ -24,6 +24,9 @@ framework:
             # On this host's filesystem, so every worker and the scheduler read one installation's latest forge budget; a cleared cache only forgets a reading, and the next answer records it again.
             !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RATE_LIMITS:
                 adapter: cache.app
+            # On this host's filesystem, so every worker knows the board last pushed on the shell topic; a cleared cache only pushes an unchanged board once more.
+            !php/const Intakt\Core\Dashboard\Contract\DashboardServices::BOARD_HEADLINES:
+                adapter: cache.app
 
 when@test:
     framework:
@@ -34,4 +37,7 @@ when@test:
                     adapter: cache.adapter.array
                 # In memory, so no reading outlives the test that recorded it.
                 !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RATE_LIMITS:
+                    adapter: cache.adapter.array
+                # In memory, so no pushed board outlives the test that pushed it.
+                !php/const Intakt\Core\Dashboard\Contract\DashboardServices::BOARD_HEADLINES:
                     adapter: cache.adapter.array
