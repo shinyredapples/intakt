@@ -35,9 +35,9 @@ final readonly class TestMethodSentenceRule implements Rule
         $providers = array_merge(...array_column($collected, 'providers'));
         $findings = [];
 
-        foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method, $mayBeProvider, $isMarkedTest]) {
+        foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method, $mayBeProvider]) {
             // keyed by place because a trait's method is collected once for every test case that uses it, but is one name to fix
-            if (str_starts_with($file, $this->root.'/tests/') && ($isMarkedTest || !$this->isNamedProvider($class, $method, $providers)) && (!$mayBeProvider || !$this->isChangedFilesRun())) {
+            if (str_starts_with($file, $this->root.'/tests/') && (!$mayBeProvider || (!$this->isNamedProvider($class, $method, $providers) && !$this->isChangedFilesRun()))) {
                 $findings[$file.':'.$line] = $this->finding($owner, $method)->file($file)->line($line)->build();
             }
         }

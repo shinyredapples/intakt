@@ -20,7 +20,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<InClassMethodNode, array{misnamed: array{string, int, string, string, string, bool, bool}|null, providers: list<array{string, string}>}>
+ * @implements Collector<InClassMethodNode, array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}>
  */
 final readonly class TestMethodCollector implements Collector
 {
@@ -39,7 +39,7 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
-     * @return array{misnamed: array{string, int, string, string, string, bool, bool}|null, providers: list<array{string, string}>}|null
+     * @return array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -52,7 +52,7 @@ final readonly class TestMethodCollector implements Collector
 
         $method = $class->getNativeReflection()->getMethod($node->getOriginalNode()->name->toString());
         $providers = [...$this->providersInTheClass($method, $class->getNativeReflection()), ...$this->externalProviders($method)];
-        $misnamed = $this->isMisnamedTest($method, $class) ? $this->location($node, $scope, $method) : null;
+        $misnamed = $this->isMisnamedTest($node, $method, $class) ? $this->location($node, $scope, $method) : null;
 
         return null === $misnamed && [] === $providers ? null : ['misnamed' => $misnamed, 'providers' => $providers];
     }
@@ -96,12 +96,12 @@ final readonly class TestMethodCollector implements Collector
         return $providers;
     }
 
-    private function isMisnamedTest(ReflectionMethod $method, ClassReflection $class): bool
+    private function isMisnamedTest(InClassMethodNode $node, ReflectionMethod $method, ClassReflection $class): bool
     {
         $name = $method->getName();
         $isTest = str_starts_with($name, 'test') || $this->isMarkedTest($method);
 
-        return $method->isPublic() && $isTest && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && ($this->isMarkedTest($method) || !$this->isNamedProvider($name, $class));
+        return $method->isPublic() && $isTest && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && (!$this->mayBeProvider($node, $method) || !$this->isNamedProvider($name, $class));
     }
 
     // because PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
@@ -111,17 +111,17 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
-     * @return array{string, int, string, string, string, bool, bool}
+     * @return array{string, int, string, string, string, bool}
      */
     private function location(InClassMethodNode $node, Scope $scope, ReflectionMethod $method): array
     {
         $trait = $scope->getTraitReflection();
         $file = $trait?->getFileName() ?? $scope->getFile();
 
-        return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method), $this->isMarkedTest($method)];
+        return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method)];
     }
 
-    // because PHPUnit wants a provider static and iterable, a static method returning void can only be a test
+    // because PHPUnit runs only a static method returning an iterable as a provider, any other method is a test whatever names it, a static one returning void included
     private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
     {
         return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
