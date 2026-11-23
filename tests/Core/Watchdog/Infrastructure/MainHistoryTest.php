@@ -58,21 +58,6 @@ final class MainHistoryTest extends TestCase
     private TemporaryRepository $repository;
     private string $keys;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
-        mkdir($this->keys);
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-        new Filesystem()->remove($this->keys);
-    }
-
     public function testARecordedMergeOnMainIsClassifiedClean(): void
     {
         $seen = $this->repository->commitEmpty('Seen');
@@ -316,6 +301,29 @@ final class MainHistoryTest extends TestCase
         $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
 
         self::assertSame(SignatureStatus::OwnerSigned, $this->history([$this->publicKey('owner')])->signatureOf($signed));
+    }
+
+    public function testASha1RepositoryNamesCommitsWithFortyCharacters(): void
+    {
+        $this->repository->commitEmpty('Seen');
+
+        self::assertSame(40, $this->history([])->commitNameLength());
+    }
+
+    public function testASha256RepositoryNamesCommitsWithSixtyFourCharacters(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->repository->commitEmpty('Seen');
+
+        self::assertSame(64, $this->history([])->commitNameLength());
+    }
+
+    public function testTheNameLengthIsNotReadFromAFolderThatIsNotTheRepository(): void
+    {
+        $this->expectException(MainNotRead::class);
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/missing', [], new Filesystem())->commitNameLength();
     }
 
     public function testFirstParentsSinceACommitComeOldestFirstWithoutTheCommitsAMergeBroughtFromItsSideBranch(): void
@@ -704,6 +712,21 @@ final class MainHistoryTest extends TestCase
         $this->history([$key]);
     }
 
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
+        mkdir($this->keys);
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+        new Filesystem()->remove($this->keys);
+    }
+
     // A git in front of the real one writes the shallow entry right after git answered the named query, because only that forces the cut between two reads; the search path to restore is returned.
     private function cutShallowAfterGitAnswers(string $option, string $entry): string
     {
@@ -756,14 +779,6 @@ final class MainHistoryTest extends TestCase
     }
 
     /**
-     * @param list<string> $ownerKeys
-     */
-    private function history(array $ownerKeys): MainHistory
-    {
-        return new MainHistory(new HardenedGit(), $this->repository->path, $ownerKeys, new Filesystem());
-    }
-
-    /**
      * @param list<string> $fields
      */
     private static function key(string $type, array $fields): string
@@ -782,6 +797,14 @@ final class MainHistoryTest extends TestCase
         }
 
         return $file;
+    }
+
+    /**
+     * @param list<string> $ownerKeys
+     */
+    private function history(array $ownerKeys): MainHistory
+    {
+        return new MainHistory(new HardenedGit(), $this->repository->path, $ownerKeys, new Filesystem());
     }
 
     private function publicKey(string $name): string

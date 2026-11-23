@@ -15,24 +15,12 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 {
     // Built from parts, so no key-shaped literal sits in the repository; the test environment's key check accepts it without a call.
     private const string TOKEN_BODY = 'journeyplaceholder';
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
     private const string OUTCOME = '/^Outcome: \S+, decided by the quorum policy \S+ over all 2 reviewers\./';
 
     private string $directory = '';
 
     private string $review = '';
-
-    protected function tearDown(): void
-    {
-        if ('' !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'first run with a key';
-    }
 
     public function testAPastedTokenRunsTheDemoReviewWhoseLiveReviewPageShowsTheVerdict(): void
     {
@@ -45,6 +33,18 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
         $this->step('open the live review page', $this->openTheLiveReviewPage(...));
         $this->step('run the round until the judge has ruled', $this->runTheRound(...));
         $this->step('read the verdict on the review page', $this->readTheVerdict(...));
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'first run with a key';
     }
 
     private function createTheDatabase(): void
@@ -93,7 +93,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 
     private function openTheLiveReviewPage(): void
     {
-        $page = $this->visit($this->review);
+        $page = $this->visit($this->review.'/record');
 
         self::assertCount(1, $page->filter('#round-'.$this->round().'-state'));
         self::assertStringContainsString('sample-change', $page->filter('h1')->text());
@@ -107,10 +107,10 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
     private function readTheVerdict(): void
     {
         $round = $this->round();
-        $page = $this->visit($this->review);
+        $page = $this->visit($this->review.'/record');
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
-        self::assertSame('judged', mb_strtolower($page->filter('.state-judged')->text()));
+        self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));
         self::assertMatchesRegularExpression(self::OUTCOME, $page->filter('#round-'.$round.'-outcome')->text());
     }
 

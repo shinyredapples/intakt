@@ -20,18 +20,6 @@ final class GateChildTreeTest extends TestCase
 {
     private string $marker;
 
-    protected function setUp(): void
-    {
-        $this->marker = sys_get_temp_dir().'/intakt-gate-descendant-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_file($this->marker)) {
-            unlink($this->marker);
-        }
-    }
-
     public function testAProgramThatATimedOutGateChildStartedIsStoppedWithIt(): void
     {
         $child = new ProcessRunner()->runToItsEnd($this->gateLeavingADescendant('sleep(10);'), sys_get_temp_dir(), 1);
@@ -84,6 +72,18 @@ final class GateChildTreeTest extends TestCase
         self::assertFileDoesNotExist($this->marker);
     }
 
+    protected function setUp(): void
+    {
+        $this->marker = sys_get_temp_dir().'/intakt-gate-descendant-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->marker)) {
+            unlink($this->marker);
+        }
+    }
+
     /**
      * @param list<string> $gate
      *
@@ -123,6 +123,11 @@ final class GateChildTreeTest extends TestCase
         return [PHP_BINARY, '-r', $gate];
     }
 
+    private function descendant(string $first = ''): string
+    {
+        return $first.' usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
+    }
+
     /**
      * @return list<string>
      */
@@ -131,10 +136,5 @@ final class GateChildTreeTest extends TestCase
         $gate = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; echo "started"; fflush(STDOUT); new '.ProcessRunner::class.'()->runWithin('.var_export([PHP_BINARY, '-r', $program], true).', sys_get_temp_dir(), 30);';
 
         return [PHP_BINARY, '-r', $gate];
-    }
-
-    private function descendant(string $first = ''): string
-    {
-        return $first.' usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
     }
 }

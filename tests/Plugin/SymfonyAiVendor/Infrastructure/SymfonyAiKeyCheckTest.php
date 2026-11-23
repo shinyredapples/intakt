@@ -66,11 +66,6 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
     private BufferingLogger $log;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
@@ -215,14 +210,52 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertSame('light-mapped', $this->modelAsked(new SymfonyAiProviderCatalog(), $tiers));
     }
 
-    public function testWithoutALightTierOnTheProviderTheKeyIsNotCheckedAndNoCallIsMade(): void
+    public function testWithoutALightTierOnTheProviderTheSampleProjectsLightModelIsAsked(): void
     {
+        $tiers = $this->tiers(['other' => Provider::OpenAi]);
+
+        self::assertSame(new SampleProjectData()->model(Provider::Anthropic, Tier::Light), $this->modelAsked(new SymfonyAiProviderCatalog(), $tiers));
+    }
+
+    /**
+     * @return iterable<string, array{string, Provider, array<string, mixed>}>
+     */
+    public static function freshInstallAnswers(): iterable
+    {
+        yield 'anthropic' => ['sk-ant-'.self::BODY, Provider::Anthropic, self::ANTHROPIC_ANSWER];
+        yield 'openai' => ['sk-'.self::BODY, Provider::OpenAi, self::OPENAI_ANSWER];
+        yield 'hugging face' => ['hf_'.self::BODY, Provider::OpenAiCompatible, self::CHAT_COMPLETION_ANSWER];
+    }
+
+    /**
+     * @param array<string, mixed> $answer
+     */
+    #[DataProvider('freshInstallAnswers')]
+    public function testOnAFreshInstallWithNoProjectAKeyItsProviderAnswersIsAcceptedWithTheSampleProjectsLightModel(string $key, Provider $tierProvider, array $answer): void
+    {
+        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
         $calls = new ArrayObject();
-        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), new SymfonyAiProviderCatalog(), $this->tiers(['other' => Provider::OpenAi]), $this->log);
 
-        $outcome = $check->check(ProviderKey::recognise('sk-ant-'.self::BODY, new SymfonyAiProviderCatalog()));
+        $outcome = $this->checkOnAFreshInstall($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
 
-        self::assertSame([KeyCheckOutcome::NotChecked, 0], [$outcome, count($calls)]);
+        self::assertSame(KeyCheckOutcome::Accepted, $outcome);
+        self::assertSame([new SampleProjectData()->model($tierProvider, Tier::Light)], array_map(static fn (array $call): mixed => $call[2]['model'] ?? null, array_values($calls->getArrayCopy())));
+    }
+
+    #[DataProvider('keys')]
+    public function testOnAFreshInstallWithNoProjectAKeyItsProviderRefusesIsRefused(string $key): void
+    {
+        $outcome = $this->checkOnAFreshInstall($key, new ArrayObject(), static fn (): MockResponse => self::answer(401, ['type' => 'error', 'error' => ['type' => 'authentication_error', 'message' => 'Invalid key']]));
+
+        self::assertSame(KeyCheckOutcome::Refused, $outcome);
+    }
+
+    public function testOnAFreshInstallWithNoProjectAnUnreachableProviderLeavesTheKeyNotChecked(): void
+    {
+        $outcome = $this->checkOnAFreshInstall('hf_'.self::BODY, new ArrayObject(), static fn (): MockResponse => new MockResponse('', ['error' => 'connection refused']));
+
+        self::assertSame(KeyCheckOutcome::NotChecked, $outcome);
+        self::assertSame(['warning'], array_column($this->log->cleanLogs(), 0));
     }
 
     public function testAKeyOfAProviderTheCatalogDoesNotListIsNotCheckedAndNoCallIsMade(): void
@@ -325,26 +358,17 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertSame([], $this->log->cleanLogs());
     }
 
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+    }
+
     /**
      * @param array<string, mixed> $body
      */
     private static function answer(int $status, array $body): MockResponse
     {
         return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
-    }
-
-    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
-    /**
-     * @param array<string, Provider>|null $lightTiers
-     */
-    private function tiers(?array $lightTiers = null): TierResolver
-    {
-        $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
-        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
-
-        return $tiers;
     }
 
     /**
@@ -379,9 +403,25 @@ final class SymfonyAiKeyCheckTest extends TestCase
      */
     private function check(string $key, ArrayObject $calls, Closure $answer): KeyCheckOutcome
     {
-        $providers = new SymfonyAiProviderCatalog();
+        return $this->keyCheck($this->tiers(), $calls, $answer)->check(ProviderKey::recognise($key, new SymfonyAiProviderCatalog()));
+    }
 
-        return new SymfonyAiKeyCheck($this->http($calls, $answer), $providers, $this->tiers(), $this->log)->check(ProviderKey::recognise($key, $providers));
+    /**
+     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
+     * @param Closure(array<mixed>): MockResponse                   $answer
+     */
+    private function checkOnAFreshInstall(string $key, ArrayObject $calls, Closure $answer): KeyCheckOutcome
+    {
+        return $this->keyCheck($this->tiers([]), $calls, $answer)->check(ProviderKey::recognise($key, new SymfonyAiProviderCatalog()));
+    }
+
+    /**
+     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
+     * @param Closure(array<mixed>): MockResponse                   $answer
+     */
+    private function keyCheck(TierResolver $tiers, ArrayObject $calls, Closure $answer): SymfonyAiKeyCheck
+    {
+        return new SymfonyAiKeyCheck($this->http($calls, $answer), new SymfonyAiProviderCatalog(), $tiers, $this->log);
     }
 
     /**
@@ -399,5 +439,19 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
             return $answer($request);
         });
+    }
+
+    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
+    /**
+     * @param array<string, Provider>|null $lightTiers
+     */
+    private function tiers(?array $lightTiers = null): TierResolver
+    {
+        $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
+        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
+
+        return $tiers;
     }
 }

@@ -54,21 +54,6 @@ final class WorkerModeTest extends TestCase
 
     private ProcessSettings $processBefore;
 
-    protected function setUp(): void
-    {
-        // Both arrays, because the env var processor reads $_ENV first and the dotenv file filled it with an empty token.
-        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
-        $this->processBefore = ProcessSettings::now();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->processBefore->restore();
-        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = '';
-        unset($_SERVER['FRANKENPHP_RESET_KERNEL']);
-        $this->kernel?->shutdown();
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
@@ -281,15 +266,30 @@ final class WorkerModeTest extends TestCase
         self::assertCount(0, $again->filter('.toast'));
     }
 
-    // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request. A kernel cloned per request boots afresh first.
-    #[NoDiscard]
-    private function nextRequestSees(KernelInterface $kernel): WorkerState
+    protected function setUp(): void
     {
-        $kernel->boot();
-        $resetter = $kernel->getContainer()->get('services_resetter');
-        $resetter->reset();
+        // Both arrays, because the env var processor reads $_ENV first and the dotenv file filled it with an empty token.
+        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
+        $this->processBefore = ProcessSettings::now();
+    }
 
-        return WorkerState::in($kernel);
+    protected function tearDown(): void
+    {
+        $this->processBefore->restore();
+        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = '';
+        unset($_SERVER['FRANKENPHP_RESET_KERNEL']);
+        $this->kernel?->shutdown();
+    }
+
+    private function otherLocale(): void
+    {
+        $other = 'C' === $this->processBefore->locale ? 'C.UTF-8' : 'C';
+        self::assertSame($other, setlocale(LC_ALL, $other));
+    }
+
+    private function requestThatRuns(WorkerBrowser $browser, Closure $step): void
+    {
+        $browser->requestRunning($step, '/mcp/owner', ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
     }
 
     // Read inside a real request, because that is what a request starts with after the kernel restored the process settings at the terminate of the one before.
@@ -305,17 +305,6 @@ final class WorkerModeTest extends TestCase
         return $seen;
     }
 
-    private function requestThatRuns(WorkerBrowser $browser, Closure $step): void
-    {
-        $browser->requestRunning($step, '/mcp/owner', ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
-    }
-
-    private function otherLocale(): void
-    {
-        $other = 'C' === $this->processBefore->locale ? 'C.UTF-8' : 'C';
-        self::assertSame($other, setlocale(LC_ALL, $other));
-    }
-
     private function bootedKernel(KernelInterface $kernel): KernelInterface
     {
         $kernel->boot();
@@ -329,6 +318,17 @@ final class WorkerModeTest extends TestCase
         return new WorkerBrowser($kernel, ['HTTP_HOST' => self::HOST]);
     }
 
+    // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request. A kernel cloned per request boots afresh first.
+    #[NoDiscard]
+    private function nextRequestSees(KernelInterface $kernel): WorkerState
+    {
+        $kernel->boot();
+        $resetter = $kernel->getContainer()->get('services_resetter');
+        $resetter->reset();
+
+        return WorkerState::in($kernel);
+    }
+
     private function startRoundAs(KernelBrowser $browser): void
     {
         $page = $browser->request('GET', '/reviews/round-1');
@@ -338,13 +338,6 @@ final class WorkerModeTest extends TestCase
 
         self::assertSame(DashboardRoutes::START_REVIEW, $browser->getRequest()->attributes->get('_route'));
         self::assertSame(303, $browser->getResponse()->getStatusCode());
-    }
-
-    private function recordAnEvent(KernelInterface $kernel): void
-    {
-        $ledger = $this->container($kernel)->get(Ledger::class);
-        self::assertInstanceOf(Ledger::class, $ledger);
-        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"round-1","project":"alpha","reviewers":2}'))->succeeded());
     }
 
     private function runReviewer(KernelInterface $kernel, UuidV7 $conversation, string $task): void
@@ -385,5 +378,12 @@ final class WorkerModeTest extends TestCase
         $connection = $this->container($kernel)->get('doctrine.dbal.default_connection');
         // MySQL and MariaDB commit implicitly at every DDL statement, which leaves the migrations' transactions counted as open; the next flush would then ask for a savepoint that does not exist.
         $connection->close();
+    }
+
+    private function recordAnEvent(KernelInterface $kernel): void
+    {
+        $ledger = $this->container($kernel)->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"round-1","project":"alpha","reviewers":2}'))->succeeded());
     }
 }

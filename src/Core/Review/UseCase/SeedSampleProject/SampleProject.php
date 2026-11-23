@@ -185,7 +185,7 @@ final readonly class SampleProject
     {
         $prices = [];
         foreach ($models as $tier) {
-            $prices[$tier['model']] = $this->data->price($tier['model']);
+            $prices[$tier['model']] = iterator_to_array($this->data->price($tier['model']));
         }
 
         return $prices;

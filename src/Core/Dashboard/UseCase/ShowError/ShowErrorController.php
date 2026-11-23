@@ -66,6 +66,15 @@ final readonly class ShowErrorController
         return is_string($route) && !str_starts_with($route, DashboardRoutes::PREFIX);
     }
 
+    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
+    private function referenceFor(Throwable $exception, string $log): string
+    {
+        $reference = bin2hex(random_bytes(4));
+        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
+
+        return $reference;
+    }
+
     /**
      * @param array<mixed> $headers
      */
@@ -83,15 +92,6 @@ final readonly class ShowErrorController
             $status >= Response::HTTP_INTERNAL_SERVER_ERROR => self::SERVER_MESSAGE,
             default => self::REQUEST_MESSAGE,
         };
-    }
-
-    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
-    private function referenceFor(Throwable $exception, string $log): string
-    {
-        $reference = bin2hex(random_bytes(4));
-        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
-
-        return $reference;
     }
 
     private function render(int $status, string $message, ?string $reference): string

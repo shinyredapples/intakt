@@ -16,6 +16,7 @@ enum StartDecision: string
     case Paused = 'paused';
     case FailureBackedOff = 'failure-backed-off';
     case Draining = 'draining';
+    case Halted = 'halted';
 
     public function admits(): bool
     {

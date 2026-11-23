@@ -13,6 +13,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -35,20 +36,12 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(LedgerEventsAreAppendOnly::class)]
+#[UsesClass(Mentions::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
 final class DoctrineLedgerTest extends KernelTestCase
 {
     private ManagerRegistry $registry;
-
-    protected function setUp(): void
-    {
-        $registry = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $registry);
-        $this->registry = $registry;
-
-        $this->createSchema();
-    }
 
     public function testEventsAreReadBackInTheOrderTheyWereAppended(): void
     {
@@ -85,7 +78,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(['r-2', 'r-1'])));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(new Mentions('r-2', 'r-1'))));
 
         self::assertSame(['{"round":"r-2"}', '{"round":"r-1"}', '{"call":"c-1","round":"r-2"}'], $payloads);
     }
@@ -98,7 +91,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(['a_b', '50%!'])));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(new Mentions('a_b', '50%!'))));
 
         self::assertSame(['{"note":"a_b"}', '{"note":"50%!"}'], $payloads);
     }
@@ -112,7 +105,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning($calls)));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(new Mentions(...$calls))));
 
         self::assertSame(['{"call":"'.$calls[1099].'"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'], $payloads);
     }
@@ -122,7 +115,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
         self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
 
-        self::assertSame([], iterator_to_array($ledger->readMentioning([])));
+        self::assertSame([], iterator_to_array($ledger->readMentioning(new Mentions())));
     }
 
     public function testEventsAreReadInAppendOrderAfterTheClockStepsBack(): void
@@ -341,6 +334,15 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertStringContainsString('a failed append is only reported through the result', $warnings[0]);
     }
 
+    protected function setUp(): void
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        $this->registry = $registry;
+
+        $this->createSchema();
+    }
+
     // Takes a plain Closure because static analysis refuses a discarded call it can see, and the engine still checks this one.
     private function discardTheResult(Closure $append, LedgerEvent $event): void
     {
@@ -368,6 +370,14 @@ final class DoctrineLedgerTest extends KernelTestCase
         $this->entityManager()->close();
     }
 
+    private function entityManager(): EntityManagerInterface
+    {
+        $manager = $this->registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        return $manager;
+    }
+
     private function storedEvent(): EventRecord
     {
         $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted->value, '{}', new DateTimeImmutable('2026-10-27 12:00:00'));
@@ -386,14 +396,6 @@ final class DoctrineLedgerTest extends KernelTestCase
         }
 
         self::fail('the flush was not refused');
-    }
-
-    private function entityManager(): EntityManagerInterface
-    {
-        $manager = $this->registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-
-        return $manager;
     }
 
     private function dropTable(): void

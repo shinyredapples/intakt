@@ -33,25 +33,6 @@ final readonly class GateReport
         return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson(), GateLine::Built);
     }
 
-    // Because a finding is cut at its end, and the end of what a child wrote names why it stopped (a timeout, a signal, a fatal error).
-    private static function endOf(ProcessResult $child, string $reason): string
-    {
-        $written = trim((string) preg_replace('/\s+/', ' ', $child->output."\n".$child->errors));
-        $room = GateResult::MAXIMUM_FINDING_LENGTH - mb_strwidth($reason);
-
-        if (mb_strwidth($written) <= $room) {
-            return $written;
-        }
-
-        $end = mb_substr($written, -$room);
-
-        while (mb_strwidth('...'.$end) > $room) {
-            $end = mb_substr($end, 1);
-        }
-
-        return '...'.$end;
-    }
-
     public function isPassing(): bool
     {
         return true === self::verdictOf($this->gate, $this->line);
@@ -108,6 +89,25 @@ final readonly class GateReport
         }
 
         return self::consistentVerdict($report);
+    }
+
+    // Because a finding is cut at its end, and the end of what a child wrote names why it stopped (a timeout, a signal, a fatal error).
+    private static function endOf(ProcessResult $child, string $reason): string
+    {
+        $written = trim((string) preg_replace('/\s+/', ' ', $child->output."\n".$child->errors));
+        $room = GateResult::MAXIMUM_FINDING_LENGTH - mb_strwidth($reason);
+
+        if (mb_strwidth($written) <= $room) {
+            return $written;
+        }
+
+        $end = mb_substr($written, -$room);
+
+        while (mb_strwidth('...'.$end) > $room) {
+            $end = mb_substr($end, 1);
+        }
+
+        return '...'.$end;
     }
 
     /**

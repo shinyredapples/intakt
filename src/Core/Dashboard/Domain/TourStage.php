@@ -31,8 +31,14 @@ enum TourStage: string
             self::ReviewersRead => 'The reviewers read the change.',
             self::FindingsArrive => 'Findings arrive as each reviewer answers.',
             self::JudgeWeighs => 'The judge checks every finding against the change.',
-            self::RoundEnds => 'Done: To fix lists what still needs changing.',
+            self::RoundEnds => 'Checked: To fix lists what still needs changing.',
         };
+    }
+
+    // Only while the reviewers work, because the caption then names them by model and AI lab and the other stages talk about the change or the judge.
+    public function isAboutTheReviewers(): bool
+    {
+        return self::ReviewersRead === $this || self::FindingsArrive === $this;
     }
 
     public function number(): int

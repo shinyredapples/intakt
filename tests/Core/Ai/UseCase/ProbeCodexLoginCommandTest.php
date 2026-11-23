@@ -40,21 +40,6 @@ final class ProbeCodexLoginCommandTest extends TestCase
 
     private string $path;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-codex-probe-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->root.'/bin/codex', IsolatedCodexCliTest::FAKE_CLI);
-        chmod($this->root.'/bin/codex', 0o700);
-        $this->path = (string) getenv('PATH');
-        putenv('PATH='.$this->root.'/bin:'.$this->path);
-    }
-
-    protected function tearDown(): void
-    {
-        putenv('PATH='.$this->path);
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheProbeShowsThePinnedModelAndEffortAndTheAnswer(): void
     {
         new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
@@ -82,6 +67,21 @@ final class ProbeCodexLoginCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('has no Codex login', $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-codex-probe-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->root.'/bin/codex', IsolatedCodexCliTest::FAKE_CLI);
+        chmod($this->root.'/bin/codex', 0o700);
+        $this->path = (string) getenv('PATH');
+        putenv('PATH='.$this->root.'/bin:'.$this->path);
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('PATH='.$this->path);
+        new Filesystem()->remove($this->root);
     }
 
     /**

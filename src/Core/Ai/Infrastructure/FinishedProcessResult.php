@@ -97,21 +97,6 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
         );
     }
 
-    // The bridge reads only the result's text (upstream/ai-claude-code-platform-structured-output), while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict. A null field holds no answer, so the result's text stays the one read.
-    /**
-     * @param array<string, mixed> $data
-     *
-     * @return array<string, mixed>
-     */
-    private function withStructuredOutput(array $data): array
-    {
-        if (null === ($data[self::STRUCTURED_OUTPUT] ?? null)) {
-            return $data;
-        }
-
-        return [...$data, self::RESULT => json_encode($data[self::STRUCTURED_OUTPUT], JSON_THROW_ON_ERROR)];
-    }
-
     // A CLI that wrote its final result and then failed reported why, so that stays a failure.
     private function cutOffUnlessFinished(Throwable $failure, string $how): Throwable
     {
@@ -164,5 +149,20 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
     private function cutOff(string $how, ?Throwable $failure): IncompleteStreamException
     {
         return new IncompleteStreamException('The Claude Code stream ended before its final result: '.$how.'.', 0, $failure);
+    }
+
+    // The bridge reads only the result's text (upstream/ai-claude-code-platform-structured-output), while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict. A null field holds no answer, so the result's text stays the one read.
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, mixed>
+     */
+    private function withStructuredOutput(array $data): array
+    {
+        if (null === ($data[self::STRUCTURED_OUTPUT] ?? null)) {
+            return $data;
+        }
+
+        return [...$data, self::RESULT => json_encode($data[self::STRUCTURED_OUTPUT], JSON_THROW_ON_ERROR)];
     }
 }

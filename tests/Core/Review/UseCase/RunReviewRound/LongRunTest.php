@@ -41,17 +41,12 @@ final class LongRunTest extends KernelTestCase
 
     private ScriptedRound $run;
 
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
-    }
-
     public function testAReviewerStillAskingForToolsAtTheRoundLimitOnItsRetryTooFailsAndBlocksTheRoundWithThatReason(): void
     {
         $review = $this->stillAskingForTools();
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame(['role-1 reviewer failed, the reviewer\'s answer could not be read as a verdict: the reviewer was still asking for tools after 30 rounds of tool calls.'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, the reviewer\'s answer could not be read as a verdict: the reviewer was still asking for tools after 30 rounds of tool calls.'], [...$review->reasons]);
         self::assertSame([], $review->verdicts);
     }
 
@@ -76,8 +71,8 @@ final class LongRunTest extends KernelTestCase
         $review = $this->limitedAfterToolRounds();
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertCount(1, $review->reasons);
-        self::assertMatchesRegularExpression('/^role-1 reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $review->reasons[0]);
+        self::assertCount(1, [...$review->reasons]);
+        self::assertMatchesRegularExpression('/^role-1 reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', [...$review->reasons][0]);
     }
 
     public function testTheBlockedReviewerOfALongRunRecordsItsReasonInTheLedger(): void
@@ -112,9 +107,14 @@ final class LongRunTest extends KernelTestCase
         $review = $this->run->review(1, $this->run->vendor($own, $this->run->answering('approve')));
 
         self::assertSame(Decision::Approve, $review->decision);
-        self::assertSame([], $review->reasons);
+        self::assertSame([], [...$review->reasons]);
         self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
         self::assertSame([self::TOOL_ROUNDS + 1], $this->usageRowsOfEndingEvents());
+    }
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     /**

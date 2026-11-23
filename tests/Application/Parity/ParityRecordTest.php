@@ -23,12 +23,6 @@ final class ParityRecordTest extends TestCase
     /** @var list<string> */
     private array $scratches = [];
 
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->scratches);
-        $this->scratches = [];
-    }
-
     public function testEveryDoneParityItemNamesAnIntaktTestThatExists(): void
     {
         $root = dirname(__DIR__, 3);
@@ -46,6 +40,13 @@ final class ParityRecordTest extends TestCase
         }
     }
 
+    public function testEverySectionHeadingOfTheRecordIsAJudgedSection(): void
+    {
+        $record = (string) file_get_contents(dirname(__DIR__, 3).'/docs/architecture/parity.md');
+
+        self::assertSame(ParityRecord::JUDGED_SECTIONS, $this->repositoryTests()->sectionHeadings($record));
+    }
+
     public function testTheOpenItemsOfTheJudgedSectionsAreTheBehaviorsNotBuiltYet(): void
     {
         self::assertSame([
@@ -61,10 +62,47 @@ final class ParityRecordTest extends TestCase
             'Build and hand-back, line 29: Every Evidence item is referenced; a miss goes back once, a second miss goes to the reviewers.',
             'Build and hand-back, line 30: A body over the cap goes back once with its commits kept.',
             'Build and hand-back, line 31: Composer changes beyond routine go to the owner, naming the packages.',
-            'CI, line 38: A head with pending CI holds nothing; heads with finished CI go first.',
-            'CI, line 39: Red CI goes back before any reviewer and uses no cycle; the third bounce in a row counts.',
-            'CI, line 40: The CI excerpt is redacted, fenced and capped.',
-            'CI, line 41: A missed CI start is nudged once; a pull request the forge reports in conflict with main is not nudged but goes to Intakt\'s checked registry-file merge, or to a builder as a merge-main rework; an unreadable workflow fails closed.',
+            'Build and hand-back, line 35: Transient forge API network failures are retried; one that outlasts the retries makes that project wait, not halt; only a long outage halts and notifies.',
+            'CI, line 39: A head with pending CI holds nothing; heads with finished CI go first.',
+            'CI, line 40: Red CI goes back before any reviewer and uses no cycle; the third bounce in a row counts.',
+            'CI, line 41: The CI excerpt is redacted, fenced and capped.',
+            'CI, line 42: A missed CI start is nudged once; a pull request the forge reports in conflict with main is not nudged but goes to Intakt\'s checked registry-file merge, or to a builder as a merge-main rework; an unreadable workflow fails closed.',
+            'Reviews, line 45: An approval counts only for the exact head and pull request text.',
+            'Reviews, line 48: Re-reviews are scoped from saved reviews; a saved approval never counts for a new head.',
+            'Reviews, line 49: Feedback holds only open findings, merged across reviewers.',
+            'Reviews, line 50: An unchanged head with an outside requirement goes on hold, not to review.',
+            'Reviews, line 51: Evidence only the owner can give reaches status without a send-back.',
+            'Reviews, line 53: Probes run in a no-network sandbox with a fixed command surface; infrastructure failures alert, never become findings.',
+            'Reviews, line 54: An out-of-limit reviewer gets a same-tier substitute whose verdict counts, and a catch-up is owed.',
+            'Reviews, line 55: A rejection beside an out-of-limit reviewer goes to the builder without a substitute.',
+            'Reviews, line 56: A crash during a catch-up neither loses nor doubles it.',
+            'Reviews, line 57: A P1 on two heads is escalated to the strong tier; its verdict is reused on unchanged files.',
+            'Planning and budget, line 60: A start is refused only by measured use at its ceiling, never by an estimate.',
+            'Planning and budget, line 62: A usage probe outage gives one notice.',
+            'Planning and budget, line 63: A budget back-off and a pause still merge fully approved heads; a drain and a crash back-off stop merges too.',
+            'Planning and budget, line 65: The owner\'s ceiling override expires and keeps a crash back-off.',
+            'Planning and budget, line 66: The cheaper tier starts; a label, a sensitive path or an earlier failure starts strong; a P1 raises the next rework.',
+            'Planning and budget, line 67: No progress for the set time stops a build with its commits kept; the runaway cap stops it regardless.',
+            'Merge and protection, line 70: The merge is a fast-forward of exactly the reviewed head; main moving after the checks fails it; a lost push response stays covered.',
+            'Merge and protection, line 71: A crash after publishing, closing or cleaning up never publishes twice.',
+            'Merge and protection, line 74: Only the owner\'s approval of exactly this head counts; Intakt never submits a review.',
+            'Merge and protection, line 75: A head waiting for the owner holds no build slot; an ordinary change never waits.',
+            'Merge and protection, line 76: At the owner-wait cap a head is queued and asked once a place frees.',
+            'Merge and protection, line 77: A conflict after the owner\'s approval parks it; an unchanged resolution merges without a new ask.',
+            'Merge and protection, line 78: Owner and maintainer pull requests are reviewed on every head and merge like a task\'s.',
+            'Merge and protection, line 79: A third party\'s priority label on a pull request is ignored.',
+            'Merge and protection, line 80: Splitting is not only for tasks: a head past the split tier on a pull request with no task goes to the maintainer agent as a split when it was opened by the owner\'s or the maintainer agent\'s identity (with a task, the maintainer agent splits the task).',
+            'Merge and protection, line 81: A pull request split records its plan first (resumable, no part created twice); each part is a task naming `Source: <branch>@<sha>` of the original head, so the builder applies the source\'s own diff and writes nothing new, cut along files where possible, each under the split tier, stating its merge order when it links to another part.',
+            'Merge and protection, line 82: Once every part\'s pull request is open or merged (a part closed without merging counts as missing) and plain code has reconstructed the original change twice, first from the heads recorded when the part pull requests opened (the parts, applied in merge order to the merge base, give the tree of `<sha>`), then from each open part\'s current head and each merged part\'s merged change, which must carry exactly its share (nothing dropped, nothing added), Intakt closes the original with a comment naming the parts; on a missing part or a mismatch the original stays open.',
+            'Merge and protection, line 83: Anyone else\'s oversized pull request is not split: it gets one comment saying it is past the size limit and asking the author to split it; once a person with write access sets `take-over`, it is split like the owner\'s.',
+            'Merge and protection, line 84: Main is watched by how a commit arrived, never by its signature.',
+            'Operations, line 87: Every non-merge outcome records a cause.',
+            'Operations, line 88: Every notice has a kind; only owner actions push; a failed push is reported, not raised.',
+            'Operations, line 89: A crash between a step\'s end and its hand-over only completes the hand-over.',
+            'Operations, line 90: Status shows pause, drain, parked items and steps.',
+            'Operations, line 91: Drain stops build admission on every slot while the review lane runs; unlike the reference, drain wins over pause, because a drain also stops merges and the strictest hold decides.',
+            'Operations, line 92: A crash in one build slot is recovered without touching another slot\'s step.',
+            'Operations, line 93: Each project\'s prompts and posted text name only that project.',
         ], array_keys(self::notBuiltItemsOfTheRecord()));
     }
 
@@ -140,7 +178,7 @@ final class ParityRecordTest extends TestCase
 
     public function testAStarBulletOutsideTheJudgedSectionsIsNotReported(): void
     {
-        $record = "## Reviews\n* [ ] A behavior. `test_old.py` [T1]\n- A note.";
+        $record = "## Notes\n* [ ] A behavior. `test_old.py` [T1]\n- A note.";
 
         self::assertSame([], $this->repositoryTests()->unprovenItems($record));
     }
@@ -283,9 +321,16 @@ final class ParityRecordTest extends TestCase
         self::assertSame([], $this->repositoryTests()->notBuiltItems($record));
     }
 
+    public function testEverySectionHeadingOfAnyLevelOrSeparatorIsFoundSoNoneHidesAnItem(): void
+    {
+        $record = "# Title\n## One\n# Two\n##\tThree\n### Deeper\n";
+
+        self::assertSame(['One', 'Two', 'Three'], $this->repositoryTests()->sectionHeadings($record));
+    }
+
     public function testAnOpenItemOutsideTheJudgedSectionsIsNeitherJudgedNorListed(): void
     {
-        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (T1)\n## Reviews\n- [ ] Another. `test_old.py` [T2]; Intakt: `NoSuchParityTest::testAnything`\n  and more words";
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (T1)\n## Notes\n- [ ] Another. `test_old.py` [T2]; Intakt: `NoSuchParityTest::testAnything`\n  and more words";
         $parity = $this->repositoryTests();
 
         self::assertSame([], $parity->unprovenItems($record));
@@ -631,6 +676,12 @@ final class ParityRecordTest extends TestCase
             ['line 1: OnlyFixtureTest is no test class under tests/', 'line 1: TwinTest is no test class under tests/'],
             $tests->unprovenItems('- [x] A behavior. [T1]; Intakt: `OnlyFixtureTest::testIt`, `TwinTest::testIt`'),
         );
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->scratches);
+        $this->scratches = [];
     }
 
     protected function testAProtectedHelperIsNoTest(): void

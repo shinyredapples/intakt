@@ -61,25 +61,13 @@ final class InstanceBootTest extends TestCase
         file_put_contents('php://fd/3', '{"status":"ready"}'."\n");
         PHP;
 
+    private const string FAILING_COMPOSER = "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n";
+
     // Not shaped like a real token, so the secret scan has nothing to find, while the plugin's report still cannot hold it by chance.
     private const string PROBE_TOKEN = 'probe-token-of-the-booting-install';
 
     private TemporaryRepository $repository;
     private CommitId $main;
-
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('composer.json', '{"name": "intakt-test/boot"}');
-        $this->main = new CommitId($this->repository->commitFile('bin/instance', self::HARNESS));
-        $this->repository->checkoutNewBranch('feature');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->repository->path.'-composer-home', $this->repository->path.'-home']);
-        $this->repository->remove();
-    }
 
     public function testAHeadThatBootsAfterComposerInstallIsReportedAsBooted(): void
     {
@@ -169,7 +157,7 @@ final class InstanceBootTest extends TestCase
     {
         $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
 
-        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o644]);
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => [0o644, self::FAILING_COMPOSER]]);
 
         self::assertSame(BootState::Crashed, $outcome->state, $outcome->reason);
         self::assertStringStartsWith('composer could not run: ', $outcome->reason);
@@ -179,10 +167,30 @@ final class InstanceBootTest extends TestCase
     {
         $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
 
-        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o755]);
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => [0o755, self::FAILING_COMPOSER]]);
 
         self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
         self::assertSame('composer install failed: the lock file does not match', $outcome->reason);
+    }
+
+    public function testAHarnessThatHangsPastItsTimeLimitIsReportedAsFailedWithTheLimit(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nsleep(30);\n");
+
+        $outcome = new InstanceBoot(bootSeconds: 1)->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
+        self::assertSame('bin/instance passed its time limit of 1 seconds.', $outcome->reason);
+    }
+
+    public function testAComposerInstallThatHangsPastItsTimeLimitIsReportedAsFailedWithTheLimit(): void
+    {
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => [0o755, "#!/bin/sh\nexec sleep 30\n"]], new InstanceBoot(installSeconds: 1));
+
+        self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
+        self::assertSame('composer install passed its time limit of 1 seconds.', $outcome->reason);
     }
 
     public function testAComposerPluginOfTheHeadDoesNotSeeASecretOfTheBootingInstall(): void
@@ -403,31 +411,45 @@ final class InstanceBootTest extends TestCase
         self::assertCount(1, $this->repository->worktrees());
     }
 
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('composer.json', '{"name": "intakt-test/boot"}');
+        $this->main = new CommitId($this->repository->commitFile('bin/instance', self::HARNESS));
+        $this->repository->checkoutNewBranch('feature');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->repository->path.'-composer-home', $this->repository->path.'-home']);
+        $this->repository->remove();
+    }
+
     private function bootWithMainsHarness(string $head): BootOutcome
     {
         return new InstanceBoot()->of($this->at($head), $this->main);
     }
 
-    // A PATH of every command of the real one except composer, plus the given stubs (name to file mode), each a script that exits with 1, so a test decides whether composer is missing, not executable or failing.
+    // A PATH of every command of the real one except composer, plus the given stubs (name to file mode and script), so a test decides whether composer is missing, not executable or failing.
     /**
-     * @param array<string, int> $stubs
+     * @param array<string, array{int, string}> $stubs
      */
-    private function bootWithoutComposerAnd(string $head, array $stubs): BootOutcome
+    private function bootWithoutComposerAnd(string $head, array $stubs, ?InstanceBoot $boot = null): BootOutcome
     {
         $tools = $this->repository->path.'-tools';
         mkdir($tools);
         $path = getenv('PATH');
         $this->linkCommandsExceptComposer((string) $path, $tools);
 
-        foreach ($stubs as $stub => $mode) {
-            file_put_contents($tools.'/'.$stub, "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n");
+        foreach ($stubs as $stub => [$mode, $body]) {
+            file_put_contents($tools.'/'.$stub, $body);
             chmod($tools.'/'.$stub, $mode);
         }
 
         putenv('PATH='.$tools);
 
         try {
-            return $this->bootWithMainsHarness($head);
+            return ($boot ?? new InstanceBoot())->of($this->at($head), $this->main);
         } finally {
             putenv(false === $path ? 'PATH' : 'PATH='.$path);
             new Filesystem()->remove($tools);

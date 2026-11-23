@@ -43,11 +43,6 @@ final class MarkVerdictsStaleTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testARoundMarkedStaleHasStaleVerdictsEvenOnItsUnchangedIdentity(): void
     {
         $round = $this->fixture->start(2)->id()->toRfc4122();
@@ -85,6 +80,11 @@ final class MarkVerdictsStaleTest extends KernelTestCase
         new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($round));
 
         self::assertEquals([new PublishVerdict($round)], $commands->messages);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function handler(): MarkVerdictsStaleHandler

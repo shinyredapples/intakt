@@ -1,6 +1,6 @@
 # A project
 
-### Review bench
+## Review bench
 
 | Reviewer | Defects found (measured) | False alarms (measured) |
 | --- | --- | --- |

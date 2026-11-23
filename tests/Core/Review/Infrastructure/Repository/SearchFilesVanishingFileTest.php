@@ -34,18 +34,6 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
         private ReviewCheckout $checkout;
         private int $reporting;
 
-        protected function setUp(): void
-        {
-            $this->checkout = new ReviewCheckout();
-        }
-
-        protected function tearDown(): void
-        {
-            restore_error_handler();
-            error_reporting($this->reporting);
-            $this->checkout->remove();
-        }
-
         public function testAFileRemovedBeforeItsSizeIsReadIsRefusedAsNotReadableUnderAHandlerThatThrowsWarnings(): void
         {
             $this->checkout->write('vanishes.txt', 'needle');
@@ -66,6 +54,18 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
             $this->expectExceptionMessageIs('"src/vanishes.txt" cannot be read.');
 
             new SearchFiles($this->checkout->checkout)('needle', 'src');
+        }
+
+        protected function setUp(): void
+        {
+            $this->checkout = new ReviewCheckout();
+        }
+
+        protected function tearDown(): void
+        {
+            restore_error_handler();
+            error_reporting($this->reporting);
+            $this->checkout->remove();
         }
 
         // Throws every warning that is not silenced, as the error handler of a debug kernel does, because the refusal must not depend on the handler.

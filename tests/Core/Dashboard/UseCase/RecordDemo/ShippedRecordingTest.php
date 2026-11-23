@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\RecordDemo;
 
+use Intakt\Core\Dashboard\Domain\AiLab;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
 #[UsesClass(CapturedUpdate::class)]
+#[UsesClass(AiLab::class)]
 final class ShippedRecordingTest extends TestCase
 {
     private const string SHIPPED = '/fixtures/demo/sample-change-review.json';
@@ -157,6 +159,40 @@ final class ShippedRecordingTest extends TestCase
         yield 'an email address' => ['~[\w.+-]+@[\w-]+(\.[\w-]+)+~'];
     }
 
+    public function testTheShippedRecordingHeadsEachLiveReviewerWithItsAiLabAndKeepsTheIdInTheTitle(): void
+    {
+        $headings = [];
+
+        foreach ($this->shipped()->updates as $update) {
+            preg_match_all('~<h3 title="([^"]+)">[^<(]+ \((.+)\) live</h3>~', $update->data, $found, PREG_SET_ORDER);
+            $headings = [...$headings, ...$found];
+        }
+
+        self::assertNotEmpty($headings);
+
+        foreach ($headings as [, $id, $name]) {
+            self::assertSame(AiLab::modelName($id).' ('.AiLab::of($id)?->value.')', $name);
+        }
+    }
+
+    public function testTheShippedRecordingNamesEveryReviewerModelCellWithItsAiLabAndKeepsTheIdInTheTitle(): void
+    {
+        $cells = [];
+
+        foreach ($this->shipped()->updates as $update) {
+            preg_match_all('~<td id="[^"]*-model"([^>]*)>([^<]*)</td>~', $update->data, $found, PREG_SET_ORDER);
+            $cells = [...$cells, ...$found];
+        }
+
+        self::assertNotEmpty($cells);
+
+        foreach ($cells as [, $attributes, $text]) {
+            $id = preg_replace('~^ title="([^"]+)"$~', '$1', $attributes);
+            self::assertNotSame($attributes, $id, 'model cell without a title');
+            self::assertSame(AiLab::modelName((string) $id).' ('.AiLab::of((string) $id)?->value.')', $text);
+        }
+    }
+
     private function privateTextPattern(string $name): string
     {
         foreach (self::privateText() as $label => [$pattern]) {
@@ -166,6 +202,30 @@ final class ShippedRecordingTest extends TestCase
         }
 
         self::fail(sprintf('No private-text pattern is named "%s".', $name));
+    }
+
+    private function shippedWith(string $field, string $value): string
+    {
+        $shipped = $this->shipped();
+        $first = $shipped->events[0];
+        /** @var array<string, mixed> $payload */
+        $payload = json_decode($first->payload, true, flags: JSON_THROW_ON_ERROR);
+        $payload[$field] = $value;
+        $events = [new RecordedLedgerEvent($first->id, $first->kind, json_encode($payload, JSON_THROW_ON_ERROR), $first->recordedAt), ...array_slice($shipped->events, 1)];
+
+        return new RecordingFormat(StoredSerializerFactory::create())->write(
+            new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, $events, $shipped->updates),
+        );
+    }
+
+    private function shipped(): Recording
+    {
+        return new RecordingFormat(StoredSerializerFactory::create())->read($this->text());
+    }
+
+    private function text(): string
+    {
+        return $this->file(self::SHIPPED);
     }
 
     /**
@@ -220,30 +280,6 @@ final class ShippedRecordingTest extends TestCase
         }
 
         return $strings;
-    }
-
-    private function shippedWith(string $field, string $value): string
-    {
-        $shipped = $this->shipped();
-        $first = $shipped->events[0];
-        /** @var array<string, mixed> $payload */
-        $payload = json_decode($first->payload, true, flags: JSON_THROW_ON_ERROR);
-        $payload[$field] = $value;
-        $events = [new RecordedLedgerEvent($first->id, $first->kind, json_encode($payload, JSON_THROW_ON_ERROR), $first->recordedAt), ...array_slice($shipped->events, 1)];
-
-        return new RecordingFormat(StoredSerializerFactory::create())->write(
-            new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, $events, $shipped->updates),
-        );
-    }
-
-    private function shipped(): Recording
-    {
-        return new RecordingFormat(StoredSerializerFactory::create())->read($this->text());
-    }
-
-    private function text(): string
-    {
-        return $this->file(self::SHIPPED);
     }
 
     private function file(string $path): string

@@ -19,11 +19,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(CodingStandardsGate::class)]
 final class ImportFormRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): ImportFormRule
-    {
-        return new ImportFormRule();
-    }
-
     public function testAPlainFunctionAndConstantPassTheCodingStandards(): void
     {
         $this->assertAcceptedBy('cs', 'plain-function-and-constant');
@@ -82,5 +77,10 @@ final class ImportFormRuleTest extends PhpStanRuleTestCase
     public function testTheDoctrineOrmAliasPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('doctrine-orm-alias');
+    }
+
+    protected function ruleFor(string $root): ImportFormRule
+    {
+        return new ImportFormRule();
     }
 }

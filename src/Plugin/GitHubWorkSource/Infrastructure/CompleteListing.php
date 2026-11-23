@@ -73,31 +73,6 @@ final readonly class CompleteListing
         return $this->store->recordIfStill($project, $readBefore, $listed) ? $this->planOver($project, $rows) : $this->planOverTheNewerRows($project);
     }
 
-    // Another worker that stored a listing meanwhile holds the newer rows, but vouched them under its own eligibility label, so a row that is a candidate under this one has its history read first; the rows are not written again, because only a write that won may write.
-    private function planOverTheNewerRows(string $project): ?IntakePlan
-    {
-        $readBefore = $this->store->syncStateOf($project);
-        $newer = $this->store->issuesOf($project);
-        try {
-            $this->vouchWhatSteers($project, $newer);
-        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
-            return $this->shortListing($project, $short);
-        }
-
-        $failures = $this->store->failuresOf($project);
-        $this->stillNewestSince($project, $readBefore);
-
-        return $this->planOverWith($newer, $failures);
-    }
-
-    // Checked once, after the last read the plan is answered from, and never retried, because a winning write is never answered from rows older than the newest committed listing, and the history and failure reads leave time for a third worker to commit one.
-    private function stillNewestSince(string $project, SyncState $readBefore): void
-    {
-        if ($this->store->syncStateOf($project)->generation !== $readBefore->generation) {
-            throw ListingReplacedMeanwhile::of($project);
-        }
-    }
-
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
     /**
      * @return list<StoredIssue>
@@ -174,6 +149,31 @@ final readonly class CompleteListing
     private function planOver(string $project, array $rows): IntakePlan
     {
         return $this->planOverWith($rows, $this->store->failuresOf($project));
+    }
+
+    // Another worker that stored a listing meanwhile holds the newer rows, but vouched them under its own eligibility label, so a row that is a candidate under this one has its history read first; the rows are not written again, because only a write that won may write.
+    private function planOverTheNewerRows(string $project): ?IntakePlan
+    {
+        $readBefore = $this->store->syncStateOf($project);
+        $newer = $this->store->issuesOf($project);
+        try {
+            $this->vouchWhatSteers($project, $newer);
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
+            return $this->shortListing($project, $short);
+        }
+
+        $failures = $this->store->failuresOf($project);
+        $this->stillNewestSince($project, $readBefore);
+
+        return $this->planOverWith($newer, $failures);
+    }
+
+    // Checked once, after the last read the plan is answered from, and never retried, because a winning write is never answered from rows older than the newest committed listing, and the history and failure reads leave time for a third worker to commit one.
+    private function stillNewestSince(string $project, SyncState $readBefore): void
+    {
+        if ($this->store->syncStateOf($project)->generation !== $readBefore->generation) {
+            throw ListingReplacedMeanwhile::of($project);
+        }
     }
 
     /**

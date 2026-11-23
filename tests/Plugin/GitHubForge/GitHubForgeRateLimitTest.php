@@ -89,12 +89,6 @@ final class GitHubForgeRateLimitTest extends TestCase
     private RateLimitReadings $readings;
     private bool $limited = true;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = FreshReadings::at($this->clock);
-    }
-
     public function testItRaisesTheResetOfAPrimaryLimitAnswered403(): void
     {
         $reset = $this->clock->now()->getTimestamp() + 1200;
@@ -216,15 +210,18 @@ final class GitHubForgeRateLimitTest extends TestCase
         self::assertSame($reset, $reading->resetsAt->getTimestamp());
     }
 
-    private function rateLimitOf(Closure $call): ForgeRateLimited
+    protected function setUp(): void
     {
-        try {
-            $call();
-        } catch (ForgeRateLimited $limited) {
-            return $limited;
-        }
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
+    }
 
-        throw new LogicException('The call was expected to be rate limited.');
+    /**
+     * @param array<string, string> $headers
+     */
+    private function limited(int $status, array $headers): MockResponse
+    {
+        return new MockResponse('{"message":"rate limit"}', ['http_code' => $status, 'response_headers' => $headers]);
     }
 
     /**
@@ -251,6 +248,17 @@ final class GitHubForgeRateLimitTest extends TestCase
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())), new GitHubAppSetting('12345', new NullLogger()));
     }
 
+    private function rateLimitOf(Closure $call): ForgeRateLimited
+    {
+        try {
+            $call();
+        } catch (ForgeRateLimited $limited) {
+            return $limited;
+        }
+
+        throw new LogicException('The call was expected to be rate limited.');
+    }
+
     private function plain(string $url): MockResponse
     {
         return match (true) {
@@ -258,14 +266,6 @@ final class GitHubForgeRateLimitTest extends TestCase
             str_contains($url, '/pulls/7') => new MockResponse(self::pull()),
             default => new MockResponse(self::fixture('compare_merge_base.json')),
         };
-    }
-
-    /**
-     * @param array<string, string> $headers
-     */
-    private function limited(int $status, array $headers): MockResponse
-    {
-        return new MockResponse('{"message":"rate limit"}', ['http_code' => $status, 'response_headers' => $headers]);
     }
 
     private static function pull(): string

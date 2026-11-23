@@ -46,17 +46,17 @@ final readonly class FinalClassRule implements Rule
         return array_values(array_map($this->notFinal(...), array_filter($classes, $this->requiresFinalModifier(...))));
     }
 
-    private function requiresFinalModifier(Class_ $class): bool
-    {
-        // PHPStan names an anonymous class, so only isAnonymous(), which it overrides for that node, tells one apart from a named class
-        return $class->name instanceof Identifier && !$class->isAnonymous() && !$class->isFinal() && !$class->isAbstract();
-    }
-
     private function notFinal(Class_ $class): IdentifierRuleError
     {
         $name = $class->name?->toString() ?? '';
         $message = sprintf('Class %s is not final: declare it final, or abstract when it is meant to be extended.', $name);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.finalClass')->line($class->name?->getStartLine() ?? $class->getStartLine())->build();
+    }
+
+    private function requiresFinalModifier(Class_ $class): bool
+    {
+        // PHPStan names an anonymous class, so only isAnonymous(), which it overrides for that node, tells one apart from a named class
+        return $class->name instanceof Identifier && !$class->isAnonymous() && !$class->isFinal() && !$class->isAbstract();
     }
 }

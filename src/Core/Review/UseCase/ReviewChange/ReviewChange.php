@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -13,6 +14,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\IgnoredProgress;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -191,6 +193,21 @@ final readonly class ReviewChange implements ChangeReviews
         return $this->findings->actListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122()));
     }
 
+    private function reasonsOf(ReviewRound $round): BlockReasons
+    {
+        $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
+
+        foreach ($round->reviewers() as $reviewer) {
+            $reason = $this->reasonOf($reviewer);
+
+            if (null !== $reason) {
+                $reasons[] = $reviewer->roleName().' reviewer '.$reason;
+            }
+        }
+
+        return new BlockReasons(...$reasons);
+    }
+
     /**
      * @return list<ReviewerOutcome>
      */
@@ -211,26 +228,8 @@ final readonly class ReviewChange implements ChangeReviews
             null === $failure ? null : $this->failures->of($failure),
             $this->ledger->tokensOfReviewer($roundId, $reviewerId),
             $this->ledger->millisecondsOfReviewer($reviewerId),
-            $this->ledger->modelsOfReviewer($roundId, $reviewerId),
+            new ModelNames(...$this->ledger->modelsOfReviewer($roundId, $reviewerId)),
         );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function reasonsOf(ReviewRound $round): array
-    {
-        $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
-
-        foreach ($round->reviewers() as $reviewer) {
-            $reason = $this->reasonOf($reviewer);
-
-            if (null !== $reason) {
-                $reasons[] = $reviewer->roleName().' reviewer '.$reason;
-            }
-        }
-
-        return $reasons;
     }
 
     // Blocked and failed are named apart, so the line says what the dashboard's chip says for the same reviewer.

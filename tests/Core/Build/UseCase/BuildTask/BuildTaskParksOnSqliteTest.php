@@ -32,6 +32,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -54,7 +55,7 @@ use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
-use Intakt\Plugin\GitHubForge\Contract\IssueListing;
+use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
@@ -76,6 +77,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(HandBackCheck::class)]
@@ -84,7 +86,6 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(PushStep::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
-#[UsesClass(IssueListing::class)]
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
@@ -116,25 +117,6 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     private const string QUESTION = '{"question":"PLANT-question: keep the old flag?","choices":["keep it","drop it"],"recommendation":"drop it"}';
 
     private string $folder = '';
-
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-build-task-parks-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        // A bundle and a text beside the question, because a question ends the build whatever else the job left.
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::QUESTION, self::QUESTION);
-        $tool = new SchemaTool($this->manager());
-        $tool->dropDatabase();
-        $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-        parent::tearDown();
-    }
 
     public function testABuildJobThatEndsWithAQuestionParksTheTaskWithItsAskedStepAndRunsNoLaterStep(): void
     {
@@ -173,10 +155,29 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringNotContainsString('PLANT', $tester->getDisplay());
     }
 
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-build-task-parks-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        // A bundle and a text beside the question, because a question ends the build whatever else the job left.
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::QUESTION, self::QUESTION);
+        $tool = new SchemaTool($this->manager());
+        $tool->dropDatabase();
+        $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+        parent::tearDown();
+    }
+
     private function buildTask(): BuildTask
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willReturn(IssueListing::listed([Issues::task(7)], null));
+        $reads->method('readOpen')->willReturn(Issues::task(7));
         $checkout = self::createStub(BuildCheckout::class);
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
@@ -187,7 +188,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger());
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)));
     }
 
     private function ledger(): Ledger

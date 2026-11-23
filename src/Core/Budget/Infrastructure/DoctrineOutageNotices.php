@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Infrastructure;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Budget\Domain\OutageNoticeRecord;
@@ -56,8 +57,31 @@ final readonly class DoctrineOutageNotices
         $this->endIfReadSince($notice);
     }
 
-    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself.
+    private function wasNoticed(UsageReadingsStayedAway $outage): bool
+    {
+        return null !== $this->entities->getRepository(OutageNoticeRecord::class)->findOneBy([
+            'provider' => $outage->account->provider,
+            'account' => $outage->account->name,
+            'lastReadingAt' => $outage->lastReadingAt,
+        ]);
+    }
+
+    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself. It looks again until the earliest reading stays the same across an update, because an earlier reading stored meanwhile skips a notice with no end yet (it cannot tell it from one that predates ends being kept), and a competing writer may have saved the same end first, which moves no row here; the loop stops once a pass changes nothing: it finds no reading after the outage, or the same earliest reading as the one it just ended with.
     private function endIfReadSince(OutageNoticeRecord $notice): void
+    {
+        $endedWith = null;
+        while (true) {
+            $earliest = $this->earliestReadingSince($notice);
+            if (!$earliest instanceof DateTimeImmutable || $earliest->getTimestamp() === $endedWith?->getTimestamp()) {
+                return;
+            }
+
+            $this->endWith($notice, $earliest);
+            $endedWith = $earliest;
+        }
+    }
+
+    private function earliestReadingSince(OutageNoticeRecord $notice): ?DateTimeImmutable
     {
         /** @var list<WindowReadingRecord> $later */
         $later = $this->entities->createQueryBuilder()
@@ -74,26 +98,20 @@ final readonly class DoctrineOutageNotices
             ->getQuery()
             ->getResult();
 
-        foreach ($later as $reading) {
-            // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
-            $this->entities->createQueryBuilder()
-                ->update(OutageNoticeRecord::class, 'notice')
-                ->set('notice.endedAt', ':takenAt')
-                ->where('notice.position = :position')
-                ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
-                ->setParameter('takenAt', $reading->takenAt, 'utc_datetime_immutable')
-                ->setParameter('position', $notice->position)
-                ->getQuery()
-                ->execute();
-        }
+        return [] === $later ? null : $later[0]->takenAt;
     }
 
-    private function wasNoticed(UsageReadingsStayedAway $outage): bool
+    // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
+    private function endWith(OutageNoticeRecord $notice, DateTimeImmutable $takenAt): void
     {
-        return null !== $this->entities->getRepository(OutageNoticeRecord::class)->findOneBy([
-            'provider' => $outage->account->provider,
-            'account' => $outage->account->name,
-            'lastReadingAt' => $outage->lastReadingAt,
-        ]);
+        $this->entities->createQueryBuilder()
+            ->update(OutageNoticeRecord::class, 'notice')
+            ->set('notice.endedAt', ':takenAt')
+            ->where('notice.position = :position')
+            ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
+            ->setParameter('takenAt', $takenAt, 'utc_datetime_immutable')
+            ->setParameter('position', $notice->position)
+            ->getQuery()
+            ->execute();
     }
 }

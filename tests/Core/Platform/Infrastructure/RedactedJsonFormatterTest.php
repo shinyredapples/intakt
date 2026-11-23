@@ -22,11 +22,6 @@ final class RedactedJsonFormatterTest extends TestCase
 {
     private const string CREDENTIAL = 'INTAKT_TEST_HELD_CREDENTIAL';
 
-    protected function tearDown(): void
-    {
-        unset($_SERVER[self::CREDENTIAL], $_SERVER[self::CREDENTIAL.'_TEAM']);
-    }
-
     public function testALoggedExceptionCarriesItsClassMessageAndTrace(): void
     {
         $line = $this->format('error', 'It failed.', ['reviewer' => 'r1', 'exception' => new RuntimeException('boom')]);
@@ -225,6 +220,11 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertSame('Bad key [redacted]', $failure['message']);
         self::assertSame(RuntimeException::class, $failure['class']);
         self::assertStringContainsString(__FUNCTION__, $failure['trace']);
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER[self::CREDENTIAL], $_SERVER[self::CREDENTIAL.'_TEAM']);
     }
 
     private function failedCallWith(string $credential): RuntimeException

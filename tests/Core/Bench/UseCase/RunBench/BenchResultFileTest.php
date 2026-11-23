@@ -50,16 +50,6 @@ final class BenchResultFileTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-bench-result-'.bin2hex(random_bytes(4));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheResultFileNamesTheIntaktVersionThePromptHashesAndTheBenchRepository(): void
     {
         $result = $this->written([]);
@@ -148,6 +138,16 @@ final class BenchResultFileTest extends TestCase
         $written = $result['changes'][0]['runs'][0]['reviewers'][0];
         self::assertSame('stopped at its output limit', $written['harness_failure']);
         self::assertSame([['id' => 'coupon', 'cause' => 'harness']], $written['missed']);
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-bench-result-'.bin2hex(random_bytes(4));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     /**

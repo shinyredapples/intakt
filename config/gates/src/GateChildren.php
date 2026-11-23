@@ -83,19 +83,6 @@ final readonly class GateChildren
         return $scratch->path.'/'.$gate.'.json';
     }
 
-    private static function keptIn(?ScratchDirectory $scratch, GateReport $report): GateReport
-    {
-        $file = $scratch instanceof ScratchDirectory ? self::wholeResultFile($scratch, $report->gate) : null;
-
-        if (null === $file || !is_file($file) || !is_readable($file)) {
-            return $report;
-        }
-
-        $kept = file_get_contents($file);
-
-        return false === $kept ? $report : $report->keeping($kept);
-    }
-
     /**
      * @param list<string>                $waiting
      * @param array<string, ChildCommand> $children
@@ -125,6 +112,36 @@ final readonly class GateChildren
         $forwarding->end();
 
         return $results;
+    }
+
+    private static function keptIn(?ScratchDirectory $scratch, GateReport $report): GateReport
+    {
+        $file = $scratch instanceof ScratchDirectory ? self::wholeResultFile($scratch, $report->gate) : null;
+
+        if (null === $file || !is_file($file) || !is_readable($file)) {
+            return $report;
+        }
+
+        $kept = file_get_contents($file);
+
+        return false === $kept ? $report : $report->keeping($kept);
+    }
+
+    // Because each group gets its grace in turn, all of them are asked first, so none waits for the grace of another.
+    /**
+     * @param array<string, RunningChild|ProcessResult> $running
+     */
+    private static function stopAll(array $running): void
+    {
+        $groups = array_map(static fn (RunningChild $child): ProcessGroup => $child->group, array_filter($running, static fn (RunningChild|ProcessResult $child): bool => $child instanceof RunningChild));
+
+        foreach ($groups as $group) {
+            $group->askToStop();
+        }
+
+        foreach ($groups as $group) {
+            $group->stop();
+        }
     }
 
     /**
@@ -182,23 +199,6 @@ final readonly class GateChildren
         }
 
         return $ended;
-    }
-
-    // Because each group gets its grace in turn, all of them are asked first, so none waits for the grace of another.
-    /**
-     * @param array<string, RunningChild|ProcessResult> $running
-     */
-    private static function stopAll(array $running): void
-    {
-        $groups = array_map(static fn (RunningChild $child): ProcessGroup => $child->group, array_filter($running, static fn (RunningChild|ProcessResult $child): bool => $child instanceof RunningChild));
-
-        foreach ($groups as $group) {
-            $group->askToStop();
-        }
-
-        foreach ($groups as $group) {
-            $group->stop();
-        }
     }
 
     // Because a gate ran in bin/check's own directory before it had a child process, the child starts there too.

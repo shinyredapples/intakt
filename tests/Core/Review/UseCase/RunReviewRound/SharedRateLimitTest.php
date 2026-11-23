@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -54,6 +55,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(SendFailures::class)]
 #[UsesClass(TypedRejectionConverter::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(ChangeDecision::class)]
@@ -64,11 +66,6 @@ final class SharedRateLimitTest extends KernelTestCase
     private const string OUT_FOR_THE_RESET = '/^role-\d reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/';
 
     private ScriptedRound $run;
-
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
-    }
 
     public function testReviewersLimitedTogetherOnTheTierAndItsSubstituteEndTheRoundBlockedWithTheReason(): void
     {
@@ -136,6 +133,11 @@ final class SharedRateLimitTest extends KernelTestCase
         self::assertSame(['anthropic.default', 'openai.default'], $this->run->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
     }
 
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
+    }
+
     private function everyCallLimited(): ChangeReview
     {
         $vendor = $this->run->vendor($this->run->limitedTogether(self::RESET_SECONDS), $this->run->limitedTogether(self::RESET_SECONDS));
@@ -155,7 +157,7 @@ final class SharedRateLimitTest extends KernelTestCase
      */
     private function rolesNamedIn(ChangeReview $review): array
     {
-        $roles = array_map(static fn (string $reason): string => explode(' ', $reason)[0], $review->reasons);
+        $roles = array_map(static fn (string $reason): string => explode(' ', $reason)[0], [...$review->reasons]);
         sort($roles);
 
         return $roles;

@@ -45,18 +45,6 @@ final class FindChangedPullRequestsTest extends KernelTestCase
     private LockFactory $locks;
     private RecordingLogger $log;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->forge = new RecordedForge();
-        $this->log = new RecordingLogger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testAPullRequestSeenForTheFirstTimeIsReturned(): void
     {
         $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
@@ -245,6 +233,18 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         $this->entities->flush();
         $this->entities->clear();
         self::assertSame('new', $this->entities->find(ListingValidator::class, 'beta')?->value());
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->forge = new RecordedForge();
+        $this->log = new RecordingLogger();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function at(string $id, string $updatedAt): OpenChange
