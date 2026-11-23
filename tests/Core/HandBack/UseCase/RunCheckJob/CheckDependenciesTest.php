@@ -210,6 +210,16 @@ final class CheckDependenciesTest extends TestCase
         self::assertNull($this->leaseFor($head));
     }
 
+    public function testASnapshotThatCannotBePinnedIsNotInstalledAgainOnTheNextLookup(): void
+    {
+        $head = $this->head();
+        $this->installBlocksThePins = true;
+
+        self::assertNull($this->leaseFor($head));
+        self::assertNull($this->leaseFor($head));
+        self::assertSame(['probe', 'install', 'probe'], $this->ranKinds());
+    }
+
     protected function setUp(): void
     {
         $this->history = new BuildHistory();

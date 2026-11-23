@@ -56,19 +56,16 @@ final readonly class CheckDependencies
         }
 
         $inputs = new LockInputs(array_map(static fn (CheckedLockFile $file): string => $file->bytes, $files), $platform);
-        $lease = $this->leaseOf($inputs) ?? $this->leaseOfANewInstall($inputs, $step, $job->image);
-
-        return $lease instanceof DependencySnapshotLease ? new CheckSnapshot($lease, $step, $files, $platform) : null;
-    }
-
-    private function leaseOf(LockInputs $inputs): ?DependencySnapshotLease
-    {
         try {
-            return $this->snapshots->lease($inputs->key());
+            $saved = $this->snapshots->lease($inputs->key());
         } catch (IOException|ExceptionInterface) {
-            // A store that cannot be opened or a snapshot that cannot be pinned only costs the reuse, because the check then installs its dependencies itself.
+            // No install, because a snapshot that may exist but cannot be leased would be installed again on every lookup and still not be reused.
             return null;
         }
+
+        $lease = $saved ?? $this->leaseOfANewInstall($inputs, $step, $job->image);
+
+        return $lease instanceof DependencySnapshotLease ? new CheckSnapshot($lease, $step, $files, $platform) : null;
     }
 
     /**
@@ -83,5 +80,15 @@ final readonly class CheckDependencies
         }
 
         return $this->leaseOf($inputs);
+    }
+
+    private function leaseOf(LockInputs $inputs): ?DependencySnapshotLease
+    {
+        try {
+            return $this->snapshots->lease($inputs->key());
+        } catch (IOException|ExceptionInterface) {
+            // A store that cannot be opened or a snapshot that cannot be pinned only costs the reuse, because the check then installs its dependencies itself.
+            return null;
+        }
     }
 }
