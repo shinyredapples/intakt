@@ -43,13 +43,13 @@ Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replac
 ## Small findings in a cleanup task per area
 
 - **The loop:** learned at full load on 2026-11-13 that follow-up tasks were a third of all tasks filed, each costing about 490k tokens against about 74k for a polish round.
-- **Intakt:** a polish round may change any file the approved change already changes, its unapplied P3 items wait in one cleanup task per area, built at about ten items or when the oldest is a day old, and a cleanup build files no further items ([Reviews](../design/05-architecture/07-reviews.md), [Choosing work](../design/05-architecture/03-choosing-work.md), step 5). Planned in T59; nothing of it is built yet.
+- **Intakt:** a polish round may change any file the approved change already changes, its unapplied P3 items wait in one cleanup task per area, built at about ten items or when the oldest is a day old, a cleanup build files no further P3 items, and a deferred P2 still gets a task of its own ([Reviews](../design/05-architecture/07-reviews.md); [Choosing work](../design/05-architecture/03-choosing-work.md), step 5). Planned in T59; nothing of it is built yet.
 - **Why:** a rule found by running at full load is designed in, so Intakt does not learn it again.
 
 ## Prose measured by words for the size limit
 
 - **The loop:** learned on 2026-11-13 that counting changed lines made a change whose size is documentation look far larger than it reads: two pull requests of about 200k characters each.
-- **Intakt:** the size of a pushed head counts prose under `docs/` as a word diff with long unchanged lines trimmed, and code by changed lines ([Reviews](../design/05-architecture/07-reviews.md), an oversized head). Planned in T48; nothing of it is built yet.
+- **Intakt:** the size of a pushed head counts prose (Markdown and plain-text files anywhere in the repository) as a word diff with long unchanged lines trimmed and code by changed lines, and compares their sum with the split tier ([Reviews](../design/05-architecture/07-reviews.md), an oversized head). Planned in T48; nothing of it is built yet.
 - **Why:** measured this way, the two pull requests came to 101k and 186k, so documentation changes stay reviewable.
 
 ## A start check and a reduced mode instead of failing halfway
