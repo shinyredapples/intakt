@@ -60,6 +60,14 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment after a case pattern' => ["case \$a in\n  b) # TODO later\n    ;;\nesac\n", [2 => 'TODO']];
         yield 'a comment after a line continuation' => ["echo a \\\n  # TODO later\n", [2 => 'TODO']];
         yield 'a comment after carriage return line ends' => ["true\r\n# TODO later\r\n", [2 => 'TODO']];
+        yield 'a comment after a single-quoted brace in a parameter default' => ["value=\${value:-'{'}\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a double-quoted brace in a parameter default' => ["value=\${value:-\"{\"}\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a nested parameter default' => ["value=\${value:-\${other:-'{'}}\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment in a case arm in a substitution in a string' => ["value=\"\$(\n    case \"\$1\" in\n        a) # TODO later\n            printf '%s\\n' a ;;\n    esac\n)\"\n# FIXME later\n", [3 => 'TODO', 7 => 'FIXME']];
+        yield 'a comment after a case with a parenthesized pattern in a substitution' => ["x=\$(case \$1 in (a) echo a;; esac) # TODO later\n", [1 => 'TODO']];
+        yield 'a comment in a substitution on the line of a here-document operator' => ["cat <<EOF \"\$(\n    # TODO later\n    printf '%s\\n' input\n)\"\n# TODO inside\nEOF\n# FIXME later\n", [2 => 'TODO', 7 => 'FIXME']];
+        yield 'a comment between nested here-documents' => ["cat <<EOF \"\$(\n    cat <<EOF\n# TODO inside\nEOF\n    # TODO later\n)\"\n# TODO outer\nEOF\n# FIXME later\n", [5 => 'TODO', 9 => 'FIXME']];
+        yield 'a comment after a here-document opened in a subshell' => ["(cat <<EOF)\n# TODO inside\nEOF\n# FIXME later\n", [4 => 'FIXME']];
     }
 
     /**
@@ -97,6 +105,8 @@ final class ShellCommentsTest extends TestCase
         yield 'a marker after an escaped line end in a here-document' => ["cat <<EOF\nprefix\\\nEOF\n# TODO inside\nEOF\n"];
         yield 'a marker in an unclosed here-document' => ["cat <<EOF\n# TODO inside\n"];
         yield 'a marker in a here-document in a substitution' => ["x=\$(cat <<EOF\n# TODO inside\nEOF\n)\n"];
+        yield 'a marker after a single-quoted closing brace in a parameter default' => ["value=\${value:-'} # TODO literal'}\n"];
+        yield 'a marker after a double-quoted closing brace in a parameter default' => ["value=\${value:-\"} # TODO literal\"}\n"];
         yield 'a hash in a shebang' => ["#!/bin/sh\n"];
         yield 'a reasoned exception' => ["# TODO(#123): drop once the image ships curl\n"];
     }
@@ -139,6 +149,15 @@ final class ShellCommentsTest extends TestCase
         self::assertSame([1004 => 'TODO'], $this->markersOn($script(1000)));
     }
 
+    public function testALongDelimiterWithManyJoinedLinesIsScannedInLinearTime(): void
+    {
+        $script = static fn (int $size): string => 'cat <<'.str_repeat('X', $size)."\n".str_repeat("x\\\n", $size)."\n".str_repeat('X', $size)."\n# TODO later\n";
+
+        // Because copying the kept text of each joined line only shows once that text outgrows the processor's caches.
+        self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script, 32000));
+        self::assertSame([1004 => 'TODO'], $this->markersOn($script(1000)));
+    }
+
     public function testDeeplyNestedSubstitutionsAndStringsAreScannedInLinearTime(): void
     {
         $script = static fn (int $size): string => 'x='.str_repeat('"$(', $size).'# TODO'."\n".str_repeat(')"', $size)."\n";
@@ -150,9 +169,9 @@ final class ShellCommentsTest extends TestCase
     /**
      * @param Closure(int): string $script
      */
-    private function growthOf(Closure $script): float
+    private function growthOf(Closure $script, int $size = 2000): float
     {
-        return $this->fastestScanOf($script(16000)) / $this->fastestScanOf($script(2000));
+        return $this->fastestScanOf($script(8 * $size)) / $this->fastestScanOf($script($size));
     }
 
     private function fastestScanOf(string $script): float

@@ -133,13 +133,55 @@ final class LeftUndoneGateShellTest extends SandboxTestCase
         yield 'a vendored script' => ['vendor/acme/shop/bin/healthcheck.sh'];
         yield 'an installed package' => ['node_modules/acme/healthcheck.sh'];
         yield 'a file named like a script' => ['docker/healthcheck.sh.dist'];
-        yield 'a script without the extension' => ['docker/healthcheck'];
     }
 
     #[DataProvider('shellPathsThatAreNotScanned')]
     public function testAShellMarkerCommentOutsideTheScopeIsNotScanned(string $path): void
     {
         $sandbox = $this->changeWithFile($path, $this->scriptWithLine('# TODO: check the exit code'));
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function shellShebangs(): iterable
+    {
+        yield 'sh' => ['#!/bin/sh'];
+        yield 'bash through env' => ['#!/usr/bin/env bash'];
+        yield 'bash with options' => ['#!/bin/bash -eu'];
+        yield 'dash after a blank' => ['#! /bin/dash'];
+    }
+
+    #[DataProvider('shellShebangs')]
+    public function testAMarkerInAnExtensionlessScriptWithAShellShebangFails(string $shebang): void
+    {
+        $sandbox = $this->changeWithFile('bin/journey-record', $shebang."\nset -eu\n# TODO: check the exit code\n");
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertStringContainsString('bin/journey-record:3: TODO comment left in the change', $run->findingsOf('left-undone'));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function extensionlessFilesThatAreNotShell(): iterable
+    {
+        yield 'a node script' => ['bin/ui-check', "#!/usr/bin/env node\n# TODO: check the exit code\n"];
+        yield 'a fish script' => ['bin/greet', "#!/usr/bin/fish\n# TODO: check the exit code\n"];
+        yield 'a file without a shebang' => ['docker/notes', "set -eu\n# TODO: check the exit code\n"];
+        yield 'a shell shebang on a later line' => ['docker/notes', "notes\n#!/bin/sh\n# TODO: check the exit code\n"];
+        yield 'a shebang in a file with another extension' => ['docker/healthcheck.txt', "#!/bin/sh\n# TODO: check the exit code\n"];
+    }
+
+    #[DataProvider('extensionlessFilesThatAreNotShell')]
+    public function testAMarkerInAFileThatIsNotAShellScriptIsNotScanned(string $path, string $contents): void
+    {
+        $sandbox = $this->changeWithFile($path, $contents);
 
         $run = $sandbox->runGate(new LeftUndoneGate());
 

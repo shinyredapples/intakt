@@ -18,6 +18,9 @@ final class ShellLexer
     private const int SUBSHELL = 0;
     private const int SUBSTITUTION = 1;
     private const int SUBSTITUTION_IN_STRING = 2;
+    private const int CASE_ARMS = 3;
+    private const string CASE_KEYWORD = 'case';
+    private const string CASE_END = 'esac';
 
     private readonly ShellLiterals $literals;
     private bool $wordStart = true;
@@ -29,8 +32,9 @@ final class ShellLexer
      */
     private array $frames = [];
 
+    // Because a line end inside a substitution is not the end of the outer command's line, here-documents wait by the depth of the frames they were opened in.
     /**
-     * @var list<array{delimiter: string, joinsLines: bool, stripsTabs: bool}>
+     * @var array<int, list<array{delimiter: string, joinsLines: bool, stripsTabs: bool}>>
      */
     private array $pendingDocuments = [];
 
@@ -99,12 +103,13 @@ final class ShellLexer
     private function afterLineEnd(int $offset): int
     {
         ++$offset;
+        $depth = count($this->frames);
 
-        foreach ($this->pendingDocuments as $document) {
+        foreach ($this->pendingDocuments[$depth] ?? [] as $document) {
             $offset = $this->literals->afterDocumentBody($offset, $document);
         }
 
-        $this->pendingDocuments = [];
+        unset($this->pendingDocuments[$depth]);
 
         return $this->atCommandStart($offset);
     }
@@ -132,7 +137,11 @@ final class ShellLexer
     // Because the `)` after a function's name, a subshell or a `case` pattern is followed by a command, while one that closes a substitution ends part of a word.
     private function afterClosingParenthesis(int $offset): int
     {
-        return match (array_pop($this->frames)) {
+        if (self::CASE_ARMS === array_last($this->frames)) {
+            return $this->atCommandStart($offset + 1);
+        }
+
+        return match ($this->closedFrame()) {
             self::SUBSTITUTION_IN_STRING => $this->afterDoubleQuoted($offset + 1),
             self::SUBSTITUTION => $this->inWord($offset + 1),
             default => $this->atCommandStart($offset + 1),
@@ -233,6 +242,15 @@ final class ShellLexer
             return $this->atCommandStart($end);
         }
 
+        // Because the `)` that ends a `case` pattern closes no substitution, the arms are a frame of their own until `esac`.
+        if (self::CASE_KEYWORD === $word) {
+            $this->frames[] = self::CASE_ARMS;
+        }
+
+        if (self::CASE_END === $word && self::CASE_ARMS === array_last($this->frames)) {
+            $this->closedFrame();
+        }
+
         $this->functionName = self::FUNCTION_KEYWORD === $word;
 
         return $this->inWord($end);
@@ -243,10 +261,23 @@ final class ShellLexer
         [$delimiter, $end, $quoted] = $this->literals->documentDelimiterAt($offset);
 
         if ('' !== $delimiter || $quoted) {
-            $this->pendingDocuments[] = ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator];
+            $this->pendingDocuments[count($this->frames)][] = ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator];
         }
 
         return $this->inWord($end);
+    }
+
+    // Because a here-document opened in a frame that closes on its own line, as in `(cat <<EOF)`, is read at the enclosing frame's line end.
+    private function closedFrame(): ?int
+    {
+        $depth = count($this->frames);
+
+        if ($depth > 0 && isset($this->pendingDocuments[$depth])) {
+            $this->pendingDocuments[$depth - 1] = [...$this->pendingDocuments[$depth - 1] ?? [], ...$this->pendingDocuments[$depth]];
+            unset($this->pendingDocuments[$depth]);
+        }
+
+        return array_pop($this->frames);
     }
 
     private function substitutionOpensAt(int $offset): bool

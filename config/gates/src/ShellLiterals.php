@@ -97,14 +97,40 @@ final readonly class ShellLiterals
         return $this->length;
     }
 
-    // Because a `#` in `${#name}` or `${name#prefix}` is an operator, a parameter expansion is skipped to its own closing brace.
+    public function afterDoubleQuotedText(int $offset): int
+    {
+        while (($offset += strcspn($this->source, '"\\$`', $offset)) < $this->length) {
+            $char = $this->source[$offset];
+
+            if ('"' === $char) {
+                return $offset + 1;
+            }
+
+            $offset = match ($char) {
+                '\\' => min($offset + 2, $this->length),
+                '`' => $this->afterEscapedText($offset + 1, '`'),
+                default => $this->afterExpansion($offset),
+            };
+        }
+
+        return $this->length;
+    }
+
+    // Because a `#` in `${#name}` or `${name#prefix}` is an operator, a parameter expansion is skipped to its own closing brace, and a brace in a quoted default such as `${name:-'}'}` counts for nothing.
     private function afterParameter(int $offset): int
     {
         $depth = 1;
 
-        while (($offset += strcspn($this->source, '{}\\', $offset)) < $this->length) {
+        while (($offset += strcspn($this->source, "{}\\'\"`\$", $offset)) < $this->length) {
             $char = $this->source[$offset];
-            $offset = '\\' === $char ? min($offset + 2, $this->length) : $offset + 1;
+            $offset = match ($char) {
+                '\\' => min($offset + 2, $this->length),
+                "'" => $this->afterSingleQuoted($offset + 1),
+                '"' => $this->afterDoubleQuotedText($offset + 1),
+                '`' => $this->afterEscapedText($offset + 1, '`'),
+                '$' => $this->afterExpansion($offset),
+                default => $offset + 1,
+            };
             $depth += match ($char) {
                 '{' => 1,
                 '}' => -1,
@@ -156,7 +182,7 @@ final readonly class ShellLiterals
      */
     private function documentLineAt(int $offset, array $document): array
     {
-        // Because only whether the line equals the delimiter matters, a line is kept no longer than one byte past it, so a long chain of joined lines is read in linear time.
+        // Because only whether the line equals the delimiter matters, a line grows in place to no more than one byte past it, so a long chain of joined lines under a long delimiter is read in linear time.
         $kept = strlen($document['delimiter']) + 1;
         $line = '';
 
@@ -164,7 +190,12 @@ final readonly class ShellLiterals
             $end = $offset + strcspn($this->source, "\n", $offset);
             $start = '' === $line && $document['stripsTabs'] ? $offset + strspn($this->source, "\t", $offset, $end - $offset) : $offset;
             $continues = $document['joinsLines'] && $end < $this->length && $this->endsInAnEscape($start, $end);
-            $line = substr($line.substr($this->source, $start, min($end - $start - ($continues ? 1 : 0), $kept)), 0, $kept);
+            $room = $kept - strlen($line);
+
+            if ($room > 0) {
+                $line .= substr($this->source, $start, min($end - $start - ($continues ? 1 : 0), $room));
+            }
+
             $offset = $end + 1;
         } while ($continues);
 

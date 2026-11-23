@@ -8,6 +8,9 @@ final readonly class CommentLanguages
 {
     // Because the dashboard's browser tests are ES modules (`.mjs`), a JavaScript file is any of the three extensions Node reads as JavaScript.
     private const array JAVASCRIPT_EXTENSIONS = ['.js', '.mjs', '.cjs'];
+    // Because the interpreter is named on the first line, directly or through `env`, as `sh`, `bash`, `dash`, `ksh` or `zsh`.
+    private const string SHELL_SHEBANG = '~\A#![ \t]*\S*/(?:env[ \t]+)?(?:ba|da|k|z)?sh(?:[ \t\r\n]|\z)~';
+    private const int SHEBANG_BYTES = 256;
 
     public function __construct(
         private PhpComments $php = new PhpComments(),
@@ -31,7 +34,7 @@ final readonly class CommentLanguages
             return $this->javaScript;
         }
 
-        return $this->isShellScriptInScope($path) ? $this->shell : null;
+        return $this->isShellScriptInScope($workspace, $path) ? $this->shell : null;
     }
 
     private function isTwigTemplateInScope(string $path): bool
@@ -44,10 +47,25 @@ final readonly class CommentLanguages
         return array_any(self::JAVASCRIPT_EXTENSIONS, static fn (string $extension): bool => str_ends_with($path, $extension)) && $this->isOutsideTheExcludedFolders($path);
     }
 
-    // Because a script without the extension cannot be told from other extensionless files by its path, only `.sh` files are read as shell.
-    private function isShellScriptInScope(string $path): bool
+    private function isShellScriptInScope(Workspace $workspace, string $path): bool
     {
-        return str_ends_with($path, '.sh') && $this->isOutsideTheExcludedFolders($path);
+        if (!$this->isOutsideTheExcludedFolders($path)) {
+            return false;
+        }
+
+        return str_ends_with($path, '.sh') || (!str_contains(basename($path), '.') && $this->startsWithAShellShebang($workspace->root.'/'.$path));
+    }
+
+    // Because a script such as `bin/journey-record` has no extension, its first line is what names it as shell.
+    private function startsWithAShellShebang(string $file): bool
+    {
+        if (is_link($file) || !is_file($file) || !is_readable($file)) {
+            return false;
+        }
+
+        $head = file_get_contents($file, length: self::SHEBANG_BYTES);
+
+        return false !== $head && 1 === preg_match(self::SHELL_SHEBANG, $head);
     }
 
     private function isOutsideTheExcludedFolders(string $path): bool
