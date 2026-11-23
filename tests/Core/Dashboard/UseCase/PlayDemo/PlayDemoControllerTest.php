@@ -221,6 +221,18 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so the demo run was not started."', FormIsRefused::class));
     }
 
+    public function testPressingPlayWithATokenThatIsNoTextStartsNothingAndShowsTheSameRefusal(): void
+    {
+        $this->demoPage();
+
+        $page = $this->browser->request('POST', '/demo', ['_token' => ['wrong']]);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame([], $this->queued());
+        self::assertSame('The form token is missing or wrong, so the demo run was not started. Go back, reload the page and press the button again.', $page->filter('.page-head .lead')->text());
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so the demo run was not started."', FormIsRefused::class));
+    }
+
     public function testPressingPlayOutsideTheComposeDemoStartsNothingAndSaysWhy(): void
     {
         $token = $this->tokenFromThePage();

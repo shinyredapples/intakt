@@ -11,9 +11,19 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ReplayIsRefused::class)]
 final class ReplayIsRefusedTest extends TestCase
 {
-    public function testARunningReplayMeansAnotherPlayCameFirst(): void
+    public function testABusyReplayLockMeansTheLockIsBusy(): void
     {
-        self::assertTrue(ReplayIsRefused::whileAnotherReplayRuns()->meansAnotherPlayCameFirst());
+        self::assertTrue(ReplayIsRefused::whileAnotherReplayRuns()->meansTheReplayLockIsBusy());
+    }
+
+    public function testABusyReplayLockDoesNotClaimThatAnotherPlayCameFirst(): void
+    {
+        self::assertFalse(ReplayIsRefused::whileAnotherReplayRuns()->meansAnotherPlayCameFirst());
+    }
+
+    public function testARoundTheLedgerHoldsDoesNotMeanTheLockIsBusy(): void
+    {
+        self::assertFalse(ReplayIsRefused::becauseTheLedgerHolds('round-1')->meansTheReplayLockIsBusy());
     }
 
     public function testARoundTheLedgerHoldsMeansAnotherPlayCameFirst(): void

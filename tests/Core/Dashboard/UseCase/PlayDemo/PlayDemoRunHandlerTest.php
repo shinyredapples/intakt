@@ -221,8 +221,21 @@ final class PlayDemoRunHandlerTest extends TestCase
 
         self::assertSame([], $this->marks->replays());
         self::assertSame([], $this->rows());
-        self::assertSame([DemoRefusal::AnotherPlayFirst->sentence()], $this->refusalReasons());
+        self::assertSame([DemoRefusal::Busy->sentence()], $this->refusalReasons());
         self::assertStringContainsString('target="demo-play-'.self::PLAY.'"', $this->shellStreams()[0]);
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testAPlayThatLosesTheReplayLockToADemoRemovalSaysARemovalMayHoldItAndClaimsNoRun(): void
+    {
+        $store = new InMemoryStore();
+        $removal = new LockFactory($store)->createLock(ReplaysRecording::LOCK, ttl: null);
+        self::assertTrue($removal->acquire());
+
+        $this->handler($this->recordingFile(), 'intakt', new LockFactory($store))($this->play());
+
+        self::assertStringContainsString('demo removal', $this->refusalReasons()[0]);
+        self::assertStringNotContainsString('review list', $this->refusalReasons()[0]);
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 

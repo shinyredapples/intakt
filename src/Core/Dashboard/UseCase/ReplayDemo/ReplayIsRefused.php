@@ -11,14 +11,22 @@ final class ReplayIsRefused extends RuntimeException
     // The code of a refusal that only means another Play came first, so the refused Play's page points at that run instead of reporting a failure.
     private const int ANOTHER_PLAY = 1;
 
+    // The code of a busy replay lock, which `intakt:demo:remove` takes as well, so the refused Play's page cannot claim that a run exists.
+    private const int LOCK_BUSY = 2;
+
     public function meansAnotherPlayCameFirst(): bool
     {
         return self::ANOTHER_PLAY === $this->getCode();
     }
 
+    public function meansTheReplayLockIsBusy(): bool
+    {
+        return self::LOCK_BUSY === $this->getCode();
+    }
+
     public static function whileAnotherReplayRuns(): self
     {
-        return new self('Another replay is running; start this one when it has ended.', self::ANOTHER_PLAY);
+        return new self('Another replay or a demo removal is running; start this one when it has ended.', self::LOCK_BUSY);
     }
 
     public static function becauseTheDemoProjectIsNoReplay(string $project): self
