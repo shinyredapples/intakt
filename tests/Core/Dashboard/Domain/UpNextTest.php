@@ -130,16 +130,6 @@ final class UpNextTest extends TestCase
         self::assertNull(new Board([new Review([$this->round('r1', '2026-11-01T10:00:00+00:00')])])->upNext([])->emptyLine());
     }
 
-    /**
-     * @param list<ReviewedRound> $rounds
-     *
-     * @return list<string>
-     */
-    private function ids(array $rounds): array
-    {
-        return array_map(static fn (ReviewedRound $round): string => $round->round, $rounds);
-    }
-
     private function round(string $round, string $startedAt, string $change = 'feat/a'): ReviewedRound
     {
         $moment = DateTimeImmutable::createFromFormat(DATE_ATOM, $startedAt, new DateTimeZone('UTC'));
@@ -156,5 +146,15 @@ final class UpNextTest extends TestCase
         $at = new DateTimeImmutable('2026-11-01T10:01:00+00:00');
 
         return new ReviewerOutcome($id, $role, 'standard', $at)->restarted($at, null);
+    }
+
+    /**
+     * @param list<ReviewedRound> $rounds
+     *
+     * @return list<string>
+     */
+    private function ids(array $rounds): array
+    {
+        return array_map(static fn (ReviewedRound $round): string => $round->round, $rounds);
     }
 }
