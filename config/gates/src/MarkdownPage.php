@@ -144,10 +144,10 @@ final readonly class MarkdownPage
                 continue;
             }
 
-            // Because a fragment of docs/highlights.d/ holds one row without its header, a line between outer pipes is a row too.
-            $inside = $inside || $this->startsTable($index) || 1 === preg_match(self::FRAMED_ROW, $line);
+            $inside = $inside || $this->startsTable($index);
 
-            if ($inside) {
+            // Because a fragment of docs/highlights.d/ holds one row without its header, a line between outer pipes is a row too, but only that line.
+            if ($inside || 1 === preg_match(self::FRAMED_ROW, $line)) {
                 $rows[$index] = true;
             }
         }

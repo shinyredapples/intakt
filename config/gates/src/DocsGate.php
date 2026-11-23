@@ -48,8 +48,11 @@ final readonly class DocsGate implements Gate
         $findings = $this->limitFindings($documents, $list, $this->targetBranchOf($workspace, $mergeBase, $base));
 
         if ($base instanceof DocsRatchetList) {
-            array_push($findings, ...$list->growthOver($base), ...new UnneededDocsEntries()->in($list, $documents));
+            array_push($findings, ...$list->growthOver($base));
         }
+
+        // Because a stale entry needs only the list and the documents to see, the first run and a tree without git check it too.
+        array_push($findings, ...new UnneededDocsEntries()->in($list, $documents));
 
         if ([] !== $findings) {
             return GateResult::withFindings($this->name(), $findings);
@@ -215,7 +218,7 @@ final readonly class DocsGate implements Gate
      */
     private function summaryFindings(string $path, MarkdownPage $page, DocsAllowances $allowances): array
     {
-        if (!str_starts_with($path, 'docs/architecture/') || $page->words() <= self::SUMMARY_THRESHOLD_WORDS || $allowances->excusesSummary($path)) {
+        if (!str_starts_with($path, 'docs/architecture/') || $page->words() <= self::SUMMARY_THRESHOLD_WORDS || $allowances->excusesSummary($path, $page->words())) {
             return [];
         }
 

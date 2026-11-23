@@ -110,6 +110,13 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($sandbox->runGate(new DocsGate())->passed('docs'));
     }
 
+    public function testProseDirectlyAfterALoneFramedLineStillCounts(): void
+    {
+        $sandbox = $this->changeWith(['docs/highlights.d/1-row.md' => "| row | done |\n".$this->words(81)."\n"]);
+
+        self::assertStringContainsString('docs/highlights.d/1-row.md:2: paragraph of 81 words', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
     public function testAnIndentedCodeBlockIsNotAParagraph(): void
     {
         $sandbox = $this->changeWith(['docs/guide/page.md' => "Code:\n\n    ".$this->words(90)."\n    ".$this->words(10)."\n"]);
@@ -449,15 +456,79 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/guide/long.md: page of 2102 words, the limit is 2002', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
     }
 
-    public function testAnUnlistedArchitecturePageOfTheTargetBranchWithoutInShortPasses(): void
+    public function testAnUnlistedArchitecturePageOfTheTargetBranchWithoutInShortPassesWhileItDoesNotGrow(): void
+    {
+        $sandbox = $this->startedChange(['docs/architecture/big.md' => "## Big\n\n".$this->chapters(1700), DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->write('docs/architecture/big.md', "## Big\n\n".$this->chapters(1600));
+        $sandbox->commitAll('docs: shorten the page');
+
+        $run = $sandbox->runGate(new DocsGate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
+    }
+
+    public function testAnUnlistedArchitecturePageOfTheTargetBranchWithoutInShortThatGrowsFails(): void
     {
         $sandbox = $this->startedChange(['docs/architecture/big.md' => "## Big\n\n".$this->chapters(1600), DocsRatchetList::PATH => $this->listOf([])]);
         $sandbox->write('docs/architecture/big.md', "## Big\n\n".$this->chapters(1700));
         $sandbox->commitAll('docs: grow the page');
 
-        $run = $sandbox->runGate(new DocsGate());
+        self::assertStringContainsString('docs/architecture/big.md: a page over 1500 words opens with an "In short" section', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
 
-        self::assertTrue($run->passed('docs'), $run->output());
+    public function testAStaleKeyFailsWhileTheTargetBranchHasNoGate(): void
+    {
+        $sandbox = $this->startedChange(['docs/user/start.md' => "# Start\n\nShort.\n"]);
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf(['docs/user/start.md' => [$this->words(81)]]));
+        $sandbox->commitAll('docs: add the list');
+
+        self::assertStringContainsString('ratchet/docs.json: unneeded paragraph keys of docs/user/start.md: 1 match no oversized paragraph any more', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testALooseCeilingFailsWhileTheTargetBranchHasNoGate(): void
+    {
+        $sandbox = $this->startedChange(['docs/guide/big.md' => "# Big\n\n".$this->chapters(1800)]);
+        $sandbox->write(DocsRatchetList::PATH, $this->listOf([], ['docs/guide/big.md' => 2002]));
+        $sandbox->commitAll('docs: add the list');
+
+        self::assertStringContainsString('docs/guide/big.md has 1802 words now; lower its ceiling from 2002 to 1802', $sandbox->runGate(new DocsGate())->findingsOf('docs'));
+    }
+
+    public function testASecondCopyOfAnUnlistedWallOfTheTargetBranchFails(): void
+    {
+        $paragraph = $this->words(81);
+        $sandbox = $this->startedChange(['docs/user/start.md' => $paragraph."\n", DocsRatchetList::PATH => $this->listOf([])]);
+        $sandbox->write('docs/user/start.md', $paragraph."\n\n".$paragraph."\n");
+        $sandbox->commitAll('docs: copy the paragraph');
+
+        $findings = $sandbox->runGate(new DocsGate())->findingsOf('docs');
+
+        self::assertStringContainsString('docs/user/start.md:3: paragraph of 81 words', $findings);
+        self::assertStringNotContainsString('docs/user/start.md:1:', $findings);
+    }
+
+    public function testAThirdCopyOfAWallTheTargetHasTwiceAndListsOnceIsTheOnlyFinding(): void
+    {
+        $paragraph = $this->words(81);
+        $list = $this->listOf(['docs/user/start.md' => [$paragraph]]);
+        $sandbox = $this->startedChange(['docs/user/start.md' => $paragraph."\n\n".$paragraph."\n", DocsRatchetList::PATH => $list]);
+        $sandbox->write('docs/user/start.md', $paragraph."\n\n".$paragraph."\n\n".$paragraph."\n");
+        $sandbox->commitAll('docs: copy the paragraph again');
+
+        self::assertSame(1, substr_count($sandbox->runGate(new DocsGate())->findingsOf('docs'), 'paragraph of 81 words'));
+    }
+
+    public function testAListedKeyDoesNotExcuseTheSameParagraphCopiedToAnotherPage(): void
+    {
+        $paragraph = $this->words(81);
+        $sandbox = $this->startedChange(['docs/user/start.md' => $paragraph."\n", DocsRatchetList::PATH => $this->listOf(['docs/user/start.md' => [$paragraph]])]);
+        $sandbox->write('docs/user/other.md', $paragraph."\n");
+        $sandbox->commitAll('docs: copy the paragraph to another page');
+
+        $findings = $sandbox->runGate(new DocsGate())->findingsOf('docs');
+
+        self::assertStringContainsString('docs/user/other.md:1: paragraph of 81 words', $findings);
+        self::assertStringNotContainsString('docs/user/start.md:1:', $findings);
     }
 
     public function testRemovingTheSummaryExcuseOfAPageStillWithoutInShortFails(): void
