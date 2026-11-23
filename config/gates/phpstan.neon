@@ -142,3 +142,13 @@ services:
         class: Intakt\Gates\PhpStan\AbstractTraitSetterUseCollector
         tags:
             - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\TestMethodSentenceRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\TestMethodCollector
+        tags:
+            - phpstan.collector

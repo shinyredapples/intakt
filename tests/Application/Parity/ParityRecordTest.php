@@ -512,7 +512,7 @@ final class ParityRecordTest extends TestCase
 
     public function testAnAbstractTestClassIsNoRunnableTestClass(): void
     {
-        $record = '- [x] Item. Intakt: `AbstractCandidateTest::testVisible`';
+        $record = '- [x] Item. Intakt: `AbstractCandidateTest::testTheCandidateIsVisible`';
 
         self::assertSame(
             ['line 1: AbstractCandidateTest is no runnable test class'],
@@ -522,7 +522,7 @@ final class ParityRecordTest extends TestCase
 
     public function testAClassThatIsNoPhpunitTestCaseIsNoRunnableTestClass(): void
     {
-        $record = '- [x] Item. Intakt: `PlainCandidateTest::testVisible`';
+        $record = '- [x] Item. Intakt: `PlainCandidateTest::testTheCandidateIsVisible`';
 
         self::assertSame(
             ['line 1: PlainCandidateTest is no runnable test class'],
