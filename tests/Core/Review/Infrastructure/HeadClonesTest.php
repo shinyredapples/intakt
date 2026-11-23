@@ -24,20 +24,6 @@ final class HeadClonesTest extends TestCase
 
     private Filesystem $filesystem;
 
-    protected function setUp(): void
-    {
-        $this->filesystem = new Filesystem();
-        $this->root = sys_get_temp_dir().'/intakt-head-clones-'.bin2hex(random_bytes(8));
-        $this->filesystem->mkdir($this->root.'/source');
-    }
-
-    protected function tearDown(): void
-    {
-        putenv('GIT_CONFIG_GLOBAL');
-        unset($_SERVER['GIT_CONFIG_GLOBAL'], $_ENV['GIT_CONFIG_GLOBAL']);
-        $this->filesystem->remove($this->root);
-    }
-
     public function testAReviewCanCloneASha256Head(): void
     {
         $head = $this->committed("committed\n", '--object-format=sha256');
@@ -73,6 +59,20 @@ final class HeadClonesTest extends TestCase
         self::assertNotSame($first, $second);
         self::assertDirectoryDoesNotExist($first);
         self::assertSame("one\ntwo\n", file_get_contents($second.'/example.txt'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->filesystem = new Filesystem();
+        $this->root = sys_get_temp_dir().'/intakt-head-clones-'.bin2hex(random_bytes(8));
+        $this->filesystem->mkdir($this->root.'/source');
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('GIT_CONFIG_GLOBAL');
+        unset($_SERVER['GIT_CONFIG_GLOBAL'], $_ENV['GIT_CONFIG_GLOBAL']);
+        $this->filesystem->remove($this->root);
     }
 
     private function committed(string $content, string ...$init): CommitId
