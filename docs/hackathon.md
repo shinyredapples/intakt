@@ -76,7 +76,7 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
 
 Counted on 2026-11-22 from the repository: 8,501 commits on main (counted), 30 upstream reproductions in `upstream/`
-and 12 fixes (11 pull requests) merged upstream (counted, [upstream reproductions](../upstream/README.md)). Counted on
+and 13 fixes (12 pull requests) merged upstream (counted on 2026-11-23, [upstream reproductions](../upstream/README.md)). Counted on
 2026-11-22 from the GitHub API: 1,211 merged pull requests (counted). Counted from the GitHub API
 to 2026-11-13, as listed in [the journey](journey.md): 773 closed issues (counted, 761 done and 12 dropped).
 
