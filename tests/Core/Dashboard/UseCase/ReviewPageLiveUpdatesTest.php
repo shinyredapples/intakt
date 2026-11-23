@@ -54,6 +54,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use stdClass;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
@@ -61,6 +62,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
@@ -740,13 +744,26 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testARoundStartedFromTheDashboardShowsAStartingStateUntilItsFirstReviewerArrives(): void
     {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $commands = $this->createStub(MessageBusInterface::class);
+        $commands->method('dispatch')->willReturnCallback(function (): Envelope {
+            $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
 
-        $page = $this->browser->request('GET', '/reviews/round-1');
+            return new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]);
+        });
+        self::getContainer()->set('command.bus', $commands);
+        $form = $this->browser->request('GET', '/reviews/round-1')->filter('form.start-review');
 
-        $starting = $page->filter('#round-round-1-now-none');
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $form->filter('input[name=_token]')->attr('value'), 'number' => '2']);
+        $page = $this->browser->followRedirect();
+
+        $starting = $page->filter('#round-round-2-now-none');
         self::assertSame('Starting the review: each reviewer appears here as soon as it begins.', $starting->text());
         self::assertSame('status', $starting->attr('role'));
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-2', 'reviewer' => 'round-2-correctness', 'text' => 'Looking']));
+        self::assertCount(0, $updated->filter('#round-round-2-now-none'));
+        self::assertCount(1, $updated->filter('#round-round-2-now-reviewer-round-2-correctness-state'));
     }
 
     public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
