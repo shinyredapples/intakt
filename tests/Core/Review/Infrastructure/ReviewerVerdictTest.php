@@ -37,6 +37,7 @@ use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -50,6 +51,7 @@ use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -87,10 +89,12 @@ use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[CoversClass(ReviewerPrompt::class)]
 #[CoversClass(FencedToolbox::class)]
 #[CoversClass(PromptCut::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[CoversClass(StrictVerdictStreamListener::class)]
 #[UsesClass(FinalStreamedUsage::class)]
 #[CoversClass(ReviewerRuns::class)]

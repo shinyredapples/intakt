@@ -14,6 +14,7 @@ use Intakt\Core\Review\Infrastructure\FenceLine;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -35,6 +36,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[CoversClass(FenceLine::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[UsesClass(AnswerForm::class)]
 #[UsesClass(Verdict::class)]

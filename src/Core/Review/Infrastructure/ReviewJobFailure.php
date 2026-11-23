@@ -51,6 +51,11 @@ final class ReviewJobFailure extends RuntimeException implements ReportableFailu
         return new self(sprintf('The reviewer\'s CLI %s exited with %d.', $provider->value, $status));
     }
 
+    public static function unreadableUsage(Provider $provider): self
+    {
+        return new self(sprintf('The reviewer\'s CLI %s reported a token count that is not a whole number of zero or more.', $provider->value));
+    }
+
     public static function unreadableAnswer(Provider $provider): self
     {
         return new self(sprintf('The reviewer\'s CLI %s gave no answer the review job can read.', $provider->value));

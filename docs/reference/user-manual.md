@@ -1147,7 +1147,7 @@ Only you can clear a card, after you have checked its commit. Run `php bin/conso
 
 A pull request runs the workflow of its own branch on your runners, so a change to a GitHub Actions workflow can run before anyone reviewed it. `php bin/console intakt:forge:workflow-risk <file>` reads one workflow file and lists everything in it beyond a GitHub-hosted runner with a read-only token and no secrets, one line each: `line <n>: <kind>: <what it found>`, where the kind is:
 
-- `runner`: a job runs on a label that is not one of GitHub's standard hosted labels (such as `ubuntu-latest`, `ubuntu-24.04`, `windows-latest` or `macos-15`), or picks its runner by group;
+- `runner`: each non-blank `runs-on` label of a job that is not one of GitHub's standard hosted labels (such as `ubuntu-latest`, `ubuntu-24.04`, `windows-latest` or `macos-15`), or a job that picks its runner by group;
 - `permissions`: the token may write (a scope set to `write`, or `write-all`), or a job gets no `permissions` from itself or the workflow, so the repository's default applies, which may write;
 - `secret`: the file reads a repository secret (`secrets.<NAME>` in any value, in any case, also inside a `|` or `>` block, or `secrets:` passed to another workflow); the job's own `secrets.GITHUB_TOKEN` is fine;
 - `trigger`: an event other than `push`, `pull_request`, `workflow_dispatch`, `schedule` and `merge_group`, such as `pull_request_target`, `workflow_run` or `issue_comment`;

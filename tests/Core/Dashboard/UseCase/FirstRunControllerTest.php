@@ -194,6 +194,13 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertNull($form->filter('input[name=key]')->attr('value'));
     }
 
+    public function testWithNoKeyTheKeyFieldIsDrawnAsADashboardInput(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertCount(1, $page->filter('#step-providers form.keep-provider-key input#provider-key.input'));
+    }
+
     public function testTheKeyFieldIsLabelledWithTheCatalogsProviders(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, []);
