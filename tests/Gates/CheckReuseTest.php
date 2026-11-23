@@ -200,11 +200,6 @@ final class CheckReuseTest extends SandboxTestCase
         self::assertSame([false, true], [Options::fromArguments(['--fast'])->reuse, Options::fromArguments(['--fast', '--reuse'])->reuse]);
     }
 
-    private function check(Sandbox $sandbox, string ...$arguments): CheckRun
-    {
-        return $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes', ...array_values($arguments));
-    }
-
     private function committedSandbox(string $readme): Sandbox
     {
         $sandbox = $this->emptySandbox();
@@ -217,6 +212,11 @@ final class CheckReuseTest extends SandboxTestCase
         $this->waitForTheNextSecond();
 
         return $sandbox;
+    }
+
+    private function check(Sandbox $sandbox, string ...$arguments): CheckRun
+    {
+        return $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes', ...array_values($arguments));
     }
 
     // Because a file written in the second a run starts records no pass, the first run starts in the next second.

@@ -66,6 +66,38 @@ final readonly class PassedTree
     /**
      * @phpstan-impure
      */
+    // Because a var/ or var/check that is a link would read or write a record outside the checked tree.
+    private function isLinked(): bool
+    {
+        return is_link($this->fingerprint->root.'/var') || is_link($this->folder());
+    }
+
+    private function file(): string
+    {
+        return $this->fingerprint->root.'/'.self::RECORD;
+    }
+
+    private function contents(string $fingerprint): string
+    {
+        return '{"fingerprint":"'.$fingerprint.'"}'."\n";
+    }
+
+    private function folderStaysInside(): bool
+    {
+        $root = realpath($this->fingerprint->root);
+        $real = realpath($this->folder());
+
+        return false !== $root && false !== $real && is_dir($real) && str_starts_with($real, rtrim($root, '/').'/');
+    }
+
+    private function folder(): string
+    {
+        return $this->fingerprint->root.'/'.FullReport::FOLDER;
+    }
+
+    /**
+     * @phpstan-impure
+     */
     // Because a tree that does not ignore var/check hands the record and the report to its gates as files to judge, the record changes the fingerprint it holds there: such a tree keeps no record and reuses nothing.
     private function stillHoldsBesideItsRecord(): bool
     {
@@ -76,37 +108,5 @@ final readonly class PassedTree
         @unlink($this->file());
 
         return false;
-    }
-
-    private function contents(string $fingerprint): string
-    {
-        return '{"fingerprint":"'.$fingerprint.'"}'."\n";
-    }
-
-    private function folder(): string
-    {
-        return $this->fingerprint->root.'/'.FullReport::FOLDER;
-    }
-
-    private function file(): string
-    {
-        return $this->fingerprint->root.'/'.self::RECORD;
-    }
-
-    /**
-     * @phpstan-impure
-     */
-    // Because a var/ or var/check that is a link would read or write a record outside the checked tree.
-    private function isLinked(): bool
-    {
-        return is_link($this->fingerprint->root.'/var') || is_link($this->folder());
-    }
-
-    private function folderStaysInside(): bool
-    {
-        $root = realpath($this->fingerprint->root);
-        $real = realpath($this->folder());
-
-        return false !== $root && false !== $real && is_dir($real) && str_starts_with($real, rtrim($root, '/').'/');
     }
 }

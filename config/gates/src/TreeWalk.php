@@ -80,21 +80,27 @@ final readonly class TreeWalk
     }
 
     /**
+     * @param list<string> $entered
+     *
+     * @return iterable<string, string>
+     *
      * @throws UnexpectedValueException
      */
-    private function bytesOf(string $path): string
+    // Because the gates open a path through a link (a vendor/ that points at a shared install, a tracked path whose folder became a link), what is behind the link counts and not only where it points.
+    private function entriesBehind(string $link, string $key, array $entered): iterable
     {
-        if (!is_file($path)) {
-            return '';
+        if (!file_exists($link)) {
+            return;
         }
 
-        $hash = @hash_file('sha256', $path);
+        $target = realpath($link);
 
-        if (false === $hash) {
-            throw new UnexpectedValueException('cannot read '.$path);
+        if (false === $target || in_array($target, $entered, true)) {
+            throw new UnexpectedValueException('a link leads nowhere or back into its own folder: '.$link);
         }
 
-        return $hash;
+        // Because no file name holds a zero byte, the key of what is behind a link never passes for a path beside it, nor for a skipped one.
+        yield from $this->entries($target, $key."\0", [...$entered, $target]);
     }
 
     /**
@@ -122,26 +128,20 @@ final readonly class TreeWalk
     }
 
     /**
-     * @param list<string> $entered
-     *
-     * @return iterable<string, string>
-     *
      * @throws UnexpectedValueException
      */
-    // Because the gates open a path through a link (a vendor/ that points at a shared install, a tracked path whose folder became a link), what is behind the link counts and not only where it points.
-    private function entriesBehind(string $link, string $key, array $entered): iterable
+    private function bytesOf(string $path): string
     {
-        if (!file_exists($link)) {
-            return;
+        if (!is_file($path)) {
+            return '';
         }
 
-        $target = realpath($link);
+        $hash = @hash_file('sha256', $path);
 
-        if (false === $target || in_array($target, $entered, true)) {
-            throw new UnexpectedValueException('a link leads nowhere or back into its own folder: '.$link);
+        if (false === $hash) {
+            throw new UnexpectedValueException('cannot read '.$path);
         }
 
-        // Because no file name holds a zero byte, the key of what is behind a link never passes for a path beside it, nor for a skipped one.
-        yield from $this->entries($target, $key."\0", [...$entered, $target]);
+        return $hash;
     }
 }

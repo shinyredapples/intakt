@@ -512,6 +512,21 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    /**
+     * @return array{Sandbox, Sandbox}
+     */
+    private function checkedTreeAndHome(): array
+    {
+        $root = $this->emptySandbox();
+        $root->startRepository();
+        $root->write('README.md', "base\n");
+        $root->write('.gitignore', "/var/\n/.phpunit.cache/\n/config/reference.php\n/config/schema.json\n");
+        $root->commitAll('feat: start');
+        mkdir($root->root.'/'.FullReport::FOLDER, 0o777, true);
+
+        return [$root, $this->home()];
+    }
+
     private function pass(Sandbox $root, Sandbox $home, string ...$arguments): void
     {
         self::assertTrue($this->tree($root, $home, ...$arguments)->recordPass());
@@ -540,21 +555,6 @@ final class PassedTreeTest extends SandboxTestCase
     private function settledClock(): MockClock
     {
         return new MockClock('+1 hour');
-    }
-
-    /**
-     * @return array{Sandbox, Sandbox}
-     */
-    private function checkedTreeAndHome(): array
-    {
-        $root = $this->emptySandbox();
-        $root->startRepository();
-        $root->write('README.md', "base\n");
-        $root->write('.gitignore', "/var/\n/.phpunit.cache/\n/config/reference.php\n/config/schema.json\n");
-        $root->commitAll('feat: start');
-        mkdir($root->root.'/'.FullReport::FOLDER, 0o777, true);
-
-        return [$root, $this->home()];
     }
 
     private function home(): Sandbox

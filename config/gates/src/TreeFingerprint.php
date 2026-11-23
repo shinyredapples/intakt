@@ -55,15 +55,6 @@ final readonly class TreeFingerprint
     }
 
     /**
-     * @param list<?string> $parts
-     */
-    private function joined(array $parts): string
-    {
-        // Because each part is prefixed by its length, no value can pass for the boundary between two parts.
-        return hash('sha256', implode('', array_map(static fn (?string $part): string => null === $part ? 'n' : strlen($part).':'.$part, $parts)));
-    }
-
-    /**
      * @return list<?string>
      *
      * @throws RepositoryAttributesRefused
@@ -140,6 +131,20 @@ final readonly class TreeFingerprint
     }
 
     /**
+     * @throws UnexpectedValueException
+     */
+    private function real(string $path): string
+    {
+        $real = realpath($path);
+
+        if (false === $real) {
+            throw new UnexpectedValueException('cannot resolve '.$path);
+        }
+
+        return $real;
+    }
+
+    /**
      * @return list<string>
      *
      * @throws ScopeFailure
@@ -164,36 +169,6 @@ final readonly class TreeFingerprint
     }
 
     /**
-     * @return list<?string>
-     *
-     * @throws UnexpectedValueException
-     */
-    private function homeInputs(?int $settledBefore): array
-    {
-        $home = $this->real($this->home);
-
-        if ($this->real($this->root) === $home) {
-            return [];
-        }
-
-        return array_map(fn (string $input): ?string => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->sealed([new TreeWalk([], $settledBefore)->entries($home.'/'.$input, $input, [$home])]) : null, self::HOME_INPUTS);
-    }
-
-    /**
-     * @throws UnexpectedValueException
-     */
-    private function real(string $path): string
-    {
-        $real = realpath($path);
-
-        if (false === $real) {
-            throw new UnexpectedValueException('cannot resolve '.$path);
-        }
-
-        return $real;
-    }
-
-    /**
      * @param iterable<iterable<string, string>> $found
      */
     private function sealed(iterable $found): string
@@ -212,6 +187,22 @@ final readonly class TreeFingerprint
     }
 
     /**
+     * @return list<?string>
+     *
+     * @throws UnexpectedValueException
+     */
+    private function homeInputs(?int $settledBefore): array
+    {
+        $home = $this->real($this->home);
+
+        if ($this->real($this->root) === $home) {
+            return [];
+        }
+
+        return array_map(fn (string $input): ?string => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->sealed([new TreeWalk([], $settledBefore)->entries($home.'/'.$input, $input, [$home])]) : null, self::HOME_INPUTS);
+    }
+
+    /**
      * @return list<string>
      */
     // Because the environment gate judges the running PHP, and a variable can change what a gate or a test does; asking for reuse changes no gate, so a run without it may be reused.
@@ -227,5 +218,14 @@ final readonly class TreeFingerprint
             serialize([PHP_VERSION, $extensions, ini_get_all(null, false)]),
             serialize($environment),
         ];
+    }
+
+    /**
+     * @param list<?string> $parts
+     */
+    private function joined(array $parts): string
+    {
+        // Because each part is prefixed by its length, no value can pass for the boundary between two parts.
+        return hash('sha256', implode('', array_map(static fn (?string $part): string => null === $part ? 'n' : strlen($part).':'.$part, $parts)));
     }
 }

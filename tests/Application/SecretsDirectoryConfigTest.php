@@ -72,9 +72,6 @@ final class SecretsDirectoryConfigTest extends TestCase
         $container->registerExtension(new McpBundle()->getContainerExtension() ?? throw new LogicException('The MCP bundle has no extension.'));
         new PhpFileLoader($container, new FileLocator(dirname(__DIR__, 2).'/config/packages'), $environment)->load('ai.php');
 
-        $directory = $container->getParameter(AiServices::SECRETS_DIRECTORY);
-        self::assertIsString($directory);
-
-        return Path::canonicalize($directory);
+        return Path::canonicalize($container->getParameter(AiServices::SECRETS_DIRECTORY));
     }
 }
