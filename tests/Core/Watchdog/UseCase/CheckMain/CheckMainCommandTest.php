@@ -336,13 +336,22 @@ final class CheckMainCommandTest extends TestCase
 
     public function testAReasonWhosePathIsLongerThan200CharactersIsStillShownEscaped(): void
     {
-        $path = $this->repository->path.'/'.str_repeat('d', 200)."/missing\u{2028}path";
+        $wrappedAtLeastOnce = false;
 
-        $tester = $this->whenTheCommandRunsIn($path, str_repeat('a', 40), []);
+        // A block is at most 120 columns wide, so 130 lengths put a line break inside the text at least once.
+        foreach (range(200, 330) as $length) {
+            $path = $this->repository->path.'/'.str_repeat('d', $length)."/missing\u{2028}path";
 
-        self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringNotContainsString("\u{2028}", $tester->getDisplay());
-        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\u{2028}path'));
+            $tester = $this->whenTheCommandRunsIn($path, str_repeat('a', 40), []);
+
+            self::assertSame(Command::FAILURE, $tester->getStatusCode());
+            self::assertStringNotContainsString("\u{2028}", $tester->getDisplay());
+            self::assertThat($tester->getDisplay(), ConsoleDisplay::shows(str_repeat('d', 50)));
+            self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\u{2028}path'));
+            $wrappedAtLeastOnce = $wrappedAtLeastOnce || !str_contains($tester->getDisplay(), 'missing\u{2028}path');
+        }
+
+        self::assertTrue($wrappedAtLeastOnce);
     }
 
     public function testAReasonWithALineBreakIsPrintedOnOneEscapedLine(): void
