@@ -50,7 +50,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Ledger** | Intakt's permanent record of what it did, one line per event, which is only ever added to (removing the demo project also removes the events it replayed) | [running one task](running-one-task.md#finding-the-steps-in-the-ledger) |
 | **Live (version)** | planned: a new version of Intakt during an update, once it holds the one right to write the records (the owner generation) and its start checks passed; from then on it hands out the work | [engine room](the-engine-room.md#draining-and-updates) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
-| **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
+| **Log** | Intakt's own record of its warnings and errors (or more, with a lower log level), one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
 | **Maintainer** | the AI agent that settles stuck work, so it rarely reaches you, and looks at speed and quality every week (planned) (formerly the maintainer agent) | [how it works](how-intakt-works.md#what-needs-you-and-what-doesnt) |
 | **MCP** | a standard way for AI assistants to use tools | [assistant](using-intakt-from-your-assistant.md) |
