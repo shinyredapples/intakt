@@ -20,7 +20,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 final readonly class Finding
 {
     // One home for the example the schema and the reviewer prompt give, so it cannot drift past the title's own rules.
-    public const string TITLE_EXAMPLE = 'A full cart loses its discount';
+    public const string TITLE_EXAMPLE = 'A large cart loses its discount';
 
     public function __construct(
         #[NotBlank]
@@ -47,7 +47,7 @@ final readonly class Finding
         #[NotBlank]
         #[WordCount(min: 3, max: 6)]
         // WordCount counts a punctuation mark as a word: upstream/validator-word-count-counts-punctuation
-        #[Callback([self::class, 'refuseAWordWithoutALetterOrDigit'])]
+        #[Callback([self::class, 'refuseFewerThanThreeRealWords'])]
         #[Schema(description: 'The problem in 3 to 6 plain words, for example "'.self::TITLE_EXAMPLE.'".')]
         public ?string $title = null,
         #[NotNull]
@@ -63,13 +63,19 @@ final readonly class Finding
     }
 
     // A word made of punctuation alone is no word, so ". . ." is no title.
-    public static function refuseAWordWithoutALetterOrDigit(?string $title, ExecutionContextInterface $context): void
+    public static function refuseFewerThanThreeRealWords(?string $title, ExecutionContextInterface $context): void
     {
-        if (null === $title || 1 !== preg_match('/(?:^|\s)[^\p{L}\p{N}\s]+(?=\s|$)/u', $title)) {
+        if (null === $title) {
             return;
         }
 
-        $context->buildViolation('Every word of the title must hold a letter or a digit.')->addViolation();
+        $words = preg_split('/\s+/u', $title, flags: PREG_SPLIT_NO_EMPTY) ?: [];
+        $real = array_filter($words, static fn (string $word): bool => 1 === preg_match('/[\p{L}\p{N}]/u', $word));
+        if (\count($real) >= 3) {
+            return;
+        }
+
+        $context->buildViolation('At least three words of the title must hold a letter or a digit.')->addViolation();
     }
 
     public function judgeNote(): ?string

@@ -190,24 +190,27 @@ final class VerdictParserTest extends KernelTestCase
         yield 'six words' => ['A cart of 100 loses discounts'];
         yield 'punctuation inside words' => ["The cart's tidy-up fails"];
         yield 'the example the schema and the prompt give' => [Finding::TITLE_EXAMPLE];
+        yield 'three real words and a lone dash' => ['Discount - is lost'];
+        yield 'three real words padded with dots' => ['Discount is lost . .'];
+        yield 'words outside ASCII' => ['Rabatt für Ärzte fehlt'];
     }
 
     /**
      * @return iterable<string, array{string}>
      */
-    public static function titlesWithAWordOfPunctuationAlone(): iterable
+    public static function titlesWithFewerThanThreeRealWords(): iterable
     {
         yield 'punctuation alone' => ['. . .'];
-        yield 'words padded with dots' => ['Discount is lost . .'];
-        yield 'a lone dash' => ['Discount - is lost'];
+        yield 'two real words and dots' => ['Cart . . broken'];
+        yield 'two real words and marks' => ['Cart is ! ?'];
     }
 
     // WordCount counts each of these marks as a word: upstream/validator-word-count-counts-punctuation
-    #[DataProvider('titlesWithAWordOfPunctuationAlone')]
-    public function testATitleWithAWordOfPunctuationAloneIsRefusedAsUnreadable(string $title): void
+    #[DataProvider('titlesWithFewerThanThreeRealWords')]
+    public function testATitleWithFewerThanThreeRealWordsIsRefusedAsUnreadable(string $title): void
     {
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessageMatches('/findings\[0\]\.title: Every word of the title must hold a letter or a digit\./');
+        $this->expectExceptionMessageMatches('/findings\[0\]\.title: At least three words of the title must hold a letter or a digit\./');
 
         $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
     }
