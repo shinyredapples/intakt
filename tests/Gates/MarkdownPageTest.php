@@ -73,6 +73,27 @@ final class MarkdownPageTest extends TestCase
         self::assertEquals(new MarkdownSummary(2, false), $summary);
     }
 
+    public function testAFencedBlockBetweenTheTitleAndTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void
+    {
+        $page = new MarkdownPage('docs/page.md', ['# Title', '', '', '', '', '', '## In short', 'Summary.'], [2, 3, 4]);
+
+        self::assertEquals(new MarkdownSummary(1, false), $page->summary());
+    }
+
+    public function testAFencedBlockAfterTheInShortSectionLeavesTheSummaryOpeningThePage(): void
+    {
+        $page = new MarkdownPage('docs/page.md', ['# Title', '', '## In short', 'Summary.', '', '', '', ''], [5, 6, 7]);
+
+        self::assertEquals(new MarkdownSummary(1, true), $page->summary());
+    }
+
+    public function testAnIndentedCodeBlockBeforeTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void
+    {
+        $summary = $this->page('# Title', '', '    code', '', '## In short', 'Summary.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, false), $summary);
+    }
+
     public function testAnEmptyInShortSectionCountsNoWords(): void
     {
         $summary = $this->page('# Title', '### In short', '', '### Next', 'Text after.')->summary();

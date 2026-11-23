@@ -35,6 +35,10 @@ final readonly class MarkdownReader
             throw new MarkdownReadFailure('cannot read '.$path);
         }
 
-        return new MarkdownPage($path, $this->codeBlocks->blanked(explode("\n", $contents)));
+        $lines = explode("\n", $contents);
+        $blanked = $this->codeBlocks->blanked($lines);
+
+        // The lines the blanking changed are the fenced code lines, so fences are found only once.
+        return new MarkdownPage($path, $blanked, array_keys(array_diff_assoc($lines, $blanked)));
     }
 }

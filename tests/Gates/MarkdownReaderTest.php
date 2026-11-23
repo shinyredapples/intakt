@@ -97,6 +97,15 @@ final class MarkdownReaderTest extends TestCase
         self::assertSame(1, $page->words());
     }
 
+    public function testAFencedBlockBeforeTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/example.md', "# Title\n\n```\nexample\n```\n\n## In short\nSummary.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/example.md'])[0];
+
+        self::assertFalse($page->summary()?->opensPage);
+    }
+
     public function testAListItemLineInsideAFenceStartsNoItem(): void
     {
         new Filesystem()->dumpFile($this->root.'/docs/inside.md', "- Item.\n  ```\n  - not an item\n  more code\n  ```\n\nAfter.\n");

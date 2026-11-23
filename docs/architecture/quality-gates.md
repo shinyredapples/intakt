@@ -50,9 +50,15 @@ The `tests` gate also guards the [parity record](parity.md): `tests/Application/
 
 `MarkdownReader` reads Markdown pages for the planned `docs` gate (#3409); no gate runs it yet. From the paths it is given, it takes `README.md` and every `.md` file under `docs/`, and fails with `cannot read <path>` (`MarkdownReadFailure`) when one cannot be read. Each page (`MarkdownPage`) yields its paragraphs, its word count and its "In short" section.
 
-A paragraph (`MarkdownParagraph`) carries its word count and a key, the first 16 hex characters of the SHA-256 hash of its text with whitespace runs made one space. A word is a token between whitespace that holds a letter or a digit; code, fenced or indented, has none, also inside a list item, where a fence may sit at the item's content indentation or open on the marker line, a fence the item leaves open ends with the item, and indented code starts four columns past the item's content (on the marker line, five or more columns after the marker). A heading, thematic break or table indented to an item's content stays inside the item. The summary (`MarkdownSummary`) holds the words of the "In short" section and whether it opens the page, with only a title above it.
+A paragraph (`MarkdownParagraph`) carries its word count and a key, the first 16 hex characters of the SHA-256 hash of its text with whitespace runs made one space. A word is a token between whitespace that holds a letter or a digit. Code, fenced or indented, has no words, also inside a list item.
 
-Tables count as words but not as paragraphs. A line framed by outer pipes is a table row by itself; with a delimiter row below its first line (indented less than four spaces, as many cells as that line, each one or more hyphens with an optional colon at either end), a table runs until a blank line, a heading, a list item, a thematic break or a change of quote depth, so a quoted line after a table is measured. The "In short" heading may be quoted and may close with hashes after a space (`## In short ##`; `## In short###` is another heading). Only an unquoted heading of the same or a higher level ends the "In short" section. The reader is not a full CommonMark parser: it does not handle fenced code inside a blockquote, or setext titles (a title underlined with `===` or `---`).
+The summary (`MarkdownSummary`) holds the words of the "In short" section and whether it opens the page. It opens the page when at most a title stands above its heading, so a code block (fenced or indented) between the title and "In short" means it does not.
+
+Tables count as words but not as paragraphs. A line framed by outer pipes is a table row by itself. With a delimiter row below its first line (indented less than four spaces, as many cells as that line, each one or more hyphens with an optional colon at either end), a table runs until a blank line, a heading, a list item, a thematic break or a change of quote depth, so a quoted line after a table is measured.
+
+The "In short" heading may be quoted and may close with hashes after a space (`## In short ##`; `## In short###` is another heading). Only an unquoted heading of the same or a higher level ends the "In short" section.
+
+The reader is not a full CommonMark parser. It does not handle fenced code inside a blockquote, or setext titles (a title underlined with `===` or `---`). Nor does it handle constructs nested inside list items beyond plain prose and indented or fenced code.
 
 ## The test time budget (planned)
 
