@@ -21,6 +21,9 @@ final class RecordedAdminApi
     /** @var list<array<string, mixed>> */
     public array $requestOptions = [];
 
+    /** @var list<string> */
+    public array $requestedUrls = [];
+
     public function __construct()
     {
         $this->answers = [
@@ -65,6 +68,7 @@ final class RecordedAdminApi
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
         $this->requestOptions[] = $options;
+        $this->requestedUrls[] = $url;
         $answer = $this->answers[(string) parse_url($url, PHP_URL_PATH)] ?? ['body' => '{"error":"not found"}', 'status' => 404];
 
         return $this->reachable

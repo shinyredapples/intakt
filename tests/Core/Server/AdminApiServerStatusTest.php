@@ -147,6 +147,16 @@ final class AdminApiServerStatusTest extends TestCase
         ));
     }
 
+    public function testNoSourceSendsTheQueryOfTheConfiguredUrl(): void
+    {
+        $recorded = new RecordedAdminApi();
+
+        $reading = $recorded->status('http://localhost:2019?password=synthetic-query-secret')->read();
+
+        self::assertInstanceOf(WorkerThreads::class, $reading->threads);
+        self::assertSame([], array_filter($recorded->requestedUrls, static fn (string $url): bool => null !== parse_url($url, PHP_URL_QUERY)));
+    }
+
     public function testAHubWithoutAHealthEndpointIsDown(): void
     {
         $api = new RecordedAdminApi()->answering('/mercure/health/ready', '{"error":"unknown health endpoint"}', 404);

@@ -8,6 +8,7 @@ use Intakt\Tests\Journeys\Support\JourneyTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversNothing]
 #[Group('journeys')]
@@ -57,9 +58,13 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
 
     private function openTheDashboardOnTheBoard(KernelBrowser $dashboard): void
     {
-        $dashboard->request('GET', '/');
+        $page = $dashboard->request('GET', '/');
 
         self::assertSame(200, $dashboard->getResponse()->getStatusCode());
+        // The journey's own reading, so the board never asked an admin API that happens to listen on this machine.
+        self::assertSame(['not read in a journey', 'not read in a journey', 'not read in a journey'], $page->filter('#infrastructure .infra-reason')->each(
+            static fn (Crawler $reason): string => trim($reason->text(), '()'),
+        ));
     }
 
     private function findTheKeyFormButNoStartButton(KernelBrowser $dashboard): void

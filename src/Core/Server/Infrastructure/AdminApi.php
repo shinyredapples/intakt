@@ -30,7 +30,8 @@ final readonly class AdminApi
      */
     public function get(string $path): array|EndpointDown
     {
-        $url = $this->onLocalhost()->withPath($path)->toRawString();
+        // Without the configured query and fragment, because no admin endpoint reads them and a credential there would reach the server's request log.
+        $url = $this->onLocalhost()->withPath($path)->withQuery(null)->withFragment(null)->toRawString();
         try {
             $response = $this->http->request('GET', $url, self::OPTIONS);
 

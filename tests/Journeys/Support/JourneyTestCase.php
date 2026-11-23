@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Closure;
+use Intakt\Core\Server\Contract\EndpointDown;
+use Intakt\Core\Server\Contract\ServerReading;
+use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
@@ -178,6 +181,11 @@ abstract class JourneyTestCase extends TestCase
     {
         $browser = new KernelBrowser($this->bootDriverKernel($environment), ['HTTP_HOST' => 'localhost:'.$this->dashboardPort()]);
         $browser->followRedirects();
+        // Every source down, because the board reads the server status on each load and a journey must never reach an admin API that happens to listen on this machine.
+        $down = new EndpointDown('not read in a journey');
+        $status = self::createStub(ServerStatus::class);
+        $status->method('read')->willReturn(new ServerReading($down, $down, $down));
+        $browser->getContainer()->set(ServerStatus::class, $status);
 
         return $browser;
     }
