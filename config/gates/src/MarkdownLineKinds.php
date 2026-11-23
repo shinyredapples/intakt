@@ -14,6 +14,10 @@ final readonly class MarkdownLineKinds
 
     public const string INDENTED_CODE = '/^(?: {4}| {0,3}\t)/';
 
+    public function __construct(private MarkdownListIndents $indents)
+    {
+    }
+
     /**
      * @param list<int>        $depths
      * @param list<string>     $contents
@@ -24,20 +28,20 @@ final readonly class MarkdownLineKinds
     public function of(array $depths, array $contents, array $tableRows): array
     {
         $kinds = [];
-        $inList = false;
+        $lists = [];
 
         foreach ($contents as $index => $content) {
             $previous = $this->previousKind($kinds, $depths, $index);
             $kind = match (true) {
                 '' === trim($content) => MarkdownLineKind::Blank,
                 isset($tableRows[$index]) => MarkdownLineKind::Table,
-                !$inList && $this->startsIndentedCode($content, $previous) => MarkdownLineKind::Code,
+                $this->startsIndentedCode($content, $previous, $lists) => MarkdownLineKind::Code,
                 1 === preg_match(self::HEADING, $content) => MarkdownLineKind::Heading,
                 1 === preg_match(self::THEMATIC_BREAK, $content) => MarkdownLineKind::Break,
                 1 === preg_match(self::LIST_ITEM, $content) => MarkdownLineKind::ListItem,
                 default => MarkdownLineKind::Prose,
             };
-            $inList = $this->staysInList($kind, $previous, $content) ?? $inList;
+            $lists = $this->openLists($kind, $previous, $content, $lists);
             $kinds[] = $kind;
         }
 
@@ -60,20 +64,28 @@ final readonly class MarkdownLineKinds
         return $kinds[$before];
     }
 
-    private function startsIndentedCode(string $content, MarkdownLineKind $previous): bool
+    /**
+     * @param list<int> $lists
+     */
+    private function startsIndentedCode(string $content, MarkdownLineKind $previous, array $lists): bool
     {
-        // CommonMark: indented code cannot interrupt a paragraph, and indentation inside a list is the item's own content.
-        return 1 === preg_match(self::INDENTED_CODE, $content)
+        // CommonMark: indented code cannot interrupt a paragraph, and inside a list item it starts four columns past the item's content.
+        return $this->indents->indent($content) >= $this->indents->innermost($lists) + 4
             && !in_array($previous, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true);
     }
 
-    private function staysInList(MarkdownLineKind $kind, MarkdownLineKind $previous, string $content): ?bool
+    /**
+     * @param list<int> $lists
+     *
+     * @return list<int>
+     */
+    private function openLists(MarkdownLineKind $kind, MarkdownLineKind $previous, string $content, array $lists): array
     {
         return match ($kind) {
-            MarkdownLineKind::ListItem => true,
-            MarkdownLineKind::Heading, MarkdownLineKind::Break, MarkdownLineKind::Table => false,
-            MarkdownLineKind::Prose => MarkdownLineKind::Blank === $previous && 0 === preg_match(self::INDENTED_CODE, $content) ? false : null,
-            default => null,
+            MarkdownLineKind::ListItem => [...$this->indents->within($lists, $this->indents->indent($content)), $this->indents->contentIndent($content)],
+            MarkdownLineKind::Heading, MarkdownLineKind::Break, MarkdownLineKind::Table => [],
+            MarkdownLineKind::Prose => MarkdownLineKind::Blank === $previous ? $this->indents->within($lists, $this->indents->indent($content)) : $lists,
+            default => $lists,
         };
     }
 }

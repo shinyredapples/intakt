@@ -6,13 +6,16 @@ namespace Intakt\Gates;
 
 final readonly class MarkdownPage
 {
-    private const string QUOTE_MARKER = '/^ {0,3}> ?/';
+    private const string QUOTE_MARKER = '/^ {0,3}>[ \t]?/';
 
-    private const string SUMMARY_HEADING = '/^ {0,3}#{1,6}[ \t]+In short[ \t]*#*[ \t]*$/i';
+    // CommonMark: a closing run of hashes counts only after a space, so "In short###" is another heading.
+    private const string SUMMARY_HEADING = '/^ {0,3}#{1,6}[ \t]+In short(?:[ \t]+#*)?[ \t]*$/i';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
-    private const string DELIMITER_ROW = '/^[\s|:-]*-[\s|:-]*$/';
+    private const array OUTER_PIPES = ['/^\s*\|/', '/(?<!\\\\)\|\s*$/'];
+
+    private const string DELIMITER_CELL = '/^:?-+:?$/';
 
     private const string FRAMED_LINE = '/^[ \t]*\|.*(?<!\\\\)\|[ \t]*$/';
 
@@ -43,7 +46,7 @@ final readonly class MarkdownPage
 
         $this->depths = $depths;
         $this->contents = $contents;
-        $this->kinds = new MarkdownLineKinds()->of($depths, $contents, $this->tableRows());
+        $this->kinds = new MarkdownLineKinds(new MarkdownListIndents())->of($depths, $contents, $this->tableRows());
     }
 
     /**
@@ -203,7 +206,26 @@ final readonly class MarkdownPage
             && !$this->startsABlock($this->contents[$header])
             && 0 === preg_match(MarkdownLineKinds::INDENTED_CODE, $this->contents[$header])
             && 1 === preg_match(self::CELL_BORDER, $this->contents[$delimiter])
-            && 1 === preg_match(self::DELIMITER_ROW, $this->contents[$delimiter]);
+            && $this->delimits($this->contents[$header], $this->contents[$delimiter]);
+    }
+
+    private function delimits(string $header, string $delimiter): bool
+    {
+        $cells = $this->cells($delimiter);
+
+        // GFM: the delimiter row matches the header's cell count and each of its cells holds one or more hyphens, else no table starts.
+        return count($cells) === count($this->cells($header))
+            && [] === array_filter($cells, static fn (string $cell): bool => 0 === preg_match(self::DELIMITER_CELL, $cell));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function cells(string $row): array
+    {
+        $inner = preg_replace(self::OUTER_PIPES, '', $row) ?? $row;
+
+        return array_map(trim(...), preg_split(self::CELL_BORDER, $inner) ?: []);
     }
 
     /**

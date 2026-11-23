@@ -1,0 +1,61 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Gates;
+
+final readonly class MarkdownListIndents
+{
+    private const string LIST_MARKER = '/^( *)([-*+]|\d{1,9}[.)])([ \t]*)/';
+
+    public function indent(string $line): int
+    {
+        $expanded = $this->expanded($line);
+
+        return strlen($expanded) - strlen(ltrim($expanded, ' '));
+    }
+
+    public function contentIndent(string $listItem): int
+    {
+        preg_match(self::LIST_MARKER, $this->expanded($listItem), $parts);
+        $gap = strlen($parts[3] ?? '');
+
+        // CommonMark: after a gap of five or more columns the item's content starts one column after its marker, the rest is indented code.
+        return strlen($parts[1] ?? '') + strlen($parts[2] ?? '') + (0 === $gap || $gap > 4 ? 1 : $gap);
+    }
+
+    /**
+     * @param list<int> $lists the content indents of the open list items, outermost first
+     *
+     * @return list<int>
+     */
+    public function within(array $lists, int $column): array
+    {
+        return array_values(array_filter($lists, static fn (int $content): bool => $content <= $column));
+    }
+
+    /**
+     * @param list<int> $lists
+     */
+    public function innermost(array $lists): int
+    {
+        return [] === $lists ? 0 : $lists[array_key_last($lists)];
+    }
+
+    public function outdented(string $line, int $columns): string
+    {
+        return substr($this->expanded($line), min($columns, $this->indent($line)));
+    }
+
+    private function expanded(string $line): string
+    {
+        $leading = strspn($line, " \t");
+        $columns = '';
+
+        foreach (str_split(substr($line, 0, $leading)) as $character) {
+            $columns .= "\t" === $character ? str_repeat(' ', 4 - strlen($columns) % 4) : ' ';
+        }
+
+        return $columns.substr($line, $leading);
+    }
+}

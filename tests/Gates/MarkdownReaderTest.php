@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
+use Intakt\Gates\MarkdownCodeBlocks;
 use Intakt\Gates\MarkdownLineKind;
 use Intakt\Gates\MarkdownLineKinds;
+use Intakt\Gates\MarkdownListIndents;
 use Intakt\Gates\MarkdownPage;
 use Intakt\Gates\MarkdownParagraph;
 use Intakt\Gates\MarkdownReader;
@@ -18,6 +20,8 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(MarkdownReader::class)]
 #[CoversClass(MarkdownReadFailure::class)]
+#[CoversClass(MarkdownCodeBlocks::class)]
+#[UsesClass(MarkdownListIndents::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(MarkdownPage::class)]
 #[UsesClass(MarkdownParagraph::class)]
@@ -40,6 +44,25 @@ final class MarkdownReaderTest extends TestCase
         new Filesystem()->dumpFile($this->root.'/docs/fenced.md', "Before.\n\n```php\necho 'not counted';\n```\n\nAfter.\n");
 
         $page = $this->reader()->pages($this->root, ['docs/fenced.md'])[0];
+
+        self::assertSame(['Before.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testFencedCodeNestedInAListIsNotCounted(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/listed.md', "- Item.\n  - Nested.\n    ```\n    code words\n    ```\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/listed.md'])[0];
+
+        self::assertSame(['Item.', 'Nested.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+        self::assertSame(3, $page->words());
+    }
+
+    public function testAFourSpaceFenceOutsideAListIsIndentedCodeAndBlanksNothingAfterIt(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/indented.md', "Before.\n\n    ```\n    code\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/indented.md'])[0];
 
         self::assertSame(['Before.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
     }
@@ -77,6 +100,6 @@ final class MarkdownReaderTest extends TestCase
 
     private function reader(): MarkdownReader
     {
-        return new MarkdownReader(new FencedCodeBlocks());
+        return new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents()));
     }
 }

@@ -8,7 +8,7 @@ final readonly class MarkdownReader
 {
     private const string MEASURED_PAGE = '#^(?:README\.md|docs/.+\.md)$#';
 
-    public function __construct(private FencedCodeBlocks $codeBlocks)
+    public function __construct(private MarkdownCodeBlocks $codeBlocks)
     {
     }
 

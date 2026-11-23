@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\MarkdownLineKind;
 use Intakt\Gates\MarkdownLineKinds;
+use Intakt\Gates\MarkdownListIndents;
 use Intakt\Gates\MarkdownPage;
 use Intakt\Gates\MarkdownParagraph;
 use Intakt\Gates\MarkdownSummary;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MarkdownPage::class)]
 #[CoversClass(MarkdownLineKind::class)]
 #[CoversClass(MarkdownLineKinds::class)]
+#[CoversClass(MarkdownListIndents::class)]
 #[UsesClass(MarkdownParagraph::class)]
 #[UsesClass(MarkdownSummary::class)]
 final class MarkdownPageTest extends TestCase
@@ -184,6 +186,63 @@ final class MarkdownPageTest extends TestCase
 
         self::assertSame(['Before.', 'After.'], $this->texts($page->paragraphs()));
         self::assertSame(2, $page->words());
+    }
+
+    public function testADelimiterRowWithFewerColumnsThanTheHeaderStartsNoTable(): void
+    {
+        $page = $this->page('First | Second', '| --- |', 'This prose should be measured.');
+
+        self::assertSame(['First | Second', 'This prose should be measured.'], $this->texts($page->paragraphs()));
+    }
+
+    public function testADelimiterCellWithoutAHyphenStartsNoTable(): void
+    {
+        $page = $this->page('First | Second', '--- | :', 'This prose should be measured.');
+
+        self::assertSame(['First | Second --- | : This prose should be measured.'], $this->texts($page->paragraphs()));
+    }
+
+    public function testAValidDelimiterRowStillStartsATable(): void
+    {
+        $page = $this->page('First | Second', ':--- | ---:', 'Row | cell', '', 'Prose.');
+
+        self::assertSame(['Prose.'], $this->texts($page->paragraphs()));
+    }
+
+    public function testHashesRightAfterTheHeadingTextAreNoClosingSequence(): void
+    {
+        $summary = $this->page('# Title', '## In short###', 'Tiny.', '## In short', $this->words(130))->summary();
+
+        self::assertEquals(new MarkdownSummary(130, false), $summary);
+    }
+
+    public function testAClosingSequenceAfterASpaceStillMarksTheSummary(): void
+    {
+        $summary = $this->page('# Title', '## In short ##', 'One two.')->summary();
+
+        self::assertEquals(new MarkdownSummary(2, true), $summary);
+    }
+
+    public function testAQuotedSummaryHeadingAfterATabIsRead(): void
+    {
+        $summary = $this->page('# Title', ">\t## In short", '> One two.', '## Next')->summary();
+
+        self::assertEquals(new MarkdownSummary(2, true), $summary);
+    }
+
+    public function testIndentedCodeInsideAListItemIsNotCounted(): void
+    {
+        $page = $this->page('- Item.', '', '      code words');
+
+        self::assertSame(['Item.'], $this->texts($page->paragraphs()));
+        self::assertSame(1, $page->words());
+    }
+
+    public function testAParagraphIndentedToTheListItemsContentIsProse(): void
+    {
+        $page = $this->page('- Item.', '', '  More of the item.');
+
+        self::assertSame(['Item.', 'More of the item.'], $this->texts($page->paragraphs()));
     }
 
     private function page(string ...$lines): MarkdownPage
