@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Dom\Element;
 use Dom\HTMLDocument;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -60,7 +61,7 @@ final class DashboardMockJourneyTest extends TestCase
         $created = $this->series('j-created');
         $closed = $this->series('j-closed');
         $expected = [$open[0]];
-        for ($day = 1; $day < \count($open); ++$day) {
+        for ($day = 1; $day < count($open); ++$day) {
             $expected[] = $expected[$day - 1] + $created[$day] - $closed[$day];
         }
 
@@ -75,7 +76,7 @@ final class DashboardMockJourneyTest extends TestCase
         foreach ($links as $link) {
             preg_match('/#(\d+)/', (string) $link->textContent, $cited);
             $target = $page->getElementById(substr((string) $link->getAttribute('href'), 1));
-            if (null === $target || !str_contains((string) $target->textContent, '#'.($cited[1] ?? 'none').' ')) {
+            if (!$target instanceof Element || !str_contains((string) $target->textContent, '#'.($cited[1] ?? 'none').' ')) {
                 $wrong[] = $link->textContent.' -> '.$link->getAttribute('href');
             }
         }
@@ -108,11 +109,11 @@ final class DashboardMockJourneyTest extends TestCase
         $html = (string) file_get_contents(self::MOCKS.'journey.html');
         self::assertSame(1, preg_match('/C\(\$\("'.preg_quote($id, '/').'"\).*?values: (\[[^\]]+\])/', $html, $matches), 'Missing series '.$id);
 
-        return json_decode($matches[1], true, flags: \JSON_THROW_ON_ERROR);
+        return json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
     }
 
     private function page(string $name): HTMLDocument
     {
-        return HTMLDocument::createFromString((string) file_get_contents(self::MOCKS.$name), \LIBXML_NOERROR);
+        return HTMLDocument::createFromString((string) file_get_contents(self::MOCKS.$name), LIBXML_NOERROR);
     }
 }
