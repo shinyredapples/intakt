@@ -27,7 +27,7 @@ final class FirstRunStylesTest extends TestCase
         self::assertLessThan($this->zIndex('.rail-in'), $row);
     }
 
-    public function testOnAPhoneATextFieldIsAtLeastTheTouchFloorHigh(): void
+    public function testOnAPhoneTheSharedInputRuleIsAtLeastTheTouchFloorHigh(): void
     {
         self::assertGreaterThanOrEqual(44, $this->pixels('/height:\s*(\d+)px;/', $this->rule('.input, .select', $this->phoneBlock())));
     }
