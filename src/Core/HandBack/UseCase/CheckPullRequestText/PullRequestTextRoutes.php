@@ -25,7 +25,7 @@ final readonly class PullRequestTextRoutes
     /**
      * @throws PullRequestTextRoundNotRecorded
      */
-    public function passed(TaskBranch $task, PullRequestTextOutcome $outcome): void
+    public function passed(PullRequestTextTask $task, PullRequestTextOutcome $outcome): void
     {
         $this->locked($task, function () use ($task, $outcome): void {
             $this->append(LedgerEventKind::PullRequestTextPassed, $this->payloadOf($task, $outcome));
@@ -35,7 +35,7 @@ final readonly class PullRequestTextRoutes
     /**
      * @throws PullRequestTextRoundNotRecorded
      */
-    public function failed(TaskBranch $task, PullRequestTextOutcome $outcome): FailedPullRequestText
+    public function failed(PullRequestTextTask $task, PullRequestTextOutcome $outcome): FailedPullRequestText
     {
         return $this->locked($task, function () use ($task, $outcome): FailedPullRequestText {
             $route = LedgerEventKind::PullRequestTextSentBack === $this->lastOf($task) ? PullRequestTextRoute::ToReviewers : PullRequestTextRoute::SentBack;
@@ -52,7 +52,7 @@ final readonly class PullRequestTextRoutes
      *
      * @return T
      */
-    private function locked(TaskBranch $task, Closure $step): mixed
+    private function locked(PullRequestTextTask $task, Closure $step): mixed
     {
         // Held from the read to the append, because two rounds of one task read alike would both be sent back; a key of its own, so this round never waits on the hand-back round's lock; a list, because a branch or path may hold any separator.
         $lock = $this->locks->createLock('intakt-pull-request-text-'.hash('sha256', json_encode([$task->repository, $task->branch], JSON_THROW_ON_ERROR)));
@@ -68,7 +68,7 @@ final readonly class PullRequestTextRoutes
     /**
      * @return array{repository: string, branch: string, verdict: string, reason: string, missing: list<positive-int>, body_characters: int}
      */
-    private function payloadOf(TaskBranch $task, PullRequestTextOutcome $outcome): array
+    private function payloadOf(PullRequestTextTask $task, PullRequestTextOutcome $outcome): array
     {
         return [
             'repository' => $task->repository,
@@ -94,7 +94,7 @@ final readonly class PullRequestTextRoutes
         }
     }
 
-    private function lastOf(TaskBranch $task): ?LedgerEventKind
+    private function lastOf(PullRequestTextTask $task): ?LedgerEventKind
     {
         $last = null;
 
@@ -107,7 +107,7 @@ final readonly class PullRequestTextRoutes
         return $last;
     }
 
-    private function isOf(TaskBranch $task, string $payload): bool
+    private function isOf(PullRequestTextTask $task, string $payload): bool
     {
         $line = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
 

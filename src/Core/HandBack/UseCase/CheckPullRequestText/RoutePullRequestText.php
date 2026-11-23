@@ -20,7 +20,7 @@ final readonly class RoutePullRequestText
      * @throws PullRequestTextRoundNotRecorded
      */
     #[NoDiscard]
-    public function route(TaskBranch $task, string $taskText, string $body): PullRequestTextOutcome|FailedPullRequestText
+    public function route(PullRequestTextTask $task, string $taskText, string $body): PullRequestTextOutcome|FailedPullRequestText
     {
         $outcome = PullRequestTextRule::judge($taskText, $body);
 

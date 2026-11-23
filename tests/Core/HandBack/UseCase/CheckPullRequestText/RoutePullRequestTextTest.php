@@ -20,7 +20,7 @@ use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoundNotRec
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoute;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\TaskBranch;
+use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextTask;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
@@ -36,7 +36,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(FailedPullRequestText::class)]
 #[CoversClass(PullRequestTextRoute::class)]
 #[CoversClass(PullRequestTextRoundNotRecorded::class)]
-#[CoversClass(TaskBranch::class)]
+#[CoversClass(PullRequestTextTask::class)]
 #[UsesClass(PullRequestTextRule::class)]
 #[UsesClass(PullRequestTextOutcome::class)]
 #[UsesClass(PullRequestTextVerdict::class)]
@@ -119,7 +119,7 @@ final class RoutePullRequestTextTest extends TestCase
 
     public function testAnotherBranchsSendBackDoesNotCountForThisTask(): void
     {
-        (void) $this->router()->route(TaskBranch::resolved(__DIR__, 'other'), self::TASK, self::MISSING_E2);
+        (void) $this->router()->route(PullRequestTextTask::resolved(__DIR__, 'other'), self::TASK, self::MISSING_E2);
 
         $result = $this->route(self::MISSING_E2);
 
@@ -130,7 +130,7 @@ final class RoutePullRequestTextTest extends TestCase
     {
         $this->route(self::MISSING_E2);
 
-        $result = $this->router()->route(TaskBranch::resolved(__DIR__.'/../CheckPullRequestText', 'task'), self::TASK, self::MISSING_E2);
+        $result = $this->router()->route(PullRequestTextTask::resolved(__DIR__.'/../CheckPullRequestText', 'task'), self::TASK, self::MISSING_E2);
 
         self::assertSame(PullRequestTextRoute::ToReviewers, $result instanceof FailedPullRequestText ? $result->route : null);
     }
@@ -185,7 +185,7 @@ final class RoutePullRequestTextTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('the repository "'.__DIR__.'/missing" cannot be found');
 
-        TaskBranch::resolved(__DIR__.'/missing', 'task');
+        PullRequestTextTask::resolved(__DIR__.'/missing', 'task');
     }
 
     public function testAnEmptyBranchIsRefused(): void
@@ -193,7 +193,7 @@ final class RoutePullRequestTextTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('the branch is empty');
 
-        TaskBranch::resolved(__DIR__, ' ');
+        PullRequestTextTask::resolved(__DIR__, ' ');
     }
 
     protected function setUp(): void
@@ -206,9 +206,9 @@ final class RoutePullRequestTextTest extends TestCase
         return $this->router()->route($this->task(), self::TASK, $body);
     }
 
-    private function task(): TaskBranch
+    private function task(): PullRequestTextTask
     {
-        return TaskBranch::resolved(__DIR__, 'task');
+        return PullRequestTextTask::resolved(__DIR__, 'task');
     }
 
     private function router(LockFactory $locks = new LockFactory(new InMemoryStore())): RoutePullRequestText

@@ -22,7 +22,7 @@ use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoundNotRec
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoute;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\TaskBranch;
+use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextTask;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -42,7 +42,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(PullRequestTextRoute::class)]
 #[UsesClass(PullRequestTextRoundNotRecorded::class)]
 #[UsesClass(FailedPullRequestText::class)]
-#[UsesClass(TaskBranch::class)]
+#[UsesClass(PullRequestTextTask::class)]
 #[UsesClass(PullRequestTextRule::class)]
 #[UsesClass(EvidenceItems::class)]
 #[UsesClass(MarkdownText::class)]

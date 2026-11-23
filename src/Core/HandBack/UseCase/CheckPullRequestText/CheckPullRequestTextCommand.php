@@ -27,7 +27,7 @@ final readonly class CheckPullRequestTextCommand
     public function __invoke(SymfonyStyle $io, #[MapInput] CheckPullRequestTextInput $input): int
     {
         try {
-            $task = TaskBranch::resolved($input->repository, $input->branch);
+            $task = PullRequestTextTask::resolved($input->repository, $input->branch);
             $result = $this->round->route($task, $this->read($input->task), $this->bodyOf($this->read($input->pullRequestText)));
         } catch (InvalidArgumentException|ReportableFailure $failure) {
             $io->error($failure->getMessage());

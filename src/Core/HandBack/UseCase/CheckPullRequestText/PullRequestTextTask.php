@@ -7,7 +7,7 @@ namespace Intakt\Core\HandBack\UseCase\CheckPullRequestText;
 use InvalidArgumentException;
 
 // A task is its resolved repository path and its branch, as in the hand-back round, so one task's lines match however its path was written.
-final readonly class TaskBranch
+final readonly class PullRequestTextTask
 {
     private function __construct(
         public string $repository,
