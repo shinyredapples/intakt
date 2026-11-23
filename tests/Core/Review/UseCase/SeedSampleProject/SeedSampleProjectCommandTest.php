@@ -108,7 +108,7 @@ final class SeedSampleProjectCommandTest extends TestCase
             'moonshotai/Kimi-K3.1-Pro:deepinfra' => ['input' => 1.9, 'output' => 9.5],
             'moonshotai/Kimi-K3.1-Pro:together' => ['input' => 2, 'output' => 10],
         ], $this->writtenPrices());
-        self::assertSame('2026-11-18', $this->written()['budget']['price_date']);
+        self::assertSame('2026-11-13', $this->written()['budget']['price_date']);
     }
 
     // Issue #2816: every router tier, the judge's light tier among them, lists the same model at another router provider as a substitute on the same provider, so one rate-limited router provider does not stop the demo.

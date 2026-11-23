@@ -243,7 +243,7 @@ final readonly class SymfonyAiVendor implements Vendor
     private function verdictThrough(TierRoutedPlatform $platform, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
         try {
-            $verdict = $this->reviewer->review($request, $platform, $platform->answering->model);
+            $verdict = $this->reviewer->review($request, $platform, $platform->answering);
         } catch (VerdictUnreadable $unreadable) {
             // Settled, because the call ended with an answer and its usage is known.
             $this->usage->settle($reservation, ...$platform->rounds());

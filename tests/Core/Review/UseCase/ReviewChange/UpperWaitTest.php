@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\UseCase\ReviewChange\UpperWait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -30,12 +31,12 @@ final class UpperWaitTest extends TestCase
 
     public function testEachReviewerAddsItsOwnTimeLimit(): void
     {
-        self::assertSame(3 * 10 + 4, new UpperWait(10, 4)->secondsFor($this->panelOf(3)));
+        self::assertSame(3 * RoundReviewer::REVIEW_CEILING_SECONDS + UpperWait::JUDGE_SECONDS, new UpperWait()->secondsFor($this->panelOf(3)));
     }
 
     public function testTheUpperWaitOfAStoredRoundIsWorkedOutFromItsReviewerCount(): void
     {
-        self::assertSame(2 * 10 + 4, new UpperWait(10, 4)->secondsForReviewers(2));
+        self::assertSame(2 * RoundReviewer::REVIEW_CEILING_SECONDS + UpperWait::JUDGE_SECONDS, new UpperWait()->secondsForReviewers(2));
     }
 
     private function panelOf(int $reviewers): Panel

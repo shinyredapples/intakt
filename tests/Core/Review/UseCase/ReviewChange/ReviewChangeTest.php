@@ -42,6 +42,7 @@ use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
@@ -97,6 +98,9 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(ReplayMark::class)]
 final class ReviewChangeTest extends KernelTestCase
 {
+    // One sleep per review ceiling, so the two-reviewer panel reaches its upper wait of three ceilings in three polls.
+    private const int A_REVIEW_CEILING = RoundReviewer::REVIEW_CEILING_SECONDS;
+
     private RoundFixture $fixture;
 
     // Answers that every tier is mapped, so only the tests of the check before a round set the mapping.
@@ -318,20 +322,20 @@ final class ReviewChangeTest extends KernelTestCase
 
     public function testARoundThatNeverReportsEndsAtTheUpperWaitAsBlockedWithNoOutcomeInTime(): void
     {
-        $review = $this->reviewChange(static function (): void {}, $this->shortUpperWait())->review($this->request());
+        $review = $this->reviewChange(static function (): void {}, sleepsFor: self::A_REVIEW_CEILING)->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertSame(RoundEnds::NoOutcomeInTime, $review->end);
         self::assertSame([], $review->actList);
-        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', [...$review->reasons][0]);
-        self::assertSame('2026-10-30 12:00:05', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within '.(2 * self::A_REVIEW_CEILING + UpperWait::JUDGE_SECONDS).' seconds', [...$review->reasons][0]);
+        self::assertSame('2026-10-30 15:00:00', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
     }
 
     public function testARoundTheWorkersFinishAtTheLastPollBeforeTheUpperWaitIsJudged(): void
     {
         $vendor = new VerdictPerRole([]);
         $work = function () use ($vendor): void {
-            if ('12:00:04' !== $this->fixture->clock->now()->format('H:i:s')) {
+            if ('14:00:00' !== $this->fixture->clock->now()->format('H:i:s')) {
                 return;
             }
 
@@ -344,7 +348,7 @@ final class ReviewChangeTest extends KernelTestCase
             }
         };
 
-        $review = $this->reviewChange($work, $this->shortUpperWait())->review($this->request());
+        $review = $this->reviewChange($work, sleepsFor: self::A_REVIEW_CEILING)->review($this->request());
 
         self::assertSame([Decision::Approve, [], RoundEnds::Judged], [$review->decision, [...$review->reasons], $review->end]);
     }
@@ -362,7 +366,7 @@ final class ReviewChangeTest extends KernelTestCase
 
     public function testAFailedJudgingOfAnotherRoundLeavesTheWaitToTheCeiling(): void
     {
-        $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), $this->shortUpperWait())->review($this->request());
+        $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), sleepsFor: self::A_REVIEW_CEILING)->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME, [...$review->reasons][0]);
@@ -372,7 +376,7 @@ final class ReviewChangeTest extends KernelTestCase
     {
         $progress = new RecordingProgress();
 
-        $this->reviewChange(static function (): void {}, new UpperWait(1, 1))->review($this->request(), $progress);
+        $this->reviewChange(static function (): void {}, sleepsFor: self::A_REVIEW_CEILING)->review($this->request(), $progress);
 
         // The first read of the round reports too, because the caller should see the start before any wait.
         self::assertCount(4, $progress->reported);
@@ -408,7 +412,7 @@ final class ReviewChangeTest extends KernelTestCase
             }
         };
 
-        $this->reviewChange($work, new UpperWait(1, 1))->review($this->request(), $progress);
+        $this->reviewChange($work, sleepsFor: self::A_REVIEW_CEILING)->review($this->request(), $progress);
 
         self::assertNotEmpty($progress->reported);
         foreach ($progress->reported as $reported) {
@@ -546,13 +550,7 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
-    // Two seconds a reviewer and one for the judge, so the two-reviewer panel's upper wait is 5 seconds.
-    private function shortUpperWait(): UpperWait
-    {
-        return new UpperWait(2, 1);
-    }
-
-    private function reviewChange(Closure $work, UpperWait $upperWait = new UpperWait(), ?MessageBusInterface $bus = null): ReviewChange
+    private function reviewChange(Closure $work, ?MessageBusInterface $bus = null, ?int $sleepsFor = null): ReviewChange
     {
         $serializer = $this->serializer();
         $findings = new StoredFindings($this->fixture->entities, $serializer, $this->fixture->machine('state_machine.review_round'));
@@ -564,11 +562,10 @@ final class ReviewChangeTest extends KernelTestCase
             new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices(['big' => ['input' => 1.0, 'output' => 2.0, 'cache_read' => 1.0, 'cache_write' => 1.0]])),
             new ChangeDecision(),
             new StoredVerdicts($serializer),
-            new WorkerOnSleep($this->fixture->clock, $work),
+            new WorkerOnSleep($this->fixture->clock, $work, $sleepsFor),
             new FailureInWords(),
             $this->tiers,
             new FailedJudgings($this->failureTransport(), $this->fixture->ledger(), $this->fixture->ledgerPayloads()),
-            $upperWait,
         );
     }
 

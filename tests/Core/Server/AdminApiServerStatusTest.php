@@ -77,6 +77,27 @@ final class AdminApiServerStatusTest extends TestCase
         ), $api->status()->read()->metrics);
     }
 
+    public function testALabelValueWithASpaceAndABraceStillAddsToTheQueueDepth(): void
+    {
+        $metrics = str_replace('frankenphp_queue_depth 0', "frankenphp_queue_depth 1\nfrankenphp_worker_queue_depth{worker=\"a b}c\"} 3", RecordedAdminApi::fixture('metrics.txt'));
+        $api = new RecordedAdminApi()->answering('/metrics', $metrics);
+
+        self::assertEquals(new ServerMetrics(
+            queueDepth: 4,
+            workerRestarts: 2,
+        ), $api->status()->read()->metrics);
+    }
+
+    public function testACountedTotalJustBelowTheIntegerLimitIsRead(): void
+    {
+        $api = new RecordedAdminApi()->answering('/metrics', RecordedAdminApi::fixture('metrics.txt')."frankenphp_worker_queue_depth{worker=\"app\"} 9223372036854774784\n");
+
+        self::assertEquals(new ServerMetrics(
+            queueDepth: 9223372036854774784,
+            workerRestarts: 2,
+        ), $api->status()->read()->metrics);
+    }
+
     public function testAServerThatNeverRestartedAWorkerCountsNoRestarts(): void
     {
         $metrics = preg_replace('/^frankenphp_worker_restarts.*$/m', '', RecordedAdminApi::fixture('metrics.txt'));
@@ -175,6 +196,24 @@ final class AdminApiServerStatusTest extends TestCase
     public function testASpecialValueInACountedSeriesIsDown(): void
     {
         $api = new RecordedAdminApi()->answering('/metrics', RecordedAdminApi::fixture('metrics.txt')."frankenphp_worker_queue_depth{worker=\"app\"} NaN\n");
+
+        self::assertEquals(new EndpointDown('/metrics answered in an unusable shape'), $api->status()->read()->metrics);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function totalsOutsideTheIntegerRange(): iterable
+    {
+        yield '1e30' => ['1e30'];
+        yield '-1e30' => ['-1e30'];
+        yield 'exactly 2^63' => ['9223372036854775808'];
+    }
+
+    #[DataProvider('totalsOutsideTheIntegerRange')]
+    public function testACountedTotalOutsideTheIntegerRangeIsDown(string $value): void
+    {
+        $api = new RecordedAdminApi()->answering('/metrics', RecordedAdminApi::fixture('metrics.txt')."frankenphp_worker_queue_depth{worker=\"app\"} {$value}\n");
 
         self::assertEquals(new EndpointDown('/metrics answered in an unusable shape'), $api->status()->read()->metrics);
     }

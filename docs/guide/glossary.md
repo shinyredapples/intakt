@@ -27,7 +27,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Definition of Ready** | what a task needs before it is built; the Tech lead checks it | [writing a good task](writing-a-good-task.md#definition-of-ready) |
 | **Designer** (planned, optional) | the AI agent that plans and judges your project's screens, only for tasks that touch them: automatic checks, scores with a reason, and your taste learned by choosing between two versions | [how it works](how-intakt-works.md#the-idea-in-one-sentence) |
 | **Developer** | the AI agent that writes the change (formerly the builder) | [how it works](how-intakt-works.md) |
-| **Draining** | stopping new work so running jobs can finish before an update; planned: an update drains only the build slots it is moving to the new version (first one slot, then the remaining build slots together, so several can show draining while reviews go on), and all of them only when it changes stored data the old version could not read | [engine room](the-engine-room.md#draining-and-updates) |
+| **Draining** | stopping new work so running jobs can finish before an update; planned: a normal update drains nothing (a running job finishes on the version it started on), and only a new version that says it needs one drains: each build slot as it switches, or all work when it changes stored data the old version could not read | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
 | **Finding** | one problem a reviewer reports, with a severity | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Fixture** | a small sample project a test of Intakt's own checks runs a rule on | [testing a new check](testing-a-new-check.md) |
@@ -48,6 +48,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Judge's note** | the judge's one-sentence reason, kept beside a serious finding (P1 or P2) it doubts, on the list of things to fix; the finding stays on the list either way | [assistant](using-intakt-from-your-assistant.md#the-judges-note-on-the-act-list) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Ledger** | Intakt's permanent record of what it did, one line per event, which is only ever added to (removing the demo project also removes the events it replayed) | [running one task](running-one-task.md#finding-the-steps-in-the-ledger) |
+| **Live (version)** | planned: a new version of Intakt during an update, once it holds the one right to write the records (the owner generation) and its start checks passed; from then on it hands out the work | [engine room](the-engine-room.md#draining-and-updates) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
 | **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
@@ -55,6 +56,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **MCP** | a standard way for AI assistants to use tools | [assistant](using-intakt-from-your-assistant.md) |
 | **Memory limit** | how much memory a job and the programs it runs may use before they are stopped | [containers](containers-and-services.md#when-a-job-runs-out-of-memory) |
 | **Merge** | adding a pull request's change to main | [journey](the-journey-of-a-task.md#6-merging) |
+| **On trial** | planned: a live new version until its own check after the update and the first job of each kind it started look right; a failure until then takes Intakt back to the old version | [engine room](the-engine-room.md#draining-and-updates) |
 | **Orchestrator** | machinery: Intakt itself, the part that runs everything | [how it works](how-intakt-works.md) |
 | **Owner cap** | at most a few things wait for you at once | [engine room](the-engine-room.md#holds-hand-overs-and-caps) |
 | **P1, P2, P3** | finding severities: wrong or unsafe, a real defect, a nice-to-have | [journey](the-journey-of-a-task.md#5-reviewing) |

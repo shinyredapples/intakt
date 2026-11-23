@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Plugin\Forge\Contract\ForgeBudget;
 use Intakt\Plugin\Forge\Contract\ForgeBudgets;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -17,6 +18,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(ForgeBudget::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(LedgerFailingHeads::class)]
+#[UsesClass(PayloadFields::class)]
 final class ForgeBudgetOnTheBoardTest extends DashboardPageTestCase
 {
     public function testTheBoardShowsTheCallsUsedAndRemainingOfEachInstallation(): void

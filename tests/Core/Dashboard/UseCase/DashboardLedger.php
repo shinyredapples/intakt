@@ -64,6 +64,11 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
     }
 
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => in_array($recorded->event->kind, $kinds, true) && array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
+    }
+
     public function startRound(string $round, string $project): void
     {
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 2]);
@@ -376,9 +381,21 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '']);
     }
 
+    public function failHeadRetryingAt(string $project, string $change, string $retryAt): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, ['failures' => 1, 'retry_at' => $retryAt] + $this->headFailure($project, $change, 'a'));
+    }
+
     public function failHeadWithoutCause(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
+    }
+
+    public function failHeadWithoutRetryAt(string $project, string $change): void
+    {
+        $failure = $this->headFailure($project, $change, 'a');
+        unset($failure['retry_at']);
+        $this->add(LedgerEventKind::HeadFailed, ['failures' => 1] + $failure);
     }
 
     public function passBuildStep(string $project, string $task, string $step): void
