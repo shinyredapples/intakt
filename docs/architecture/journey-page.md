@@ -38,7 +38,7 @@ The command computes everything before it writes, then writes each SVG and last 
 `bin/pages <folder> [--recorded=<folder>]` writes the Jekyll source of the whole GitHub Pages site into `<folder>` (made when missing). It runs `bin/highlights`, then `bin/journey` with the `--recorded` option passed through unchanged, each as `PHP_BINARY` with its output passed on; when one exits non-zero, `bin/pages` exits 1 without running the next and without writing into `<folder>`. Then it writes:
 
 - `index.html` and `assets/<path>`: copies of `docs/pages/index.html`, the front page, and of every file under `docs/pages/assets/`, subfolders included, at the same relative path.
-- `highlights/index.md`: `docs/highlights.md` with one line after its title that links the journey page relatively (`[the journey](../journey/)`).
+- `highlights/index.md`: `docs/highlights.md` with one line after its title that links the journey page relatively (`[the journey](../journey/)`), then, when `--recorded` holds a readable `issues.json`, the settled row statuses and the one-sentence rule ([The published highlights page](highlights-page.md)).
 - `journey/index.md`: `docs/journey.md` with every `](journey/` turned into `](`, so the chart images resolve from `/journey/` (correct only because `docs/journey.md` links nothing under `journey/` except the `*.svg` drawings copied beside the page, which `PagesCommandTest` checks on the repository's page), and the Mermaid timeline block (matched by `MermaidTimeline::BLOCK`) replaced with `![Timeline](timeline.svg)`.
 - `journey/<name>.svg`: a copy of every `docs/journey/*.svg`.
 
