@@ -14,7 +14,7 @@ flowchart TD
 
 - **Shares:** each project gets a share of the week, for example 70% and 30%. When a build slot comes free, the project furthest behind its share goes first.
 - **Nothing is wasted:** a project with nothing to build lends its share to the others. When it has work again, it goes first until it has caught up.
-- **Urgent beats shares:** an `urgent` task in any project gets the next free slot first.
+- **The build order beats shares:** the next free slot goes, in any project, first to what an approved pull request still needs, then to `urgent` fixes of open pull requests, then to other fixes of open pull requests, then to `urgent` new tasks, then to the rest. Shares only decide between projects whose next work is in the same step.
 - **A share of 0** pauses the project. Nothing new is built or reviewed for it, open pull requests included, so it spends none of the allowance. A job already running finishes. Its work waits where it is and carries on when you raise the share again.
 - **Reviews aren't rationed by share** (except a share of 0, which pauses them): the review lane takes turns between projects, so no project's finished work waits on another's.
 
