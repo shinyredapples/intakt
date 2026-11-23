@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Matched by id because the judge's answer is data, and prose of a finding is never read; a P1 or P2 is always on the act list whatever its mark (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and a P3 with no mark or marked reject is on neither list.
+// Matched by id because the judge's answer is data, and prose of a finding is never read; a gate gap is never on the act list, because a gate that misses a case gets a gate issue and not a send-back (decision D4 of #845): marked reject it is rejected, and with any other mark or none it is a follow-up. Any other P1 or P2 is always on the act list whatever its mark (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and a P3 with no mark or marked reject is on neither list.
 #[Exclude]
 final readonly class JudgedFindings
 {
@@ -48,21 +48,21 @@ final readonly class JudgedFindings
             }
         }
 
-        $blocking = static fn (Finding $finding): bool => Severity::P3 !== $finding->severity;
-        $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
-        $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
-        $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Reject === ($marks[$finding->id] ?? null)));
+        $markOf = static fn (Finding $finding): ?Mark => $marks[$finding->id] ?? null;
+        $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => !$finding->gate_gap && (self::blocking($finding) || Mark::Act === $markOf($finding))));
+        $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => $finding->gate_gap ? Mark::Reject !== $markOf($finding) : !self::blocking($finding) && Mark::Defer === $markOf($finding)));
+        $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => ($finding->gate_gap || !self::blocking($finding)) && Mark::Reject === $markOf($finding)));
 
         return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings), $judgement->fallback());
     }
 
-    // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
+    // Only a P1 or P2 that is no gate gap and is marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
     /**
      * @param list<Finding> $findings
      */
     private static function notesOf(Judgement $judgement, array $findings): JudgeNotes
     {
-        $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, static fn (Finding $finding): bool => Severity::P3 !== $finding->severity));
+        $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, static fn (Finding $finding): bool => !$finding->gate_gap && self::blocking($finding)));
         $notes = new JudgeNotes();
 
         foreach ($judgement->marks as $judged) {
@@ -72,5 +72,10 @@ final readonly class JudgedFindings
         }
 
         return $notes;
+    }
+
+    private static function blocking(Finding $finding): bool
+    {
+        return Severity::P3 !== $finding->severity;
     }
 }
