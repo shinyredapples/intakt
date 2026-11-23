@@ -52,21 +52,6 @@ final readonly class PullRequestsOfTasks
         return $reworks;
     }
 
-    // Lowest number first, so the first trusted one is the task's pull request. The closing one is always among the open ones, because the listing's open pull requests were checked against them.
-    /**
-     * @param list<BranchPullRequest> $open
-     *
-     * @return list<BranchPullRequest>
-     */
-    private function candidatesOf(int $task, IntakePlan $plan, array $open): array
-    {
-        $closing = $plan->pullRequests[$task] ?? null;
-        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => $pull->number === $closing || TaskBranchName::names($pull->branch, $task)));
-        usort($candidates, static fn (BranchPullRequest $a, BranchPullRequest $b): int => $a->number <=> $b->number);
-
-        return $candidates;
-    }
-
     // Checked against the tick's complete listing, because pages that shift while they are read can skip a pull request, and a skipped one would let its task be built afresh.
     /**
      * @return list<BranchPullRequest>
@@ -93,6 +78,21 @@ final readonly class PullRequestsOfTasks
         return function (string $account) use ($project, &$answers): bool {
             return $answers[$account] ??= $this->accounts->steers($project, $account);
         };
+    }
+
+    // Lowest number first, so the first trusted one is the task's pull request. The closing one is always among the open ones, because the listing's open pull requests were checked against them.
+    /**
+     * @param list<BranchPullRequest> $open
+     *
+     * @return list<BranchPullRequest>
+     */
+    private function candidatesOf(int $task, IntakePlan $plan, array $open): array
+    {
+        $closing = $plan->pullRequests[$task] ?? null;
+        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => $pull->number === $closing || TaskBranchName::names($pull->branch, $task)));
+        usort($candidates, static fn (BranchPullRequest $a, BranchPullRequest $b): int => $a->number <=> $b->number);
+
+        return $candidates;
     }
 
     // The author is asked first, because a pull request whose author has no write access counts for nothing and its history need not be read; its history is the one it was listed with, so an edit since fails the read instead of passing unchecked.
