@@ -128,7 +128,7 @@ final readonly class ReplaysRecording
             if ($step instanceof CapturedUpdate) {
                 $this->updates->publish(new LiveEvent($step->topic, $step->data));
             } else {
-                $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
+                $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor), $this->subjectOf($step)), $recording, $number++);
             }
 
             $this->judged->publishEach($judgedAfter[$index] ?? []);
@@ -181,6 +181,12 @@ final readonly class ReplaysRecording
         }
 
         return json_encode($row, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+    }
+
+    // A reviewer start carries its round as the subject, as a live round writes it, because a reader of one round's starts by subject must find a replayed round's starts too.
+    private function subjectOf(RecordedLedgerEvent $event): ?string
+    {
+        return LedgerEventKind::ReviewerStarted === $event->kind ? self::roundOf($event->payload) : null;
     }
 
     private function append(LedgerEvent $event, Recording $recording, int $number): void
