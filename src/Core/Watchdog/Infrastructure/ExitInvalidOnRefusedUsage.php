@@ -13,7 +13,7 @@ use Symfony\Component\Console\Event\ConsoleTerminateEvent;
 use Symfony\Component\Console\Exception\ExceptionInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 
-// Console refuses an option without its value or a missing argument before the check runs, with exit 1, and the watchdog's caller must tell refused input (2) from a failed or violating check (1); Console's error listener logs the whole command line, and refused input was never checked, so an --owner-key value in it may be private key material.
+// Console refuses an option without its value or a missing argument before the check runs, with exit 1, and the watchdog's caller must tell refused input (2) from a failed or violating check (1); Console's error listener logs the whole command line, and refused input was never checked, so an --owner-key or --peer-key value in it may be private key material.
 final readonly class ExitInvalidOnRefusedUsage
 {
     #[AsEventListener]

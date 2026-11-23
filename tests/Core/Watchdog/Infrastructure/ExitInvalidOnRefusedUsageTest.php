@@ -128,6 +128,17 @@ final class ExitInvalidOnRefusedUsageTest extends TestCase
         self::assertStringNotContainsString('private-looking-marker', $this->logged($log));
     }
 
+    public function testAMalformedPeerKeyTheCheckRefusesIsNotLogged(): void
+    {
+        $log = $this->logStream();
+        $tester = $this->applicationTester($log);
+
+        $exit = $tester->run(['command' => CheckMainCommand::NAME, 'repository' => '.', 'last-seen-head' => str_repeat('a', 40), '--peer-key' => ['private-looking-marker']]);
+
+        self::assertSame(Command::INVALID, $exit);
+        self::assertStringNotContainsString('private-looking-marker', $this->logged($log));
+    }
+
     public function testAFailedCheckIsStillLogged(): void
     {
         $log = $this->logStream();
