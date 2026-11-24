@@ -19,6 +19,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskBranchName;
@@ -58,6 +59,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ListingRows::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(QueuedIssue::class)]
+#[UsesClass(QueueOrder::class)]
 #[UsesClass(StoredIssue::class)]
 #[UsesClass(SyncState::class)]
 #[UsesClass(TaskBranchName::class)]
@@ -84,15 +86,15 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
         parent::tearDownAfterClass();
     }
 
-    public function testTheRecordedIssuesPrintTheUrgentTaskThenTheReworkThenByPriorityThenTheHeldTasks(): void
+    public function testTheRecordedIssuesPrintTheReworkThenTheUrgentTaskThenByPriorityThenTheHeldTasks(): void
     {
         $tester = $this->show('queue_open_issues.json', '', 'alpha');
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame(<<<'TEXT'
             Pick order of project alpha:
-              1. #42 Fix the dashboard clock
-              2. #43 Add the queue page (rework of #50)
+              1. #43 Add the queue page (rework of #50)
+              2. #42 Fix the dashboard clock
               3. #44 Retry a failed listing
               4. #48 Tidy the lanes page
               5. #47 Trim the ledger page

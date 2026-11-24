@@ -16,6 +16,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemNotAsPlanned;
 use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
@@ -51,7 +52,12 @@ final readonly class GitHubWorkSource implements WorkSource
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
         }
 
-        return $this->firstStillPickable($project, $plan);
+        $reworks = $this->reworksOrNone($project, $plan, $plan->ready);
+        if (null === $reworks) {
+            return WorkPick::nothing(NothingPicked::ListingIncomplete);
+        }
+
+        return $this->firstStillPickable($project, $plan, $reworks);
     }
 
     public function queue(string $project): WorkQueue
@@ -61,13 +67,13 @@ final readonly class GitHubWorkSource implements WorkSource
             return WorkQueue::incomplete();
         }
 
-        $reworks = $this->reworksOrNone($project, $plan);
+        $reworks = $this->reworksOrNone($project, $plan, [...$plan->ready, ...array_map(static fn (HeldIssue $held): QueuedIssue => $held->issue, $plan->held)]);
         if (null === $reworks) {
             return WorkQueue::incomplete();
         }
 
         return WorkQueue::listed(
-            array_map(fn (QueuedIssue $issue): Task => $this->taskOf($issue, $reworks), $plan->ready),
+            array_map(fn (QueuedIssue $issue): Task => $this->taskOf($issue, $reworks), QueueOrder::of($plan->ready, $reworks)),
             array_map(fn (HeldIssue $held): HeldTask => new HeldTask($this->taskOf($held->issue, $reworks), $held->reason), $plan->held),
         );
     }
@@ -77,9 +83,13 @@ final readonly class GitHubWorkSource implements WorkSource
         $this->store->failForGood($project, $number, $reason);
     }
 
-    private function firstStillPickable(string $project, IntakePlan $plan): WorkPick
+    // The order is taken from the reworks read now, because a pull request found only by its branch is not in the plan's order.
+    /**
+     * @param array<int, int> $reworks
+     */
+    private function firstStillPickable(string $project, IntakePlan $plan, array $reworks): WorkPick
     {
-        foreach ($plan->ready as $issue) {
+        foreach (QueueOrder::of($plan->ready, $reworks) as $issue) {
             $steered = $this->stillSteeredOrEndOfTick($project, $issue);
             if ($steered instanceof WorkPick) {
                 return $steered;
@@ -91,7 +101,7 @@ final readonly class GitHubWorkSource implements WorkSource
                 continue;
             }
 
-            $pick = $this->pickUnlessFailed($project, $issue, $plan);
+            $pick = $this->pickUnlessFailed($project, $issue, $plan, $reworks);
             if ($pick instanceof WorkPick) {
                 return $pick;
             }
@@ -165,19 +175,16 @@ final readonly class GitHubWorkSource implements WorkSource
         };
     }
 
-    // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see, and a pull request may be open that it did not see. The pull requests are read before the failures, so a failure recorded during that forge read is still seen.
-    private function pickUnlessFailed(string $project, QueuedIssue $issue, IntakePlan $plan): ?WorkPick
+    // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see. The pull requests were read before the failures, so a failure recorded during that forge read is still seen.
+    /**
+     * @param array<int, int> $reworks
+     */
+    private function pickUnlessFailed(string $project, QueuedIssue $issue, IntakePlan $plan, array $reworks): ?WorkPick
     {
         try {
-            $task = $this->taskOf($issue, $this->pullRequests->reworksOf($project, $plan, [$issue]));
-
-            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($task);
+            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($this->taskOf($issue, $reworks));
         } catch (ProjectHeldByAnotherWriter $held) {
             $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
-
-            return WorkPick::nothing(NothingPicked::ListingIncomplete);
-        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
-            $this->logger->warning('The open pull request of task #{number} of project {project} could not be read, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
 
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
         }
@@ -191,16 +198,18 @@ final readonly class GitHubWorkSource implements WorkSource
         return isset($failures[$issue->number()]) || array_any($plan->dependsOn[$issue->number()] ?? [], static fn (int $target): bool => isset($failures[$target]));
     }
 
-    // No queue rather than one without its reworks, because a task shown as a fresh build may have a pull request open.
+    // Nothing rather than reworks left out, because a task taken for a fresh build may have a pull request open, and the order depends on it.
     /**
+     * @param list<QueuedIssue> $tasks
+     *
      * @return array<int, int>|null
      */
-    private function reworksOrNone(string $project, IntakePlan $plan): ?array
+    private function reworksOrNone(string $project, IntakePlan $plan, array $tasks): ?array
     {
         try {
-            return $this->pullRequests->reworksOf($project, $plan, [...$plan->ready, ...array_map(static fn (HeldIssue $held): QueuedIssue => $held->issue, $plan->held)]);
+            return $this->pullRequests->reworksOf($project, $plan, $tasks);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
-            $this->logger->warning('The open pull requests of the tasks of project {project} could not be read, so no queue is shown: {reason}', ['project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
+            $this->logger->warning('The open pull requests of the tasks of project {project} could not be read, so nothing is picked or shown: {reason}', ['project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
 
             return null;
         }
