@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Exception;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 
@@ -63,7 +64,7 @@ final readonly class HistoryRow
 
         try {
             return new DateTimeImmutable($text)->setTimezone(new DateTimeZone('UTC'));
-        } catch (\Exception) {
+        } catch (Exception) {
             return null;
         }
     }

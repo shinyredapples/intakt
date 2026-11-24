@@ -31,7 +31,7 @@ final class HistoryTest extends TestCase
             $this->recorded('oldest', '2026-10-28T11:00:00+00:00'),
         ]));
 
-        self::assertSame(['third', 'second', 'first', 'oldest'], array_map(static fn (HistoryRow $row): ?string => $row->who, $history->rows));
+        self::assertSame(['third', 'second', 'first', 'oldest'], array_map(static fn (HistoryRow $row): string => $row->who, $history->rows));
     }
 
     public function testAProjectFilterKeepsThatProjectsRowsAndRowsWithoutAProject(): void
@@ -42,7 +42,7 @@ final class HistoryTest extends TestCase
             $this->recorded('c', '2026-10-28T12:00:00+00:00'),
         ]));
 
-        self::assertSame(['c', 'a'], array_map(static fn (HistoryRow $row): ?string => $row->who, $history->ofProject('alpha')->rows));
+        self::assertSame(['c', 'a'], array_map(static fn (HistoryRow $row): string => $row->who, $history->ofProject('alpha')->rows));
         self::assertCount(3, $history->ofProject(null)->rows);
         self::assertCount(3, $history->ofProject('')->rows);
     }
