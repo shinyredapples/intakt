@@ -145,6 +145,20 @@ final class AiProvidersTest extends KernelTestCase
         self::assertSame('value-from-the-vault', $this->resolvedVariable('ANTHROPIC_API_KEY'));
     }
 
+    public function testAKeptKeyIsUsedBesideAnEmptySecretInTheVault(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', '');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
+        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
     public function testTheAnthropicPlatformSendsTheKeptKeyToTheProvider(): void
     {
         $this->keepKey(self::KEPT_KEY);
