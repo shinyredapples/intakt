@@ -16,6 +16,7 @@ use Intakt\Core\Bench\UseCase\RunBench\BenchResultFile;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\PromptHashes;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
@@ -44,6 +45,7 @@ use Symfony\Component\Finder\Finder;
 #[UsesClass(BenchReviewerResult::class)]
 #[UsesClass(RunVerdict::class)]
 #[UsesClass(RoundTokens::class)]
+#[UsesClass(ModelNames::class)]
 final class BenchResultFileTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/../../../../../fixtures/sample-repository';
@@ -91,8 +93,8 @@ final class BenchResultFileTest extends TestCase
 
     public function testTheResultFileRecordsEachChangesRunsAndWhetherTheyAgreed(): void
     {
-        $caught = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, ['boundary'], [], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, []);
-        $missed = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, [], ['boundary' => FailureCause::Reviewer], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, []);
+        $caught = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, ['boundary'], [], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, new ModelNames());
+        $missed = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, [], ['boundary' => FailureCause::Reviewer], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, new ModelNames());
         $agreeing = new RepeatedChange('free-shipping', [new BenchReview('free-shipping', Decision::Changes, [$caught], []), new BenchReview('free-shipping', Decision::Changes, [$caught], [])]);
         $disagreeing = new RepeatedChange('price-list', [new BenchReview('price-list', Decision::Changes, [$caught], []), new BenchReview('price-list', Decision::Changes, [$missed], [])]);
 
@@ -104,7 +106,7 @@ final class BenchResultFileTest extends TestCase
     public function testEachReviewerHoldsItsMatchedDefectsMissesFalseAlarmsTokensAndDuration(): void
     {
         $verdict = new RunVerdict(false, ['caught-one'], ['missed-one' => FailureCause::Reviewer, 'impossible' => FailureCause::Bench], [$this->finding('F2', 9)], [$this->finding('F3', 12)], null);
-        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(2, 500, 0, 0, 0, 40, 540), 3000, []);
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(2, 500, 0, 0, 0, 40, 540), 3000, new ModelNames());
 
         $result = $this->written([new BenchReview('free-shipping', Decision::Changes, [$reviewer], [])]);
 
@@ -119,9 +121,18 @@ final class BenchResultFileTest extends TestCase
         self::assertSame(3000, $written['milliseconds']);
     }
 
+    public function testAReviewerKeepsItsModelNamesAsAListInTheOrderTheCallsStarted(): void
+    {
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(true, [], [], [], [], null), new RoundTokens(0, 0, 0, 0, 0, 0, 0), null, new ModelNames('model-b', 'model-a'));
+
+        $result = $this->written([new BenchReview('round-total', Decision::Approve, [$reviewer], [])]);
+
+        self::assertSame(['model-b', 'model-a'], $result['changes'][0]['runs'][0]['reviewers'][0]['models']);
+    }
+
     public function testAReviewerWithoutAnEndHasNoDuration(): void
     {
-        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(true, [], [], [], [], null), new RoundTokens(0, 0, 0, 0, 0, 0, 0), null, []);
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(true, [], [], [], [], null), new RoundTokens(0, 0, 0, 0, 0, 0, 0), null, new ModelNames());
 
         $result = $this->written([new BenchReview('round-total', Decision::Approve, [$reviewer], [])]);
 
@@ -131,7 +142,7 @@ final class BenchResultFileTest extends TestCase
     public function testAHarnessFailureIsWrittenWithItsReasonAndItsMissesAsTheHarnesses(): void
     {
         $verdict = new RunVerdict(false, [], ['coupon' => FailureCause::Harness], [], [], 'stopped at its output limit');
-        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, []);
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, new ModelNames());
 
         $result = $this->written([new BenchReview('coupon-code', Decision::Blocked, [$reviewer], [])]);
 

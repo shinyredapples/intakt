@@ -37,7 +37,7 @@ final readonly class ProviderKey
 
         // Exactly one, so a key two forms fit is refused instead of going to whichever provider is listed first.
         if (1 !== count($fitting)) {
-            throw new KeyNotRecognised(array_map(static fn (ProviderDescriptor $descriptor): string => $descriptor->label(), $catalog->descriptors()));
+            throw new KeyNotRecognised(...array_map(static fn (ProviderDescriptor $descriptor): string => $descriptor->label(), $catalog->descriptors()));
         }
 
         return new self($fitting[0]->id(), $key);

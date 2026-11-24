@@ -1,0 +1,5 @@
+[
+ {"number": 42, "title": "Fix the dashboard clock", "body": "", "labels": [{"name": "intakt"}, {"name": "priority:urgent"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:01:00+00:00", "milestone": null},
+ {"number": 51, "title": "Order the queue", "body": "", "labels": [{"name": "intakt"}, {"name": "priority:low"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:02:00+00:00", "milestone": null},
+ {"number": 52, "title": "Order the queue", "body": "No closing keyword here.", "labels": [], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:03:00+00:00", "milestone": null, "head": {"ref": "feat/51-order-the-queue"}, "pull_request": {"url": "https://api.github.com/repos/acme/widget/pulls/52"}}
+]

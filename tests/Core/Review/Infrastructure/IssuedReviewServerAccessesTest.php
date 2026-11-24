@@ -27,7 +27,7 @@ final class IssuedReviewServerAccessesTest extends TestCase
     {
         $access = $this->accesses()->forRound(new UuidV7());
 
-        self::assertSame(['read_file', 'list_directory', 'search_files'], $access->tools);
+        self::assertSame(['read_file', 'list_directory', 'search_files'], [...$access->tools]);
     }
 
     public function testTheAccessCarriesTheCredentialOfItsRound(): void

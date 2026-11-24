@@ -42,3 +42,13 @@ In GitHub, the journeys run on every push to main. On a pull request they run wh
 A run that times out files or updates a task that says so; a run you cancel files nothing.
 
 The technical side is in [Journeys](../architecture/journeys.md).
+
+## Journeys in a real browser
+
+A second kind of journey check clicks through a dashboard that is already running, in a real browser without a window:
+
+```
+bin/journey-check http://localhost:7781
+```
+
+Each journey starts on a fresh page, finds buttons and text by what they say on screen, and passes or fails. A failing one names the step that broke and, when it can, saves a picture of the page in `var/journey-check/` under a folder for that run. It ends with 0 when every journey passed, 1 when one failed and 2 when it could not run, for example when nothing answers at the address. It has no journeys of its own yet; the first one is planned. It needs Node.js and Playwright: the [user manual](../reference/user-manual.md#walking-user-journeys-with-the-journey-check) has the commands, and the technical side is in [Journey check](../architecture/journey-check.md).

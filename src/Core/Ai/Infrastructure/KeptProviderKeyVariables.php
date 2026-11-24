@@ -69,7 +69,7 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
      */
     private function compatibleStandIn(ProviderDescriptor $descriptor, ProviderKey $key): array
     {
-        $compatible = Provider::OpenAiCompatible->variables();
+        $compatible = [...Provider::OpenAiCompatible->variables()];
 
         if (Provider::OpenAiCompatible !== $descriptor->tierProvider() || [] !== array_intersect($descriptor->variables(), $compatible) || array_any($compatible, $this->isSetElsewhere(...))) {
             return [];

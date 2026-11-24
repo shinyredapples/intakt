@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\UseCase;
 
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -26,7 +27,7 @@ final class ListProjectTiersCommandTest extends TestCase
     public function testEveryTierOfEveryProjectIsListedWithItsModelOrItsProblem(): void
     {
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('projects')->willReturn(['alpha']);
+        $resolver->method('projects')->willReturn(new ProjectNames('alpha'));
         $resolver->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => match ($tier) {
             Tier::Strong => new ResolvedModel(Provider::Anthropic, 'big'),
             default => throw new TierNotMapped($project, $tier),
@@ -43,7 +44,7 @@ final class ListProjectTiersCommandTest extends TestCase
     public function testWithoutProjectsItSaysSo(): void
     {
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('projects')->willReturn([]);
+        $resolver->method('projects')->willReturn(new ProjectNames());
 
         self::assertStringContainsString('No projects are configured.', $this->execute($resolver)->getDisplay());
     }

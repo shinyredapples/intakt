@@ -166,13 +166,13 @@ final readonly class BenchReport
      */
     private function totalsName(BenchReviewerResult $reviewer, array $results): string
     {
-        if ([] !== $reviewer->models) {
+        if (!$reviewer->models->isEmpty()) {
             return $reviewer->name();
         }
 
         $names = [];
         foreach ($results as $other) {
-            if ([] !== $other->models && $other->role === $reviewer->role && $other->tier === $reviewer->tier) {
+            if (!$other->models->isEmpty() && $other->role === $reviewer->role && $other->tier === $reviewer->tier) {
                 $names[$other->name()] = true;
             }
         }
