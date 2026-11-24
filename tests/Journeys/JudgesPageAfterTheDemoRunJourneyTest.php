@@ -61,8 +61,8 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
         $page = $dashboard->request('GET', '/');
 
         self::assertSame(200, $dashboard->getResponse()->getStatusCode());
-        // The journey's own reading, so the board never asked an admin API that happens to listen on this machine.
-        self::assertSame(['not read in a journey', 'not read in a journey', 'not read in a journey'], $page->filter('#infrastructure .infra-reason')->each(
+        // The refusal of the journey's admin URL, so the board never asked an admin API that happens to listen on this machine.
+        self::assertSame(array_fill(0, 3, $this->refusedAdminApiReason()), $page->filter('#infrastructure .infra-reason')->each(
             static fn (Crawler $reason): string => trim($reason->text(), '()'),
         ));
     }
