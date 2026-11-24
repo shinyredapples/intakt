@@ -24,12 +24,6 @@ final readonly class MarkdownPage
 
     private const string ITEM_MARKERS = '/^(?:[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
 
-    /** @var list<string> */
-    private array $lines;
-
-    /** @var list<int> */
-    private array $fencedLines;
-
     /** @var list<int> */
     private array $depths;
 
@@ -43,20 +37,18 @@ final readonly class MarkdownPage
     private array $itemHeadings;
 
     /**
-     * @param list<string> $blankedLines
+     * @param list<string> $lines
      * @param list<int>    $fencedLines
      */
     public function __construct(
         public string $path,
-        array $blankedLines,
-        array $fencedLines = [],
+        private array $lines,
+        private array $fencedLines = [],
     ) {
-        $this->lines = $blankedLines;
-        $this->fencedLines = $fencedLines;
         $depths = [];
         $contents = [];
 
-        foreach ($blankedLines as $line) {
+        foreach ($this->lines as $line) {
             [$depths[], $contents[]] = $this->unquoted($line);
         }
 
@@ -65,7 +57,7 @@ final readonly class MarkdownPage
         [$kinds, $this->itemHeadings] = new MarkdownLineKinds(new MarkdownListIndents())->of($depths, $contents, $this->tableRows());
 
         // A blanked fence still holds content, so a fenced block before "In short" means the summary does not open the page.
-        $this->kinds = array_replace($kinds, array_intersect_key(array_fill_keys($fencedLines, MarkdownLineKind::Code), $kinds));
+        $this->kinds = array_replace($kinds, array_intersect_key(array_fill_keys($this->fencedLines, MarkdownLineKind::Code), $kinds));
     }
 
     /**
@@ -211,7 +203,7 @@ final readonly class MarkdownPage
     {
         // Code lines are set aside, so a "<!--" a reader sees in code hides nothing after it.
         $masked = array_map(fn (int $index): string => MarkdownLineKind::Code === $this->kinds[$index] ? self::CODE_LINE : $this->lines[$index], array_keys($this->lines));
-        $shown = preg_replace_callback(self::CODE_SPAN_OR_COMMENT, static fn (array $match): string => '<!--' === substr(ltrim($match[0]), 0, 4) ? ' '.str_repeat("\n", substr_count($match[0], "\n")) : $match[0], implode("\n", $masked));
+        $shown = preg_replace_callback(self::CODE_SPAN_OR_COMMENT, static fn (array $match): string => str_starts_with(ltrim($match[0]), '<!--') ? ' '.str_repeat("\n", substr_count($match[0], "\n")) : $match[0], implode("\n", $masked));
 
         if (null === $shown) {
             return $this;
