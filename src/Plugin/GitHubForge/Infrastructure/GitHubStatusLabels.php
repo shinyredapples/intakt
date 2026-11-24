@@ -51,9 +51,8 @@ final readonly class GitHubStatusLabels implements StatusLabels
     public function mirror(string $project, ChangeId $change, RoundStatusLabel $status): void
     {
         $lock = $this->lockOf($project, $change);
-        $plan = fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...));
-        if (!$this->whileHeld($lock, self::WAIT_TRIES, fn () => $this->write($project, $change, $plan))) {
-            $this->write($project, $change, fn (array $events): StatusLabelPlan => $plan($events)->withoutComment());
+        if (!$this->whileHeld($lock, self::WAIT_TRIES, fn () => $this->write($project, $change, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...))))) {
+            $this->write($project, $change, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...))->withoutComment());
         }
     }
 
