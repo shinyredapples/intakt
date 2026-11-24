@@ -22,6 +22,7 @@ use Intakt\Core\Watchdog\Infrastructure\FirstParentChain;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -38,6 +39,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(FirstParentChain::class)]
 #[CoversClass(OwnerKey::class)]
 #[CoversClass(OwnerKeyRefused::class)]
+#[CoversClass(TrustedSignatures::class)]
 #[CoversClass(MainHistoryRewritten::class)]
 #[CoversClass(MainNotRead::class)]
 #[UsesClass(HardenedGit::class)]
@@ -87,6 +89,254 @@ final class MainHistoryTest extends TestCase
         $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
 
         self::assertSame(SignatureStatus::OwnerSigned, $this->history([$this->publicKey('owner')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAGivenPeerKeyIsPeerSigned(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        self::assertSame(SignatureStatus::PeerSigned, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAPeerKeyIsPeerSignedWithoutAnyOwnerKey(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        self::assertSame(SignatureStatus::PeerSigned, $this->historyWithPeers([], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByTheOwnerKeyStaysOwnerSignedWhenPeerKeysAreGiven(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        self::assertSame(SignatureStatus::OwnerSigned, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAnOwnerKeyIsNeverPeerSignedWhenOnlyPeerKeysAreGiven(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->historyWithPeers([], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAPeerKeyIsNeverOwnerSignedWhenOnlyOwnerKeysAreGiven(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->historyWithPeers([$this->publicKey('owner')], [])->signatureOf($signed));
+    }
+
+    public function testACommitSignedByAKeyNeitherOwnerNorPeerGaveIsAnUnknownKey(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('stranger'), 'Foreign change');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')])->signatureOf($signed));
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerReadsAsOwnerSigned(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        self::assertSame(SignatureStatus::OwnerSigned, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')])->signatureOf($signed));
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckIsInterrupted(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $path = $this->interruptOwnerChecks();
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAPeerKeyStaysPeerSignedBehindTheInterruptingProgramWhenNoOwnerKeyIsAskedFor(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([], [$this->publicKey('peer')]);
+        $path = $this->interruptOwnerChecks();
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    #[DataProvider('exitCodesThatAreNoAnswer')]
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckEndsWithAnExitCodeThatIsNoAnswer(int $exitCode): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $path = $this->endOwnerChecksWith('exit '.$exitCode);
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function exitCodesThatAreNoAnswer(): iterable
+    {
+        yield 'a general error' => [1];
+        yield 'a program without the execute bit' => [126];
+        yield 'a program that is missing' => [127];
+        yield 'the code right below a refused signature' => [254];
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckCannotLaunchItsProgram(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $path = $this->endOwnerChecksWith('exec "$0.missing"');
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAPeerKeyStaysPeerSignedBehindTheProgramThatDoesNotLaunchWhenNoOwnerKeyIsAskedFor(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([], [$this->publicKey('peer')]);
+        $path = $this->endOwnerChecksWith('exit 127');
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testASignatureTheRealProgramRefusesForTheOwnerExitsWith255AndStillReachesThePeerCheck(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith('"$program" "$@"; status=$?; echo $status >> '.escapeshellarg($exits).'; exit $status');
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+            self::assertSame("255\n", file_get_contents($exits));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckEndsInAFatalErrorAndThePeerCheckAnswersYes(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith($this->failOwnerChecksFatally($exits), 'exit 0');
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+            self::assertSame("255\n", file_get_contents($exits));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerInAnotherBase64SpellingIsAnUnknownKeyWhenTheOwnerCheckEndsInAFatalError(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $privateKey = $this->privateKey('owner', ['-t', 'ecdsa', '-b', '256']);
+        $signed = $this->repository->commitSignedWith($privateKey, 'Owner change');
+        [$type, $key] = explode(' ', $this->publicKey('owner'));
+        $digits = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        $last = strlen(rtrim($key, '=')) - 1;
+        $respelled = substr_replace($key, $digits[strpos($digits, $key[$last]) ^ 1], $last, 1);
+        self::assertSame(base64_decode($key, true), base64_decode($respelled, true));
+        $history = $this->historyWithPeers([$type.' '.$key], [$type.' '.$respelled]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith($this->failOwnerChecksFatally($exits), 'exit 0');
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAPeerKeyStaysPeerSignedWhenTheOwnerCheckForAnotherKeyEndsInAFatalError(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith($this->failOwnerChecksFatally($exits));
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+            self::assertSame("255\n", file_get_contents($exits));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function paddedRsaNumbers(): iterable
+    {
+        yield 'the exponent' => [1];
+        yield 'the modulus' => [2];
+    }
+
+    // Forced order: the padded copy is the one spelling of the owner's key that would outlive the owner-key exclusion and read as peer_signed behind a fatal owner check, so it must never become a peer key.
+    #[DataProvider('paddedRsaNumbers')]
+    public function testTheOwnersRsaKeyWithALeadingZeroByteAddedToANumberIsRefusedAsAPeerKey(int $number): void
+    {
+        $this->privateKey('owner', ['-t', 'rsa', '-b', '2048']);
+        [$type, $key] = explode(' ', $this->publicKey('owner'));
+        $blob = (string) base64_decode($key, true);
+        $fields = [];
+        for ($offset = 0; $offset < strlen($blob); $offset += 4 + strlen(array_last($fields))) {
+            $fields[] = substr($blob, $offset + 4, (int) hexdec(bin2hex(substr($blob, $offset, 4))));
+        }
+        self::assertCount(3, $fields);
+        $padded = array_map(static fn (string $field, int $index): string => $index === $number ? "\x00".$field : $field, $fields, array_keys($fields));
+
+        try {
+            $this->historyWithPeers([$type.' '.$key], [self::key($type, $padded)]);
+            self::fail('A padded copy of the owner key must be refused.');
+        } catch (OwnerKeyRefused $refused) {
+            self::assertStringStartsWith('Peer key 1 is not one SSH public key', $refused->getMessage());
+        }
+    }
+
+    public function testAMalformedPeerKeyIsRefusedNamingItAsAPeerKeyAndItsPosition(): void
+    {
+        try {
+            $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer'), 'cert-authority ssh-ed25519 A']);
+            self::fail('A malformed peer key must be refused.');
+        } catch (OwnerKeyRefused $refused) {
+            self::assertStringStartsWith('Peer key 2 is not one SSH public key', $refused->getMessage());
+        }
     }
 
     public function testACommitSignedByAKeyTheOwnerDidNotRegisterIsAnUnknownKeyViolation(): void
@@ -653,6 +903,7 @@ final class MainHistoryTest extends TestCase
     public static function keysAtTheShapeLimits(): iterable
     {
         yield 'an rsa modulus of exactly 1024 bits after a leading zero byte' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x80".str_repeat("\x01", 127)])];
+        yield 'an rsa exponent whose leading zero byte keeps it positive' => [self::key('ssh-rsa', ['ssh-rsa', "\x00\x80\x01", "\x00\x80".str_repeat("\x01", 127)])];
         yield 'an uncompressed ecdsa point on its curve' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', self::P256_GENERATOR])];
     }
 
@@ -691,7 +942,10 @@ final class MainHistoryTest extends TestCase
         yield 'an rsa modulus encoded as a negative mpint' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x80".str_repeat("\x01", 127)])];
         yield 'an rsa exponent encoded as a negative mpint' => [self::key('ssh-rsa', ['ssh-rsa', "\x80\x01", "\x00\x80".str_repeat("\x01", 127)])];
         yield 'an rsa exponent of zero' => [self::key('ssh-rsa', ['ssh-rsa', "\x00\x00", "\x00\x80".str_repeat("\x01", 127)])];
-        yield 'an rsa modulus of 1023 bits' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x7f".str_repeat("\xff", 127)])];
+        yield 'an rsa modulus of 1023 bits' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x7f".str_repeat("\xff", 127)])];
+        yield 'an rsa exponent with a leading zero byte it does not need' => [self::key('ssh-rsa', ['ssh-rsa', "\x00\x01\x00\x01", "\x00\x80".str_repeat("\x01", 127)])];
+        yield 'an rsa modulus with a leading zero byte it does not need' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x01".str_repeat("\x01", 128)])];
+        yield 'an rsa modulus with a second leading zero byte' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x00\x80".str_repeat("\x01", 127)])];
         yield 'an ecdsa point in hybrid form' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x07".substr(self::P256_GENERATOR, 1)])];
         yield 'a key type the check does not know' => [self::key('ssh-unknown', ['ssh-unknown', str_repeat("\x01", 32)])];
         yield 'a second line' => ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA test\nowner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB"];
@@ -759,6 +1013,33 @@ final class MainHistoryTest extends TestCase
         return $path;
     }
 
+    // An ssh-keygen in front of the real one kills itself when asked for the owner principal, because a real program is hard to interrupt on cue; the search path to restore is returned.
+    private function interruptOwnerChecks(): string
+    {
+        return $this->endOwnerChecksWith('kill -TERM $$');
+    }
+
+    // The real program's fatal error for a signature file it cannot read, recorded with its exit code, because that error ends with 255 as a refused signature does.
+    private function failOwnerChecksFatally(string $exits): string
+    {
+        return '"$program" -Y verify -f '.escapeshellarg($this->keys.'/missing-signers').' -I owner -n git -s '.escapeshellarg($this->keys.'/missing-signature').' </dev/null; status=$?; echo $status >> '.escapeshellarg($exits).'; exit $status';
+    }
+
+    // An ssh-keygen in front of the real one runs the given shell line when asked for the owner principal and the other line (the real program, $program, by default) otherwise, because only a program in front forces an end on the owner check alone; the search path to restore is returned.
+    private function endOwnerChecksWith(string $shellLine, string $otherwise = 'exec "$program" "$@"'): string
+    {
+        $bin = $this->keys.'/owner-check-bin';
+        mkdir($bin);
+        $sshKeygen = escapeshellarg((string) new ExecutableFinder()->find('ssh-keygen'));
+        $script = "#!/bin/sh\nprogram=".$sshKeygen."\ncase \" \$* \" in\n    *\" -I owner \"*) ".$shellLine." ;;\nesac\n".$otherwise."\n";
+        file_put_contents($bin.'/ssh-keygen', $script);
+        chmod($bin.'/ssh-keygen', 0o700);
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$bin.':'.$path);
+
+        return $path;
+    }
+
     // The values from before the test, because later tests must inherit the environment the run started with.
     private function restoreGitDir(string|false $process, mixed $server): void
     {
@@ -805,6 +1086,15 @@ final class MainHistoryTest extends TestCase
     private function history(array $ownerKeys): MainHistory
     {
         return new MainHistory(new HardenedGit(), $this->repository->path, $ownerKeys, new Filesystem());
+    }
+
+    /**
+     * @param list<string> $ownerKeys
+     * @param list<string> $peerKeys
+     */
+    private function historyWithPeers(array $ownerKeys, array $peerKeys): MainHistory
+    {
+        return new MainHistory(new HardenedGit(), $this->repository->path, $ownerKeys, new Filesystem(), $peerKeys);
     }
 
     private function publicKey(string $name): string

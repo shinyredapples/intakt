@@ -64,7 +64,7 @@ final readonly class JobContainerDefinition
         $environment = ['HOME='.JobSpec::WORK_AREA, 'TMPDIR='.JobSpec::WORK_AREA, 'INTAKT_JOB_ID='.$spec->id->value, 'INTAKT_JOB_OUTPUT='.JobSpec::OUTPUT_DIRECTORY];
         $environment = $spec->kept instanceof JobKeptFolder ? [...$environment, 'INTAKT_JOB_KEPT='.JobSpec::KEPT_FOLDER] : $environment;
 
-        return $spec->egress->isNone() ? $environment : [...$environment, 'INTAKT_JOB_EGRESS='.implode(' ', $spec->egress->hosts)];
+        return $spec->egress->isNone() ? $environment : [...$environment, 'INTAKT_JOB_EGRESS='.implode(' ', [...$spec->egress->hosts])];
     }
 
     /**

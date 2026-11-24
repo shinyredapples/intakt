@@ -19,9 +19,6 @@ final readonly class HeadClones
 {
     private const int GIT_SECONDS = 300;
 
-    // Only for the fetch, because HardenedGit allows no protocol at all and the fetch reads the round's checkout by its path.
-    private const array LOCAL_FETCH = ['GIT_ALLOW_PROTOCOL' => 'file'];
-
     public function __construct(
         private Filesystem $filesystem,
         // Under the project folder like the jobs' prompts and output directories, because the engine mounts host paths.
@@ -46,9 +43,11 @@ final readonly class HeadClones
         // Any failure, also a timeout, removes the partial clone, so no head is left on the host.
         try {
             $this->filesystem->mkdir($clone, 0o700);
-            $this->run($this->hardened->call(['--git-dir=.git', 'init', '--quiet', '--template=', '--object-format='.$format], $clone));
-            $this->run($this->hardened->call(['fetch', '--quiet', '--no-tags', '--depth=1', $checkout, $head->hash], $clone), self::LOCAL_FETCH);
-            $this->run($this->hardened->call(['-c', 'core.autocrlf=false', '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $head->hash], $clone));
+            $this->run($this->hardened->call($clone, '--git-dir=.git', 'init', '--quiet', '--template=', '--object-format='.$format));
+            $fetch = $this->hardened->call($clone, 'fetch', '--quiet', '--no-tags', '--depth=1', $checkout, $head->hash);
+            // Only for the fetch, because HardenedGit allows no protocol at all and the fetch reads the round's checkout by its path.
+            $this->run(new GitCall($fetch->command, $fetch->directory, $fetch->environment->with(GIT_ALLOW_PROTOCOL: 'file')));
+            $this->run($this->hardened->call($clone, '-c', 'core.autocrlf=false', '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $head->hash));
         } catch (RuntimeException $failed) {
             $this->remove($clone);
 
@@ -71,17 +70,15 @@ final readonly class HeadClones
      */
     private function objectFormatOf(string $checkout): string
     {
-        return trim($this->run($this->hardened->call(['rev-parse', '--show-object-format'], $checkout)));
+        return trim($this->run($this->hardened->call($checkout, 'rev-parse', '--show-object-format')));
     }
 
     /**
-     * @param array<string, string> $environment
-     *
      * @throws ProcessFailedException
      * @throws RuntimeException
      */
-    private function run(GitCall $call, array $environment = []): string
+    private function run(GitCall $call): string
     {
-        return new Process($call->command, $call->directory, [...$call->environment, ...$environment], null, self::GIT_SECONDS)->mustRun()->getOutput();
+        return new Process([...$call->command], $call->directory, [...$call->environment], null, self::GIT_SECONDS)->mustRun()->getOutput();
     }
 }

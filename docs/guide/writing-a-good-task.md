@@ -44,6 +44,19 @@ flowchart LR
 
 A task that fails one of them is not built. Intakt leaves one comment listing what is missing, and picks the task up again once you have added it.
 
+## Writing a bug task
+
+Give a bug the `bug` label and describe it in four parts, each under its own heading or in bold:
+
+- **When:** the steps or the input that show the bug.
+- **Today:** what happens now.
+- **Expected:** what should happen.
+- **Must keep working:** what the fix must not change.
+
+Start each part with a heading that is just its name (`## Today`) or with its name in bold (`**Today:** the page stays blank`). Parts written inside a fenced code block (```` ``` ```` or `~~~`) or a comment do not count.
+
+If a part is missing or empty, Intakt builds nothing. It parks the task with a question that names the missing part; add it, or remove the `bug` label. For now the question is only stored: Intakt does not post it on the issue yet. A complete bug task goes on to the build. A bug no test can show (a vendor outage, a device only you have) keeps the usual evidence rules.
+
 ## The template
 
 Copy this into a new issue and fill it in:
@@ -120,15 +133,15 @@ Labels on the issue tell Intakt how to treat the task. Only people with write ac
 
 | Label | Effect |
 |---|---|
-| `intakt` | Intakt may build this task |
-| `idea` | for discussion only: Intakt never builds or plans it, even if `intakt` is also set |
+| the project's eligibility label (`intakt` by default) | Intakt may build this task |
+| `idea` | for discussion only: Intakt never builds or plans it, even if the eligibility label is also set |
 | `priority:urgent`, `high`, `normal`, `low` | the order in the queue (no label means `normal`) |
 | `class:core`, `feature`, `tooling`, `process` | what kind of work it is |
 | `model:strong`, `standard`, `light` | start with a stronger or cheaper AI model |
 | `plan:required`, `plan:skip` | the Tech lead writes a plan for your approval first, or not |
 | `review:full`, `review:<role>` | all the Code reviewers every round, or a specialist reviewer (for example `review:security`) |
 
-To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add `intakt`.
+To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add the project's eligibility label (`intakt` unless the project names another).
 
 ## Asking and answering
 

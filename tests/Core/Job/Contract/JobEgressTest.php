@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job\Contract;
 
+use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobRefused;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -17,29 +18,29 @@ final class JobEgressTest extends TestCase
     public function testNoneHasNoHost(): void
     {
         self::assertTrue(JobEgress::none()->isNone());
-        self::assertSame([], JobEgress::none()->hosts);
+        self::assertSame([], [...JobEgress::none()->hosts]);
     }
 
     public function testAnAllowlistKeepsEachHostOnce(): void
     {
-        $egress = JobEgress::to(['api.vendor.example', 'repo.packagist.org', 'api.vendor.example']);
+        $egress = JobEgress::to(new EgressHosts('api.vendor.example', 'repo.packagist.org', 'api.vendor.example'));
 
         self::assertFalse($egress->isNone());
-        self::assertSame(['api.vendor.example', 'repo.packagist.org'], $egress->hosts);
+        self::assertSame(['api.vendor.example', 'repo.packagist.org'], [...$egress->hosts]);
     }
 
     public function testAHostOf253CharactersIsAccepted(): void
     {
         $host = $this->hostOfLength(253);
 
-        self::assertSame([$host], JobEgress::to([$host])->hosts);
+        self::assertSame([$host], [...JobEgress::to(new EgressHosts($host))->hosts]);
     }
 
     public function testAnEmptyAllowlistIsRefused(): void
     {
         $this->expectExceptionObject(JobRefused::forEmptyAllowlist());
 
-        JobEgress::to([]);
+        JobEgress::to(new EgressHosts());
     }
 
     /**
@@ -68,7 +69,7 @@ final class JobEgressTest extends TestCase
     {
         $this->expectExceptionObject(JobRefused::forEgressHost($host));
 
-        JobEgress::to(['api.vendor.example', $host]);
+        JobEgress::to(new EgressHosts('api.vendor.example', $host));
     }
 
     public function testAHostOf254CharactersIsRefused(): void
@@ -77,7 +78,7 @@ final class JobEgressTest extends TestCase
 
         $this->expectExceptionObject(JobRefused::forEgressHost($host));
 
-        JobEgress::to([$host]);
+        JobEgress::to(new EgressHosts($host));
     }
 
     // Three labels of 63 characters and a top-level domain of three letters, so the fourth label alone sets the length.

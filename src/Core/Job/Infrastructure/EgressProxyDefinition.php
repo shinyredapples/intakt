@@ -66,7 +66,7 @@ final readonly class EgressProxyDefinition
     {
         return implode(PHP_EOL, [
             'http_port '.self::PORT,
-            'acl intakt_allowed dstdomain -n '.implode(' ', $egress->hosts),
+            'acl intakt_allowed dstdomain -n '.implode(' ', [...$egress->hosts]),
             'acl intakt_tls port 443',
             'acl intakt_connect method CONNECT',
             'http_access allow intakt_connect intakt_tls intakt_allowed',

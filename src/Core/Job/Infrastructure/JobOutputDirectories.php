@@ -7,6 +7,7 @@ namespace Intakt\Core\Job\Infrastructure;
 use DirectoryIterator;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobOutputRefused;
 use SplFileInfo;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -70,7 +71,8 @@ final readonly class JobOutputDirectories
 
         ksort($files, SORT_STRING);
 
-        return new JobOutput($files);
+        // A name of digits became an integer key above, so each name is turned back into text.
+        return new JobOutput(...array_map(static fn (string $name, string $contents): JobOutputFile => new JobOutputFile($name, $contents), array_map(strval(...), array_keys($files)), $files));
     }
 
     public function remove(JobId $job): void

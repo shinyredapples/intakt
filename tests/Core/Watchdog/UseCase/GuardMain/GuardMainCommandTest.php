@@ -28,7 +28,10 @@ use Intakt\Core\Watchdog\Infrastructure\LedgerOwnerPushNotices;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\NoticeNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
+use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
+use Intakt\Core\Watchdog\UseCase\CheckMain\TrustedKeys;
 use Intakt\Core\Watchdog\UseCase\GuardMain\AHaltNamesItsProject;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardedMain;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMain;
@@ -58,6 +61,9 @@ use Symfony\Component\Process\Process;
 #[CoversClass(GuardedMain::class)]
 #[CoversClass(AHaltNamesItsProject::class)]
 #[CoversClass(ConsoleReport::class)]
+#[UsesClass(TrustedKeys::class)]
+#[UsesClass(TrustedSignatures::class)]
+#[UsesClass(OwnerKeyRefused::class)]
 #[UsesClass(LedgerOwnerPushNotices::class)]
 #[UsesClass(OwnerPushNoticePayload::class)]
 #[UsesClass(NoticeNotRecorded::class)]
@@ -211,6 +217,69 @@ final class GuardMainCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame(sprintf("notice acme/shop: commit %s owner_signed, pushed without the gate\nacme/shop is not halted: no owner card stands\n", $owner), $tester->getDisplay());
         self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testAPeerSignedMergePrintsAnInfoLineRaisesNoCardGivesNoNoticeAndExitsWithZero(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')], '--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(sprintf("info: peer merge %s peer_signed\nacme/shop is not halted: no owner card stands\n", $peer), $tester->getDisplay());
+        self::assertSame([], $this->ledger->kinds());
+    }
+
+    public function testAPeerMergeAndARecordedMergeLeaveTheProjectNotHalted(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->checkoutNewBranch('change');
+        $this->repository->commitEmpty('Built change');
+        $this->repository->checkout('main');
+        $recorded = $this->repository->merge('change');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--recorded-merge' => [$seen.'..'.$recorded], '--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(sprintf("info: peer merge %s peer_signed\nacme/shop is not halted: no owner card stands\n", $peer), $tester->getDisplay());
+    }
+
+    public function testAPeerMergeNextToAnUnsignedCommitIsShownAndTheCardStillHalts(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $unsigned = $this->repository->commitEmpty('Unsigned change');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringStartsWith(sprintf("info: peer merge %s peer_signed\ncard ", $peer), $tester->getDisplay());
+        self::assertSame($unsigned, $this->onlyStandingCard()->violation?->commit);
+    }
+
+    public function testAMergeSignedByThePeerKeyIsAnUnknownKeyCardWhenThePeerKeyIsNotGiven(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame($peer, $this->onlyStandingCard()->violation?->commit);
+    }
+
+    public function testAMalformedPeerKeyExitsInvalidAndRecordsNothing(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--peer-key' => ['cert-authority secret-looking-value']]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('Peer key 1', $tester->getDisplay());
+        self::assertStringNotContainsString('secret-looking-value', $tester->getDisplay());
+        self::assertSame([], $this->ledger->kinds());
     }
 
     public function testTheSameOwnerSignedCommitSeenAgainGivesNoSecondNotice(): void
