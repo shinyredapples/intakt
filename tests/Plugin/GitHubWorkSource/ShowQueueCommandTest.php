@@ -34,6 +34,7 @@ use Intakt\Plugin\GitHubWorkSource\UseCase\ShowQueue\ShowQueueCommand;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\Task;
 use Intakt\Plugin\WorkSource\Contract\WorkQueue;
+use Intakt\Plugin\WorkSource\Contract\WorkSource;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -178,6 +179,37 @@ final class ShowQueueCommandTest extends KernelTestCase
         self::assertStringContainsString("  1. #4 <error>Fix</error> [2J now\n", $display);
     }
 
+    public function testUnicodeControlsAndDirectionOverridesInATitleAreBlankedWhilePrintableTextStays(): void
+    {
+        $task = Issues::task(4);
+        $this->reads->lists([new ListedIssue(4, "Café \u{9B}2J clear, \u{202E}txt.exe\u{202C} next\u{85}line\u{2028}end", $task->body, $task->labels, $task->author, $task->updatedAt, null, false)]);
+
+        $display = $this->show('alpha')->getDisplay();
+
+        self::assertStringContainsString("  1. #4 Café  2J clear,  txt.exe  next line end\n", $display);
+    }
+
+    public function testATitleThatIsNotUtf8KeepsOnlyItsPrintableAscii(): void
+    {
+        $source = self::createStub(WorkSource::class);
+        $source->method('queue')->willReturn(WorkQueue::listed([new Task(4, "Fix \xC2 the \u{9B}2J byte", null)], []));
+
+        $display = $this->show('alpha', $source)->getDisplay();
+
+        self::assertStringContainsString("  1. #4 Fix ? the ??2J byte\n", $display);
+        self::assertTrue(mb_check_encoding($display, 'UTF-8'));
+    }
+
+    public function testAHeldReasonHasItsControlsBlankedToo(): void
+    {
+        $source = self::createStub(WorkSource::class);
+        $source->method('queue')->willReturn(WorkQueue::listed([], [new HeldTask(new Task(2, 'Held', null), "waits\rfor\u{85}#1\u{9B}2J")]));
+
+        $display = $this->show('alpha', $source)->getDisplay();
+
+        self::assertStringContainsString("  #2 Held: waits for #1 2J\n", $display);
+    }
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
@@ -195,10 +227,10 @@ final class ShowQueueCommandTest extends KernelTestCase
         parent::tearDown();
     }
 
-    private function show(string $project): CommandTester
+    private function show(string $project, ?WorkSource $source = null): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ShowQueueCommand($this->source()));
+        $application->addCommand(new ShowQueueCommand($source ?? $this->source()));
         $tester = new CommandTester($application->find('intakt:queue:show'));
         $tester->execute(['project' => $project], ['capture_stderr_separately' => true]);
 

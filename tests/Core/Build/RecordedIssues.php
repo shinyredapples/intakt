@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -14,7 +15,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 // Serves recorded issues to an install in the test environment, so the evidence of intakt:build:task needs no GitHub; GitHubIssueReads serves an installed instance.
 /**
- * @phpstan-type Issue array{number: int, title: string, body: string, labels: list<array{name: string}>, user: array{login: string}, updated_at: string, pull_request?: array<mixed>}
+ * @phpstan-type Issue array{number: int, title: string, body: string, labels: list<array{name: string}>, user: array{login: string}, updated_at: string, milestone?: array{due_on: string|null}|null, pull_request?: array<mixed>}
  */
 final readonly class RecordedIssues implements IssueReads
 {
@@ -41,7 +42,7 @@ final readonly class RecordedIssues implements IssueReads
      */
     private function listed(array $issue): ListedIssue
     {
-        $moment = DateTimeImmutable::createFromFormat('Y-m-d\TH:i:sP', $issue['updated_at'], new DateTimeZone('UTC'));
+        $due = $issue['milestone']['due_on'] ?? null;
 
         return new ListedIssue(
             $issue['number'],
@@ -49,10 +50,17 @@ final readonly class RecordedIssues implements IssueReads
             $issue['body'],
             array_column($issue['labels'], 'name'),
             $issue['user']['login'],
-            false === $moment ? throw new LogicException('Not a recorded moment: '.$issue['updated_at']) : $moment,
-            null,
+            $this->moment($issue['updated_at']),
+            null === $due ? null : $this->moment($due),
             isset($issue['pull_request']),
         );
+    }
+
+    private function moment(string $recorded): DateTimeImmutable
+    {
+        $moment = DateTimeImmutable::createFromFormat('Y-m-d\TH:i:sP', $recorded, new DateTimeZone('UTC'));
+
+        return false === $moment ? throw new LogicException('Not a recorded moment: '.$recorded) : $moment;
     }
 
     /**
@@ -60,10 +68,11 @@ final readonly class RecordedIssues implements IssueReads
      */
     private function read(): array
     {
+        // A recording of the form {"fails": "<message>"} stands for a listing GitHub did not answer in full, so a short listing can be shown on an install too.
         $file = is_file($this->recording) ? $this->recording : throw new LogicException('BUILD_RECORDING names no recording file.');
-        /** @var list<Issue> $recorded */
+        /** @var list<Issue>|array{fails: string} $recorded */
         $recorded = json_decode((string) file_get_contents($file), true, flags: JSON_THROW_ON_ERROR);
 
-        return $recorded;
+        return isset($recorded['fails']) ? throw new ForgeReadFailed($recorded['fails']) : $recorded;
     }
 }

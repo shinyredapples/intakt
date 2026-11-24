@@ -45,11 +45,22 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
               1. #42 Fix the dashboard clock
               2. #43 Add the queue page (rework of #50)
               3. #44 Retry a failed listing
-              4. #41 Show the build tier per task
+              4. #48 Tidy the lanes page
+              5. #47 Trim the ledger page
+              6. #41 Show the build tier per task
             Held tasks of project alpha:
               #45 Document the queue page: waits for #43
 
             TEXT, $tester->getDisplay());
+    }
+
+    public function testAListingReadThatFailsPrintsNoOrderAndFails(): void
+    {
+        $tester = $this->show('queue_listing_fails.json', '', 'alpha');
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame('', $tester->getDisplay());
+        self::assertStringContainsString('The listing of project alpha came back short', $tester->getErrorOutput());
     }
 
     public function testWithTheDefaultLabelATaskCarryingOnlyReadyIsNotQueuedAndATaskCarryingIntaktIsPicked(): void

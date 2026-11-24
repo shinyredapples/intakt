@@ -16,6 +16,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'intakt:queue:show', description: 'Print the order in which the work source would pick the tasks of a project, then the held tasks with their reasons')]
 final readonly class ShowQueueCommand
 {
+    private const string UNICODE_CONTROLS = '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u';
+
     public function __construct(
         private WorkSource $workSource,
     ) {
@@ -75,6 +77,12 @@ final readonly class ShowQueueCommand
     // Raw and without control characters, because a title or a quoted wait line is issue text anyone can write, and it must not restyle or rewrite the terminal.
     private function printLine(SymfonyStyle $io, string $line): void
     {
-        $io->writeln(preg_replace('/[\x00-\x1F\x7F]/', ' ', $line) ?? '', OutputInterface::OUTPUT_RAW);
+        $io->writeln($this->printable($line), OutputInterface::OUTPUT_RAW);
+    }
+
+    private function printable(string $line): string
+    {
+        // Unicode's controls, format characters and line breaks too (CSI as U+009B, a next line, a direction override), the set ConsoleReport escapes; text that is not UTF-8 keeps only its printable ASCII, as BuildTaskCommand does, since its other bytes cannot be told from control characters.
+        return preg_replace(self::UNICODE_CONTROLS, ' ', $line) ?? (string) preg_replace('/[^\x20-\x7E]/', '?', $line);
     }
 }
