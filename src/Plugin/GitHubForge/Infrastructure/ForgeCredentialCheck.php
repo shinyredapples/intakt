@@ -71,9 +71,9 @@ final readonly class ForgeCredentialCheck implements HealthCheck
             return CheckResult::failed('GitHub rate-limits this installation until '.$limited->resetsAt->format(DATE_ATOM).'. Run the doctor again after that.');
         } catch (ReportableFailure $failure) {
             return CheckResult::failed($failure->getMessage().self::FIX);
-        } catch (InvalidArgumentException $invalid) {
-            // The expected installation is parsed from the settings on first use, so a bad setting surfaces here.
-            return CheckResult::failed($invalid->getMessage().' Fix GITHUB_APP_PERMISSIONS and GITHUB_APP_REPOSITORIES in your settings.');
+        } catch (InvalidArgumentException) {
+            // The expected installation is parsed from the settings on first use, so a bad setting surfaces here; its message is left out because it can quote a setting's text, line breaks included.
+            return CheckResult::failed('GITHUB_APP_PERMISSIONS or GITHUB_APP_REPOSITORIES cannot be read. Fix GITHUB_APP_PERMISSIONS and GITHUB_APP_REPOSITORIES in your settings.');
         }
 
         return CheckResult::passed();

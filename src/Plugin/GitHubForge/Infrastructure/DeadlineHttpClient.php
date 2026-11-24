@@ -12,7 +12,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 use Symfony\Contracts\HttpClient\ResponseStreamInterface;
 
-// One deadline over several requests, because Symfony's timeout and max_duration bound each request alone: every request may take its full slice, and none starts without a full slice left, so the whole read ends by the deadline.
+// One deadline over several requests, because Symfony's timeout and max_duration bound each request alone: each request gets its slice or the time left, whichever is shorter, so the whole read ends by the deadline without refusing a request that still fits. Nothing is sent once no time is left, because a max_duration of 0 would mean no limit at all.
 #[Exclude]
 final readonly class DeadlineHttpClient implements HttpClientInterface
 {
@@ -30,11 +30,12 @@ final readonly class DeadlineHttpClient implements HttpClientInterface
      */
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
-        if ($this->secondsLeft() < self::SLICE_SECONDS) {
+        $limit = min(self::SLICE_SECONDS, $this->secondsLeft());
+        if ($limit <= 0) {
             throw new TransportException('The time for this check ran out before the next request.');
         }
 
-        return $this->http->request($method, $url, ['timeout' => self::SLICE_SECONDS, 'max_duration' => self::SLICE_SECONDS] + $options);
+        return $this->http->request($method, $url, ['timeout' => $limit, 'max_duration' => $limit] + $options);
     }
 
     public function stream(ResponseInterface|iterable $responses, ?float $timeout = null): ResponseStreamInterface

@@ -48,6 +48,16 @@ final class HubHealthCheckTest extends TestCase
         self::assertStringContainsString('the hub reports unhealthy. Restart the container', $result->fix);
     }
 
+    // The shipped compose.yaml names the service, not the container, so only the service name reaches it.
+    public function testTheHubCheckNamesTheComposeServiceInItsCommands(): void
+    {
+        $result = new HubHealthCheck(new RecordedAdminApi()->answering('/mercure/health/ready', '', 503)->status())->run();
+
+        self::assertStringContainsString('docker compose restart intakt', $result->fix);
+        self::assertStringContainsString('docker compose logs intakt', $result->fix);
+        self::assertStringNotContainsString('docker restart', $result->fix);
+    }
+
     public function testTheHubCheckFailsWhenItsEndpointIsDown(): void
     {
         $result = new HubHealthCheck(new RecordedAdminApi()->unreachable()->status())->run();

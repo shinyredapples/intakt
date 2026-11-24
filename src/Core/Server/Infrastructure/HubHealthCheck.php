@@ -32,6 +32,6 @@ final readonly class HubHealthCheck implements HealthCheck
 
         $problem = HubVerdict::of($hub)->problem();
 
-        return null === $problem ? CheckResult::passed() : CheckResult::failed($problem.'. Restart the container (docker restart intakt); if the hub stays down, read its log with docker logs intakt.');
+        return null === $problem ? CheckResult::passed() : CheckResult::failed($problem.'. Restart the container from the host, in the folder with compose.yaml (docker compose restart intakt); if the hub stays down, read its log with docker compose logs intakt.');
     }
 }

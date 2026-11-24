@@ -12,7 +12,7 @@ You cannot open the dashboard, so you cannot see what is wrong. The doctor works
 
 1. Run `docker exec intakt php bin/console intakt:doctor`.
 2. Read each line. `pass:` means the check is fine; `FAIL:` ends with what to do.
-3. **Live-update hub:** it is down or unhealthy. Restart the container. Run outside the container, this check fails because the admin API answers only inside it.
+3. **Live-update hub:** it is down or unhealthy. Restart the container from the host, in the folder with `compose.yaml`: `docker compose restart intakt`. If the hub stays down, read its log with `docker compose logs intakt`. Run outside the container, this check fails because the admin API answers only inside it.
 4. **GitHub App credential:** Intakt could not read the App's installation back. Check the App id, private key and installation id, and that the host can reach `api.github.com`. An install with no GitHub App set up (all three settings empty) passes this check; an App id left empty while the other two are set fails it. When GitHub is pausing Intakt for its rate limit, the line says until when; run the doctor again after that. The check gives up after 15 seconds and never changes the GitHub budget the workers keep.
 5. A line that says the check could not run counts as a failure too: start the stack and run it again.
 6. The exit code is 0 only when every check passes.

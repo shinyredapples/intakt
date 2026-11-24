@@ -21,24 +21,31 @@ final class DeadlineHttpClientTest extends TestCase
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $sent = [];
-        $http = new MockHttpClient(static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
-            $sent = $options;
+        $client = new DeadlineHttpClient(self::recording($sent), $clock, $clock->now()->modify('+15 seconds'));
 
-            return new MockResponse('{}');
-        });
-
-        $client = new DeadlineHttpClient($http, $clock, $clock->now()->modify('+5 seconds'));
         $client->request('GET', 'https://api.github.com/', ['timeout' => 60, 'max_duration' => 0]);
 
         self::assertEqualsWithDelta(5.0, $sent['timeout'], 0.0);
         self::assertEqualsWithDelta(5.0, $sent['max_duration'], 0.0);
     }
 
-    public function testARequestWithLessThanAFullSliceLeftIsRefusedBeforeItIsSent(): void
+    public function testARequestWithLessThanAFullSliceLeftIsSentWithTheTimeLeftAsItsLimits(): void
+    {
+        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $sent = [];
+        $client = new DeadlineHttpClient(self::recording($sent), $clock, $clock->now()->modify('+3 seconds'));
+
+        $client->request('GET', 'https://api.github.com/');
+
+        self::assertEqualsWithDelta(3.0, $sent['timeout'], 0.0);
+        self::assertEqualsWithDelta(3.0, $sent['max_duration'], 0.0);
+    }
+
+    public function testARequestWithNoTimeLeftIsRefusedBeforeItIsSent(): void
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $http = new MockHttpClient(static fn (): ResponseInterface => throw new LogicException('must not be sent'));
-        $client = new DeadlineHttpClient($http, $clock, $clock->now()->modify('+4 seconds'));
+        $client = new DeadlineHttpClient($http, $clock, $clock->now());
 
         $this->expectException(TransportException::class);
 
@@ -49,10 +56,22 @@ final class DeadlineHttpClientTest extends TestCase
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $client = new DeadlineHttpClient(new MockHttpClient(new MockResponse('{}')), $clock, $clock->now()->modify('+6 seconds'));
-        $clock->sleep(2);
+        $clock->sleep(7);
 
         $this->expectException(TransportException::class);
 
         $client->withOptions(['headers' => ['X-Test' => 'yes']])->request('GET', 'https://api.github.com/');
+    }
+
+    /**
+     * @param array<mixed> $sent
+     */
+    private static function recording(array &$sent): MockHttpClient
+    {
+        return new MockHttpClient(static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
+            $sent = $options;
+
+            return new MockResponse('{}');
+        });
     }
 }
