@@ -139,7 +139,7 @@ final class DevelopmentCaddyfileTest extends TestCase
         $carriers = 0;
 
         foreach ($templates as $template) {
-            $path = substr((string) $template, \strlen(self::ROOT) + 1);
+            $path = substr((string) $template, strlen(self::ROOT) + 1);
             if (!str_contains((string) file_get_contents((string) $template), 'frankenphp-hot-reload:url')) {
                 continue;
             }
