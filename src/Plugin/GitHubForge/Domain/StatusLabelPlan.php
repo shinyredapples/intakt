@@ -39,6 +39,12 @@ final readonly class StatusLabelPlan
         return new self($wanted, $remove, !$ownPresent, [] !== $changedByPerson);
     }
 
+    // For a write made without the lock, because the writer holding it comments on the person's change already.
+    public function withoutComment(): self
+    {
+        return clone($this, ['commentOnRestore' => false]);
+    }
+
     // Toward the status Intakt applied last, because that is the round as Intakt last mirrored it; null when Intakt never set one, so there is nothing to put back.
     /**
      * @param list<LabelEvent>      $events

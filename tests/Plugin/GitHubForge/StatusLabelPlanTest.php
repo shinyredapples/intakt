@@ -44,6 +44,17 @@ final class StatusLabelPlanTest extends TestCase
         self::assertTrue($plan->commentOnRestore);
     }
 
+    public function testAPlanWithoutItsCommentKeepsItsLabelWrites(): void
+    {
+        $events = [new LabelEvent('status:in-review', 'intakt[bot]', true), new LabelEvent('status:waiting-on-you', 'alice', true)];
+
+        $plan = StatusLabelPlan::of(RoundStatusLabel::InReview, $events, $this->own(...))->withoutComment();
+
+        self::assertSame(['status:waiting-on-you'], $plan->remove);
+        self::assertFalse($plan->add);
+        self::assertFalse($plan->commentOnRestore);
+    }
+
     public function testTheWantedLabelAPersonRemovedIsPutBackWithOneComment(): void
     {
         $events = [new LabelEvent('status:in-review', 'intakt[bot]', true), new LabelEvent('status:in-review', 'alice', false)];

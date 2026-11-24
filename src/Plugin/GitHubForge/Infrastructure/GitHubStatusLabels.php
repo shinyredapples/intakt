@@ -47,13 +47,13 @@ final readonly class GitHubStatusLabels implements StatusLabels
     ) {
     }
 
-    // Waits a bounded while for a busy lock, because a new status that gave up would leave the old one standing, and a restoration aims at the status Intakt applied last.
+    // Waits a bounded while for a busy lock and then writes without it and without a comment, because a new status that gave up would leave the old one standing (a restoration aims at the status Intakt applied last), and the holder comments on the person's change.
     public function mirror(string $project, ChangeId $change, RoundStatusLabel $status): void
     {
         $lock = $this->lockOf($project, $change);
-        $write = fn () => $this->write($project, $change, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...)));
-        if (!$this->whileHeld($lock, self::WAIT_TRIES, $write)) {
-            throw new ForgeWriteFailed('Another write held the status label of this change for longer than the wait.');
+        $plan = fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...));
+        if (!$this->whileHeld($lock, self::WAIT_TRIES, fn () => $this->write($project, $change, $plan))) {
+            $this->write($project, $change, fn (array $events): StatusLabelPlan => $plan($events)->withoutComment());
         }
     }
 

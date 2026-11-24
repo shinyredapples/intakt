@@ -110,24 +110,32 @@ final class GitHubStatusLabelsTest extends TestCase
         self::assertSame([], $this->comments);
     }
 
-    public function testAWriterThatOverlapsARestorationIsRefusedSoThePersonsChangeGetsOneComment(): void
+    public function testAWriterThatOverlapsAnotherPastTheWaitWritesWithoutCommentingSoThePersonsChangeGetsOneComment(): void
     {
         $this->labeled('status:in-review', self::OWN);
         $this->labeled('status:waiting-on-you', RecordedTrust::WRITER);
-        $overlapping = null;
-        $this->whileWriting = function () use (&$overlapping): void {
+        $this->whileWriting = function (): void {
             $this->whileWriting = null;
-            try {
-                $this->mirror(RoundStatusLabel::InReview);
-            } catch (ForgeWriteFailed $refused) {
-                $overlapping = $refused;
-            }
+            $this->mirror(RoundStatusLabel::InReview);
         };
 
         $this->mirror(RoundStatusLabel::InReview);
 
-        self::assertInstanceOf(ForgeWriteFailed::class, $overlapping);
         self::assertCount(1, $this->comments);
+    }
+
+    public function testAVerdictStatusThatArrivesWhileARestorationHoldsTheLockPastTheWaitIsStillWritten(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', RecordedTrust::WRITER);
+        $this->whileWriting = function (): void {
+            $this->whileWriting = null;
+            $this->mirror(RoundStatusLabel::WaitingOnYou);
+        };
+
+        $this->restore();
+
+        self::assertContains('POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}', $this->writes);
     }
 
     public function testAVerdictStatusThatArrivesWhileARestorationHoldsTheLockWaitsAndIsWritten(): void
@@ -141,16 +149,26 @@ final class GitHubStatusLabelsTest extends TestCase
         self::assertSame('2026-11-25T10:00:00.500', $this->clock->now()->format('Y-m-d\TH:i:s.v'));
     }
 
-    public function testAStatusWhoseLockStaysBusyForTheWholeWaitFailsWithoutAWrite(): void
+    public function testAStatusWhoseLockStaysBusyForTheWholeWaitIsWrittenWithoutTheLock(): void
     {
         $this->locks = new LockFactory(new BusyForAWhileStore(20));
 
-        try {
-            $this->mirror(RoundStatusLabel::WaitingOnYou);
-            self::fail('The busy lock should have failed the write.');
-        } catch (ForgeWriteFailed) {
-            self::assertSame([], $this->writes);
-        }
+        $this->mirror(RoundStatusLabel::WaitingOnYou);
+
+        self::assertSame(['POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}'], $this->writes);
+        self::assertSame('2026-11-25T10:00:09.500', $this->clock->now()->format('Y-m-d\TH:i:s.v'));
+    }
+
+    public function testAStatusWrittenWithoutTheLockLeavesTheCommentToTheHolder(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->labeled('status:waiting-on-you', RecordedTrust::WRITER);
+        $this->locks = new LockFactory(new BusyForAWhileStore(20));
+
+        $this->mirror(RoundStatusLabel::InReview);
+
+        self::assertSame(['DELETE /repos/acme/widget/issues/1/labels/status%3Awaiting-on-you'], $this->writes);
+        self::assertSame([], $this->comments);
     }
 
     public function testAStatusWhoseLockFreesOnTheLastTryOfTheWaitIsWritten(): void
