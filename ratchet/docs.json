@@ -8,6 +8,7 @@
             "0cb955f2ecbded39": 1071,
             "283fc0e14c8fc276": 193,
             "3b178764dc186303": 238,
+            "4af085f51aa489a2": 148,
             "54de0438386268f1": 1006,
             "5cafc177b4dfb678": 1406,
             "6d717b9888545ab8": 121,
@@ -18,7 +19,6 @@
             "a292c7885506916c": 225,
             "b07eb0fe71d9ea3e": 1227,
             "b185f9de4c02bfd7": 860,
-            "cc32d5095405a516": 142,
             "e520be0db25d2f3c": 1435,
             "e8232dd6fc61a12b": 116,
             "f802f03100bc7aec": 93
@@ -98,10 +98,11 @@
             "f50a23e85fe6fc8c": 233
         },
         "docs/architecture/builder-prompt.md": {
+            "6dfa2fd482f77e16": 134,
             "74eec47bf1cf081b": 207,
             "d56137f0c1738091": 116,
-            "f023f3f183f48287": 127,
-            "f28df0ac2a4a8ea8": 163
+            "f28df0ac2a4a8ea8": 163,
+            "f85b34076fa98b60": 137
         },
         "docs/architecture/capability-tiers.md": {
             "01becaab941aafbb": 129,
@@ -121,6 +122,7 @@
             "462776949d873f5a": 407,
             "472c5a7479b6e77b": 253,
             "4bd6ad70f0e24c23": 183,
+            "526b42ee5128dd3d": 122,
             "616cec7836db248a": 1509,
             "735e3cf55a723d8b": 189,
             "75feac8a637ffc15": 135,
@@ -128,7 +130,6 @@
             "837537b02405b542": 100,
             "8dd9352e22f6d019": 340,
             "a1742f92bc36dfe9": 94,
-            "a960fdaf29b7c94d": 117,
             "ac51c83ab837cea7": 186,
             "be568b660065de04": 449,
             "c04c5d7dc298ca04": 96,
@@ -175,7 +176,7 @@
             "710eee2e5ac5f4ef": 181,
             "a470092f51fd21d2": 228,
             "b02365574027ca2c": 495,
-            "c57acd81a24fd061": 451,
+            "c113c69cb758526c": 467,
             "ca0c1942a3fd1939": 180,
             "d7702252f2962569": 580,
             "fc3dc9967550e7ec": 323
@@ -308,6 +309,7 @@
             "1853c04664427499": 96,
             "27afcd2444deffed": 106,
             "883d850862af852c": 86,
+            "c066b7bc1dc8d59e": 97,
             "f3df73a54e0e7ebe": 111
         },
         "docs/architecture/finding-ledger.md": {
@@ -316,7 +318,6 @@
         },
         "docs/architecture/forge-contract.md": {
             "07299bf1fe905ddb": 229,
-            "12c080339295e176": 964,
             "181929d7b1ae5fc8": 199,
             "2eeae478ff022034": 201,
             "35d0282e0854a5c7": 151,
@@ -324,18 +325,19 @@
             "3ad7499c3acbb038": 1079,
             "47d8b364c6e7b8a0": 220,
             "498aa8eff774367a": 456,
+            "5ba16500d6b12587": 234,
+            "6a11f1423256e9d1": 973,
             "6e585796f26e874b": 1283,
             "755135dbc95814d4": 633,
             "7a63dcf4ce8479a9": 230,
             "9741dbf7319668c6": 90,
             "9f811725298487d7": 87,
             "a229a94bb25148a2": 121,
-            "a4417e50c2e72dc8": 232,
             "aa1a6dba7244a8d2": 521,
             "aaa02a16fd5af812": 163,
             "aab2e2cb77838410": 255,
-            "c2ca9a81ad7cf140": 439,
             "c88534de77f493d9": 187,
+            "c955209a83082381": 441,
             "cc0f9581d7866bad": 288,
             "cd429216b83a64c8": 3288,
             "d629caa6be33f801": 154,
@@ -369,12 +371,12 @@
             "26a3b4bf7bc2517a": 85,
             "28c08e58f9e027c6": 461,
             "324a23a45a457e34": 117,
-            "35fda48a9c670a5e": 274,
             "43598106f063a515": 462,
             "49e6ff5c36e9e3d3": 296,
             "5d29f33e05b41040": 155,
             "6d35c28d959aa508": 123,
             "b5a7f880a1c46c5f": 388,
+            "b839919e31b51f7c": 277,
             "e3fb9d5ba6693830": 394,
             "ec8bf90ad50294b7": 188,
             "faa21970d61a7c45": 108
@@ -423,6 +425,9 @@
             "b6b329ef004e5492": 271,
             "ddfc00ebb26b8d21": 133,
             "e508b9f4849efb16": 189
+        },
+        "docs/architecture/journey-check.md": {
+            "1180070a3eb446f4": 153
         },
         "docs/architecture/journey-page.md": {
             "222f6a3fd6dd2605": 268,
@@ -669,8 +674,8 @@
             "f1efd75f6f70ca10": 88
         },
         "docs/architecture/reviewer-agent.md": {
-            "02b7d6431354fc6c": 172,
             "165fbd5574bca58f": 298,
+            "26b3e0b5d689a3e1": 450,
             "381da463e3530645": 134,
             "48a27f7e9e4dd270": 310,
             "55a245eb1843f365": 426,
@@ -777,17 +782,17 @@
             "4216074b474eec4b": 261,
             "483ff114a35edcb9": 127,
             "4e975a4cc65ca11f": 128,
-            "5f981eff6384ff76": 667,
-            "62b7816fda6a591f": 469,
+            "61172ce804effaf4": 697,
             "67883dca9129fcef": 186,
             "6f748010f9785fea": 245,
             "75397a81ab3116c6": 272,
             "7b1f8511aef8b636": 469,
+            "85a110291dc842fa": 579,
             "8e5b35b0f96eda11": 94,
             "90b047d9ba8204a8": 208,
             "92ea63d3c03fd7a1": 329,
-            "d664591809d662fb": 188,
             "d915b9721fcbca1f": 177,
+            "dd5a6004f54b2ff3": 190,
             "dfadc3d5df2042ac": 178,
             "e9ac3519aced8fd5": 89
         },
@@ -1254,7 +1259,8 @@
             "ef03a21ed856754d": 180,
             "f3e400d814fca485": 130,
             "f66959d0aea5b03d": 102,
-            "f6e8224b160595cc": 217
+            "f6e8224b160595cc": 217,
+            "fa9cc1940f593e41": 190
         },
         "docs/design/05-architecture/15-designer-scoring.md": {
             "005072f98dce1b33": 163,
@@ -1306,6 +1312,7 @@
             "1f639b7c123e393c": 298,
             "2147c11a4b734ae7": 387,
             "221fc57bf629a841": 171,
+            "28969fdbb9f3cc9b": 104,
             "2aa879fa0e2381d1": 84,
             "3f477a67ce39087e": 277,
             "48c3b57344537a70": 170,
@@ -1357,6 +1364,7 @@
             "41b6b0c2f15e813d": 122,
             "5d93f706a1a0f8fb": 167,
             "6f63c8583df365c1": 114,
+            "7f0974c0dd8bb82d": 106,
             "92f560d9ee5990e0": 144
         },
         "docs/guide/containers-and-services.md": {
@@ -1432,7 +1440,6 @@
             "0ceddf54e6bbc83e": 186,
             "0d2d8d7fd2b9025b": 277,
             "0ead1e8575f1482b": 297,
-            "0f8eee9689a8deea": 357,
             "23239700fa8dab33": 110,
             "2dbd727974361897": 139,
             "3178544bda8c19e5": 131,
@@ -1448,6 +1455,7 @@
             "8fdaa66a37482981": 130,
             "a5b4098f04272b89": 166,
             "a69e13f9bd48cb74": 142,
+            "a85087603411aefb": 364,
             "ab9f518084b59aaf": 208,
             "c016b52a885209fd": 84,
             "d201008c256e7992": 177,
@@ -1458,10 +1466,10 @@
         "docs/guide/the-journey-of-a-task.md": {
             "1179fc02de043bba": 150,
             "21238d232c85b016": 92,
-            "4a137f5c22026e5f": 110,
             "4c8a5c638fbcaafb": 119,
             "59316a2b912b0b2d": 156,
             "5dfad4551287f2c2": 176,
+            "6481bae610122245": 108,
             "6c1d3f831a0b4c90": 172,
             "75810ab06d3aa0d2": 146,
             "7b4e63838ae1ae5f": 269,
@@ -1470,8 +1478,8 @@
             "8efbb250c681d9c5": 87,
             "a44f50806e2bb969": 89,
             "a57be8a541faf141": 166,
+            "a9a367c507419ca0": 127,
             "af8321be90330d5d": 220,
-            "d60a98076d591cd6": 126,
             "e6b7bc0345f70ae2": 466,
             "f572304738286195": 84,
             "fc6aa906f7c4731f": 178
@@ -1519,7 +1527,8 @@
         "docs/guide/writing-a-good-task.md": {
             "12c4a9a56081e455": 163,
             "3a568982c6b09bff": 81,
-            "d319a06ed28eb730": 298
+            "d319a06ed28eb730": 298,
+            "ea9acd655f067418": 127
         },
         "docs/guide/your-data.md": {
             "3c91852ba3ccae79": 115,
@@ -1586,7 +1595,6 @@
             "4dd6497a56681796": 96,
             "507022f47e106b3f": 163,
             "519347ae8fd4668c": 100,
-            "51c7288d54cf7b0c": 729,
             "520deaa6ec57cf41": 371,
             "5260645821996f96": 492,
             "58b745c19cf10578": 247,
@@ -1648,6 +1656,7 @@
             "eef61754db5b3014": 125,
             "f2fe6ca69b3a3ca7": 439,
             "f47b6261c6903039": 1148,
+            "f78106806deb9b2d": 727,
             "fa33e2b85d46ba07": 273,
             "faf9bf1ad9964a53": 116,
             "fbaaf813f82b6451": 90,
@@ -1711,6 +1720,7 @@
             "1d409a73098bd20b": 551,
             "1f99fe456ad81138": 182,
             "2009ee4203a6fc75": 105,
+            "211ee2ae9b9707d6": 163,
             "21911a6e338af7e1": 351,
             "219f8c616b1aa2e8": 103,
             "2419cafaf71306dd": 83,
@@ -1726,6 +1736,7 @@
             "28fa7fd6f8605e48": 87,
             "29aa52b046aefff5": 190,
             "2a68b7a71ee7d31c": 102,
+            "2aedf2e55e8cb48b": 109,
             "2b827a8078bc2438": 250,
             "2bd8e9527886d4c1": 236,
             "2cb7b5619c47bd12": 86,
@@ -1772,12 +1783,13 @@
             "4cd01a34e3011c20": 905,
             "4db2f9d9525a56c9": 237,
             "4f448f416a6b4edc": 581,
+            "4f52ef4cb5416ae1": 1847,
             "5045b70156379110": 511,
-            "50945f8430eb5272": 205,
             "51759d7cb9736059": 285,
             "51c16df223a079fd": 451,
             "53d2237a608ed47b": 184,
             "54653d7897498e90": 81,
+            "54c67b52a6bc3be5": 705,
             "5677cc33e9325563": 130,
             "56ae371e61d3570a": 370,
             "57659527d6f731e9": 145,
@@ -1819,7 +1831,6 @@
             "779f5743a921b5e1": 227,
             "77bdc86b0a6d9a71": 264,
             "7aad081053e458c4": 157,
-            "7af53e992d376b27": 685,
             "7c866a8897cdf755": 168,
             "7ea05e0a24eefe88": 637,
             "7eaa9ecd0d1fa15b": 103,
@@ -1842,7 +1853,9 @@
             "8e6415d27cb74b45": 343,
             "8f2277317579dee2": 180,
             "8f4f0768f4c4de0a": 279,
+            "9000e200aca2966c": 184,
             "90ada6fb608e81d4": 171,
+            "90b071370285f7e2": 216,
             "916b67640b3ffeeb": 96,
             "923f9e5c5a73bbae": 155,
             "92db7f4577439397": 385,
@@ -1850,7 +1863,6 @@
             "94bd1ba10c8700a5": 99,
             "94bfb88889f2794e": 84,
             "95b21657bb01276e": 84,
-            "98063b6220304eb4": 1794,
             "9947b1b5cb4b0743": 121,
             "9aad5ae8b493c1b4": 390,
             "9b08ca14b31210f9": 446,
@@ -1885,6 +1897,7 @@
             "b887f5f6940a751f": 312,
             "b8dbc4259c1f3f4d": 140,
             "b9005911931a2595": 186,
+            "bb4c7a8b62d7453d": 217,
             "bbea5e4e11b2b4f0": 93,
             "bcac4f28d285935e": 237,
             "be3c0453fe68bad4": 3155,
@@ -1925,7 +1938,6 @@
             "e58fae15dfd4727a": 437,
             "e5dbc5263938ef09": 109,
             "e5e0a0d59370bff7": 211,
-            "e6ebbfef6291fdca": 162,
             "e8ea564e53a0cc30": 129,
             "ea68818e38bd36e7": 168,
             "eb7369011da93139": 307,
@@ -1974,7 +1986,9 @@
         },
         "docs/user/README.md": {
             "001dc949b7820009": 104,
-            "e0fc5d37705d7441": 107
+            "e0fc5d37705d7441": 107,
+            "e666852b4b829758": 90,
+            "ec450ea5f08af426": 86
         },
         "docs/video.md": {
             "1792c2da6d4efe21": 113,
@@ -1983,17 +1997,17 @@
         }
     },
     "pages": {
-        "docs/guide/a-tour-of-the-dashboard.md": 12817,
+        "docs/guide/a-tour-of-the-dashboard.md": 12927,
         "docs/guide/accounts-and-costs.md": 2659,
         "docs/guide/demo-walkthrough.md": 1947,
-        "docs/guide/glossary.md": 2199,
+        "docs/guide/glossary.md": 2226,
         "docs/guide/how-intakt-works.md": 4390,
         "docs/guide/steering-intakt.md": 1871,
         "docs/guide/symfony-in-intakt.md": 2636,
-        "docs/guide/the-engine-room.md": 5729,
-        "docs/guide/the-journey-of-a-task.md": 5205,
+        "docs/guide/the-engine-room.md": 5736,
+        "docs/guide/the-journey-of-a-task.md": 5210,
         "docs/guide/why-isnt-anything-happening.md": 2767,
         "docs/guide/why-the-ai-cant-wreck-your-project.md": 4957,
-        "docs/guide/writing-a-good-task.md": 2291
+        "docs/guide/writing-a-good-task.md": 2345
     }
 }
