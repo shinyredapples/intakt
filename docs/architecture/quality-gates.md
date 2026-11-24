@@ -90,7 +90,7 @@ The page and summary limits were measured on the same 63 pull requests, counting
 
 A paragraph (`MarkdownParagraph`) carries its word count, the line it starts on and a key, the first 16 hex characters of the SHA-256 hash of its text with whitespace runs made one space. A word is a token between whitespace that holds a letter or a digit. Code, fenced or indented, has no words, also inside a list item.
 
-The summary (`MarkdownSummary`) holds the words of the "In short" section and whether it opens the page. It opens the page when at most a title stands above its heading, so a code block (fenced or indented) between the title and "In short" means it does not.
+The summary (`MarkdownSummary`) holds the words of the "In short" section, whether it opens the page, and whether it has text beyond its headings. It opens the page when at most a title stands above its heading, so a code block (fenced or indented) between the title and "In short" means it does not.
 
 Tables count as words but not as paragraphs. A line framed by outer pipes is a table row by itself. With a delimiter row below its first line (indented less than four spaces, as many cells as that line, each one or more hyphens with an optional colon at either end), a table runs until a blank line, a heading, a list item, a thematic break or a change of quote depth, so a quoted line after a table is measured.
 
