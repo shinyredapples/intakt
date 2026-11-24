@@ -50,6 +50,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Tests\Support\UnpricedRoundCosts;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -706,8 +707,7 @@ final class StatusReadModelTest extends TestCase
         $holds->method('sharedInEffect')->willReturn($this->holds);
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
+        $costs = new UnpricedRoundCosts();
         $ledger = $this->readFrom ?? $this->ledger;
         $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
         $lookup = self::createStub(RoundEndingLookup::class);

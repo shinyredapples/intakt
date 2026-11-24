@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\VerdictReceived;
@@ -124,10 +125,25 @@ final readonly class RoundLedgerReading implements RoundCosts
     // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
     public function costOf(string $roundId): Cost
     {
-        $recorded = $this->usageRows();
-        $models = $this->callsStartedFor($roundId, $recorded);
+        return $this->costsOf($roundId)->of($roundId);
+    }
 
-        return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
+    // One read of the usage rows for all the rounds, because a review page with several rounds read the ledger once more for each.
+    public function costsOf(string ...$roundIds): RoundCostList
+    {
+        $recorded = $this->usageRows();
+        $models = $this->modelsByCall($roundIds, $recorded);
+        $costs = array_fill_keys($roundIds, Cost::none());
+
+        foreach ($recorded as $row) {
+            $ended = $this->endingOf($row);
+
+            foreach (null === $ended ? [] : $models[$ended->call] ?? [] as $round => $model) {
+                $costs[$round] = $costs[$round]->plus($this->costOfEnding($ended, $model));
+            }
+        }
+
+        return new RoundCostList($costs);
     }
 
     /**
@@ -160,13 +176,26 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
+     * @param list<string>        $roundIds
      * @param list<RecordedEvent> $recorded
      *
-     * @return array<string, string|null>
+     * @return array<string, array<array-key, string|null>>
      */
-    private function callsStartedFor(string $roundId, array $recorded): array
+    // By call id and then round, as startsFor() keys a round's calls, so a call id started in two rounds still counts in each.
+    private function modelsByCall(array $roundIds, array $recorded): array
     {
-        return array_map(static fn (UsageStarted $started): ?string => $started->model, $this->startsFor($roundId, $recorded));
+        $asked = array_flip($roundIds);
+        $models = [];
+
+        foreach ($recorded as $row) {
+            $started = $this->payloads->of($row, UsageStarted::class);
+
+            if ('started' === $started?->phase && null !== $started->round && array_key_exists($started->round, $asked)) {
+                $models[$started->call][$started->round] = $started->model;
+            }
+        }
+
+        return $models;
     }
 
     /**
@@ -268,18 +297,9 @@ final readonly class RoundLedgerReading implements RoundCosts
         return new ModelNames(...array_values(array_unique($models)));
     }
 
-    /**
-     * @param array<string, string|null> $models
-     */
-    private function costOfEnding(RecordedEvent $row, array $models): Cost
+    private function costOfEnding(UsageSettled|UsageUnsettled $ended, ?string $model): Cost
     {
-        $ended = $this->endingOf($row);
-
-        if (null === $ended || !array_key_exists($ended->call, $models)) {
-            return Cost::none();
-        }
-
-        $cost = $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
+        $cost = $this->prices->costOf($model, $this->figuresOf($ended->usages));
 
         return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
     }

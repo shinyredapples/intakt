@@ -45,6 +45,7 @@ use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndingLookup;
@@ -59,9 +60,11 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
+use Intakt\Tests\Support\FixedRoundCosts;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Tests\Support\UnpricedRoundCosts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -808,12 +811,27 @@ final class LedgerRoundsTest extends TestCase
 
     public function testARoundCarriesTheCostTheReviewModuleReadsForIt(): void
     {
-        $this->costs = self::createStub(RoundCosts::class);
-        $this->costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+        $this->costs = new FixedRoundCosts(Cost::inUsd(0.5));
 
         $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
 
         self::assertSame(0.5, $review?->rounds[0]->cost->usd);
+    }
+
+    public function testAReviewPageWithTwoRoundsAsksForTheirCostsOnceAndShowsEachRoundsOwnCost(): void
+    {
+        $costs = $this->createMock(RoundCosts::class);
+        $costs->expects($this->never())->method('costOf');
+        $costs->expects($this->once())->method('costsOf')->with('r1', 'r2')->willReturn(new RoundCostList(['r1' => Cost::inUsd(0.5), 'r2' => Cost::inUsd(0.25)]));
+        $this->costs = $costs;
+
+        $review = $this->reviewOf(
+            'r2',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r2","project":"alpha","reviewers":2,"change":"feat/thing","number":2}'),
+        );
+
+        self::assertSame([['r1', 0.5], ['r2', 0.25]], array_map(static fn (ReviewedRound $round): array => [$round->round, $round->cost->usd], $review->rounds ?? []));
     }
 
     public function testARoundTheJudgeHasNotJudgedTakesTheEndingTheReviewModuleNamesForIt(): void
@@ -936,10 +954,7 @@ final class LedgerRoundsTest extends TestCase
 
     private function noCosts(): RoundCosts
     {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-
-        return $costs;
+        return new UnpricedRoundCosts();
     }
 
     // Serialized as the writers do, so the reader is shown the row it meets in production.
