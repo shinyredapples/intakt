@@ -210,6 +210,25 @@ final class ShowQueueCommandTest extends KernelTestCase
         self::assertStringContainsString("  #2 Held: waits for #1 2J\n", $display);
     }
 
+    public function testNoControlSeparatorOrInvalidByteOfATitleOrHeldReasonReachesTheTerminal(): void
+    {
+        $hostile = "a\u{9B}b\u{85}c\u{202E}d\u{2028}e\u{2029}f\u{1B}g";
+        $source = self::createStub(WorkSource::class);
+        $source->method('queue')->willReturn(WorkQueue::listed(
+            [new Task(1, $hostile, null), new Task(2, $hostile."\xFF", null)],
+            [new HeldTask(new Task(3, 'Held', null), $hostile), new HeldTask(new Task(4, 'Held', null), $hostile."\xFF")],
+        ));
+
+        $display = $this->show('alpha', $source)->getDisplay();
+
+        self::assertTrue(mb_check_encoding($display, 'UTF-8'));
+        foreach (["\u{9B}", "\u{85}", "\u{202E}", "\u{2028}", "\u{2029}", "\u{1B}", "\xFF"] as $character) {
+            self::assertStringNotContainsString($character, $display);
+        }
+        self::assertStringContainsString("  1. #1 a b c d e f g\n", $display);
+        self::assertStringContainsString("  #3 Held: a b c d e f g\n", $display);
+    }
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
