@@ -13,11 +13,12 @@ final readonly class DocsRatchetList
     private const string KEY = '/^[0-9a-f]{16}$/';
 
     /**
-     * @param array<array-key, array<array-key, int>> $paragraphs because PHP turns a key of digits alone into an integer
+     * @param array<array-key, array<array-key, int>> $paragraphs
      * @param array<string, int>                      $pages
      * @param array<string, int>                      $summaries
      */
     private function __construct(
+        // Because PHP turns a key of digits alone into an integer, the keys are typed array-key.
         public array $paragraphs,
         public array $pages,
         public array $summaries,
