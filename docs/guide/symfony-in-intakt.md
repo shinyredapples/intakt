@@ -140,7 +140,7 @@ As a second safety net, a worker (one loaded copy of Intakt) does not live forev
 
 A brand-new release of a package is the one most likely to be broken or, rarely, tampered with: such problems are usually spotted and the release pulled within a few days. So Intakt holds every fresh release back for 3 days, a **cooldown**. *(built)*
 
-- **PHP packages:** Composer leaves out any version published less than 3 days ago, and the checks fail when the lock file holds one, except for the owner's one-time exception for Symfony 8.2.0-BETA2.
+- **PHP packages:** Composer leaves out any version published less than 3 days ago, and the checks fail when the lock file holds one, except for the owner's one-time exceptions for Symfony 8.2.0-BETA2 and for Twig 3.31.1, the security fix Twig released on 2026-11-24.
 - **The dashboard's JavaScript packages:** the import map (the list in `importmap.php` that tells the browser where each JavaScript module of the dashboard lives) follows the same rule: while the newest release is less than 3 days old, `bin/console importmap:update` holds it back and can move the pin to an older release that is old enough.
 - **A fingerprint on every module:** the import map the browser receives pins each module by its **integrity hash** (sha384), a fingerprint of the exact file Intakt serves. If the file's bytes change after the fingerprint was taken, the browser refuses to run it.
 
