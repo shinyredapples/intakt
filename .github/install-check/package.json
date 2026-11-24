@@ -1,0 +1,6 @@
+{
+  "description": "The Playwright and axe-core versions the daily install check runs bin/install-check with.",  "dependencies": {
+    "axe-core": "4.14.1",
+    "playwright": "1.65.1"
+  }
+}
