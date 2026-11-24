@@ -19,6 +19,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskBranchName;
@@ -58,6 +59,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ListingRows::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(QueuedIssue::class)]
+#[UsesClass(QueueOrder::class)]
 #[UsesClass(StoredIssue::class)]
 #[UsesClass(SyncState::class)]
 #[UsesClass(TaskBranchName::class)]
@@ -84,15 +86,15 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
         parent::tearDownAfterClass();
     }
 
-    public function testTheRecordedIssuesPrintTheUrgentTaskThenTheReworkThenByPriorityThenTheHeldTasks(): void
+    public function testTheRecordedIssuesPrintTheReworkThenTheUrgentTaskThenByPriorityThenTheHeldTasks(): void
     {
         $tester = $this->show('queue_open_issues.json', '', 'alpha');
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame(<<<'TEXT'
             Pick order of project alpha:
-              1. #42 Fix the dashboard clock
-              2. #43 Add the queue page (rework of #50)
+              1. #43 Add the queue page (rework of #50)
+              2. #42 Fix the dashboard clock
               3. #44 Retry a failed listing
               4. #48 Tidy the lanes page
               5. #47 Trim the ledger page
@@ -101,6 +103,13 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
               #45 Document the queue page: waits for #43
 
             TEXT, $tester->getDisplay());
+    }
+
+    public function testATaskWhosePullRequestIsFoundOnlyByItsBranchPrintsBeforeAnUrgentFreshTask(): void
+    {
+        $tester = $this->show('queue_branch_rework.json', '', 'alpha');
+
+        self::assertSame("Pick order of project alpha:\n  1. #51 Order the queue (rework of #52)\n  2. #42 Fix the dashboard clock\nHeld tasks of project alpha:\n  no task is held\n", $tester->getDisplay());
     }
 
     public function testAListingReadThatFailsPrintsNoOrderAndFails(): void

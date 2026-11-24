@@ -55,7 +55,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Review job](review-job.md): how one reviewer's CLI runs in a job container.
 - [Reviewer agent](reviewer-agent.md): the reviewer that runs through Symfony AI.
 - [Reviewer repository tools](reviewer-repository-tools.md): the three read-only tools a reviewer reads the change with.
-- [Prompt assembly](prompt-assembly.md): the one class that builds every message sent to a model.
+- [Prompt assembly](prompt-assembly.md): the one class that builds every message sent to a model, and the only places that may build its carriers (`ReviewerRole`, `RoundReviewer`, `ReviewerConversation`).
 - [Boot step](boot-step.md): booting a commit once to see whether it starts.
 - [Project memory](project-memory.md): what Intakt learned about a project, handed to reviewers.
 - [Ledger](ledger.md): the append-only event log that everything else reads.

@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Contract;
+
+enum Provider: string
+{
+    case Anthropic = 'anthropic';
+    case Codex = 'codex';
+}

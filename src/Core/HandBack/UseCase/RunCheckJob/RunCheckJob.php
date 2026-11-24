@@ -14,7 +14,6 @@ use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
-use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -163,7 +162,7 @@ final readonly class RunCheckJob implements CheckJobs
     {
         $hosts = $this->gate->registryHosts();
 
-        return [] === $hosts ? JobEgress::none() : JobEgress::to(new EgressHosts(...$hosts));
+        return $hosts->isEmpty() ? JobEgress::none() : JobEgress::to($hosts);
     }
 
     private function ranJob(JobSpec $spec): ?JobResult

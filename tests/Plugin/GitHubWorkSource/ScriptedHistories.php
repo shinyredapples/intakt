@@ -34,6 +34,6 @@ final class ScriptedHistories implements IssueHistories
 
         $listed = $this->reads->lastListed[$number] ?? throw new LogicException(sprintf('#%d was never listed.', $number));
 
-        return new IssueHistory('ana', array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+        return new IssueHistory('ana', array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), [...$listed->labels]), $listed->body, $listed->labels);
     }
 }

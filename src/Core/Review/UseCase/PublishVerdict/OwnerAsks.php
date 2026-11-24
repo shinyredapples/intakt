@@ -14,6 +14,7 @@ use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
+use Intakt\Plugin\Forge\Contract\CommentBodies;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
@@ -72,10 +73,7 @@ final readonly class OwnerAsks
         }
     }
 
-    /**
-     * @return list<string>
-     */
-    private function partsOf(CommitId $head, ProtectedChanges $changes): array
+    private function partsOf(CommitId $head, ProtectedChanges $changes): CommentBodies
     {
         $lines = [sprintf(self::HEADING, $head->hash), '', self::ASK];
 
@@ -85,7 +83,7 @@ final readonly class OwnerAsks
         }
 
         if ($changes->paths->isEmpty()) {
-            return [implode("\n", $lines)];
+            return new CommentBodies(implode("\n", $lines));
         }
 
         $parts = [];
@@ -103,7 +101,7 @@ final readonly class OwnerAsks
             ++$listed;
         }
 
-        return [...$parts, $part];
+        return new CommentBodies(...[...$parts, $part]);
     }
 
     // Control bytes and backslashes spelled out first, so a newline in a name stays on its line; invalid UTF-8 replaced, because git allows any bytes in a file name and the forge takes only text.

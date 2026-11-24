@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Domain;
 
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
@@ -35,7 +36,7 @@ final class QueuedIssueListingTest extends TestCase
             $references->closedBy(self::BODY),
         ));
 
-        self::assertSame($listedAsPlanned, $issue->isListedAs(new IssueHistory('ana', [], $body, $labels), $references));
+        self::assertSame($listedAsPlanned, $issue->isListedAs(new IssueHistory('ana', [], $body, new IssueLabels(...$labels)), $references));
     }
 
     /**

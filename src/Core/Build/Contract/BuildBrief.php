@@ -10,6 +10,7 @@ final readonly class BuildBrief
         public string $task,
         public Decisions $decisions,
         public ?Rework $rework,
+        public TaskKind $kind = TaskKind::Task,
     ) {
     }
 }
