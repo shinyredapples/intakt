@@ -4,10 +4,18 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { createServer } from 'node:http';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const { JOURNEYS, runJourney, runFolder, report, exitCode } = createRequire(import.meta.url)('../../../../bin/journey-check');
+const SCRIPT = fileURLToPath(new URL('../../../../bin/journey-check', import.meta.url));
+const { JOURNEYS, OUTCOME, RECORDED_FINDING, targetOf, expectAnswer, runJourney, runFolder, report, exitCode } = createRequire(import.meta.url)(SCRIPT);
 
 const ADDRESS = 'http://localhost:7781';
+
+function run(args) {
+    return spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8', timeout: 20_000 });
+}
 
 class FakePage {
     constructor() {
@@ -61,10 +69,58 @@ function withFolder(body) {
 }
 
 test('a journey whose steps all succeed is reported as passed', async () => {
-    const result = await runJourney(new FakeBrowser(), ADDRESS, journeyOf('smooth', [['one', async () => {}], ['two', async () => {}]]));
+    await withFolder(async (folder) => {
+        const result = await runJourney(new FakeBrowser(), ADDRESS, journeyOf('smooth', [['one', async () => {}], ['two', async () => {}]]), folder, null);
 
-    assert.deepEqual(result, { journey: 'smooth', failure: null });
-    assert.equal(report([result]), 'smooth: passed\nJourney check: 1 journeys, 1 passed, 0 failed.');
+        assert.deepEqual(result, { journey: 'smooth', failure: null });
+        assert.equal(report([result]), 'smooth: passed\nJourney check: 1 journeys, 1 passed, 0 failed.');
+    });
+});
+
+test('the recorded finding matches amount > 100 ended by its own period, before a space or at the end of the name', () => {
+    assert.match('The check changed from amount >= 100 to amount > 100. src/discount.js:3', RECORDED_FINDING);
+    assert.match('The check changed from amount >= 100 to amount > 100.', RECORDED_FINDING);
+    assert.doesNotMatch('The check changed from amount >= 100 to amount > 100.50. src/discount.js:3', RECORDED_FINDING);
+    assert.doesNotMatch('The check changed from amount >= 100 to amount > 1000. src/discount.js:3', RECORDED_FINDING);
+    assert.doesNotMatch('The check changed from amount >= 100 to amount > 100 src/discount.js:3', RECORDED_FINDING);
+});
+
+test('every verdict heading the review page can show ends the wait for the run, the not recorded one included', () => {
+    for (const heading of ['Approved', 'Changes needed', 'Blocked: no reviewer', 'Failed: every reviewer failed', 'Checked, but the outcome was not recorded']) {
+        assert.match(heading, OUTCOME, heading);
+    }
+    assert.doesNotMatch('Checking', OUTCOME);
+});
+
+test('a dashboard that accepts the connection and never answers stops the check within the step timeout', async () => {
+    const server = createServer(() => {});
+    await new Promise((resolve) => server.listen(0, 'localhost', resolve));
+    const started = Date.now();
+    try {
+        await assert.rejects(expectAnswer(`http://localhost:${server.address().port}`, 300), /^Error: nothing answers at http:\/\/localhost:\d+: no answer within 300 ms$/);
+        assert.ok(Date.now() - started < 5_000);
+    } finally {
+        server.closeAllConnections();
+        await new Promise((resolve) => server.close(resolve));
+    }
+});
+
+test('the address is never printed with its user info, and an address that does not parse is not echoed, both with exit 2', async () => {
+    const closed = createServer();
+    await new Promise((resolve) => closed.listen(0, 'localhost', resolve));
+    const port = closed.address().port;
+    await new Promise((resolve) => closed.close(resolve));
+
+    assert.deepEqual(targetOf(`http://watcher:s%40cret@localhost:${port}/`), { address: `http://localhost:${port}`, credentials: { username: 'watcher', password: 's@cret' } });
+    assert.deepEqual(targetOf('http://localhost:7781'), { address: 'http://localhost:7781', credentials: null });
+
+    const stopped = run([`http://watcher:s%40cret@localhost:${port}`]);
+    assert.equal(stopped.status, 2);
+    assert.equal(stopped.stderr, `Journey check stopped: nothing answers at http://localhost:${port}: ECONNREFUSED\n`);
+
+    const unparsed = run(['watcher:s3cret@ no address']);
+    assert.equal(unparsed.status, 2);
+    assert.equal(unparsed.stderr, 'Journey check stopped: the address does not parse as an http or https URL\n');
 });
 
 test('a step that throws fails its journey, names that step and skips the later steps', async () => {
@@ -128,8 +184,10 @@ test('every journey opens a fresh page in its own browser context and closes it'
     const browser = new FakeBrowser();
     const journey = journeyOf('any', [['open', async () => {}]]);
 
-    await runJourney(browser, ADDRESS, journey);
-    await runJourney(browser, ADDRESS, journey);
+    await withFolder(async (folder) => {
+        await runJourney(browser, ADDRESS, journey, folder, null);
+        await runJourney(browser, ADDRESS, journey, folder, null);
+    });
 
     assert.equal(browser.contexts.length, 2);
     assert.notEqual(browser.contexts[0].page, browser.contexts[1].page);

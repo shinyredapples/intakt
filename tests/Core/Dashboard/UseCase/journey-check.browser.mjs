@@ -68,7 +68,7 @@ async function dashboard(changes = {}) {
 async function walk(changes) {
     const site = await dashboard(changes);
     try {
-        return await runJourney(browser, site.address, FIRST_RUN, folder);
+        return await runJourney(browser, site.address, FIRST_RUN, folder, null);
     } finally {
         await site.close();
     }
@@ -106,4 +106,19 @@ test('a To fix list without the recorded finding fails the first-run journey at 
 
     assert.equal(result.failure.number, 5);
     assert.equal(result.failure.step, 'the review page shows the recorded finding to fix');
+});
+
+test('a finding link reading amount > 100.50 fails the first-run journey at the findings step', async () => {
+    const result = await walk({ finding: 'The check changed from <code>amount &gt;= 100</code> to <code>amount &gt; 100.50</code>.' });
+
+    assert.equal(result.failure.number, 5);
+    assert.equal(result.failure.step, 'the review page shows the recorded finding to fix');
+});
+
+test('a run that ends without a recorded outcome fails the first-run journey at the verdict step after a click wait', async () => {
+    const started = Date.now();
+    const result = await walk({ verdict: 'Checked, but the outcome was not recorded' });
+
+    assert.equal(result.failure.number, 4);
+    assert.ok(Date.now() - started < 60_000);
 });

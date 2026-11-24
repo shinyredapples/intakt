@@ -15,9 +15,10 @@ const STEP_TIMEOUT_MS = 15_000;
 const RUN_TIMEOUT_MS = 180_000;
 // The shipped recording (fixtures/demo/sample-change-review.json) ends with the judge asking for changes, and its first finding to fix is the changed discount check,
 // so a replay that failed or was blocked, or a To fix list that shows something else, fails the journey instead of passing it.
-const OUTCOME = /^(Approved|Changes needed|Blocked:|Failed:)/;
+const OUTCOME = /^(Approved|Changes needed|Blocked:|Failed:|Checked, but the outcome was not recorded)/;
 const RECORDED_VERDICT = 'Changes needed';
-const RECORDED_FINDING = /^The check changed from\W*amount >= 100\W*to\W*amount > 100\W/;
+// The finding's sentence ends right after amount > 100, so its own period must follow, then a space or the end of the name: amount > 100.50 is another finding.
+const RECORDED_FINDING = /^The check changed from\W*amount >= 100\W*to\W*amount > 100\.(\s|$)/;
 
 // Controls are found by role and exact visible text only, so a redesign keeps the journeys while a renamed button fails the journey a person would miss it in,
 // also when the new name still contains the old one (Playwright matches a name as a substring unless it is exact).
@@ -66,15 +67,15 @@ const JOURNEYS = [
 ];
 
 async function main(argv) {
-  const { chromium } = require('playwright');
-  const address = (argv[0] ?? DEFAULT_ADDRESS).replace(/\/+$/, '');
+  const { address, credentials } = targetOf(argv[0] ?? DEFAULT_ADDRESS);
 
-  await expectAnswer(address);
+  await expectAnswer(address, STEP_TIMEOUT_MS);
+  const { chromium } = require('playwright');
   const out = runFolder(new Date(), process.pid, OUT);
   const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   try {
     const results = [];
-    for (const journey of JOURNEYS) results.push(await runJourney(browser, address, journey, out));
+    for (const journey of JOURNEYS) results.push(await runJourney(browser, address, journey, out, credentials));
     console.log(report(results));
 
     return exitCode(results);
@@ -83,12 +84,25 @@ async function main(argv) {
   }
 }
 
-// A dashboard that does not answer is a check that could not run, not a journey that failed.
-async function expectAnswer(address) {
+// The user info of an address is a password, so it is taken out before the address reaches any request, error or report, and the browser sends it as HTTP credentials;
+// an address that does not parse is not echoed, since it may hold one too. `user:secret@host` parses with the scheme `user:`, so only http and https count.
+function targetOf(raw) {
+  const url = URL.parse(raw);
+  if (url === null || !['http:', 'https:'].includes(url.protocol)) throw new Error('the address does not parse as an http or https URL');
+  const credentials = url.username === '' && url.password === '' ? null : { username: decodeURIComponent(url.username), password: decodeURIComponent(url.password) };
+  url.username = '';
+  url.password = '';
+
+  return { address: url.href.replace(/\/+$/, ''), credentials };
+}
+
+// A dashboard that does not answer, or accepts the connection and never answers, is a check that could not run, not a journey that failed.
+async function expectAnswer(address, timeoutMs) {
   try {
-    await fetch(address + '/', { redirect: 'manual' });
+    await fetch(address + '/', { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
-    throw new Error(`nothing answers at ${address}: ${error.cause?.code || error.cause?.message || error.message}`);
+    const reason = error.name === 'TimeoutError' ? `no answer within ${timeoutMs} ms` : error.cause?.code || error.cause?.message || error.message;
+    throw new Error(`nothing answers at ${address}: ${reason}`);
   }
 }
 
@@ -99,8 +113,8 @@ function runFolder(startedAt, pid, root) {
 }
 
 // A fresh context per journey, so no cookie, storage or open page of one journey changes what the next one sees.
-async function runJourney(browser, address, journey, out = OUT) {
-  const context = await browser.newContext();
+async function runJourney(browser, address, journey, out, credentials) {
+  const context = await browser.newContext(credentials ? { httpCredentials: credentials } : {});
   try {
     const page = await context.newPage();
     page.setDefaultTimeout(STEP_TIMEOUT_MS);
@@ -169,7 +183,7 @@ function exitCode(results) {
   return results.some((result) => result.failure !== null) ? 1 : 0;
 }
 
-module.exports = { JOURNEYS, runJourney, runFolder, report, exitCode };
+module.exports = { JOURNEYS, OUTCOME, RECORDED_FINDING, targetOf, expectAnswer, runJourney, runFolder, report, exitCode };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(
