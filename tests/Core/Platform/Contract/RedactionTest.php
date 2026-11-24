@@ -10,6 +10,7 @@ use Intakt\Core\Platform\Contract\KeptTail;
 use Intakt\Core\Platform\Contract\ListedHeaders;
 use Intakt\Core\Platform\Contract\RedactedSpans;
 use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Core\Platform\Contract\SecretShape;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -19,10 +20,138 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(HeldCredentialSpans::class)]
 #[CoversClass(HeaderSpans::class)]
 #[CoversClass(RedactedSpans::class)]
+#[CoversClass(SecretShape::class)]
 #[UsesClass(KeptTail::class)]
 #[UsesClass(ListedHeaders::class)]
 final class RedactionTest extends TestCase
 {
+    public function testItRedactsAFineGrainedTokenRightAfterAnUnderscore(): void
+    {
+        $redacted = new Redaction()->redact('fixtures/key_github_pat_'.str_repeat('A', 82).'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItRedactsAClassicTokenRightAfterAnUnderscore(): void
+    {
+        $redacted = new Redaction()->redact('fixtures/key_ghp_'.str_repeat('B', 36).'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItRedactsAWebTokenThatStartsInsideAnApiKeyWhole(): void
+    {
+        $key = 'sk-'.str_repeat('K', 24);
+        $webToken = 'eyJ'.str_repeat('H', 12).'.eyJ'.str_repeat('P', 12).'.'.str_repeat('S', 16);
+
+        $redacted = new Redaction()->redact('fixtures/key_'.$key.'-'.$webToken.'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItRedactsTwoWebTokensJoinedByAHyphenWhole(): void
+    {
+        $first = 'eyJ'.str_repeat('H', 12).'.eyJ'.str_repeat('P', 12).'.'.str_repeat('S', 16);
+        $second = 'eyJ'.str_repeat('h', 12).'.eyJ'.str_repeat('p', 12).'.'.str_repeat('s', 16);
+
+        $redacted = new Redaction()->redact('fixtures/key_'.$first.'-'.$second.'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItRedactsAWebTokenThatStartsInASignatureBeforeAShorterLastStart(): void
+    {
+        $first = 'eyJ'.str_repeat('a', 8).'.eyJ'.str_repeat('a', 8).'.sig-eyJ'.str_repeat('d', 8).'-eyJx';
+
+        $redacted = new Redaction()->redact('k '.$first.'.eyJ'.str_repeat('e', 8).'.SECRETTAIL end');
+
+        self::assertSame('k [redacted] end', $redacted);
+    }
+
+    public function testItRedactsAJoinedWebTokenWhoseLastStartIsTooShortWhole(): void
+    {
+        $middle = 'eyJ'.str_repeat('B', 8);
+        $first = 'eyJ'.str_repeat('A', 8).'.'.$middle.'.FIRST';
+        $second = 'eyJ'.str_repeat('C', 8).'-eyJ.'.$middle.'.SECOND';
+
+        $redacted = new Redaction()->redact('fixtures/key_'.$first.'-'.$second.'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItRedactsABearerTokenInsideTheValueOfAnotherWhole(): void
+    {
+        $redacted = new Redaction()->redact('Bearer '.str_repeat('a', 8).'.Bearer '.str_repeat('b', 12).' end');
+
+        self::assertSame('[redacted] end', $redacted);
+    }
+
+    public function testItLeavesAMegabyteOfUnfinishedWebTokensUnchangedInUnderASecond(): void
+    {
+        $text = 'prefix '.str_repeat('eyJ'.str_repeat('0', 8).'_', 87_000).'.x.y suffix';
+        $start = hrtime(true);
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame($text, $redacted);
+        self::assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+    }
+
+    public function testItRedactsALongRunOfApiKeysJoinedByHyphensWithinBoundedMemory(): void
+    {
+        $text = 'prefix '.str_repeat('sk-'.str_repeat('A', 20).'-', 3000).' suffix';
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('prefix [redacted] suffix', $redacted);
+        self::assertLessThan(8 * 1024 * 1024, memory_get_peak_usage() - $before);
+    }
+
+    public function testItRedactsALongRunOfApiKeyPrefixesWithinBoundedMemory(): void
+    {
+        $text = str_repeat('sk-', 20_000);
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('[redacted]', $redacted);
+        // 20 000 starts keep one pair of offsets each (about 10 MiB), where a copy of each match took 650 MiB.
+        self::assertLessThan(32 * 1024 * 1024, memory_get_peak_usage() - $before);
+    }
+
+    public function testItRedactsAMegabyteOfApiKeysJoinedByHyphensInUnderASecond(): void
+    {
+        $text = 'prefix '.str_repeat('sk-'.str_repeat('A', 20).'-', 43_000).' suffix';
+        $start = hrtime(true);
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('prefix [redacted] suffix', $redacted);
+        self::assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+    }
+
+    public function testItRedactsAMegabyteOfPrivateKeyHeadersWithoutAnEndLineInUnderASecond(): void
+    {
+        $header = str_repeat('-', 5).'BEGIN RSA PRIVATE KEY'.str_repeat('-', 5)."\n";
+        $text = 'x '.str_repeat($header, 32_000);
+        $start = hrtime(true);
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('x [redacted]', $redacted);
+        self::assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+    }
+
+    public function testItLeavesAWordThatContainsATokenPrefixAfterALetter(): void
+    {
+        $word = 'xghp_'.str_repeat('a', 30);
+
+        self::assertSame($word, new Redaction()->redact($word));
+    }
+
     public function testItRedactsAHeldCredentialWhereverItAppears(): void
     {
         $redacted = new Redaction()->redact('first key-one, then key-one again', 'key-one');
