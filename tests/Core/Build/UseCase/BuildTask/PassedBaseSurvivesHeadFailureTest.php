@@ -45,7 +45,7 @@ final class PassedBaseSurvivesHeadFailureTest extends TestCase
 
         try {
             $history->commitFile('tests/FooTest.php', "<?php\n", 'Add test');
-            $bundle = file_get_contents($history->bundle('main..task'));
+            $bundle = new Filesystem()->readFile($history->bundle('main..task'));
             $checkout = self::createStub(BuildCheckout::class);
             $checkout->method('mirrorOf')->willReturn($history->mirror);
             $checks = self::createStub(CheckJobs::class);
