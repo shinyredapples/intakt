@@ -65,6 +65,14 @@ final class CodexLoginsTest extends TestCase
         self::assertFalse($logins->hasLogin('team'));
     }
 
+    public function testAnAccountWhoseKeptLoginFileHasANulByteInItsLastRefreshHasNoLogin(): void
+    {
+        $logins = $this->logins();
+        new Filesystem()->dumpFile($logins->loginFile('team'), CodexLoginTest::json("2020-01-01T00:00:00Z\0"));
+
+        self::assertFalse($logins->hasLogin('team'));
+    }
+
     public function testTheCallHomeNeverHoldsTheKeptLogin(): void
     {
         $logins = $this->logins();
