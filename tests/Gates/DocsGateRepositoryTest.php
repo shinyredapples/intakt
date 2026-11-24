@@ -43,7 +43,7 @@ final class DocsGateRepositoryTest extends TestCase
 {
     public function testTheRepositoryDocumentationMeetsTheLimitsWithItsList(): void
     {
-        $root = \dirname(__DIR__, 2);
+        $root = dirname(__DIR__, 2);
         $gate = new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
 
         $result = $gate->run(new Workspace($root, $root, Mode::Full, null));
