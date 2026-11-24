@@ -374,7 +374,19 @@ test('Try now does not replace a pending try sooner than the countdowns would', 
     assert.equal(source.es, slow);
 });
 
-test('Try now replaces a try pending for three countdowns', async (t) => {
+test('Try now keeps a try that has been pending for 14 seconds', async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+    t.mock.timers.tick(14000);
+
+    shell.tryNow(new FakeClick());
+
+    assert.equal(source.es, slow);
+});
+
+test('Try now replaces a try pending for three countdowns',async (t) => {
     const { shell, source } = await connectedShell(t);
     source.es.emit('error');
     t.mock.timers.tick(5000);

@@ -5,7 +5,7 @@ const SOURCE = 'turbo-mercure-stream-source';
 const RETRY_EVERY_S = 5;
 const UNREACHABLE_AFTER_MS = 120000;
 // Three countdowns give a slow hub time to answer, while a try whose packets are silently dropped (it never fails) is still replaced, so DESIGN.md's next try keeps coming.
-const GIVE_UP_ON_A_TRY_AFTER_MS = RETRY_EVERY_S * 3 * 1000;
+const GIVE_UP_ON_A_TRY_AFTER_S = RETRY_EVERY_S * 3;
 // Everything that changes Intakt's state is a POST form, so its submit button is what waits while offline.
 const ACTIONS = 'form[method="post"] button[type="submit"]';
 // Marked in the page rather than remembered by the controller, because Turbo caches the page with the marks and a new controller restores it.
@@ -23,6 +23,7 @@ export default class extends Controller {
         this.dropped = new Set();
         this.lastEventIds = new Map();
         this.triedAt = new Map();
+        this.secondsCounted = 0;
         this.settle();
         const visit = (this.visit = {});
         await customElements.whenDefined(SOURCE);
@@ -140,6 +141,7 @@ export default class extends Controller {
     }
 
     tick() {
+        this.secondsCounted += 1;
         this.countdown -= 1;
         if (this.countdown === 0) {
             this.retryDropped();
@@ -157,13 +159,13 @@ export default class extends Controller {
         });
     }
 
-    // Elapsed time rather than a count of countdowns, so clicking Try now does not bring the replacement of a pending try closer.
+    // Seconds counted by the ticker rather than the clock, because a clock correction must not stretch or shorten the wait, and not a count of countdowns, so clicking Try now does not bring the replacement of a pending try closer.
     isWorthReplacing(source) {
         if (source.es.readyState === EventSource.CLOSED) {
             return true;
         }
 
-        return Date.now() - this.triedAt.get(source) >= GIVE_UP_ON_A_TRY_AFTER_MS;
+        return this.secondsCounted - this.triedAt.get(source) >= GIVE_UP_ON_A_TRY_AFTER_S;
     }
 
     // A new EventSource sends no Last-Event-ID header, so the hub is asked in the address for what the page missed.
@@ -173,7 +175,7 @@ export default class extends Controller {
             address.searchParams.set('last_event_id', this.lastEventIds.get(source));
         }
         source.setAttribute('src', address.toString());
-        this.triedAt.set(source, Date.now());
+        this.triedAt.set(source, this.secondsCounted);
         this.watch(source);
     }
 
