@@ -351,7 +351,7 @@ final class InstallCheckTest extends TestCase
     {
         $made = match (true) {
             str_starts_with($command, 'git clone --') => [$this->directory.'/source/README.md', $this->readme],
-            str_starts_with($command, self::CLONE_COMMAND."\n") =>[$directory.'/intakt/'.($this->withJourneyCheck ? 'bin/journey-check' : 'README.md'), ''],
+            str_starts_with($command, self::CLONE_COMMAND."\n") => [$directory.'/intakt/'.($this->withJourneyCheck ? 'bin/journey-check' : 'README.md'), ''],
             str_contains($command, 'bin/ui-check') => [$directory.'/var/ui-check/start-light-390.png', 'png'],
             str_contains($command, 'bin/journey-check') => [$directory.'/var/journey-check/run-1/01-first-install.png', 'png'],
             default => null,
