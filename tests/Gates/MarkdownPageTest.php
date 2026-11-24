@@ -127,11 +127,11 @@ final class MarkdownPageTest extends TestCase
         self::assertNull($this->page('# Title', 'Prose.')->summary());
     }
 
-    public function testAQuotedInShortSectionIsRead(): void
+    public function testAQuotedInShortSectionIsNotThePageSummary(): void
     {
         $summary = $this->page('# Title', '', '> ### In short', '> One two three.', '', '## Next', 'More.')->summary();
 
-        self::assertEquals(new MarkdownSummary(3, true, true), $summary);
+        self::assertNull($summary);
     }
 
     public function testAHeadingInsideAQuoteDoesNotEndTheInShortSection(): void
@@ -260,11 +260,11 @@ final class MarkdownPageTest extends TestCase
         self::assertEquals(new MarkdownSummary(2, true, true), $summary);
     }
 
-    public function testAQuotedSummaryHeadingAfterATabIsRead(): void
+    public function testAQuotedSummaryHeadingAfterATabIsNotThePageSummary(): void
     {
         $summary = $this->page('# Title', ">\t## In short", '> One two.', '## Next')->summary();
 
-        self::assertEquals(new MarkdownSummary(2, true, true), $summary);
+        self::assertNull($summary);
     }
 
     public function testIndentedCodeInsideAListItemIsNotCounted(): void
