@@ -31,12 +31,20 @@ final class HealthcheckScriptTest extends TestCase
         self::assertStringContainsString('admin=http://localhost:2999 bin/console', (string) file_get_contents($this->directory.'/calls'));
     }
 
-    public function testTheHealthCheckKeepsAnAdminUrlThatIsSetBesideAMovedAdminApi(): void
+    public function testTheHealthCheckChecksTheListenerOfItsOwnServerWhenAnAdminUrlIsSetBesideIt(): void
     {
-        $process = $this->check(['CADDY_ADMIN' => 'localhost:2999', 'FRANKENPHP_ADMIN_URL' => 'http://127.0.0.1:2019']);
+        $process = $this->check(['CADDY_ADMIN' => 'localhost:2999', 'FRANKENPHP_ADMIN_URL' => 'http://localhost:3000']);
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString('admin=http://127.0.0.1:2019 bin/console', (string) file_get_contents($this->directory.'/calls'));
+        self::assertStringContainsString('admin=http://localhost:2999 bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    public function testABarePortInTheMovedAdminApiMeansLocalhost(): void
+    {
+        $process = $this->check(['CADDY_ADMIN' => ':2999']);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('admin=http://localhost:2999 bin/console', (string) file_get_contents($this->directory.'/calls'));
     }
 
     public function testWithoutAMovedAdminApiTheServerHealthCommandReadsTheAppsOwnAdminUrl(): void
