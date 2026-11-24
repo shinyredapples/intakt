@@ -75,7 +75,9 @@ final readonly class RecordedIssues implements IssueReads
             throw new ForgeReadFailed($recorded['fails']);
         }
 
-        /** @var list<Issue> $recorded */
-        return $recorded;
+        /** @var list<Issue> $issues */
+        $issues = $recorded;
+
+        return $issues;
     }
 }
