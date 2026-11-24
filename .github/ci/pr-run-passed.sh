@@ -7,6 +7,8 @@
 # contained main, as a fast-forward land does, or when the merge added nothing the head lacked. A run whose merge added
 # anything recorded another tree and does not count. Only runs from this repository's own branches count: a fork's run
 # skips every job behind the fork guard and still ends green.
+# A run the API lists under a pull request into another branch does not count either; the list is empty after a merge, so
+# an empty list says nothing.
 # Needs GH_TOKEN with actions: read and GITHUB_REPOSITORY. A failing API call exits non-zero, never prints no or yes.
 set -eu
 # An empty argument (a failed command substitution in the caller) must not ask about the record of an empty tree.
@@ -16,7 +18,7 @@ if [ "$#" -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then
 fi
 # --paginate reads every page: a qualifying run or record past the first page still counts.
 runs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$1&event=pull_request&status=success&per_page=100" \
-    --jq ".workflow_runs[] | select(.head_repository.full_name == \"$GITHUB_REPOSITORY\") | .id")
+    --jq ".workflow_runs[] | select(.head_repository.full_name == \"$GITHUB_REPOSITORY\" and all(.pull_requests[]?; .base.ref == \"main\")) | .id")
 for run in $runs; do
     names=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts?name=main-tested-tree-$2&per_page=100" --jq '.artifacts[] | select(.expired | not) | .name')
     # One name per line, read whole: a name with a space must not match on one of its words.

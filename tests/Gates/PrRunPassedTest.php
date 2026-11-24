@@ -60,6 +60,32 @@ final class PrRunPassedTest extends SandboxTestCase
         self::assertSame($expected."\n", $result->output);
     }
 
+    /** @return iterable<string, array{list<string>, string}> */
+    public static function bases(): iterable
+    {
+        yield 'a run listed under a pull request into main' => [['main'], 'yes'];
+        yield 'a run listed under no pull request, as after a merge' => [[], 'yes'];
+        yield 'a run listed under a pull request into another branch' => [['integration'], 'no'];
+        yield 'a run listed under pull requests into main and another branch' => [['main', 'integration'], 'no'];
+    }
+
+    /** @param list<string> $bases */
+    #[DataProvider('bases')]
+    public function testARunListedUnderAnotherBaseDoesNotCount(array $bases, string $expected): void
+    {
+        $sandbox = $this->sandboxWithRuns([[
+            'id' => 7,
+            'head_repository' => ['full_name' => 'example/intakt'],
+            'pull_requests' => array_map(static fn (string $base): array => ['base' => ['ref' => $base]], $bases),
+        ]]);
+        $sandbox->write('artifacts-7.json', $this->json(['artifacts' => [['name' => 'main-tested-tree-pushed', 'expired' => false]]]));
+
+        $result = $this->answer($sandbox);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame($expected."\n", $result->output);
+    }
+
     public function testNoSuccessfulRunMeansNo(): void
     {
         $result = $this->answer($this->sandboxWithRuns([]));
