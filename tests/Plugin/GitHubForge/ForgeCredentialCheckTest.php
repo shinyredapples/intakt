@@ -57,6 +57,10 @@ final class ForgeCredentialCheckTest extends TestCase
 
     private MockClock $clock;
     private RateLimitReadings $shared;
+    private AppJwt $jwt;
+    private ExpectedInstallation $expected;
+    /** @var array{string, string, string} */
+    private array $settings;
     private int $requests = 0;
 
     public function testTheForgeCredentialCheckPassesWhenTheInstallationReadsBack(): void
@@ -77,7 +81,9 @@ final class ForgeCredentialCheckTest extends TestCase
 
     public function testTheForgeCredentialCheckFailsWithItsFixTextOnAnUnreadablePrivateKey(): void
     {
-        $result = $this->check(self::healthy(...), jwt: new AppJwt('12345', 'not-a-key', $this->clock))->run();
+        $this->jwt = new AppJwt('12345', 'not-a-key', $this->clock);
+
+        $result = $this->check(self::healthy(...))->run();
 
         self::assertFalse($result->passed);
         self::assertStringContainsString('private key cannot be read', $result->fix);
@@ -94,7 +100,9 @@ final class ForgeCredentialCheckTest extends TestCase
 
     public function testTheForgeCredentialCheckFailsWhenTheInstallationDoesNotMatchTheConfiguration(): void
     {
-        $result = $this->check(self::healthy(...), ExpectedInstallation::fromSettings('contents:read', self::REPOSITORIES))->run();
+        $this->expected = ExpectedInstallation::fromSettings('contents:read', self::REPOSITORIES);
+
+        $result = $this->check(self::healthy(...))->run();
 
         self::assertFalse($result->passed);
         self::assertStringContainsString('permission contents is expected at read but granted at write', $result->fix);
@@ -104,7 +112,9 @@ final class ForgeCredentialCheckTest extends TestCase
     {
         $unparsable = new ReflectionClass(ExpectedInstallation::class)->newLazyProxy(static fn (): ExpectedInstallation => ExpectedInstallation::fromSettings('contents', self::REPOSITORIES));
 
-        $result = $this->check(self::healthy(...), $unparsable)->run();
+        $this->expected = $unparsable;
+
+        $result = $this->check(self::healthy(...))->run();
 
         self::assertFalse($result->passed);
         self::assertStringContainsString('Fix GITHUB_APP_PERMISSIONS and GITHUB_APP_REPOSITORIES', $result->fix);
@@ -112,7 +122,9 @@ final class ForgeCredentialCheckTest extends TestCase
 
     public function testTheForgeCredentialCheckPassesWithoutReadingWhenNoAppIsConfigured(): void
     {
-        $result = $this->check(self::healthy(...), settings: ['', '', ''])->run();
+        $this->settings = ['', '', ''];
+
+        $result = $this->check(self::healthy(...))->run();
 
         self::assertTrue($result->passed);
         self::assertSame(0, $this->requests);
@@ -120,7 +132,9 @@ final class ForgeCredentialCheckTest extends TestCase
 
     public function testTheForgeCredentialCheckFailsWhenTheAppIdIsEmptyButTheOtherAppSettingsAreSet(): void
     {
-        $result = $this->check(self::healthy(...), settings: ['', '678', 'a-key'])->run();
+        $this->settings = ['', '678', 'a-key'];
+
+        $result = $this->check(self::healthy(...))->run();
 
         self::assertFalse($result->passed);
         self::assertStringContainsString('GITHUB_APP_ID is empty while GITHUB_APP_INSTALLATION_ID or GITHUB_APP_PRIVATE_KEY is set', $result->fix);
@@ -179,6 +193,9 @@ final class ForgeCredentialCheckTest extends TestCase
     {
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
         $this->shared = FreshReadings::at($this->clock);
+        $this->jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
+        $this->expected = ExpectedInstallation::fromSettings(self::PERMISSIONS, self::REPOSITORIES);
+        $this->settings = ['12345', '678', 'a-key'];
     }
 
     /**
@@ -196,9 +213,8 @@ final class ForgeCredentialCheckTest extends TestCase
 
     /**
      * @param callable(string): ResponseInterface $answer
-     * @param array{string, string, string}       $settings
      */
-    private function check(callable $answer, ?ExpectedInstallation $expected = null, array $settings = ['12345', '678', 'a-key'], ?AppJwt $jwt = null, int $secondsPerRequest = 0): ForgeCredentialCheck
+    private function check(callable $answer, int $secondsPerRequest = 0): ForgeCredentialCheck
     {
         $http = new MockHttpClient(function (string $method, string $url) use ($answer, $secondsPerRequest): ResponseInterface {
             ++$this->requests;
@@ -208,12 +224,12 @@ final class ForgeCredentialCheckTest extends TestCase
         });
 
         return new ForgeCredentialCheck(
-            $jwt ?? new AppJwt('12345', AppKey::generate()->private, $this->clock),
+            $this->jwt,
             $http,
             $this->shared,
-            $expected ?? ExpectedInstallation::fromSettings(self::PERMISSIONS, self::REPOSITORIES),
+            $this->expected,
             $this->clock,
-            ...$settings,
+            ...$this->settings,
         );
     }
 }

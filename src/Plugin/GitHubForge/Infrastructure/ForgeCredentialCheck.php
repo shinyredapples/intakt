@@ -64,7 +64,7 @@ final readonly class ForgeCredentialCheck implements HealthCheck
     private function readInstallation(): CheckResult
     {
         try {
-            // The workers' pause is read and honored, never written.
+            // Read only, because a call during the workers' pause would just be refused, and a write here could pause the workers.
             $this->readings->refuseWhileLimited($this->installationId, RateLimitReadings::CORE);
             (void) $this->readBack()->check();
         } catch (ForgeRateLimited $limited) {
