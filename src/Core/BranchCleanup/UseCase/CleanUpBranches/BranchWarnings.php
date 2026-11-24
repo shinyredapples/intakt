@@ -40,6 +40,8 @@ final readonly class BranchWarnings
                 }
             }
 
+            // Flushed before the new ones, because a branch warned again at a new head keeps its identity, and Doctrine holds one object per identity.
+            $this->entities->flush();
             foreach ($warnings as $warning) {
                 $this->entities->persist($warning);
             }

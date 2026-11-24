@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
+use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watcher\Contract\WatcherServices;
@@ -67,8 +68,17 @@ final readonly class LocalForgeBranches implements ForgeBranches
     {
         $repository = $this->repositoryOf($project);
         // Fetched without a ref of its own, because only the commit's objects are needed before the branch points at it.
-        $this->write($repository, ['fetch', '--quiet', '--no-write-fetch-head', '--', $restore->mirror, $restore->archiveRef], sprintf('the archived head of "%s" was not fetched from the mirror', $restore->branch));
+        $this->fetchFromMirror($repository, $restore);
         $this->write($repository, ['update-ref', self::HEADS.$restore->branch, $restore->head->hash, ''], sprintf('the branch "%s" was not restored, it exists again', $restore->branch));
+    }
+
+    // Only the file protocol, because HardenedGit allows none and the mirror is a folder on this machine.
+    private function fetchFromMirror(string $repository, BranchRestore $restore): void
+    {
+        $fetch = $this->call($repository, ['fetch', '--quiet', '--no-write-fetch-head', '--', $restore->mirror, $restore->archiveRef]);
+        if (!$this->ran(new GitCall($fetch->command, $fetch->directory, $fetch->environment->with(GIT_ALLOW_PROTOCOL: 'file')))->isSuccessful()) {
+            throw new ForgeWriteFailed(sprintf('The archived head of "%s" was not fetched from the mirror.', $restore->branch));
+        }
     }
 
     private function repositoryOf(string $project): string
@@ -108,12 +118,28 @@ final readonly class LocalForgeBranches implements ForgeBranches
      */
     private function git(string $repository, array $arguments): Process
     {
+        return $this->ran($this->call($repository, $arguments));
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function call(string $repository, array $arguments): GitCall
+    {
         try {
-            $call = $this->hardened->call($repository, ...$arguments);
+            return $this->hardened->call($repository, ...$arguments);
+        } catch (RepositoryAttributesRefused $refused) {
+            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $refused->getMessage()), $refused->getCode(), previous: $refused);
+        }
+    }
+
+    private function ran(GitCall $call): Process
+    {
+        try {
             $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
             $process->run();
-        } catch (RepositoryAttributesRefused|ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
+        } catch (ExceptionInterface $failure) {
+            throw new ForgeReadFailed(sprintf('git did not run: %s', $failure->getMessage()), $failure->getCode(), previous: $failure);
         }
 
         return $process;
