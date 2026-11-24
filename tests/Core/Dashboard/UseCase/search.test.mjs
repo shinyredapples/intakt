@@ -256,6 +256,26 @@ test('another shortcut with ctrl is left to the browser', async () => {
     assert.ok(!key.defaultPrevented);
 });
 
+test('a keydown without a key and with ctrl is left to the browser', async () => {
+    const { page } = await openPage();
+
+    const key = page.press(undefined, { ctrlKey: true });
+
+    assert.ok(!page.isOpen());
+    assert.ok(!key.defaultPrevented);
+});
+
+test('a keydown without a key while the search is open does nothing', async () => {
+    const { page } = await openWithRecent();
+    const selected = page.selected();
+
+    const key = page.press(undefined, { metaKey: true });
+
+    assert.ok(page.isOpen());
+    assert.equal(page.selected(), selected);
+    assert.ok(!key.defaultPrevented);
+});
+
 test('a page without the overlay leaves ctrl k to the browser', async () => {
     const { page } = await openPage({ overlay: false });
 

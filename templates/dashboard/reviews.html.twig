@@ -63,6 +63,7 @@
     </article>
 {% endfor %}
 </div>
+{{ include('dashboard/_project_empty.html.twig', {text: 'No failed pull request for this project'}, with_context = false) }}
 </section>
 {% endif %}
 {% if reviews is empty %}
@@ -89,6 +90,7 @@
     </li>
 {% endfor %}
 </ol>
+{{ include('dashboard/_project_empty.html.twig', {text: 'No review for this project yet'}, with_context = false) }}
 </section>
 {% endif %}
 {% endblock %}
