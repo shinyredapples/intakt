@@ -150,14 +150,14 @@ The address defaults to `http://localhost:7780`. `CHROME_PATH` names a Chrome or
 It walks one journey, **First run without a key**, in five steps:
 
 1. `open /setup and see the start`: the heading "See a real review".
-2. `open /demo and see the demo run`: the heading "The demo run". Nothing on `/setup` links to `/demo`, so the step opens it by its address.
-3. `press the button "Play the demo run"`: the demo page then follows the run to its review page.
-4. `wait for the verdict of the demo run`: any verdict heading on the review page ("Approved", "Changes needed", "Blocked: ...", "Failed: ..." or "Checked, but the outcome was not recorded").
+2. `press the button "Play the demo run"`: the button on `/setup`.
+3. `reach /demo and see the demo run`: the press lands on `/demo` with the heading "The demo run"; the demo page then follows the run to its review page.
+4. `wait for the verdict of the demo run`: any verdict heading on the review page ("Approved", "Changes needed", "Blocked: ...", "Failed: ..." or "Checked, but the outcome was not recorded"), and then it must be the recorded verdict, "Changes needed".
 5. `see the recorded finding on the review page`: the link of the recorded finding "The check changed from amount >= 100 to amount > 100.".
 
-It needs an install that can play the demo run: the compose demo with its recording, a queue worker and live updates. The journey plays the run, so the next check fails at step 3 until `intakt:demo:remove` has removed it.
+It needs an install that can play the demo run: the compose demo with its recording, a queue worker and live updates. The journey plays the run, so the next check fails at step 2 until `intakt:demo:remove` has removed it.
 
-Before it opens a browser it asks the address for an answer and waits at most 10 seconds, the startup deadline. The same 10 seconds is the default timeout of each page action (a page load, a click, waiting for a text), except the wait for the demo run's verdict, which has 180 seconds; the check has no deadline for a whole step. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run: no address, an address that is not an http or https URL (its text is not printed back), nothing answering within that time, or no browser. Any output names the address without a user name or password.
+Before it opens a browser it asks the address for an answer and waits at most 10 seconds, the startup deadline. The same 10 seconds is the default timeout of each page action (a page load, a click, waiting for a text), except the wait for any verdict of the demo run, which has 180 seconds; the check has no deadline for a whole step. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run: no address, an address that is not an http or https URL (its text is not printed back), nothing answering within that time, or no browser. Any output names the address without a user name or password.
 
 It needs Node.js 22 or later and Playwright, like the UI check:
 
