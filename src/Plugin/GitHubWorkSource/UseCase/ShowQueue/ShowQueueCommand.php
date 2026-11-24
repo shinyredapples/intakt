@@ -39,6 +39,12 @@ final readonly class ShowQueueCommand
         return Command::SUCCESS;
     }
 
+    private function printable(string $line): string
+    {
+        // Unicode's controls, format characters and line breaks too (CSI as U+009B, a next line, a direction override), the set ConsoleReport escapes; text that is not UTF-8 keeps only its printable ASCII, as BuildTaskCommand does, since its other bytes cannot be told from control characters.
+        return preg_replace(self::UNICODE_CONTROLS, ' ', $line) ?? (string) preg_replace('/[^\x20-\x7E]/', '?', $line);
+    }
+
     private function printPickOrder(SymfonyStyle $io, string $project, WorkQueue $queue): void
     {
         $this->printLine($io, sprintf('Pick order of project %s:', $project));
@@ -71,12 +77,6 @@ final readonly class ShowQueueCommand
     private function printLine(SymfonyStyle $io, string $line): void
     {
         $io->writeln($this->printable($line), OutputInterface::OUTPUT_RAW);
-    }
-
-    private function printable(string $line): string
-    {
-        // Unicode's controls, format characters and line breaks too (CSI as U+009B, a next line, a direction override), the set ConsoleReport escapes; text that is not UTF-8 keeps only its printable ASCII, as BuildTaskCommand does, since its other bytes cannot be told from control characters.
-        return preg_replace(self::UNICODE_CONTROLS, ' ', $line) ?? (string) preg_replace('/[^\x20-\x7E]/', '?', $line);
     }
 
     private function lineOf(Task $task): string
