@@ -384,7 +384,7 @@ return static function (ContainerConfigurator $container): void {
         ->arg('$codex', new Parameter(Provider::Codex->parameter()));
     // Built from the watch sections here, because the Contract class takes typed labels and the parameter holds arrays.
     $container->services()->set(EligibilityLabels::class)
-        ->factory([WatchConfiguration::class, 'eligibilityLabelsOf'])
+        ->factory(WatchConfiguration::eligibilityLabelsOf(...))
         ->args([new Parameter(WatcherServices::PROJECTS)]);
     $container->services()->set(AiServices::PROVIDER_PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])

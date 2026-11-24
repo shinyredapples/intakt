@@ -113,11 +113,6 @@ final class WatchConfigurationTest extends TestCase
         $this->processed(['repository' => '/r', 'task' => 'Review.']);
     }
 
-    /**
-     * @param array<string, mixed> $watch
-     *
-     * @return array<string, mixed>
-     */
     public function testEachWatchedProjectGetsTheEligibilityLabelItsSectionNames(): void
     {
         $labels = WatchConfiguration::eligibilityLabelsOf(['alpha' => ['eligibility_label' => 'intakt'], 'beta' => ['eligibility_label' => 'build']]);
@@ -132,6 +127,11 @@ final class WatchConfigurationTest extends TestCase
         WatchConfiguration::eligibilityLabelsOf(['beta' => ['eligibility_label' => 'intakt']])->of('alpha');
     }
 
+    /**
+     * @param array<string, mixed> $watch
+     *
+     * @return array<string, mixed>
+     */
     private function processed(array $watch): array
     {
         /** @var array<string, mixed> $projects */
