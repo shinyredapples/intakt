@@ -61,7 +61,7 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\HttpKernel\Log\Logger;
 use Symfony\Component\Yaml\Yaml;
 
-// Which provider keys are set is ProviderKeySource's rule; this file only hands it the framework's default vault directory and the kept key.
+// Provider key presence is decided at build time, because an unset env reference fails when the service is built; ProviderKeySource holds that rule.
 return static function (ContainerConfigurator $container): void {
     $environmentValue = ProviderKeySource::environmentValue(...);
 
