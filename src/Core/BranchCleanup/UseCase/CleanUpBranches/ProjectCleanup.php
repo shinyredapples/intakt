@@ -53,7 +53,7 @@ final readonly class ProjectCleanup
             $lock->release();
         }
 
-        $this->logger->notice('Branch cleanup of {project}: {warned} branches warned, {deleted} deleted, {stale} stale.', ['project' => $project, 'warned' => count($report->warned), 'deleted' => count($report->deleted), 'stale' => count($report->stale)]);
+        $this->logger->notice('Branch cleanup of {project}: {warned} branches warned ({branches}), {deleted} deleted, {stale} stale.', ['project' => $project, 'warned' => count($report->warned), 'branches' => $this->warningList($report), 'deleted' => count($report->deleted), 'stale' => count($report->stale)]);
 
         return $report;
     }
@@ -99,6 +99,12 @@ final readonly class ProjectCleanup
         $this->warnings->replace($project, $warned);
 
         return new CleanupReport($project, $warned, $deleted, $stale, $failures);
+    }
+
+    // The names in the notice itself, because the scheduled run has no console that would print the list.
+    private function warningList(CleanupReport $report): string
+    {
+        return implode(', ', array_map(static fn (BranchWarning $warning): string => sprintf('%s deletable from %s', $warning->branch(), $warning->deletableFrom()->format('Y-m-d')), $report->warned));
     }
 
     /**

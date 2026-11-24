@@ -34,6 +34,7 @@ use Intakt\Tests\Core\BranchCleanup\UseCase\BranchCleanupScenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(ProjectCleanup::class)]
@@ -72,6 +73,17 @@ final class ProjectCleanupTest extends KernelTestCase
         self::assertSame([['intakt/7-old', $head]], $this->warned($report));
         self::assertSame([], $report->deleted);
         self::assertSame($head, $this->scenario->headOf('intakt/7-old'));
+    }
+
+    public function testTheRunsNoticeNamesEachWarnedBranchAndTheDayItMayGo(): void
+    {
+        $this->scenario->intaktBranch('intakt/7-old');
+        $this->scenario->daysLater(53);
+        $deletableFrom = $this->scenario->clock->now()->modify('+7 days')->format('Y-m-d');
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('notice')->with(self::stringContains('{branches}'), self::callback(static fn (array $context): bool => 'intakt/7-old deletable from '.$deletableFrom === $context['branches']));
+
+        $this->scenario->cleanup($logger)->run(BranchCleanupScenario::PROJECT);
     }
 
     public function testAWarnedBranchIsDeletedAWeekLaterAndItsHeadKeptAsAnArchiveRef(): void
