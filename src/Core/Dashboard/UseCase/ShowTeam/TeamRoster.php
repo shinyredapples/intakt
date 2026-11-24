@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\Setback;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\ReviewerRoles;
 
 // Read from the configuration, never from the enabled accounts, so a role whose accounts are all disabled still shows.
@@ -41,7 +42,7 @@ final readonly class TeamRoster
         return array_filter($roles, static fn (array $providers): bool => [] !== $providers);
     }
 
-    // The tier each project builds on and the one a setback escalates it to, because both are configured routing; a tier an issue label picks is not.
+    // The tier each project builds on, the one a setback escalates it to and the one a confirmed escalation or a sensitive path sends it to (both the strong tier), because all are configured routing; a tier an issue label picks is not.
     /**
      * @return list<Provider>
      */
@@ -66,7 +67,11 @@ final readonly class TeamRoster
      */
     private function buildFacts(): array
     {
-        return [new BuildFacts(null, []), ...array_map(static fn (Setback $setback): BuildFacts => new BuildFacts(null, [], $setback), Setback::cases())];
+        return [
+            new BuildFacts(null, []),
+            new BuildFacts(null, [], null, EscalationOutcome::Confirmed),
+            ...array_map(static fn (Setback $setback): BuildFacts => new BuildFacts(null, [], $setback), Setback::cases()),
+        ];
     }
 
     // Left out, because a project whose routing or tier is not configured has no Developer to show.

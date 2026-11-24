@@ -62,7 +62,7 @@ final readonly class LedgerAccountSpend
             }
 
             if (($usage instanceof UsageSettled || $usage instanceof UsageUnsettled) && $row->recordedAt >= $since) {
-                $costs = [...$costs, ...$this->costsOfEnding($row, $usage, $models[$usage->call] ?? null)];
+                $this->addCostsOfEnding($costs, $row, $usage, $models[$usage->call] ?? null);
             }
         }
 
@@ -70,26 +70,22 @@ final readonly class LedgerAccountSpend
     }
 
     /**
-     * @return list<array{string, Cost, DateTimeImmutable}>
+     * @param list<array{string, Cost, DateTimeImmutable}> $costs
      */
-    private function costsOfEnding(RecordedEvent $row, UsageSettled|UsageUnsettled $ended, ?string $model): array
+    private function addCostsOfEnding(array &$costs, RecordedEvent $row, UsageSettled|UsageUnsettled $ended, ?string $model): void
     {
-        $costs = [];
-
         foreach ($ended->usages as $usage) {
             if (null !== $usage->account) {
                 $costs[] = [$usage->account, $this->costOf($model ?? $usage->model, $usage), $row->recordedAt];
             }
         }
-
-        return $costs;
     }
 
-    // A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
+    // A usage without input or output tokens makes the cost unknown, because the other count alone would read as the whole cost.
     private function costOf(?string $model, TokenUsageRow $usage): Cost
     {
         $cost = $this->prices->costOf($model, $usage->figures());
 
-        return null === $usage->prompt ? $cost->plus(Cost::unknown()) : $cost;
+        return null === $usage->prompt || null === $usage->completion ? $cost->plus(Cost::unknown()) : $cost;
     }
 }
