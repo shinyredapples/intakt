@@ -278,7 +278,8 @@ return static function (ContainerConfigurator $container): void {
     $disabledAccounts = [];
     $enabledAccounts = [];
     $listedAccounts = [];
-    $explicitAccounts = is_array($contents['accounts'] ?? null) ? $contents['accounts'] : [];
+    // Keyed as the configuration tree normalizes them, so a provider listed as openai-compatible counts as listed under openai_compatible.
+    $explicitAccounts = is_array($contents['accounts'] ?? null) ? array_flip(array_map(static fn (int|string $key): string => str_replace('-', '_', (string) $key), array_keys($contents['accounts']))) : [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
