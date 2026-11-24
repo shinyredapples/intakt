@@ -101,7 +101,7 @@ final readonly class CodexLogin
     {
         // A NUL byte makes the parser throw ValueError instead of returning false, so it is refused here like any unreadable value.
         $moment = is_string($lastRefresh) && !str_contains($lastRefresh, "\0")
-            ?DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', (string) preg_replace('/\.\d+(?=Z|[+-]\d{2}:\d{2}$)/', '', $lastRefresh), new DateTimeZone('UTC'))
+            ? DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', (string) preg_replace('/\.\d+(?=Z|[+-]\d{2}:\d{2}$)/', '', $lastRefresh), new DateTimeZone('UTC'))
             : false;
 
         if (false === $moment) {
