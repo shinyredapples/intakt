@@ -127,7 +127,7 @@ final class LiveRoundProgressTest extends KernelTestCase
         $round = $this->fixture->start(1);
 
         try {
-            $this->fixture->deliver($this->fixture->bus->messages[0], new ScriptedVendor(new ProviderRateLimited(30, new RuntimeException('429'))));
+            $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429'))));
             self::fail('The rate limit was recorded as a failure.');
         } catch (ReviewerRateLimited) {
         }

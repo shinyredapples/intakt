@@ -29,7 +29,7 @@ use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
-use Intakt\Tests\Core\Review\UseCase\RunReviewRound\ScriptedVendor;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -161,7 +161,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     private function reviewedRound(): string
     {
         $round = $this->fixture->start(2);
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         foreach ($this->fixture->bus->messages as $message) {
             $this->fixture->deliver($message, $vendor);

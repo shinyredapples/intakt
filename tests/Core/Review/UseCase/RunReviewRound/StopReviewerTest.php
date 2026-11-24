@@ -107,7 +107,7 @@ final class StopReviewerTest extends KernelTestCase
         $message = $this->started();
 
         try {
-            $this->fixture->deliver($message, new ScriptedVendor(new ProviderRateLimited(30, new RuntimeException('429'))));
+            $this->fixture->deliver($message, new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429'))));
             self::fail('The rate limit was recorded as a failure.');
         } catch (ReviewerRateLimited) {
         }

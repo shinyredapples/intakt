@@ -43,7 +43,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $limited = new ScriptedVendor(new ProviderRateLimited(30, new RuntimeException('429')));
+        $limited = new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429')));
 
         try {
             $this->fixture->deliver($message, $limited);
@@ -56,7 +56,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
         self::assertSame(RoundState::Collecting, $this->fixture->round($round->id()->toRfc4122())->state());
 
-        $this->fixture->deliver($message, new ScriptedVendor());
+        $this->fixture->deliver($message, new VerdictPerRole());
 
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
@@ -68,7 +68,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $round = $this->fixture->start(1);
 
         try {
-            $this->fixture->deliver($this->fixture->bus->messages[0], new ScriptedVendor(new ProviderRateLimited(30, new RuntimeException('429'))));
+            $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429'))));
             self::fail('The rate limit was recorded as a failure.');
         } catch (ReviewerRateLimited) {
         }
@@ -83,8 +83,8 @@ final class RateLimitedReviewerTest extends KernelTestCase
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $limited = new ScriptedVendor(new ProviderRateLimited(30, new RuntimeException('429')));
-        $retried = new ScriptedVendor();
+        $limited = new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429')));
+        $retried = new VerdictPerRole();
 
         try {
             $this->fixture->deliver($message, $limited);
@@ -101,7 +101,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $this->fixture->start(1);
 
         try {
-            $this->fixture->deliver($this->fixture->bus->messages[0], new ScriptedVendor(new ProviderRateLimited(null, new RuntimeException('429'))));
+            $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure:new ProviderRateLimited(null, new RuntimeException('429'))));
             self::fail('The rate limit was recorded as a failure.');
         } catch (ReviewerRateLimited $retry) {
             self::assertNull($retry->getRetryDelay());
@@ -114,7 +114,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
 
         try {
-            $this->fixture->deliver($message, new ScriptedVendor(VendorAccountBusy::at('anthropic')));
+            $this->fixture->deliver($message, new VerdictPerRole(failure:VendorAccountBusy::at('anthropic')));
             self::fail('The busy account was recorded as a failure.');
         } catch (ReviewerRateLimited $retry) {
             self::assertNull($retry->getRetryDelay());
@@ -129,13 +129,13 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
 
         try {
-            $this->fixture->deliver($message, new ScriptedVendor(new ProviderRateLimited(1, new RuntimeException('429'))));
+            $this->fixture->deliver($message, new VerdictPerRole(failure:new ProviderRateLimited(1, new RuntimeException('429'))));
         } catch (ReviewerRateLimited) {
         }
 
         $this->fixture->takeAndStop($message);
         $this->fixture->clock->modify('+1 hour');
-        $this->fixture->deliver($message, new ScriptedVendor());
+        $this->fixture->deliver($message, new VerdictPerRole());
 
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
