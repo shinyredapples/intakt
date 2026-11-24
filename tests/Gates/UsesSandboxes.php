@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Closure;
 use PHPUnit\Framework\Assert;
 
 trait UsesSandboxes
@@ -42,29 +43,6 @@ trait UsesSandboxes
     final protected static function casesOfOnePhpstanRunOnTheFixtureKernel(array $fixtureAndFindingsOfEachCase, string $parent = ''): iterable
     {
         return self::casesOfOneRunWith($fixtureAndFindingsOfEachCase, $parent, static fn (Sandbox $sandbox) => $sandbox->bootFixtureKernel());
-    }
-
-    /**
-     * @param array<string, non-empty-list<string>> $fixtureAndFindingsOfEachCase
-     * @param \Closure(Sandbox): void              $bootKernel
-     *
-     * @return iterable<string, non-empty-list<CheckRun|string>>
-     */
-    private static function casesOfOneRunWith(array $fixtureAndFindingsOfEachCase, string $parent, \Closure $bootKernel): iterable
-    {
-        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder (under a parent such as src/ when the rule judges only that folder, or its cases would pass unjudged), and a case still runs alone under --filter
-        $sandbox = Sandbox::withFixturesInFoldersUnder($parent, ...array_unique(array_column($fixtureAndFindingsOfEachCase, 0)));
-        $bootKernel($sandbox);
-
-        try {
-            $run = $sandbox->check('--only=phpstan');
-        } finally {
-            $sandbox->remove();
-        }
-
-        foreach ($fixtureAndFindingsOfEachCase as $name => $fixtureAndFindings) {
-            yield $name => [$run, $parent.array_shift($fixtureAndFindings), ...$fixtureAndFindings];
-        }
     }
 
     final protected function assertFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
@@ -110,6 +88,29 @@ trait UsesSandboxes
 
         Assert::assertSame(0, $run->exitCode(), $run->output());
         Assert::assertTrue($run->passed($gate), $run->output());
+    }
+
+    /**
+     * @param array<string, non-empty-list<string>> $fixtureAndFindingsOfEachCase
+     * @param Closure(Sandbox): void                $bootKernel
+     *
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    private static function casesOfOneRunWith(array $fixtureAndFindingsOfEachCase, string $parent, Closure $bootKernel): iterable
+    {
+        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder (under a parent such as src/ when the rule judges only that folder, or its cases would pass unjudged), and a case still runs alone under --filter
+        $sandbox = Sandbox::withFixturesInFoldersUnder($parent, ...array_unique(array_column($fixtureAndFindingsOfEachCase, 0)));
+        $bootKernel($sandbox);
+
+        try {
+            $run = $sandbox->check('--only=phpstan');
+        } finally {
+            $sandbox->remove();
+        }
+
+        foreach ($fixtureAndFindingsOfEachCase as $name => $fixtureAndFindings) {
+            yield $name => [$run, $parent.array_shift($fixtureAndFindings), ...$fixtureAndFindings];
+        }
     }
 
     private function sandboxFor(string $gate, string $fixture): Sandbox

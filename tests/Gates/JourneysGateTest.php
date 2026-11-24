@@ -85,10 +85,12 @@ final class JourneysGateTest extends SandboxTestCase
     #[DataProvider('optionsThatJourneysRefuse')]
     public function testJourneysDoNotRunTogetherWithOtherOptions(array $others): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('--journeys runs alone');
-
-        Options::fromArguments(['--journeys', ...$others]);
+        try {
+            Options::fromArguments(['--journeys', ...$others]);
+            self::fail('The options were accepted.');
+        } catch (InvalidArgumentException $refusal) {
+            self::assertStringContainsString('--journeys runs alone', $refusal->getMessage());
+        }
     }
 
     /**
