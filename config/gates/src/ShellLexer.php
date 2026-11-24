@@ -22,6 +22,8 @@ final class ShellLexer
     private const int CASE = 8;
     private const int ARITHMETIC = 9;
     private const int ARITHMETIC_GROUP = 10;
+    // Because a `case` reads its word up to `in` before its patterns start, the head is kept apart from the body.
+    private const int CASE_HEAD = 11;
     // Because an expansion nested in any of these still stands inside the double quotes, it reads a `'` as a quoted expansion does.
     private const array QUOTED_FRAMES = [self::DOUBLE_QUOTES, self::QUOTED_PATTERN, self::QUOTED_WORD, self::QUOTED_SUBSCRIPT];
     // Because `<<` shifts inside arithmetic, it opens no here-document there.
@@ -36,11 +38,15 @@ final class ShellLexer
     private const string COMMAND_BREAKS = "\n;&|(";
     private const string COMMAND_PREFIX_CHARACTERS = " \t{!";
     private const array COMMAND_PREFIX_WORDS = ['then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time'];
+    // Because a backslash in `$' '` escapes the next character, the quote ends at the first `'` no backslash escapes, or at the end of the source.
+    private const string ANSI_C_QUOTED = '/(?:[^\'\\\\]++|\\\\.?)*+\'?/As';
 
     private readonly int $length;
     private readonly ShellHereDocuments $hereDocuments;
     private bool $atWordStart = true;
     private bool $atCommandStart = true;
+    // Because a `(` before a case pattern only opens the pattern, the lexer knows where a pattern may start.
+    private bool $atPatternStart = false;
 
     /**
      * @var list<int>
@@ -137,6 +143,10 @@ final class ShellLexer
             return $this->afterComment($offset);
         }
 
+        if ($this->notePatternStart($char)) {
+            return $this->afterPatternOpening($offset);
+        }
+
         if ('\\' === $char) {
             return $this->afterEscape($offset);
         }
@@ -154,6 +164,7 @@ final class ShellLexer
             '(' => $this->afterParenthesisOpening($offset, $frame),
             ')' => $this->afterParenthesisClosing($offset, $frame),
             '<' => $this->afterLess($offset, $frame),
+            ';' => $this->afterSemicolon($offset, $frame),
             default => $this->afterQuoteOrDollar($offset, $char),
         };
     }
@@ -238,6 +249,23 @@ final class ShellLexer
         return $end;
     }
 
+    // Because blanks and line feeds may stand between a branch terminator and the next pattern, only another character ends the place where a pattern may start.
+    private function notePatternStart(string $char): bool
+    {
+        $wasPatternStart = $this->atPatternStart;
+        $this->atPatternStart = $wasPatternStart && str_contains(" \t\n", $char);
+
+        return $wasPatternStart && '(' === $char;
+    }
+
+    private function afterPatternOpening(int $offset): int
+    {
+        $this->atWordStart = true;
+        $this->atCommandStart = false;
+
+        return $offset + 1;
+    }
+
     // Because a backslash before a line feed joins two lines, it leaves the word and the command as they were.
     private function afterEscape(int $offset): int
     {
@@ -253,13 +281,15 @@ final class ShellLexer
     {
         $word = substr($this->source, $offset, $length);
         $end = $offset + $length;
-        $isCommand = $this->atCommandStart && str_contains(self::WORD_BREAKS, $this->source[$end] ?? "\n");
+        $isWhole = str_contains(self::WORD_BREAKS, $this->source[$end] ?? "\n");
+        $isCommand = $this->atCommandStart && $isWhole;
         $this->atWordStart = false;
         $this->atCommandStart = $isCommand && in_array($word, self::COMMAND_PREFIX_WORDS, true);
 
         return match (true) {
+            $isWhole && 'in' === $word && self::CASE_HEAD === $frame => $this->afterCaseIn($end),
             !$isCommand => $end,
-            'case' === $word => $this->afterOpening(self::CASE, $end),
+            'case' === $word => $this->afterOpening(self::CASE_HEAD, $end),
             'esac' === $word && self::CASE === $frame => $this->afterClosing($end - 1),
             default => $end,
         };
@@ -297,9 +327,18 @@ final class ShellLexer
     {
         return match (true) {
             '<<<' === substr($this->source, $offset, 3) => $offset + 3,
-            '<' === ($this->source[$offset + 1] ?? '') && !in_array($frame, self::ARITHMETIC_FRAMES, true) => $this->afterHereDocumentOperator($offset),
+            '<' === ($this->source[$offset + 1] ?? '') && !in_array($frame, self::ARITHMETIC_FRAMES, true) => $this->hereDocuments->afterOperator($offset),
             default => $offset + 1,
         };
+    }
+
+    // Because `;;`, `;&` and `;;&` end a case branch, a pattern may start after them.
+    private function afterSemicolon(int $offset, ?int $frame): int
+    {
+        $terminator = self::CASE === $frame ? strspn($this->source, ';&', $offset + 1, 2) : 0;
+        $this->atPatternStart = 0 < $terminator;
+
+        return $offset + 1 + $terminator;
     }
 
     private function afterSingleQuoted(int $offset): int
@@ -311,7 +350,17 @@ final class ShellLexer
 
     private function afterAnsiCQuoted(int $offset): int
     {
-        return $this->afterBackslashQuoted($offset, "'");
+        preg_match(self::ANSI_C_QUOTED, $this->source, $quoted, 0, $offset);
+
+        return $offset + strlen($quoted[0] ?? '');
+    }
+
+    private function afterCaseIn(int $offset): int
+    {
+        array_pop($this->frames);
+        $this->atPatternStart = true;
+
+        return $this->afterOpening(self::CASE, $offset);
     }
 
     private function afterCasePattern(int $offset): int
@@ -329,57 +378,5 @@ final class ShellLexer
         $this->atCommandStart = false;
 
         return $this->afterClosing($offset);
-    }
-
-    private function afterHereDocumentOperator(int $offset): int
-    {
-        $start = $offset + 2 + strspn($this->source, '-', $offset + 2, 1);
-        $operator = substr($this->source, $offset, $start - $offset);
-        $start += strspn($this->source, " \t", $start);
-        $end = $this->afterDelimiterWord($start);
-
-        if ($end > $start) {
-            $this->hereDocuments->queue($operator, substr($this->source, $start, $end - $start));
-        }
-
-        return $end;
-    }
-
-    private function afterBackslashQuoted(int $offset, string $quote): int
-    {
-        while ($offset < $this->length) {
-            $offset += strcspn($this->source, '\\'.$quote, $offset);
-
-            if ($quote === ($this->source[$offset] ?? '')) {
-                return $offset + 1;
-            }
-
-            $offset += 2;
-        }
-
-        return $this->length;
-    }
-
-    private function afterDelimiterWord(int $offset): int
-    {
-        // Because the end of the source ends the word as a line feed does, a missing character reads as one.
-        while (!str_contains(self::WORD_BREAKS, $this->source[$offset] ?? "\n")) {
-            $offset = $this->afterDelimiterPart($offset);
-        }
-
-        return min($offset, $this->length);
-    }
-
-    private function afterDelimiterPart(int $offset): int
-    {
-        $char = $this->source[$offset];
-
-        return match (true) {
-            "'" === $char => $this->afterSingleQuoted($offset + 1),
-            '"' === $char => $this->afterBackslashQuoted($offset + 1, '"'),
-            '\\' === $char => $offset + 2,
-            '$' === $char && "'" === ($this->source[$offset + 1] ?? '') => $this->afterAnsiCQuoted($offset + 2),
-            default => $offset + 1,
-        };
     }
 }

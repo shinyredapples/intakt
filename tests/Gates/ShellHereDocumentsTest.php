@@ -59,6 +59,16 @@ final class ShellHereDocumentsTest extends TestCase
         yield 'a comment after a shift in a nested arithmetic group' => ["echo \$(( (1<<2) ))\n# TODO later\n2)\n", [2 => 'TODO']];
         yield 'a comment after a shift in an arithmetic command' => ["((x = 1<<2))\n# TODO later\n2))\n", [2 => 'TODO']];
         yield 'a comment after a here-document marker in quotes' => ["echo '<<EOF' \"<<EOF\"\n# TODO later\nEOF\n", [2 => 'TODO']];
+        yield 'a comment in a branch after a nested case behind a parenthesized pattern' => ["x=\"\$(case \"\$1\" in\n  (start) case \"\$2\" in\n    fast) echo fast ;;\n  esac ;;\n  stop) # TODO branch\n    echo stop ;;\nesac)\"\n# TODO later\n", [5 => 'TODO', 8 => 'TODO']];
+        yield 'a comment after a case with parenthesized patterns and fall-through terminators' => ["case \$1 in\n  (a) echo a ;&\n  (b) echo b ;;&\n  # TODO between branches\n  (c) (echo c) ;;\nesac\n# TODO later\n", [4 => 'TODO', 7 => 'TODO']];
+        yield 'a comment after a here-document read inside a nested case branch' => ["case \$1 in\n  (a) cat <<EOF ;;\n# TODO in the body\nEOF\nesac\n# TODO later\n", [6 => 'TODO']];
+        yield 'a comment after a for loop over in inside a case branch' => ["case \$1 in\n  a) for x in (y); do :; done ;;\nesac\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after a single-quoted delimiter with a backslash' => ["cat <<'END\\MARK'\n# TODO in the body\nEND\\MARK\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after an ANSI-C quoted delimiter with an escape' => ["cat <<\$'E\\x4fF'\n# TODO in the body\nEOF\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after a double-quoted delimiter with an escaped quote' => ["cat <<\"E\\\"F\"\n# TODO in the body\nE\"F\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after a delimiter of mixed quoting' => ["cat <<E'O'\"F\"\n# TODO in the body\nEOF\n# TODO later\n", [4 => 'TODO']];
+        yield 'a comment after outer and inner here-documents on one line' => ["cat <<OUT \"\$(cat <<IN)\"\n# TODO outer body\nOUT\n# TODO inner body\nIN\n# TODO later\n", [6 => 'TODO']];
+        yield 'a comment inside a substitution in a parameter default after its here-document' => ["echo \"\${value:-\$(cat <<EOF\n# TODO in the body\nEOF\n# TODO inside\n)}\"\n# TODO later\n", [4 => 'TODO', 6 => 'TODO']];
     }
 
     /**
@@ -95,6 +105,14 @@ final class ShellHereDocumentsTest extends TestCase
 
         self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
         self::assertSame([2002 => 'TODO'], $this->markersOn($script(1000)));
+    }
+
+    public function testDeeplyNestedHereDocumentSubstitutionsAreScannedInLinearTime(): void
+    {
+        $script = static fn (int $size): string => str_repeat('$(cat <<EOF ', $size).'x'.str_repeat(')', $size)."\n".str_repeat("EOF\n", $size)."# TODO later\n";
+
+        self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
+        self::assertSame([1002 => 'TODO'], $this->markersOn($script(1000)));
     }
 
     public function testALongBackslashContinuedHereDocumentBodyIsScannedInLinearTime(): void
