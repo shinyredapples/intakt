@@ -2,6 +2,9 @@
 
 {% block title %}Trends - Intakt{% endblock %}
 
+{#- A sub-tab of History, so the rail marks History. -#}
+{% set rail_section = 'history' %}
+
 {#- Always loaded, not only with live updates, because the charts' tooltip controller starts from it. -#}
 {% block importmap %}{{ importmap('app') }}{% endblock %}
 

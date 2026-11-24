@@ -6,17 +6,22 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\History;
 use Intakt\Core\Dashboard\Domain\HistoryRow;
+use Intakt\Core\Dashboard\Domain\HistorySource;
+use Intakt\Core\Dashboard\Domain\HistoryTopic;
 use Intakt\Core\Dashboard\UseCase\ShowHistory\ShowHistoryController;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(ShowHistoryController::class)]
 #[UsesClass(History::class)]
 #[UsesClass(HistoryRow::class)]
+#[UsesClass(HistorySource::class)]
+#[UsesClass(HistoryTopic::class)]
 #[UsesClass(PayloadFields::class)]
 final class ShowHistoryControllerTest extends DashboardPageTestCase
 {
@@ -41,6 +46,65 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
 
         self::assertSame('Ledger', $crawler->filter('.subtabs a[aria-current="page"]')->text());
         self::assertSame('/trends', $crawler->filter('.subtabs a:not([aria-current])')->attr('href'));
+    }
+
+    public function testTheRailMarksHistoryAsTheCurrentPlace(): void
+    {
+        $crawler = $this->browser->request('GET', '/history');
+
+        self::assertSame(['history'], $crawler->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+    }
+
+    public function testAFullHistoryRowHasAKeyboardStopForHorizontalScrolling(): void
+    {
+        $this->record(['actor' => 'owner', 'project' => 'sample', 'before' => 'low', 'after' => 'high', 'expires_at' => '2026-12-01T10:00:00+00:00']);
+
+        $scroll = $this->browser->request('GET', '/history?project=sample')->filter('.table-scroll');
+
+        self::assertSame(['0', 'region', 'History'], [$scroll->attr('tabindex'), $scroll->attr('role'), $scroll->attr('aria-label')]);
+    }
+
+    public function testTheLedgerOffersTheMocksFilterChipsAndATextFilter(): void
+    {
+        $this->record(['actor' => 'owner']);
+
+        $toolbar = $this->browser->request('GET', '/history')->filter('.filters[role="toolbar"][data-history-filter]');
+
+        self::assertSame(['Everything', 'From the dashboard', 'By Intakt', 'Limits', 'Projects', 'Accounts'], $toolbar->filter('button.fchip')->each(static fn (Crawler $chip): string => $chip->text()));
+        self::assertSame(['true', 'false', 'false', 'false', 'false', 'false'], $toolbar->filter('button.fchip')->each(static fn (Crawler $chip): string => (string) $chip->attr('aria-pressed')));
+        self::assertSame('Filter by text', $toolbar->filter('label[for="history-text"]')->text());
+        self::assertCount(1, $toolbar->filter('input#history-text[type="search"]'));
+    }
+
+    public function testARowWithAnActorComesFromTheDashboardAndOneWithoutFromIntakt(): void
+    {
+        $this->record(['actor' => 'owner']);
+        $this->record(['project' => 'alpha']);
+
+        $rows = $this->browser->request('GET', '/history')->filter('.ledger tbody tr');
+
+        self::assertSame(['intakt', 'dashboard'], $rows->each(static fn (Crawler $row): string => (string) $row->attr('data-source')));
+        self::assertSame('Intakt', $rows->first()->filter('.who')->text());
+    }
+
+    public function testACooledDownAccountIsALimitAndAnAccountRowAndAProjectRowIsAProjectsRow(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountCooledDown, json_encode(['account' => 'sample', 'until' => '2026-12-01T10:00:00+00:00'], JSON_THROW_ON_ERROR)));
+        $this->record(['project' => 'alpha']);
+        $this->record(['actor' => 'owner']);
+
+        $rows = $this->browser->request('GET', '/history')->filter('.ledger tbody tr');
+
+        self::assertSame(['', 'projects', 'limits accounts'], $rows->each(static fn (Crawler $row): string => (string) $row->attr('data-topics')));
+    }
+
+    public function testTheEmptyLineForFilteredRowsStartsHidden(): void
+    {
+        $this->record(['actor' => 'owner']);
+
+        $crawler = $this->browser->request('GET', '/history');
+
+        self::assertSame('No entries match. Clear the filter to see everything.', $crawler->filter('p.history-none[hidden]')->text());
     }
 
     public function testAHistoryRowWithoutAChangeShowsNoArrow(): void

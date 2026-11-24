@@ -366,12 +366,12 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSelectorNotExists('.page-head .actions');
     }
 
-    public function testTheRailListsTrendsAfterYouAndMarksItCurrentOnTheTrendsPage(): void
+    public function testTheRailMarksHistoryCurrentOnTheTrendsPageBecauseTrendsIsItsSubTab(): void
     {
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['Now', 'You', 'Trends', 'Projects'], $page->filter('.rail a.nav')->each(static fn (Crawler $item): string => trim($item->text())));
-        self::assertSame(['trends'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+        self::assertSame(['Now', 'You', 'History', 'Projects'], $page->filter('.rail a.nav')->each(static fn (Crawler $item): string => trim($item->text())));
+        self::assertSame(['history'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
     }
 
     public function testTheTwoChartsShowTheirTitlesAndTakeawaysReadFromTheLedger(): void

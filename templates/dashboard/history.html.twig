@@ -13,13 +13,22 @@
 {% if history.rows is empty %}
 {{ include('dashboard/components/empty.html.twig', {title: 'No history yet', text: 'Nothing has been recorded yet.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
 {% else %}
-<div class="table-scroll">
+{# assets/history-filter.js narrows the rows by the pressed chip and the text; the empty value is Everything. #}
+<div class="filters" role="toolbar" aria-label="Filter history" data-history-filter>
+    <button class="fchip" type="button" aria-pressed="true" data-filter="">Everything</button>
+    {% for choice in enum_cases('Intakt\\Core\\Dashboard\\Domain\\HistorySource')|merge(enum_cases('Intakt\\Core\\Dashboard\\Domain\\HistoryTopic')) %}
+    <button class="fchip" type="button" aria-pressed="false" data-filter="{{ choice.value }}">{{ choice.filterLabel }}</button>
+    {% endfor %}
+    <label class="sr-only" for="history-text">Filter by text</label>
+    <input class="input" id="history-text" type="search" placeholder="Filter by text">
+</div>
+<div class="table-scroll" tabindex="0" role="region" aria-label="History">
 <table class="ledger">
     <caption class="sr-only">History</caption>
     <thead><tr><th scope="col">When</th><th scope="col">Source</th><th scope="col">What</th><th scope="col">Change</th><th scope="col">Until</th></tr></thead>
     <tbody>
 {% for row in history.rows %}
-        <tr{% if row.project is not null %} data-project="{{ row.project }}"{% endif %}>
+        <tr data-source="{{ row.source.value }}" data-topics="{{ row.topics|map(topic => topic.value)|join(' ') }}"{% if row.project is not null %} data-project="{{ row.project }}"{% endif %}>
             <td class="when"><time datetime="{{ row.at|date('c', 'UTC') }}">{{ row.at|date('Y-m-d H:i:s', 'UTC') }} UTC</time></td>
             <td class="who">{{ row.who }}</td>
             <td>{{ row.label }}{% if row.project is not null %} <span class="pname">{{ row.project }}</span>{% endif %}{% if row.fingerprint is not null %} <span class="fingerprint">Fingerprint <code>{{ row.fingerprint }}</code></span>{% endif %}</td>
@@ -30,5 +39,6 @@
     </tbody>
 </table>
 </div>
+<p class="muted history-none" hidden>No entries match. Clear the filter to see everything.</p>
 {% endif %}
 {% endblock %}

@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 
@@ -18,6 +19,7 @@ final readonly class HistoryRow
         public DateTimeImmutable $at,
         public string $kind,
         public string $who,
+        public HistorySource $source,
         public ?string $project,
         public ?string $round,
         public ?string $before,
@@ -32,11 +34,13 @@ final readonly class HistoryRow
         $fields = PayloadFields::of($recorded);
         $fingerprint = $fields->text('fingerprint');
         $isSecret = null !== $fingerprint;
+        $actor = $fields->text('actor');
 
         return new self(
             $recorded->recordedAt->setTimezone(new DateTimeZone('UTC')),
             $recorded->event->kind->value,
-            $fields->text('actor') ?? self::UNNAMED_ACTOR,
+            $actor ?? self::UNNAMED_ACTOR,
+            null === $actor ? HistorySource::Intakt : HistorySource::Dashboard,
             $fields->text('project'),
             $fields->text('round'),
             $isSecret ? null : $fields->text('before'),
@@ -68,6 +72,14 @@ final readonly class HistoryRow
     public function label(): string
     {
         return ucfirst(str_replace('_', ' ', $this->kind));
+    }
+
+    /**
+     * @return list<HistoryTopic>
+     */
+    public function topics(): array
+    {
+        return HistoryTopic::of(LedgerEventKind::from($this->kind), $this->project);
     }
 
     // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable. It throws on a NUL byte, which would take the whole page down for one row.

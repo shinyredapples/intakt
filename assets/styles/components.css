@@ -196,6 +196,10 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   color: var(--ink); font: 500 var(--t13)/1 var(--f-head); cursor: pointer;
 }
 .fchip[aria-pressed="true"] { border-color: transparent; background: var(--selected); }
+.filters { display: flex; flex-wrap: wrap; gap: var(--s8); align-items: center; margin-bottom: var(--s16); }
+.filters .input { max-width: 240px; height: 32px; margin-left: auto; }
+/* Its own mark, not hidden, because the project filter owns a row's hidden and either may hide it. */
+.ledger tr[data-filtered-out] { display: none; }
 
 /* Toasts */
 .toast {
@@ -306,6 +310,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .seg { display: flex; }
   .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .filters .input { flex: none; min-width: 200px; height: 44px; }
   .stepper button { width: 48px; height: 46px; }
   .copy { flex-wrap: wrap; padding: calc(var(--s8) + 2px); }
   .copy code { flex: 1 1 100%; padding: var(--s4); white-space: normal; overflow-wrap: anywhere; }
