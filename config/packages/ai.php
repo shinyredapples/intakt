@@ -277,6 +277,9 @@ return static function (ContainerConfigurator $container): void {
     $disabled = [];
     $disabledAccounts = [];
     $enabledAccounts = [];
+    $listedAccounts = [];
+    // Keyed as the configuration tree normalizes them, so a provider listed as openai-compatible counts as listed under openai_compatible.
+    $explicitAccounts = is_array($contents['accounts'] ?? null) ? array_flip(array_map(static fn (int|string $key): string => str_replace('-', '_', (string) $key), array_keys($contents['accounts']))) : [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
@@ -299,6 +302,11 @@ return static function (ContainerConfigurator $container): void {
             }
 
             $missingOf[$name] = $missing;
+        }
+
+        // A provider without a key that the file does not list under accounts keeps only its implicit default account, so the owner never set it up and only the disabled-provider note names it.
+        if ([] !== $enabled || array_key_exists($provider->value, $explicitAccounts)) {
+            $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
         }
 
         // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
@@ -352,6 +360,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    $container->parameters()->set(AiServices::LISTED_ACCOUNTS, $listedAccounts);
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
         static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),

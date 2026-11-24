@@ -317,6 +317,44 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertArrayNotHasKey(Provider::Anthropic->value, $container->getParameter(AiServices::DISABLED_PROVIDERS));
     }
 
+    public function testAListedAccountWithoutItsKeyStaysAmongTheListedAccounts(): void
+    {
+        $this->listAccounts('anthropic: [default, team]');
+
+        self::assertSame(['default', 'team'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
+    }
+
+    public function testAProviderWhoseEveryListedAccountLacksItsKeyKeepsThemListed(): void
+    {
+        $this->listAccounts('anthropic: [team]');
+        $this->unsetVariable('ANTHROPIC_API_KEY');
+
+        self::assertSame(['team'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
+    }
+
+    public function testAnExplicitlyListedDefaultAccountWithoutItsKeyStaysListed(): void
+    {
+        $this->listAccounts('anthropic: [default]');
+        $this->unsetVariable('ANTHROPIC_API_KEY');
+
+        self::assertSame(['default'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
+    }
+
+    public function testAnAccountListedUnderTheHyphenatedProviderKeyWithoutItsKeyStaysListed(): void
+    {
+        $this->listAccounts('openai-compatible: [team]');
+
+        $container = $this->bootedContainer();
+
+        self::assertSame(['team'], $this->parameterList($container, AiServices::LISTED_ACCOUNTS)[Provider::OpenAiCompatible->value] ?? null);
+        self::assertArrayNotHasKey(Provider::OpenAiCompatible->value, $this->parameterList($container, AiServices::ACCOUNTS));
+    }
+
+    public function testAProviderWithoutAKeyThatKeepsItsImplicitDefaultAccountIsNotListed(): void
+    {
+        self::assertArrayNotHasKey(Provider::OpenAi->value, $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS));
+    }
+
     public function testAProviderWhoseEveryListedAccountLacksItsKeyIsDisabled(): void
     {
         $this->listAccounts('anthropic: [team]');
