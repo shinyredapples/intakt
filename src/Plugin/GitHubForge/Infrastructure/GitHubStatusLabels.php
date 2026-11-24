@@ -51,6 +51,15 @@ final readonly class GitHubStatusLabels implements StatusLabels
         $this->whileHeld($project, $change, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...)));
     }
 
+    private function isOwn(string $login): bool
+    {
+        try {
+            return $this->identities->isOwn($login);
+        } catch (TrustNotChecked $unchecked) {
+            throw new ForgeWriteFailed($unchecked->getMessage(), $unchecked->getCode(), previous: $unchecked);
+        }
+    }
+
     // Planned and written under one lock, because two writers that read the same events would both find the person's change last and both comment; not waited for, because the busy writer leaves the label to the one holding it.
     /**
      * @param Closure(list<LabelEvent>): ?StatusLabelPlan $plan
@@ -129,15 +138,6 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
         if ($plan->commentOnRestore) {
             $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
-        }
-    }
-
-    private function isOwn(string $login): bool
-    {
-        try {
-            return $this->identities->isOwn($login);
-        } catch (TrustNotChecked $unchecked) {
-            throw new ForgeWriteFailed($unchecked->getMessage(), $unchecked->getCode(), previous: $unchecked);
         }
     }
 

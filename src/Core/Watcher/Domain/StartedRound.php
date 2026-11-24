@@ -37,10 +37,10 @@ final class StartedRound
     #[ORM\Column(name: 'withdrawal_requested', options: ['default' => false])]
     private bool $withdrawalRequested = false;
 
-    // Kept on the round, because its verdicts are judged by the labels it started with; null on a round stored before labels were kept, which started with none.
-    /** @var list<string>|null */
-    #[ORM\Column(type: Types::JSON, nullable: true)]
-    private readonly ?array $labels;
+    // Kept on the round, because its verdicts are judged by the labels it started with.
+    /** @var list<string> */
+    #[ORM\Column(type: Types::JSON)]
+    private readonly array $labels;
 
     public function __construct(
         #[ORM\Id]
@@ -78,7 +78,7 @@ final class StartedRound
 
     public function labels(): Labels
     {
-        return new Labels(...$this->labels ?? []);
+        return new Labels(...$this->labels);
     }
 
     public function isStale(): bool

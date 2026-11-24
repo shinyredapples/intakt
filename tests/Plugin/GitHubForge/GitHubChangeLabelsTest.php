@@ -94,7 +94,7 @@ final class GitHubChangeLabelsTest extends TestCase
     private function history(string ...$labels): IssueHistories
     {
         $histories = self::createStub(IssueHistories::class);
-        $histories->method('of')->willReturn(new IssueHistory('alice', array_map(static fn (string $label): LabelApplication => new LabelApplication($label, RecordedTrust::WRITER), $labels), '', new IssueLabels(...$labels)));
+        $histories->method('of')->willReturn(new IssueHistory('alice', array_values(array_map(static fn (string $label): LabelApplication => new LabelApplication($label, RecordedTrust::WRITER), $labels)), '', new IssueLabels(...$labels)));
 
         return $histories;
     }

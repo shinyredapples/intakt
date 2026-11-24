@@ -63,11 +63,6 @@ final class GitHubStatusLabelsTest extends TestCase
 
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testAQueuedRoundWritesTheInReviewLabel(): void
     {
         $this->mirror(RoundStatusLabel::InReview);
@@ -200,6 +195,11 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->refuseWrites = true;
 
         $this->labelsOf()->mirror('alpha', new ChangeId(self::PULL), RoundStatusLabel::InReview);
+    }
+
+    protected function setUp(): void
+    {
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function mirror(RoundStatusLabel $status): void

@@ -50,9 +50,9 @@ final readonly class RoundStarts
     }
 
     // After the commit, so a round rolled back never shows as in review; a head whose round already runs is due again because the pull request changed, which a person's change of the status label does, so the status Intakt set last is put back.
-    private function mirrorStatus(WatchedProject $project, OpenChange $change, bool $queued): void
+    private function mirrorStatus(WatchedProject $project, OpenChange $change, ?QueuedRound $queued): void
     {
-        if ($queued) {
+        if ($queued instanceof QueuedRound) {
             $this->status->show($project->name, $change->id, RoundStatusLabel::InReview);
 
             return;

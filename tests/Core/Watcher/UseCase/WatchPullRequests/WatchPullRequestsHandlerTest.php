@@ -92,11 +92,11 @@ use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
 use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
-use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\AdmitHeads\RecordedChecks;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
+use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
@@ -750,7 +750,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
                     'round_id' => 'other',
                     'stale' => false,
                     'queued_recorded' => false,
-                ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
+                    'labels' => [],
+                ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN, 'labels' => Types::JSON]);
             }
         };
 

@@ -28,7 +28,7 @@ final readonly class StartedRounds
     /**
      * @param Closure(): QueuedRound $start
      */
-    public function startOnce(string $project, OpenChange $change, Closure $start): bool
+    public function startOnce(string $project, OpenChange $change, Closure $start): ?QueuedRound
     {
         $connection = $this->entities->getConnection();
         $connection->beginTransaction();
@@ -49,7 +49,7 @@ final readonly class StartedRounds
             throw $failure;
         }
 
-        return $queued instanceof QueuedRound;
+        return $queued;
     }
 
     /**
