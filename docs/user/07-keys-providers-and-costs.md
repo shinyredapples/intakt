@@ -59,6 +59,8 @@ Every review page shows the tokens and the cost of each round. The cost is an es
 3. Optionally set `budget.price_date`, the day you read the prices, in quotes. If you read them on different days, use the earliest.
 4. Run `php bin/console cache:clear`.
 
+The tokens table splits the prompt's cache tokens. **Cache read** and **Cache write** are the ones the provider named as such; **Cached** is the rest it did not tell apart, so a round can show a cache read and a cached figure side by side. Optional `cache_read` and `cache_write` prices apply to the first two, and the cached figure costs the `input` price.
+
 The page then shows a figure, an **estimated** label and the price date. A model without a price makes the cost read "unknown, no price for" that model, never a partial sum. This holds for a call that has not recorded its end yet (still running, or cut off) too: if its model has no price, the round's cost is unknown; if the model has a price, such a call adds nothing. The demo brings its own list prices, dated 2026-11-13, the earliest day any of them was read.
 
 ## Running on a subscription

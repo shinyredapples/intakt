@@ -86,7 +86,7 @@ final class WhoIsWorkingOnSqliteTest extends KernelTestCase
         self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"r1-security","role":"security","tier":"standard"}'))->succeeded());
 
         $costs = new FixedRoundCosts(Cost::inUsd(0.5));
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        $pages = new LedgerReviewPages($clock, $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
         $lanes = $pages->board()->whoIsWorking()->lanes();
 
