@@ -148,6 +148,11 @@ final class UpNextTest extends TestCase
         return new ReviewerOutcome($id, $role, 'standard', $at)->restarted($at, null);
     }
 
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-01T10:30:00+00:00');
+    }
+
     /**
      * @param list<ReviewedRound> $rounds
      *
@@ -156,10 +161,5 @@ final class UpNextTest extends TestCase
     private function ids(array $rounds): array
     {
         return array_map(static fn (ReviewedRound $round): string => $round->round, $rounds);
-    }
-
-    private function now(): DateTimeImmutable
-    {
-        return new DateTimeImmutable('2026-11-01T10:30:00+00:00');
     }
 }

@@ -174,6 +174,11 @@ final class WhoIsWorkingTest extends TestCase
         self::assertSame(['r1-b'], $this->reviewers($working));
     }
 
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-01T10:30:00+00:00');
+    }
+
     /**
      * @return list<string>
      */
@@ -211,10 +216,5 @@ final class WhoIsWorkingTest extends TestCase
     private function since(): DateTimeImmutable
     {
         return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
-    }
-
-    private function now(): DateTimeImmutable
-    {
-        return new DateTimeImmutable('2026-11-01T10:30:00+00:00');
     }
 }
