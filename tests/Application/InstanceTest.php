@@ -169,10 +169,12 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
-    // Shorter than one wait between two status reads, so the command ends during the last wait.
+    // Shorter than one wait between two status reads; the command ends only once the instance sleeps, so after a read saw it running and during the last wait.
     public function testACommandThatEndsDuringTheLastWaitBeforeAFractionalLimitIsNotKilled(): void
     {
-        $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'printf "done\n"'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.025']);
+        $command = 'while read -r _ _ state _ < /proc/$PPID/stat; [ "$state" != S ]; do :; done; printf "done\n"';
+
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', $command], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.045']);
 
         self::assertSame(0, $run['exit']);
         self::assertStringNotContainsString('was killed', $run['errors']);
@@ -185,6 +187,17 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame(0, $run['exit']);
         self::assertStringNotContainsString('was killed', $run['errors']);
         self::assertStringNotContainsString('Warning', $run['errors']);
+    }
+
+    public function testACommandLimitPastTheRangeOfAFloatIsRefusedBeforeTheCommandRuns(): void
+    {
+        $ran = $this->scratch.'/ran';
+
+        $run = $this->runInstance(self::stubProject(), ['touch', $ran], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1e309']);
+
+        self::assertSame(1, $run['exit']);
+        self::assertSame(['status' => 'failed', 'reason' => 'INTAKT_INSTANCE_COMMAND_SECONDS is past the range of a time limit'], $this->decoded($run['status']));
+        self::assertFileDoesNotExist($ran);
     }
 
     #[DataProvider('signals')]

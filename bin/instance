@@ -635,6 +635,16 @@ $command = '--' === array_first($command) ? array_slice($command, 1) : [];
 // Needed so a test can prove the cap without waiting for the full minute.
 $commandSeconds = (float) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
+// Because a limit past the range of a float deadline would never end the command, as if there were none.
+if (!is_finite($commandSeconds * 1_000_000_000)) {
+    $refusal = 'INTAKT_INSTANCE_COMMAND_SECONDS is past the range of a time limit';
+    fwrite(STDERR, $refusal."\n");
+    $statusChannel = statusChannel();
+    null === $statusChannel || fwrite($statusChannel, InstanceStatus::failed($refusal)->toJson());
+
+    exit(1);
+}
+
 $root = dirname(__DIR__);
 // The image ships frankenphp, so there the instance runs the app the way the image serves it.
 $frankenphp = executableOnPath('frankenphp');

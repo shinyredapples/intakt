@@ -94,19 +94,34 @@ final class ProcessQueueTest extends SandboxTestCase
     {
         $late = static function (int $worker): array {
             // Half the limit, because a build that a busy runner lets overrun the limit never starts its job, and the job still runs past the limit.
-            usleep(400_000);
+            usleep(250_000);
 
             return [['php', '-r', 'echo "started\n"; sleep(5);'], []];
         };
         $started = hrtime(true);
 
-        $results = new ProcessQueue(0.8, 0.8)->run(['late' => $late], 1, $this->emptySandbox()->root);
+        $results = new ProcessQueue(0.5, 0.5)->run(['late' => $late], 1, $this->emptySandbox()->root);
         $elapsed = (hrtime(true) - $started) / 1_000_000_000;
 
-        // Below the 1.2 seconds at which the job's own limit would stop it, so the stop is the time left in the pass.
-        self::assertLessThan(1.1, $elapsed);
+        // Below the 0.75 seconds at which the job's own limit would stop it, so the stop is the time left in the pass.
+        self::assertLessThan(0.7, $elapsed);
         self::assertSame(ProcessRunner::TIMED_OUT, $results['late']->exitCode);
-        self::assertSame('timed out: the test pass reached its overall limit of 0.8 seconds, last output: started', $results['late']->firstErrorLine());
+        self::assertSame('timed out: the test pass reached its overall limit of 0.5 seconds, last output: started', $results['late']->firstErrorLine());
+    }
+
+    public function testAJobWhoseOwnLimitIsJustAboveThePassLimitNamesThePassLimit(): void
+    {
+        $results = new ProcessQueue(0.53, 0.5)->run(['hang' => $this->php('echo "started\n"; sleep(30);')], 1, $this->emptySandbox()->root);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['hang']->exitCode);
+        self::assertSame('timed out: the test pass reached its overall limit of 0.5 seconds, last output: started', $results['hang']->firstErrorLine());
+    }
+
+    public function testAPassLimitPastTheIntegerRangeOfNanosecondsRunsTheJob(): void
+    {
+        $results = new ProcessQueue(0.3, 10_000_000_000)->run(['quick' => $this->php('echo "done";')], 1, $this->emptySandbox()->root);
+
+        self::assertSame([0, 'done'], [$results['quick']->exitCode, $results['quick']->output]);
     }
 
     public function testAJobStoppedByAFractionalPassLimitShorterThanItsOwnNamesThePassLimit(): void

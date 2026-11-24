@@ -34,7 +34,8 @@ final readonly class ProcessQueue
         $order = array_keys($jobs);
         $results = [];
         $running = [];
-        $deadline = hrtime(true) + (int) ($this->overallSeconds * 1_000_000_000);
+        // A float, because a large limit times a billion nanoseconds is past the integer range.
+        $deadline = hrtime(true) + $this->overallSeconds * 1_000_000_000;
         // A job builder must return without waiting, because the running processes are polled only between builds.
         $start = fn (int $worker, Closure $job): ?array => hrtime(true) < $deadline ? $this->started($this->built($job, $worker), $directory, $deadline) : null;
 
@@ -85,7 +86,7 @@ final readonly class ProcessQueue
         }
 
         // Because a job starts a moment after its pass, a short slack keeps the reason of a job timeout equal to the overall limit the job's own; the process still stops at the time left.
-        $ownTimeout = $this->seconds <= $left + self::START_SLACK_SECONDS;
+        $ownTimeout = $this->seconds <= $left || ($this->seconds === $this->overallSeconds && $this->seconds <= $left + self::START_SLACK_SECONDS);
         $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->seconds, $left));
 
         try {
