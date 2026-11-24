@@ -12,6 +12,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(ShowHistoryController::class)]
 #[UsesClass(History::class)]
@@ -40,6 +41,33 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/history?project=beta');
 
         self::assertSame(['beta', 'alpha'], $crawler->filter('.review-row')->each(static fn ($row): string => (string) $row->attr('data-project')));
+    }
+
+    public function testAProjectWithOnlyWatcherEventsCanBeChosenInTheHistoryFilter(): void
+    {
+        // The payload the watcher writes when a project's main fails to boot: no review or build follows it.
+        $payload = ['project' => 'beta', 'main' => str_repeat('a', 40), 'tool_fingerprint' => 'sample', 'reason' => 'sample'];
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::MainBootFailed, json_encode($payload, JSON_THROW_ON_ERROR)));
+
+        $crawler = $this->browser->request('GET', '/history?project=beta');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('li.review-row[data-project="beta"]'));
+        self::assertCount(1, $crawler->filter('#projfilter option[value="beta"][selected]'));
+    }
+
+    public function testTheHistoryFilterOffersItsRowsProjectsInNameOrderWithTheOthers(): void
+    {
+        $round = Uuid::v7()->toRfc4122();
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, json_encode(['round' => $round, 'project' => 'Beta', 'reviewers' => 1, 'change' => 'sample', 'number' => 1, 'task' => 'sample'], JSON_THROW_ON_ERROR)));
+        $this->record(['actor' => 'owner', 'project' => 'gamma']);
+        $this->record(['actor' => 'owner', 'project' => 'alpha']);
+        $this->record(['actor' => 'owner', 'project' => 'alpha']);
+        $this->record(['actor' => 'owner', 'project' => '']);
+
+        $crawler = $this->browser->request('GET', '/history');
+
+        self::assertSame(['', 'alpha', 'Beta', 'gamma'], $crawler->filter('#projfilter option')->each(static fn ($option): string => (string) $option->attr('value')));
     }
 
     public function testTheHistoryPageShowsASecretOnlyAsItsFingerprint(): void

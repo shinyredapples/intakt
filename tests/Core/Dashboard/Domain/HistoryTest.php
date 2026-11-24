@@ -47,6 +47,21 @@ final class HistoryTest extends TestCase
         self::assertSame([null, 'alpha', 'alpha'], array_map(static fn (HistoryRow $row): ?string => $row->project, $history->rows));
     }
 
+    public function testTheProjectsOfAHistoryAreThoseItsRowsNameEachOnceAfterTheRoundJoin(): void
+    {
+        $round = Uuid::v7()->toRfc4122();
+
+        $history = History::of(new RecordedEvents([
+            $this->event(LedgerEventKind::ReviewerStarted, ['round' => $round], $this->noon()),
+            $this->event(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha'], $this->noon()),
+            $this->event(LedgerEventKind::MainBootFailed, ['project' => 'beta'], $this->noon()),
+            $this->event(LedgerEventKind::OwnerAsked, ['project' => ''], $this->noon()),
+            $this->event(LedgerEventKind::OwnerAsked, ['actor' => 'owner'], $this->noon()),
+        ]));
+
+        self::assertEqualsCanonicalizing(['alpha', 'beta'], $history->projects());
+    }
+
     private function noon(): DateTimeImmutable
     {
         return new DateTimeImmutable('2026-10-28T12:00:00+00:00');

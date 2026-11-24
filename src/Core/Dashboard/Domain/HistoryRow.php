@@ -70,10 +70,10 @@ final readonly class HistoryRow
         return ucfirst(str_replace('_', ' ', $this->kind));
     }
 
-    // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable.
+    // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable. It throws on a NUL byte, which would take the whole page down for one row.
     private static function expiryOf(?string $text): ?DateTimeImmutable
     {
-        if (null === $text) {
+        if (null === $text || str_contains($text, "\0")) {
             return null;
         }
 

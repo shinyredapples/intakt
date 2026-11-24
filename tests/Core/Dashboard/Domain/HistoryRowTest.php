@@ -42,6 +42,11 @@ final class HistoryRowTest extends TestCase
         self::assertSame('2026-02-28', $lastDay->expires?->format('Y-m-d'));
     }
 
+    public function testAnExpiryHoldingANulByteIsUnreadableRatherThanAnError(): void
+    {
+        self::assertNull(HistoryRow::of($this->recorded(['expires_at' => "2026-12-01T12:00:00+00:00\0"]))->expires);
+    }
+
     public function testAnEmptyFingerprintStillHidesBeforeAndAfter(): void
     {
         $row = HistoryRow::of($this->recorded(['fingerprint' => '', 'before' => 'sk-old-secret', 'after' => 'sk-new-secret']));

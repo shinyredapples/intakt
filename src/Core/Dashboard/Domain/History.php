@@ -33,4 +33,20 @@ final readonly class History
 
         return new self($rows);
     }
+
+    // Read after the round join, so a project known only through a reviewer's row counts too. The empty name is left out because the filter reads it as All projects.
+    /**
+     * @return list<string>
+     */
+    public function projects(): array
+    {
+        $projects = [];
+        foreach ($this->rows as $row) {
+            if (null !== $row->project && '' !== $row->project) {
+                $projects[$row->project] = $row->project;
+            }
+        }
+
+        return array_values($projects);
+    }
 }
