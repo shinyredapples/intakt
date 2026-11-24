@@ -53,6 +53,12 @@ final class TierRoutedPlatform implements PlatformInterface
         return $round;
     }
 
+    #[Override]
+    public function getModelCatalog(): ModelCatalogInterface
+    {
+        return $this->catalog ?? ($this->answering->provider->streams() ? new FallbackModelCatalog() : new UnstreamedModelCatalog());
+    }
+
     /**
      * @param array<mixed> $input
      */
@@ -64,11 +70,5 @@ final class TierRoutedPlatform implements PlatformInterface
         }
 
         return $request;
-    }
-
-    #[Override]
-    public function getModelCatalog(): ModelCatalogInterface
-    {
-        return $this->catalog ?? ($this->answering->provider->streams() ? new FallbackModelCatalog() : new UnstreamedModelCatalog());
     }
 }
