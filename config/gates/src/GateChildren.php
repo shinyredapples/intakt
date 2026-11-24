@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Closure;
+
 final readonly class GateChildren
 {
     public const string FULL_RESULT_VARIABLE = 'INTAKT_GATE_FULL_RESULT';
@@ -14,8 +16,10 @@ final readonly class GateChildren
 
     private const int POLL_MICROSECONDS = 10000;
 
+    // Because no outside timing can put a stop between two starts of one launch round, a test needs to act right after each start.
     /**
-     * @param list<string> $runningTheChangesCode
+     * @param list<string>                                 $runningTheChangesCode
+     * @param Closure(RunningChild|ProcessResult): void    $afterEachStart
      */
     public function __construct(
         private string $home,
@@ -23,6 +27,7 @@ final readonly class GateChildren
         private GateSlots $slots,
         private array $runningTheChangesCode,
         private ProcessRunner $runner = new ProcessRunner(),
+        private Closure $afterEachStart = static function (RunningChild|ProcessResult $child): void {},
     ) {
     }
 
@@ -100,8 +105,7 @@ final readonly class GateChildren
         });
 
         while ([] !== $waiting || [] !== $running) {
-            [$waiting, $started] = $this->launched($waiting, $running, $children);
-            $running += $started;
+            $waiting = $this->launched($waiting, $running, $children);
             $ended = $this->ended($running);
             $running = array_diff_key($running, $ended);
             $results += $ended;
@@ -144,23 +148,23 @@ final readonly class GateChildren
         }
     }
 
+    // Because the stop handler reads the same set, each child joins it the moment it starts, not once the whole round has started.
     /**
      * @param list<string>                              $waiting
      * @param array<string, RunningChild|ProcessResult> $running
      * @param array<string, ChildCommand>               $children
      *
-     * @return array{list<string>, array<string, RunningChild|ProcessResult>}
+     * @return list<string>
      */
-    private function launched(array $waiting, array $running, array $children): array
+    private function launched(array $waiting, array &$running, array $children): array
     {
-        $started = [];
-
-        while ([] !== $waiting && $this->mayStart($waiting, [...array_keys($running), ...array_keys($started)])) {
+        while ([] !== $waiting && $this->mayStart($waiting, array_keys($running))) {
             $gate = array_shift($waiting);
-            $started[$gate] = $this->started($children[$gate]);
+            $running[$gate] = $this->started($children[$gate]);
+            ($this->afterEachStart)($running[$gate]);
         }
 
-        return [$waiting, $started];
+        return $waiting;
     }
 
     /**

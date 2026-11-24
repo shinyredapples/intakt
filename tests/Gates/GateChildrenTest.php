@@ -170,6 +170,20 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame([false, false], array_map($this->runsOnAfterAWhile(...), $pids));
     }
 
+    // Because the handler re-raises the signal and ends its process, the children are launched by a script of their own, not by the test.
+    public function testAStopThatArrivesWhileALaunchRoundIsStillStartingChildrenStopsTheChildStartedFirst(): void
+    {
+        $home = $this->fakeGatesHome();
+        $home->write('stop-mid-round.php', $this->launchRoundStoppedAfterItsFirstStart());
+
+        new ProcessRunner()->run([PHP_BINARY, $home->root.'/stop-mid-round.php', $this->emptySandbox()->root], $home->root);
+
+        $pid = (int) @file_get_contents($home->root.'/commits.pid');
+        self::assertNotSame(0, $pid, 'the first child wrote its process id');
+        self::assertFileDoesNotExist($home->root.'/dashes.pid', 'the stop arrived before the second child started');
+        self::assertFalse($this->runsOnAfterAWhile($pid));
+    }
+
     public function testAGateWhoseChildCrashesFailsWithTheChildsOutput(): void
     {
         $run = $this->checkWithFakeGates('--only=rector');
@@ -257,6 +271,33 @@ final class GateChildrenTest extends SandboxTestCase
         $home->symlink('vendor', $real.'/vendor');
 
         return $home;
+    }
+
+    // Because a started child waits for its release until it is polled, the launcher polls the first one until its gate runs, then stops itself before the second starts; the limit only ends a hang.
+    private function launchRoundStoppedAfterItsFirstStart(): string
+    {
+        $real = var_export(dirname(__DIR__, 2), true);
+
+        return <<<PHP
+            <?php
+            require {$real}.'/vendor/autoload.php';
+            use Intakt\\Gates\\GateChildren;
+            use Intakt\\Gates\\GateSlots;
+            use Intakt\\Gates\\ProcessResult;
+            use Intakt\\Gates\\ProcessRunner;
+            use Intakt\\Gates\\RunningChild;
+            \$root = \$argv[1];
+            \$stopOnceItRuns = static function (RunningChild|ProcessResult \$child): void {
+                \$until = hrtime(true) + 90_000_000_000;
+                while (\$child instanceof RunningChild && '' === (string) @file_get_contents(__DIR__.'/commits.pid') && hrtime(true) < \$until) {
+                    \$child->process->isRunning();
+                    usleep(10000);
+                }
+                posix_kill(posix_getpid(), SIGTERM);
+            };
+            \$children = new GateChildren(__DIR__, \$root, GateSlots::chosen('2', 2, 1), [], new ProcessRunner(), \$stopOnceItRuns);
+            \$children->reportsOf(['commits', 'dashes'], ['--root='.\$root], null);
+            PHP;
     }
 
     /**
