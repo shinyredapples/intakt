@@ -92,7 +92,7 @@ final readonly class MarkdownPage
     {
         foreach ($this->contents as $index => $content) {
             if (MarkdownLineKind::Heading === $this->kinds[$index] && 1 === preg_match(self::SUMMARY_HEADING, $content)) {
-                return new MarkdownSummary($this->sectionWords($index), $this->opensPageAt($index));
+                return $this->summaryAt($index);
             }
         }
 
@@ -170,10 +170,11 @@ final readonly class MarkdownPage
         return MarkdownLineKind::Code === $this->kinds[$index] ? 0 : $this->wordsIn($this->textOf($index));
     }
 
-    private function sectionWords(int $heading): int
+    private function summaryAt(int $heading): MarkdownSummary
     {
         $level = $this->headingLevel($heading);
         $words = 0;
+        $hasText = false;
 
         foreach (array_slice($this->kinds, $heading + 1, preserve_keys: true) as $index => $kind) {
             // Only a heading outside a quote ends the section, so an oversized summary cannot hide behind a quoted heading.
@@ -181,10 +182,13 @@ final readonly class MarkdownPage
                 break;
             }
 
-            $words += $this->wordsOfLine($index);
+            $lineWords = $this->wordsOfLine($index);
+            $words += $lineWords;
+            // Because a subheading summarizes nothing, a section of headings alone has no text even though its headings count toward its size.
+            $hasText = $hasText || (MarkdownLineKind::Heading !== $kind && $lineWords > 0);
         }
 
-        return $words;
+        return new MarkdownSummary($words, $this->opensPageAt($heading), $hasText);
     }
 
     private function opensPageAt(int $heading): bool

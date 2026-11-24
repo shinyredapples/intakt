@@ -55,9 +55,9 @@ The `docs` gate (`DocsGate`) measures `README.md` and every `.md` file under `do
 
 - A paragraph has at most 80 words, on every measured page.
 - A page under `docs/user/` or `docs/guide/` has at most 1,500 words.
-- A page under `docs/architecture/` of more than 1,500 words opens with an "In short" section of at most 120 words; an empty one fails.
+- A page under `docs/architecture/` of more than 1,500 words opens with an "In short" section of at most 120 words; an empty one fails, and so does one that holds only headings (its headings still count toward the 120 words).
 
-It measures the pages the working tree holds, so a page deleted but not yet staged is not read, while one that is there but cannot be read fails.
+It measures the pages the working tree holds, so a page deleted but not yet staged is not read, while one that is there but cannot be read fails, also when its folder cannot be searched: a page counts as deleted only when the nearest folder of it that exists can be searched.
 
 A paragraph finding names the file, the line and the limit, and says to split or cut the paragraph. A page finding and a summary finding name the file and the limit, and say how to fix the page.
 

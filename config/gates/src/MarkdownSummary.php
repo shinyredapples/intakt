@@ -12,6 +12,7 @@ final readonly class MarkdownSummary
     public function __construct(
         public int $words,
         public bool $opensPage,
+        public bool $hasText,
     ) {
     }
 }

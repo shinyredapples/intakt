@@ -223,6 +223,24 @@ final class DocsGateTest extends SandboxTestCase
         self::assertSame(['docs/architecture/topic.md: page of 1605 words, over the limit of 1500 words for a page under docs/architecture/, has an empty "In short" section: open it with an "In short" section of at most 120 words'], $result->findings);
     }
 
+    public function testALargeArchitecturePageWhoseInShortHoldsOnlyASubheadingFails(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n## In short\n\n### Overview\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertSame(['docs/architecture/topic.md: page of 1606 words, over the limit of 1500 words for a page under docs/architecture/, has an empty "In short" section: open it with an "In short" section of at most 120 words'], $result->findings);
+    }
+
+    public function testALargeArchitecturePageWhoseInShortHasTextUnderASubheadingPasses(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n## In short\n\n### Overview\n\nThe topic in brief.\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertTrue($result->isPassing(), implode("\n", $result->findings));
+    }
+
     public function testAPageDeletedInTheWorkingTreeBeforeItIsStagedIsNotMeasured(): void
     {
         $sandbox = $this->targetWith([self::GUIDE => 'Short.', DocsRatchetList::PATH => $this->list()]);
@@ -242,6 +260,32 @@ final class DocsGateTest extends SandboxTestCase
         $result = $sandbox->gateResult($this->gate());
 
         self::assertSame(['cannot read docs/guide/start.md'], $result->findings);
+    }
+
+    public function testAPageInAFolderThatCannotBeSearchedFails(): void
+    {
+        $this->skipWhenPermissionsAreIgnored();
+        $sandbox = $this->targetWith([self::GUIDE => 'Short.', DocsRatchetList::PATH => $this->list()]);
+        chmod($sandbox->root.'/docs/guide', 0o000);
+
+        try {
+            $result = $sandbox->gateResult($this->gate());
+        } finally {
+            chmod($sandbox->root.'/docs/guide', 0o700);
+        }
+
+        self::assertSame(['cannot read docs/guide/start.md'], $result->findings);
+    }
+
+    public function testAPageWhoseFolderWasDeletedBeforeItIsStagedIsNotMeasured(): void
+    {
+        $sandbox = $this->targetWith([self::GUIDE => 'Short.', DocsRatchetList::PATH => $this->list()]);
+        unlink($sandbox->root.'/'.self::GUIDE);
+        rmdir($sandbox->root.'/docs/guide');
+
+        $result = $sandbox->gateResult($this->gate());
+
+        self::assertTrue($result->isPassing(), implode("\n", $result->findings));
     }
 
     public function testAKeyOfDigitsAloneIsComparedAsAKey(): void

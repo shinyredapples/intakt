@@ -64,14 +64,33 @@ final readonly class DocsGate implements Gate
     private function pagesOf(Workspace $workspace): array
     {
         $pages = [];
-        // Because the index still lists a page deleted but not yet staged, only what the working tree holds is measured; a page there that cannot be read still fails the reader.
-        $present = array_filter($workspace->repositoryFiles(), static fn (string $path): bool => file_exists($workspace->root.'/'.$path) || is_link($workspace->root.'/'.$path));
+        // Because the index still lists a page deleted but not yet staged, a page the working tree confirms missing is skipped; any other page goes to the reader, which fails on one it cannot read.
+        $present = array_filter($workspace->repositoryFiles(), fn (string $path): bool => !$this->isMissing($workspace->root, $path));
 
         foreach ($this->reader->pages($workspace->root, array_values($present)) as $page) {
             $pages[$page->path] = new DocsPage($page);
         }
 
         return $pages;
+    }
+
+    // Because a folder that cannot be searched hides its entries from file_exists(), absence counts only where the nearest existing folder can be searched.
+    private function isMissing(string $root, string $path): bool
+    {
+        $file = $root.'/'.$path;
+
+        if (file_exists($file) || is_link($file)) {
+            return false;
+        }
+
+        $parent = dirname($path);
+        $folder = '.' === $parent ? $root : $root.'/'.$parent;
+
+        if (is_dir($folder)) {
+            return is_executable($folder);
+        }
+
+        return '.' !== $parent && (file_exists($folder) || $this->isMissing($root, $parent));
     }
 
     private function targetOf(Workspace $workspace): ?string
