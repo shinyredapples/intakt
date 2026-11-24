@@ -45,7 +45,7 @@ Click a round to open its review page. A queued pull request has no link until i
 
 ## History: what changed and who changed it
 
-Open `/history` to read the ledger as a list, newest first. Each row says who made the change, what it was, the project and the time. Where a value changed, the row shows it before and after; an expiry shows when the change has one. A secret never shows, only its fingerprint. Add `?project=` and a project name to see one project.
+Open `/history` to read the ledger as a list, newest first. Each row says who made the change, what it was, the project and the time. Where a value changed, the row shows it before and after; an expiry shows when the change has one. A secret never shows, only its fingerprint. The project filter at the top shows one project or all, and a reviewer's step counts for the project of its review; a row that belongs to no project shows under every project. Add `?project=` and a project name to the address to open the page with that project chosen; choose **All projects** to see every row again.
 
 ## Now: what is running right now
 

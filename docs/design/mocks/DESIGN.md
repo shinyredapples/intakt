@@ -143,7 +143,7 @@ Rail: Board, Waiting on you, Projects, Team, History, Settings. New pages live u
 
 | Page | Lives under | How you get there |
 |---|---|---|
-| `trends.html` | History | Sub-tab "Trends" beside "Ledger"; until History is built, the dashboard lists Trends as a rail item after Projects (decided in #2858) |
+| `trends.html` | History | Sub-tab "Trends" beside "Ledger"; until the Ledger and Trends sub-tabs are built, the dashboard lists Trends as a rail item after Projects (decided in #2858) |
 | `project.html` | Projects | Click a project name; breadcrumb back |
 | `add-project.html` | Projects | "Add a project"; search action |
 | `health.html` | Projects | Sub-tab "Health" (shows the broken count); board's CI banner |
