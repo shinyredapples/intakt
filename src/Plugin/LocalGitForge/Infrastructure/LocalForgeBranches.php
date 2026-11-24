@@ -14,6 +14,8 @@ use Intakt\Plugin\Forge\Contract\ForgeBranch;
 use Intakt\Plugin\Forge\Contract\ForgeBranches;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use RuntimeException;
+use SplFileObject;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
@@ -63,12 +65,18 @@ final readonly class LocalForgeBranches implements ForgeBranches
     public function deleteBranch(string $project, ForgeBranch $branch): void
     {
         $repository = $this->repositoryOf($project);
-        if (in_array(self::HEADS.$branch->name, $this->checkedOutRefs($repository), true)) {
-            throw new ForgeWriteFailed(sprintf('The branch "%s" is checked out, so it was not deleted.', $branch->name));
-        }
+        // Every worktree's HEAD stays locked from the check to the delete, because git takes the same lock to check a branch out, and a checkout in between keeps the commit the same but leaves HEAD on a deleted branch.
+        $locks = $this->lockedHeads($repository);
+        try {
+            if (in_array(self::HEADS.$branch->name, $this->checkedOutRefs($repository), true)) {
+                throw new ForgeWriteFailed(sprintf('The branch "%s" is checked out, so it was not deleted.', $branch->name));
+            }
 
-        // No dereference and the old value, because a symbolic branch must never take its target with it and a branch that moved since it was listed is refused by git.
-        $this->write($repository, ['update-ref', '-d', '--no-deref', self::HEADS.$branch->name, $branch->head->hash], sprintf('the branch "%s" was not deleted, it may have moved', $branch->name));
+            // No dereference and the old value, because a symbolic branch must never take its target with it and a branch that moved since it was listed is refused by git.
+            $this->write($repository, ['update-ref', '-d', '--no-deref', self::HEADS.$branch->name, $branch->head->hash], sprintf('the branch "%s" was not deleted, it may have moved', $branch->name));
+        } finally {
+            array_walk($locks, static fn (string $lock): bool => unlink($lock));
+        }
     }
 
     public function hasCommitByPerson(string $project, ForgeBranch $branch): bool
@@ -79,6 +87,33 @@ final readonly class LocalForgeBranches implements ForgeBranches
         $authors = $this->read($repository, ['log', '--format=<%ae>', $branch->head->hash, '--not', $default, '--']);
 
         return array_any('' === $authors ? [] : explode("\n", $authors), static fn (string $email): bool => '<'.self::INTAKT_EMAIL.'>' !== $email);
+    }
+
+    // A lock git already holds means a checkout or another write is under way, so the delete is refused instead of waiting for it.
+    /**
+     * @return list<string>
+     */
+    private function lockedHeads(string $repository): array
+    {
+        try {
+            $common = $this->read($repository, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+        } catch (ForgeReadFailed $unread) {
+            throw new ForgeWriteFailed('The repository folder could not be read, so nothing was deleted.', $unread->getCode(), $unread);
+        }
+
+        $locks = [];
+        foreach ([$common.'/HEAD', ...(glob($common.'/worktrees/*/HEAD') ?: [])] as $head) {
+            try {
+                new SplFileObject($head.'.lock', 'x');
+                $locks[] = $head.'.lock';
+            } catch (RuntimeException $busy) {
+                array_walk($locks, static fn (string $lock): bool => unlink($lock));
+
+                throw new ForgeWriteFailed('A worktree\'s HEAD is locked by another git command, so nothing was deleted.', $busy->getCode(), $busy);
+            }
+        }
+
+        return $locks;
     }
 
     // Every worktree's branch, because deleting one a linked worktree has checked out would leave that worktree on a missing ref.
