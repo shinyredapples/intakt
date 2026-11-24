@@ -445,6 +445,8 @@ The `docs` gate keeps the documentation readable. A paragraph in `README.md` or 
 
 Paragraphs and pages that were already too long are listed in `ratchet/docs.json`. That list may only shrink. Editing a listed paragraph makes it new, so it must then meet the limit, and so does a copy of a listed paragraph on the same page. When a listed entry is no longer needed, or a page got shorter than its listed count, the gate asks you to remove the entry or lower the count. Deleting or emptying the list fails.
 
+A paragraph is listed by a hash of its text after each run of whitespace is collapsed to one space, so rewrapping lines or changing spacing keeps its allowance, and any other change to the words loses it.
+
 ## GitHub's test merge and the `commits` gate
 
 On a pull request, GitHub checks out a merge of the branch into the base branch, with a subject such as `Merge <sha> into <sha>`, which is not a Conventional Commit. CI names that merge and the pull request's head with `--test-merge=<merge>:<head>`, and the `commits` gate skips it when its second parent is the pull request's head and its first parent is on the base branch, also when the base branch moved after the pull request's last update. Every other commit, merges included, still needs a conforming subject.
