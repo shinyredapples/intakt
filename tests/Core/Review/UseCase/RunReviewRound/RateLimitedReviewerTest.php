@@ -43,7 +43,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $limited = new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429')));
+        $limited = new VerdictPerRole(failure: new ProviderRateLimited(30, new RuntimeException('429')));
 
         try {
             $this->fixture->deliver($message, $limited);
@@ -68,7 +68,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $round = $this->fixture->start(1);
 
         try {
-            $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429'))));
+            $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure: new ProviderRateLimited(30, new RuntimeException('429'))));
             self::fail('The rate limit was recorded as a failure.');
         } catch (ReviewerRateLimited) {
         }
@@ -83,7 +83,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $limited = new VerdictPerRole(failure:new ProviderRateLimited(30, new RuntimeException('429')));
+        $limited = new VerdictPerRole(failure: new ProviderRateLimited(30, new RuntimeException('429')));
         $retried = new VerdictPerRole();
 
         try {
@@ -101,7 +101,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $this->fixture->start(1);
 
         try {
-            $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure:new ProviderRateLimited(null, new RuntimeException('429'))));
+            $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure: new ProviderRateLimited(null, new RuntimeException('429'))));
             self::fail('The rate limit was recorded as a failure.');
         } catch (ReviewerRateLimited $retry) {
             self::assertNull($retry->getRetryDelay());
@@ -114,7 +114,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
 
         try {
-            $this->fixture->deliver($message, new VerdictPerRole(failure:VendorAccountBusy::at('anthropic')));
+            $this->fixture->deliver($message, new VerdictPerRole(failure: VendorAccountBusy::at('anthropic')));
             self::fail('The busy account was recorded as a failure.');
         } catch (ReviewerRateLimited $retry) {
             self::assertNull($retry->getRetryDelay());
@@ -129,7 +129,7 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
 
         try {
-            $this->fixture->deliver($message, new VerdictPerRole(failure:new ProviderRateLimited(1, new RuntimeException('429'))));
+            $this->fixture->deliver($message, new VerdictPerRole(failure: new ProviderRateLimited(1, new RuntimeException('429'))));
         } catch (ReviewerRateLimited) {
         }
 

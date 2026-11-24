@@ -156,7 +156,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAFailedReviewerCountsAsFinishedAndTheRoundStillCompletes(): void
     {
         $round = $this->fixture->start(2);
-        $failing = new VerdictPerRole(failure:new ProviderFailedTransiently(new RuntimeException('secret detail')));
+        $failing = new VerdictPerRole(failure: new ProviderFailedTransiently(new RuntimeException('secret detail')));
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $failing);
         $this->fixture->deliver($this->fixture->bus->messages[1], new VerdictPerRole());
@@ -171,7 +171,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAReviewerWhoseStreamWasCutMidAnswerIsStoredAsABlockedVerdictWithTheCutAsItsReasonAndNeverApproves(): void
     {
         $round = $this->fixture->start(1);
-        $cut = new VerdictPerRole(otherwise:Verdict::incompleteStream('The stream ended before its terminal event.', new Evidence('the call to anthropic, model big', 'cut by: platform')));
+        $cut = new VerdictPerRole(otherwise: Verdict::incompleteStream('The stream ended before its terminal event.', new Evidence('the call to anthropic, model big', 'cut by: platform')));
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $cut);
 
@@ -188,7 +188,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAReviewerAnsweringBlockedWithFindingsIsStoredAsChanges(): void
     {
         $round = $this->fixture->start(1);
-        $blocked = new VerdictPerRole(otherwise:new Verdict(Decision::Blocked, [new Finding(
+        $blocked = new VerdictPerRole(otherwise: new Verdict(Decision::Blocked, [new Finding(
             id: 'F1',
             severity: Severity::P1,
             file: 'src/Cart.php',
@@ -214,7 +214,7 @@ final class RunReviewRoundTest extends KernelTestCase
     {
         $round = $this->fixture->start(1);
 
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure:new RuntimeException('401 invalid api key')));
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure: new RuntimeException('401 invalid api key')));
 
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
@@ -234,7 +234,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testTheLedgerHoldsTheStartAndTheEndOfEveryReviewer(): void
     {
         $this->fixture->start(2);
-        $failing = new VerdictPerRole(failure:new ProviderFailedTransiently(new RuntimeException('down')));
+        $failing = new VerdictPerRole(failure: new ProviderFailedTransiently(new RuntimeException('down')));
 
         $this->fixture->deliver($this->fixture->bus->messages[1], new VerdictPerRole());
         $this->fixture->deliver($this->fixture->bus->messages[0], $failing);

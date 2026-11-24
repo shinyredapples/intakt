@@ -104,7 +104,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
 
         try {
-            $this->fixture->deliver($message, new VerdictPerRole(failure:new VendorAccountOut(new RuntimeException('429'))));
+            $this->fixture->deliver($message, new VerdictPerRole(failure: new VendorAccountOut(new RuntimeException('429'))));
             self::fail('The move to another account was recorded as a failure.');
         } catch (ReviewerMovesToAnotherAccount $retry) {
             self::assertSame(0, $retry->getRetryDelay());
@@ -119,7 +119,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
 
         try {
-            $this->fixture->deliver($message, new VerdictPerRole(failure:new VendorAccountOut(new RuntimeException('429'))));
+            $this->fixture->deliver($message, new VerdictPerRole(failure: new VendorAccountOut(new RuntimeException('429'))));
         } catch (ReviewerMovesToAnotherAccount) {
         }
 
@@ -161,7 +161,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
-        $vendor = new AccountLimitedVendor(new VerdictPerRole(failure:new ProviderFailedTransiently(new ServerException(503))), $resolver, $this->cooldowns);
+        $vendor = new AccountLimitedVendor(new VerdictPerRole(failure: new ProviderFailedTransiently(new ServerException(503))), $resolver, $this->cooldowns);
 
         try {
             $this->fixture->deliver($message, $vendor);
