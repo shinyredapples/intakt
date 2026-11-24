@@ -235,6 +235,11 @@ final class TeamRosterTest extends TestCase
         return array_map(static fn (TeamAccount $account): string => $account->account->key(), $team->accounts);
     }
 
+    private function developer(Team $team): TeamRole
+    {
+        return $team->roles[0];
+    }
+
     /**
      * @return array<string, list<string>>
      */
@@ -249,11 +254,6 @@ final class TeamRosterTest extends TestCase
     private function rolesWithProviders(Team $team): array
     {
         return array_combine(array_map(static fn (TeamRole $role): string => $role->label(), $team->roles), array_map(static fn (TeamRole $role): array => $role->providers, $team->roles));
-    }
-
-    private function developer(Team $team): TeamRole
-    {
-        return $team->roles[0];
     }
 
     /**

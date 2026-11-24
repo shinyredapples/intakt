@@ -101,11 +101,11 @@ final readonly class TeamRoster
             }
         }
 
-        return array_values(array_map(
+        return array_map(
             static fn (string $name, array $of): TeamRole => new TeamRole(TeamRoleKind::Reviewer, $name, array_values(array_unique($of, SORT_REGULAR))),
             array_map(strval(...), array_keys($providers)),
             $providers,
-        ));
+        );
     }
 
     // Null for a project without a review panel, because it has no reviewer to show.
