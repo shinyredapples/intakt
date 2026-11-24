@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
+use Twig\Environment;
+use Twig\Loader\ArrayLoader;
 
-// Covers nothing because the client is a line of the base template, which FrankenPHP's hot_reload in docker/dev/Caddyfile turns on.
+// Covers nothing because the client is a development template the base template includes, which FrankenPHP's hot_reload in docker/dev/Caddyfile turns on.
 #[CoversNothing]
 final class HotReloadClientTest extends DashboardPageTestCase
 {
@@ -29,5 +31,15 @@ final class HotReloadClientTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $page->filter('meta[name="frankenphp-hot-reload:url"]'));
         self::assertStringNotContainsString('EventSource', (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testTheBaseTemplateStillRendersInTheImageWhereTheClientTemplateIsLeftOut(): void
+    {
+        $base = (string) file_get_contents(__DIR__.'/../../../../templates/dashboard/base.html.twig');
+        self::assertSame(1, preg_match("~\\{% include 'dashboard/dev/hot_reload\\.html\\.twig'[^%]*%\\}~", $base, $include));
+
+        $rendered = new Environment(new ArrayLoader(['base' => $include[0]]))->render('base');
+
+        self::assertSame('', $rendered);
     }
 }

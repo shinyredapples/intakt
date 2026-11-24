@@ -1,6 +1,6 @@
 # Development setup
 
-`compose.dev.yaml` is an override for working on Intakt in the container with file watching. Nothing of it is in the `Dockerfile`, the shipped `Caddyfile`, `compose.yaml` or the image: `.dockerignore` leaves `compose.dev.yaml` and `docker/dev/` out of the build context, and without the override the image runs as the [container image](container-image.md) page describes.
+`compose.dev.yaml` is an override for working on Intakt in the container with file watching. Nothing of it is in the `Dockerfile`, the shipped `Caddyfile`, `compose.yaml` or the image: `.dockerignore` leaves `compose.dev.yaml`, `docker/dev/` and the browser reload client's `templates/dashboard/dev/` out of the build context, and without the override the image runs as the [container image](container-image.md) page describes.
 
 ## Starting it
 
@@ -31,4 +31,4 @@ The folders are named instead of using the bare `watch`, whose default includes 
 
 ## The browser reload
 
-Under `hot_reload`, FrankenPHP gives each request the hub address to subscribe to in `FRANKENPHP_HOT_RELOAD`. When it is set, `templates/dashboard/base.html.twig` adds a `frankenphp-hot-reload:url` meta tag and a short script that subscribes with `EventSource` and reloads the page on each update. It loads nothing from outside, and without the override the variable is unset, so the page has neither (`HotReloadClientTest`).
+Under `hot_reload`, FrankenPHP gives each request the hub address to subscribe to in `FRANKENPHP_HOT_RELOAD`. When it is set, `templates/dashboard/dev/hot_reload.html.twig`, which `templates/dashboard/base.html.twig` includes with `ignore missing`, adds a `frankenphp-hot-reload:url` meta tag and a short script that subscribes with `EventSource` and reloads the page on each update. It loads nothing from outside, and without the override the variable is unset, so the page has neither (`HotReloadClientTest`). The image does not contain that template at all, and the base template renders without it (`HotReloadClientTest`, `DevelopmentCaddyfileTest::testNoTemplateTheImageCopiesCarriesTheBrowserReloadClient`).

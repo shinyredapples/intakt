@@ -15,5 +15,6 @@ mate
 Dockerfile
 compose.dev.yaml
 docker/dev
+templates/dashboard/dev
 .dockerignore
 PR.md

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use FilesystemIterator;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
@@ -126,6 +129,26 @@ final class DevelopmentCaddyfileTest extends TestCase
         self::assertContains('compose.dev.yaml', $excluded);
         self::assertContains('docker/dev', $excluded);
         self::assertNotContains('docker', $excluded);
+    }
+
+    public function testNoTemplateTheImageCopiesCarriesTheBrowserReloadClient(): void
+    {
+        $excluded = file(self::ROOT.'/.dockerignore', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        self::assertIsArray($excluded);
+        $templates = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(self::ROOT.'/templates', FilesystemIterator::SKIP_DOTS));
+        $carriers = 0;
+
+        foreach ($templates as $template) {
+            $path = substr((string) $template, \strlen(self::ROOT) + 1);
+            if (!str_contains((string) file_get_contents((string) $template), 'frankenphp-hot-reload:url')) {
+                continue;
+            }
+            ++$carriers;
+            $ignored = array_filter($excluded, static fn (string $rule): bool => str_starts_with($path, rtrim($rule, '/').'/'));
+            self::assertNotEmpty($ignored, $path.' carries the reload client into the image');
+        }
+
+        self::assertGreaterThan(0, $carriers);
     }
 
     private function frankenphp(): string

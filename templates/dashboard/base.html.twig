@@ -23,10 +23,8 @@
             root.dataset.tour = 'closed';
         }
     })();</script>
-    {# FrankenPHP sets this only under hot_reload, which only the development Caddyfile (docker/dev/Caddyfile) declares; a watched file's change then reloads the page. A plain EventSource, so the page loads nothing from outside. #}
-    {% set hot_reload = app.request ? app.request.server.get('FRANKENPHP_HOT_RELOAD') : null %}
-    {% if hot_reload %}<meta name="frankenphp-hot-reload:url" content="{{ hot_reload }}">
-    <script>new EventSource(document.querySelector('meta[name="frankenphp-hot-reload:url"]').content).onmessage = () => location.reload();</script>{% endif %}
+    {# .dockerignore leaves the development folder out of the image, so there the include finds nothing. #}
+    {% include 'dashboard/dev/hot_reload.html.twig' ignore missing %}
     <link rel="icon" type="image/png" href="{{ asset('images/favicon-32.png') }}">
     <link rel="stylesheet" href="{{ asset('styles/fonts.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
