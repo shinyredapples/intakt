@@ -70,9 +70,12 @@ final readonly class RecordedIssues implements IssueReads
     {
         // A recording of the form {"fails": "<message>"} stands for a listing GitHub did not answer in full, so a short listing can be shown on an install too.
         $file = is_file($this->recording) ? $this->recording : throw new LogicException('BUILD_RECORDING names no recording file.');
-        /** @var list<Issue>|array{fails: string} $recorded */
         $recorded = json_decode((string) file_get_contents($file), true, flags: JSON_THROW_ON_ERROR);
+        if (is_array($recorded) && is_string($recorded['fails'] ?? null)) {
+            throw new ForgeReadFailed($recorded['fails']);
+        }
 
-        return isset($recorded['fails']) ? throw new ForgeReadFailed($recorded['fails']) : $recorded;
+        /** @var list<Issue> $recorded */
+        return $recorded;
     }
 }
