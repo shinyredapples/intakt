@@ -1,6 +1,6 @@
 {#- One home for the head's Set up Intakt, because the page renders it on load and the pushed board replaces only this slot: the review list link beside it is never replaced, so a push does not take the keyboard focus off it. Once a review has run it renders an empty hidden target, so a board that becomes empty again gets the action back with the first-day panel that asks for it; after that the Projects page carries the link (#2067, D3). -#}
 {%- if board.firstDay -%}
-<a class="btn primary" id="board-setup" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Set up Intakt</a>
+<a class="btn primary" id="board-setup" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP')) }}">Set up Intakt</a>
 {%- else -%}
 <span id="board-setup" hidden></span>
 {%- endif -%}

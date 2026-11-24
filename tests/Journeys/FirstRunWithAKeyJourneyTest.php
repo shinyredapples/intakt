@@ -61,15 +61,15 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 
     private function openTheDashboard(): void
     {
-        self::assertSame('/setup', $this->redirectOf('/'));
+        self::assertSame('/setup?step=5', $this->redirectOf('/'));
     }
 
     private function pasteAToken(): void
     {
-        $form = $this->visit('/setup')->filter('form.keep-provider-key')->form(['key' => 'hf_'.self::TOKEN_BODY]);
+        $form = $this->visit('/setup?step=3')->filter('form.keep-provider-key')->form(['key' => 'hf_'.self::TOKEN_BODY]);
 
-        self::assertSame('/setup', $this->redirectOfSubmit($form));
-        self::assertStringContainsString('is kept. Restart Intakt to use it.', $this->visit('/setup')->filter('#step-providers .lead')->text());
+        self::assertSame('/setup?step=3', $this->redirectOfSubmit($form));
+        self::assertStringContainsString('is kept. Restart Intakt to use it.', $this->visit('/setup?step=3')->filter('#step-providers .lead')->text());
     }
 
     private function restartWithTheKeptToken(): void
@@ -82,7 +82,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
     {
         $browser = $this->dashboardWith($this->demoEnvironment());
         $browser->followRedirects(false);
-        $browser->submit($browser->request('GET', '/setup')->filter('form.start-first-review')->form());
+        $browser->submit($browser->request('GET', '/setup?step=5')->filter('form.start-first-review')->form());
         $response = $browser->getResponse();
 
         self::assertSame(303, $response->getStatusCode());

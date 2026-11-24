@@ -82,7 +82,7 @@
 </dl>
 {% endif %}
 {% if not trends.anyReview %}
-{# The same start as step 3 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). #}
+{# The same start as step 5 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). #}
 <div class="empty">
     {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}
     <h2>No reviews yet</h2>
@@ -93,7 +93,7 @@
         {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
     </form>
     {% else %}
-    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}#step-first-review">Start the first review</a>
+    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP'), {(constant('Intakt\\Core\\Dashboard\\UseCase\\RunSetup\\RunSetupController::STEP')): constant('Intakt\\Core\\Dashboard\\Domain\\SetupStep::Ready').value}) }}#step-first-review">Start the first review</a>
     {% endif %}
 </div>
 {% else %}

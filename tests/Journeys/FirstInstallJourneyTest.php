@@ -62,7 +62,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
 
         self::assertSame('Set up Intakt', $link->text());
         self::assertSame(self::FIRST_RUN, $link->attr('href'));
-        self::assertCount(3, $this->visit(self::FIRST_RUN)->filter('.own-steps > li'));
+        self::assertSame('Step 1 of 5: Repository', $this->visit(self::FIRST_RUN)->filter('.wizard .step-count')->text());
     }
 
     private function openProjectsOfAFreshInstall(): void
@@ -101,7 +101,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         $environment = [...$this->environment(), 'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample'];
         $this->rebuildContainer($environment);
         $browser = $this->dashboardWith($environment);
-        $page = $browser->request('GET', self::FIRST_RUN);
+        $page = $browser->request('GET', self::FIRST_RUN.'?step=5');
         $page = $browser->submit($page->selectButton('Start the first review')->form());
 
         self::assertSame('Started round 1.', $page->filter('.toast')->text());

@@ -9,11 +9,13 @@ use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\InfrastructureRow;
 use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\SetupStep;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
+use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
@@ -53,9 +55,9 @@ final readonly class ShowBoardController
         $events = $this->ledger->readInOrder();
         $board = $this->reviewPages->boardOf($events);
 
-        // Only on a demo install, because an install without the sample has nothing on the first-run page to start and keeps the board's own opening.
+        // Only on a demo install, because an install without the sample has nothing on the setup wizard to start and keeps the board's own opening; it lands on the Ready step, which holds the recorded review and the first review's start.
         if ($board->hasNoReview() && $this->sample->hasRepository()) {
-            return $this->variesByDevice($this->redirectTo(DashboardRoutes::FIRST_RUN));
+            return $this->variesByDevice($this->redirectTo(DashboardRoutes::RUN_SETUP, [RunSetupController::STEP => SetupStep::Ready->value]));
         }
 
         if ($this->landsOnWaiting($request)) {
@@ -80,7 +82,7 @@ final readonly class ShowBoardController
     }
 
     /**
-     * @param array<string, string> $parameters
+     * @param array<string, int|string> $parameters
      */
     private function redirectTo(string $route, array $parameters = []): RedirectResponse
     {
