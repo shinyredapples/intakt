@@ -17,13 +17,6 @@ final readonly class MarkdownPage
 
     private const string WORD = '/[\p{L}\p{N}]/u';
 
-    // A code span comes first so a "<!--" a reader sees in it opens no comment; an unclosed comment hides the rest only as a block at a line start.
-    private const string CODE_SPAN_OR_COMMENT = '/(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)|<!--(?s:.*?)-->|^ {0,3}<!--(?s:.*)/m';
-
-    private const string CODE_LINE = "\0";
-
-    private const string ITEM_MARKERS = '/^(?:[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
-
     /** @var list<int> */
     private array $depths;
 
@@ -201,25 +194,9 @@ final readonly class MarkdownPage
 
     private function visiblePage(): self
     {
-        // Code lines are set aside, so a "<!--" a reader sees in code hides nothing after it.
-        $masked = array_map(fn (int $index): string => MarkdownLineKind::Code === $this->kinds[$index] ? self::CODE_LINE : $this->lines[$index], array_keys($this->lines));
-        $shown = preg_replace_callback(self::CODE_SPAN_OR_COMMENT, static fn (array $match): string => str_starts_with(ltrim($match[0]), '<!--') ? ' '.str_repeat("\n", substr_count($match[0], "\n")) : $match[0], implode("\n", $masked));
+        [$lines, $codeLines] = new MarkdownComments()->removedFrom($this->lines, array_keys($this->kinds, MarkdownLineKind::Code, true));
 
-        if (null === $shown) {
-            return $this;
-        }
-
-        $shownLines = explode("\n", $shown);
-        $kept = array_values(array_filter($this->fencedLines, static fn (int $index): bool => self::CODE_LINE === ($shownLines[$index] ?? null)));
-
-        return new self($this->path, array_map(fn (int $index): string => self::CODE_LINE === $shownLines[$index] ? $this->lines[$index] : $shownLines[$index], array_keys($this->lines)), $kept);
-    }
-
-    private function holdsAHeading(int $index): bool
-    {
-        // A heading after a list marker is still a heading to a reader, so "- ### Detail" is no summary text.
-        return MarkdownLineKind::Heading === $this->kinds[$index]
-            || (MarkdownLineKind::ListItem === $this->kinds[$index] && 1 === preg_match(MarkdownLineKinds::HEADING, preg_replace(self::ITEM_MARKERS, '', $this->contents[$index]) ?? ''));
+        return new self($this->path, $lines, array_values(array_intersect($this->fencedLines, $codeLines)));
     }
 
     /**
@@ -240,6 +217,11 @@ final readonly class MarkdownPage
         }
 
         return $lines;
+    }
+
+    private function holdsAHeading(int $index): bool
+    {
+        return MarkdownLineKind::Heading === $this->kinds[$index] || isset($this->itemHeadings[$index]);
     }
 
     private function opensPageAt(int $heading): bool

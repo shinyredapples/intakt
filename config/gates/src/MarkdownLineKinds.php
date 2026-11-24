@@ -14,6 +14,8 @@ final readonly class MarkdownLineKinds
 
     public const string INDENTED_CODE = '/^(?: {4}| {0,3}\t)/';
 
+    private const string ITEM_MARKERS = '/^(?:[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
+
     public function __construct(private MarkdownListIndents $indents)
     {
     }
@@ -36,7 +38,7 @@ final readonly class MarkdownLineKinds
             $kind = isset($tableRows[$index]) ? MarkdownLineKind::Table : $this->kindOf($content, $previous, $lists);
             $lists = $this->continuesAParagraph($kind, $previous) ? $lists : $this->openLists($kind, $content, $lists);
             $kinds[] = MarkdownLineKind::CodeItem === $kind ? MarkdownLineKind::Code : $kind;
-            $itemHeadings += $this->itemHeadingAt($index, $kind, $lists);
+            $itemHeadings += $this->itemHeadingAt($index, $kind, $lists) + $this->headingAfterMarkerAt($index, $kind, $content);
         }
 
         return [$kinds, $itemHeadings];
@@ -112,5 +114,14 @@ final readonly class MarkdownLineKinds
     private function itemHeadingAt(int $index, MarkdownLineKind $kind, array $lists): array
     {
         return MarkdownLineKind::Heading === $kind && [] !== $lists ? [$index => true] : [];
+    }
+
+    /**
+     * @return array<int, true>
+     */
+    private function headingAfterMarkerAt(int $index, MarkdownLineKind $kind, string $content): array
+    {
+        // A heading after a list marker is still a heading to a reader, so "- ### Detail" is no summary text.
+        return MarkdownLineKind::ListItem === $kind && 1 === preg_match(self::HEADING, preg_replace(self::ITEM_MARKERS, '', $content) ?? '') ? [$index => true] : [];
     }
 }

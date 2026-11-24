@@ -71,7 +71,7 @@ With git history, the gate reads the list on the merge base. An added key, a new
 
 A paragraph (`MarkdownParagraph`) carries its word count, its first line and a key, the first 16 hex characters of the SHA-256 hash of its text with whitespace runs made one space. A word is a token between whitespace that holds a letter or a digit. Code, fenced or indented, has no words, also inside a list item.
 
-The summary (`MarkdownSummary`) holds the words of the "In short" section, whether text other than headings is left, and whether it opens the page. It is read from the page with its HTML comments removed first, so a heading inside a comment ends no section and a comment above "In short" does not stand between it and the title.
+The summary (`MarkdownSummary`) holds the words of the "In short" section, whether text other than headings is left, and whether it opens the page. It is read from the page with its HTML comments removed first (`MarkdownComments`), so a heading inside a comment ends no section and a comment above "In short" does not stand between it and the title.
 
 A `<!--` inside a code span or code block opens no comment, and an unclosed `<!--` hides the rest of the page only at the start of a line. A heading after a list marker (`- ### Detail`) is no summary text.
 

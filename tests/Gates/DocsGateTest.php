@@ -10,6 +10,7 @@ use Intakt\Gates\DocsRatchetList;
 use Intakt\Gates\DocsRatchetListUnusable;
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\MarkdownCodeBlocks;
+use Intakt\Gates\MarkdownComments;
 use Intakt\Gates\MarkdownDelimiterRow;
 use Intakt\Gates\MarkdownLineKind;
 use Intakt\Gates\MarkdownLineKinds;
@@ -30,6 +31,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(UnneededDocsEntries::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(MarkdownCodeBlocks::class)]
+#[UsesClass(MarkdownComments::class)]
 #[UsesClass(MarkdownDelimiterRow::class)]
 #[UsesClass(MarkdownLineKind::class)]
 #[UsesClass(MarkdownLineKinds::class)]

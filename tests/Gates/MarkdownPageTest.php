@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\MarkdownComments;
 use Intakt\Gates\MarkdownDelimiterRow;
 use Intakt\Gates\MarkdownLineKind;
 use Intakt\Gates\MarkdownLineKinds;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MarkdownLineKinds::class)]
 #[CoversClass(MarkdownListIndents::class)]
 #[CoversClass(MarkdownDelimiterRow::class)]
+#[CoversClass(MarkdownComments::class)]
 #[UsesClass(MarkdownParagraph::class)]
 #[UsesClass(MarkdownSummary::class)]
 final class MarkdownPageTest extends TestCase
