@@ -53,7 +53,7 @@ final readonly class DoctorCommand
         return $result->passed ? 'pass: '.$this->oneLine($check->name()) : 'FAIL: '.$this->oneLine($check->name()).': '.$this->oneLine($result->fix);
     }
 
-    // One line per check is the promise scripts rely on, and a fix text can quote what the forge sent, line breaks included.
+    // Because scripts rely on one line per check, and a fix text can quote what the forge sent, line breaks included.
     private function oneLine(string $text): string
     {
         return preg_replace('/\p{Cc}/u', ' ', $text) ?? preg_replace('/[\x00-\x1F\x7F]/', ' ', $text) ?? '';
