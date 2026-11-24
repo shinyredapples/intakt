@@ -58,6 +58,7 @@ class FakeSelect {
 class FakeSharedFilter {
     value = '';
     changes = 0;
+    options = ['', 'Alpha', 'Beta'].map((value) => ({ value }));
 
     constructor(page) {
         this.page = page;
@@ -190,6 +191,17 @@ test('a project the picker does not list reads as All projects, so no row is hid
     page.listeners['intakt:project-shown']();
 
     assert.equal(picker.value, '');
+    assert.deepEqual(shown(alpha, beta), [true, true]);
+});
+
+test('a project a live update took off the shared filter is handed on as All projects, so the shared filter keeps a selected option', () => {
+    const { page, picker, alpha, beta } = historyOfAlphaAndBeta(true);
+    page.shared.options = [{ value: '' }, { value: 'Alpha' }];
+
+    picker.value = 'Beta';
+    page.listeners.change({ target: picker });
+
+    assert.deepEqual([page.shared.value, picker.value], ['', '']);
     assert.deepEqual(shown(alpha, beta), [true, true]);
 });
 

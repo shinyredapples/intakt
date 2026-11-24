@@ -234,6 +234,14 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/padding-block:\s*var\(--s4\)/', $rules['.filters'] ?? '');
     }
 
+    public function testOnPhonesTheFiltersBarPadsItsInlineEdgesByTheFocusRingWidthPlusOffsetAndKeepsItsAlignment(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/padding-inline:\s*var\(--s4\)/', $rules['.filters'] ?? '');
+        self::assertMatchesRegularExpression('/margin-inline:\s*calc\(-1 \* var\(--s4\)\)/', $rules['.filters'] ?? '');
+    }
+
     public function testNoPaddingMarginOrGapHoldsARawLengthOf4PxOrMore(): void
     {
         preg_match_all('/(?:padding|margin|gap)(?:-[a-z]+)?:\s*([^;}]+)/', (string) preg_replace('~/\*.*?\*/~s', '', $this->componentSheet()), $declarations);

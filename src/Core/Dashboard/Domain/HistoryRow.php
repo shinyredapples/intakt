@@ -26,6 +26,7 @@ final readonly class HistoryRow
         public ?string $after,
         public ?DateTimeImmutable $expires,
         public ?string $fingerprint,
+        private bool $namesProject,
     ) {
     }
 
@@ -47,16 +48,17 @@ final readonly class HistoryRow
             $isSecret ? null : $fields->text('after'),
             self::expiryOf($fields->text('expires_at')),
             $fingerprint,
+            null !== $fields->text('project'),
         );
     }
 
-    // A reviewer's or the judge's event names only its round, so its project is the one the round's start names.
+    // A reviewer's or the judge's event names only its round, so its project is the one the round's start names. An event that wrote an empty project said it has none, so it keeps none.
     /**
      * @param array<string, string> $projectOfRound
      */
     public function inProjectOf(array $projectOfRound): self
     {
-        if (null !== $this->project || null === $this->round || !isset($projectOfRound[$this->round])) {
+        if ($this->namesProject || null === $this->round || !isset($projectOfRound[$this->round])) {
             return $this;
         }
 
@@ -82,10 +84,10 @@ final readonly class HistoryRow
         return HistoryTopic::of(LedgerEventKind::from($this->kind), $this->project);
     }
 
-    // An empty name is no name, so the topic, the project filter and the Source column all read the same null.
+    // An empty or blank name is no name, so the topic, the project filter and the Source column all read the same null.
     private static function filled(?string $text): ?string
     {
-        return '' === $text ? null : $text;
+        return null === $text || '' === trim($text) ? null : $text;
     }
 
     // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable. It throws on a NUL byte, which would take the whole page down for one row.

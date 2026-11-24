@@ -23,6 +23,9 @@ export function filterHistory(page, phone) {
         const picker = event.target?.closest?.(PICKER);
         const shared = page.querySelector(SHARED);
         if (picker && shared) {
+            // A live update may have taken the project off the shared filter since the page loaded; a value it does not list would leave it without a selected option, which the shell reads.
+            const listed = [...shared.options].some((option) => option.value === picker.value);
+            picker.value = listed ? picker.value : '';
             shared.value = picker.value;
             shared.dispatchEvent(new Event('change'));
         }

@@ -91,6 +91,20 @@ final class HistoryRowTest extends TestCase
     /**
      * @param array<string, string>|string $payload
      */
+    public function testAnEmptyActorOnASecretChangeIsIntaktAndTheValuesStayHidden(): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => '', 'project' => '', 'fingerprint' => 'abc', 'before' => 'previous', 'after' => 'next']));
+
+        self::assertSame(['Intakt', null, false], [$row->who, $row->project, $row->showsChange()]);
+    }
+
+    public function testAnActorOrProjectOfOnlySpacesReadsAsUnset(): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => '   ', 'project' => " \t"]));
+
+        self::assertSame(['Intakt', null], [$row->who, $row->project]);
+    }
+
     private function recorded(array|string $payload): RecordedEvent
     {
         $json = is_string($payload) ? $payload : json_encode($payload, JSON_THROW_ON_ERROR);
