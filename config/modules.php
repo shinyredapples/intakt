@@ -8,6 +8,7 @@ return [
     'Core/Budget',
     'Core/Build',
     'Core/Dashboard',
+    'Core/Doctor',
     'Core/Git',
     'Core/HandBack',
     'Core/Job',

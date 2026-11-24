@@ -17,6 +17,8 @@ final readonly class InstallationReader
 {
     private const string API = 'https://api.github.com';
     private const int PAGE_SIZE = 100;
+    // Short, because the doctor reads it while the network may be half down.
+    private const array LIMITS = ['timeout' => 5, 'max_duration' => 15];
     private const array HEADERS = ['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'];
 
     public function __construct(
@@ -145,7 +147,7 @@ final readonly class InstallationReader
      */
     private function options(#[SensitiveParameter] string $credential): array
     {
-        return ['auth_bearer' => $credential, 'headers' => self::HEADERS];
+        return ['auth_bearer' => $credential, 'headers' => self::HEADERS, ...self::LIMITS];
     }
 
     /**

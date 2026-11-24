@@ -6,10 +6,10 @@ namespace Intakt\Core\Server\UseCase\CheckServerHealth;
 
 use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
 use Intakt\Core\Server\Contract\EndpointDown;
-use Intakt\Core\Server\Contract\HubHealth;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
+use Intakt\Core\Server\Infrastructure\HubHealthCheck;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
@@ -20,6 +20,7 @@ final readonly class CheckServerHealthCommand
 {
     public function __construct(
         private ServerStatus $status,
+        private HubHealthCheck $hubCheck,
     ) {
     }
 
@@ -53,7 +54,7 @@ final readonly class CheckServerHealthCommand
         return array_values(array_filter([
             $this->threadsProblem($reading->threads),
             $reading->metrics instanceof EndpointDown ? 'server metrics down ('.$reading->metrics->reason.')' : null,
-            $this->hubProblem($reading->hub),
+            $this->hubCheck->problem($reading->hub),
         ], is_string(...)));
     }
 
@@ -65,14 +66,5 @@ final readonly class CheckServerHealthCommand
 
         // A busy thread counts as ready, because it takes the next request once it is done; only threads that are all booting or restarting can take none.
         return 0 === $threads->busy + $threads->idle ? 'no worker thread is ready' : null;
-    }
-
-    private function hubProblem(HubHealth|EndpointDown $hub): ?string
-    {
-        if ($hub instanceof EndpointDown) {
-            return 'hub down ('.$hub->reason.')';
-        }
-
-        return HubHealth::Unhealthy === $hub ? 'the hub reports unhealthy' : null;
     }
 }
