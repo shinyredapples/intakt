@@ -14,8 +14,7 @@ final readonly class Redaction
 
     public const string MASK = "\0";
 
-    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`). A start inside the match of a key, a run-shaped token or an `AKIA` key ends where that match ends, so those shapes go on after their match. A key block runs to its end line in possessive steps, since a lazy `.*?` takes one backtrack per byte and gives up on a long block with no end line.
-    // Every start of a web token inside one run of word characters and hyphens ends its first part at the same dot, so when the rest fails, `(*SKIP)` goes on after that run instead of trying its later starts, and after a match the scan resumes at the second part, where the next token may start. A `Bearer` value may hold another `Bearer`, so that scan resumes at the value.
+    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`). A start inside the match of a key, a run-shaped token or an `AKIA` key ends where that match ends, so those shapes go on after their match. A key block runs to its end line in possessive steps, since a lazy `.*?` takes one backtrack per byte and gives up on a long block with no end line. Every start of a web token inside one run of word characters and hyphens ends its first part at the same dot, so when the rest fails, `(*SKIP)` goes on after that run instead of trying its later starts, and after a match the scan resumes at the second part, where the next token may start. A `Bearer` value may hold another `Bearer`, so that scan resumes at the value.
     private const array SECRET_SHAPES = [
         '-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[^-]++|-(?!----END [A-Z ]*PRIVATE KEY-----))*+(?:-----END [A-Z ]*PRIVATE KEY-----|\z)',
         '(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}',
