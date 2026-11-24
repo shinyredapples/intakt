@@ -107,12 +107,6 @@ final readonly class DocsRatchetList
         return $ceilings;
     }
 
-    // JSON decoding turns a numeric object key into an integer, so only a string naming a Markdown file is a page.
-    private static function isPage(mixed $key): bool
-    {
-        return is_string($key) && str_ends_with($key, '.md');
-    }
-
     /**
      * @return list<string>|null
      */
@@ -135,6 +129,15 @@ final readonly class DocsRatchetList
         $strings = array_values(array_filter($value, is_string(...)));
 
         return count($strings) === count($value) ? $strings : null;
+    }
+
+    /**
+     * @phpstan-assert-if-true string $key
+     */
+    private static function isPage(mixed $key): bool
+    {
+        // JSON decoding turns a numeric object key into an integer, so only a string naming a Markdown file is a page.
+        return is_string($key) && str_ends_with($key, '.md');
     }
 
     /**
