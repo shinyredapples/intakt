@@ -12,6 +12,8 @@ final class YamlLexer
     private const string SEPARATORS = " \t\r\n";
     // Because only these characters can end a plain scalar or stand before a comment, the text between them is skipped at once.
     private const string PLAIN_BREAKS = " \t\r\n:,]}";
+    // Because an anchor name and a tag hold no flow indicator, `[&empty]` closes its sequence right after the anchor.
+    private const string PROPERTY_BREAKS = " \t\r\n,[]{}";
     private const string BLOCK_HEADER_INDICATORS = '123456789+-';
 
     private readonly int $length;
@@ -92,7 +94,7 @@ final class YamlLexer
         return match (true) {
             "'" === $char => $this->afterScalar($this->afterSingleQuoted($offset + 1)),
             '"' === $char => $this->afterScalar($this->afterDoubleQuoted($offset + 1)),
-            '&' === $char, '!' === $char => $offset + strcspn($this->source, self::SEPARATORS, $offset),
+            '&' === $char, '!' === $char => $offset + 1 + strcspn($this->source, self::PROPERTY_BREAKS, $offset + 1),
             '[' === $char, '{' === $char => $this->afterFlowOpening($offset),
             0 === $this->flowDepth && ('|' === $char || '>' === $char) => $this->afterBlockScalar($offset),
             $this->isEntryIndicator($offset, $char) => $this->afterEntryIndicator($offset),
