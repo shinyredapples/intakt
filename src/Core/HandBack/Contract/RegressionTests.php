@@ -10,7 +10,7 @@ use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobRefused;
 use NoDiscard;
 
-// An interface, because the build task reports these runs for a bug and other modules may use only this module's contract.
+// An interface, because the build task judges a bug head by these runs and other modules may use only this module's contract.
 interface RegressionTests
 {
     /**

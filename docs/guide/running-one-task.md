@@ -22,7 +22,7 @@ flowchart LR
 3. **Clone:** it makes a fresh copy for the work in `<folder>`.
 4. **Build job:** the Developer works on the issue in a container of its own and hands back its commits and the pull request text.
 5. **Hand-back check:** Intakt checks what came back: only new commits on the task's branch, nothing that rewrites history, no secrets.
-6. **Pre-push check:** it runs the project's checks on the work once more, in a fresh container, merged with the latest main. For a `bug` task it then also runs the tests the work adds or changes twice, once on the code as it was before the fix and once on the fixed code, and records how both runs ended: a real regression test fails before the fix and passes after it. For now this only goes in the log (at info level); it does not hold the work back.
+6. **Pre-push check:** it runs the project's checks on the work once more, in a fresh container, merged with the latest main. For a `bug` task it then also runs the tests the work adds or changes twice, once on the code as it was before the fix and once on the fixed code, because a real regression test fails before the fix and passes after it. Only then does the work go on. A test that passes before the fix too proves nothing, so the work is sent back with that reason, and so is work that adds no test at all. When the work goes on, Intakt writes both results into the pull request's Evidence itself.
 7. **Push:** it signs the commits with its own key, pushes the branch and opens (or updates) the pull request.
 
 ## Where it stops
