@@ -42,7 +42,7 @@ final readonly class MirrorBranchArchive implements BranchArchive
     {
         try {
             $this->mirror->update($project, $remote);
-            // Boundary: every way the update fails means the same to cleanup, which then deletes nothing.
+            // Boundary: every way the update fails means the same to cleanup, so it deletes nothing that is not archived.
         } catch (Throwable $failed) {
             throw BranchNotArchived::because(sprintf('the mirror of "%s" was not updated (%s)', $project, $failed->getMessage()), $failed);
         }
@@ -57,7 +57,10 @@ final readonly class MirrorBranchArchive implements BranchArchive
             return null;
         }
 
-        return new MirroredHead(new DateTimeImmutable('@'.$committedAt), $this->isClaimed($mirror, $head->commit, $base));
+        $moment = DateTimeImmutable::createFromFormat('!U', trim($committedAt), new DateTimeZone('UTC'));
+
+        // A head whose time git does not give is unknown, so the rules keep it.
+        return false === $moment ? null : new MirroredHead($moment, $this->isClaimed($mirror, $head->commit, $base));
     }
 
     public function archive(string $project, BranchHead $head): ArchivedBranch

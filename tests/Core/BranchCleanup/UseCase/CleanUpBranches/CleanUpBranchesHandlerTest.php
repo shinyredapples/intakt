@@ -46,7 +46,7 @@ final class CleanUpBranchesHandlerTest extends KernelTestCase
         new CleanUpBranchesHandler($this->scenario->forges(), $this->scenario->cleanup(), $this->logger())();
 
         self::assertLoggedError('error', 'Branch cleanup of broken failed; nothing more of it was deleted this week.');
-        self::assertSame(1, (int) $this->manager()->getConnection()->fetchOne('SELECT COUNT(*) FROM branch_cleanup_warning WHERE project = ?', [BranchCleanupScenario::PROJECT]));
+        self::assertEquals(1, $this->manager()->getConnection()->fetchOne('SELECT COUNT(*) FROM branch_cleanup_warning WHERE project = ?', [BranchCleanupScenario::PROJECT]));
     }
 
     public function testTheCommandPrintsTheWarningListAndThenTheArchiveRefOfEachDeletedBranch(): void
@@ -97,7 +97,7 @@ final class CleanUpBranchesHandlerTest extends KernelTestCase
         self::assertCount(1, $messages);
         $trigger = $messages[0]->getTrigger();
         self::assertInstanceOf(PeriodicalTrigger::class, $trigger);
-        self::assertSame('2026-11-30 03:00:00', $trigger->getNextRunDate(new DateTimeImmutable('2026-11-23 03:00:00 UTC'))?->format('Y-m-d H:i:s'));
+        self::assertSame('2026-11-30 03:00:00', $trigger->getNextRunDate(new DateTimeImmutable('2026-11-23T03:00:00Z'))?->format('Y-m-d H:i:s'));
     }
 
     protected function setUp(): void

@@ -17,6 +17,7 @@ use Intakt\Core\BranchCleanup\Infrastructure\ProjectForges;
 use Intakt\Core\BranchCleanup\UseCase\CleanUpBranches\BranchWarnings;
 use Intakt\Core\BranchCleanup\UseCase\CleanUpBranches\CleanupNotRun;
 use Intakt\Core\BranchCleanup\UseCase\CleanUpBranches\CleanupReport;
+use Intakt\Core\BranchCleanup\UseCase\CleanUpBranches\CleanupRun;
 use Intakt\Core\BranchCleanup\UseCase\CleanUpBranches\ProjectCleanup;
 use Intakt\Core\BranchCleanup\UseCase\RestoreBranch\RestoreBranch;
 use Intakt\Core\Git\Contract\ArchivedBranch;
@@ -38,6 +39,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(ProjectCleanup::class)]
+#[CoversClass(CleanupRun::class)]
 #[CoversClass(BranchWarnings::class)]
 #[CoversClass(BranchWarning::class)]
 #[CoversClass(CleanupReport::class)]

@@ -19,7 +19,7 @@ final readonly class CleanupPolicies
     ) {
     }
 
-    // A project that sets neither key gets the defaults: Intakt's own branches only, none kept by name.
+    // A project that sets neither key gets the safe defaults (Intakt's own branches only, none kept by name), so other people's branches need an explicit opt-in.
     public function of(string $project): CleanupPolicy
     {
         $settings = $this->projects[$project] ?? ['clean_other_branches' => false, 'keep_branches' => []];

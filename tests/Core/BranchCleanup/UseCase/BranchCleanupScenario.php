@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\BranchCleanup\UseCase;
 
 use DateTimeImmutable;
+use DateTimeZone;
+use RuntimeException;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\BranchCleanup\Infrastructure\CleanupPolicies;
 use Intakt\Core\BranchCleanup\Infrastructure\ProjectForges;
@@ -115,12 +117,12 @@ final class BranchCleanupScenario
 
     public function mirrorGit(string ...$arguments): string
     {
-        return $this->outputOf(['git', '--git-dir='.$this->folder.'/mirrors/'.self::PROJECT.'.git', ...$arguments]);
+        return $this->outputOf(['git', '--git-dir='.$this->folder.'/mirrors/'.self::PROJECT.'.git', ...array_values($arguments)]);
     }
 
     public function git(string ...$arguments): string
     {
-        return $this->outputOf(['git', '-C', $this->remote->path, ...$arguments]);
+        return $this->outputOf(['git', '-C', $this->remote->path, ...array_values($arguments)]);
     }
 
     public function remove(): void
@@ -131,7 +133,9 @@ final class BranchCleanupScenario
 
     private function committedAt(string $commit): DateTimeImmutable
     {
-        return new DateTimeImmutable('@'.$this->git('log', '-1', '--format=%ct', $commit));
+        $moment = DateTimeImmutable::createFromFormat('!U', $this->git('log', '-1', '--format=%ct', $commit), new DateTimeZone('UTC'));
+
+        return false !== $moment ? $moment : throw new RuntimeException('git gave no commit time');
     }
 
     private function archive(): MirrorBranchArchive

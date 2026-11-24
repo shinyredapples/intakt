@@ -10,7 +10,6 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 
-// The watched projects with the forge each lives on and the local repository its mirror is filled from.
 final readonly class ProjectForges
 {
     /**

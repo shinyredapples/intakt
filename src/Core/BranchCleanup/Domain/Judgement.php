@@ -6,7 +6,7 @@ namespace Intakt\Core\BranchCleanup\Domain;
 
 use DateTimeImmutable;
 
-// One branch on its way through the rule chain: the first rule that decides wins, and later rules pass a decided judgement on unchanged.
+// Later rules pass a decided judgement on unchanged, so the first rule that decides wins and a keep rule cannot be overruled by a later one.
 final readonly class Judgement
 {
     public function __construct(

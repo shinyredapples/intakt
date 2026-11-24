@@ -19,7 +19,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 
-// A watched project without a GitHub repository lives in its local repository, which has no pull requests and no branch protection.
+// A local repository has no pull requests and no branch protection, so every branch here is judged by its head and its commits alone.
 final readonly class LocalForgeBranches implements ForgeBranches
 {
     private const int TIMEOUT_SECONDS = 60;
@@ -60,7 +60,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
 
     public function deleteBranch(string $project, ForgeBranch $branch): void
     {
-        // The old value makes git delete only while the branch is still at the listed head.
+        // The old value keeps a branch that moved since it was listed, because git then refuses the delete.
         $this->write($this->repositoryOf($project), ['update-ref', '-d', self::HEADS.$branch->name, $branch->head->hash], sprintf('the branch "%s" was not deleted, it may have moved', $branch->name));
     }
 

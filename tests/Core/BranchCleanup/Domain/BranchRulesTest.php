@@ -29,8 +29,6 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(CommitId::class)]
 final class BranchRulesTest extends TestCase
 {
-    private const string NOW = '2026-11-24 03:00:00 UTC';
-
     public function testOnlyBranchesWithIntaktsPrefixAreTouchableByDefault(): void
     {
         $rules = new BranchRules(new CleanupPolicy(false, []));
@@ -68,91 +66,96 @@ final class BranchRulesTest extends TestCase
 
     public function testAMergedBranchIsDueAtOnce(): void
     {
-        $facts = $this->facts(new BranchChange(BranchChangeState::Merged, new DateTimeImmutable(self::NOW), []), '-1 hour');
+        $facts = $this->facts(new BranchChange(BranchChangeState::Merged, $this->now(), []), '-1 hour');
 
-        self::assertSame(Verdict::Due, $this->rules()->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Due, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testAClosedUnmergedBranchIsKeptUntilThirtyDaysHavePassed(): void
     {
-        $facts = $this->facts(new BranchChange(BranchChangeState::ClosedUnmerged, new DateTimeImmutable(self::NOW.' -29 days'), []), '-40 days');
+        $facts = $this->facts(new BranchChange(BranchChangeState::ClosedUnmerged, $this->now()->modify('-29 days'), []), '-40 days');
 
-        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testAClosedUnmergedBranchIsDueOnceThirtyDaysHavePassed(): void
     {
-        $facts = $this->facts(new BranchChange(BranchChangeState::ClosedUnmerged, new DateTimeImmutable(self::NOW.' -30 days'), []), '-40 days');
+        $facts = $this->facts(new BranchChange(BranchChangeState::ClosedUnmerged, $this->now()->modify('-30 days'), []), '-40 days');
 
-        self::assertSame(Verdict::Due, $this->rules()->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Due, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testAClosedUnmergedBranchLabeledKeepIsNeverDue(): void
     {
-        $facts = $this->facts(new BranchChange(BranchChangeState::ClosedUnmerged, new DateTimeImmutable(self::NOW.' -400 days'), ['bug', 'keep']), '-400 days');
+        $facts = $this->facts(new BranchChange(BranchChangeState::ClosedUnmerged, $this->now()->modify('-400 days'), ['bug', 'keep']), '-400 days');
 
-        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testABranchWithAnOpenPullRequestIsKeptHoweverOld(): void
     {
         $facts = $this->facts(new BranchChange(BranchChangeState::Open, null, []), '-400 days');
 
-        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsKeptForTwentyNineDays(): void
     {
-        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($this->facts(null, '-29 days'), new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($this->facts(null, '-29 days'), $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsStaleAtThirtyDays(): void
     {
-        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts(null, '-30 days'), new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts(null, '-30 days'), $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsDueAtSixtyDays(): void
     {
-        self::assertSame(Verdict::Due, $this->rules()->verdictOf($this->facts(null, '-60 days'), new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Due, $this->rules()->verdictOf($this->facts(null, '-60 days'), $this->now()));
     }
 
     public function testABranchAPersonCommittedToIsOnlyStaleAtSixtyDays(): void
     {
-        $facts = new BranchFacts($this->branch('intakt/7'), null, new MirroredHead(new DateTimeImmutable(self::NOW.' -90 days'), true));
+        $facts = new BranchFacts($this->branch('intakt/7'), null, new MirroredHead($this->now()->modify('-90 days'), true));
 
-        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testABranchNamedInKeepBranchesIsOnlyStaleAtSixtyDays(): void
     {
         $rules = new BranchRules(new CleanupPolicy(false, ['intakt/7']));
 
-        self::assertSame(Verdict::Stale, $rules->verdictOf($this->facts(null, '-90 days'), new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Stale, $rules->verdictOf($this->facts(null, '-90 days'), $this->now()));
     }
 
     public function testABranchNamedInKeepBranchesIsStillDueWhenMerged(): void
     {
         $rules = new BranchRules(new CleanupPolicy(false, ['intakt/7']));
-        $facts = $this->facts(new BranchChange(BranchChangeState::Merged, new DateTimeImmutable(self::NOW), []), '-1 day');
+        $facts = $this->facts(new BranchChange(BranchChangeState::Merged, $this->now(), []), '-1 day');
 
-        self::assertSame(Verdict::Due, $rules->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Due, $rules->verdictOf($facts, $this->now()));
     }
 
     public function testABranchWhoseHeadTheMirrorLacksIsKept(): void
     {
-        $facts = new BranchFacts($this->branch('intakt/7'), new BranchChange(BranchChangeState::Merged, new DateTimeImmutable(self::NOW), []), null);
+        $facts = new BranchFacts($this->branch('intakt/7'), new BranchChange(BranchChangeState::Merged, $this->now(), []), null);
 
-        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, new DateTimeImmutable(self::NOW)));
+        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, $this->now()));
+    }
+
+    private function facts(?BranchChange $change, string $lastCommit): BranchFacts
+    {
+        return new BranchFacts($this->branch('intakt/7'), $change, new MirroredHead($this->now()->modify($lastCommit), false));
+    }
+
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-24T03:00:00Z');
     }
 
     private function rules(): BranchRules
     {
         return new BranchRules(new CleanupPolicy(false, []));
-    }
-
-    private function facts(?BranchChange $change, string $lastCommit): BranchFacts
-    {
-        return new BranchFacts($this->branch('intakt/7'), $change, new MirroredHead(new DateTimeImmutable(self::NOW.' '.$lastCommit), false));
     }
 
     private function branch(string $name): ForgeBranch

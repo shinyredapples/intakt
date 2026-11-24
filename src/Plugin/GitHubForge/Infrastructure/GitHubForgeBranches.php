@@ -85,13 +85,15 @@ final readonly class GitHubForgeBranches implements ForgeBranches
             throw new ForgeWriteFailed(sprintf('The branch "%s" moved since it was listed, so it was not deleted.', $branch->name));
         }
 
-        $this->write('DELETE', $path.'/git/refs/heads/'.$this->segments($branch->name), [], self::NO_CONTENT);
+        $status = $this->write('DELETE', $path.'/git/refs/heads/'.$this->segments($branch->name), []);
+        $this->expect(self::NO_CONTENT, $status, 'deletion');
     }
 
     public function restoreBranch(string $project, BranchRestore $restore): void
     {
         // Creating a ref fails when it exists, so a branch made again since is never overwritten; GitHub must still hold the commit, which a pull request's own ref keeps.
-        $this->write('POST', $this->repositories->addressOf($project)->path().'/git/refs', ['ref' => 'refs/heads/'.$restore->branch, 'sha' => $restore->head->hash], self::CREATED);
+        $status = $this->write('POST', $this->repositories->addressOf($project)->path().'/git/refs', ['ref' => 'refs/heads/'.$restore->branch, 'sha' => $restore->head->hash]);
+        $this->expect(self::CREATED, $status, 'restore');
     }
 
     /**
@@ -122,6 +124,19 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         $data = $this->decode($body);
 
         return !array_is_list($data) || [] === $data ? $data : throw new ForgeReadFailed('GitHub answered a list where an object was expected.');
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $data;
+        foreach ($keys as $key) {
+            $value = is_array($value) ? ($value[$key] ?? null) : null;
+        }
+
+        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 
     /**
@@ -185,19 +200,23 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     /**
      * @param array<string, string> $body
      */
-    private function write(string $method, string $path, array $body, int $expected): void
+    private function write(string $method, string $path, array $body): int
     {
         try {
             $options = ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], ...([] === $body ? [] : ['json' => $body])];
-            $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
+
+            return $this->calls->asInstallation($method, $path, $options)->getStatusCode();
         } catch (ExceptionInterface $failure) {
             throw new ForgeWriteFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), $failure);
         } catch (ForgeReadFailed $noToken) {
             throw new ForgeWriteFailed($noToken->getMessage(), $noToken->getCode(), $noToken);
         }
+    }
 
+    private function expect(int $expected, int $status, string $write): void
+    {
         if ($expected !== $status) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a branch %s.', $status, 'DELETE' === $method ? 'deletion' : 'restore'));
+            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a branch %s.', $status, $write));
         }
     }
 
@@ -213,19 +232,6 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         }
 
         return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 
     private function commitOf(string $sha): CommitId

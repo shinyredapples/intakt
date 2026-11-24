@@ -4,21 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\BranchCleanup\UseCase\CleanUpBranches;
 
-use DateTimeImmutable;
-use Intakt\Core\BranchCleanup\Domain\BranchFacts;
 use Intakt\Core\BranchCleanup\Domain\BranchRules;
 use Intakt\Core\BranchCleanup\Domain\BranchWarning;
-use Intakt\Core\BranchCleanup\Domain\Verdict;
 use Intakt\Core\BranchCleanup\Infrastructure\CleanupPolicies;
 use Intakt\Core\BranchCleanup\Infrastructure\ProjectForges;
 use Intakt\Core\Git\Contract\ArchivedBranch;
 use Intakt\Core\Git\Contract\BranchArchive;
 use Intakt\Core\Git\Contract\BranchHead;
-use Intakt\Core\Git\Contract\BranchNotArchived;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
-use Intakt\Plugin\Forge\Contract\ForgeBranches;
-use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
-use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Lock\LockFactory;
@@ -26,8 +19,6 @@ use Symfony\Component\Lock\LockFactory;
 // Warns a week ahead and deletes only what a warning of at least a week named at the same head, so nothing goes without notice.
 final readonly class ProjectCleanup
 {
-    private const string WARNING_AHEAD = '+7 days';
-
     public function __construct(
         private ProjectForges $projects,
         private CleanupPolicies $policies,
@@ -66,68 +57,28 @@ final readonly class ProjectCleanup
         $this->archive->refresh($project, $this->projects->repositoryOf($project));
 
         $rules = new BranchRules($this->policies->of($project));
-        $stored = $this->warnings->of($project);
-        $now = $this->clock->now();
-        [$warned, $deleted, $stale, $failures] = [[], [], [], []];
+        $run = new CleanupRun($project, $forge, $this->archive, $rules, $this->warnings->of($project), $base->head->hash, $this->clock->now());
+        $outcomes = [];
 
         foreach ($rules->touchable($listed) as $branch) {
-            $head = new BranchHead($branch->name, $branch->head->hash);
-            $facts = new BranchFacts($branch, $forge->changeOf($project, $branch), $this->archive->headOf($project, $head, $base->head->hash));
-            $warning = $this->warningOf($stored, $head);
-
-            if (Verdict::Due === $rules->verdictOf($facts, $now) && true === $warning?->allowsDeletionAt($now)) {
-                try {
-                    $deleted[] = $this->delete($forge, $project, $branch);
-
-                    continue;
-                } catch (BranchNotArchived|ForgeWriteFailed|ForgeRateLimited $failed) {
-                    $failures[] = sprintf('%s: %s', $branch->name, $failed->getMessage());
-                }
-            }
-
-            if (Verdict::Due === $rules->verdictOf($facts, $this->aWeekAfter($now))) {
-                $warned[] = $warning ?? new BranchWarning($project, $branch->name, $branch->head->hash, $now);
-
-                continue;
-            }
-
-            if (Verdict::Stale === $rules->verdictOf($facts, $now)) {
-                $stale[] = $head;
-            }
+            array_push($outcomes, ...$run->outcomesOf($branch));
         }
 
+        $warned = array_values(array_filter($outcomes, static fn (mixed $outcome): bool => $outcome instanceof BranchWarning));
         $this->warnings->replace($project, $warned);
 
-        return new CleanupReport($project, $warned, $deleted, $stale, $failures);
+        return new CleanupReport(
+            $project,
+            $warned,
+            array_values(array_filter($outcomes, static fn (mixed $outcome): bool => $outcome instanceof ArchivedBranch)),
+            array_values(array_filter($outcomes, static fn (mixed $outcome): bool => $outcome instanceof BranchHead)),
+            array_values(array_filter($outcomes, is_string(...))),
+        );
     }
 
     // The names in the notice itself, because the scheduled run has no console that would print the list.
     private function warningList(CleanupReport $report): string
     {
         return implode(', ', array_map(static fn (BranchWarning $warning): string => sprintf('%s deletable from %s', $warning->branch(), $warning->deletableFrom()->format('Y-m-d')), $report->warned));
-    }
-
-    /**
-     * @param array<string, BranchWarning> $stored
-     */
-    private function warningOf(array $stored, BranchHead $head): ?BranchWarning
-    {
-        $warning = $stored[$head->branch] ?? null;
-
-        return true === $warning?->names($head) ? $warning : null;
-    }
-
-    // Archived before the forge call, so a head is never deleted without its archive ref.
-    private function delete(ForgeBranches $forge, string $project, ForgeBranch $branch): ArchivedBranch
-    {
-        $archived = $this->archive->archive($project, new BranchHead($branch->name, $branch->head->hash));
-        $forge->deleteBranch($project, $branch);
-
-        return $archived;
-    }
-
-    private function aWeekAfter(DateTimeImmutable $now): DateTimeImmutable
-    {
-        return $now->modify(self::WARNING_AHEAD);
     }
 }

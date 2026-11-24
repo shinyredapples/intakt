@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\BranchCleanup\Domain;
 
-// A project's own choices: whether branches without Intakt's prefix may be cleaned up, and which branches people keep by name.
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// A project's own choices, read from its configuration, because whether other people's branches may go and which are kept by name is the project's to decide.
+#[Exclude]
 final readonly class CleanupPolicy
 {
     // The prefix of the branches Intakt creates (docs/design/05-architecture/08-merge.md#branch-cleanup); spelled once, so the branch names and the cleanup agree.

@@ -47,6 +47,9 @@ final class BranchCleanupConfigurationTest extends TestCase
      */
     private function processed(array $projects): array
     {
-        return new Processor()->processConfiguration(new BranchCleanupConfiguration(), [['projects' => $projects]])['projects'];
+        $processed = new Processor()->processConfiguration(new BranchCleanupConfiguration(), [['projects' => $projects]])['projects'];
+        self::assertIsArray($processed);
+
+        return $processed;
     }
 }

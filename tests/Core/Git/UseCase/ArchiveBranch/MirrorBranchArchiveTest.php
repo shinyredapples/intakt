@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Git\UseCase\ArchiveBranch;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Git\Contract\ArchivedBranch;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchNotArchived;
@@ -135,7 +136,7 @@ final class MirrorBranchArchiveTest extends TestCase
     {
         $facts = $this->refreshedArchive()->headOf('widgets', new BranchHead(self::BRANCH, $this->head), $this->main);
 
-        self::assertEquals(new DateTimeImmutable('@'.trim($this->remote->log('-1', '--format=%ct', $this->head))), $facts?->committedAt);
+        self::assertEquals(DateTimeImmutable::createFromFormat('!U', trim($this->remote->log('-1', '--format=%ct', $this->head)), new DateTimeZone('UTC')), $facts?->committedAt);
     }
 
     public function testABranchWithACommitThatLacksTheOrchestratorsSignatureIsClaimedByAPerson(): void
@@ -208,12 +209,12 @@ final class MirrorBranchArchiveTest extends TestCase
 
     private function mirrorGit(string ...$arguments): string
     {
-        return $this->outputOf(['git', '--git-dir='.$this->folder.'/mirrors/widgets.git', ...$arguments]);
+        return $this->outputOf(['git', '--git-dir='.$this->folder.'/mirrors/widgets.git', ...array_values($arguments)]);
     }
 
     private function remoteGit(string ...$arguments): string
     {
-        return $this->outputOf(['git', '-C', $this->remote->path, ...$arguments]);
+        return $this->outputOf(['git', '-C', $this->remote->path, ...array_values($arguments)]);
     }
 
     /**

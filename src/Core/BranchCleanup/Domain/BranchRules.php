@@ -10,7 +10,7 @@ use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
 
-// The cleanup rules of docs/design/05-architecture/08-merge.md#branch-cleanup, each one step of a chain.
+// Each rule of docs/design/05-architecture/08-merge.md#branch-cleanup is its own step, so the order in which they decide stays visible in one chain.
 final readonly class BranchRules
 {
     public const string KEEP_LABEL = 'keep';
@@ -117,7 +117,7 @@ final readonly class BranchRules
         return $judgement->facts->change instanceof BranchChange ? $judgement->decided(Verdict::Keep) : $judgement;
     }
 
-    // A claimed branch may still be listed stale, but never becomes due.
+    // A claimed branch may still be listed stale, because a person should still hear of it, but it must never become due.
     private function keptWhenClaimed(Judgement $judgement): Judgement
     {
         $claimed = true === $judgement->facts->head?->claimedByPerson || $this->policy->keepsByName($judgement->facts->branch->name);

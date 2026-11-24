@@ -81,14 +81,14 @@ final class GitHubForgeBranchesTest extends TestCase
     {
         $this->answers['GET '.$this->pulls()] = sprintf('[{"state":"closed","merged_at":"2026-11-20T10:00:00Z","closed_at":"2026-11-20T10:00:00Z","labels":[],"head":{"sha":"%s"}}]', self::HEAD);
 
-        self::assertEquals(new BranchChange(BranchChangeState::Merged, new DateTimeImmutable('2026-11-20 10:00:00 UTC'), []), $this->forge()->changeOf('alpha', $this->branch(self::HEAD)));
+        self::assertEquals(new BranchChange(BranchChangeState::Merged, new DateTimeImmutable('2026-11-20T10:00:00Z'), []), $this->forge()->changeOf('alpha', $this->branch(self::HEAD)));
     }
 
     public function testAClosedUnmergedPullRequestCarriesTheMomentItClosedAndItsLabels(): void
     {
         $this->answers['GET '.$this->pulls()] = sprintf('[{"state":"closed","merged_at":null,"closed_at":"2026-10-01T08:00:00Z","labels":[{"name":"keep"}],"head":{"sha":"%s"}}]', self::HEAD);
 
-        self::assertEquals(new BranchChange(BranchChangeState::ClosedUnmerged, new DateTimeImmutable('2026-10-01 08:00:00 UTC'), ['keep']), $this->forge()->changeOf('alpha', $this->branch(self::HEAD)));
+        self::assertEquals(new BranchChange(BranchChangeState::ClosedUnmerged, new DateTimeImmutable('2026-10-01T08:00:00Z'), ['keep']), $this->forge()->changeOf('alpha', $this->branch(self::HEAD)));
     }
 
     public function testAnOpenPullRequestWinsOverAnOlderClosedOneOfTheSameHead(): void
