@@ -6,13 +6,18 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\DomCrawler\Crawler;
+use Twig\Environment;
 
 #[CoversClass(ListProjectsController::class)]
 #[CoversClass(ProjectCards::class)]
@@ -144,6 +149,35 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertCount(3, $crawler->filter('[data-project="unmapped"] .tiers li'));
+    }
+
+    public function testACredentialInATierProblemIsRedactedOnTheCard(): void
+    {
+        $token = 'ghp_'.str_repeat('a1', 18);
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(['alpha']);
+        $tiers->method('resolve')->willThrowException(new TierProviderDisabled('alpha', Tier::Strong, 'the key '.$token.' was revoked'));
+        self::getContainer()->set(TierResolver::class, $tiers);
+
+        $crawler = $this->browser->request('GET', '/projects');
+
+        self::assertStringContainsString('the key [redacted] was revoked', $crawler->filter('[data-project="alpha"] .tiers')->text());
+        self::assertStringNotContainsString($token, (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testFollowingTheWaitOnYouCountLeadsToTheBoardColumnOfTheItemsItCounts(): void
+    {
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+        $card = new ProjectCard('alpha', 0, 0, 0, 1, null, TokenFigures::none(), Cost::none(), [], [], []);
+        $href = (string) new Crawler($twig->render('dashboard/_project_cards.html.twig', ['projects' => [$card]]))->filter('[data-project="alpha"] .waits')->attr('href');
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $board = $this->browser->request('GET', $href);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('col-waiting-on-you', parse_url($href, PHP_URL_FRAGMENT));
+        self::assertCount(1, $board->filter('section#col-waiting-on-you'));
     }
 
     public function testALongProjectNameIsCutOnTheCardWithTheFullNameInTheTooltip(): void

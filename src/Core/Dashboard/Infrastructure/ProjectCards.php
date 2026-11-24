@@ -118,7 +118,7 @@ final readonly class ProjectCards
             try {
                 $resolved = $this->tiers->resolve($project, $tier);
             } catch (TierResolutionFailure $failure) {
-                return new TierLine($tier->value, '-', $failure->getMessage());
+                return new TierLine($tier->value, '-', $this->redactor->redact($failure->getMessage()));
             }
 
             return new TierLine($tier->value, $resolved->provider->value, $resolved->model);
