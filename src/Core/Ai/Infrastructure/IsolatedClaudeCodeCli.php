@@ -72,7 +72,7 @@ final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
         $file = $files->tempnam($this->directory, 'review-server-', '.json');
         // Still empty here, so the bearer is never readable by anyone else.
         $files->chmod($file, 0o600);
-        $files->appendToFile($file, json_encode($access->mcpConfiguration(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        $files->appendToFile($file, $access->mcpConfigurationJson());
 
         return $file;
     }

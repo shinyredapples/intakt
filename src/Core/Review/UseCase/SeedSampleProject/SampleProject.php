@@ -66,7 +66,7 @@ final readonly class SampleProject
     public function keyVariables(): array
     {
         return array_merge(...array_map(
-            static fn (Provider $provider): array => Provider::OpenAiCompatible === $provider ? [self::HUGGING_FACE_TOKEN] : $provider->variables(),
+            static fn (Provider $provider): array => Provider::OpenAiCompatible === $provider ? [self::HUGGING_FACE_TOKEN] : [...$provider->variables()],
             self::PROVIDERS,
         ));
     }
