@@ -74,7 +74,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
         $windows = $this->browser->request('GET', '/team')->filter('.acct .window');
 
-        self::assertSame(['Five hour window46% used, read 1 min ago', 'Weekly window61% used, read 2 h ago'], $windows->each(static fn (Crawler $window): string => $window->filter('.wl')->text()));
+        self::assertSame(['Five-hour window46% used, read 1 min ago', 'Weekly window61% used, read 2 h ago'], $windows->each(static fn (Crawler $window): string => $window->filter('.wl')->text()));
     }
 
     public function testTheBarNamesOnlyTheUsedShareBecauseReservedAndForecastHaveNoSource(): void
@@ -93,7 +93,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
         $window = $this->browser->request('GET', '/team')->filter('.acct .window')->first();
 
-        self::assertSame('Five hour windowNo reading yet', $window->filter('.wl')->text());
+        self::assertSame('Five-hour windowNo reading yet', $window->filter('.wl')->text());
         self::assertCount(0, $window->filter('.bar'));
         self::assertStringNotContainsString('Used 0%', (string) $this->browser->getResponse()->getContent());
     }
@@ -116,7 +116,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
         $note = $this->browser->request('GET', '/team')->filter('.acct .window .wl')->first()->text();
 
-        self::assertSame('Five hour windowLast known 80% used, read 3 h ago', $note);
+        self::assertSame('Five-hour windowLast known 80% used, read 3 h ago', $note);
     }
 
     public function testAPayPerUseAccountShowsItsApiSpendOfTodayAndThisWeek(): void

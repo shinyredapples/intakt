@@ -19,7 +19,7 @@ final readonly class TeamWindow
 
     public function label(): string
     {
-        return ucfirst(str_replace('-', ' ', $this->window->value)).' window';
+        return ucfirst($this->window->value).' window';
     }
 
     public function hasReading(): bool
