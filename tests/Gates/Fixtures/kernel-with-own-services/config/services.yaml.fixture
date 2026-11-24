@@ -1,4 +1,21 @@
+parameters:
+    fixture.greeting: hello
+
 services:
     fixture.mailer:
         class: Fixture\Mailer
+        public: true
+
+    # Private and used by two public services, so the container keeps it instead of inlining it.
+    fixture.signature:
+        class: Fixture\Signature
+
+    fixture.letter:
+        class: Fixture\Letter
+        arguments: ['@fixture.signature']
+        public: true
+
+    fixture.card:
+        class: Fixture\Letter
+        arguments: ['@fixture.signature']
         public: true
