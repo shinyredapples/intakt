@@ -1,0 +1,18 @@
+# Development only: docker compose -f compose.yaml -f compose.dev.yaml up --wait --build. Nothing here is in the image or in compose.yaml.
+services:
+    intakt:
+        environment:
+            APP_ENV: dev
+            APP_DEBUG: "1"
+        volumes:
+            # The checkout, so an edit on the host is what the workers see; it hides the image's vendor/, so run composer install on the host first.
+            - .:/app
+            # The Caddyfile with watch and hot reload; mounted over the shipped one, so the entrypoint and the image stay as they are.
+            - ./docker/dev/Caddyfile:/app/Caddyfile:ro
+            # Named volumes keep the cache and log writable for the image's user, whatever the host folder allows.
+            - intakt-dev-cache:/app/var/cache
+            - intakt-dev-log:/app/var/log
+
+volumes:
+    intakt-dev-cache:
+    intakt-dev-log:

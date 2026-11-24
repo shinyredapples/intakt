@@ -1,0 +1,73 @@
+{
+	# On localhost only, because intakt:server:status reads it (FRANKENPHP_ADMIN_URL) and it can change the whole server; CADDY_ADMIN moves it, so the hub tests do not take the port of a running install. Caddy binds a bare port such as :2019 on every interface, so docker/entrypoint.sh refuses any value that is not a port on a loopback host.
+	admin {$CADDY_ADMIN:localhost:2019}
+	# FrankenPHP adds its series (frankenphp_queue_depth, frankenphp_worker_restarts) to the admin API's /metrics only with Caddy's metrics on, so the health check and the board need it.
+	metrics
+
+	frankenphp {
+		# 1.13.4 has max_wait_time only here, for every worker; a worker block has no such key.
+		max_wait_time {$MAX_WAIT_TIME:30s}
+	}
+}
+
+:{$SERVER_PORT:7781} {
+	# The hub's stream must not be compressed, because a compressor buffers it and a client would see events late or in bursts.
+	@compressible not path /.well-known/mercure
+	encode @compressible zstd gzip
+
+	mercure {
+		# One prefix-less name for the hub and the app (config/packages/mercure.yaml), because the dashboard answers over plain http on localhost, where a __Secure- cookie is refused.
+		cookie_name mercure_access_token
+		# Modern mode: the issuer block names who may sign a token and the key for each role.
+		issuer {$MERCURE_JWT_ISSUER} {
+			publisher {
+				jwt {$MERCURE_JWT_SECRET} HS256
+			}
+			subscriber {
+				jwt {$MERCURE_JWT_SECRET} HS256
+			}
+		}
+		# Bolt keeps history on disk, so a client that reconnects with Last-Event-ID receives what it missed.
+		transport bolt {
+			path {$MERCURE_BOLT_PATH:var/mercure.db}
+			size {$MERCURE_HISTORY_SIZE:1000}
+		}
+	}
+
+	root public/
+	php_server {
+		# The browser reloads when a watched file changes. It uses the hub above, which FrankenPHP finds only outside a route block, so the mercure block sits at the top of the site.
+		# Named folders for the same reason as the workers' watch.
+		hot_reload {
+			watch src/**/*.php
+			watch templates/**/*.twig
+			watch config/**/*.{php,yaml}
+			watch assets/**/*.{css,js}
+		}
+		# FRANKENPHP_WORKER makes Symfony Runtime pick FrankenPhpWorkerRunner.
+		worker {
+			name app
+			file public/index.php
+			# Named folders, never the bare default: that one includes var/, where Symfony rewrites its cache in dev, and would restart the workers in a loop.
+			watch src/**/*.php
+			watch templates/**/*.twig
+			watch config/**/*.{php,yaml}
+			watch .env*
+			num {$APP_WORKERS:2}
+			env FRANKENPHP_WORKER 1
+		}
+		# Own threads, so a streamed MCP response cannot starve the dashboard; the paths are in config/packages/mcp.yaml.
+		worker {
+			name mcp
+			file public/mcp.php
+			watch src/**/*.php
+			watch templates/**/*.twig
+			watch config/**/*.{php,yaml}
+			watch .env*
+			match /mcp/*
+			num {$MCP_WORKERS:2}
+			max_threads {$MCP_MAX_THREADS:8}
+			env FRANKENPHP_WORKER 1
+		}
+	}
+}
