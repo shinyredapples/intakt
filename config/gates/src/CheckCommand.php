@@ -240,10 +240,10 @@ final readonly class CheckCommand
         return $this->runGates($reports, $scratch instanceof ScratchDirectory ? new FullReport($root, $reports) : null, $reused ? null : $passed);
     }
 
+    // Because a run that reused a pass ran only some gates, it records nothing ($passed null) and names the record it stood on.
     /**
      * @param list<GateReport> $reports
      */
-    // Because a run that reused a pass ran only some gates, it records nothing ($passed null) and names the record it stood on.
     private function runGates(array $reports, ?FullReport $fullReport, ?PassedTree $passed): int
     {
         $failed = $this->reportOn($reports);
