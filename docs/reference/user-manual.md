@@ -143,6 +143,22 @@ NODE_PATH="$(npm root --global)" bin/ui-check http://localhost:7780
 
 The address defaults to `http://localhost:7780`. `CHROME_PATH` names a Chrome or Chromium to use in place of Playwright's own browser.
 
+### Walking user journeys with the journey check
+
+`bin/journey-check <dashboard address>` walks user journeys in a headless browser against a running Intakt, each journey from a fresh page (its own cookies and storage), and prints one line per journey (a query string or fragment on the address is dropped): `passed <journey>`, or `failed <journey> at step "<step>": <what broke>`. A failed journey also gets a screenshot where one can be saved, `var/journey-check/<run>/<position>-<journey>.png` (the run is named by its start in UTC and eight random hex digits, for example `2026-11-24T09-05-07-012Z-1a2b3c4d`, and the file by the journey's place in the run, two digits, and its name, for example `01-read-a-verdict.png`); when the folder cannot be created or the page cannot be captured, the line `no screenshot: <reason>` takes its place and the journey still counts as failed. The last line counts the journeys, those that passed and those that failed. The check has no journey of its own yet, so on a running dashboard it reports `Journey check: 0 journeys, 0 passed, 0 failed.`
+
+Before it opens a browser it asks the address for an answer and waits at most 10 seconds, the startup deadline. The same 10 seconds is the default timeout of each page action (a page load, a click, waiting for a text); the check has no deadline for a whole step. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run: no address, an address that is not an http or https URL (its text is not printed back), nothing answering within that time, or no browser. Any output names the address without a user name or password.
+
+It needs Node.js 22 or later and Playwright, like the UI check:
+
+```sh
+npm install --global playwright
+npx playwright install chromium
+NODE_PATH="$(npm root --global)" bin/journey-check http://localhost:7781
+```
+
+`CHROME_PATH` names a Chrome or Chromium to use in place of Playwright's own browser.
+
 ## Running the container image
 
 The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. To check an image you built, run `docker/smoke-test.sh <image>`: it starts the image with throwaway secrets and checks that the dashboard answers, that MCP requests go to their own worker, that the server runs as an unprivileged user and that the admin port stays inside the container, then removes what it started. CI builds the image and runs this check on main and on every pull request that changes more than `docs/`, `tests/` or `upstream/` (the `image` job in `.github/workflows/ci.yml`). Every release also publishes a checked image, `ghcr.io/shinyredapples/intakt:<version>` and `:latest` (see [Releasing](../releasing.md#the-container-image)); use it instead of `docker build` when you run a release. Between two requests the worker clears the signed-in user, the database entities it loaded and the other per-request state of Intakt's own services, so one browser never sees another's flash messages or data. Each request also starts with the file permission mask (`umask`), locale and environment variables the worker started with, whatever the request before changed. The same reset runs between two messages of a consumer, so a reviewer's model, tools and conversation stay with its own review: the next one connects to the review tools again and sends only its own model, tools and messages (checked by `tests/Application/SymfonyAiResetTest.php`). A test in the repository (`tests/Application/WorkerModeTest.php`) checks the rest, both as the image runs and with `FRANKENPHP_RESET_KERNEL=1` (a fresh copy of Intakt's kernel for each request). The image does not set it.
