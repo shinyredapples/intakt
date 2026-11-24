@@ -188,8 +188,8 @@ final class GateChildrenTest extends SandboxTestCase
     public function testAStopThatArrivesWhileAChildIsStillBeingStartedAlsoStopsThatChild(): void
     {
         $home = $this->fakeGatesHome();
-        $home->write('stop-during-start.php', self::launchRoundStoppedDuringItsSecondStart());
-        $home->write('tools/setsid', self::setsidThatLingersForTheGate('dashes', (string) shell_exec('command -v setsid')));
+        $home->write('stop-during-start.php', $this->launchRoundStoppedDuringItsSecondStart());
+        $home->write('tools/setsid', $this->setsidThatLingersForTheGate('dashes', (string) shell_exec('command -v setsid')));
         chmod($home->root.'/tools/setsid', 0o700);
         $marker = $home->root.'/dashes-launcher.pid';
 
@@ -324,7 +324,7 @@ final class GateChildrenTest extends SandboxTestCase
     }
 
     // Because Symfony Process calls proc_open() unqualified, a function of its namespace sends the stop right after the second child's session exists; the limit only ends a hang.
-    private static function launchRoundStoppedDuringItsSecondStart(): string
+    private function launchRoundStoppedDuringItsSecondStart(): string
     {
         return <<<'PHP'
             <?php
@@ -352,7 +352,7 @@ final class GateChildrenTest extends SandboxTestCase
     }
 
     // Because the child's own launcher sits in the session it creates, it writes its pid there and lingers past the test's limit before it goes on, so only a stop that reaches it ends it in time.
-    private static function setsidThatLingersForTheGate(string $gate, string $setsid): string
+    private function setsidThatLingersForTheGate(string $gate, string $setsid): string
     {
         $real = escapeshellarg(trim($setsid));
 
