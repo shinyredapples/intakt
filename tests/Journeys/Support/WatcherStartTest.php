@@ -47,7 +47,7 @@ final class WatcherStartTest extends TestCase
     private const string ROUND = '0198a1b2-0000-7000-8000-000000000001';
     private const string OTHER_ROUND = '0198a1b2-0000-7000-8000-000000000002';
     private const string EARLIER_EVENT = '01a19b80-0000-7000-8000-000000000001';
-    // Past the 30 seconds the worker's own time limit once allowed after the interval, and inside the process timeout's margin, which also covers the worker's boot.
+    // Chosen past the 30 seconds the worker's own time limit once allowed after the interval, because that is the order that lost the tick, and inside the process timeout's margin, because the margin also covers the worker's boot.
     private const int LATE_FIRST_POLL_SECONDS = 45;
 
     private string $directory = '';
