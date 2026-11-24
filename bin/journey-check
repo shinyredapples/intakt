@@ -13,9 +13,26 @@ const { randomUUID } = require('crypto');
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'var', 'journey-check');
 const STEP_TIMEOUT_MS = 10_000;
+// The recorded demo run plays for about a minute after the click, so the verdict gets far longer than a click.
+const VERDICT_TIMEOUT_MS = 180_000;
 const USAGE = 'usage: bin/journey-check <address of a running dashboard>';
-// Part 2 of #3677 adds the first journey; until then the check starts, finds the dashboard answering and walks none.
-const JOURNEYS = [];
+// Every heading templates/dashboard/_verdict_card.html.twig can show; the recorded demo run keeps no quorum decision, so it ends on the last one.
+const OUTCOME = /^(Approved|Changes needed|Blocked: .+|Failed: .+|Checked, but the outcome was not recorded)$/;
+// Finding F1 of fixtures/demo/sample-change-review.json as its row on the review page names it; the sentence's own period must follow, so "amount > 100.50" is not taken for it.
+const RECORDED_FINDING = /^The check changed from amount >= 100 to amount > 100\.(\s|$)/;
+const JOURNEYS = [
+  {
+    name: 'First run without a key',
+    steps: [
+      named('open /setup and see the start', open('/setup'), seeRole('heading', 'See a real review')),
+      // Nothing on /setup links to /demo, so the journey opens the demo page by its address.
+      named('open /demo and see the demo run', open('/demo'), seeRole('heading', 'The demo run')),
+      press('button', 'Play the demo run'),
+      named('wait for the verdict of the demo run', seeRole('heading', OUTCOME, VERDICT_TIMEOUT_MS)),
+      named('see the recorded finding on the review page', seeRole('link', RECORDED_FINDING)),
+    ],
+  },
+];
 
 class CheckCouldNotRun extends Error {}
 
@@ -136,6 +153,24 @@ function see(text) {
   return { name: `see "${text}"`, run: (page) => page.getByText(text, { exact: true }).filter({ visible: true }).first().waitFor() };
 }
 
+// Playwright ignores exact for a pattern, so a pattern name must be anchored itself.
+function seeRole(role, name, timeout = STEP_TIMEOUT_MS) {
+  return {
+    name: name instanceof RegExp ? `see the ${role} matching ${name}` : `see the ${role} "${name}"`,
+    run: (page) => page.getByRole(role, { name, exact: true }).filter({ visible: true }).first().waitFor({ timeout }),
+  };
+}
+
+// One step a person would name, made of the smaller steps that prove it, so the report says which part of the journey broke.
+function named(name, ...steps) {
+  return {
+    name,
+    run: async (page, address) => {
+      for (const step of steps) await step.run(page, address);
+    },
+  };
+}
+
 function report(results, root) {
   const lines = results.flatMap((result) => resultLines(result, root));
   const failed = results.filter((result) => result.failure !== null).length;
@@ -158,7 +193,25 @@ function exitCode(results) {
   return results.some((result) => result.failure !== null) ? 1 : 0;
 }
 
-module.exports = { STEP_TIMEOUT_MS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, open, press, see, report, exitCode };
+module.exports = {
+  STEP_TIMEOUT_MS,
+  VERDICT_TIMEOUT_MS,
+  OUTCOME,
+  RECORDED_FINDING,
+  JOURNEYS,
+  parseAddress,
+  expectAnswer,
+  runName,
+  runJourney,
+  screenshotFile,
+  open,
+  press,
+  see,
+  seeRole,
+  named,
+  report,
+  exitCode,
+};
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(

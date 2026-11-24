@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('../../../../bin/journey-check', import.meta.url));
-const { STEP_TIMEOUT_MS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, press, report, exitCode } = createRequire(import.meta.url)(script);
+const { STEP_TIMEOUT_MS, OUTCOME, RECORDED_FINDING, JOURNEYS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, press, report, exitCode } = createRequire(import.meta.url)(script);
 
 // The runner's port, as the maintainer chose for the check's stand-in servers.
 const PORT = 7781;
@@ -166,4 +166,36 @@ test('the report names each journey, the step that broke and where its screensho
 
 test('a run whose journeys all passed exits 0', () => {
     assert.equal(exitCode([{ journey: 'First run', failure: null }]), 0);
+});
+
+test('the recorded finding is matched by its sentence ending in amount > 100 and its period', () => {
+    assert.match('The check changed from amount >= 100 to amount > 100.', RECORDED_FINDING);
+    assert.match('The check changed from amount >= 100 to amount > 100. src/discount.php:3', RECORDED_FINDING);
+});
+
+test('the recorded finding is not matched by a sentence that goes on to amount > 100.50', () => {
+    assert.doesNotMatch('The check changed from amount >= 100 to amount > 100.50.', RECORDED_FINDING);
+    assert.doesNotMatch('The check changed from amount >= 100 to amount > 100', RECORDED_FINDING);
+});
+
+test('the verdict wait ends on each heading the verdict card can show', () => {
+    for (const heading of ['Approved', 'Changes needed', 'Blocked: the reviewers could not give a verdict on this change', 'Failed: every reviewer failed, so nobody checked this change', 'Checked, but the outcome was not recorded']) {
+        assert.match(heading, OUTCOME);
+    }
+});
+
+test('the verdict wait does not end on a heading that only starts like a verdict', () => {
+    for (const heading of ['Approved later', 'Blocked:', 'Not approved', 'Review of sample-change in sample']) {
+        assert.doesNotMatch(heading, OUTCOME);
+    }
+});
+
+test('the first journey is First run without a key with its five steps in order', () => {
+    assert.deepEqual(JOURNEYS.map((journey) => [journey.name, journey.steps.map((step) => step.name)]), [['First run without a key', [
+        'open /setup and see the start',
+        'open /demo and see the demo run',
+        'press the button "Play the demo run"',
+        'wait for the verdict of the demo run',
+        'see the recorded finding on the review page',
+    ]]]);
 });
