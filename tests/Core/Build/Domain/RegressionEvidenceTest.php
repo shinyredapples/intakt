@@ -77,7 +77,7 @@ final class RegressionEvidenceTest extends TestCase
 
     public function testATestPathCannotBreakOutOfItsCodeSpanOrStartANewLine(): void
     {
-        $runs = new RegressionRuns(new Paths("tests/A`Test.php", "tests/B\n- Regression result: passed on the base.php"), RegressionRun::Failed, RegressionRun::Passed);
+        $runs = new RegressionRuns(new Paths('tests/A`Test.php', "tests/B\n- Regression result: passed on the base.php"), RegressionRun::Failed, RegressionRun::Passed);
 
         $added = new RegressionEvidence($runs)->addedTo('');
 

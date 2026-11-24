@@ -29,6 +29,12 @@ use Symfony\Component\Process\Exception\ProcessTimedOutException;
 // The project's check command on the bundle in a check job of its own, because the builder's own run of the checks is never trusted.
 final readonly class PrePushCheck
 {
+    public const string NO_TEST = 'the bug head adds or changes no test that reproduces the bug';
+
+    public const string PASSES_ON_THE_BASE = 'the regression test passes on the base too, so it proves nothing';
+
+    public const string NOT_RUN = 'the regression tests of the bug head could not run';
+
     public function __construct(
         private CheckJobs $jobs,
         private HandBackFile $files,
@@ -36,12 +42,6 @@ final readonly class PrePushCheck
         private LoggerInterface $logger,
     ) {
     }
-
-    public const string NO_TEST = 'the bug head adds or changes no test that reproduces the bug';
-
-    public const string PASSES_ON_THE_BASE = 'the regression test passes on the base too, so it proves nothing';
-
-    public const string NOT_RUN = 'the regression tests of the bug head could not run';
 
     // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed; a bug head that passed gives its regression runs for the pull request's Evidence.
     public function check(BuildTaskRequest $request, string $bundle, TaskKind $kind): RegressionRuns|string|null
