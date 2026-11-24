@@ -25,11 +25,11 @@ Watch the 90-second demo: [https://youtu.be/-8v0nflAQBk](https://youtu.be/-8v0nf
 
 First clone and start Intakt as in steps 1 and 2 of path a.
 
-1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens the newest review, since the board is then at rest; `/?board=1` is the board on any device). Paste the key or token in card 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Intakt asks the provider once; the page then reads "The ... key ending in ... is kept. Restart Intakt to use it." Calls are billed to the key's owner.
+1. Open http://localhost:7781/setup?step=3, the AI account step of the setup wizard (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens the newest review, since the board is then at rest; `/?board=1` is the board on any device). Paste the key or token in the field ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Intakt asks the provider once; the page then reads "The ... key ending in ... is kept. Restart Intakt to use it." Calls are billed to the key's owner.
 2. Restart as the page says: `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
-3. Reload http://localhost:7781/setup: card 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
-   - **If you skipped path a:** press **Start the first review** in card 3. Its live review page opens: each reviewer's row fills in as it answers, then the owl's verdict card gives the outcome and the groups below it list what to fix.
-   - **If you played path a:** card 3 shows **Open the review** for the recorded run and no start button. Run `docker compose exec intakt php bin/console intakt:demo` instead. It runs the same live review and prints the verdict, each reviewer, the act list and an "Open the review:" line with the address of its review page.
+3. Open http://localhost:7781/setup?step=4, the Check step: it now reads "1 project is configured." and lists the `sample` project. Then open http://localhost:7781/setup?step=5, the Done step, and start the live review:
+   - **If you skipped path a:** press **Start the first review** under "First review". Its live review page opens: each reviewer's row fills in as it answers, then the owl's verdict card gives the outcome and the groups below it list what to fix.
+   - **If you played path a:** "First review" shows **Open the review** for the recorded run and no start button. Run `docker compose exec intakt php bin/console intakt:demo` instead. It runs the same live review and prints the verdict, each reviewer, the act list and an "Open the review:" line with the address of its review page.
 
 ## c. With your agent over MCP
 

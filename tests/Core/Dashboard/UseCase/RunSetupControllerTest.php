@@ -139,6 +139,9 @@ final class RunSetupControllerTest extends WebTestCase
 
     private string $path = '/setup';
 
+    /** @var array<string, mixed>|null */
+    private ?array $posted = null;
+
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
 
@@ -264,17 +267,59 @@ final class RunSetupControllerTest extends WebTestCase
         $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         $form = $page->filter('#step-repository form.check-repository');
-        self::assertSame('get', $form->attr('method'));
-        self::assertSame('/setup', $form->attr('action'));
-        self::assertSame('1', $form->filter('input[type=hidden][name=step]')->attr('value'));
+        self::assertSame('post', $form->attr('method'));
+        self::assertSame('/setup?step=1', $form->attr('action'));
         self::assertSame('Repository address', $form->filter('label[for=repo]')->text());
         self::assertCount(1, $form->filter('input#repo.input[name=repository]'));
         self::assertCount(0, $page->filter('.field-error, [aria-invalid], .detected'));
     }
 
+    public function testCheckingAnAddressKeepsItsCredentialsOutOfTheUrl(): void
+    {
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $form = $page->selectButton('Check the address')->form(['repository' => 'https://someone:marker@github.com/acme/field-notes']);
+
+        $this->browser()->submit($form);
+
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('marker', $this->browser()->getRequest()->getUri());
+        self::assertSame(RepositoryField::NOT_AN_ADDRESS, $this->browser()->getCrawler()->filter('#step-repository .field-error')->text());
+    }
+
+    public function testARepositoryInTheQueryIsNotChecked(): void
+    {
+        $page = $this->onStep('1&repository=https%3A%2F%2Fgithub.com%2Facme%2Ffield-notes')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('.field-error, [aria-invalid], .detected'));
+        self::assertSame('', $page->filter('input#repo')->attr('value'));
+    }
+
+    public function testAStepSentAsAListOpensTheFirstStep(): void
+    {
+        $this->path = '/setup?step%5B%5D=2';
+
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Step 1 of 5: Repository', $page->filter('.wizard .step-count')->text());
+    }
+
+    public function testARepositorySentAsAListOnAnotherStepIsIgnored(): void
+    {
+        $page = $this->onStep('2&repository%5B%5D=ignored')->posting(['repository' => ['ignored']])->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Step 2 of 5: GitHub App', $page->filter('.wizard .step-count')->text());
+    }
+
+    public function testARepositorySentAsAListOnTheFirstStepReadsAsEmpty(): void
+    {
+        $page = $this->onStep('1')->posting(['repository' => ['acme/field-notes']])->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame(RepositoryField::EMPTY, $page->filter('#step-repository .field-error')->text());
+    }
+
     public function testAnEmptyRepositoryAddressShowsTheErrorAndStaysOnStepOne(): void
     {
-        $page = $this->onStep('1&repository=')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('1')->posting(['repository' => ''])->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('Step 1 of 5: Repository', $page->filter('.wizard .step-count')->text());
         self::assertSame(RepositoryField::EMPTY, $page->filter('#step-repository .field-error')->text());
@@ -285,7 +330,7 @@ final class RunSetupControllerTest extends WebTestCase
 
     public function testARepositoryOnAnotherHostIsRefusedAndKeptInTheField(): void
     {
-        $page = $this->onStep('1&repository=https%3A%2F%2Fgitlab.com%2Facme%2Ffield-notes')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('1')->posting(['repository' => 'https://gitlab.com/acme/field-notes'])->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame(RepositoryField::NOT_GITHUB, $page->filter('#step-repository .field-error')->text());
         self::assertSame('https://gitlab.com/acme/field-notes', $page->filter('input#repo')->attr('value'));
@@ -293,7 +338,7 @@ final class RunSetupControllerTest extends WebTestCase
 
     public function testAGitHubAddressIsShownAsTheDetectedRepository(): void
     {
-        $page = $this->onStep('1&repository=https%3A%2F%2Fgithub.com%2Facme%2Ffield-notes')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('1')->posting(['repository' => 'https://github.com/acme/field-notes'])->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('GitHub, repository acme/field-notes', $page->filter('#step-repository .detected p')->text());
         self::assertCount(0, $page->filter('.field-error, [aria-invalid]'));
@@ -308,7 +353,7 @@ final class RunSetupControllerTest extends WebTestCase
 
     public function testATypedAddressWithMarkupIsEscaped(): void
     {
-        $page = $this->onStep('1&repository=%3Cb%3Ebold%3C%2Fb%3E')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('1')->posting(['repository' => '<b>bold</b>'])->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertCount(0, $page->filter('main b'));
         self::assertSame('<b>bold</b>', $page->filter('input#repo')->attr('value'));
@@ -992,6 +1037,14 @@ final class RunSetupControllerTest extends WebTestCase
         return $this;
     }
 
+    /** @param array<string, mixed> $fields */
+    private function posting(array $fields): self
+    {
+        $this->posted = $fields;
+
+        return $this;
+    }
+
     /**
      * @param list<string> $keys
      */
@@ -1018,7 +1071,7 @@ final class RunSetupControllerTest extends WebTestCase
         if ($this->commands instanceof MessageBusInterface) {
             self::getContainer()->set('command.bus', $this->commands);
         }
-        $page = $browser->request('GET', $this->path);
+        $page = null === $this->posted ? $browser->request('GET', $this->path) : $browser->request('POST', $this->path, $this->posted);
         self::assertResponseIsSuccessful();
 
         return $page;

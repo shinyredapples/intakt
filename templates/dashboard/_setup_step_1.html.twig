@@ -1,8 +1,7 @@
 <section class="step" id="step-repository" data-s="1" aria-labelledby="s1h">
     <h1 id="s1h">Connect your repository</h1>
     <p class="lead">Intakt works from your repository's issues and pull requests. Paste its address.</p>
-    <form method="get" action="{{ path(route) }}" class="check-repository" novalidate>
-        <input type="hidden" name="{{ query }}" value="{{ step.value }}">
+    <form method="post" action="{{ path(route, {(query): step.value}) }}" class="check-repository" novalidate>
         <div class="field">
             <label for="repo">Repository address</label>
             <input class="input" id="repo" type="text" inputmode="url" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\RunSetup\\RunSetupController::REPOSITORY') }}" value="{{ repository.input }}" autocomplete="off" spellcheck="false" aria-describedby="repo-hint{% if repository.error %} repo-error{% endif %}"{% if repository.error %} aria-invalid="true"{% endif %}>

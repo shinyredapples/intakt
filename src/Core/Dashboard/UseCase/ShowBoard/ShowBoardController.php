@@ -57,7 +57,7 @@ final readonly class ShowBoardController
 
         // Only on a demo install, because an install without the sample has nothing on the setup wizard to start and keeps the board's own opening; it lands on the Ready step, which holds the recorded review and the first review's start.
         if ($board->hasNoReview() && $this->sample->hasRepository()) {
-            return $this->variesByDevice($this->redirectTo(DashboardRoutes::RUN_SETUP, [RunSetupController::STEP => (string) SetupStep::Ready->value]));
+            return $this->variesByDevice($this->redirectTo(DashboardRoutes::RUN_SETUP, [RunSetupController::STEP => SetupStep::Ready->value]));
         }
 
         if ($this->landsOnWaiting($request)) {
@@ -82,7 +82,7 @@ final readonly class ShowBoardController
     }
 
     /**
-     * @param array<string, string> $parameters
+     * @param array<string, int|string> $parameters
      */
     private function redirectTo(string $route, array $parameters = []): RedirectResponse
     {

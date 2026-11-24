@@ -26,22 +26,35 @@ final readonly class RunSetupController
     ) {
     }
 
-    #[Route('/setup', name: DashboardRoutes::RUN_SETUP, methods: ['GET'])]
+    // The address check is posted, because a pasted address may hold credentials and a query would put them in the browser's history; it keeps nothing, so it needs no token.
+    #[Route('/setup', name: DashboardRoutes::RUN_SETUP, methods: ['GET', 'POST'])]
     public function __invoke(Request $request): Response
     {
-        $step = SetupStep::fromQuery($request->query->getString(self::STEP));
+        $step = SetupStep::fromQuery(self::text($request->query->all()[self::STEP] ?? ''));
 
         return new Response($this->pages->render($request, 'dashboard/setup.html.twig', [
             'step' => $step,
             'steps' => SetupStep::cases(),
-            'repository' => $this->repositoryOf($request),
+            'repository' => $this->repositoryOf($request, $step),
             'first_run' => $this->steps->firstRun(),
             'demo' => $this->demo->readiness(),
         ]));
     }
 
-    private function repositoryOf(Request $request): RepositoryField
+    private function repositoryOf(Request $request, SetupStep $step): RepositoryField
     {
-        return $request->query->has(self::REPOSITORY) ? RepositoryField::submitted($request->query->getString(self::REPOSITORY)) : RepositoryField::unsubmitted();
+        $fields = $request->request->all();
+
+        if (SetupStep::Repository !== $step || !$request->isMethod('POST') || !array_key_exists(self::REPOSITORY, $fields)) {
+            return RepositoryField::unsubmitted();
+        }
+
+        return RepositoryField::submitted(self::text($fields[self::REPOSITORY]));
+    }
+
+    // A field sent as a list is no step and no address, so it reads as empty instead of failing the request.
+    private static function text(mixed $value): string
+    {
+        return is_string($value) ? $value : '';
     }
 }

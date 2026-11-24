@@ -25,6 +25,9 @@ final class RepositoryFieldTest extends TestCase
         yield 'a name with dots and underscores' => ['acme/my_repo.js', 'acme/my_repo.js'];
         yield 'an owner of 39 characters' => [str_repeat('a', 39).'/x', str_repeat('a', 39).'/x'];
         yield 'an owner with an inner dash' => ['ac-me/x', 'ac-me/x'];
+        yield 'a name of 100 characters' => ['acme/'.str_repeat('x', 100), 'acme/'.str_repeat('x', 100)];
+        yield 'a clone address with a name of 100 characters' => ['https://github.com/acme/'.str_repeat('x', 100).'.git', 'acme/'.str_repeat('x', 100)];
+        yield 'a clone address with a trailing slash' => ['https://github.com/acme/field-notes.git/', 'acme/field-notes'];
     }
 
     #[DataProvider('addresses')]
@@ -63,6 +66,10 @@ final class RepositoryFieldTest extends TestCase
         yield 'the parent folder as name' => ['acme/..', RepositoryField::NOT_AN_ADDRESS];
         yield 'only .git as name' => ['acme/.git', RepositoryField::NOT_AN_ADDRESS];
         yield 'a name with a slash' => ['acme/x/y', RepositoryField::NOT_AN_ADDRESS];
+        yield 'a clone address with a name of 101 characters' => ['https://github.com/acme/'.str_repeat('x', 101).'.git', RepositoryField::NOT_AN_ADDRESS];
+        yield 'an empty segment before the owner' => ['https://github.com//acme/field-notes', RepositoryField::NOT_AN_ADDRESS];
+        yield 'two trailing slashes' => ['https://github.com/acme/field-notes//', RepositoryField::NOT_AN_ADDRESS];
+        yield 'a user and password in the address' => ['https://someone:p@github.com/acme/field-notes', RepositoryField::NOT_AN_ADDRESS];
         yield 'markup' => ['<b>acme</b>/x', RepositoryField::NOT_AN_ADDRESS];
     }
 

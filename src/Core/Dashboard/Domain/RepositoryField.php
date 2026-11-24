@@ -57,6 +57,7 @@ final readonly class RepositoryField
     }
 
     // An address that is no https URL on GitHub gives an empty path, so it fails as no address at all; another host gives null.
+    // Only the one leading slash and one trailing slash are dropped, so an empty segment such as github.com//owner/name stays wrong.
     private static function pathOfUrl(string $address): ?string
     {
         $url = Uri::parse($address);
@@ -65,17 +66,28 @@ final readonly class RepositoryField
             return '';
         }
 
-        return in_array($url->getHost(), self::GITHUB_HOSTS, true) ? trim($url->getPath(), '/') : null;
-    }
-
-    private static function repositoryIn(string $path): ?string
-    {
-        if (1 !== preg_match('~\A('.self::OWNER.')/('.self::NAME.')\z~', $path, $parts)) {
+        if (!in_array($url->getHost(), self::GITHUB_HOSTS, true)) {
             return null;
         }
 
-        $name = str_ends_with($parts[2], '.git') ? substr($parts[2], 0, -4) : $parts[2];
+        $path = $url->getPath();
 
-        return in_array($name, ['', '.', '..'], true) ? null : $parts[1].'/'.$name;
+        if (!str_starts_with($path, '/')) {
+            return '';
+        }
+
+        return str_ends_with($path, '/') ? substr($path, 1, -1) : substr($path, 1);
+    }
+
+    // The clone suffix is dropped before the name is matched, because GitHub's 100-character limit counts the name without it.
+    private static function repositoryIn(string $path): ?string
+    {
+        $bare = str_ends_with($path, '.git') ? substr($path, 0, -4) : $path;
+
+        if (1 !== preg_match('~\A('.self::OWNER.')/('.self::NAME.')\z~', $bare, $parts)) {
+            return null;
+        }
+
+        return in_array($parts[2], ['.', '..'], true) ? null : $parts[1].'/'.$parts[2];
     }
 }
