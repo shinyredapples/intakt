@@ -282,7 +282,7 @@ final class ShellLexer
     {
         $word = substr($this->source, $offset, $length);
         $end = $offset + $length;
-        $isWhole = str_contains(self::WORD_BREAKS, $this->source[$end] ?? "\n");
+        $isWhole = str_contains(self::WORD_BREAKS, $this->source[$this->afterLineJoins($end)] ?? "\n");
         $isCommand = $this->atCommandStart && $isWhole;
         $this->atWordStart = false;
         $this->atCommandStart = $isCommand && in_array($word, self::COMMAND_PREFIX_WORDS, true);
@@ -294,6 +294,16 @@ final class ShellLexer
             'esac' === $word && self::CASE === $frame => $this->afterClosing($end - 1),
             default => $end,
         };
+    }
+
+    // Because bash removes a backslash before a line feed before it splits words, a word ends only at the first other character after such pairs.
+    private function afterLineJoins(int $offset): int
+    {
+        while ("\\\n" === substr($this->source, $offset, 2)) {
+            $offset += 2;
+        }
+
+        return $offset;
     }
 
     private function noteBreakOrCharacter(string $char): void
