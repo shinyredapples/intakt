@@ -162,10 +162,10 @@ final class InstanceTest extends InstanceTestCase
 
     public function testACommandThatOverrunsItsTimeIsKilledWithExitCode124(): void
     {
-        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1']);
+        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
 
         self::assertSame(124, $run['exit']);
-        self::assertStringContainsString('ran longer than 1 seconds and was killed', $run['errors']);
+        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $run['errors']);
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
