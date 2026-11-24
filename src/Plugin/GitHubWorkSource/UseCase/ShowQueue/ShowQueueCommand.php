@@ -51,12 +51,6 @@ final readonly class ShowQueueCommand
         }
     }
 
-    // Raw and without control characters, because a title or a quoted wait line is issue text anyone can write, and it must not restyle or rewrite the terminal.
-    private function printLine(SymfonyStyle $io, string $line): void
-    {
-        $io->writeln(preg_replace('/[\x00-\x1F\x7F]/', ' ', $line) ?? '', OutputInterface::OUTPUT_RAW);
-    }
-
     private function printHeldTasks(SymfonyStyle $io, string $project, WorkQueue $queue): void
     {
         $io->writeln(sprintf('Held tasks of project %s:', $project));
@@ -76,5 +70,11 @@ final readonly class ShowQueueCommand
         $line = sprintf('#%d %s', $task->number, $task->title);
 
         return null === $task->reworkOf ? $line : sprintf('%s (rework of #%d)', $line, $task->reworkOf);
+    }
+
+    // Raw and without control characters, because a title or a quoted wait line is issue text anyone can write, and it must not restyle or rewrite the terminal.
+    private function printLine(SymfonyStyle $io, string $line): void
+    {
+        $io->writeln(preg_replace('/[\x00-\x1F\x7F]/', ' ', $line) ?? '', OutputInterface::OUTPUT_RAW);
     }
 }
