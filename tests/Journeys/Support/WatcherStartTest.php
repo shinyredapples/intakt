@@ -10,13 +10,27 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherSchedule;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Clock\MockClock;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Messenger\Event\WorkerRunningEvent;
+use Symfony\Component\Messenger\Event\WorkerStartedEvent;
+use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
+use Symfony\Component\Messenger\Handler\HandlersLocator;
+use Symfony\Component\Messenger\MessageBus;
+use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
+use Symfony\Component\Messenger\Worker;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Scheduler\Generator\MessageGenerator;
+use Symfony\Component\Scheduler\Messenger\SchedulerTransport;
 use Symfony\Component\Yaml\Yaml;
 
 #[CoversClass(WatcherStart::class)]
@@ -24,12 +38,17 @@ use Symfony\Component\Yaml\Yaml;
 #[UsesClass(SampleRepository::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
+#[UsesClass(WatcherSchedule::class)]
+#[UsesClass(WatchedProjects::class)]
+#[UsesClass(WatchPullRequests::class)]
 final class WatcherStartTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/../../../fixtures/sample-repository';
     private const string ROUND = '0198a1b2-0000-7000-8000-000000000001';
     private const string OTHER_ROUND = '0198a1b2-0000-7000-8000-000000000002';
     private const string EARLIER_EVENT = '01a19b80-0000-7000-8000-000000000001';
+    // Chosen past the 30 seconds the worker's own time limit once allowed after the interval, because that is the order that lost the tick, and inside the process timeout's margin, because the margin also covers the worker's boot.
+    private const int LATE_FIRST_POLL_SECONDS = 45;
 
     private string $directory = '';
 
@@ -40,6 +59,8 @@ final class WatcherStartTest extends TestCase
 
     /** @var list<array{arguments: list<string>, environment: array<string,string>, seconds: int}> */
     private array $calls = [];
+
+    private bool $timesOut = false;
 
     public function testTheRecordingHoldsTheSamplePullRequestAndASuccessfulCiRunForItsHead(): void
     {
@@ -78,17 +99,34 @@ final class WatcherStartTest extends TestCase
         self::assertCount(1, $recorded);
     }
 
-    public function testTheTickWaitsLongerThanTheScheduleIntervalAndItsProcessLongerStill(): void
+    public function testTheTickHasNoTimeLimitOfItsOwnAndItsProcessWaitsLongerThanTheScheduleInterval(): void
     {
         $this->start($this->ledgerWith($this->queued(self::ROUND, $this->head)));
 
         $tick = array_find($this->calls, static fn (array $call): bool => 'messenger:consume' === $call['arguments'][0]) ?? self::fail('no tick ran');
-        $limit = array_find($tick['arguments'], static fn (string $argument): bool => str_starts_with($argument, '--time-limit=')) ?? self::fail('the tick has no time limit');
-        $seconds = (int) substr($limit, strlen('--time-limit='));
         $interval = new DateTimeImmutable('@0')->add(DateInterval::createFromDateString(WatcherSchedule::INTERVAL))->getTimestamp();
 
-        self::assertGreaterThan($interval, $seconds);
-        self::assertGreaterThan($seconds, $tick['seconds']);
+        self::assertNull($this->optionOf($tick['arguments'], '--time-limit='));
+        self::assertGreaterThan($interval, $tick['seconds']);
+    }
+
+    public function testAWorkerWhoseProcessTimesOutBeforeATickFailsNamingTheRecording(): void
+    {
+        $this->timesOut = true;
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/recording '.preg_quote($this->recordingFile(), '/').' handled no tick within \d+ seconds/');
+
+        $this->start($this->ledgerWith());
+    }
+
+    public function testTheWorkerStillHandlesTheTickWhenItsFirstPollComesLongAfterItStarted(): void
+    {
+        $this->start($this->ledgerWith($this->queued(self::ROUND, $this->head)));
+
+        $tick = array_find($this->calls, static fn (array $call): bool => 'messenger:consume' === $call['arguments'][0]) ?? self::fail('no tick ran');
+
+        self::assertSame([SampleProject::NAME], $this->ticksHandledBy($tick['arguments'], $tick['seconds'], self::LATE_FIRST_POLL_SECONDS));
     }
 
     public function testAConfigurationWithoutTheSampleProjectFailsNamingTheFile(): void
@@ -201,7 +239,55 @@ final class WatcherStartTest extends TestCase
     {
         $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
 
+        if ($this->timesOut && 'messenger:consume' === $arguments[0]) {
+            throw new ProcessTimedOutException(new Process(['bin/console', ...$arguments], timeout: $seconds), ProcessTimedOutException::TYPE_GENERAL);
+        }
+
         return 'intakt:ledger:events' === $arguments[0] ? array_shift($this->ledgers) ?? '' : '';
+    }
+
+    // Symfony's own worker, scheduler transport and the watcher's schedule on one MockClock, given the options messenger:consume builds from the tick's arguments, so the order a busy machine produces (the first poll of the schedule long after the worker started) is forced instead of waited for; the process timeout ends a worker that never gets the tick.
+    /**
+     * @param list<string> $arguments
+     *
+     * @return list<string>
+     */
+    private function ticksHandledBy(array $arguments, int $processSeconds, int $firstPollAfter): array
+    {
+        $clock = new MockClock();
+        $deadline = $clock->now()->getTimestamp() + $processSeconds;
+        $handled = [];
+        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([WatchPullRequests::class => [static function (WatchPullRequests $tick) use (&$handled): void {
+            $handled[] = $tick->project;
+        }]]))]);
+        $events = new EventDispatcher();
+        $events->addListener(WorkerStartedEvent::class, static fn () => $clock->sleep($firstPollAfter));
+        $events->addListener(WorkerRunningEvent::class, static function (WorkerRunningEvent $running) use ($clock, $deadline): void {
+            if ($clock->now()->getTimestamp() >= $deadline) {
+                $running->getWorker()->stop();
+            }
+        });
+        $limit = $this->optionOf($arguments, '--limit=');
+
+        if (null !== $limit) {
+            $events->addSubscriber(new StopWorkerOnMessageLimitListener($limit));
+        }
+
+        $schedule = new WatcherSchedule(new WatchedProjects([SampleProject::NAME => ['repository' => 'sample', 'base' => SampleRepository::BASE, 'task' => SampleProject::TASK]]));
+        new Worker(['scheduler_watcher' => new SchedulerTransport(new MessageGenerator($schedule, 'watcher', $clock))], $bus, $events, clock: $clock)
+            ->run(['time_limit' => $this->optionOf($arguments, '--time-limit=')]);
+
+        return $handled;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function optionOf(array $arguments, string $prefix): ?int
+    {
+        $option = array_find($arguments, static fn (string $argument): bool => str_starts_with($argument, $prefix));
+
+        return null === $option ? null : (int) substr($option, strlen($prefix));
     }
 
     /**

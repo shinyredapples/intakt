@@ -37,6 +37,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
@@ -277,11 +278,18 @@ return static function (ContainerConfigurator $container): void {
     $disabled = [];
     $disabledAccounts = [];
     $enabledAccounts = [];
+    $listedAccounts = [];
+    // Keyed as the configuration tree normalizes them, so a provider listed as openai-compatible counts as listed under openai_compatible.
+    $explicitAccounts = is_array($contents['accounts'] ?? null) ? array_flip(array_map(static fn (int|string $key): string => str_replace('-', '_', (string) $key), array_keys($contents['accounts']))) : [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
-        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
+        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command; accounts the file lists for it still show, without credentials.
         if (Provider::Codex === $provider && !isset($configuration[Provider::Codex->configKey()])) {
+            if (array_key_exists($provider->value, $explicitAccounts)) {
+                $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
+            }
+
             continue;
         }
 
@@ -299,6 +307,11 @@ return static function (ContainerConfigurator $container): void {
             }
 
             $missingOf[$name] = $missing;
+        }
+
+        // A provider without a key that the file does not list under accounts keeps only its implicit default account, so the owner never set it up and only the disabled-provider note names it.
+        if ([] !== $enabled || array_key_exists($provider->value, $explicitAccounts)) {
+            $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
         }
 
         // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
@@ -352,6 +365,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    $container->parameters()->set(AiServices::LISTED_ACCOUNTS, $listedAccounts);
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
         static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),
@@ -381,6 +395,10 @@ return static function (ContainerConfigurator $container): void {
         ->autowire()
         ->autoconfigure()
         ->arg('$codex', new Parameter(Provider::Codex->parameter()));
+    // Built from the watch sections here, because the Contract class takes typed labels and the parameter holds arrays.
+    $container->services()->set(EligibilityLabels::class)
+        ->factory(WatchConfiguration::eligibilityLabelsOf(...))
+        ->args([new Parameter(WatcherServices::PROJECTS)]);
     $container->services()->set(AiServices::PROVIDER_PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');
