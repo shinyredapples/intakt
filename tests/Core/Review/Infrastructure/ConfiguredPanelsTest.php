@@ -215,6 +215,27 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness'], $this->roles($panel));
     }
 
+    public function testAModelLabelSetsTheTierOfEveryReviewer(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([Tier::Light], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testTheLastModelLabelWins(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light', 'model:standard')));
+
+        self::assertSame([Tier::Standard], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testAModelLabelThatNamesNoTierKeepsTheConfiguredTier(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:gpt-9')));
+
+        self::assertSame([Tier::Strong], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
     private function ruled(): ConfiguredPanels
     {
         return new ConfiguredPanels(['alpha' => [

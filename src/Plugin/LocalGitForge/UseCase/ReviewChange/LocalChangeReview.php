@@ -116,7 +116,7 @@ final readonly class LocalChangeReview
 
     private function panelFor(ReviewChangeInput $input, Change $change): Panel
     {
-        return $this->panels->panelForChange($input->project, $this->describe($change, $input->labels));
+        return $this->panels->panelForChange($input->project, $this->describe($change, $input->labels ?? new Labels()));
     }
 
     private function identityOf(ReviewChangeInput $input, Change $change, Panel $panel): VerdictIdentity

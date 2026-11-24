@@ -92,6 +92,8 @@ An approval always names one exact version. If the change itself is pushed again
 - **Pause** a project or the whole install from the dashboard's [admin area](a-tour-of-the-dashboard.md#pausing): running jobs finish, nothing new starts. Every pause ends at a time you choose, or when you resume.
 - **Shares:** with several projects, each gets a share of the week's AI allowance. Setting a project's share to 0 pauses it like the Pause button: running jobs finish, then no builds and no reviews, open pull requests included, until you raise it again.
 
-## Labels on a reviewed pull request (in progress)
+## Labels on a reviewed pull request
 
-The code that decides which labels of a pull request count is written and tested: only labels a person with write access applied, and still on the pull request, count; when two values of one family are present (two `model:` labels, say) the one applied last wins; `review:` may hold several values. Intakt can also swap its `status:` label (`in-review`, `waiting-on-you`) and, when a person changed it, put it back with one comment. A round does not use any of this yet, so today `review:full` and `model:` on a pull request change nothing and no status label is written.
+On GitHub, two labels steer a review. `review:full` asks for the full panel of reviewers, and `model:<tier>` (`strong`, `standard` or `light`) sets the tier the reviewers start on. Only labels a person with write access applied, and still on the pull request, count; when two values of one family (two `model:` labels, say) are present, the one applied last wins. If Intakt cannot read the labels, none counts and the review runs on the configured panel.
+
+Intakt also keeps one `status:` label on the pull request in step with the review: `status:in-review` while a round runs and `status:waiting-on-you` once its verdict is published. If a person changes that label, Intakt puts it back and says so in one comment.

@@ -39,12 +39,7 @@ final class ReviewChangeInput
     public string $base = 'main';
 
     // Set only by a round the watcher starts, so the console has no option for it.
-    public Labels $labels;
-
-    public function __construct()
-    {
-        $this->labels = new Labels();
-    }
+    public ?Labels $labels = null;
 
     public static function startedBy(StartReview $command): self
     {
