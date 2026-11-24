@@ -126,9 +126,21 @@ final readonly class RoundLedgerReading implements RoundCosts
     {
         $recorded = $this->usageRows();
         $models = $this->callsStartedFor($roundId, $recorded);
-        $ended = array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
+        $cost = Cost::none();
+        $unended = $models;
 
-        return $ended->plus($this->costOfUnended($recorded, $models));
+        foreach ($recorded as $row) {
+            $ended = $this->endingOf($row);
+
+            if (null === $ended || !array_key_exists($ended->call, $models)) {
+                continue;
+            }
+
+            unset($unended[$ended->call]);
+            $cost = $cost->plus($this->costOfEnding($ended, $models));
+        }
+
+        return $cost->plus($this->costOfUnended($unended));
     }
 
     /**
@@ -272,29 +284,19 @@ final readonly class RoundLedgerReading implements RoundCosts
     /**
      * @param array<string, string|null> $models
      */
-    private function costOfEnding(RecordedEvent $row, array $models): Cost
+    private function costOfEnding(UsageSettled|UsageUnsettled $ended, array $models): Cost
     {
-        $ended = $this->endingOf($row);
-
-        if (null === $ended || !array_key_exists($ended->call, $models)) {
-            return Cost::none();
-        }
-
         $cost = $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
 
         return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
     }
 
     /**
-     * @param list<RecordedEvent>        $recorded
-     * @param array<string, string|null> $models
+     * @param array<string, string|null> $unended
      */
     // Priced as zero tokens, because a call still running or cut off before its ending row recorded none, yet a model without a price must still read as unknown.
-    private function costOfUnended(array $recorded, array $models): Cost
+    private function costOfUnended(array $unended): Cost
     {
-        $endedCalls = array_filter(array_map(fn (RecordedEvent $row): ?string => $this->endingOf($row)?->call, $recorded), static fn (?string $call): bool => null !== $call);
-        $unended = array_diff_key($models, array_flip($endedCalls));
-
         return array_reduce($unended, fn (Cost $sum, ?string $model): Cost => $sum->plus($this->prices->costOf($model, TokenFigures::none())), Cost::none());
     }
 
