@@ -267,7 +267,7 @@ final class ShellLexer
 
     private function noteBreakOrCharacter(string $char): void
     {
-        $this->atCommandStart = str_contains(self::COMMAND_BREAKS, $char) || ($this->atCommandStart && str_contains(self::COMMAND_PREFIX_CHARACTERS, $char));
+        $this->atCommandStart = str_contains($this->atCommandStart ? self::COMMAND_BREAKS.self::COMMAND_PREFIX_CHARACTERS : self::COMMAND_BREAKS, $char);
         $this->atWordStart = str_contains(self::WORD_BREAKS, $char);
     }
 
@@ -362,7 +362,8 @@ final class ShellLexer
 
     private function afterDelimiterWord(int $offset): int
     {
-        while ($offset < $this->length && !str_contains(self::WORD_BREAKS, $this->source[$offset])) {
+        // Because the end of the source ends the word as a line feed does, a missing character reads as one.
+        while (!str_contains(self::WORD_BREAKS, $this->source[$offset] ?? "\n")) {
             $offset = $this->afterDelimiterPart($offset);
         }
 

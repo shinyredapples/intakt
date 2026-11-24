@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
 final readonly class ShellHereDocument
 {
     public function __construct(private string $delimiter, private bool $quoted, private bool $tabsStripped)
