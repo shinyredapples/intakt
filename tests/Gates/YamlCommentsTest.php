@@ -80,7 +80,7 @@ final class YamlCommentsTest extends TestCase
         yield 'a marker in a quoted entry of a flow sequence' => ["list: [a, '# TODO later']\n"];
         yield 'a marker in a value joined to its key in a flow mapping' => ["map: {\"a\":\"# TODO later\"}\n"];
         yield 'a marker in a block scalar as an explicit key' => ["? |\n  # TODO later\n: value\n"];
-        yield 'a marker in a literal block scalar' =>["script: |\n  # TODO later\n"];
+        yield 'a marker in a literal block scalar' => ["script: |\n  # TODO later\n"];
         yield 'a marker in a folded block scalar after a blank line' => ["text: >\n  a\n\n  # TODO later\n"];
         yield 'a marker in a block scalar with keep chomping and an indentation indicator' => ["text: |+2\n  # TODO later\n"];
         yield 'a marker in a block scalar behind an anchor before a compact key' => ["- &id key: |\n    # TODO later\n"];
