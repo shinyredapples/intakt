@@ -52,14 +52,15 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         exit(3);
         PHP_WRAP;
 
-        // Only the server this run launched is read, by its Caddyfile in this test's scratch folder, and only whether its value is the instance's own admin address is printed.
+        // The scratch folder, because another FrankenPHP on the machine must neither satisfy the assertion nor leak its environment into the failure output.
         $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp(), 'FRANKENPHP_ADMIN_URL' => 'http://localhost:2019'], [PHP_BINARY, '-r', $command, $this->scratch.'/tmp/']);
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame(0, $run['exit']);
         self::assertMatchesRegularExpression('#^Worker PHP Thread - '.preg_quote((string) realpath(self::ROOT), '#').'/public/index\.php served [1-9]\d*$#m', $run['output']);
         self::assertMatchesRegularExpression('/^listeners: 0100007F$/m', $run['output']);
-        self::assertSame(['server admin url: own'], preg_grep('/^server admin url: /', explode("\n", $run['output'])) |> array_values(...));
+        self::assertSame(1, preg_match_all('/^server admin url: /m', $run['output']));
+        self::assertMatchesRegularExpression('/^server admin url: own$/m', $run['output']);
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
     }
