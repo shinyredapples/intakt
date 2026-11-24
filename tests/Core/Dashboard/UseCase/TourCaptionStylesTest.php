@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
-// The sheet is read as text, as FirstRunStylesTest does, because no page is needed to see a rule.
+// The sheet is read as text, as RunSetupStylesTest does, because no page is needed to see a rule.
 #[CoversNothing]
 final class TourCaptionStylesTest extends TestCase
 {

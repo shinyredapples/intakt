@@ -1,0 +1,25 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Set up - Intakt{% endblock %}
+
+{% block content_width %} wide{% endblock %}
+
+{% block body %}
+{%- set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP') %}
+{%- set query = constant('Intakt\\Core\\Dashboard\\UseCase\\RunSetup\\RunSetupController::STEP') %}
+<div class="setup wizard">
+    {#- Numbered, because the steps are a real sequence; each marker is a link, so any step opens without a script. -#}
+    <ol class="steps" aria-label="Setup progress">
+        {%- for marker in steps %}
+        {%- set state = marker.markerAt(step) %}
+        <li class="{{ state }}" data-s="{{ marker.value }}"{% if state == 'current' %} aria-current="step"{% endif %}><a href="{{ path(route, {(query): marker.value}) }}"><span>{{ marker.value }} {{ marker.label }}</span></a></li>
+        {%- endfor %}
+    </ol>
+    <p class="step-count">{{ step.count }}</p>
+
+    {#- Back and Continue are links to the neighboring steps, so each partial only says what its own buttons are. -#}
+    {%- set back = step.previous ? path(route, {(query): step.previous.value}) : null %}
+    {%- set continue = step.next ? path(route, {(query): step.next.value}) : null %}
+    {{ include('dashboard/_setup_step_' ~ step.value ~ '.html.twig') }}
+</div>
+{% endblock %}
