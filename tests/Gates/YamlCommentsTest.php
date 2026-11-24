@@ -54,6 +54,7 @@ final class YamlCommentsTest extends TestCase
         yield 'a comment after a block scalar behind an anchor before a compact key' => ["- &id key: |\n    echo a\n  other: 1 # TODO later\n", [3 => 'TODO']];
         yield 'a comment after a block scalar with a tag and an anchor before its indicator' => ["key: !!str &text |\n  # a line of the text\n# TODO later\n", [3 => 'TODO']];
         yield 'a comment after an empty block scalar' => ["key: |\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a byte order mark' => ["\u{FEFF}# TODO later\n", [1 => 'TODO']];
     }
 
     /**
@@ -77,7 +78,9 @@ final class YamlCommentsTest extends TestCase
         yield 'a hash inside a plain value' => ["url: a#TODO later\n"];
         yield 'a hash inside a key' => ["C#TODO: later\n"];
         yield 'a marker in a quoted entry of a flow sequence' => ["list: [a, '# TODO later']\n"];
-        yield 'a marker in a literal block scalar' => ["script: |\n  # TODO later\n"];
+        yield 'a marker in a value joined to its key in a flow mapping' => ["map: {\"a\":\"# TODO later\"}\n"];
+        yield 'a marker in a block scalar as an explicit key' => ["? |\n  # TODO later\n: value\n"];
+        yield 'a marker in a literal block scalar' =>["script: |\n  # TODO later\n"];
         yield 'a marker in a folded block scalar after a blank line' => ["text: >\n  a\n\n  # TODO later\n"];
         yield 'a marker in a block scalar with keep chomping and an indentation indicator' => ["text: |+2\n  # TODO later\n"];
         yield 'a marker in a block scalar behind an anchor before a compact key' => ["- &id key: |\n    # TODO later\n"];
