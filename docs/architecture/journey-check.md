@@ -12,17 +12,35 @@ The script is Node.js (CommonJS) beside `bin/ui-check` and follows its contract:
 4. Each journey runs through `runJourney(browser, address, journey, folder, position)`, where `position` is its 1-based place in the run, in a new browser context (fresh cookies and storage), with `STEP_TIMEOUT_MS` as the page's default timeout. The steps run in order; the first one that throws ends the journey, and the first line of its error is kept (Playwright's call log follows on later lines).
 5. `report` prints one line per journey and a count; `exitCode` gives 0 when every journey passed and 1 when one failed. Every error that escapes `main` (a startup failure, a missing Playwright, a browser that does not launch) prints `Journey check stopped: <reason>` and ends with exit code 2.
 
-The journeys the check walks are the `JOURNEYS` list in the script. It is empty until part 2 of #3677 adds the first journey; the runner is proved by a trivial journey that only `tests/Core/Dashboard/UseCase/journey-check.browser.mjs` uses.
+The journeys the check walks are the `JOURNEYS` list in the script, exported with the patterns below so the tests run the same journey.
+
+## Journey 1: First run without a key
+
+Its five steps, by the names the report prints:
+
+| Step | Built from | Passes when |
+|---|---|---|
+| `open /setup and see the start` | `open('/setup')`, `seeRole('heading', 'See a real review')` | `/setup` loads and shows that heading |
+| `open /demo and see the demo run` | `open('/demo')`, `seeRole('heading', 'The demo run')` | `/demo` loads and shows that heading; nothing in `templates/` links to `/demo`, so the step opens it by its address |
+| `press the button "Play the demo run"` | `press('button', 'Play the demo run')` | the button exists and is clicked; the redirected demo page then follows the run to its review page (`assets/tour-caption.js`) once the live update arrives |
+| `wait for the verdict of the demo run` | `seeRole('heading', OUTCOME, VERDICT_TIMEOUT_MS)` | a visible heading matches `OUTCOME` within 180 seconds |
+| `see the recorded finding on the review page` | `seeRole('link', RECORDED_FINDING)` | a visible link's accessible name matches `RECORDED_FINDING` |
+
+`OUTCOME` is `/^(Approved|Changes needed|Blocked: .+|Failed: .+|Checked, but the outcome was not recorded)$/`: every heading `templates/dashboard/_verdict_card.html.twig` can show, so the wait ends on any verdict, including a judged pass without a recorded outcome, and never on another heading. `RECORDED_FINDING` is `/^The check changed from amount >= 100 to amount > 100\.(\s|$)/`: the headline of finding F1 of `fixtures/demo/sample-change-review.json` as its row in the review page's to-fix list names it (the code spans lose their backticks, and the place, such as `src/discount.js:3`, follows after a space). It ends with the sentence's own period followed by white space or the end of the name, so a link reading `... to amount > 100.50.` does not match. Playwright ignores `exact` for a pattern, so both are anchored themselves.
+
+The journey plays the demo run, so it needs an install where `/demo` offers **Play the demo run** (the compose demo with a recording ready), a queue worker that plays it and the Mercure hub for the live updates. After it played, `/demo` shows no button, and the next check fails at step 3 until `intakt:demo:remove` removes the run.
 
 ## Journeys and steps
 
-A journey is `{ name, steps }`, and a step is `{ name, run(page, address) }`. The script exports three step builders, so a journey finds what a person sees and never a CSS class: a redesign keeps the journeys, while a renamed button fails the journey a person would also get stuck in.
+A journey is `{ name, steps }`, and a step is `{ name, run(page, address) }`. The script exports the step builders, so a journey finds what a person sees and never a CSS class: a redesign keeps the journeys, while a renamed button fails the journey a person would also get stuck in.
 
 | Builder | Step name | What it does |
 |---|---|---|
 | `open(path)` | `open <path>` | `page.goto(address + path)`; when no page was loaded (`goto` returns no response) the step fails with `no page was loaded for <path>`, and a response that is not a success fails it with `HTTP <status> for <path>` |
 | `press(role, name)` | `press the <role> "<name>"` | `page.getByRole(role, { name, exact: true }).click()` |
 | `see(text)` | `see "<text>"` | `page.getByText(text, { exact: true }).filter({ visible: true }).first().waitFor()`: waits for the first visible exact match, so a hidden match earlier in the page is skipped |
+| `seeRole(role, name, timeout)` | `see the <role> "<name>"`, or `see the <role> matching <pattern>` for a pattern | `page.getByRole(role, { name, exact: true }).filter({ visible: true }).first().waitFor({ timeout })`, with `STEP_TIMEOUT_MS` when no timeout is given |
+| `named(name, ...steps)` | `<name>` | runs the given steps in order as one step, so the report names the step a person would name; the first line of the inner step's error is kept |
 
 `exact: true` keeps `press('button', 'Start')` from matching a button named "Start review".
 
@@ -39,7 +57,7 @@ Journey check: <n> journeys, <passed> passed, <failed> failed.
 
 ## Tests
 
-- `tests/Core/Dashboard/UseCase/journey-check.test.mjs` runs without a browser: the address parsing and its redaction, the startup deadline against a `node:http` server on port 7781 that never answers, the exit code 2 cases through the script itself, the run's name, the screenshot names of two journeys whose names reduce to the same text, the report, and a failed journey whose folder cannot be created or whose page cannot take a screenshot (a stand-in browser).
-- `tests/Core/Dashboard/UseCase/journey-check.browser.mjs` runs the trivial journey in Chromium, with its page answered by Playwright's routing on each context the runner opens, in four tests: a passing journey, a renamed button that fails its step with a screenshot, a fresh page for each journey, and a page where a hidden copy of the text comes first and `see` still passes on the visible copy that follows.
+- `tests/Core/Dashboard/UseCase/journey-check.test.mjs` runs without a browser: the address parsing and its redaction, the startup deadline against a `node:http` server on port 7781 that never answers, the exit code 2 cases through the script itself, the run's name, the screenshot names of two journeys whose names reduce to the same text, the report, and a failed journey whose folder cannot be created or whose page cannot take a screenshot (a stand-in browser), `OUTCOME` against every verdict heading and against headings that only start like one, `RECORDED_FINDING` against the finding's sentence and against `... to amount > 100.50.`, and journey 1's name and step names.
+- `tests/Core/Dashboard/UseCase/journey-check.browser.mjs` runs in Chromium, with its pages answered by Playwright's routing on each context the runner opens. A trivial journey proves the runner in four tests: a passing journey, a renamed button that fails its step with a screenshot, a fresh page for each journey, and a page where a hidden copy of the text comes first and `see` still passes on the visible copy that follows. Journey 1 runs against stand-in pages for `/setup`, `/demo` and a review page whose verdict and finding arrive after the page loads, in six tests: it passes; it passes when the verdict arrives after more than a click's wait; a renamed **Play the demo run** button fails it at `press the button "Play the demo run"` with `01-first-run-without-a-key.png`; a finding link reading `... to amount > 100.50.` fails it at step 5; the heading "Checked, but the outcome was not recorded" ends the verdict wait within a click's wait; and a `/demo` answering 404 fails it at step 2 with `HTTP 404 for /demo`.
 
 Both run by hand with `node --test` (see [Requirements](requirements.md)).

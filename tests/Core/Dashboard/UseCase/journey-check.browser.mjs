@@ -42,7 +42,7 @@ function routedBrowser() {
 // a moment after the review page loads, as the demo run's live update brings them.
 function demoSite({ playLabel = 'Play the demo run', verdict = 'Checked, but the outcome was not recorded', finding = 'to <code>amount &gt; 100</code>.', delayMs = 500 } = {}) {
     const html = (title, body) => `<!doctype html><html lang="en"><head><title>${title}</title></head><body><main>${body}</main></body></html>`;
-    const arrive = `<h2>${verdict}</h2><a href="/reviews/r1/record#f1"><span>The check changed from <code>amount &gt;= 100</code> ${finding}</span> <span>src/discount.php:3</span></a>`;
+    const arrive = `<h2>${verdict}</h2><a href="/reviews/r1/record#f1"><span>The check changed from <code>amount &gt;= 100</code> ${finding}</span> <span>src/discount.js:3</span></a>`;
 
     return {
         '/setup': html('Start', '<h1>See a real review</h1><p>1 minute · no key</p><button>Play the demo run</button>'),

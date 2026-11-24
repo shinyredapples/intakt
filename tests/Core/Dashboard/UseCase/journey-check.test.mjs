@@ -170,7 +170,7 @@ test('a run whose journeys all passed exits 0', () => {
 
 test('the recorded finding is matched by its sentence ending in amount > 100 and its period', () => {
     assert.match('The check changed from amount >= 100 to amount > 100.', RECORDED_FINDING);
-    assert.match('The check changed from amount >= 100 to amount > 100. src/discount.php:3', RECORDED_FINDING);
+    assert.match('The check changed from amount >= 100 to amount > 100. src/discount.js:3', RECORDED_FINDING);
 });
 
 test('the recorded finding is not matched by a sentence that goes on to amount > 100.50', () => {

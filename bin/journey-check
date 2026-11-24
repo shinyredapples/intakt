@@ -13,10 +13,10 @@ const { randomUUID } = require('crypto');
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'var', 'journey-check');
 const STEP_TIMEOUT_MS = 10_000;
-// The recorded demo run plays for about a minute after the click, so the verdict gets far longer than a click.
+// The recorded demo run plays for tens of seconds after the click, and a queue worker may start it late, so the verdict gets far longer than a click.
 const VERDICT_TIMEOUT_MS = 180_000;
 const USAGE = 'usage: bin/journey-check <address of a running dashboard>';
-// Every heading templates/dashboard/_verdict_card.html.twig can show; the recorded demo run keeps no quorum decision, so it ends on the last one.
+// Every heading templates/dashboard/_verdict_card.html.twig can show, because the journey proves the run reached a verdict, not which one.
 const OUTCOME = /^(Approved|Changes needed|Blocked: .+|Failed: .+|Checked, but the outcome was not recorded)$/;
 // Finding F1 of fixtures/demo/sample-change-review.json as its row on the review page names it; the sentence's own period must follow, so "amount > 100.50" is not taken for it.
 const RECORDED_FINDING = /^The check changed from amount >= 100 to amount > 100\.(\s|$)/;

@@ -145,9 +145,19 @@ The address defaults to `http://localhost:7780`. `CHROME_PATH` names a Chrome or
 
 ### Walking user journeys with the journey check
 
-`bin/journey-check <dashboard address>` walks user journeys in a headless browser against a running Intakt, each journey from a fresh page (its own cookies and storage), and prints one line per journey (a query string or fragment on the address is dropped): `passed <journey>`, or `failed <journey> at step "<step>": <what broke>`. A failed journey also gets a screenshot where one can be saved, `var/journey-check/<run>/<position>-<journey>.png` (the run is named by its start in UTC and eight random hex digits, for example `2026-11-24T09-05-07-012Z-1a2b3c4d`, and the file by the journey's place in the run, two digits, and its name, for example `01-read-a-verdict.png`); when the folder cannot be created or the page cannot be captured, the line `no screenshot: <reason>` takes its place and the journey still counts as failed. The last line counts the journeys, those that passed and those that failed. The check has no journey of its own yet, so on a running dashboard it reports `Journey check: 0 journeys, 0 passed, 0 failed.`
+`bin/journey-check <dashboard address>` walks user journeys in a headless browser against a running Intakt, each journey from a fresh page (its own cookies and storage), and prints one line per journey (a query string or fragment on the address is dropped): `passed <journey>`, or `failed <journey> at step "<step>": <what broke>`. A failed journey also gets a screenshot where one can be saved, `var/journey-check/<run>/<position>-<journey>.png` (the run is named by its start in UTC and eight random hex digits, for example `2026-11-24T09-05-07-012Z-1a2b3c4d`, and the file by the journey's place in the run, two digits, and its name, for example `01-first-run-without-a-key.png`); when the folder cannot be created or the page cannot be captured, the line `no screenshot: <reason>` takes its place and the journey still counts as failed. The last line counts the journeys, those that passed and those that failed.
 
-Before it opens a browser it asks the address for an answer and waits at most 10 seconds, the startup deadline. The same 10 seconds is the default timeout of each page action (a page load, a click, waiting for a text); the check has no deadline for a whole step. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run: no address, an address that is not an http or https URL (its text is not printed back), nothing answering within that time, or no browser. Any output names the address without a user name or password.
+It walks one journey, **First run without a key**, in five steps:
+
+1. `open /setup and see the start`: the heading "See a real review".
+2. `open /demo and see the demo run`: the heading "The demo run". Nothing on `/setup` links to `/demo`, so the step opens it by its address.
+3. `press the button "Play the demo run"`: the demo page then follows the run to its review page.
+4. `wait for the verdict of the demo run`: any verdict heading on the review page ("Approved", "Changes needed", "Blocked: ...", "Failed: ..." or "Checked, but the outcome was not recorded").
+5. `see the recorded finding on the review page`: the link of the recorded finding "The check changed from amount >= 100 to amount > 100.".
+
+It needs an install that can play the demo run: the compose demo with its recording, a queue worker and live updates. The journey plays the run, so the next check fails at step 3 until `intakt:demo:remove` has removed it.
+
+Before it opens a browser it asks the address for an answer and waits at most 10 seconds, the startup deadline. The same 10 seconds is the default timeout of each page action (a page load, a click, waiting for a text), except the wait for the demo run's verdict, which has 180 seconds; the check has no deadline for a whole step. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run: no address, an address that is not an http or https URL (its text is not printed back), nothing answering within that time, or no browser. Any output names the address without a user name or password.
 
 It needs Node.js 22 or later and Playwright, like the UI check:
 
