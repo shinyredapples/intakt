@@ -12,7 +12,6 @@ use Intakt\Core\Dashboard\Domain\TeamSpend;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
@@ -61,24 +60,18 @@ final readonly class LedgerAccountSpend
                 $models[$usage->call] = $usage->model;
             }
 
-            if (($usage instanceof UsageSettled || $usage instanceof UsageUnsettled) && $row->recordedAt >= $since) {
-                $this->addCostsOfEnding($costs, $row, $usage, $models[$usage->call] ?? null);
+            if (!($usage instanceof UsageSettled || $usage instanceof UsageUnsettled) || $row->recordedAt < $since) {
+                continue;
+            }
+
+            foreach ($usage->usages as $tokens) {
+                if (null !== $tokens->account) {
+                    $costs[] = [$tokens->account, $this->costOf($models[$usage->call] ?? $tokens->model, $tokens), $row->recordedAt];
+                }
             }
         }
 
         return $costs;
-    }
-
-    /**
-     * @param list<array{string, Cost, DateTimeImmutable}> $costs
-     */
-    private function addCostsOfEnding(array &$costs, RecordedEvent $row, UsageSettled|UsageUnsettled $ended, ?string $model): void
-    {
-        foreach ($ended->usages as $usage) {
-            if (null !== $usage->account) {
-                $costs[] = [$usage->account, $this->costOf($model ?? $usage->model, $usage), $row->recordedAt];
-            }
-        }
     }
 
     // A usage without input or output tokens makes the cost unknown, because the other count alone would read as the whole cost.
