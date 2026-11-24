@@ -90,8 +90,13 @@ final readonly class DocsGate implements Gate
         $findings = [];
 
         foreach ($pages as $path => $page) {
+            $allowed = [];
+
+            // A listed key allows only its first paragraph on the page, so copying an oversized paragraph cannot add violations.
             foreach ($page->paragraphs() as $paragraph) {
-                $findings[] = $this->paragraphFinding($path, $paragraph, $list->paragraphCeiling($path, $paragraph->key()));
+                $key = $paragraph->key();
+                $findings[] = $this->paragraphFinding($path, $paragraph, isset($allowed[$key]) ? null : $list->paragraphCeiling($path, $key));
+                $allowed[$key] = true;
             }
 
             $findings[] = $this->limits->limitsPage($path) ? $this->pageFinding($path, $page->words(), $list->pageCeiling($path)) : '';
@@ -111,7 +116,11 @@ final readonly class DocsGate implements Gate
             return ['no base branch found, pass --base=<ref>'];
         }
 
-        $baseList = $this->baseListOf($workspace, $mergeBase);
+        try {
+            $baseList = $this->baseListOf($workspace, $mergeBase);
+        } catch (ScopeFailure $failure) {
+            return [DocsRatchetList::PATH.' on the target branch: unreadable, so the change cannot be compared with it ('.$failure->getMessage().'); fetch the target branch again'];
+        }
 
         // Because the list arrives with its gate, a target branch without one has nothing to compare with.
         if (null === $baseList) {
@@ -155,11 +164,26 @@ final readonly class DocsGate implements Gate
             : $where.'its ceiling of '.$ceiling.' words in '.DocsRatchetList::PATH.' and the limit of '.DocsLimits::PAGE_WORDS.' words per page; cut it to at most '.$ceiling.' words';
     }
 
+    // Because a failed read must not pass as a missing list, the tree is listed first and only a list it lacks counts as absent.
     private function baseListOf(Workspace $workspace, string $mergeBase): ?string
     {
+        $listed = $workspace->git(['ls-tree', '--name-only', $mergeBase, '--', DocsRatchetList::PATH]);
+
+        if (!$listed->succeeded()) {
+            throw new ScopeFailure($listed->firstErrorLine());
+        }
+
+        if ('' === trim($listed->output)) {
+            return null;
+        }
+
         $shown = $workspace->git(['show', $mergeBase.':'.DocsRatchetList::PATH]);
 
-        return $shown->succeeded() ? $shown->output : null;
+        if (!$shown->succeeded()) {
+            throw new ScopeFailure($shown->firstErrorLine());
+        }
+
+        return $shown->output;
     }
 
     /**

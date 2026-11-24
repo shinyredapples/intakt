@@ -229,6 +229,39 @@ final class DocsGateTest extends SandboxTestCase
         ];
     }
 
+    public function testAJsonListInPlaceOfAnObjectMakesTheListMalformed(): void
+    {
+        $sandbox = $this->listedTree();
+        $sandbox->write('ratchet/docs.json', '{"paragraphs": {"'.self::LISTED_PAGE.'": {"'.$this->key($this->words(90, 'listed')).'": 90}}, "pages": []}');
+
+        $findings = $sandbox->gateResult($this->gate())->findings;
+
+        self::assertCount(1, $findings);
+        self::assertStringStartsWith('ratchet/docs.json: malformed', $findings[0]);
+    }
+
+    public function testACopyOfAListedParagraphOnTheSamePageFails(): void
+    {
+        $sandbox = $this->listedTree();
+        $sandbox->write(self::LISTED_PAGE, "# Long\n\n".$this->words(90, 'listed')."\n\n".$this->words(90, 'listed')."\n");
+
+        self::assertSame([self::LISTED_PAGE.':5: paragraph of 90 words, over the limit of 80 words per paragraph; split it or cut words'], $sandbox->gateResult($this->gate())->findings);
+    }
+
+    public function testAnUnreadableListOnTheTargetBranchFails(): void
+    {
+        $sandbox = $this->changeOnAMainWithTheGate();
+        $blob = trim($sandbox->git('rev-parse', 'main:ratchet/docs.json')->output);
+        unlink($sandbox->root.'/.git/objects/'.substr($blob, 0, 2).'/'.substr($blob, 2));
+        $sandbox->write('docs/architecture/new.md', $this->words(81, 'fresh')."\n");
+        $sandbox->write('ratchet/docs.json', $this->listJson([...$this->listedParagraph(), 'docs/architecture/new.md' => [$this->key($this->words(81, 'fresh')) => 81]]));
+
+        $findings = $sandbox->gateResult($this->gate(), 'main')->findings;
+
+        self::assertCount(1, $findings);
+        self::assertStringStartsWith('ratchet/docs.json on the target branch: unreadable', $findings[0]);
+    }
+
     public function testAListedKeyOfOnlyDigitsIsRead(): void
     {
         $list = DocsRatchetList::fromJson('{"paragraphs": {"docs/a.md": {"1234567890123456": 90}}, "pages": {}}');

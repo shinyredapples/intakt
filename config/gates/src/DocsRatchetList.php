@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 use JsonException;
+use stdClass;
 
 final readonly class DocsRatchetList
 {
@@ -30,17 +31,18 @@ final readonly class DocsRatchetList
     public static function fromJson(string $json): ?self
     {
         try {
-            $decoded = json_decode($json, true, self::DEPTH, JSON_THROW_ON_ERROR);
+            // Decoded into objects, because associative arrays would let a JSON list stand in for an object.
+            $decoded = self::fieldsOf(json_decode($json, false, self::DEPTH, JSON_THROW_ON_ERROR));
         } catch (JsonException) {
             return null;
         }
 
-        if (!is_array($decoded) || self::SECTIONS !== self::sortedKeys($decoded)) {
+        if (null === $decoded || self::SECTIONS !== self::sortedKeys($decoded)) {
             return null;
         }
 
-        $paragraphs = self::paragraphsOf($decoded['paragraphs']);
-        $pages = self::countsOf($decoded['pages']);
+        $paragraphs = self::paragraphsOf(self::fieldsOf($decoded['paragraphs']));
+        $pages = self::countsOf(self::fieldsOf($decoded['pages']));
 
         return null === $paragraphs || null === $pages ? null : new self($paragraphs, $pages);
     }
@@ -74,18 +76,29 @@ final readonly class DocsRatchetList
     }
 
     /**
+     * @return ?array<int|string, mixed>
+     */
+    private static function fieldsOf(mixed $value): ?array
+    {
+        return $value instanceof stdClass ? get_object_vars($value) : null;
+    }
+
+    /**
+     * @param ?array<int|string, mixed> $section
+     *
      * @return ?array<string, array<int|string, int>>
      */
-    private static function paragraphsOf(mixed $section): ?array
+    private static function paragraphsOf(?array $section): ?array
     {
-        if (!is_array($section)) {
+        if (null === $section) {
             return null;
         }
 
         $paragraphs = [];
 
-        foreach ($section as $page => $keys) {
-            $counts = self::isMarkdownPath($page) && is_array($keys) && [] !== $keys && !array_is_list($keys) ? self::keyCountsOf($keys) : null;
+        foreach ($section as $page => $value) {
+            $keys = self::fieldsOf($value);
+            $counts = self::isMarkdownPath($page) && null !== $keys && [] !== $keys ? self::keyCountsOf($keys) : null;
 
             if (null === $counts) {
                 return null;
@@ -98,11 +111,13 @@ final readonly class DocsRatchetList
     }
 
     /**
+     * @param ?array<int|string, mixed> $section
+     *
      * @return ?array<string, int>
      */
-    private static function countsOf(mixed $section): ?array
+    private static function countsOf(?array $section): ?array
     {
-        if (!is_array($section)) {
+        if (null === $section) {
             return null;
         }
 
