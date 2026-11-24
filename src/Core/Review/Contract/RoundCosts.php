@@ -10,4 +10,7 @@ use Intakt\Core\Budget\Contract\Cost;
 interface RoundCosts
 {
     public function costOf(string $roundId): Cost;
+
+    // Several rounds at once, because a review page with several rounds would read the ledger once more for each.
+    public function costsOf(string ...$roundIds): RoundCostList;
 }

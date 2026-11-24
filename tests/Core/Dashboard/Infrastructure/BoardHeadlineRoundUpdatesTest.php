@@ -22,10 +22,10 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReadAnswer;
-use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Support\FixedRoundCosts;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\ReplayMarkBus;
@@ -221,8 +221,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 
     private function pagesOn(Ledger $ledger): LedgerReviewPages
     {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+        $costs = new FixedRoundCosts(Cost::inUsd(0.5));
 
         return new LedgerReviewPages(new MockClock(), $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }

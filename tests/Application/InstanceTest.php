@@ -135,6 +135,7 @@ final class InstanceTest extends InstanceTestCase
             $lines = [
                 (string) getenv("INTAKT_INSTANCE_URL"),
                 "admin url: ".var_export(getenv("INTAKT_INSTANCE_ADMIN_URL"), true),
+                "server admin url: ".file_get_contents(getenv("INTAKT_INSTANCE_URL")."/?admin"),
                 "descriptor 3: ".(@readlink("/proc/self/fd/3") === realpath($argv[2]) ? "status" : "other"),
             ];
             foreach (getenv() as $name => $value) { $lines[] = $name."=".$value; }
@@ -145,7 +146,7 @@ final class InstanceTest extends InstanceTestCase
             PHP;
         $printed = $this->scratch.'/printed';
 
-        $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', $command, $printed, $this->scratch.'/status'], ['INTAKT_TEST_CANARY' => 'visible']);
+        $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', $command, $printed, $this->scratch.'/status'], ['INTAKT_TEST_CANARY' => 'visible', 'FRANKENPHP_ADMIN_URL' => 'http://localhost:2019']);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertSame(5, $run['exit']);
@@ -158,6 +159,8 @@ final class InstanceTest extends InstanceTestCase
         // PHP itself may take the free descriptor 3 (OPcache does for its lock), so the target tells, not whether it is open.
         self::assertStringContainsString("\ndescriptor 3: other\n", $run['output']);
         self::assertStringContainsString("\nadmin url: false\n", $run['output']);
+        self::assertStringContainsString("\nserver admin url: ok http://admin-api.invalid\n", $run['output']);
+        self::assertStringNotContainsString('localhost:2019', $run['output']);
     }
 
     public function testACommandThatOverrunsItsTimeIsKilledWithExitCode124(): void
