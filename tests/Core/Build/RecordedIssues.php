@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Build;
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -48,7 +49,7 @@ final readonly class RecordedIssues implements IssueReads
             $issue['number'],
             $issue['title'],
             $issue['body'],
-            array_column($issue['labels'], 'name'),
+            new IssueLabels(...array_column($issue['labels'], 'name')),
             $issue['user']['login'],
             $this->moment($issue['updated_at']),
             null === $due ? null : $this->moment($due),

@@ -220,7 +220,7 @@ final class GitHubForgeTest extends TestCase
         $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
 
         self::assertSame(HeadMoveKind::Commits, $move->kind);
-        self::assertSame(['src/Added.php', 'docs/read me.md'], $move->paths);
+        self::assertSame(['src/Added.php', 'docs/read me.md'], [...$move->paths]);
     }
 
     public function testItReportsBothPathsOfAFileRenamedByTheNewCommits(): void
@@ -231,7 +231,7 @@ final class GitHubForgeTest extends TestCase
 
         $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
 
-        self::assertSame(['src/Guard.php', 'docs/Guard.php'], $move->paths);
+        self::assertSame(['src/Guard.php', 'docs/Guard.php'], [...$move->paths]);
     }
 
     public function testItReportsARewriteWhenTheNewCommitsListThreeHundredFiles(): void
@@ -252,7 +252,7 @@ final class GitHubForgeTest extends TestCase
         $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
 
         self::assertSame(HeadMoveKind::Commits, $move->kind);
-        self::assertCount(299, $move->paths);
+        self::assertCount(299, [...$move->paths]);
     }
 
     public function testItReportsARewriteWhenTheNewCommitsHaveNoFileList(): void

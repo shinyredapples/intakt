@@ -48,7 +48,7 @@ final readonly class QueuedIssue
 
     public function hasLabel(string $label): bool
     {
-        return in_array($label, $this->reading->listed->labels, true);
+        return $this->reading->listed->labels->contains($label);
     }
 
     // Only a label an account with write access applied last steers, because a triage account can set labels too.
@@ -102,7 +102,7 @@ final readonly class QueuedIssue
     {
         $body = $history->body;
 
-        return $this->sorted($this->reading->listed->labels) === $this->sorted($history->currentLabels)
+        return $this->sorted([...$this->reading->listed->labels]) === $this->sorted([...$history->currentLabels])
             && $this->sorted($this->reading->waitsFor) === $this->sorted($references->waitsFor($body))
             && $this->sorted($this->reading->unreadableWaits) === $this->sorted($references->unreadableWaits($body))
             && $this->sorted($this->reading->closedBy) === $this->sorted($references->closedBy($body));
