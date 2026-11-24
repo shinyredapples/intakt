@@ -1176,7 +1176,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         parent::tearDown();
     }
 
-    // The suite runs without debug, and only a debug kernel traces the listeners it called.
+    // Because the suite runs without debug, and only a debug kernel traces the listeners it called.
     private function bootTheDebugKernel(): void
     {
         $this->platformKernel->shutdown();
