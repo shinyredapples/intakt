@@ -14,9 +14,9 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
+use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
 use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
-use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Psr\Log\LoggerInterface;
 
 // The mode and the hand-over are read here and not when the round is queued, so a project switched to or from reviewer-for-loop after its judge publishes by its mode at publication; a failed write is left to Messenger's retries.

@@ -28,7 +28,7 @@ final readonly class BuildFacts
         foreach ($labels as $label) {
             $tier = Tier::fromLabel($label);
 
-            if (null !== $tier) {
+            if ($tier instanceof Tier) {
                 $tiers[] = $tier;
             }
         }

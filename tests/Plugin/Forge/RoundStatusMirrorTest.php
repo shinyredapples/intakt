@@ -23,7 +23,7 @@ final class RoundStatusMirrorTest extends TestCase
         $labels = $this->createMock(StatusLabels::class);
         $labels->expects(self::once())->method('mirror')->with('alpha', new ChangeId('7'), RoundStatusLabel::InReview);
 
-        new RoundStatusMirror($this->createStub(LoggerInterface::class), $labels)->show('alpha', new ChangeId('7'), RoundStatusLabel::InReview);
+        new RoundStatusMirror(self::createStub(LoggerInterface::class), $labels)->show('alpha', new ChangeId('7'), RoundStatusLabel::InReview);
     }
 
     public function testAForgeWithoutLabelsIsLeftAlone(): void
@@ -36,7 +36,7 @@ final class RoundStatusMirrorTest extends TestCase
 
     public function testAFailedWriteIsLoggedAndTheRoundGoesOn(): void
     {
-        $labels = $this->createStub(StatusLabels::class);
+        $labels = self::createStub(StatusLabels::class);
         $labels->method('mirror')->willThrowException(new ForgeWriteFailed('down'));
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects(self::once())->method('warning');
