@@ -623,7 +623,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $connection = $this->entities->getConnection();
         $store = new class implements PersistingStoreInterface, BlockingStoreInterface {
             public bool $waited = false;
-            private InMemoryStore $inner;
+            private readonly InMemoryStore $inner;
 
             public function __construct()
             {
