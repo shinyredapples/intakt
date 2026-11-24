@@ -46,7 +46,7 @@ final readonly class UnneededDocsEntries
      */
     private function unusedKeysOf(DocsRatchetList $list, string $path, ?MarkdownPage $page): array
     {
-        $oversized = array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->key(), null === $page ? [] : $this->limits->oversizedParagraphsOf($page));
+        $oversized = array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->key(), $page instanceof MarkdownPage ? $this->limits->oversizedParagraphsOf($page) : []);
         $unused = [];
 
         foreach (array_unique($list->paragraphs[$path]) as $key) {

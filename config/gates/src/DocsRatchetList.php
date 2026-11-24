@@ -34,7 +34,7 @@ final readonly class DocsRatchetList
         $pages = self::ceilingsOf($data['pages'] ?? null);
         $summaries = self::pathsOf($data['summaries'] ?? null);
 
-        return null === $paragraphs || null === $pages || null === $summaries ? null : new self($paragraphs, $pages, $summaries);
+        return in_array(null, [$paragraphs, $pages, $summaries], true) ? null : new self($paragraphs, $pages, $summaries);
     }
 
     // Because a key listed once excuses one paragraph, a copy of a listed paragraph on the same page is a new one.
@@ -122,12 +122,13 @@ final readonly class DocsRatchetList
      */
     private static function stringsOf(mixed $value): ?array
     {
-        if (!is_array($value) || !array_is_list($value) || !array_all($value, static fn (mixed $item): bool => is_string($item))) {
+        if (!is_array($value) || !array_is_list($value)) {
             return null;
         }
 
-        /** @var list<string> $value */
-        return $value;
+        $strings = array_values(array_filter($value, is_string(...)));
+
+        return count($strings) === count($value) ? $strings : null;
     }
 
     /**
