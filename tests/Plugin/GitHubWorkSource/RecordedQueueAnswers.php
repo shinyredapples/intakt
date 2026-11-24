@@ -29,7 +29,7 @@ final readonly class RecordedQueueAnswers implements IssueHistories, SteeringAcc
     {
         $item = $this->listed($project)[$number] ?? throw new ForgeReadFailed(sprintf('The recording holds no #%d.', $number));
 
-        return new IssueHistory($item->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, $item->author), $item->labels), $item->body, $item->labels);
+        return new IssueHistory($item->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, $item->author), [...$item->labels]), $item->body, $item->labels);
     }
 
     public function steers(string $project, string $account): bool

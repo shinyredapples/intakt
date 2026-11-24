@@ -163,7 +163,7 @@ final readonly class RunCheckJob implements CheckJobs
     {
         $hosts = $this->gate->registryHosts();
 
-        return [] === $hosts ? JobEgress::none() : JobEgress::to(new EgressHosts(...$hosts));
+        return $hosts->isEmpty() ? JobEgress::none() : JobEgress::to($hosts);
     }
 
     private function ranJob(JobSpec $spec): ?JobResult

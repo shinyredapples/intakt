@@ -944,7 +944,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             $listed = $this->reads->lastListed[$number];
 
-            return new IssueHistory($this->editorOf[$number] ?? $this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$number][$label] ?? $this->labelApplier), $this->appliedInOrder ?? $listed->labels), $this->editedBodies[$number] ?? $listed->body, $listed->labels);
+            return new IssueHistory($this->editorOf[$number] ?? $this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$number][$label] ?? $this->labelApplier), $this->appliedInOrder ?? [...$listed->labels]), $this->editedBodies[$number] ?? $listed->body, $listed->labels);
         });
 
         return $this->sourceOver($this->reads, $histories);

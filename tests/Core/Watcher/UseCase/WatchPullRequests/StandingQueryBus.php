@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Override;
@@ -42,7 +43,7 @@ final class StandingQueryBus implements MessageBusInterface
         private readonly VerdictIdentity $recorded,
         private readonly EntityManagerInterface $entities,
     ) {
-        $this->move = new HeadMove(HeadMoveKind::Unmoved, []);
+        $this->move = new HeadMove(HeadMoveKind::Unmoved, new Paths());
         $this->mainBoot = BootOutcome::booted();
         $this->headBoot = BootOutcome::booted();
     }

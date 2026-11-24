@@ -31,6 +31,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;
@@ -234,7 +235,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
         $this->deliver($queue, [self::FIRST => $this->changes([], [$this->finding('b', severity: Severity::P1)])]);
 
-        $counting = $this->fixture->verdictsOf(new VerdictsOfRound($roundId, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])))->counting;
+        $counting = $this->fixture->verdictsOf(new VerdictsOfRound($roundId, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())))->counting;
         $findings = array_merge(...array_map(static fn (PanelVerdict $panel): array => $panel->verdict->findings, $counting));
         self::assertSame([Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $findings));
         self::assertSame(Severity::P3, $this->fixture->storedFindings(self::CHANGE)[1]->latest->severity);

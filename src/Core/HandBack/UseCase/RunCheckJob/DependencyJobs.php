@@ -168,7 +168,7 @@ final readonly class DependencyJobs
             new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->installScript), 'intakt-install', self::LOCK, $step->platformProbe, $step->install, ...$step->lockFiles),
             [new JobInput($folder.'/lock', self::LOCK)],
             new JobLimits(self::INSTALL_MEMORY_BYTES, self::CPUS, self::INSTALL_SECONDS),
-            [] === $hosts ? JobEgress::none() : JobEgress::to(new EgressHosts(...$hosts)),
+            $hosts->isEmpty() ? JobEgress::none() : JobEgress::to($hosts),
             new JobKeptFolder($folder.'/kept'),
         );
     }

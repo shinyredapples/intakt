@@ -6,6 +6,7 @@ namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
+use Intakt\Plugin\Gate\Contract\LockFiles;
 
 // The lock files of the tree the check job installs in, read before the job, so the key names what that tree's install depends on.
 final readonly class CheckedLockFiles
@@ -16,13 +17,11 @@ final readonly class CheckedLockFiles
 
     // Null when the merged tree's files cannot be known before the merge, or one is missing, so the check installs itself.
     /**
-     * @param non-empty-list<string> $paths
-     *
      * @return ?non-empty-array<string, CheckedLockFile>
      *
      * @throws HandBackNotChecked
      */
-    public function of(string $repository, string $head, array $paths): ?array
+    public function of(string $repository, string $head, LockFiles $paths): ?array
     {
         $main = $this->git->answer($repository, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']) ?? '';
         // Main's file must match, because the job checks a branch that lacks main on its merge with main, which holds the head's file only where main's is the same.
@@ -39,7 +38,7 @@ final readonly class CheckedLockFiles
             $files[$path] = new CheckedLockFile($blob, $this->git->exactOutput($repository, ['cat-file', 'blob', $blob]));
         }
 
-        return $files;
+        return [] === $files ? null : $files;
     }
 
     // A plain file only, because the job would read a link's target, which the commit does not hold.

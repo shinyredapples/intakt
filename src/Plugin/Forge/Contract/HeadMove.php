@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
+use Intakt\Core\Git\Contract\Paths;
+
 final readonly class HeadMove
 {
-    /**
-     * @param list<string> $paths
-     */
     public function __construct(
         public HeadMoveKind $kind,
-        public array $paths,
+        public Paths $paths,
     ) {
     }
 }

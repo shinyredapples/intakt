@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Closure;
 use Fiber;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\CommentBodies;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
@@ -159,7 +160,7 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
     {
         $forge = $this->forge(static fn (string $url): ResponseInterface => str_contains($url, self::LISTING) ? new MockResponse('[]') : new MockResponse('{}', ['http_code' => 201]));
         $escaped = '- <code>bin/sk&#95;live&#95;'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2).'</code>';
-        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), [$escaped]);
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), new CommentBodies($escaped));
 
         try {
             $forge->publishVerdict('widgets', new ChangeId(self::PULL), $verdict);
@@ -173,7 +174,7 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
     public function testAnOwnerAskWithEntitiesButNoSecretIsPosted(): void
     {
         $forge = $this->forge(static fn (string $url): ResponseInterface => str_contains($url, self::LISTING) ? new MockResponse('[]') : new MockResponse('{}', ['http_code' => 201]));
-        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), ['- <code>bin/a&#95;b&#60;c&#62;</code>']);
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), new CommentBodies('- <code>bin/a&#95;b&#60;c&#62;</code>'));
 
         self::assertTrue($forge->publishVerdict('widgets', new ChangeId(self::PULL), $verdict));
 
@@ -183,7 +184,7 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
     public function testAnOwnerAskThatHoldsASecretPostsNothing(): void
     {
         $forge = $this->forge(static fn (string $url): ResponseInterface => str_contains($url, self::LISTING) ? new MockResponse('[]') : new MockResponse('{}', ['http_code' => 201]));
-        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), ["The fixture holds a key:\nsk_live_".str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)]);
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), new CommentBodies("The fixture holds a key:\nsk_live_".str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)));
 
         try {
             $forge->publishVerdict('widgets', new ChangeId(self::PULL), $verdict);
@@ -196,7 +197,7 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
 
     private function askingVerdict(): PublishedVerdict
     {
-        return new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), ['Ask, part 1.', 'Ask, part 2.']);
+        return new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), new CommentBodies('Ask, part 1.', 'Ask, part 2.'));
     }
 
     /**

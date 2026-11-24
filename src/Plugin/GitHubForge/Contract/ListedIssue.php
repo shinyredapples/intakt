@@ -11,14 +11,11 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class ListedIssue
 {
-    /**
-     * @param list<string> $labels
-     */
     public function __construct(
         public int $number,
         public string $title,
         public string $body,
-        public array $labels,
+        public IssueLabels $labels,
         public string $author,
         public DateTimeImmutable $updatedAt,
         public ?DateTimeImmutable $milestoneDue,

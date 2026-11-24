@@ -54,7 +54,7 @@ final readonly class VerdictIdentity
             return VerdictStanding::stale($changed);
         }
 
-        return VerdictStanding::keptExceptFor($changed, new Paths(...$move->paths));
+        return VerdictStanding::keptExceptFor($changed, $move->paths);
     }
 
     /**
@@ -84,7 +84,7 @@ final readonly class VerdictIdentity
 
     private function touchesOnlyDocumentation(HeadMove $move): bool
     {
-        return array_all($move->paths, static fn (string $path): bool => str_starts_with($path, self::DOCUMENTATION));
+        return array_all([...$move->paths], static fn (string $path): bool => str_starts_with($path, self::DOCUMENTATION));
     }
 
     private function valueOf(IdentityField $field): string
