@@ -40,7 +40,9 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         private EventDispatcherInterface $events,
         private LockFactory $locks,
     ) {
-        $this->held = new ArrayObject();
+        /** @var ArrayObject<string, SharedLockInterface> $held */
+        $held = new ArrayObject();
+        $this->held = $held;
     }
 
     #[Override]
