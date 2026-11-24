@@ -122,12 +122,20 @@ final class WatchConfigurationTest extends TestCase
 
     public function testAProjectNamedWithDigitsGetsTheEligibilityLabelItsSectionNames(): void
     {
-        /** @var array<string, array{eligibility_label: string}> $projects */
-        $projects = json_decode('{"123": {"eligibility_label": "intakt"}}', true);
-
-        $labels = WatchConfiguration::eligibilityLabelsOf($projects);
+        $labels = WatchConfiguration::eligibilityLabelsOf($this->decoded('{"123": {"eligibility_label": "intakt"}}'));
 
         self::assertSame('intakt', $labels->of('123'));
+    }
+
+    /**
+     * @return array<string, array{eligibility_label: string}>
+     */
+    private function decoded(string $json): array
+    {
+        /** @var array<string, array{eligibility_label: string}> $projects */
+        $projects = json_decode($json, true);
+
+        return $projects;
     }
 
     public function testAProjectWithoutAWatchSectionGetsNoEligibilityLabel(): void
