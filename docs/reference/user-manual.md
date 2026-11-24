@@ -304,7 +304,7 @@ The file lies in the checked folder (`--root`, else the repository), under `var/
 
 ## Running `bin/check` again on an unchanged tree
 
-When every gate passed and the report was written, `bin/check` also notes that pass in `var/check/passed.json`. Run it again with the same options plus `--reuse` on a tree where nothing has changed, and it runs no gate except `audit`, which always runs again because a new advisory can hit an unchanged `composer.lock`. Without `audit` (for example with `--fast` or `--only=...`), it prints only
+When every gate passed and the report was written, `bin/check` also notes that pass in `var/check/passed.json`. Run it again with the same options plus `--reuse` on a tree where nothing has changed, and it runs no gate except `audit`, which always runs again because a new advisory can hit an unchanged `composer.lock`. Without `audit` (for example with `--only=dashes` or `--skip=audit`), it prints only
 
 ```
 {"result":"pass","failed":[],"reused":"var/check/passed.json"}
