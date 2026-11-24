@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
-use DateTimeImmutable;
 use Intakt\Core\Doctor\Contract\CheckResult;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
@@ -219,6 +218,7 @@ final class ForgeCredentialCheckTest extends TestCase
     public function testTheForgeCredentialCheckStopsAtItsDeadlineWhenTheLastPageDoesNotArriveInTime(): void
     {
         $this->expected = ExpectedInstallation::fromSettings(self::PERMISSIONS, implode(',', $this->manyRepositories()));
+        $start = (float) $this->clock->now()->format('U.u');
 
         $result = $this->check(
             $this->paged(...),
@@ -228,7 +228,7 @@ final class ForgeCredentialCheckTest extends TestCase
 
         self::assertFalse($result->passed);
         self::assertSame(4, $this->requests);
-        self::assertEqualsWithDelta(15.0, (float) $this->clock->now()->format('U.u') - (float) new DateTimeImmutable('2026-11-25 10:00:00 UTC')->format('U'), 0.001);
+        self::assertEqualsWithDelta(15.0, (float) $this->clock->now()->format('U.u') - $start, 0.001);
     }
 
     protected function setUp(): void
@@ -253,6 +253,14 @@ final class ForgeCredentialCheckTest extends TestCase
         return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.$fixture), ['response_headers' => $headers]);
     }
 
+    /**
+     * @return list<string>
+     */
+    private function manyRepositories(): array
+    {
+        return array_map(static fn (int $n): string => 'acme/repo'.$n, range(1, 101));
+    }
+
     // Two pages, so the last request starts with less than a full slice of the deadline left.
     private function paged(string $url): ResponseInterface
     {
@@ -268,32 +276,27 @@ final class ForgeCredentialCheckTest extends TestCase
     }
 
     /**
-     * @return list<string>
-     */
-    private function manyRepositories(): array
-    {
-        return array_map(static fn (int $n): string => 'acme/repo'.$n, range(1, 101));
-    }
-
-    /**
      * @param callable(string): ResponseInterface $answer
      */
     private function check(callable $answer, int $secondsPerRequest = 0, ?int $lastPageSeconds = null): ForgeCredentialCheck
     {
-        // Behaves like a real client: a request slower than its max_duration is cut at that limit.
-        $http = new MockHttpClient(function (string $method, string $url, array $options) use ($answer, $secondsPerRequest, $lastPageSeconds): ResponseInterface {
-            ++$this->requests;
-            $seconds = null !== $lastPageSeconds && str_contains($url, '&page=2') ? $lastPageSeconds : $secondsPerRequest;
-            $limit = (float) $options['max_duration'];
-            if ($seconds > $limit) {
-                $this->clock->sleep($limit);
+        // MockHttpClient ignores max_duration, so the deadline tests would let a slow request run past its limit unless the fake cuts it like a real client.
+        $http = new MockHttpClient(
+            function (string $method, string $url, array $options) use ($answer, $secondsPerRequest, $lastPageSeconds): ResponseInterface {
+                ++$this->requests;
+                $seconds = null !== $lastPageSeconds && str_contains($url, '&page=2') ? $lastPageSeconds : $secondsPerRequest;
+                $limit = $options['max_duration'];
+                self::assertIsFloat($limit);
+                if ($seconds > $limit) {
+                    $this->clock->sleep($limit);
 
-                throw new TimeoutException('timed out');
-            }
-            $this->clock->sleep($seconds);
+                    throw new TimeoutException('timed out');
+                }
+                $this->clock->sleep($seconds);
 
-            return $answer($url);
-        });
+                return $answer($url);
+            },
+        );
 
         return new ForgeCredentialCheck(
             $this->jwt,
