@@ -66,7 +66,7 @@ final readonly class PullRequestTextRoutes
             'branch' => $task->branch,
             'verdict' => $outcome->verdict->value,
             'reason' => $outcome->verdict->reason(),
-            'missing' => $outcome->missingItems,
+            'missing' => [...$outcome->missingItems],
             'body_characters' => $outcome->bodyCharacters,
         ];
     }

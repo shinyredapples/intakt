@@ -32,6 +32,7 @@ use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
+use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndingLookup;
@@ -117,7 +118,14 @@ final class LedgerRounds
     {
         $rounds = $this->membersOf($round);
 
-        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds), $this->timelineOf($rounds));
+        if ([] === $rounds) {
+            return null;
+        }
+
+        // Priced together, because each pricing reads every usage row of the ledger.
+        $costs = $this->costs->costsOf(...array_map(static fn (ReviewedRound $member): string => $member->round, $rounds));
+
+        return new Review(array_map(fn (ReviewedRound $member): ReviewedRound => $this->completed($member, $costs), $rounds), $this->timelineOf($rounds));
     }
 
     // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.
@@ -340,9 +348,9 @@ final class LedgerRounds
         return Decision::Blocked === $decision ? self::UNRECORDED_REASON : null;
     }
 
-    private function completed(ReviewedRound $round): ReviewedRound
+    private function completed(ReviewedRound $round, RoundCostList $costs): ReviewedRound
     {
-        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
+        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($costs->of($round->round))->markedAs($this->markOf($round)));
     }
 
     // A spelling other than its canonical form, kept apart from rounds of its pull request, is history only, because storage numbers every new round of that pull request on the canonical row.

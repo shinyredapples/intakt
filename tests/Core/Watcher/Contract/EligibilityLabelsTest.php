@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\Contract;
 
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(EligibilityLabels::class)]
+#[CoversClass(ProjectEligibilityLabel::class)]
 #[CoversClass(ProjectNamesNoEligibilityLabel::class)]
 final class EligibilityLabelsTest extends TestCase
 {
     public function testEachProjectHasTheLabelItsWatchSectionNames(): void
     {
-        $labels = new EligibilityLabels(['alpha' => ['eligibility_label' => 'intakt'], 'beta' => ['eligibility_label' => 'build-me']]);
+        $labels = new EligibilityLabels(new ProjectEligibilityLabel('alpha', 'intakt'), new ProjectEligibilityLabel('beta', 'build-me'));
 
         self::assertSame(['intakt', 'build-me'], [$labels->of('alpha'), $labels->of('beta')]);
     }
@@ -24,6 +26,11 @@ final class EligibilityLabelsTest extends TestCase
     {
         $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('alpha'));
 
-        new EligibilityLabels(['beta' => ['eligibility_label' => 'intakt']])->of('alpha');
+        new EligibilityLabels(new ProjectEligibilityLabel('beta', 'intakt'))->of('alpha');
+    }
+
+    public function testAProjectNamedLikeANumberKeepsItsLabel(): void
+    {
+        self::assertSame('build', new EligibilityLabels(new ProjectEligibilityLabel('42', 'build'))->of('42'));
     }
 }
