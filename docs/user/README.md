@@ -68,7 +68,7 @@ One rule to know before your first build: for a project with a `github` entry, t
 
 A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks)).
 
-When all four parts are there, the builder writes the failing regression test first, commits it on its own, then fixes the bug. Only the task itself may say that no test can reproduce the bug ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+When all four parts are there, the builder writes the failing regression test first, commits it on its own, then fixes the bug. A build without that test, or whose test also passes on the base, fails before the push like a red check; a bug no test can reproduce goes in without the `bug` label ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
 
 Before the push, Intakt runs the tests the work adds or changes twice: on the old code (they should fail) and on the fixed code (they should pass). It finds them in the work itself, not in the builder's word. For now both results only go to the log.
 

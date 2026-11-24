@@ -68,7 +68,7 @@ final readonly class PrePushCheck
         try {
             $runs = $this->regressionTests->run(new CheckJob($handBack, $request->image, null, new Paths()));
         } catch (ExceptionInterface|IOExceptionInterface|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
-            // The job's script that cannot be read too, because a run that only reports must never fail a check that passed.
+            // The job's script that cannot be read too: a run that could not happen proves nothing either way, so the verdict stays as the check job gave it.
             $this->logger->warning('The regression tests of a bug head could not run.', ['project' => $request->project, 'exception' => $failure]);
 
             return null;
