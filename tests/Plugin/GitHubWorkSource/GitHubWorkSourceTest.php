@@ -148,7 +148,30 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $pick = $this->source()->nextWork('alpha', WorkerState::Free);
 
         self::assertEquals(new Task(7, 'Task 7', 12), $pick->task);
-        self::assertSame(1, $this->branches->reads);
+        self::assertSame(2, $this->branches->reads);
+    }
+
+    public function testAPullRequestOpenedOnTheBranchDuringTheSteeringCheckMakesTheTaskARework(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'No closing keyword here.')]);
+        $this->duringHistory = function (): void {
+            $this->branches->branchOf = [12 => 'feat/7-add-intake'];
+        };
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertEquals(new Task(7, 'Task 7', 12), $pick->task);
+    }
+
+    public function testNoBranchIsReadWhenNoTaskIsReady(): void
+    {
+        $this->reads->lists([]);
+        $this->branches->failure = new ForgeReadFailed('GitHub answered 502 to a read.');
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::NoTaskReady, $pick->nothing);
+        self::assertSame(0, $this->branches->reads);
     }
 
     public function testATaskWhosePullRequestIsFoundOnlyByItsBranchIsPickedBeforeAFreshTaskOfHigherPriority(): void

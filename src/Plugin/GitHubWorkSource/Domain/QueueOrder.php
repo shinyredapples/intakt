@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
-// The open pull request of each task is by closing keyword or by branch. Work that finishes an open pull request goes before work that starts a task, also an urgent one, because docs/design/05-architecture/03-choosing-work.md step 5 fixes it; a missing due date sorts last.
+// Work that finishes an open pull request goes before work that starts a task, also an urgent one, because docs/design/05-architecture/03-choosing-work.md step 5 fixes it; a missing due date sorts last.
 final readonly class QueueOrder
 {
     /**

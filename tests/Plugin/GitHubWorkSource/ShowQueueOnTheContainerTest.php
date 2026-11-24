@@ -105,6 +105,13 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
             TEXT, $tester->getDisplay());
     }
 
+    public function testATaskWhosePullRequestIsFoundOnlyByItsBranchPrintsBeforeAnUrgentFreshTask(): void
+    {
+        $tester = $this->show('queue_branch_rework.json', '', 'alpha');
+
+        self::assertSame("Pick order of project alpha:\n  1. #51 Order the queue (rework of #52)\n  2. #42 Fix the dashboard clock\nHeld tasks of project alpha:\n  no task is held\n", $tester->getDisplay());
+    }
+
     public function testAListingReadThatFailsPrintsNoOrderAndFails(): void
     {
         $tester = $this->show('queue_listing_fails.json', '', 'alpha');

@@ -52,6 +52,10 @@ final readonly class GitHubWorkSource implements WorkSource
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
         }
 
+        if ([] === $plan->ready) {
+            return WorkPick::nothing(NothingPicked::NoTaskReady);
+        }
+
         $reworks = $this->reworksOrNone($project, $plan, $plan->ready);
         if (null === $reworks) {
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
@@ -118,7 +122,7 @@ final readonly class GitHubWorkSource implements WorkSource
                 continue;
             }
 
-            $pick = $this->pickUnlessFailed($project, $this->taskOf($issue, $reworks), $plan);
+            $pick = $this->pickWithRework($project, $issue, $plan);
             if ($pick instanceof WorkPick) {
                 return $pick;
             }
@@ -139,6 +143,17 @@ final readonly class GitHubWorkSource implements WorkSource
 
             return WorkPick::nothing(NothingPicked::TrustNotChecked);
         }
+    }
+
+    // Read again after the steering check, because a pull request opened on the task's branch during it makes the task a rework, never a fresh build.
+    private function pickWithRework(string $project, QueuedIssue $issue, IntakePlan $plan): ?WorkPick
+    {
+        $now = $this->reworksOrNone($project, $plan, [$issue]);
+        if (null === $now) {
+            return WorkPick::nothing(NothingPicked::ListingIncomplete);
+        }
+
+        return $this->pickUnlessFailed($project, $this->taskOf($issue, $now), $plan);
     }
 
     // Asked again before each pick, because access may have been withdrawn since the item was vouched. The history must still be of the planned item, because an edit in the second of the listing keeps the update time and may add a wait or change a label the plan does not hold. Its labels are vouched again too, because a label removed and applied again in that second by an account without write access leaves the label set as planned.
