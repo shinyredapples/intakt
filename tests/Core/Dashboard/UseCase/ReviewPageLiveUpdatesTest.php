@@ -1539,18 +1539,18 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return new Finding('F1', Severity::P2, 'src/discount.js', 3, null, str_repeat('The discount is applied twice when the cart holds a voucher. ', 6), FixableBy::Builder, false, null, null);
     }
 
-    // The template's indentation carries no layout, so the fixtures keep one space where it has a run of them.
-    private function normalized(string $html): string
-    {
-        return (string) preg_replace('/\s+/', ' ', $html);
-    }
-
     private function findingIdFixture(string $name): string
     {
         $contents = file_get_contents(__DIR__.'/review-finding-id/'.$name);
         self::assertIsString($contents);
 
         return rtrim($contents, "\n");
+    }
+
+    // The template's indentation carries no layout, so the fixtures keep one space where it has a run of them.
+    private function normalized(string $html): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $html);
     }
 
     private function actionsTheConnectionControllerHolds(): string
