@@ -17,7 +17,6 @@ final readonly class GitHubIssues
     private const int SECONDS = 60;
     private const string LOGIN = '/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?$/';
     private const string INTEGRATION_REFUSAL = 'Resource not accessible by integration';
-    private const string ACTIONS_BOT = 'github-actions[bot]';
 
     /**
      * @param (Closure(list<string>, string): string)|null $runner
@@ -93,16 +92,20 @@ final readonly class GitHubIssues
         $this->issueCommand(['close', (string) $number, '--comment', $comment], '');
     }
 
-    // The Actions bot stands in when GitHub refuses a workflow's own token its account, because such a token always files as that bot.
-    public function account(): string
+    // GitHub refuses this question to every installation token alike, the workflow's own and another app's, so the account is then never guessed: only the one the caller names stands in.
+    public function account(?string $given): string
     {
         try {
             $login = $this->gh(['api', 'user', '--jq', '.login'], '');
         } catch (GitHubCallFailed $refused) {
-            $login = str_contains($refused->getMessage(), self::INTEGRATION_REFUSAL) ? self::ACTIONS_BOT : throw $refused;
+            if (!str_contains($refused->getMessage(), self::INTEGRATION_REFUSAL)) {
+                throw $refused;
+            }
+
+            $login = $given ?? throw new AlarmAccountUnknown('GitHub refuses gh api user to this token, so INSTALL_CHECK_ALARM_ACCOUNT must name the login the alarm files its issues as');
         }
 
-        return 1 === preg_match(self::LOGIN, $login) ? $login : throw new GitHubCallFailed('gh api user answered something that is not an account login');
+        return 1 === preg_match(self::LOGIN, $login) ? $login : throw new GitHubCallFailed('the alarm account is not an account login');
     }
 
     /**

@@ -20,7 +20,8 @@ final readonly class InstallWalk
     private const string KEYED = 'keyed: review the sample with a provider key';
     private const string ENDED_IN = 'INTAKT_INSTALL_CHECK_ENDED_IN';
     private const string ENDED_IN_FILE = '.install-check-ended-in';
-    private const string COMPOSE_IN_FILE = '.install-check-compose-in';
+    // The last folder inside the clone's home that a command ended in; teardown runs there, and Compose's lookup of its file in parent folders and the run's own COMPOSE_PROJECT_NAME find the containers from it.
+    private const string LAST_FOLDER_IN_HOME_FILE = '.install-check-last-folder-in-home';
     // Only what .env.local can hold unquoted, because a quote or a space would change the key the container reads.
     private const string KEY_SHAPE = '/\A[A-Za-z0-9._~+\/=-]+\z/';
 
@@ -108,7 +109,7 @@ final readonly class InstallWalk
 
         // A later line that returns to home must not move teardown away from where Compose started, so the last folder inside home is kept apart.
         if ($ended !== $home) {
-            $this->files->dumpFile($home.'/'.self::COMPOSE_IN_FILE, (string) realpath($ended));
+            $this->files->dumpFile($home.'/'.self::LAST_FOLDER_IN_HOME_FILE, (string) realpath($ended));
         }
 
         return $result;
@@ -215,7 +216,7 @@ final readonly class InstallWalk
 
     private function tearDown(string $home): InstallStepResult
     {
-        $clone = $this->cloneIn($home, self::COMPOSE_IN_FILE);
+        $clone = $this->cloneIn($home, self::LAST_FOLDER_IN_HOME_FILE);
 
         return $clone === $home ? $this->skipped(self::TEARDOWN, 'no clone was made') : $this->step(self::TEARDOWN, 'docker compose down -v --remove-orphans', $clone);
     }

@@ -32,6 +32,10 @@ final class JourneyAlarmTest extends TestCase
         $arguments = array_slice($argv, 1);
         $action = 'api' === $arguments[0] ? ('user' === $arguments[1] ? 'user' : 'api') : $arguments[1];
         if ('user' === $action) {
+            if (is_file(__DIR__.'/user-refused')) {
+                fwrite(STDERR, "gh: Resource not accessible by integration (HTTP 403)\n");
+                exit(1);
+            }
             echo 'alarm[bot]';
             exit(0);
         }
@@ -104,6 +108,27 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
         self::assertStringContainsString('failed at the step `journey-check`', $this->callsOf('create')[0]['input']);
         self::assertSame(2, $this->alarm(['--install-check='.$this->directory.'/missing.json'])->getExitCode());
+    }
+
+    public function testAnInstallCheckAlarmWhoseAccountGitHubRefusesActsAsTheAccountTheSettingNames(): void
+    {
+        new Filesystem()->touch($this->directory.'/user-refused');
+        $this->openIssues((string) json_encode([['number' => 5, 'user' => ['login' => 'custom-app[bot]'], 'body' => '<!-- intakt:install-check:'.hash('sha256', 'journey-check').' -->']]));
+
+        $alarm = $this->alarm(['--install-check='.$this->failedInstallReport()], environment: ['INSTALL_CHECK_ALARM_ACCOUNT' => 'custom-app[bot]']);
+
+        self::assertSame("updated #5\n", $alarm->getOutput(), $alarm->getErrorOutput());
+    }
+
+    public function testAnInstallCheckAlarmWhoseAccountGitHubRefusesWithoutTheSettingWritesNothingAndStopsWithTwo(): void
+    {
+        new Filesystem()->touch($this->directory.'/user-refused');
+
+        $alarm = $this->alarm(['--install-check='.$this->failedInstallReport()], environment: ['INSTALL_CHECK_ALARM_ACCOUNT' => false]);
+
+        self::assertSame(2, $alarm->getExitCode());
+        self::assertStringContainsString('INSTALL_CHECK_ALARM_ACCOUNT must name the login', $alarm->getErrorOutput());
+        self::assertSame([], $this->calls());
     }
 
     public function testASecondRedRunEditsTheOpenTaskAndCreatesNone(): void
@@ -351,6 +376,14 @@ final class JourneyAlarmTest extends TestCase
     {
         putenv(false === $this->tokenBefore ? 'GH_TOKEN' : 'GH_TOKEN='.$this->tokenBefore);
         new Filesystem()->remove($this->directory);
+    }
+
+    private function failedInstallReport(): string
+    {
+        $report = $this->directory.'/report.json';
+        file_put_contents($report, new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')])->toJson());
+
+        return $report;
     }
 
     private function fixture(): string

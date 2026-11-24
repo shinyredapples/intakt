@@ -17,6 +17,7 @@ final readonly class InstallCheckAlarm
     public function __construct(
         private GitHubIssues $issues,
         private LockFactory $locks,
+        private ?string $account = null,
     ) {
     }
 
@@ -30,7 +31,7 @@ final readonly class InstallCheckAlarm
             $markers = [];
             $installs = 0;
             // Only issues the alarm's own account opened are its to edit or close, because anyone can copy a marker into an issue.
-            $owned = $this->issues->openedBy($this->issues->account());
+            $owned = $this->issues->openedBy($this->issues->account($this->account));
 
             foreach ($report->steps as $step) {
                 // An install step is known by its place in the README block, so a fixed command closes the task its broken spelling filed.
@@ -77,7 +78,7 @@ final readonly class InstallCheckAlarm
     private function settle(GitHubIssues $owned, InstallStepResult $step, string $body): ?string
     {
         $marker = explode("\n", $body, 2)[0];
-        $open = $owned->oldestOpenIssueHolding($marker);
+        $open = $this->oldestOpening($owned, $marker);
 
         if (InstallStatus::Passed === $step->status && null !== $open) {
             $owned->close($open, 'The install check passes this step again.');
@@ -97,7 +98,7 @@ final readonly class InstallCheckAlarm
 
         $created = $owned->create('fix(install): install check step "'.mb_strimwidth($step->name, 0, 60, '...').'" fails', $body, JourneyAlarmTask::LABELS);
         // The lock holds only on one machine, so a run elsewhere may have filed the same task meanwhile: the oldest stays.
-        $oldest = $owned->oldestOpenIssueHolding($marker);
+        $oldest = $this->oldestOpening($owned, $marker);
 
         if (null === $oldest || $oldest >= $created['number']) {
             return 'filed '.$created['link'];
@@ -107,6 +108,14 @@ final readonly class InstallCheckAlarm
         $owned->replaceBody($oldest, $body);
 
         return 'updated #'.$oldest.', closed #'.$created['number'].' as its duplicate';
+    }
+
+    // An alarm body quotes a log, and a log may hold another step's marker on a line of its own, so only an issue whose first line is the marker is the step's.
+    private function oldestOpening(GitHubIssues $owned, string $marker): ?int
+    {
+        $numbers = array_keys($owned->openIssuesOpeningWith('/\A'.preg_quote($marker, '/').'\z/'));
+
+        return [] === $numbers ? null : min($numbers);
     }
 
     // A README that lost a command shifts or drops the places after it, so once every install command passes, a task for a step this run did not have is closed.

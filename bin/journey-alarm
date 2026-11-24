@@ -3,6 +3,7 @@
 
 declare(strict_types=1);
 
+use Intakt\Tests\Journeys\Support\AlarmAccountUnknown;
 use Intakt\Tests\Journeys\Support\GitHubCallFailed;
 use Intakt\Tests\Journeys\Support\GitHubIssues;
 use Intakt\Tests\Journeys\Support\InstallCheckAlarm;
@@ -71,11 +72,16 @@ if (null !== $installReport) {
         exit(2);
     }
 
+    $account = (string) getenv('INSTALL_CHECK_ALARM_ACCOUNT');
+
     try {
-        $alarm = new InstallCheckAlarm(new GitHubIssues((string) getenv('GITHUB_REPOSITORY')), new LockFactory(new FlockStore()));
+        $alarm = new InstallCheckAlarm(new GitHubIssues((string) getenv('GITHUB_REPOSITORY')), new LockFactory(new FlockStore()), '' === $account ? null : $account);
         fwrite(STDOUT, $alarm->raise(InstallReport::fromJson($json), $link)."\n");
 
         exit(0);
+    } catch (AlarmAccountUnknown $missing) {
+        fwrite(STDERR, $missing->getMessage()."\n");
+        exit(2);
     } catch (InstallCheckCouldNotRun|GitHubCallFailed $failure) {
         fwrite(STDERR, $failure->getMessage()."\n");
         exit(1);

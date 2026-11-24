@@ -26,6 +26,7 @@ final class InstallCheckTest extends TestCase
 {
     private const string CLONE_COMMAND = 'git clone https://github.com/shinyredapples/intakt.git && cd intakt';
     private const string ACCOUNT = 'alarm[bot]';
+    private const string INTEGRATION_REFUSAL = 'gh api user failed: gh: Resource not accessible by integration (HTTP 403)';
     private const string README = "<!-- install-check -->\n```\n".self::CLONE_COMMAND."\ndocker compose up -d --wait\n```\n";
 
     private string $directory = '';
@@ -164,11 +165,29 @@ final class InstallCheckTest extends TestCase
         self::assertSame(['create'], array_map(static fn (array $call): string => $call['arguments'][1], $this->github));
     }
 
-    public function testAWorkflowTokenThatCannotReadItsAccountActsAsTheActionsBot(): void
+    public function testATokenThatCannotReadItsAccountActsAsTheAccountTheCallerNames(): void
     {
-        $this->account = new GitHubCallFailed('gh api user failed: gh: Resource not accessible by integration (HTTP 403)');
+        $this->account = new GitHubCallFailed(self::INTEGRATION_REFUSAL);
 
-        self::assertSame('github-actions[bot]', $this->issues()->account());
+        self::assertSame('custom-app[bot]', $this->issues()->account('custom-app[bot]'));
+    }
+
+    public function testATokenThatCannotReadItsAccountWithNoAccountNamedStopsTheAlarmBeforeItWritesAnything(): void
+    {
+        $this->account = new GitHubCallFailed(self::INTEGRATION_REFUSAL);
+
+        try {
+            $this->alarm(new InstallReport([new InstallStepResult('demo', InstallStatus::Passed, '')]), [['number' => 7, 'user' => ['login' => 'github-actions[bot]'], 'body' => $this->markerOf('demo')]]);
+            self::fail('the alarm should have stopped');
+        } catch (AlarmAccountUnknown $missing) {
+            self::assertStringContainsString('INSTALL_CHECK_ALARM_ACCOUNT', $missing->getMessage());
+            self::assertSame([], $this->github);
+        }
+    }
+
+    public function testAnAccountGitHubAnswersWinsOverTheOneTheCallerNames(): void
+    {
+        self::assertSame(self::ACCOUNT, $this->issues()->account('custom-app[bot]'));
     }
 
     public function testAnAccountThatCannotBeReadForAnotherReasonStopsTheAlarm(): void
@@ -178,7 +197,7 @@ final class InstallCheckTest extends TestCase
         $this->expectException(GitHubCallFailed::class);
         $this->expectExceptionMessageMatches('/^gh api user failed: gh: Bad credentials \(HTTP 401\)$/');
 
-        $this->issues()->account();
+        $this->issues()->account('custom-app[bot]');
     }
 
     public function testAnAnswerThatIsNoLoginIsRefusedAsTheAccount(): void
@@ -186,9 +205,45 @@ final class InstallCheckTest extends TestCase
         $this->account = "alarm\nsecond line";
 
         $this->expectException(GitHubCallFailed::class);
-        $this->expectExceptionMessageMatches('/^gh api user answered something that is not an account login$/');
+        $this->expectExceptionMessageMatches('/^the alarm account is not an account login$/');
 
-        $this->issues()->account();
+        $this->issues()->account(null);
+    }
+
+    public function testANamedAccountThatIsNoLoginIsRefused(): void
+    {
+        $this->account = new GitHubCallFailed(self::INTEGRATION_REFUSAL);
+
+        $this->expectException(GitHubCallFailed::class);
+        $this->expectExceptionMessageMatches('/^the alarm account is not an account login$/');
+
+        $this->issues()->account("bot\nsecond");
+    }
+
+    public function testAPassClosesOnlyTheStepsOwnIssueNotAnOlderAlarmWhoseLogQuotesItsMarker(): void
+    {
+        $answer = $this->alarm(new InstallReport([new InstallStepResult('ui-check', InstallStatus::Passed, '')]), $this->olderAlarmQuotingUiCheckAndTheReal());
+
+        self::assertSame('closed #9 (ui-check)', $answer);
+        self::assertSame([['issue', 'close', '9']], array_map(static fn (array $call): array => array_slice($call['arguments'], 0, 3), $this->github));
+    }
+
+    public function testAFailureEditsOnlyTheStepsOwnIssueNotAnOlderAlarmWhoseLogQuotesItsMarker(): void
+    {
+        $answer = $this->alarm(new InstallReport([new InstallStepResult('ui-check', InstallStatus::Failed, 'boom')]), $this->olderAlarmQuotingUiCheckAndTheReal());
+
+        self::assertSame('updated #9', $answer);
+        self::assertSame([['issue', 'edit', '9']], array_map(static fn (array $call): array => array_slice($call['arguments'], 0, 3), $this->github));
+    }
+
+    public function testAFailureWithOnlyAnOlderAlarmQuotingItsMarkerFilesANewIssueAndLeavesTheOlderAlone(): void
+    {
+        $older = [$this->olderAlarmQuotingUiCheckAndTheReal()[0]];
+
+        $answer = $this->alarm(new InstallReport([new InstallStepResult('ui-check', InstallStatus::Failed, 'boom')]), $older);
+
+        self::assertSame('filed https://github.com/example/repo/issues/7', $answer);
+        self::assertSame(['create'], array_map(static fn (array $call): string => $call['arguments'][1], $this->github));
     }
 
     public function testTeardownStopsTheContainersWhereComposeRanAfterALaterLineLeftTheClone(): void
@@ -530,6 +585,22 @@ final class InstallCheckTest extends TestCase
         $this->github[] = ['arguments' => $arguments, 'input' => $input];
 
         return 'create' === $arguments[1] ? 'https://github.com/example/repo/issues/7' : '';
+    }
+
+    private function markerOf(string $identity): string
+    {
+        return '<!-- intakt:install-check:'.hash('sha256', $identity).' -->';
+    }
+
+    /**
+     * @return list<array{number: int, body: string}>
+     */
+    private function olderAlarmQuotingUiCheckAndTheReal(): array
+    {
+        return [
+            ['number' => 7, 'body' => $this->markerOf('demo')."\nLast lines of its log:\n\n```\n".$this->markerOf('ui-check')."\n```\n"],
+            ['number' => 9, 'body' => $this->markerOf('ui-check')."\nfiled by the alarm"],
+        ];
     }
 
     /**
