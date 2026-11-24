@@ -25,7 +25,7 @@ final class ContainerUnknownParameterRuleTest extends PhpStanRuleTestCase
      */
     public static function casesOfOneRun(): iterable
     {
-        return self::casesOfOnePhpstanRun([
+        return self::casesOfOnePhpstanRunOnTheFixtureKernel([
             'ReadingAMisspelledParameterNameFailsStaticAnalysis' => ['misspelled-parameter-name', 'src/Settings.php:17 intakt.containerUnknownParameter Parameter "kernal.debug" is not defined in the container'],
             'ReadingADefinedParameterNamePassesStaticAnalysis' => ['typed-container-parameter'],
         ]);

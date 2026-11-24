@@ -88,6 +88,24 @@ final class SandboxTest extends TestCase
         self::assertSame(dirname(__DIR__, 2).'/bin/console', readlink($this->sandbox->root.'/bin/console'));
     }
 
+    public function testBootingTheFixtureKernelKeepsTheCallerOfTheRuleFixture(): void
+    {
+        $this->sandbox->replaceFixtureWith('private-get-service-id-in-union');
+
+        $this->sandbox->bootFixtureKernel();
+
+        self::assertFileEquals(__DIR__.'/Fixtures/private-get-service-id-in-union/src/Lookup.php.fixture', $this->sandbox->root.'/src/Lookup.php');
+        self::assertFileExists($this->sandbox->root.'/src/Kernel.php');
+    }
+
+    public function testBootingTheFixtureKernelLeavesItsOwnCallerOut(): void
+    {
+        $this->sandbox->bootFixtureKernel();
+
+        self::assertFileDoesNotExist($this->sandbox->root.'/src/Lookup.php');
+        self::assertFileExists($this->sandbox->root.'/config/services.yaml');
+    }
+
     public function testAGateRunInTheTestProcessReadsAsItsCheckLine(): void
     {
         $this->sandbox->write('README.md', "Plain \u{2014} text\n");

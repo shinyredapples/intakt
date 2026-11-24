@@ -20,6 +20,7 @@ use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyVariables;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
+use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
@@ -49,13 +50,10 @@ use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
 use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Config\Definition\Processor;
-use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
-use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigurator;
 use Symfony\Component\DependencyInjection\Parameter;
@@ -64,36 +62,10 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\HttpKernel\Log\Logger;
 use Symfony\Component\Yaml\Yaml;
 
-// Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
-    $environmentValue = static function (string $name): ?string {
-        $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+    $environmentValue = ProviderKeySource::environmentValue(...);
 
-        return is_string($value) && '' !== $value ? $value : null;
-    };
-
-    // The framework's default vault directory and decryption key (SYMFONY_DECRYPTION_SECRET when set, else the vault's own private key file), which config/packages/framework.yaml keeps.
-    $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
-    // Decoded by the framework's own base64: env processor (lenient, either alphabet), so a key the framework accepts is not missing here.
-    $decryptionSecret = $environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '';
-    $decryptionKey = new EnvVarProcessor(new Container())->getEnv('base64', 'SYMFONY_DECRYPTION_SECRET', static fn (): string => $decryptionSecret);
-    $vault = new SodiumVault($vaultDirectory, is_string($decryptionKey) ? $decryptionKey : null);
-    // Names only, since decrypting every entry up front would let an unrelated secret abort the boot; the framework's env loader reveals one name at a time too.
-    $vaultNames = $vault->list();
-
-    // False for a listed secret whose reveal throws, apart from null for one the vault lacks or cannot open, because the vault's loader throws the same way at run time before any later loader is asked.
-    $vaultValue = static function (string $name) use ($vault, $vaultNames): string|false|null {
-        if (!array_key_exists($name, $vaultNames)) {
-            return null;
-        }
-
-        try {
-            return $vault->reveal($name);
-        } catch (SodiumException|RuntimeException) {
-            // A decryption key of the wrong length, or no key at all, throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
-            return false;
-        }
-    };
+    $vault = ProviderKeySource::openVault(__DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env()), $environmentValue('SYMFONY_DECRYPTION_SECRET'));
 
     // Only the test environment reads a variable for it, so a test keeps its key outside the install's data volume, where the file is the live key, and no other install can be pointed away from it.
     $keptKeyDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_PROVIDER_KEY_DIR') : null) ?? dirname(__DIR__, 2).'/var/data';
@@ -104,20 +76,7 @@ return static function (ContainerConfigurator $container): void {
     // The framework's own fallback logger on stderr, because the app's logger is a service of the container being built, and a skipped kept key must not go unnoticed.
     $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, new Logger(LogLevel::WARNING), [$vault])->loadEnvVars();
 
-    // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
-    $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {
-        if (null !== $environmentValue($name)) {
-            return true;
-        }
-
-        $fromVault = $vaultValue($name);
-        // The kept key must not enable the provider here: resolving the variable would throw in the vault's loader before the kept key is reached.
-        if (false === $fromVault) {
-            return false;
-        }
-
-        return '' !== ($fromVault ?? '') || '' !== ($keptValues[$name] ?? '');
-    };
+    $keySource = new ProviderKeySource($vault, $keptValues, $environmentValue);
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
@@ -278,11 +237,18 @@ return static function (ContainerConfigurator $container): void {
     $disabled = [];
     $disabledAccounts = [];
     $enabledAccounts = [];
+    $listedAccounts = [];
+    // Keyed as the configuration tree normalizes them, so a provider listed as openai-compatible counts as listed under openai_compatible.
+    $explicitAccounts = is_array($contents['accounts'] ?? null) ? array_flip(array_map(static fn (int|string $key): string => str_replace('-', '_', (string) $key), array_keys($contents['accounts']))) : [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
-        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
+        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command; accounts the file lists for it still show, without credentials.
         if (Provider::Codex === $provider && !isset($configuration[Provider::Codex->configKey()])) {
+            if (array_key_exists($provider->value, $explicitAccounts)) {
+                $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
+            }
+
             continue;
         }
 
@@ -291,7 +257,7 @@ return static function (ContainerConfigurator $container): void {
 
         foreach ($configuration['accounts'][$provider->value] as $name) {
             $account = new Account($provider, $name);
-            $missing = new EnvironmentVariables(...array_filter([...$account->variables()], static fn (string $variable): bool => !$isSet($variable)));
+            $missing = $keySource->missing($account);
 
             if ($missing->isEmpty()) {
                 $enabled[$name] = $account;
@@ -300,6 +266,11 @@ return static function (ContainerConfigurator $container): void {
             }
 
             $missingOf[$name] = $missing;
+        }
+
+        // A provider without a key that the file does not list under accounts keeps only its implicit default account, so the owner never set it up and only the disabled-provider note names it.
+        if ([] !== $enabled || array_key_exists($provider->value, $explicitAccounts)) {
+            $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
         }
 
         // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
@@ -353,6 +324,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    $container->parameters()->set(AiServices::LISTED_ACCOUNTS, $listedAccounts);
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
         static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),
