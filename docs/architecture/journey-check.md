@@ -28,7 +28,7 @@ A journey is `{ name, steps }`, and a step is `{ name, run(page, address) }`. Th
 
 ## Output
 
-The screenshots of one run go to `var/journey-check/<run>/`, where `<run>` is the run's start in UTC as `toISOString()` with `:` and `.` replaced by `-` (for example `2026-11-24T09-05-07-012Z`), and the file is the journey's name in lower case with every other run of characters turned into `-` (`start-a-review.png`). The folder is made only when a journey fails, so a passing run leaves none. When the folder cannot be created or `page.screenshot` fails, the journey keeps its failed step and exit code 1, and the report says `no screenshot: <reason>` instead of the path.
+The screenshots of one run go to `var/journey-check/<run>/`, where `<run>` is the run's start in UTC as `toISOString()` with `:` and `.` replaced by `-` followed by `-` and eight random hex digits, so runs that start in the same millisecond never share a folder (for example `2026-11-24T09-05-07-012Z-1a2b3c4d`), and the file is the journey's name in lower case with every other run of characters turned into `-` (`start-a-review.png`). The folder is made only when a journey fails, so a passing run leaves none. When the folder cannot be created or `page.screenshot` fails, the journey keeps its failed step and exit code 1, and the report says `no screenshot: <reason>` instead of the path.
 
 ```
 passed <journey>

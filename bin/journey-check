@@ -8,6 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'var', 'journey-check');
@@ -43,6 +44,8 @@ function parseAddress(text) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new CheckCouldNotRun('the dashboard address is not an http or https address; ' + USAGE);
   url.username = '';
   url.password = '';
+  url.search = '';
+  url.hash = '';
 
   return url.href.replace(/\/+$/, '');
 }
@@ -57,8 +60,9 @@ async function expectAnswer(address, timeout) {
   }
 }
 
+// Two runs may start in the same millisecond, so a random suffix keeps their screenshots apart.
 function runName(now) {
-  return now.toISOString().replace(/[:.]/g, '-');
+  return now.toISOString().replace(/[:.]/g, '-') + '-' + randomUUID().slice(0, 8);
 }
 
 // A fresh context per journey, so cookies and storage one journey leaves behind never help or hinder the next.
@@ -112,6 +116,7 @@ function open(pathOnSite) {
     name: `open ${pathOnSite}`,
     run: async (page, address) => {
       const response = await page.goto(address + pathOnSite);
+      if (response === null) throw new Error(`no page was loaded for ${pathOnSite}`);
       if (!response.ok()) throw new Error(`HTTP ${response.status()} for ${pathOnSite}`);
     },
   };
@@ -122,7 +127,7 @@ function press(role, name) {
 }
 
 function see(text) {
-  return { name: `see "${text}"`, run: (page) => page.getByText(text, { exact: true }).first().waitFor() };
+  return { name: `see "${text}"`, run: (page) => page.getByText(text, { exact: true }).filter({ visible: true }).first().waitFor() };
 }
 
 function report(results, root) {

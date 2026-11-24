@@ -81,3 +81,17 @@ test('each journey starts from a fresh page without the storage and cookies of t
     assert.equal(first.failure, null);
     assert.equal(second.failure, null);
 });
+
+test('seeing a text passes when a hidden copy comes first and a visible copy follows', async () => {
+    const hiddenFirst = '<!doctype html><html lang="en"><head><title>T</title></head><body><p hidden>Started</p><p>Started</p></body></html>';
+    const routed = { newContext: async () => {
+        const context = await browser.newContext();
+        await context.route(`${ORIGIN}/**`, (route) => route.fulfill({ contentType: 'text/html', body: hiddenFirst }));
+
+        return context;
+    } };
+
+    const result = await runJourney(routed, ORIGIN, { name: 'hidden first', steps: [open('/'), see('Started')] }, scratch());
+
+    assert.equal(result.failure, null);
+});

@@ -106,7 +106,17 @@ test('the check stops with exit 2 and its usage when no address is given', async
 });
 
 test('a run is named by its start in UTC, safe as a folder name', () => {
-    assert.equal(runName(new Date(Date.UTC(2026, 10, 24, 9, 5, 7, 12))), '2026-11-24T09-05-07-012Z');
+    assert.match(runName(new Date(Date.UTC(2026, 10, 24, 9, 5, 7, 12))), /^2026-11-24T09-05-07-012Z-[0-9a-f]{8}$/);
+});
+
+test('two runs that start in the same millisecond get different folders', () => {
+    const start = new Date(Date.UTC(2026, 10, 24, 9, 5, 7, 12));
+
+    assert.notEqual(runName(start), runName(start));
+});
+
+test('a query string or fragment on the address is dropped, so routes append cleanly', () => {
+    assert.equal(parseAddress('http://localhost:7780/?t=1#start'), 'http://localhost:7780');
 });
 
 test('a failed journey keeps its step and exit 1 when its folder cannot be created', async () => {
