@@ -181,18 +181,30 @@ final class TaskDetailStylesTest extends TestCase
     {
         $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
 
-        self::assertMatchesRegularExpression('/display:\s*grid;\s*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/', $rules['.round .ledger.reviewers tr'] ?? '');
+        self::assertMatchesRegularExpression('/display:\s*grid;\s*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+fit-content\(60%\);/', $rules['.round .ledger.reviewers tr'] ?? '');
         self::assertMatchesRegularExpression('/^\s*grid-row:\s*1;\s*grid-column:\s*2;\s*$/', $rules['.round .ledger.reviewers td:nth-child(3)'] ?? '');
         self::assertMatchesRegularExpression('/^\s*grid-column:\s*1 \/ -1;\s*$/', $rules['.round .ledger.reviewers td:nth-child(2), .round .ledger.reviewers td:nth-child(n+4)'] ?? '');
         self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.round .ledger.reviewers .stop-reviewer .btn'] ?? '');
     }
 
-    // The column headings are clipped on a phone, so the count says what it counts.
-    public function testOnAPhoneAReviewersFindingsCountCarriesItsOwnLabel(): void
+    // A blocked reviewer's unbroken 100-character note widened an `auto` outcome track past 390 px and pushed the findings and Stop offscreen.
+    public function testOnAPhoneAReviewersLongNoteWrapsInsideAnOutcomeColumnThatCanShrink(): void
     {
         $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
 
-        self::assertMatchesRegularExpression('/clip-path:\s*inset\(50%\);/', $rules['.round .ledger.reviewers thead'] ?? '');
+        self::assertDoesNotMatchRegularExpression('/grid-template-columns:[^;]*\bauto\b/', $rules['.round .ledger.reviewers tr'] ?? '');
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere;/', $rules['.round .ledger.reviewers td'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*flex-wrap:\s*wrap;\s*$/', $rules['.round .ledger.reviewers .reviewer-outcome'] ?? '');
+    }
+
+    // The count says what it counts in each row, and the Findings heading stays visible with the newest round's "counted" label and its source tooltip.
+    public function testOnAPhoneTheFindingsHeadingWithItsCountedLabelStaysVisibleWhileTheOtherHeadingsAreClipped(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertDoesNotMatchRegularExpression('/clip-path/', $rules['.round .ledger.reviewers thead'] ?? '');
+        self::assertMatchesRegularExpression('/clip-path:\s*inset\(50%\);/', $rules['.round .ledger.reviewers th:not(.num), .round .ledger.reviewers th.num:not(:has(.figure-kind))'] ?? '');
+        self::assertMatchesRegularExpression('/display:\s*block;.*text-align:\s*left;/s', $rules['.round .ledger.reviewers th.num'] ?? '');
         self::assertMatchesRegularExpression('/content:\s*"Findings: ";/', $rules['.round .ledger.reviewers td.num::before'] ?? '');
     }
 

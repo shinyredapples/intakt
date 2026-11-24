@@ -740,10 +740,15 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .log { margin-top: 0; }
 }
 /* At 390 wide the reviewers table measured 567 px in a 358 px box and hid the count and Stop past the edge, so a phone stacks each reviewer: role and outcome, model, findings, then Stop across the row. */
+/* The outcome track is capped and its text may break anywhere, because a blocked reviewer's unbroken note in an `auto` track pushed the row offscreen again. */
+/* Only the Findings heading stays in view, and only when it carries the newest round's "counted" label, because that label and its source tooltip live nowhere else. */
 @media (max-width: 760px) {
-  .round .ledger.reviewers thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .round .ledger.reviewers tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s12); padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
-  .round .ledger.reviewers td { padding: 0 0 var(--s4); border-bottom: 0; text-align: left; }
+  .round .ledger.reviewers thead, .round .ledger.reviewers thead tr { display: block; }
+  .round .ledger.reviewers th:not(.num), .round .ledger.reviewers th.num:not(:has(.figure-kind)) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .round .ledger.reviewers th.num { display: block; padding: 0 0 var(--s8); border-bottom: 0; text-align: left; }
+  .round .ledger.reviewers tr { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(60%); column-gap: var(--s12); padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
+  .round .ledger.reviewers td { padding: 0 0 var(--s4); border-bottom: 0; text-align: left; overflow-wrap: anywhere; }
+  .round .ledger.reviewers .reviewer-outcome { flex-wrap: wrap; }
   .round .ledger.reviewers td:nth-child(3) { grid-row: 1; grid-column: 2; }
   .round .ledger.reviewers td:nth-child(2), .round .ledger.reviewers td:nth-child(n+4) { grid-column: 1 / -1; }
   .round .ledger.reviewers td.num::before { content: "Findings: "; color: var(--muted); }

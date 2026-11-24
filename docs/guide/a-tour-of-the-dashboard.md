@@ -91,7 +91,7 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 
 The main view shows the review's current state, its rounds and **Stop**. Stop sits beside the title. After a second click it asks every reviewer working at that moment to stop. It shows up by itself when a reviewer starts working and goes away by itself once the round is done. On a phone, Stop sits under the review path, on the left half of its row.
 
-**Full record** holds the **Timeline** and the **Live log**. The Timeline lists the rounds, the newest open and older finished ones folded to a line, with each reviewer's outcome and findings. On a phone, each reviewer there takes its own lines, with its **Stop this reviewer** button across the row.
+**Full record** holds the **Timeline** and the **Live log**. The Timeline lists the rounds, the newest open and older finished ones folded to a line, with each reviewer's outcome and findings. On a phone, each reviewer there takes its own lines, with its **Stop this reviewer** button across the row, and a long note from a reviewer wraps inside the screen. The newest round keeps its **Findings counted** heading in view, so you can still point at "counted" to see where the count comes from.
 
 The Live log shows a running review's tool calls in plain words ("read src/discount.js"), each with what the reviewer said just before it. When a reviewer was asked again, one line says so and the second try's words replace the first's. A reviewer's final answer shows as its verdict and one line per problem, or one line saying it could not be read.
 
@@ -99,7 +99,7 @@ A summary is pinned under the log: tool calls by kind, cost, files read and the 
 
 On a wide screen the Timeline and the Live log sit side by side, and on a very wide screen the summary moves beside the log. On a phone, a **Timeline** / **Live log** switch that stays in view as you scroll shows one of the two (the arrow keys, Home and End move between them). A long change name wraps rather than running off the screen, also in the trail at the top.
 
-Once they come, the buttons let you **stop** the job, **continue** it, or **send it back with a note**. Like every change on the dashboard, the buttons ask for no login: whoever can open the dashboard can press them ([steering budgets and pauses](#steering-budgets-and-pauses)).
+**Stop** works today. *(Planned: the buttons to **continue** the job or **send it back with a note**.)* Like every change on the dashboard, these buttons ask for no login: whoever can open the dashboard can press them ([steering budgets and pauses](#steering-budgets-and-pauses)).
 
 ## Starting a task from the dashboard
 
