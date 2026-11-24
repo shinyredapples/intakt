@@ -47,6 +47,16 @@ final class RedactionTest extends TestCase
         self::assertSame('fixtures/key_[redacted].txt', $redacted);
     }
 
+    public function testItRedactsTwoWebTokensJoinedByAHyphenWhole(): void
+    {
+        $first = 'eyJ'.str_repeat('H', 12).'.eyJ'.str_repeat('P', 12).'.'.str_repeat('S', 16);
+        $second = 'eyJ'.str_repeat('h', 12).'.eyJ'.str_repeat('p', 12).'.'.str_repeat('s', 16);
+
+        $redacted = new Redaction()->redact('fixtures/key_'.$first.'-'.$second.'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
     public function testItLeavesAWordThatContainsATokenPrefixAfterALetter(): void
     {
         $word = 'xghp_'.str_repeat('a', 30);

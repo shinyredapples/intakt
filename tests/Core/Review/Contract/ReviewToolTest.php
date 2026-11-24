@@ -83,6 +83,16 @@ final class ReviewToolTest extends TestCase
         self::assertStringContainsString('fixtures/key_[redacted]', $words);
     }
 
+    public function testAReadOfAPathHoldingTwoWebTokensJoinedByAHyphenReadsAsOneMarker(): void
+    {
+        $first = 'eyJ'.str_repeat('H', 12).'.eyJ'.str_repeat('P', 12).'.'.str_repeat('S', 16);
+        $second = 'eyJ'.str_repeat('I', 12).'.eyJ'.str_repeat('Q', 12).'.'.str_repeat('T', 16);
+
+        $words = ReviewTool::ReadFile->callInWords(new ToolCall('call-1', ReviewTool::ReadFile->value, ['path' => 'fixtures/key_'.$first.'-'.$second.'.txt']));
+
+        self::assertSame('read fixtures/key_[redacted].txt', $words);
+    }
+
     /**
      * @return iterable<string, array{ReviewTool}>
      */

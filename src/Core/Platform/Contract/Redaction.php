@@ -14,15 +14,15 @@ final readonly class Redaction
 
     public const string MASK = "\0";
 
-    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`); each shape is matched on its own, because one match consumes its text, and `sk-` running on into `-eyJ...` would hide the token that starts inside it.
+    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`). Each shape is tried at every position inside a lookahead, so a match does not consume its text: `sk-...` or a web token's signature running on into `-eyJ...` would otherwise hide the token that starts inside it.
     private const array SECRET_SHAPES = [
-        '~-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)~s',
-        '~(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})~',
-        '~(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}~',
-        '~(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}\b~',
-        '~(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}~',
-        '~(?<![A-Za-z0-9])eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+~',
-        '~\bBearer\s+[A-Za-z0-9._\\~+/=-]{8,}~',
+        '-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)',
+        '(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})',
+        '(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}',
+        '(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}\b',
+        '(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}',
+        '(?<![A-Za-z0-9])eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+',
+        '\bBearer\s+[A-Za-z0-9._\\~+/=-]{8,}',
     ];
 
     // Headers, URLs and secret shapes are looked for both in the original text and with the held credentials masked: a held credential may spell a header name or a scheme, or end right before one and hide the word boundary its pattern needs. All parts are replaced at the end, so overlapping parts become one marker.
@@ -82,12 +82,12 @@ final readonly class Redaction
 
     private function addSecretShapes(string $text, RedactedSpans $spans): bool
     {
-        foreach (self::SECRET_SHAPES as $pattern) {
-            if (false === preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
+        foreach (self::SECRET_SHAPES as $shapePattern) {
+            if (false === preg_match_all('~(?=('.$shapePattern.'))~s', $text, $matches, PREG_OFFSET_CAPTURE)) {
                 return false;
             }
 
-            foreach ($matches[0] as [$shape, $at]) {
+            foreach ($matches[1] as [$shape, $at]) {
                 $spans->add($at, $at + strlen($shape));
             }
         }
