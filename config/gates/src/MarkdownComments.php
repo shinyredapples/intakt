@@ -21,7 +21,8 @@ final readonly class MarkdownComments
     {
         // Code lines are set aside, so a "<!--" a reader sees in code hides nothing after it.
         $masked = array_replace($lines, array_fill_keys($codeLines, self::CODE_LINE));
-        $shown = preg_replace_callback(self::CODE_SPAN_OR_COMMENT, $this->blankedComment(...), implode("\n", $masked));
+        $text = implode("\n", $masked);
+        $shown = preg_replace_callback(self::CODE_SPAN_OR_COMMENT, fn (array $match): string => $this->blankedComment($match[0], $text), $text, flags: PREG_OFFSET_CAPTURE);
 
         if (null === $shown) {
             return [$lines, $codeLines];
@@ -34,10 +35,24 @@ final readonly class MarkdownComments
     }
 
     /**
-     * @param array<array-key, string> $match
+     * @param array{string, int} $match
      */
-    private function blankedComment(array $match): string
+    private function blankedComment(array $match, string $text): string
     {
-        return str_starts_with(ltrim($match[0]), '<!--') ? ' '.str_repeat("\n", substr_count($match[0], "\n")) : $match[0];
+        [$found, $offset] = $match;
+
+        if (!str_starts_with(ltrim($found), '<!--')) {
+            return $found;
+        }
+
+        $blank = ' '.str_repeat("\n", substr_count($found, "\n"));
+
+        // A comment at a line start opens an HTML block, which shows the rest of its closing line as text, so an escape keeps that rest from reading as a heading or another block.
+        return $this->startsALine($text, $offset) && 1 === preg_match('/\G[ \t]*[^\s]/', $text, offset: $offset + strlen($found)) ? $blank.'\\' : $blank;
+    }
+
+    private function startsALine(string $text, int $offset): bool
+    {
+        return 1 === preg_match('/(?:^|\n) {0,3}\z/', substr($text, 0, $offset));
     }
 }

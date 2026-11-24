@@ -75,6 +75,25 @@ final class MarkdownPageTest extends TestCase
         self::assertEquals(new MarkdownSummary(2, false, true), $summary);
     }
 
+    public function testAQuotedHeadingBeforeTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void
+    {
+        $summary = $this->page('> # Quote', '', '## In short', '', 'Overview.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, false, true), $summary);
+    }
+
+    public function testHashesRightAfterACommentAtALineStartAreNoSummaryHeading(): void
+    {
+        self::assertNull($this->page('# Title', '', '<!-- note -->## In short', '', 'Overview.')->summary());
+    }
+
+    public function testACommentOnTheLineBeforeTheInShortHeadingLeavesTheSummaryOpeningThePage(): void
+    {
+        $summary = $this->page('# Title', '', '<!-- note -->', '## In short', '', 'Overview.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, true, true), $summary);
+    }
+
     public function testAFencedBlockBetweenTheTitleAndTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void
     {
         $page = new MarkdownPage('docs/page.md', ['# Title', '', '', '', '', '', '## In short', 'Summary.'], [2, 3, 4]);

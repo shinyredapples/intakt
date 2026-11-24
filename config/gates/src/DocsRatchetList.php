@@ -75,11 +75,11 @@ final readonly class DocsRatchetList
         foreach ($value as $page => $keys) {
             $listed = self::stringsOf($keys);
 
-            if (null === $listed || [] === $listed || array_any($listed, static fn (string $key): bool => 1 !== preg_match(self::KEY, $key))) {
+            if (!self::isPage($page) || null === $listed || [] === $listed || array_any($listed, static fn (string $key): bool => 1 !== preg_match(self::KEY, $key))) {
                 return null;
             }
 
-            $paragraphs[(string) $page] = $listed;
+            $paragraphs[$page] = $listed;
         }
 
         return $paragraphs;
@@ -97,14 +97,20 @@ final readonly class DocsRatchetList
         $ceilings = [];
 
         foreach ($value as $page => $ceiling) {
-            if (!is_int($ceiling) || $ceiling <= DocsLimits::PAGE_WORDS) {
+            if (!self::isPage($page) || !is_int($ceiling) || $ceiling <= DocsLimits::PAGE_WORDS) {
                 return null;
             }
 
-            $ceilings[(string) $page] = $ceiling;
+            $ceilings[$page] = $ceiling;
         }
 
         return $ceilings;
+    }
+
+    // JSON decoding turns a numeric object key into an integer, so only a string naming a Markdown file is a page.
+    private static function isPage(mixed $key): bool
+    {
+        return is_string($key) && str_ends_with($key, '.md');
     }
 
     /**
@@ -114,7 +120,7 @@ final readonly class DocsRatchetList
     {
         $paths = self::stringsOf($value);
 
-        return null === $paths || count(array_unique($paths)) !== count($paths) ? null : $paths;
+        return null === $paths || count(array_unique($paths)) !== count($paths) || !array_all($paths, self::isPage(...)) ? null : $paths;
     }
 
     /**

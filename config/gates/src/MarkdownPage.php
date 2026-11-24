@@ -226,12 +226,13 @@ final readonly class MarkdownPage
 
     private function opensPageAt(int $heading): bool
     {
-        $before = array_values(array_filter(
-            array_slice($this->kinds, 0, $heading),
+        $before = array_keys(array_filter(
+            array_slice($this->kinds, 0, $heading, true),
             static fn (MarkdownLineKind $kind): bool => MarkdownLineKind::Blank !== $kind,
         ));
 
-        return in_array($before, [[], [MarkdownLineKind::Heading]], true);
+        // Only the page's own title may come first, so a quoted heading before "In short" is content, not the title.
+        return [] === $before || 1 === count($before) && $this->isOwnHeading($before[0]);
     }
 
     private function startsATable(int $header): bool

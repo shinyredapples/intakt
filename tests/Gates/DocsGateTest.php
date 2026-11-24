@@ -224,6 +224,30 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/architecture/big.md: a page under docs/architecture/ over 1500 words must open with an "In short" section', $run->findingsOf('docs'));
     }
 
+    public function testHashesRightAfterACommentAtALineStartDoNotSatisfyTheSummaryRule(): void
+    {
+        $page = "# Big\n\n<!-- note -->## In short\n\nOverview.\n\n## Detail\n\n".$this->chapters(1600);
+        $run = $this->changeWith([self::ARCHITECTURE_PAGE => $page])->runGate($this->gate());
+
+        self::assertStringContainsString('docs/architecture/big.md: a page under docs/architecture/ over 1500 words must open with an "In short" section', $run->findingsOf('docs'));
+    }
+
+    public function testACommentOnTheLineRightBeforeTheInShortHeadingPasses(): void
+    {
+        $page = "# Big\n\n<!-- note -->\n## In short\n\nOverview.\n\n## Detail\n\n".$this->chapters(1600);
+        $run = $this->changeWith([self::ARCHITECTURE_PAGE => $page])->runGate($this->gate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
+    }
+
+    public function testAQuotedHeadingBeforeTheInShortDoesNotSatisfyTheSummaryRule(): void
+    {
+        $page = "> # Quote\n\n## In short\n\nOverview.\n\n## Detail\n\n".$this->chapters(1600);
+        $run = $this->changeWith([self::ARCHITECTURE_PAGE => $page])->runGate($this->gate());
+
+        self::assertStringContainsString('docs/architecture/big.md: a page under docs/architecture/ over 1500 words must open with an "In short" section', $run->findingsOf('docs'));
+    }
+
     public function testAnInShortAtTheLimitPasses(): void
     {
         $run = $this->changeWith([self::ARCHITECTURE_PAGE => $this->summarizedPage($this->words(60)."\n\n".$this->words(60), 1600)])->runGate($this->gate());
@@ -273,6 +297,35 @@ final class DocsGateTest extends SandboxTestCase
         $run = $this->changeWith([DocsRatchetList::PATH => '{"paragraphs": {"docs/user/start.md": ["the paragraph"]}, "pages": {}, "summaries": []}'])->runGate($this->gate());
 
         self::assertStringContainsString('ratchet/docs.json is not valid', $run->findingsOf('docs'));
+    }
+
+    public function testAListWithANumericParagraphPageKeyFailsAsNotValid(): void
+    {
+        $run = $this->changeWith([DocsRatchetList::PATH => '{"paragraphs": {"1": ["0123456789abcdef"]}, "pages": {}, "summaries": []}'])->runGate($this->gate());
+
+        self::assertStringContainsString('ratchet/docs.json is not valid', $run->findingsOf('docs'));
+    }
+
+    public function testAListWithANumericCeilingPageKeyFailsAsNotValid(): void
+    {
+        $run = $this->changeWith([DocsRatchetList::PATH => '{"paragraphs": {}, "pages": {"7": 2000}, "summaries": []}'])->runGate($this->gate());
+
+        self::assertStringContainsString('ratchet/docs.json is not valid', $run->findingsOf('docs'));
+    }
+
+    public function testAListExcusingASummaryOfAPathThatIsNoMarkdownPageFailsAsNotValid(): void
+    {
+        $run = $this->changeWith([DocsRatchetList::PATH => '{"paragraphs": {}, "pages": {}, "summaries": ["docs/architecture/notes.txt"]}'])->runGate($this->gate());
+
+        self::assertStringContainsString('ratchet/docs.json is not valid', $run->findingsOf('docs'));
+    }
+
+    public function testAListWithAPageKeyEndingInMdIsValid(): void
+    {
+        $paragraph = $this->words(81);
+        $run = $this->changeWith([self::USER_PAGE => $paragraph."\n", DocsRatchetList::PATH => $this->listOf([self::USER_PAGE => [$paragraph]])])->runGate($this->gate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
     }
 
     public function testAnUnreadableListFails(): void
