@@ -275,6 +275,41 @@ test('a demo page that went to a review page and from there to /elsewhere before
     assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
 });
 
+// Forces the order: the review page leaves only once the step before has passed, so the wrong address can only be met by the step under test.
+function leaveAfter(position) {
+    const step = FIRST_RUN.steps[position];
+    const stepThenLeave = { name: step.name, run: async (page, address) => {
+        await step.run(page, address);
+        await page.waitForURL(`${ORIGIN}/reviews/r1`);
+        await page.evaluate(() => { setTimeout(() => location.assign('/elsewhere'), 100); });
+        await page.waitForURL(`${ORIGIN}/elsewhere`);
+    } };
+
+    return { name: FIRST_RUN.name, steps: FIRST_RUN.steps.with(position, stepThenLeave) };
+}
+
+test('a review page that leaves for /elsewhere, the only page with the verdict and the finding, after step 3 passed fails the first journey at step 4', async () => {
+    const pages = demoSite({ delayMs: 0 });
+    pages['/elsewhere'] = pages['/reviews/r1'];
+    pages['/reviews/r1'] = '<!doctype html><html lang="en"><head><title>Review</title></head><body><h1>Review of sample-change in sample</h1></body></html>';
+
+    const result = await runJourney(routedSite(pages), ORIGIN, leaveAfter(2), scratch(), 1);
+
+    assert.equal(result.failure.step, 'wait for the verdict of the demo run');
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
+});
+
+test('a review page that shows the verdict and then leaves for /elsewhere, which shows the finding, fails the first journey at step 5', async () => {
+    const pages = demoSite({ delayMs: 0 });
+    pages['/elsewhere'] = pages['/reviews/r1'];
+    pages['/reviews/r1'] = '<!doctype html><html lang="en"><head><title>Review</title></head><body><h1>Review of sample-change in sample</h1><h2>Changes needed</h2></body></html>';
+
+    const result = await runJourney(routedSite(pages), ORIGIN, leaveAfter(3), scratch(), 1);
+
+    assert.equal(result.failure.step, 'see the recorded finding on the review page');
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
+});
+
 test('a demo page that stays and does not show its heading fails the first journey at step 3', async () => {
     const result = await runJourney(routedSite(demoSite({ demo: '<h1>Something else</h1>' })), ORIGIN, FIRST_RUN, scratch(), 1);
 

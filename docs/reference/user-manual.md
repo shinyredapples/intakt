@@ -152,8 +152,8 @@ It walks one journey, **First run without a key**, in five steps:
 1. `open /setup and see the start`: the heading "See a real review".
 2. `press the button "Play the demo run"`: the button on `/setup`.
 3. `reach /demo and see the demo run`: the press leads to `/demo` of the checked dashboard (not of another address) and the page there loads without an error. While the page is still on `/demo` it must show the heading "The demo run"; the demo page follows the run to its review page as soon as the run started, so a page that already moved on passes this step only when it went to a review page (`/reviews/<round>`) of the checked dashboard. A page that went anywhere else since it reached `/demo`, before or after a review page, also to a page below a review (such as its full record, however the address spells the slash), fails this step, and the report names where it went (address and path only).
-4. `wait for the verdict of the demo run`: any verdict heading on the review page ("Approved", "Changes needed", "Blocked: ...", "Failed: ..." or "Checked, but the outcome was not recorded"), and then it must be the recorded verdict, "Changes needed".
-5. `see the recorded finding on the review page`: the link of the recorded finding "The check changed from amount >= 100 to amount > 100.".
+4. `wait for the verdict of the demo run`: any verdict heading on the review page ("Approved", "Changes needed", "Blocked: ...", "Failed: ..." or "Checked, but the outcome was not recorded"), and then it must be the recorded verdict, "Changes needed". From the arrival at `/demo` on, the page may only be on `/demo` or a review page of the checked dashboard; any other page fails the step, and the report names it (address and path only).
+5. `see the recorded finding on the review page`: the link of the recorded finding "The check changed from amount >= 100 to amount > 100.". The same address rule holds until the end of the journey.
 
 It needs an install that can play the demo run: the compose demo with its recording, a queue worker and live updates. The journey plays the run, so the next check fails at step 2 until `intakt:demo:remove` has removed it.
 
