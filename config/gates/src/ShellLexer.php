@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-// Because whether a `#` starts a comment depends on the quotes and `${ }` expansions open around it, the lexer keeps them on a stack for one source.
+// Because whether a `#` starts a comment depends on the quotes, expansions, substitutions and here-documents open around it, the lexer keeps them on a stack for one source.
 final class ShellLexer
 {
     private const int DOUBLE_QUOTES = 0;
@@ -16,17 +16,31 @@ final class ShellLexer
     // Because bash reads a `'` in any other part of a `${ }` inside double quotes as a plain character, such an expansion is kept apart from an unquoted one.
     private const int QUOTED_WORD = 4;
     private const int QUOTED_SUBSCRIPT = 5;
+    private const int SUBSTITUTION = 6;
+    private const int SUBSHELL = 7;
+    // Because a `)` that ends a case pattern closes nothing, a `case` stays open until its `esac`.
+    private const int CASE = 8;
+    private const int ARITHMETIC = 9;
+    private const int ARITHMETIC_GROUP = 10;
     // Because an expansion nested in any of these still stands inside the double quotes, it reads a `'` as a quoted expansion does.
     private const array QUOTED_FRAMES = [self::DOUBLE_QUOTES, self::QUOTED_PATTERN, self::QUOTED_WORD, self::QUOTED_SUBSCRIPT];
+    // Because `<<` shifts inside arithmetic, it opens no here-document there.
+    private const array ARITHMETIC_FRAMES = [self::ARITHMETIC, self::ARITHMETIC_GROUP];
     private const string NAME_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_';
     private const string SPECIAL_PARAMETERS = '@*#?-$!';
     private const string PATTERN_OPERATORS = '#%/';
     // Because a `#` starts a comment only at the start of a word, these are the characters a word starts after.
     private const string WORD_BREAKS = " \t\n;&|()<>";
     private const string DOUBLE_QUOTED_SPECIALS = '\\"$';
+    // Because `case` is a keyword only where a command starts, these are the characters a command starts after, and the ones that keep it starting.
+    private const string COMMAND_BREAKS = "\n;&|(";
+    private const string COMMAND_PREFIX_CHARACTERS = " \t{!";
+    private const array COMMAND_PREFIX_WORDS = ['then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time'];
 
     private readonly int $length;
+    private readonly ShellHereDocuments $hereDocuments;
     private bool $atWordStart = true;
+    private bool $atCommandStart = true;
 
     /**
      * @var list<int>
@@ -41,6 +55,7 @@ final class ShellLexer
     public function __construct(private readonly string $source)
     {
         $this->length = strlen($source);
+        $this->hereDocuments = new ShellHereDocuments($source);
     }
 
     /**
@@ -62,29 +77,12 @@ final class ShellLexer
         $frame = array_last($this->frames);
 
         return match ($frame) {
-            null => $this->afterUnquoted($offset),
             self::DOUBLE_QUOTES => $this->afterDoubleQuoted($offset),
             self::QUOTED_HEAD => $this->afterOperatorDecided($offset),
             self::QUOTED_SUBSCRIPT => $this->afterInSubscript($offset),
-            default => $this->afterInExpansion($offset, $frame),
+            self::EXPANSION, self::QUOTED_PATTERN, self::QUOTED_WORD => $this->afterInExpansion($offset, $frame),
+            default => $this->afterUnquoted($offset, $frame),
         };
-    }
-
-    private function afterUnquoted(int $offset): int
-    {
-        $char = $this->source[$offset];
-
-        if ('#' === $char && $this->atWordStart) {
-            return $this->afterComment($offset);
-        }
-
-        if ('\\' === $char) {
-            return $this->afterEscape($offset);
-        }
-
-        $this->atWordStart = str_contains(self::WORD_BREAKS, $char);
-
-        return $this->afterQuoteOrDollar($offset, $char);
     }
 
     private function afterDoubleQuoted(int $offset): int
@@ -95,6 +93,7 @@ final class ShellLexer
             '\\' === $char => $offset + 2,
             '"' === $char => $this->afterClosing($offset),
             $this->expansionOpensAt($offset) => $this->afterExpansionOpening($offset + 2),
+            $this->substitutionOpensAt($offset) => $this->afterSubstitutionOpening($offset + 2),
             default => $offset + 1 + strcspn($this->source, self::DOUBLE_QUOTED_SPECIALS, $offset + 1),
         };
     }
@@ -130,32 +129,32 @@ final class ShellLexer
         };
     }
 
-    private function afterComment(int $offset): int
+    private function afterUnquoted(int $offset, ?int $frame): int
     {
-        $end = $offset + strcspn($this->source, "\n", $offset);
-        $this->comments[] = [$offset, substr($this->source, $offset, $end - $offset)];
+        $char = $this->source[$offset];
 
-        return $end;
-    }
-
-    // Because a backslash before a line feed joins two lines, it leaves the word as it was.
-    private function afterEscape(int $offset): int
-    {
-        if ("\n" !== ($this->source[$offset + 1] ?? '')) {
-            $this->atWordStart = false;
+        if ('#' === $char && $this->atWordStart) {
+            return $this->afterComment($offset);
         }
 
-        return $offset + 2;
-    }
+        if ('\\' === $char) {
+            return $this->afterEscape($offset);
+        }
 
-    private function afterQuoteOrDollar(int $offset, string $char): int
-    {
-        return match (true) {
-            "'" === $char => $this->afterSingleQuoted($offset + 1),
-            '"' === $char => $this->afterOpening(self::DOUBLE_QUOTES, $offset + 1),
-            $this->expansionOpensAt($offset) => $this->afterExpansionOpening($offset + 2),
-            '$' === $char && "'" === ($this->source[$offset + 1] ?? '') => $this->afterAnsiCQuoted($offset + 2),
-            default => $offset + 1,
+        $word = $this->atWordStart ? strspn($this->source, self::NAME_CHARACTERS, $offset) : 0;
+
+        if (0 < $word) {
+            return $this->afterWord($offset, $word, $frame);
+        }
+
+        $this->noteBreakOrCharacter($char);
+
+        return match ($char) {
+            "\n" => $this->hereDocuments->afterBodies($offset + 1),
+            '(' => $this->afterParenthesisOpening($offset, $frame),
+            ')' => $this->afterParenthesisClosing($offset, $frame),
+            '<' => $this->afterLess($offset, $frame),
+            default => $this->afterQuoteOrDollar($offset, $char),
         };
     }
 
@@ -190,6 +189,22 @@ final class ShellLexer
         return $this->afterOpening($this->quotedKindAt($offset), $offset);
     }
 
+    // Because `$((` opens arithmetic, only a `$(` followed by something else opens a command substitution.
+    private function substitutionOpensAt(int $offset): bool
+    {
+        return '$' === $this->source[$offset] && '(' === ($this->source[$offset + 1] ?? '') && '(' !== ($this->source[$offset + 2] ?? '');
+    }
+
+    // Because the text of a `$( )` is read as a script of its own, a word and a command start right after its opening.
+    private function afterSubstitutionOpening(int $offset): int
+    {
+        $this->hereDocuments->openSubstitution();
+        $this->atWordStart = true;
+        $this->atCommandStart = true;
+
+        return $this->afterOpening(self::SUBSTITUTION, $offset);
+    }
+
     private function quotedKindAt(int $offset): int
     {
         return str_contains(self::PATTERN_OPERATORS, $this->source[$offset] ?? '}') ? self::QUOTED_PATTERN : self::QUOTED_WORD;
@@ -202,6 +217,91 @@ final class ShellLexer
         return $offset;
     }
 
+    private function afterQuoteOrDollar(int $offset, string $char): int
+    {
+        return match (true) {
+            "'" === $char => $this->afterSingleQuoted($offset + 1),
+            '"' === $char => $this->afterOpening(self::DOUBLE_QUOTES, $offset + 1),
+            $this->expansionOpensAt($offset) => $this->afterExpansionOpening($offset + 2),
+            $this->substitutionOpensAt($offset) => $this->afterSubstitutionOpening($offset + 2),
+            '$' === $char && '((' === substr($this->source, $offset + 1, 2) => $this->afterOpening(self::ARITHMETIC, $offset + 3),
+            '$' === $char && "'" === ($this->source[$offset + 1] ?? '') => $this->afterAnsiCQuoted($offset + 2),
+            default => $offset + 1,
+        };
+    }
+
+    private function afterComment(int $offset): int
+    {
+        $end = $offset + strcspn($this->source, "\n", $offset);
+        $this->comments[] = [$offset, substr($this->source, $offset, $end - $offset)];
+
+        return $end;
+    }
+
+    // Because a backslash before a line feed joins two lines, it leaves the word and the command as they were.
+    private function afterEscape(int $offset): int
+    {
+        if ("\n" !== ($this->source[$offset + 1] ?? '')) {
+            $this->atWordStart = false;
+            $this->atCommandStart = false;
+        }
+
+        return $offset + 2;
+    }
+
+    private function afterWord(int $offset, int $length, ?int $frame): int
+    {
+        $word = substr($this->source, $offset, $length);
+        $end = $offset + $length;
+        $isCommand = $this->atCommandStart && str_contains(self::WORD_BREAKS, $this->source[$end] ?? "\n");
+        $this->atWordStart = false;
+        $this->atCommandStart = $isCommand && in_array($word, self::COMMAND_PREFIX_WORDS, true);
+
+        return match (true) {
+            !$isCommand => $end,
+            'case' === $word => $this->afterOpening(self::CASE, $end),
+            'esac' === $word && self::CASE === $frame => $this->afterClosing($end - 1),
+            default => $end,
+        };
+    }
+
+    private function noteBreakOrCharacter(string $char): void
+    {
+        $this->atCommandStart = str_contains(self::COMMAND_BREAKS, $char) || ($this->atCommandStart && str_contains(self::COMMAND_PREFIX_CHARACTERS, $char));
+        $this->atWordStart = str_contains(self::WORD_BREAKS, $char);
+    }
+
+    // Because `((` opens arithmetic and a parenthesis inside arithmetic only groups, neither is a subshell.
+    private function afterParenthesisOpening(int $offset, ?int $frame): int
+    {
+        return match (true) {
+            in_array($frame, self::ARITHMETIC_FRAMES, true) => $this->afterOpening(self::ARITHMETIC_GROUP, $offset + 1),
+            '(' === ($this->source[$offset + 1] ?? '') => $this->afterOpening(self::ARITHMETIC, $offset + 2),
+            default => $this->afterOpening(self::SUBSHELL, $offset + 1),
+        };
+    }
+
+    private function afterParenthesisClosing(int $offset, ?int $frame): int
+    {
+        return match ($frame) {
+            null => $offset + 1,
+            self::CASE => $this->afterCasePattern($offset),
+            self::SUBSTITUTION => $this->afterSubstitutionClosing($offset),
+            self::ARITHMETIC => $this->afterClosing($offset) + strspn($this->source, ')', $offset + 1, 1),
+            default => $this->afterClosing($offset),
+        };
+    }
+
+    // Because `<<<` is a here-string and `<<` shifts in arithmetic, only another `<<` opens a here-document.
+    private function afterLess(int $offset, ?int $frame): int
+    {
+        return match (true) {
+            '<<<' === substr($this->source, $offset, 3) => $offset + 3,
+            '<' === ($this->source[$offset + 1] ?? '') && !in_array($frame, self::ARITHMETIC_FRAMES, true) => $this->afterHereDocumentOperator($offset),
+            default => $offset + 1,
+        };
+    }
+
     private function afterSingleQuoted(int $offset): int
     {
         $end = strpos($this->source, "'", $offset);
@@ -211,10 +311,46 @@ final class ShellLexer
 
     private function afterAnsiCQuoted(int $offset): int
     {
-        while ($offset < $this->length) {
-            $offset += strcspn($this->source, "\\'", $offset);
+        return $this->afterBackslashQuoted($offset, "'");
+    }
 
-            if ("'" === ($this->source[$offset] ?? '')) {
+    private function afterCasePattern(int $offset): int
+    {
+        $this->atCommandStart = true;
+
+        return $offset + 1;
+    }
+
+    // Because the word around a `$( )` goes on after it, `$(date)#x` holds no comment.
+    private function afterSubstitutionClosing(int $offset): int
+    {
+        $this->hereDocuments->closeSubstitution();
+        $this->atWordStart = false;
+        $this->atCommandStart = false;
+
+        return $this->afterClosing($offset);
+    }
+
+    private function afterHereDocumentOperator(int $offset): int
+    {
+        $start = $offset + 2 + strspn($this->source, '-', $offset + 2, 1);
+        $operator = substr($this->source, $offset, $start - $offset);
+        $start += strspn($this->source, " \t", $start);
+        $end = $this->afterDelimiterWord($start);
+
+        if ($end > $start) {
+            $this->hereDocuments->queue($operator, substr($this->source, $start, $end - $start));
+        }
+
+        return $end;
+    }
+
+    private function afterBackslashQuoted(int $offset, string $quote): int
+    {
+        while ($offset < $this->length) {
+            $offset += strcspn($this->source, '\\'.$quote, $offset);
+
+            if ($quote === ($this->source[$offset] ?? '')) {
                 return $offset + 1;
             }
 
@@ -222,5 +358,27 @@ final class ShellLexer
         }
 
         return $this->length;
+    }
+
+    private function afterDelimiterWord(int $offset): int
+    {
+        while ($offset < $this->length && !str_contains(self::WORD_BREAKS, $this->source[$offset])) {
+            $offset = $this->afterDelimiterPart($offset);
+        }
+
+        return min($offset, $this->length);
+    }
+
+    private function afterDelimiterPart(int $offset): int
+    {
+        $char = $this->source[$offset];
+
+        return match (true) {
+            "'" === $char => $this->afterSingleQuoted($offset + 1),
+            '"' === $char => $this->afterBackslashQuoted($offset + 1, '"'),
+            '\\' === $char => $offset + 2,
+            '$' === $char && "'" === ($this->source[$offset + 1] ?? '') => $this->afterAnsiCQuoted($offset + 2),
+            default => $offset + 1,
+        };
     }
 }
