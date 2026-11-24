@@ -38,7 +38,7 @@ final readonly class FilterProjects
             ProjectSummary::fromReviews($this->reviews->newestFirst()),
         ), ...$this->reviews->builtProjects(), ...$shown]));
         // Name order, because the order of first reviews means nothing to a reader looking for one project in a long list; names the natural order calls equal (case, spacing) fall back to byte order, so the order never depends on the ledger's and the live filter update can rebuild it (base.html.twig).
-        usort($names, static fn (string $one, string $other): int => strnatcasecmp($one, $other) ?: strcmp($one, $other));
+        usort($names, static fn (string $one, string $other): int => [strnatcasecmp($one, $other), strcmp($one, $other)] <=> [0, 0]);
 
         return $names;
     }
