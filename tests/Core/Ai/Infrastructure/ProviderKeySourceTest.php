@@ -18,7 +18,6 @@ use Symfony\Component\Filesystem\Filesystem;
 final class ProviderKeySourceTest extends TestCase
 {
     private const string NAME = 'PROVIDER_KEY_SOURCE_TEST_VARIABLE';
-    private const string SECRET = 'PROVIDER_KEY_SOURCE_TEST_SECRET';
 
     private string $directory;
 
@@ -132,7 +131,7 @@ final class ProviderKeySourceTest extends TestCase
         return new ProviderKeySource($vault ?? new SodiumVault($this->directory), $kept, $environment ?? static fn (): ?string => null);
     }
 
-    // The vault files are named after the folder, which the unusable-key test relies on.
+    // Sealed in the folder the test names, because the unusable-key test removes the key files by that name.
     private function sealed(string $name, string $value): void
     {
         $vault = new SodiumVault($this->directory);
