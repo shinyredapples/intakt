@@ -19,6 +19,7 @@ final class AccountLimitedVendorAliasEnvironmentTest extends TestCase
 
     private string $root;
 
+    /** @param non-empty-string $aliasTest */
     #[DataProvider('aliasTests')]
     public function testAnAliasTestGivesTheCallerItsDirectoriesBack(string $aliasTest): void
     {
@@ -32,6 +33,7 @@ final class AccountLimitedVendorAliasEnvironmentTest extends TestCase
         self::assertDirectoryDoesNotExist($this->root);
     }
 
+    /** @param non-empty-string $aliasTest */
     #[DataProvider('aliasTests')]
     public function testAnAliasTestLeavesUnsetDirectoriesUnset(string $aliasTest): void
     {
@@ -43,7 +45,7 @@ final class AccountLimitedVendorAliasEnvironmentTest extends TestCase
         self::assertArrayNotHasKey('APP_BUILD_DIR', $_SERVER);
     }
 
-    /** @return iterable<string, array{string}> */
+    /** @return iterable<string, array{non-empty-string}> */
     public static function aliasTests(): iterable
     {
         yield 'the alias' => ['testOutsideTheTestEnvironmentTheVendorContractIsTheAccountLimitedVendor'];
@@ -62,6 +64,7 @@ final class AccountLimitedVendorAliasEnvironmentTest extends TestCase
         new Filesystem()->remove($this->root);
     }
 
+    /** @param non-empty-string $aliasTest */
     private function runAsPhpUnitDoes(string $aliasTest): void
     {
         $test = new AccountLimitedVendorAliasTest($aliasTest);
