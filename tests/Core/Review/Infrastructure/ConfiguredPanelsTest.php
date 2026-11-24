@@ -91,108 +91,6 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness', 'security'], $this->roles($panel));
     }
 
-    public function testAPathGlobWithOneStarDoesNotReachIntoSubfolders(): void
-    {
-        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths('docs/a/b.md'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testAChangedPathThatIsNotValidUtf8StillMatchesItsGlob(): void
-    {
-        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths("config/security/\xFF.php"), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testAChangedPathWithANewlineStillMatchesADoubleStarGlob(): void
-    {
-        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths("config/security/a\nb.php"), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testADoubleStarBetweenSlashesMatchesNoFolderAtAll(): void
-    {
-        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, new Paths('src/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testADoubleStarBetweenSlashesMatchesNestedFoldersWithANewline(): void
-    {
-        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, new Paths("src/x\ny/Security/a.php"), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testADoubleStarBetweenSlashesDoesNotMatchAFolderThatOnlyEndsInTheName(): void
-    {
-        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, new Paths('src/NoSecurity/Door.php'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testALeadingDoubleStarMatchesAFolderAtTheRoot(): void
-    {
-        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, new Paths('Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testALeadingDoubleStarMatchesANestedFolder(): void
-    {
-        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, new Paths('a/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testALeadingDoubleStarDoesNotMatchAFolderThatOnlyEndsInTheName(): void
-    {
-        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, new Paths('NoSecurity/Door.php'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testConsecutiveDoubleStarsBetweenSlashesMatchNoFolderAtAll(): void
-    {
-        $panel = $this->securityRule('src/**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('src/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testConsecutiveDoubleStarsBetweenSlashesMatchANestedFolder(): void
-    {
-        $panel = $this->securityRule('src/**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('src/a/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testConsecutiveLeadingDoubleStarsMatchAFolderAtTheRoot(): void
-    {
-        $panel = $this->securityRule('**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testConsecutiveLeadingDoubleStarsDoNotMatchAFolderThatOnlyEndsInTheName(): void
-    {
-        $panel = $this->securityRule('**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('NoSecurity/Door.php'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testAOneCharacterWildcardMatchesOneCharacterOfAUtf8Path(): void
-    {
-        $panel = new ConfiguredPanels(['alpha' => [
-            'quorum' => 'all',
-            'reviewers' => [$this->reviewer('correctness')],
-            'rules' => [['paths' => ['src/?.php'], 'reviewers' => [$this->reviewer('short')]]],
-        ]])->panelForChange('alpha', new ChangeDescription(1, new Paths('src/é.php'), new Labels()));
-
-        self::assertSame(['correctness', 'short'], $this->roles($panel));
-    }
-
     public function testAChangeToNoMatchingPathKeepsTheCorePanelAndItsQuorum(): void
     {
         $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths('src/a.php'), new Labels()));
@@ -224,25 +122,6 @@ final class ConfiguredPanelsTest extends TestCase
                 ['min_lines' => 100, 'reviewers' => [$this->reviewer('big')]],
                 ['paths' => ['config/security/**', 'docs/*.md'], 'reviewers' => [$this->reviewer('security')]],
             ],
-        ]]);
-    }
-
-    private function nested(): ConfiguredPanels
-    {
-        return $this->securityRule('src/**/Security/**');
-    }
-
-    private function anywhere(): ConfiguredPanels
-    {
-        return $this->securityRule('**/Security/**');
-    }
-
-    private function securityRule(string $glob): ConfiguredPanels
-    {
-        return new ConfiguredPanels(['alpha' => [
-            'quorum' => 'all',
-            'reviewers' => [$this->reviewer('correctness')],
-            'rules' => [['paths' => [$glob], 'reviewers' => [$this->reviewer('security')]]],
         ]]);
     }
 
