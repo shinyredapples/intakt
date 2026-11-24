@@ -13,6 +13,7 @@ final readonly class ForgeCredentialCheck implements HealthCheck
 {
     public function __construct(
         private InstallationReadBack $readBack,
+        private GitHubAppSetting $setting,
     ) {
     }
 
@@ -22,6 +23,17 @@ final readonly class ForgeCredentialCheck implements HealthCheck
     }
 
     public function run(): CheckResult
+    {
+        $result = CheckResult::passed();
+        // An install without an App (the demo) has no credential to check, so it passes.
+        $this->setting->whenConfigured(function () use (&$result): void {
+            $result = $this->readInstallation();
+        });
+
+        return $result;
+    }
+
+    private function readInstallation(): CheckResult
     {
         try {
             (void) $this->readBack->check();

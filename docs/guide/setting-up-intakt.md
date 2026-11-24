@@ -29,6 +29,10 @@ There is no login, password or setup code: by default the dashboard's port is pu
 
 A new project starts with the smallest team: the Tech lead, the Developer, the Code reviewers and the Maintainer, nothing more. The Designer, the Security engineer and the AI engineer are opt-in per project, off until you turn one on, and so is every tool they need (security scanners, accessibility and page-quality tools, a scan of the running app); the wizard proposes none of them (planned, [details](../design/05-architecture/11-setup.md#the-starting-team)). Without the Security engineer, every change to the project's protected files comes to you.
 
+## When something does not work
+
+Run `docker exec intakt php bin/console intakt:doctor` first, even when the dashboard does not start. It checks the install without changing anything and prints one line per check: `pass:` or `FAIL:` with what to do next. It ends with a non-zero exit code when any check fails, so a script can use it. Today it checks the live-update service and the GitHub App credential ([what each means](../user/08-when-something-goes-wrong.md#the-doctor-says-fail)).
+
 ## Adding Intakt to a project you already have
 
 Intakt looks at what your project already uses, says how sure it is, and asks you to confirm each item:

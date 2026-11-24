@@ -6,6 +6,17 @@
 
 It is Friday afternoon. You started a review half an hour ago, and the page still says one reviewer is running. Nothing looks broken, but nothing moves either. Most surprises in Intakt have a reason written on the screen. This chapter lists the common ones: what you see, why, and what to do.
 
+## The doctor says FAIL
+
+You cannot open the dashboard, so you cannot see what is wrong. The doctor works without it, and it changes nothing and uses no AI tokens.
+
+1. Run `docker exec intakt php bin/console intakt:doctor`.
+2. Read each line. `pass:` means the check is fine; `FAIL:` ends with what to do.
+3. **Live-update hub:** it is down or unhealthy. Restart the container. Run outside the container, this check fails because the admin API answers only inside it.
+4. **GitHub App credential:** Intakt could not read the App's installation back. Check the App id, private key and installation id, and that the host can reach `api.github.com`. An install with no GitHub App set up passes this check.
+5. A line that says the check could not run counts as a failure too: start the stack and run it again.
+6. The exit code is 0 only when every check passes.
+
 ## First, look at Waiting on you
 
 Open **You** in the menu. Anything only you can decide shows up there, oldest first. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
@@ -77,7 +88,7 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 
 - **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
 - **Why:** the health check failed three times in a row: the dashboard did not answer, the live-update hub reported a problem, no worker was ready to take a request, or the server's figures could not be read.
-- **What to do:** run `docker exec intakt php bin/console intakt:server:health`. Each `unhealthy:` line names one problem and why.
+- **What to do:** run `docker exec intakt php bin/console intakt:doctor` first, then `docker exec intakt php bin/console intakt:server:health`. Each `unhealthy:` line names one problem and why.
 
 ## The dashboard says "Open the dashboard on localhost"
 

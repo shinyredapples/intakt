@@ -119,6 +119,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Container image](container-image.md): the image and its smoke test.
 - [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
 - [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
+- [Doctor](doctor.md): `intakt:doctor` and the checks the modules contribute.
 - [Persistence](persistence.md): the supported databases.
 - [Job containers](job-containers.md): a fresh container per job, with a network allowlist.
 - [Job images](job-images.md): how a project's job image is made and checked.

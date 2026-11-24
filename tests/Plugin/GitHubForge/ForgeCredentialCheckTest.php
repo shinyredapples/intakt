@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\ForgeCredentialCheck;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -30,6 +31,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(ForgeCredentialCheck::class)]
 #[UsesClass(CheckResult::class)]
+#[UsesClass(GitHubAppSetting::class)]
 #[UsesClass(InstallationReadBack::class)]
 #[UsesClass(InstallationReader::class)]
 #[UsesClass(ExpectedInstallation::class)]
@@ -80,6 +82,13 @@ final class ForgeCredentialCheckTest extends TestCase
         self::assertStringContainsString('permission contents is expected at read but granted at write', $result->fix);
     }
 
+    public function testTheForgeCredentialCheckPassesWithoutReadingWhenNoAppIsConfigured(): void
+    {
+        $result = $this->check(static fn (string $url): ResponseInterface => throw new TimeoutException('never read'), self::PERMISSIONS, '')->run();
+
+        self::assertTrue($result->passed);
+    }
+
     private static function healthy(string $url): ResponseInterface
     {
         if (str_ends_with($url, '/access_tokens')) {
@@ -93,7 +102,7 @@ final class ForgeCredentialCheckTest extends TestCase
     /**
      * @param callable(string): ResponseInterface $answer
      */
-    private function check(callable $answer, string $permissions = self::PERMISSIONS): ForgeCredentialCheck
+    private function check(callable $answer, string $permissions = self::PERMISSIONS, string $appId = '12345'): ForgeCredentialCheck
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $logger = new RecordingLogger();
@@ -102,6 +111,6 @@ final class ForgeCredentialCheckTest extends TestCase
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, $logger), '678', $clock);
         $reader = new InstallationReader($jwt, $tokens, new GitHubCalls($http, FreshReadings::at($clock), $tokens));
 
-        return new ForgeCredentialCheck(new InstallationReadBack($reader, ExpectedInstallation::fromSettings($permissions, self::REPOSITORIES), $logger));
+        return new ForgeCredentialCheck(new InstallationReadBack($reader, ExpectedInstallation::fromSettings($permissions, self::REPOSITORIES), $logger), new GitHubAppSetting($appId, $logger));
     }
 }
