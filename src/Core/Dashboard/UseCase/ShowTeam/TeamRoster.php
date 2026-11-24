@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\Setback;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\ReviewerRoles;
 
@@ -68,9 +69,9 @@ final readonly class TeamRoster
     private function buildFacts(): array
     {
         return [
-            new BuildFacts(null, []),
-            new BuildFacts(null, [], null, EscalationOutcome::Confirmed),
-            ...array_map(static fn (Setback $setback): BuildFacts => new BuildFacts(null, [], $setback), Setback::cases()),
+            new BuildFacts(null, new Paths()),
+            new BuildFacts(null, new Paths(), null, EscalationOutcome::Confirmed),
+            ...array_map(static fn (Setback $setback): BuildFacts => new BuildFacts(null, new Paths(), $setback), Setback::cases()),
         ];
     }
 
