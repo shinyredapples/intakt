@@ -9,6 +9,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManagerInterface;
 use DoctrineMigrations\Version20261029120000;
+use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\StoredConversations;
@@ -16,6 +17,7 @@ use Intakt\Core\Review\UseCase\ExpireConversations\ExpireConversations;
 use Intakt\Core\Review\UseCase\ExpireConversations\ExpireConversationsHandler;
 use Intakt\Core\Review\UseCase\ExpireConversations\RetentionSchedule;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
+use Intakt\Core\Review\UseCase\ReviewChange\UpperWait;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -181,6 +183,21 @@ final class ExpireConversationsTest extends KernelTestCase
         self::assertSame([], $this->kept());
     }
 
+    // A round carries its whole diff, so loading the rounds would keep every pending diff in memory for each run.
+    public function testTheTaskLoadsNoRoundIntoTheEntityManager(): void
+    {
+        $this->fixture->clock->modify('-90 days');
+        $this->startedReviewer();
+        $this->startedReviewer(RoundState::Complete);
+        $this->fixture->clock->modify('+90 days');
+        $this->startedReviewer();
+        $this->entities()->clear();
+
+        $this->expire(30);
+
+        self::assertCount(0, $this->entities()->getUnitOfWork()->getIdentityMap()[ReviewRound::class] ?? []);
+    }
+
     public function testKeepingForeverDeletesNothing(): void
     {
         $ancient = $this->conversation($this->idStartedDaysAgo(5000), 5000);
@@ -305,7 +322,7 @@ final class ExpireConversationsTest extends KernelTestCase
 
     private function expire(?int $days): void
     {
-        $stored = new StoredConversations($this->connection, $this->entities(), $this->fixture->noFailedJudgings(), $this->fixture->clock);
+        $stored = new StoredConversations($this->connection, $this->entities(), $this->fixture->noFailedJudgings(), $this->fixture->clock, new UpperWait());
 
         new ExpireConversationsHandler($stored, $this->fixture->clock, $days)();
     }
