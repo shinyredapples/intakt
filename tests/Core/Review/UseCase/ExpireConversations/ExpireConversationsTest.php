@@ -259,6 +259,7 @@ final class ExpireConversationsTest extends KernelTestCase
     {
         yield 'one day' => [1, 1];
         yield 'ninety days' => [90, 90];
+        yield 'a hundred years' => [36500, 36500];
         yield 'forever' => ['forever', null];
     }
 
@@ -284,6 +285,9 @@ final class ExpireConversationsTest extends KernelTestCase
         yield 'negative' => [-3];
         yield 'text' => ['soon'];
         yield 'fraction' => [1.5];
+        yield 'a day over a hundred years' => [36501];
+        // So large that subtracting it from now overflows into a cutoff far in the future, which would delete every conversation.
+        yield 'the largest integer' => [PHP_INT_MAX];
     }
 
     // From the migration, because the test schema is built from the ORM mapping and the message store's table has no entity.

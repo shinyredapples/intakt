@@ -12,6 +12,9 @@ final class RetentionConfiguration implements ConfigurationInterface
 {
     public const int DEFAULT_DAYS = 30;
 
+    // A larger count overflows the date arithmetic into a cutoff in the future, which would delete every conversation; "forever" covers longer wishes.
+    public const int MAX_DAYS = 36500;
+
     public const string FOREVER = 'forever';
 
     public function getConfigTreeBuilder(): TreeBuilder
@@ -21,8 +24,8 @@ final class RetentionConfiguration implements ConfigurationInterface
             ->scalarNode('conversation_days')
                 ->defaultValue(self::DEFAULT_DAYS)
                 ->validate()
-                    ->ifTrue(static fn (mixed $value): bool => self::FOREVER !== $value && (!is_int($value) || $value < 1))
-                    ->thenInvalid('retention.conversation_days must be a whole number of days from 1, or "forever", got %s.');
+                    ->ifTrue(static fn (mixed $value): bool => self::FOREVER !== $value && (!is_int($value) || $value < 1 || $value > self::MAX_DAYS))
+                    ->thenInvalid(sprintf('retention.conversation_days must be a whole number of days from 1 to %d, or "forever", got %%s.', self::MAX_DAYS));
 
         return $tree;
     }
