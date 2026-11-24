@@ -7,11 +7,12 @@ namespace Intakt\Tests\Journeys\Support;
 use Symfony\Component\Lock\LockFactory;
 use Uri\Rfc3986\Uri;
 
-// One open task stands for each failing step because a marker made of the step's name finds it again; the next pass that finds the step green closes it.
+// One open task stands for each failing step because a marker made of the step's identity finds it again; the next pass that finds the step green closes it.
 final readonly class InstallCheckAlarm
 {
     private const string LOCK = 'intakt-journey-alarm';
     private const string MARKER = '<!-- intakt:install-check:';
+    private const string INSTALL = 'install:';
 
     public function __construct(
         private GitHubIssues $issues,
@@ -25,7 +26,16 @@ final readonly class InstallCheckAlarm
         $lock->acquire(true);
 
         try {
-            $lines = array_values(array_filter(array_map(fn (InstallStepResult $step): ?string => $this->settle($step, $link), $report->steps), static fn (?string $line): bool => null !== $line));
+            $lines = [];
+            $installs = 0;
+
+            foreach ($report->steps as $step) {
+                // An install step is known by its place in the README block, so a fixed command closes the task its broken spelling filed.
+                $identity = str_starts_with($step->name, self::INSTALL) ? self::INSTALL.' #'.++$installs : $step->name;
+                $lines[] = $this->settle($step, $this->markerOf($identity), $link);
+            }
+
+            $lines = array_values(array_filter($lines, static fn (?string $line): bool => null !== $line));
 
             return [] === $lines ? 'no install step failed: nothing filed' : implode("\n", $lines);
         } finally {
@@ -33,9 +43,8 @@ final readonly class InstallCheckAlarm
         }
     }
 
-    private function settle(InstallStepResult $step, ?Uri $link): ?string
+    private function settle(InstallStepResult $step, string $marker, ?Uri $link): ?string
     {
-        $marker = $this->markerOf($step);
         $open = $this->issues->oldestOpenIssueHolding($marker);
 
         if (InstallStatus::Passed === $step->status && null !== $open) {
@@ -56,13 +65,24 @@ final readonly class InstallCheckAlarm
             return 'updated #'.$open;
         }
 
-        return 'filed '.$this->issues->create('fix(install): install check step "'.mb_strimwidth($step->name, 0, 60, '...').'" fails', $body, JourneyAlarmTask::LABELS)['link'];
+        $created = $this->issues->create('fix(install): install check step "'.mb_strimwidth($step->name, 0, 60, '...').'" fails', $body, JourneyAlarmTask::LABELS);
+        // The lock holds only on one machine, so a run elsewhere may have filed the same task meanwhile: the oldest stays.
+        $oldest = $this->issues->oldestOpenIssueHolding($marker);
+
+        if (null === $oldest || $oldest >= $created['number']) {
+            return 'filed '.$created['link'];
+        }
+
+        $this->issues->closeAsDuplicateOf($created['number'], $oldest);
+        $this->issues->replaceBody($oldest, $body);
+
+        return 'updated #'.$oldest.', closed #'.$created['number'].' as its duplicate';
     }
 
-    // The name is hashed, so no step name can break the marker line.
-    private function markerOf(InstallStepResult $step): string
+    // The identity is hashed, so no step name can break the marker line.
+    private function markerOf(string $identity): string
     {
-        return self::MARKER.hash('sha256', $step->name).' -->';
+        return self::MARKER.hash('sha256', $identity).' -->';
     }
 
     private function body(InstallStepResult $step, string $marker, ?Uri $link): string

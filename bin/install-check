@@ -5,14 +5,16 @@ declare(strict_types=1);
 
 use Intakt\Tests\Journeys\Support\InstallCheck;
 use Intakt\Tests\Journeys\Support\InstallCheckCouldNotRun;
+use Intakt\Tests\Journeys\Support\InstallProcessRunner;
 use Intakt\Tests\Journeys\Support\InstallStatus;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 const USAGE = "usage: bin/install-check [<repository address or path, default the GitHub repository>]\n";
-const DEFAULT_REPOSITORY = 'https://github.com/shinyredapples/intakt.git';
 const STEP_SECONDS = 1800;
+const ALARM_SECONDS = 600;
 
 $autoload = __DIR__.'/../vendor/autoload.php';
 
@@ -32,25 +34,17 @@ if (count($arguments) > 1 || str_starts_with($arguments[0] ?? '', '-')) {
 
 $checkout = dirname(__DIR__);
 $files = new Filesystem();
-$logs = $checkout.'/var/install-check/'.new NativeClock()->now()->format('Ymd-His');
+$logs = $checkout.'/var/install-check/'.new NativeClock()->now()->format('Ymd-His').'-'.bin2hex(random_bytes(3));
 $temporary = sys_get_temp_dir().'/intakt-install-check-'.bin2hex(random_bytes(6));
 $files->mkdir($temporary);
-
-$runner = static function (string $command, string $directory): array {
-    $process = Process::fromShellCommandline($command, $directory, null, null, STEP_SECONDS);
-    $process->run();
-
-    return [$process->getExitCode() ?? 1, $process->getOutput().$process->getErrorOutput()];
-};
-
-$environment = [];
+$keys = [];
 
 foreach (InstallCheck::KEYS as $name) {
-    $environment[$name] = (string) getenv($name);
+    $keys[$name] = (string) getenv($name);
 }
 
 try {
-    $report = new InstallCheck($runner, $temporary, $logs, $checkout, $environment)->run($arguments[0] ?? DEFAULT_REPOSITORY);
+    $report = new InstallCheck(new InstallProcessRunner(STEP_SECONDS)->__invoke(...), $temporary, $logs, $checkout, $keys)->run($arguments[0] ?? InstallCheck::REPOSITORY);
 } catch (InstallCheckCouldNotRun $stopped) {
     fwrite(STDERR, 'the install check could not run: '.$stopped->getMessage()."\n");
     exit(2);
@@ -58,7 +52,8 @@ try {
     $files->remove($temporary);
 }
 
-$files->dumpFile($logs.'/report.json', $report->toJson());
+$reportFile = $logs.'/report.json';
+$files->dumpFile($reportFile, $report->toJson());
 
 foreach ($report->steps as $step) {
     fwrite(STDOUT, $step->line()."\n");
@@ -69,4 +64,30 @@ foreach ($report->steps as $step) {
 }
 
 fwrite(STDOUT, 'logs and screenshots in '.substr($logs, strlen($checkout) + 1)."\n");
-exit($report->hasFailed() ? 1 : 0);
+$reported = true;
+
+// Filing needs the repository the issues go to; a run by hand without it only prints.
+if ('' === (string) getenv('GITHUB_REPOSITORY')) {
+    fwrite(STDOUT, "not reported: set GITHUB_REPOSITORY and GH_TOKEN to file or close the issues through bin/journey-alarm\n");
+} else {
+    $run = array_all(['GITHUB_SERVER_URL', 'GITHUB_REPOSITORY', 'GITHUB_RUN_ID'], static fn (string $name): bool => '' !== (string) getenv($name))
+        ? ['--run='.getenv('GITHUB_SERVER_URL').'/'.getenv('GITHUB_REPOSITORY').'/actions/runs/'.getenv('GITHUB_RUN_ID')]
+        : [];
+    $alarm = new Process([PHP_BINARY, __DIR__.'/journey-alarm', ...$run, '--install-check='.$reportFile], $checkout, null, null, ALARM_SECONDS);
+    try {
+        $alarm->run();
+        $reported = $alarm->isSuccessful();
+    } catch (ProcessTimedOutException) {
+        $reported = false;
+        fwrite(STDERR, 'bin/journey-alarm did not finish within '.ALARM_SECONDS." seconds\n");
+    }
+
+    fwrite(STDOUT, $alarm->getOutput());
+    fwrite(STDERR, $alarm->getErrorOutput());
+}
+
+exit(match (true) {
+    $report->hasFailed() => 1,
+    !$reported => 2,
+    default => 0,
+});
