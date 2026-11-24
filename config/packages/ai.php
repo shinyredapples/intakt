@@ -32,6 +32,7 @@ use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
+use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
@@ -181,6 +182,12 @@ return static function (ContainerConfigurator $container): void {
     unset($contents['github']);
     /** @var array{github: array{reserve_percent: int}} $githubSettings */
     $githubSettings = new Processor()->processConfiguration(new GitHubConfiguration(), [$github]);
+
+    // How long conversations are kept is the owner's for the installation too, so it also sits beside the projects.
+    $retention = array_key_exists('retention', $contents) ? ['retention' => $contents['retention']] : [];
+    unset($contents['retention']);
+    /** @var array{retention: array{conversation_days: int|string}} $retentionSettings */
+    $retentionSettings = new Processor()->processConfiguration(new RetentionConfiguration(), [$retention]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
@@ -362,6 +369,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
     $container->parameters()->set(BudgetServices::PRICE_DATE, $ceilings['budget']['price_date']);
+    $container->parameters()->set(ReviewServices::CONVERSATION_DAYS, RetentionConfiguration::daysOf($retentionSettings['retention']['conversation_days']));
     $container->parameters()->set(GitHubForgeServices::RESERVE_PERCENT, $githubSettings['github']['reserve_percent']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)

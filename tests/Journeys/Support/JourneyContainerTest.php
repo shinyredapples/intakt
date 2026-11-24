@@ -74,6 +74,19 @@ final class JourneyContainerTest extends JourneyTestCase
         self::assertEquals([new Update('review/rounds/1', '<turbo-stream>changed</turbo-stream>', true)], $this->publishedUpdates());
     }
 
+    public function testARecordingAnEarlierContainerLeftIsNotReadByTheNextJourney(): void
+    {
+        $earlier = $this->container()->get(HubInterface::class);
+        self::assertInstanceOf(HubInterface::class, $earlier);
+        $earlier->publish(new Update('review/rounds/1', '<turbo-stream>stale</turbo-stream>', true));
+
+        $hub = $this->container()->get(HubInterface::class);
+        self::assertInstanceOf(HubInterface::class, $hub);
+        $hub->publish(new Update('review/rounds/2', '<turbo-stream>changed</turbo-stream>', true));
+
+        self::assertEquals([new Update('review/rounds/2', '<turbo-stream>changed</turbo-stream>', true)], $this->publishedUpdates());
+    }
+
     public function testTheJourneyGetsALiveRoundDriverOnTheTestContainersCommandBus(): void
     {
         self::assertInstanceOf(LiveRoundDriver::class, $this->liveRoundDriver());
@@ -147,11 +160,10 @@ final class JourneyContainerTest extends JourneyTestCase
 
     protected function tearDown(): void
     {
-        $directory = $this->kernel?->getShareDir();
         $this->kernel?->shutdown();
 
-        if (null !== $directory) {
-            new Filesystem()->remove($directory.'/'.RecordingHub::FILE);
+        if ($this->kernel instanceof Kernel) {
+            $this->forgetTheRecording($this->kernel);
         }
     }
 
@@ -162,11 +174,24 @@ final class JourneyContainerTest extends JourneyTestCase
 
     private function container(): TestContainer
     {
-        $this->kernel = new Kernel('test', false);
-        $this->kernel->boot();
-        $container = $this->kernel->getContainer()->get('test.service_container');
+        $this->kernel?->shutdown();
+        $kernel = new Kernel('test', false);
+        $this->kernel = $kernel;
+        $kernel->boot();
+        // Before the test publishes too, because a recording an earlier test left in the same share directory would be read as this test's.
+        $this->forgetTheRecording($kernel);
+        $container = $kernel->getContainer()->get('test.service_container');
         self::assertInstanceOf(TestContainer::class, $container);
 
         return $container;
+    }
+
+    private function forgetTheRecording(Kernel $kernel): void
+    {
+        $directory = $kernel->getShareDir();
+
+        if (null !== $directory) {
+            new Filesystem()->remove($directory.'/'.RecordingHub::FILE);
+        }
     }
 }
