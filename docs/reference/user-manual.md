@@ -201,11 +201,18 @@ The board shows the same reading in a row under its columns, read once each time
 unhealthy: the hub reports unhealthy
 ```
 
-`php bin/console intakt:doctor` runs the checks the owner needs when the dashboard does not start, read-only and with no model call: the Mercure hub (the same judgement as `intakt:server:health`) and the GitHub App credential (one read of the installation, skipped as a pass when `GITHUB_APP_ID` is empty). It prints `pass: <check>` or `FAIL: <check>: <what to do>` per check and exits non-zero when any check fails or cannot run. Each GitHub request ends after 5 seconds of silence or 15 seconds in all. For example:
+`php bin/console intakt:doctor` runs the checks the owner needs when the dashboard does not start, read-only and with no model call: the Mercure hub (the same judgement as `intakt:server:health` and the board's Hub figure) and the GitHub App credential (one read of the installation; a pass without a read when `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` are all empty, a failure when only `GITHUB_APP_ID` is empty). It prints `pass: <check>` or `FAIL: <check>: <what to do>` per check and exits non-zero when any check fails or cannot run. The GitHub check gives each request at most 5 seconds and stops within 15 seconds in all. It honors a rate-limit pause the workers recorded and records no budget reading or pause of its own. On a healthy install:
 
 ```
-FAIL: Live-update hub: hub down (/mercure/health/ready did not answer). Run this inside the container (docker exec intakt php bin/console intakt:doctor) and restart the container if it stays down.
+pass: Live-update hub
 pass: GitHub App credential
+```
+
+With a private key that cannot sign:
+
+```
+pass: Live-update hub
+FAIL: GitHub App credential: The installation cannot be read back: The GitHub App private key cannot be read or cannot sign. Check the GitHub App id, private key and installation id in your settings, and that the host can reach api.github.com.
 ```
 
 The Caddyfile turns on Caddy's `metrics` option, because FrankenPHP reports its queue depth and worker restarts only then.

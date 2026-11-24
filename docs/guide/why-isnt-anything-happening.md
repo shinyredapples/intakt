@@ -64,7 +64,7 @@ None of this is built yet. Each rule in one sentence:
 
 ## Is the server itself busy?
 
-If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. The board shows the same numbers in a row under its columns each time it loads. The container's health check uses them too: Docker calls the container unhealthy when the hub is unhealthy, no worker is ready to take a request, or the numbers cannot be read. `php bin/console intakt:server:health` shows what the check sees.
+If the dashboard is slow or does not answer, run `php bin/console intakt:doctor` inside the container first. It changes nothing and prints one line per check, `pass:` or `FAIL:` with what to do next. Then ask the web server how it is doing: run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. The board shows the same numbers in a row under its columns each time it loads. The container's health check uses them too: Docker calls the container unhealthy when the hub is unhealthy, no worker is ready to take a request, or the numbers cannot be read. `php bin/console intakt:server:health` shows what the check sees.
 
 ## What is Intakt doing right now?
 
