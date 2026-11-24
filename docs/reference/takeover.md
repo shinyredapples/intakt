@@ -8,7 +8,7 @@ Until the takeover, two sets of GitHub Apps run side by side: the earlier loop's
 
 All of these must hold. If one does not, stop here.
 
-- **Intakt builds tasks on its own.** Intakt takes its tasks from GitHub issues and runs builds in its build lane. Today both are planned (see the [user guide](user-manual.md)), and the `eligibility_label` key of a project's `watch` section is read only by the code that chooses the next task, which nothing calls yet (see `config/intakt.example.yaml`), so this runbook cannot be run on the current code.
+- **Intakt builds tasks on its own.** Intakt takes its tasks from GitHub issues and runs builds in its build lane. Today both are planned (see the [user guide](user-manual.md)), and the `eligibility_label` key of a project's `watch` section is read only by the code that chooses the next task, which only `intakt:queue:show` calls so far: it prints the order and builds nothing (see `config/intakt.example.yaml`). So this runbook cannot be run on the current code.
 - **The labeled share ran.** Intakt has built the tasks carrying its own eligibility label end to end, and the weekly report compared its outcomes with the loop's (plan task T72).
 - **Every parity item names an Intakt test.** Each line of [Parity for the takeover](../architecture/parity.md) is checked and names an Intakt test that exists and passes (plan task T73).
 - **The owner gave the go.** Each stage of the switch starts with the owner's go.

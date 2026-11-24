@@ -149,7 +149,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, ['small']], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, ['small']], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testAClaudeCodeCallWhoseAnswerNamesNoModelIsPricedByTheModelItsTierResolvedTo(): void
@@ -177,7 +177,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testAnUnsettledCallOfAModelWithoutAPriceThatRecordedNoUsageHasAnUnknownCostNamingTheModel(): void
@@ -187,7 +187,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, ['unpriced']], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, ['unpriced']], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testAnUnsettledCallOfAPricedModelThatRecordedNoUsageCostsNothing(): void
@@ -206,7 +206,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, [], 'unknown'], [$cost->usd, $cost->unpriced, $cost->reading()]);
+        self::assertSame([null, [], 'unknown'], [$cost->usd, [...$cost->unpriced], $cost->reading()]);
     }
 
     public function testACallLackingInputTokensOfAModelWithoutAPriceStillNamesTheModel(): void
@@ -216,7 +216,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, ['small']], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, ['small']], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testACallReportingZeroInputTokensIsStillPriced(): void

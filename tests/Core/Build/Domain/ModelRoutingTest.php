@@ -11,7 +11,9 @@ use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\RoutingRules;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PathGlob;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -22,11 +24,13 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(BuildFacts::class)]
 #[UsesClass(TierChoice::class)]
 #[UsesClass(PathGlob::class)]
+#[UsesClass(Paths::class)]
+#[UsesClass(Labels::class)]
 final class ModelRoutingTest extends TestCase
 {
     public function testABuildWithNoLabelAndNoSensitivePathGetsTheConfiguredCheaperTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['docs/a.md']));
+        $choice = $this->choose(new BuildFacts(null, new Paths('docs/a.md')));
 
         self::assertSame(Tier::Standard, $choice->tier);
         self::assertSame(TierReason::Default, $choice->reason);
@@ -34,7 +38,7 @@ final class ModelRoutingTest extends TestCase
 
     public function testABuildLabelledForAStrongTierGetsItFromTheFirstCycle(): void
     {
-        $choice = $this->choose(new BuildFacts(Tier::Strong, ['docs/a.md']));
+        $choice = $this->choose(new BuildFacts(Tier::Strong, new Paths('docs/a.md')));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::Label, $choice->reason);
@@ -42,7 +46,7 @@ final class ModelRoutingTest extends TestCase
 
     public function testABuildTouchingASensitivePathGetsTheStrongTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['docs/a.md', 'src/Security/Login.php']));
+        $choice = $this->choose(new BuildFacts(null, new Paths('docs/a.md', 'src/Security/Login.php')));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::SensitivePath, $choice->reason);
@@ -50,14 +54,14 @@ final class ModelRoutingTest extends TestCase
 
     public function testABuildTouchingOnlyPathsOutsideTheSensitiveOnesStaysOnTheCheaperTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['src/Other/Login.php', 'config/a.yaml']));
+        $choice = $this->choose(new BuildFacts(null, new Paths('src/Other/Login.php', 'config/a.yaml')));
 
         self::assertSame(Tier::Standard, $choice->tier);
     }
 
     public function testASensitivePathBeatsALabelForALowerTier(): void
     {
-        $choice = $this->choose(new BuildFacts(Tier::Light, ['src/Security/Login.php']));
+        $choice = $this->choose(new BuildFacts(Tier::Light, new Paths('src/Security/Login.php')));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::SensitivePath, $choice->reason);
@@ -65,7 +69,7 @@ final class ModelRoutingTest extends TestCase
 
     public function testABuildAfterAnEarlierFailedAttemptStartsOnTheStrongTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['docs/a.md'], Setback::FailedAttempt));
+        $choice = $this->choose(new BuildFacts(null, new Paths('docs/a.md'), Setback::FailedAttempt));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::Setback, $choice->reason);
@@ -73,7 +77,7 @@ final class ModelRoutingTest extends TestCase
 
     public function testAReworkAfterABlockingFindingIsRaisedToTheStrongTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['docs/a.md'], Setback::BlockingFinding));
+        $choice = $this->choose(new BuildFacts(null, new Paths('docs/a.md'), Setback::BlockingFinding));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::Setback, $choice->reason);
@@ -81,7 +85,7 @@ final class ModelRoutingTest extends TestCase
 
     public function testAReworkAfterAStallIsRaisedToTheStrongTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['docs/a.md'], Setback::Stall));
+        $choice = $this->choose(new BuildFacts(null, new Paths('docs/a.md'), Setback::Stall));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::Setback, $choice->reason);
@@ -89,7 +93,7 @@ final class ModelRoutingTest extends TestCase
 
     public function testAReworkAfterARoundWithoutAP1StaysOnTheDefaultTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['docs/a.md']));
+        $choice = $this->choose(new BuildFacts(null, new Paths('docs/a.md')));
 
         self::assertSame(Tier::Standard, $choice->tier);
         self::assertSame(TierReason::Default, $choice->reason);
@@ -97,21 +101,21 @@ final class ModelRoutingTest extends TestCase
 
     public function testASetbackTheProjectDoesNotEscalateOnKeepsTheDefaultTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, [], Setback::Stall), [Setback::BlockingFinding]);
+        $choice = $this->choose(new BuildFacts(null, new Paths(), Setback::Stall), [Setback::BlockingFinding]);
 
         self::assertSame(Tier::Standard, $choice->tier);
     }
 
     public function testASensitivePathStillWinsOverASetback(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['src/Security/a.php'], Setback::Stall));
+        $choice = $this->choose(new BuildFacts(null, new Paths('src/Security/a.php'), Setback::Stall));
 
         self::assertSame(TierReason::SensitivePath, $choice->reason);
     }
 
     public function testASetbackRaisesABuildLabelledWithACheaperTier(): void
     {
-        $choice = $this->choose(new BuildFacts(Tier::Light, [], Setback::Stall));
+        $choice = $this->choose(new BuildFacts(Tier::Light, new Paths(), Setback::Stall));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::Setback, $choice->reason);
@@ -119,49 +123,49 @@ final class ModelRoutingTest extends TestCase
 
     public function testASetbackKeepsTheLabelReasonWhenTheLabelAlreadyNamesStrong(): void
     {
-        $choice = $this->choose(new BuildFacts(Tier::Strong, [], Setback::Stall));
+        $choice = $this->choose(new BuildFacts(Tier::Strong, new Paths(), Setback::Stall));
 
         self::assertSame(TierReason::Label, $choice->reason);
     }
 
     public function testABuildAfterAConfirmedEscalationRunsOnTheStrongTierEvenWhenTheProjectEscalatesOnNoSetback(): void
     {
-        $choice = $this->choose(new BuildFacts(Tier::Light, [], null, EscalationOutcome::Confirmed), []);
+        $choice = $this->choose(new BuildFacts(Tier::Light, new Paths(), null, EscalationOutcome::Confirmed), []);
 
         self::assertSame([Tier::Strong, TierReason::ConfirmedEscalation], [$choice->tier, $choice->reason]);
     }
 
     public function testABuildAfterARejectedEscalationKeepsItsLabelledTier(): void
     {
-        $choice = $this->choose(new BuildFacts(Tier::Light, [], null, EscalationOutcome::Rejected));
+        $choice = $this->choose(new BuildFacts(Tier::Light, new Paths(), null, EscalationOutcome::Rejected));
 
         self::assertSame([Tier::Light, TierReason::Label], [$choice->tier, $choice->reason]);
     }
 
     public function testASensitivePathStillWinsOverAConfirmedEscalation(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['src/Security/a.php'], null, EscalationOutcome::Confirmed));
+        $choice = $this->choose(new BuildFacts(null, new Paths('src/Security/a.php'), null, EscalationOutcome::Confirmed));
 
         self::assertSame(TierReason::SensitivePath, $choice->reason);
     }
 
     public function testAConfirmedEscalationGivesItsReasonEvenWhenTheLabelAlreadyNamesStrong(): void
     {
-        $choice = $this->choose(new BuildFacts(Tier::Strong, [], null, EscalationOutcome::Confirmed));
+        $choice = $this->choose(new BuildFacts(Tier::Strong, new Paths(), null, EscalationOutcome::Confirmed));
 
         self::assertSame([Tier::Strong, TierReason::ConfirmedEscalation], [$choice->tier, $choice->reason]);
     }
 
     public function testFactsAfterAnEscalationKeepTheirLabelPathsAndSetback(): void
     {
-        $facts = BuildFacts::fromLabels(['model:light'], ['a.php'], Setback::Stall)->afterEscalation(EscalationOutcome::Confirmed);
+        $facts = BuildFacts::fromLabels(new Labels('model:light'), new Paths('a.php'), Setback::Stall)->afterEscalation(EscalationOutcome::Confirmed);
 
-        self::assertEquals(new BuildFacts(Tier::Light, ['a.php'], Setback::Stall, EscalationOutcome::Confirmed), $facts);
+        self::assertEquals(new BuildFacts(Tier::Light, new Paths('a.php'), Setback::Stall, EscalationOutcome::Confirmed), $facts);
     }
 
     public function testABuildWithoutPathsOrSensitiveRulesGetsTheDefault(): void
     {
-        $choice = new ModelRouting()->choose(new RoutingRules(Tier::Light, [], []), new BuildFacts(null, []));
+        $choice = new ModelRouting()->choose(new RoutingRules(Tier::Light, [], []), new BuildFacts(null, new Paths()));
 
         self::assertSame(Tier::Light, $choice->tier);
     }
