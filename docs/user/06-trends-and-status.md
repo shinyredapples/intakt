@@ -43,6 +43,10 @@ At the bottom of Trends, **Up next** lists the review rounds the board shows und
 
 Click a round to open its review page. A queued pull request has no link until its round starts, because its review page does not exist before that. When nothing is going on, Up next says "Nothing running or queued.". The list shows the moment you opened the page: reload it to see newer rounds.
 
+## History: what changed and who changed it
+
+Open `/history` to read the ledger as a list, newest first. Each row says who made the change, what it was, the project and the time. Where a value changed, the row shows it before and after; an expiry shows when the change has one. A secret never shows, only its fingerprint. Add `?project=` and a project name to see one project.
+
 ## Now: what is running right now
 
 Trends mostly looks back. For the present moment, open **Now** in the menu. The board's status line sums it up in one phrase, such as "Running smoothly · 1 reviewer working" or "Quiet · nobody working".
