@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\TierChoice;
@@ -15,11 +16,20 @@ use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRoster;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ReviewerRoles;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(TeamRoster::class)]
+#[UsesClass(BuildFacts::class)]
+#[UsesClass(BuildRoutingNotConfigured::class)]
+#[UsesClass(ConfiguredBuildRouting::class)]
+#[UsesClass(ModelRouting::class)]
+#[UsesClass(Paths::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(TierChoice::class)]
 final class TeamRosterTest extends TestCase
 {
     public function testAProjectWithoutBuildRoutingAddsNoDeveloperProvider(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\ShowTeam;
 
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\TeamSpend;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
@@ -15,11 +16,20 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(LedgerAccountSpend::class)]
+#[UsesClass(ConfiguredPrices::class)]
+#[UsesClass(Cost::class)]
+#[UsesClass(LedgerEvent::class)]
+#[UsesClass(LedgerPayloads::class)]
+#[UsesClass(RoundPayloads::class)]
+#[UsesClass(TeamSpend::class)]
+#[UsesClass(TokenUsageRow::class)]
+#[UsesClass(UsageSettled::class)]
 final class LedgerAccountSpendTest extends TestCase
 {
     public function testAUsageWithoutOutputTokensMakesTheSpendUnknown(): void
