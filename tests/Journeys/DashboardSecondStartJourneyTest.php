@@ -18,7 +18,7 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
 {
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
-    private const string FIRST_RUN = '/setup';
+    private const string FIRST_RUN = '/setup?step=5';
     private const string ENDED_TEXT = 'Checked.';
     private const string STARTED = 'Started round 2.';
     private const string REFUSED = 'Round 2 was asked for, but the next round of this change is round 3.';
