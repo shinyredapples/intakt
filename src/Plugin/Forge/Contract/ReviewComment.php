@@ -21,6 +21,6 @@ final readonly class ReviewComment
 
     public function redactedBody(): string
     {
-        return new Redaction()->redact($this->body, ...$this->credentials->values);
+        return new Redaction()->redact($this->body, ...$this->credentials);
     }
 }

@@ -248,7 +248,7 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame(12, $issue->number);
         self::assertSame('Add the export', $issue->title);
         self::assertSame("Export the report.\n\nWaits for #9 and #10\n", $issue->body);
-        self::assertSame(['intakt', 'priority:high'], $issue->labels);
+        self::assertSame(['intakt', 'priority:high'], [...$issue->labels]);
         self::assertSame('ana', $issue->author);
         self::assertSame('2026-11-10T10:00:00+00:00', $issue->updatedAt->format('c'));
         self::assertSame('2026-12-01T08:00:00+00:00', $issue->milestoneDue?->format('c'));
@@ -503,7 +503,7 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame(12, $issue?->number);
         self::assertSame('Add the export', $issue->title);
         self::assertSame("Export the report.\n\nWaits for #9 and #10\n", $issue->body);
-        self::assertSame(['intakt', 'priority:high'], $issue->labels);
+        self::assertSame(['intakt', 'priority:high'], [...$issue->labels]);
         self::assertSame('2026-12-01T08:00:00+00:00', $issue->milestoneDue?->format('c'));
     }
 

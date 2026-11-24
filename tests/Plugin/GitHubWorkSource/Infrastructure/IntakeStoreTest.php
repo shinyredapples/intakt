@@ -20,6 +20,7 @@ use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
@@ -106,7 +107,7 @@ final class IntakeStoreTest extends KernelTestCase
     public function testAnItemVouchedForByAnAccountWithoutWriteAccessIsReadBackUntrustedWithNoVouchedLabel(): void
     {
         $issue = $this->stored(Issues::task(7, ['intakt']));
-        $issue->vouch(Vouching::of('mallory', new IssueHistory('mallory', [new LabelApplication('intakt', 'mallory')], '', ['intakt']), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
+        $issue->vouch(Vouching::of('mallory', new IssueHistory('mallory', [new LabelApplication('intakt', 'mallory')], '', new IssueLabels('intakt')), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
         $this->record('alpha', [$issue], null);
         $this->entities->clear();
 
@@ -931,7 +932,7 @@ final class IntakeStoreTest extends KernelTestCase
     private function vouched(ListedIssue $listed): StoredIssue
     {
         $issue = $this->stored($listed);
-        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), [...$listed->labels]), $listed->body, $listed->labels);
         $issue->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => in_array($account, self::WRITERS, true)));
 
         return $issue;

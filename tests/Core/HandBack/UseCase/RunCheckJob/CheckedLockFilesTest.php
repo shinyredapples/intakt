@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFile;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Plugin\Gate\Contract\LockFiles;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(CheckedLockFile::class)]
 #[UsesClass(RepositoryGit::class)]
 #[UsesClass(HardenedGit::class)]
+#[UsesClass(LockFiles::class)]
 final class CheckedLockFilesTest extends TestCase
 {
     private const array PATHS = ['composer.json', 'composer.lock'];
@@ -159,6 +161,6 @@ final class CheckedLockFilesTest extends TestCase
         // In the mirror, because the check reads the head there once the hand-back is fetched.
         $this->history->push('task');
 
-        return new CheckedLockFiles(new RepositoryGit(new HardenedGit()))->of($this->history->mirror, $head, self::PATHS);
+        return new CheckedLockFiles(new RepositoryGit(new HardenedGit()))->of($this->history->mirror, $head, new LockFiles(...self::PATHS));
     }
 }

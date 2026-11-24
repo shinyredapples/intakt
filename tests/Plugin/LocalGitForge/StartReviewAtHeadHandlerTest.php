@@ -104,7 +104,7 @@ final class StartReviewAtHeadHandlerTest extends TestCase
 
         self::assertSame($next, $answer->identity->commits->head->hash);
         self::assertSame(HeadMoveKind::Commits, $answer->move->kind);
-        self::assertSame(['src/Feature.php'], $answer->move->paths);
+        self::assertSame(['src/Feature.php'], [...$answer->move->paths]);
     }
 
     protected function setUp(): void
