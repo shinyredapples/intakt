@@ -106,6 +106,47 @@ test('choosing all projects shows every row again', () => {
     assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
 });
 
+test('choosing a project with no rows shows the empty line', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] }).open();
+
+    page.chooseProject('gamma');
+
+    assert.deepEqual(page.shownRows(), []);
+    assert.equal(page.emptyLineShown(), true);
+});
+
+test('choosing a project with rows keeps the empty line hidden', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] }).open();
+
+    page.chooseProject('alpha');
+
+    assert.equal(page.emptyLineShown(), false);
+});
+
+test('choosing all projects hides the empty line again', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] }).open();
+    page.chooseProject('gamma');
+
+    page.chooseProject('');
+
+    assert.equal(page.emptyLineShown(), false);
+});
+
+test('a phone shows no empty line, because it shows every project', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'], phone: true }).open();
+
+    page.chooseProject('gamma');
+
+    assert.equal(page.emptyLineShown(), false);
+});
+
+test('a stored project with no rows shows the empty line after a reload', () => {
+    const browser = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] });
+    browser.open().chooseProject('gamma');
+
+    assert.equal(browser.open().emptyLineShown(), true);
+});
+
 test('the chosen project stays chosen after a reload', () => {
     const browser = new Browser('light');
     browser.open().chooseProject('alpha');

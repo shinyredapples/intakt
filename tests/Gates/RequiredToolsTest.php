@@ -50,6 +50,16 @@ final class RequiredToolsTest extends TestCase
         self::assertContains(RequiredTools::notFound('jq'), $missing);
     }
 
+    public function testTheJourneysGateAloneNamesAMissingUnshareAndAMissingTrue(): void
+    {
+        putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
+
+        $missing = $this->tools()->missingFor(['journeys']);
+
+        self::assertContains(RequiredTools::notFound('unshare'), $missing);
+        self::assertContains(RequiredTools::notFound('true'), $missing);
+    }
+
     public function testAToolOfAGateThatIsNotSelectedIsNotRequired(): void
     {
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
