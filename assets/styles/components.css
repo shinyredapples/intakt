@@ -739,6 +739,16 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .ttabs ~ .task-grid .timeline-title { display: none; }
   .log { margin-top: 0; }
 }
+/* At 390 wide the reviewers table measured 567 px in a 358 px box and hid the count and Stop past the edge, so a phone stacks each reviewer: role and outcome, model, findings, then Stop across the row. */
+@media (max-width: 760px) {
+  .round .ledger.reviewers thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .round .ledger.reviewers tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s12); padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
+  .round .ledger.reviewers td { padding: 0 0 var(--s4); border-bottom: 0; text-align: left; }
+  .round .ledger.reviewers td:nth-child(3) { grid-row: 1; grid-column: 2; }
+  .round .ledger.reviewers td:nth-child(2), .round .ledger.reviewers td:nth-child(n+4) { grid-column: 1 / -1; }
+  .round .ledger.reviewers td.num::before { content: "Findings: "; color: var(--muted); }
+  .round .ledger.reviewers .stop-reviewer .btn { width: 100%; }
+}
 
 /* Status line and the Status page's lanes */
 .working { margin: var(--s24) 0 var(--s32); }

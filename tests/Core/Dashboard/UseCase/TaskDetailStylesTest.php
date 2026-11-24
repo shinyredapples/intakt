@@ -176,6 +176,33 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/overflow-x:\s*auto;/', $rules['.table-scroll'] ?? '');
     }
 
+    // At 390 wide the reviewers table measured 567 px in a 358 px box, so the Findings count and Stop sat past the screen's edge.
+    public function testOnAPhoneEachReviewerStacksSoItsFindingsAndStopFitTheScreen(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/display:\s*grid;\s*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/', $rules['.round .ledger.reviewers tr'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*grid-row:\s*1;\s*grid-column:\s*2;\s*$/', $rules['.round .ledger.reviewers td:nth-child(3)'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*grid-column:\s*1 \/ -1;\s*$/', $rules['.round .ledger.reviewers td:nth-child(2), .round .ledger.reviewers td:nth-child(n+4)'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.round .ledger.reviewers .stop-reviewer .btn'] ?? '');
+    }
+
+    // The column headings are clipped on a phone, so the count says what it counts.
+    public function testOnAPhoneAReviewersFindingsCountCarriesItsOwnLabel(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/clip-path:\s*inset\(50%\);/', $rules['.round .ledger.reviewers thead'] ?? '');
+        self::assertMatchesRegularExpression('/content:\s*"Findings: ";/', $rules['.round .ledger.reviewers td.num::before'] ?? '');
+    }
+
+    public function testFrom761WideTheReviewersStayATableWithItsHeadings(): void
+    {
+        $outside = implode("\n", array_keys($this->rulesOf($this->sheetOutside('max-width: 760px'))));
+
+        self::assertStringNotContainsString('.ledger.reviewers', $outside);
+    }
+
     public function testAJudgedRoundsFindingsAreOneColumnOfCardsWhoseTextWrapsInsteadOfOverflowing(): void
     {
         $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
