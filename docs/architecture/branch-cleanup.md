@@ -15,7 +15,7 @@ A read that fails or cannot answer throws `ForgeReadFailed` (or `ForgeRateLimite
 
 ## GitHub (`GitHubForgeBranches`)
 
-- Every answer is validated field by field. A missing `protected` flag, labels, head or date fails the read.
+- `GitHubBranchCalls` holds the reads and the delete and checks every answer; `GitHubForgeBranches` maps them. Every answer is validated field by field. A missing `protected` flag, labels, head or date fails the read.
 - The pull-request lookup (`GET /pulls?state=all&head=<owner>:<branch>`) and the commit comparison follow every page, using `NextLinks` on the `Link` header, so an open or `keep`-labelled pull request on a later page is never missed. More than ten pages fails the read.
 - `hasCommitByPerson` compares the default branch with the branch head. A commit is Intakt's only when its GitHub author is this App's own bot account (`SteeringIdentities::isBot()` and `isOwn()`); a commit without a GitHub account, or by any other account, is a person's.
 - `deleteBranch` reads the branch head right before the delete and refuses when it differs from the expected head. GitHub's REST ref deletion takes no expected head, and the GraphQL `updateRefs` mutation was not used because this build cannot prove it against the installation's permissions. The short window between that read and the delete is accepted: cleanup candidates have been idle for weeks. A head that cannot be read counts as moved and nothing is deleted.
