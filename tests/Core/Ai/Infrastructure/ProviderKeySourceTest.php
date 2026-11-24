@@ -214,6 +214,14 @@ final class ProviderKeySourceTest extends TestCase
         return base64_encode('too short for a key pair');
     }
 
+    private function removeTheVaultKeyFiles(): void
+    {
+        new Filesystem()->remove([
+            $this->vaultDirectory().'/'.basename($this->vaultDirectory()).'.encrypt.public.php',
+            $this->vaultDirectory().'/'.basename($this->vaultDirectory()).'.decrypt.private.php',
+        ]);
+    }
+
     /**
      * @return list<string>
      */
@@ -222,14 +230,6 @@ final class ProviderKeySourceTest extends TestCase
         $source = new ProviderKeySource(ProviderKeySource::vaultIn($this->vaultDirectory(), $decryptionSecret), ['ANTHROPIC_API_KEY' => 'sk-ant-kept']);
 
         return [...$source->missingOf(new Account(Provider::Anthropic, Account::DEFAULT))];
-    }
-
-    private function removeTheVaultKeyFiles(): void
-    {
-        new Filesystem()->remove([
-            $this->vaultDirectory().'/'.basename($this->vaultDirectory()).'.encrypt.public.php',
-            $this->vaultDirectory().'/'.basename($this->vaultDirectory()).'.decrypt.private.php',
-        ]);
     }
 
     // A folder of its own per test, so no test touches config/secrets/ or the vault of a test running beside it.

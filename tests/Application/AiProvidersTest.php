@@ -277,6 +277,12 @@ final class AiProvidersTest extends KernelTestCase
         return [$variables, $vault, is_file($kept) ? file_get_contents($kept) : null];
     }
 
+    private function keepKey(string $key): void
+    {
+        $providers = new SymfonyAiProviderCatalog();
+        new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise($key, $providers));
+    }
+
     // Reflection, because the container resolves a variable only for a service argument and its method for that is protected.
     private function resolvedVariable(string $name): mixed
     {
@@ -284,12 +290,6 @@ final class AiProvidersTest extends KernelTestCase
         self::assertNotNull($container);
 
         return new ReflectionMethod($container, 'getEnv')->invoke($container, $name);
-    }
-
-    private function keepKey(string $key): void
-    {
-        $providers = new SymfonyAiProviderCatalog();
-        new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise($key, $providers));
     }
 
     // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
