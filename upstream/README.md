@@ -22,7 +22,7 @@ Building Intakt led to 13 fixes (12 pull requests) merged upstream in Symfony, S
 | symfony/symfony | [`debug:config` fails when the cached container is stale](framework-debug-config-stale-container/) | [#68310](https://github.com/symfony/symfony/pull/68310) Intakt's, merged (7.4, in no release yet) |
 | symfony/ai | [`Provider` keeps a resolved model](ai-platform-provider-keeps-resolved-model/) | [#2851](https://github.com/symfony/ai/pull/2851) fixed upstream, merged |
 | symfony/ai | [Failover retries a failed platform](ai-failover-platform-retries-a-failed-platform/) | [#2890](https://github.com/symfony/ai/pull/2890) Intakt's, open |
-| symfony/symfony | [Messenger: a stopped worker hides the rest of its fetched batch](messenger-concurrency-limit-hides-fetched-message/) | [#68307](https://github.com/symfony/symfony/pull/68307) Intakt's, open, reviewed |
+| symfony/symfony | [Messenger: a stopped worker hides the rest of its fetched batch](messenger-concurrency-limit-hides-fetched-message/) | [#68358](https://github.com/symfony/symfony/pull/68358) Intakt's, open (replaces [#68307](https://github.com/symfony/symfony/pull/68307), closed without merging) |
 | symfony/ai | [Typed answer of a multi-part reply missed](ai-structured-output-multi-part-answers/) | [#2945](https://github.com/symfony/ai/issues/2945) Intakt's, reported |
 | symfony/ai | [Failover misses a deferred 429](ai-failover-platform-deferred-rate-limit/) | [#2944](https://github.com/symfony/ai/issues/2944) Intakt's, reported |
 | symfony/ai | [Claude Code: response format passed as `Array`](ai-claude-code-platform-structured-output/) | [#2962](https://github.com/symfony/ai/issues/2962) Intakt's, reported |

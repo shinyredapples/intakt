@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Contract;
 
+use Intakt\Core\Review\Contract\Labels;
+
 enum TaskKind: string
 {
     case Task = 'task';
     case Bug = 'bug';
 
-    /**
-     * @param list<string> $labels
-     */
-    public static function fromLabels(array $labels): self
+    public static function fromLabels(Labels $labels): self
     {
-        return in_array(self::Bug->value, $labels, true) ? self::Bug : self::Task;
+        return $labels->contains(self::Bug->value) ? self::Bug : self::Task;
     }
 }

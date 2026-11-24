@@ -52,7 +52,7 @@ final class ConfiguredPricesTest extends TestCase
 
         $cost = new ConfiguredPrices(['claude-opus-5-5' => self::OPUS])->costOf($row->model, $row->figures());
 
-        self::assertSame([null, ['claude-haiku-5-5']], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, ['claude-haiku-5-5']], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testAnOpenAiFormAnswerPaysTheCacheReadPriceOnlyForTheCachedPartOfItsPrompt(): void
@@ -76,7 +76,7 @@ final class ConfiguredPricesTest extends TestCase
     {
         $cost = new ConfiguredPrices(['claude-opus-5-5' => self::OPUS])->costOf(null, new TokenFigures(100, 0, 0, 0, 20));
 
-        self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, [...$cost->unpriced]]);
     }
 
     // The fields UsageLedger copies from a vendor's usage, so the row is the one a recorded answer leaves in the ledger.

@@ -22,6 +22,11 @@ final readonly class ModelNames implements IteratorAggregate
         $this->names = array_values($names);
     }
 
+    public function isEmpty(): bool
+    {
+        return [] === $this->names;
+    }
+
     /**
      * @return Traversable<int, string>
      */

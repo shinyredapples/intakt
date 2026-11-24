@@ -33,7 +33,7 @@ final readonly class OpenAiDescriptor implements SymfonyAiProvider
     // Read from the enum, because its accounts still build their variables from it until its match arms move into descriptors.
     public function variables(): array
     {
-        return Provider::OpenAi->variables();
+        return [...Provider::OpenAi->variables()];
     }
 
     // The Anthropic prefix is excluded, so a cut-off Anthropic key is refused instead of going to OpenAI.
