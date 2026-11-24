@@ -28,7 +28,7 @@ final readonly class ShowQueueCommand
     {
         $queue = $this->workSource->queue($project);
         if (!$queue->complete) {
-            $io->getErrorStyle()->error(sprintf('The listing of project %s came back short, so no order is shown; the log says why.', $project));
+            $io->getErrorStyle()->error(sprintf('The listing of project %s came back short, so no order is shown; the log says why.', $this->printable($project)));
 
             return Command::FAILURE;
         }

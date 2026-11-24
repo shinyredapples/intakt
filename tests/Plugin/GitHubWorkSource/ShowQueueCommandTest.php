@@ -250,6 +250,31 @@ final class ShowQueueCommandTest extends KernelTestCase
         self::assertStringContainsString('The listing of project alpha<info>beta</info> came back short', preg_replace('/\s+/', ' ', $error) ?? '');
     }
 
+    public function testNoControlSeparatorOrInvalidByteOfTheProjectNameReachesTheShortListingError(): void
+    {
+        $source = self::createStub(WorkSource::class);
+        $source->method('queue')->willReturn(WorkQueue::incomplete());
+
+        $error = $this->show("alpha\u{1B}b\u{9B}c\u{85}d\u{202E}e\u{2028}f\xFFg", $source)->getErrorOutput();
+
+        self::assertTrue(mb_check_encoding($error, 'UTF-8'));
+        foreach (["\u{1B}", "\u{9B}", "\u{85}", "\u{202E}", "\u{2028}", "\xFF"] as $character) {
+            self::assertStringNotContainsString($character, $error);
+        }
+    }
+
+    public function testNoControlOfTheProjectNameReachesTheHeadingsOrTheShortListingError(): void
+    {
+        $source = self::createStub(WorkSource::class);
+        $source->method('queue')->willReturn(WorkQueue::listed([], []), WorkQueue::incomplete());
+
+        $display = $this->show("alpha\u{9B}\u{202E}beta", $source)->getDisplay();
+        $error = $this->show("alpha\u{9B}\u{202E}beta", $source)->getErrorOutput();
+
+        self::assertStringNotContainsString("\u{9B}\u{202E}", $display);
+        self::assertStringNotContainsString("\u{9B}\u{202E}", $error);
+    }
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
