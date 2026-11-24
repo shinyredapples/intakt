@@ -226,5 +226,4 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
     {
         return $page->filter('[data-project="'.$project.'"] dd')->each(static fn (Crawler $dd): string => $dd->text());
     }
-
 }
