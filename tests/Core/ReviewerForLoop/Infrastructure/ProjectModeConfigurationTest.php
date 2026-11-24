@@ -29,6 +29,14 @@ final class ProjectModeConfigurationTest extends TestCase
         $this->processed('quiet');
     }
 
+    public function testTheRemovedShadowModeIsRefusedAsAnUnknownMode(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/"shadow" is not allowed for path "intakt\.projects\.beta\.mode"/');
+
+        $this->processed('shadow');
+    }
+
     /**
      * @return array<string, mixed>
      */

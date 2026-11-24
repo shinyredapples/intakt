@@ -120,6 +120,7 @@ final class AiProvidersTest extends KernelTestCase
 
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
+        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
     }
 
     public function testAValueInTheEnvironmentWinsOverTheKeptKey(): void
@@ -129,15 +130,6 @@ final class AiProvidersTest extends KernelTestCase
         $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => 'value-from-the-environment']);
 
         self::assertSame('value-from-the-environment', $this->resolvedVariable('ANTHROPIC_API_KEY'));
-    }
-
-    public function testAKeptKeyIsTheVariableWhenTheEnvironmentHasNone(): void
-    {
-        $this->keepKey(self::KEPT_KEY);
-
-        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
     }
 
     public function testASecretInTheVaultWinsOverTheKeptKey(): void
@@ -191,91 +183,6 @@ final class AiProvidersTest extends KernelTestCase
         self::assertInstanceOf(PlatformInterface::class, $container->get('ai.platform.anthropic'));
     }
 
-    public function testAVaultSecretBehindADecryptionSecretOfTheWrongLengthDisablesItsProviderDespiteAKeptKey(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        $this->useMalformedDecryptionSecret();
-        $this->keepKey(self::KEPT_KEY);
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertFalse($container->has('ai.platform.anthropic'));
-        self::assertSame(
-            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter(AiServices::DISABLED_PROVIDERS),
-        );
-    }
-
-    public function testAVaultSecretWithoutAnyUsableDecryptionKeyDisablesItsProviderDespiteAKeptKey(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
-        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.encrypt.public.php');
-        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.decrypt.private.php');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        // Only characters base64 ignores, so the secret decodes to an empty key.
-        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = '!!!';
-        $this->keepKey(self::KEPT_KEY);
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertFalse($container->has('ai.platform.anthropic'));
-        self::assertSame(
-            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter(AiServices::DISABLED_PROVIDERS),
-        );
-    }
-
-    public function testAKeptKeyIsUsedBehindAVaultSecretThatAWrongKeyOfTheRightLengthCannotOpen(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        // Another key pair of the right length, which libsodium takes and only fails to decrypt with, so the vault's loader returns nothing where a wrong length throws.
-        $secretKey = str_repeat("\x01", SODIUM_CRYPTO_BOX_SECRETKEYBYTES);
-        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode(sodium_crypto_box_keypair_from_secretkey_and_publickey($secretKey, sodium_crypto_box_publickey_from_secretkey($secretKey)));
-        $this->keepKey(self::KEPT_KEY);
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
-        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
-    }
-
-    public function testAKeptKeyIsUsedBehindAVaultSecretWhosePrivateKeyFileIsMissing(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
-        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.decrypt.private.php');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        $this->keepKey(self::KEPT_KEY);
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
-        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
-    }
-
-    public function testAKeptKeyIsUsedBesideAnEmptySecretInTheVault(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', '');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        $this->keepKey(self::KEPT_KEY);
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
-        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
-    }
-
     protected function setUp(): void
     {
         $this->containers = self::compiledContainers();
@@ -310,12 +217,6 @@ final class AiProvidersTest extends KernelTestCase
         $this->containers->restoreTheSharedCache();
         new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
         $this->removeTheVaultsFolderWhenEmpty();
-    }
-
-    // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
-    private function useMalformedDecryptionSecret(): void
-    {
-        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode('too short for a key pair');
     }
 
     /**

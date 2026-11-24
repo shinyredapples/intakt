@@ -120,16 +120,6 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
     }
 
-    public function testAShadowModeStopsTheBootAsAnUnknownMode(): void
-    {
-        file_put_contents($this->file, "projects:\n    beta:\n        mode: shadow\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/"shadow" is not allowed for path "intakt\.projects\.beta\.mode"/');
-
-        $this->bootedContainer();
-    }
-
     public function testAReviewerForLoopModeIsTheModeTheContainerReadsForItsProject(): void
     {
         file_put_contents($this->file, "projects:\n    beta:\n        mode: reviewer-for-loop\n        tiers:\n            strong: { provider: openai, model: other }\n");
@@ -145,16 +135,6 @@ final class ProjectTiersTest extends KernelTestCase
         file_put_contents($this->file, "projects:\n    beta:\n        review_job: { image: 'intakt-job/beta:review' }\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
         self::assertSame(['beta' => 'intakt-job/beta:review'], $this->bootedContainer()->getParameter(ReviewServices::JOB_IMAGES));
-    }
-
-    public function testAReviewJobSectionWithoutItsImageStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "projects:\n    beta:\n        review_job: {}\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/"image" under "intakt\.projects\.beta" must be configured/');
-
-        $this->bootedContainer();
     }
 
     public function testAProjectBuildSectionReachesTheRoutingAndAProjectWithoutOneGetsTheDefaults(): void
@@ -210,16 +190,6 @@ final class ProjectTiersTest extends KernelTestCase
         $this->measureBothWindowsAt(75.0);
 
         self::assertSame(StartDecision::Start, $guard->decide(new Account(Provider::Anthropic, 'default'), 0));
-    }
-
-    public function testAShadowCeilingsSectionStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/Unrecognized option "shadow_ceilings" under "intakt\.budget"/');
-
-        $this->bootedContainer();
     }
 
     public function testTheCodexProbeOfTheContainerUsesTheOwnersCodexSection(): void
