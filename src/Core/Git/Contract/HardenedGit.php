@@ -37,56 +37,48 @@ final readonly class HardenedGit
     private const string NOWHERE = '/nonexistent';
 
     /**
-     * @param list<string> $arguments
-     *
      * @throws RepositoryAttributesRefused
      * @throws RuntimeException
      */
-    public function call(array $arguments, string $directory): GitCall
+    public function call(string $directory, string ...$arguments): GitCall
     {
         // Pathspec magic would read ":odd.txt" as "odd.txt".
-        return $this->callWith(['--literal-pathspecs'], $arguments, $directory);
+        return $this->callWith(['--literal-pathspecs'], array_values($arguments), $directory);
     }
 
     /**
-     * @param list<string> $arguments
-     *
      * @throws RepositoryAttributesRefused
      * @throws RuntimeException
      */
-    public function callWithPathspecMagic(array $arguments, string $directory): GitCall
+    public function callWithPathspecMagic(string $directory, string ...$arguments): GitCall
     {
         // Because a gate writes glob pathspecs itself, which literal pathspecs refuse; never use it for a path from the repository.
-        return $this->callWith([], $arguments, $directory);
+        return $this->callWith([], array_values($arguments), $directory);
     }
 
     /**
-     * @param list<string> $arguments
-     *
      * @throws RepositoryAttributesRefused
      * @throws RuntimeException
      */
-    public function callInBareRepository(array $arguments, string $repository): GitCall
+    public function callInBareRepository(string $repository, string ...$arguments): GitCall
     {
         $repository = $this->absolute($repository);
         // Named and pinned as bare, because without a pinned work tree git would otherwise take the one core.worktree names, or the folder it runs in.
         $options = ['--literal-pathspecs', '--git-dir='.$repository, '--bare'];
         $emptyTree = $this->bareEmptyTree($options, $repository);
 
-        return new GitCall($this->command($options, $arguments, $emptyTree), $repository, $this->variables(null, $emptyTree));
+        return new GitCall(new GitCommand(...$this->command($options, array_values($arguments), $emptyTree)), $repository, $this->environmentOf($this->variables(null, $emptyTree)));
     }
 
     /**
-     * @return array<string, string|false>
-     *
      * @throws RepositoryAttributesRefused
      * @throws RuntimeException
      */
-    public function environment(string $directory): array
+    public function environment(string $directory): GitEnvironment
     {
         $directory = $this->absolute($directory);
 
-        return $this->variables($directory, $this->emptyTree($directory));
+        return $this->environmentOf($this->variables($directory, $this->emptyTree($directory)));
     }
 
     /**
@@ -101,7 +93,7 @@ final readonly class HardenedGit
         $directory = $this->absolute($directory);
         $emptyTree = $this->emptyTree($directory);
 
-        return new GitCall($this->command($options, $arguments, $emptyTree), $directory, $this->variables($directory, $emptyTree));
+        return new GitCall(new GitCommand(...$this->command($options, $arguments, $emptyTree)), $directory, $this->environmentOf($this->variables($directory, $emptyTree)));
     }
 
     private function absolute(string $directory): string
@@ -237,6 +229,19 @@ final readonly class HardenedGit
     private function variables(?string $workTree, string $emptyTree): array
     {
         return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($workTree, $emptyTree)];
+    }
+
+    /**
+     * @param array<string, string|false> $variables
+     */
+    private function environmentOf(array $variables): GitEnvironment
+    {
+        $environment = GitEnvironment::of();
+        foreach ($variables as $name => $value) {
+            $environment = false === $value ? $environment->unsetting($name) : $environment->with(...[$name => $value]);
+        }
+
+        return $environment;
     }
 
     /**
