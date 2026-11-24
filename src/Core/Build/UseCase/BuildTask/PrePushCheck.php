@@ -14,6 +14,7 @@ use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRun;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 use Intakt\Core\HandBack\Contract\RegressionTests;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
@@ -39,7 +40,7 @@ final readonly class PrePushCheck
     // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed.
     public function failureOf(BuildTaskRequest $request, string $bundle, TaskKind $kind): ?string
     {
-        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack) ?? $this->reportedRegressionRuns($request, $handBack, $kind));
+        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack) ?? $this->regressionFailure($request, $handBack, $kind));
     }
 
     private function failureIn(BuildTaskRequest $request, HandBack $handBack): ?string
@@ -57,8 +58,8 @@ final readonly class PrePushCheck
         return $outcome instanceof RefusedHandBack ? $outcome->reason() : $this->failureOfJob($outcome);
     }
 
-    // Only reported for now, never part of the verdict, and only for a bug whose check passed, so a head that fails the check is not run twice more.
-    private function reportedRegressionRuns(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): null
+    // Only a bug whose check passed, so a head that fails the check is not run twice more; only a missing test or a test that passes on the base fails, because the other results are not proof either way.
+    private function regressionFailure(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): ?string
     {
         if (TaskKind::Bug !== $kind) {
             return null;
@@ -80,9 +81,20 @@ final readonly class PrePushCheck
                 'base' => $runs->base?->value,
                 'head' => $runs->head?->value,
             ]);
+
+            return $this->unprovenBy($runs);
         }
 
         return null;
+    }
+
+    private function unprovenBy(RegressionRuns $runs): ?string
+    {
+        return match (true) {
+            $runs->foundNoTest() => 'the head of a bug adds no regression test',
+            RegressionRun::Passed === $runs->base => 'the new test of a bug also passes on the base, so it proves nothing',
+            default => null,
+        };
     }
 
     private function stoppedBy(ExceptionInterface $stopped): string

@@ -72,17 +72,47 @@ final class PrePushCheckTest extends TestCase
         self::assertNull($failure);
     }
 
-    public function testABugsRegressionResultsAreLoggedAndDoNotChangeThePrePushVerdict(): void
+    public function testABugHeadWhoseNewTestFailsOnTheBaseAndPassesOnTheHeadPassesThePrePushCheck(): void
     {
         $regressionTests = self::createStub(RegressionTests::class);
-        $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Passed, RegressionRun::Failed));
+        $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects(self::once())->method('info')->with(
             'The regression tests of a bug head ran.',
-            ['project' => 'alpha', 'tests' => ['tests/FooTest.php'], 'base' => 'passed', 'head' => 'failed'],
+            ['project' => 'alpha', 'tests' => ['tests/FooTest.php'], 'base' => 'failed', 'head' => 'passed'],
         );
 
         $failure = $this->passingCheck($regressionTests, $logger)->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+
+        self::assertNull($failure);
+    }
+
+    public function testABugHeadWhoseNewTestAlsoPassesOnTheBaseFailsThePrePushCheckWithTheReason(): void
+    {
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Passed, RegressionRun::Passed));
+
+        $failure = $this->passingCheck($regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+
+        self::assertSame('the new test of a bug also passes on the base, so it proves nothing', $failure);
+    }
+
+    public function testABugHeadWithoutANewTestFailsThePrePushCheckWithTheReason(): void
+    {
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn(RegressionRuns::noTest());
+
+        $failure = $this->passingCheck($regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+
+        self::assertSame('the head of a bug adds no regression test', $failure);
+    }
+
+    public function testABugHeadWhoseTestOnlyErroredOnTheBaseStillPassesThePrePushCheck(): void
+    {
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Errored, RegressionRun::Passed));
+
+        $failure = $this->passingCheck($regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
 
         self::assertNull($failure);
     }
