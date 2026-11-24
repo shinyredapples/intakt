@@ -298,17 +298,6 @@ final class DashboardLedger implements Ledger
         $this->recordSpend(['account' => $account, 'model' => 'model-z', 'prompt' => $prompt], $settledAt);
     }
 
-    // Started a day before it settles, so a read that keeps only this week's endings still finds the call's model.
-    /**
-     * @param array{account: string, model: string, prompt: int} $usage
-     */
-    private function recordSpend(array $usage, DateTimeImmutable $settledAt): void
-    {
-        $call = Uuid::v7()->toRfc4122();
-        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => $usage['model']], $settledAt->modify('-1 day'));
-        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [[...$usage, 'completion' => 0, 'total' => $usage['prompt']]]], $settledAt);
-    }
-
     /**
      * @param array<string, int|string|null> $usage
      */
@@ -435,6 +424,17 @@ final class DashboardLedger implements Ledger
     public function recordBuildStep(array $payload): void
     {
         $this->add(LedgerEventKind::BuildStepEnded, $payload);
+    }
+
+    // Started a day before it settles, so a read that keeps only this week's endings still finds the call's model.
+    /**
+     * @param array{account: string, model: string, prompt: int} $usage
+     */
+    private function recordSpend(array $usage, DateTimeImmutable $settledAt): void
+    {
+        $call = Uuid::v7()->toRfc4122();
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => $usage['model']], $settledAt->modify('-1 day'));
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [[...$usage, 'completion' => 0, 'total' => $usage['prompt']]]], $settledAt);
     }
 
     /**
