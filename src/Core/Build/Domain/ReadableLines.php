@@ -21,9 +21,9 @@ final readonly class ReadableLines
     // The text after the closing marker stays, because GitHub shows it.
     private const string COMMENT_CLOSES = '/-->(?<rest>.*)$/';
 
+    // One line per line of the body, empty where it is code, outside text or a comment, and the closer of the block the body ends in, so a writer can close it before adding lines.
     /**
-     * @param list<string> $lines  one per line of the body, empty where the line is code, outside text or a comment
-     * @param ?string      $closer the line that closes the block the body ends in, or null when it ends in none
+     * @param list<string> $lines
      */
     private function __construct(
         public array $lines,
