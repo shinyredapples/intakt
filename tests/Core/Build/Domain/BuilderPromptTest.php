@@ -88,7 +88,7 @@ final class BuilderPromptTest extends TestCase
         self::assertSame(1, substr_count($prompt, 'This task is a bug.'));
     }
 
-    public function testTheTestFirstInstructionLetsOnlyTheTaskItselfWaiveTheTestForABugATestCannotReproduce(): void
+    public function testTheTestFirstInstructionNamesThePrePushRuleAndSendsAnIrreproducibleBugToAnUnlabeledTask(): void
     {
         $prompt = $this->promptFor(new BuildBrief($this->plant(1), new Decisions(), null, TaskKind::Bug));
 
