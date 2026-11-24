@@ -22,11 +22,6 @@ final readonly class JobCommand implements IteratorAggregate
         $this->items = array_values($items);
     }
 
-    public function isEmpty(): bool
-    {
-        return [] === $this->items;
-    }
-
     /**
      * @return Traversable<int, string>
      */

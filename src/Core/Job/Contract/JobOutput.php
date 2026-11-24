@@ -11,7 +11,12 @@ final readonly class JobOutput
 
     public function __construct(JobOutputFile ...$files)
     {
-        $this->files = array_values($files);
+        $byName = [];
+        foreach ($files as $file) {
+            $byName[$file->name] = $file;
+        }
+
+        $this->files = array_values($byName);
     }
 
     /**

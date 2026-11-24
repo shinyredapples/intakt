@@ -142,4 +142,12 @@ final class JobSpecTest extends TestCase
         self::assertSame('seven', $output->contents('7'));
         self::assertNull($output->contents('missing'));
     }
+
+    public function testAnOutputKeepsOneFilePerNameAndTheLastContentsWin(): void
+    {
+        $output = new JobOutput(new JobOutputFile('result', 'original'), new JobOutputFile('result', 'updated'));
+
+        self::assertSame(['result'], array_column($output->files(), 'name'));
+        self::assertSame('updated', $output->contents('result'));
+    }
 }
