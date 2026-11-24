@@ -56,7 +56,7 @@ final readonly class HistoryRow
             return $this;
         }
 
-        return clone($this, ['project' => $projectOfRound[$this->round]]);
+        return clone ($this, ['project' => $projectOfRound[$this->round]]);
     }
 
     // The arrow is for a literal change, so it needs two values that differ.
