@@ -18,6 +18,9 @@ use Uri\Rfc3986\Uri;
 #[UsesClass(JourneyAlarmTask::class)]
 #[UsesClass(JourneyRun::class)]
 #[UsesClass(JourneyFailure::class)]
+#[UsesClass(InstallCheckAlarm::class)]
+#[UsesClass(InstallReport::class)]
+#[UsesClass(InstallStepResult::class)]
 final class JourneyAlarmTest extends TestCase
 {
     private const string COMMAND = __DIR__.'/../../../bin/journey-alarm';
@@ -85,6 +88,18 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame(['issue', 'create', '--title', 'fix(journeys): journey "broken" fails on main', '--label', 'priority:urgent', '--label', 'ready', '--body-file', '-', '--repo', self::REPOSITORY], $create[0]['arguments']);
         self::assertStringContainsString('journey "broken" failed at step "read the second page": Failed asserting that two strings are identical.', $create[0]['input']);
         self::assertStringContainsString("```\n".trim((string) file_get_contents($this->fixture()))."\n```", $create[0]['input']);
+    }
+
+    public function testAnInstallCheckReportFilesOneTaskForItsFailingStepAndAnUnreadableReportStopsWithTwo(): void
+    {
+        $report = $this->directory.'/report.json';
+        file_put_contents($report, (new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')]))->toJson());
+
+        $alarm = $this->alarm(['--install-check='.$report]);
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertStringContainsString('failed at the step `journey-check`', $this->callsOf('create')[0]['input']);
+        self::assertSame(2, $this->alarm(['--install-check='.$this->directory.'/missing.json'])->getExitCode());
     }
 
     public function testASecondRedRunEditsTheOpenTaskAndCreatesNone(): void

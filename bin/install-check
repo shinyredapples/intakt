@@ -1,0 +1,72 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Intakt\Tests\Journeys\Support\InstallCheck;
+use Intakt\Tests\Journeys\Support\InstallCheckCouldNotRun;
+use Intakt\Tests\Journeys\Support\InstallStatus;
+use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
+
+const USAGE = "usage: bin/install-check [<repository address or path, default the GitHub repository>]\n";
+const DEFAULT_REPOSITORY = 'https://github.com/shinyredapples/intakt.git';
+const STEP_SECONDS = 1800;
+
+$autoload = __DIR__.'/../vendor/autoload.php';
+
+if (!is_file($autoload)) {
+    fwrite(STDERR, "run composer install first\n");
+    exit(2);
+}
+
+require $autoload;
+
+$arguments = array_slice($argv, 1);
+
+if (count($arguments) > 1 || str_starts_with($arguments[0] ?? '', '-')) {
+    fwrite(STDERR, USAGE);
+    exit(2);
+}
+
+$checkout = dirname(__DIR__);
+$files = new Filesystem();
+$logs = $checkout.'/var/install-check/'.new NativeClock()->now()->format('Ymd-His');
+$temporary = sys_get_temp_dir().'/intakt-install-check-'.bin2hex(random_bytes(6));
+$files->mkdir($temporary);
+
+$runner = static function (string $command, string $directory): array {
+    $process = Process::fromShellCommandline($command, $directory, null, null, STEP_SECONDS);
+    $process->run();
+
+    return [$process->getExitCode() ?? 1, $process->getOutput().$process->getErrorOutput()];
+};
+
+$environment = [];
+
+foreach (InstallCheck::KEYS as $name) {
+    $environment[$name] = (string) getenv($name);
+}
+
+try {
+    $report = new InstallCheck($runner, $temporary, $logs, $checkout, $environment)->run($arguments[0] ?? DEFAULT_REPOSITORY);
+} catch (InstallCheckCouldNotRun $stopped) {
+    fwrite(STDERR, 'the install check could not run: '.$stopped->getMessage()."\n");
+    exit(2);
+} finally {
+    $files->remove($temporary);
+}
+
+$files->dumpFile($logs.'/report.json', $report->toJson());
+
+foreach ($report->steps as $step) {
+    fwrite(STDOUT, $step->line()."\n");
+
+    if (InstallStatus::Failed === $step->status) {
+        fwrite(STDOUT, preg_replace('/^/m', '    ', $step->tail)."\n");
+    }
+}
+
+fwrite(STDOUT, 'logs and screenshots in '.substr($logs, strlen($checkout) + 1)."\n");
+exit($report->hasFailed() ? 1 : 0);

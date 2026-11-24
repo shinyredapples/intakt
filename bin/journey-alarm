@@ -5,6 +5,9 @@ declare(strict_types=1);
 
 use Intakt\Tests\Journeys\Support\GitHubCallFailed;
 use Intakt\Tests\Journeys\Support\GitHubIssues;
+use Intakt\Tests\Journeys\Support\InstallCheckAlarm;
+use Intakt\Tests\Journeys\Support\InstallCheckCouldNotRun;
+use Intakt\Tests\Journeys\Support\InstallReport;
 use Intakt\Tests\Journeys\Support\JourneyAlarm;
 use Intakt\Tests\Journeys\Support\JourneyRun;
 use Intakt\Tests\Journeys\Support\UnreadableJourneyRun;
@@ -12,7 +15,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\FlockStore;
 use Uri\Rfc3986\Uri;
 
-const USAGE = "usage: bin/journey-alarm [--run=<https link to the run>] [--timed-out] [<file with the output of bin/check --journeys>]\n";
+const USAGE = "usage: bin/journey-alarm [--run=<https link to the run>] [--timed-out] [<file with the output of bin/check --journeys> | --install-check=<report.json of bin/install-check>]\n";
 
 $autoload = __DIR__.'/../vendor/autoload.php';
 
@@ -26,10 +29,17 @@ require $autoload;
 $link = null;
 $timedOut = false;
 $files = [];
+$installReport = null;
 
 foreach (array_slice($argv, 1) as $argument) {
     if ('--timed-out' === $argument) {
         $timedOut = true;
+
+        continue;
+    }
+
+    if (str_starts_with($argument, '--install-check=')) {
+        $installReport = substr($argument, 16);
 
         continue;
     }
@@ -51,6 +61,25 @@ foreach (array_slice($argv, 1) as $argument) {
     }
 
     $files[] = $argument;
+}
+
+if (null !== $installReport) {
+    $json = 0 === count($files) && !$timedOut && is_file($installReport) ? @file_get_contents($installReport) : false;
+
+    if (false === $json) {
+        fwrite(STDERR, "--install-check needs a readable report file and no other input\n".USAGE);
+        exit(2);
+    }
+
+    try {
+        $alarm = new InstallCheckAlarm(new GitHubIssues((string) getenv('GITHUB_REPOSITORY')), new LockFactory(new FlockStore()));
+        fwrite(STDOUT, $alarm->raise(InstallReport::fromJson($json), $link)."\n");
+
+        exit(0);
+    } catch (InstallCheckCouldNotRun|GitHubCallFailed $failure) {
+        fwrite(STDERR, $failure->getMessage()."\n");
+        exit(1);
+    }
 }
 
 if (count($files) > 1) {

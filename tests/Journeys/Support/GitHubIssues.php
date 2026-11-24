@@ -60,6 +60,11 @@ final readonly class GitHubIssues
         $this->issueCommand(['close', (string) $number, '--comment', 'Duplicate of #'.$original], '');
     }
 
+    public function close(int $number, string $comment): void
+    {
+        $this->issueCommand(['close', (string) $number, '--comment', $comment], '');
+    }
+
     /**
      * @return list<array{number: int, body: string}>
      */

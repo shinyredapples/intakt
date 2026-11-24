@@ -113,4 +113,17 @@ You press **Play the demo run**, the page comes back with "The demo run is start
 
 More cases, and the exact wording of every reason, are in the [complete reference](../reference/user-manual.md).
 
+## Trying the install the way a stranger does
+
+`bin/install-check` clones the project into a temporary folder and runs the README's install commands there, then plays the demo run in a browser, checks every dashboard page and, when you have set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, runs one review with that key. It never uses your own checkout.
+
+```
+bin/install-check                     # the GitHub repository's default branch
+bin/install-check /path/to/a/clone    # a local repository, for trying a change
+```
+
+It prints one line per step (`passed`, `failed` or `skipped`) and, under a failed step, the last lines of its log. It exits 0 when every step passed, 1 when a step failed and 2 when it could not run (no `docker compose`, a clone that fails, a README without the install block). It needs Docker, Node.js 22 and Playwright, and port 7781 free. The logs, the screenshots and `report.json` are kept in `var/install-check/<date>-<time>/`. The containers are stopped and the clone is removed at the end, also when a step failed.
+
+A failed step is reported as one urgent task per step: `GITHUB_REPOSITORY=owner/name bin/journey-alarm --install-check=var/install-check/<folder>/report.json` files it, or updates the task that is already open, and closes it when the step passes again. A daily scheduled run is added by a later change.
+
 Next: [Running it for a team](09-running-it-for-a-team.md)

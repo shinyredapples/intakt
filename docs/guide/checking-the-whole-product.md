@@ -41,4 +41,6 @@ It reads stdin when you give no file, and `--run` is optional. It talks to GitHu
 In GitHub, the journeys run on every push to main. On a pull request they run when it changes anything outside `docs/`, `tests/` and `upstream/` (the product, its app image or the CI configuration) or the journeys' own test code; a pull request that only changes docs or other tests skips them and its check still shows green. They run as the `journeys` job of the `ci` workflow. When one fails there, that pull request's checks (or that push's) turn red, and no task is filed. The `journeys` workflow also runs them on main every night. Start a run of it with its "Run workflow" button or `gh workflow run journeys.yml`. Only a red run of this workflow files or updates the urgent task. The nightly run stays for now; it is removed once the journeys in the `ci` workflow have been green on main for a week.
 A run that times out files or updates a task that says so; a run you cancel files nothing.
 
+`bin/journey-alarm --install-check=<report.json>` does the same for `bin/install-check`, the install the README describes: one task per failing step, closed when the step passes ([the install check](../architecture/install-check.md)).
+
 The technical side is in [Journeys](../architecture/journeys.md).
