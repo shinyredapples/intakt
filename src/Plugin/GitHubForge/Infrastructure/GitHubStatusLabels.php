@@ -63,7 +63,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         try {
             return $this->identities->isOwn($login);
         } catch (TrustNotChecked $unchecked) {
-            throw new ForgeWriteFailed($unchecked->getMessage(), previous: $unchecked);
+            throw new ForgeWriteFailed($unchecked->getMessage(), $unchecked->getCode(), previous: $unchecked);
         }
     }
 
@@ -79,7 +79,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
             $listed = $this->page($path.'/events', $page);
             foreach ($listed as $event) {
                 $read = $this->labelEvent($event);
-                if (null !== $read) {
+                if ($read instanceof LabelEvent) {
                     $events[] = $read;
                 }
             }
@@ -128,7 +128,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), $failure);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -138,7 +138,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         try {
             $events = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub listed the events as something other than JSON.', previous: $invalid);
+            throw new ForgeReadFailed('GitHub listed the events as something other than JSON.', $invalid->getCode(), previous: $invalid);
         }
 
         if (!is_array($events) || !array_is_list($events)) {
@@ -163,7 +163,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         try {
             $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class));
+            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class), $failure->getCode(), $failure);
         }
 
         // A label already gone is what a removal wants.
@@ -180,7 +180,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         try {
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeReadFailed('No GitHub read of the events: '.$refused->getMessage(), previous: $refused);
+            throw new ForgeReadFailed('No GitHub read of the events: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
     }
 
@@ -192,7 +192,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         try {
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeWriteFailed('No GitHub write of a label: '.$refused->getMessage(), previous: $refused);
+            throw new ForgeWriteFailed('No GitHub write of a label: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
     }
 }

@@ -21,8 +21,8 @@ final readonly class StatusLabelPlan
     }
 
     /**
-     * @param list<LabelEvent>        $events earliest first
-     * @param Closure(string): bool   $isOwn  whether an account is Intakt's own identity
+     * @param list<LabelEvent>      $events earliest first
+     * @param Closure(string): bool $isOwn  whether an account is Intakt's own identity
      */
     public static function of(RoundStatusLabel $wanted, array $events, Closure $isOwn): self
     {
