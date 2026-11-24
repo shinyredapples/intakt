@@ -81,6 +81,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
 | `bash`, `git`, `mktemp`, `rm` | `image-needed.sh` (the `image` job, and the `journeys` job's decision step, which also runs `git diff --quiet` on the journeys' test code) | deciding from the pull request's diff whether the app image is needed | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `upgrade-needed.sh` (the `image` job) | deciding from the pull request's diff whether the upgrade check is needed | yes |
+| `npm`, `env`, `gh` | `install-check.yml`, GitHub's `ubuntu-24.04` only | `npm ci` of `.github/install-check/`; `bin/install-check` daily or by dispatch; `bin/journey-alarm` in the CI image with `gh` mounted | on GitHub's runners |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
 

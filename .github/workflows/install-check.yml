@@ -3,22 +3,18 @@ on:
   schedule:
     - cron: '41 3 * * *'
   workflow_dispatch:
-concurrency:
-  group: install-check
-  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
   install-check:
-    # A GitHub-hosted runner is a fresh machine on every run, as a stranger's is.
+    # A fresh machine on every run; this job's token only reads.
     runs-on: ubuntu-24.04
-    # GitHub grants a token's scopes per job; only the install check step gets the token.
-    permissions:
-      contents: read
-      issues: write
     timeout-minutes: 180
+    outputs:
+      commit: ${{ steps.checkout.outputs.commit }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -26,7 +22,6 @@ jobs:
         with:
           php-version: '8.5'
           extensions: intl, pcntl, zip
-          tools: composer
           coverage: none
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -34,27 +29,54 @@ jobs:
       - name: Install the runner's tools
         run: |
           composer install --no-interaction --no-progress --prefer-dist
-          npm ci --prefix .github/install-check --no-audit --no-fund
+          npm ci --prefix .github/install-check
           .github/install-check/node_modules/.bin/playwright install --with-deps chromium
           echo "NODE_PATH=$GITHUB_WORKSPACE/.github/install-check/node_modules" >> "$GITHUB_ENV"
-      # The provider keys of this repository only; a fork's run checks the install without them.
+      # Keys only here; a fork checks its own default branch.
       - name: Run the install check with the keys
         if: github.repository == 'shinyredapples/intakt'
         env:
-          GH_TOKEN: ${{ github.token }}
-          INSTALL_CHECK_ALARM_ACCOUNT: github-actions[bot]
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: bin/install-check
+        run: env -u GITHUB_REPOSITORY bin/install-check "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
       - name: Run the install check without keys
         if: github.repository != 'shinyredapples/intakt'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INSTALL_CHECK_ALARM_ACCOUNT: github-actions[bot]
-        run: bin/install-check
+        run: env -u GITHUB_REPOSITORY bin/install-check "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: install-check
           path: var/install-check/
-          if-no-files-found: warn
+  alarm:
+    needs: install-check
+    # Also after a pass, which closes tasks; the only job that writes issues, with first-party actions.
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.install-check.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: install-check
+          path: ${{ runner.temp }}/install-check
+      - run: .github/ci/build-image.sh
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSTALL_CHECK_ALARM_ACCOUNT: github-actions[bot]
+          RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          report=$(cd "$RUNNER_TEMP/install-check" && echo */report.json)
+          docker run --rm --user 1000:1000 \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/install-check:/install-check:ro" \
+            --volume "$(command -v gh):/usr/local/bin/gh:ro" \
+            --env GH_TOKEN --env GITHUB_REPOSITORY --env INSTALL_CHECK_ALARM_ACCOUNT \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/journey-alarm --run="$RUN_LINK" --install-check="/install-check/$report"
