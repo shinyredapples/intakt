@@ -37,7 +37,7 @@ final class SuiteBuildDirectoryTest extends TestCase
         $process = new Process([PHP_BINARY, '-r', $read], self::ROOT, ['APP_ENV' => 'test', 'APP_DEBUG' => '0', 'APP_CACHE_DIR' => $scratch.'/cache', 'APP_BUILD_DIR' => $scratch.'/inherited-build']);
         $process->mustRun();
 
-        $seen = json_decode($process->getOutput(), true, flags: \JSON_THROW_ON_ERROR);
+        $seen = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($seen);
         self::assertCount(3, $seen);
 
