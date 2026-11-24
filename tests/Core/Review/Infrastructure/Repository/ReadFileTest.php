@@ -43,6 +43,7 @@ final class ReadFileTest extends TestCase
 
     protected function tearDown(): void
     {
+        // PHP cannot remove a default-context option, so the counter is nulled: an empty entry for our own protocol stays.
         stream_context_set_default([CountedBytes::PROTOCOL => ['opens' => null]]);
 
         if (in_array(CountedBytes::PROTOCOL, stream_get_wrappers(), true)) {
