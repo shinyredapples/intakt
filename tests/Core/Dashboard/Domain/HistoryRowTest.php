@@ -88,9 +88,6 @@ final class HistoryRowTest extends TestCase
         self::assertSame('Owner asked', $unnamed->label());
     }
 
-    /**
-     * @param array<string, string>|string $payload
-     */
     public function testAnEmptyActorOnASecretChangeIsIntaktAndTheValuesStayHidden(): void
     {
         $row = HistoryRow::of($this->recorded(['actor' => '', 'project' => '', 'fingerprint' => 'abc', 'before' => 'previous', 'after' => 'next']));
