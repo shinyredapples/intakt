@@ -22,34 +22,20 @@ final class RegressionScriptTest extends TestCase
 
     private const string TEST = 'tests/ValueTest.php';
 
-    private const string ASSERTS_TWO = <<<'PHP'
-        <?php
-        final class ValueTest extends \PHPUnit\Framework\TestCase
+    private const string ASSERTS_TWO = <<<'PHP_WRAP'
+    <?php
+    final class ValueTest extends \PHPUnit\Framework\TestCase
+    {
+        public function testTheValueIsTwo(): void
         {
-            public function testTheValueIsTwo(): void
-            {
-                self::assertSame(2, require __DIR__.'/../src/value.php');
-            }
+            self::assertSame(2, require __DIR__.'/../src/value.php');
         }
-        PHP;
+    }
+    PHP_WRAP;
 
     private BuildHistory $history;
 
     private string $base = '';
-
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->base = $this->history->commitFile('src/value.php', '<?php return 1;', 'Start the project');
-        $this->history->push('task');
-        $this->history->inMirror('update-ref', 'refs/heads/main', $this->base);
-        $this->history->commitFile('src/value.php', '<?php return 2;', 'Fix the value');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
 
     public function testTheBaseRunFailsWhenTheHeadsTestFailsAnAssertionOnTheBaseCode(): void
     {
@@ -75,7 +61,7 @@ final class RegressionScriptTest extends TestCase
     public function testATestThatErrorsBeforeItsAssertionOnTheBaseIsErroredAndNotFailed(): void
     {
         $this->history->commitFile('tests/fixture.php', '<?php return 2;', 'Add a fixture');
-        $this->history->commitFile(self::TEST, str_replace("assertSame(2,", "assertSame(require __DIR__.'/fixture.php',", self::ASSERTS_TWO), 'Cover the value');
+        $this->history->commitFile(self::TEST, str_replace('assertSame(2,', "assertSame(require __DIR__.'/fixture.php',", self::ASSERTS_TWO), 'Cover the value');
 
         self::assertSame("errored 3\n", $this->baseResult());
     }
@@ -111,6 +97,20 @@ final class RegressionScriptTest extends TestCase
     public function testABundleOfAnotherBranchLeavesNotApplied(): void
     {
         self::assertSame("not-applied\n", $this->scriptResult([$this->base, '-', '0', '-', 'true'], 'other'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->base = $this->history->commitFile('src/value.php', '<?php return 1;', 'Start the project');
+        $this->history->push('task');
+        $this->history->inMirror('update-ref', 'refs/heads/main', $this->base);
+        $this->history->commitFile('src/value.php', '<?php return 2;', 'Fix the value');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     private function baseResult(): string
