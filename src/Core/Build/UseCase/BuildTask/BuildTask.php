@@ -322,8 +322,9 @@ final readonly class BuildTask
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
     {
         // No paths and no setback, because a first build has no file forecast and no earlier round.
-        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels(new Labels(...$task->labels), new Paths()));
-        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null, TaskKind::fromLabels(new Labels(...$task->labels)));
+        $labels = new Labels(...$task->labels);
+        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($labels, new Paths()));
+        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null, TaskKind::fromLabels($labels));
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }

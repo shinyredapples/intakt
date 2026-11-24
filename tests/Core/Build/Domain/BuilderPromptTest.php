@@ -99,7 +99,8 @@ final class BuilderPromptTest extends TestCase
     {
         $prompt = $this->promptFor(new BuildBrief($this->plant(1), new Decisions($this->plant(2)), null, TaskKind::Bug));
 
-        self::assertGreaterThan(strrpos($prompt, $this->plant(2)), strpos($prompt, 'This task is a bug.'));
+        $decisionsEnd = (int) strpos($prompt, "\n<<<END ", (int) strpos($prompt, '<<<UNTRUSTED decisions '));
+        self::assertGreaterThan($decisionsEnd, strpos($prompt, 'This task is a bug.'));
         self::assertLessThan(strpos($prompt, 'PR.md', (int) strpos($prompt, 'This task is a bug.')), strpos($prompt, 'This task is a bug.'));
         self::assertSame(UntrustedSource::Task, FencedPlants::sourceAround($this->plant(1), $prompt));
     }
