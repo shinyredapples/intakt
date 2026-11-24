@@ -100,7 +100,7 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
 
         $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::IPHONE_SAFARI]);
 
-        self::assertResponseRedirects('/setup', Response::HTTP_SEE_OTHER);
+        self::assertResponseRedirects('/setup?step=5', Response::HTTP_SEE_OTHER);
         self::assertResponseHeaderSame('Vary', self::VARY);
     }
 
