@@ -319,7 +319,7 @@ final class LedgerReviewPagesTest extends TestCase
     private function pagesOn(Ledger $ledger, array $replays = [], array $stored = []): LedgerReviewPages
     {
         $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+        $costs->method('costOfIn')->willReturn(Cost::inUsd(0.5));
 
         return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays, $stored)));
     }

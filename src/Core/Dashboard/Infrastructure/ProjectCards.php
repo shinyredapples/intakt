@@ -73,9 +73,8 @@ final readonly class ProjectCards
      */
     private function cardOf(string $name, array $reviews, array $failing): ProjectCard
     {
+        // A handed-over head waits on the Maintainer, not on the owner, and is no longer retried, so it neither fails the card nor counts in its amber link.
         $retrying = array_values(array_filter($failing, static fn (FailingHead $head): bool => !$head->handedOver));
-        $handedOver = count($failing) - count($retrying);
-        $asking = count(array_filter($reviews, static fn (Review $review): bool => BoardColumn::WaitingOnYou === $review->column()));
         $running = array_values(array_filter($reviews, static fn (Review $review): bool => $review->activeRound() instanceof ReviewedRound));
 
         return new ProjectCard(
@@ -83,8 +82,8 @@ final readonly class ProjectCards
             count($running),
             count(array_filter($reviews, static fn (Review $review): bool => BoardColumn::Done === $review->column())),
             count($retrying),
-            $handedOver + $asking,
-            [] === $failing ? null : $this->redactor->redact(array_first($failing)->fault->cause),
+            count(array_filter($reviews, static fn (Review $review): bool => BoardColumn::WaitingOnYou === $review->column())),
+            [] === $retrying ? null : $this->redactor->redact(array_first($retrying)->fault->cause),
             array_reduce($reviews, static fn (TokenFigures $sum, Review $review): TokenFigures => $sum->plus($review->tokens()), TokenFigures::none()),
             array_reduce($reviews, static fn (Cost $sum, Review $review): Cost => $sum->plus($review->cost()), Cost::none()),
             array_map(WorkingCard::ofReview(...), array_values(array_filter($running, static fn (Review $review): bool => BoardColumn::InReview === $review->column()))),
@@ -137,6 +136,7 @@ final readonly class ProjectCards
     {
         $names = [
             ...array_map(strval(...), array_keys($this->watched)),
+            ...$this->tiers->projects(),
             ...array_map(static fn (Review $review): string => $review->project, $reviews),
             ...array_map(static fn (FailingHead $head): string => $head->project, $failing),
         ];

@@ -110,7 +110,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->ledger = $ledger;
         $asked = [];
         $costs = $this->createMock(RoundCosts::class);
-        $costs->expects($this->atLeastOnce())->method('costOf')->willReturnCallback(static function (string $round) use (&$asked): Cost {
+        $costs->expects($this->atLeastOnce())->method('costOfIn')->willReturnCallback(static function (string $round) use (&$asked): Cost {
             $asked[$round] = true;
 
             return Cost::none();
@@ -711,7 +711,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->log = new BufferingLogger();
         $this->ledger = new DashboardLedger();
         $this->costs = self::createStub(RoundCosts::class);
-        $this->costs->method('costOf')->willReturn(Cost::none());
+        $this->costs->method('costOfIn')->willReturn(Cost::none());
     }
 
     private function readAnswer(string $title): ReadAnswer

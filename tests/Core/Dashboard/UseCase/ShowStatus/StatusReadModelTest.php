@@ -707,7 +707,7 @@ final class StatusReadModelTest extends TestCase
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
         $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
+        $costs->method('costOfIn')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
         $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
         $lookup = self::createStub(RoundEndingLookup::class);

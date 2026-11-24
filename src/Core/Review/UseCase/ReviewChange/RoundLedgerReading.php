@@ -30,6 +30,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
+use Override;
 
 // Reads back, because the ledger is where the judge's act ids and the vendor's token usage are recorded.
 final readonly class RoundLedgerReading implements RoundCosts
@@ -124,10 +125,18 @@ final readonly class RoundLedgerReading implements RoundCosts
     // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
     public function costOf(string $roundId): Cost
     {
-        $recorded = $this->usageRows();
-        $models = $this->callsStartedFor($roundId, $recorded);
+        return $this->costOfIn($roundId, $this->usageRows());
+    }
 
-        return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
+    /**
+     * @param list<RecordedEvent> $usageRows
+     */
+    #[Override]
+    public function costOfIn(string $roundId, array $usageRows): Cost
+    {
+        $models = $this->callsStartedFor($roundId, $usageRows);
+
+        return array_reduce($usageRows, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -12,14 +13,29 @@ use Intakt\Core\Dashboard\Infrastructure\LiveProjectCards;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCardsRoundUpdates;
+use Intakt\Core\Dashboard\Infrastructure\ProjectCardsWatcherUpdates;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Core\Watcher\Contract\WatcherLineRecorded;
+use Intakt\Core\Watcher\Domain\HeadFailure;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\OpenChange;
+use Intakt\Tests\Journeys\Support\StreamedPage;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\Component\DomCrawler\Crawler;
+use RuntimeException;
+use stdClass;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
@@ -27,7 +43,11 @@ use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LiveProjectCards::class)]
 #[CoversClass(ProjectCardsRoundUpdates::class)]
+#[CoversClass(ProjectCardsWatcherUpdates::class)]
+#[CoversClass(WatcherLedger::class)]
 #[UsesClass(ListProjectsController::class)]
+#[UsesClass(WatcherLineRecorded::class)]
+#[UsesClass(StreamedPage::class)]
 #[UsesClass(ProjectCards::class)]
 #[UsesClass(ProjectCard::class)]
 #[UsesClass(MercureLiveUpdates::class)]
@@ -59,12 +79,66 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/projects');
         self::assertCount(0, $page->filter('[data-project="alpha"]'));
 
-        $pushed = $this->pushedCardsAfterAReviewerStarted();
+        $this->pushedCardsAfterAReviewerStarted();
 
-        self::assertSame('replace', $pushed->filter('turbo-stream')->attr('action'));
-        self::assertSame('project-cards', $pushed->filter('turbo-stream')->attr('target'));
-        self::assertCount(1, $pushed->filter('template [data-project="alpha"] .dot.ok'));
-        self::assertCount(1, $page->filter('#project-cards'));
+        $shown = new StreamedPage()->afterTopic(DashboardTopics::SHELL, $this->shellUpdates(), $page);
+        self::assertSame('Running', $shown->filter('[data-project="alpha"] .state')->text());
+        self::assertCount(1, $shown->filter('[data-project="alpha"] .dot.ok'));
+    }
+
+    public function testAHeadTheWatcherFailedAfterThePageLoadedTurnsItsCardFailingThroughThePushedUpdate(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $page = $this->browser->request('GET', '/projects');
+        self::assertCount(0, $page->filter('[data-project="alpha"] .failing'));
+        $at = new DateTimeImmutable('2026-10-28T12:00:00+00:00');
+
+        $this->watcherLedger()->headFailed(new HeadFailure('alpha', new OpenChange(new ChangeId('7'), new CommitId(str_repeat('a', 40)), $at), 'the checks timed out'), 2, $at);
+        $this->dispatcher()->dispatch(new WorkerMessageHandledEvent(new Envelope(new stdClass()), 'scheduler_default'));
+
+        $shown = new StreamedPage()->afterTopic(DashboardTopics::SHELL, $this->shellUpdates(), $page);
+        self::assertSame('Failing: the checks timed out', $shown->filter('[data-project="alpha"] .failing')->text());
+    }
+
+    public function testAWatcherLineIsPushedOnlyOnceTheWorkerIsDoneWithItsTick(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $this->dispatcher()->dispatch(new WatcherLineRecorded(LedgerEventKind::HeadFailed));
+
+        self::assertSame([], $this->shellUpdates());
+    }
+
+    public function testATickThatFailedAfterAWatcherLinePushesTheCards(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $this->dispatcher()->dispatch(new WatcherLineRecorded(LedgerEventKind::HeadHandedOver));
+        $this->dispatcher()->dispatch(new WorkerMessageFailedEvent(new Envelope(new stdClass()), 'scheduler_default', new RuntimeException('forge down')));
+
+        self::assertCount(1, $this->shellUpdates());
+        // Messenger's own listener logs the failed tick, which this test only stands in for.
+        self::assertLoggedError('critical', 'Error thrown while handling message stdClass. Removing from transport after 0 retries. Error: "forge down"');
+    }
+
+    public function testATickWhoseWatcherLinesDecideNoPullRequestStatePushesNoCards(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $this->dispatcher()->dispatch(new WatcherLineRecorded(LedgerEventKind::BootResultComputed));
+        $this->dispatcher()->dispatch(new WorkerMessageHandledEvent(new Envelope(new stdClass()), 'scheduler_default'));
+
+        self::assertSame([], $this->shellUpdates());
+    }
+
+    public function testTheNextTickWithoutAWatcherLinePushesNoCardsAgain(): void
+    {
+        $this->dispatcher()->dispatch(new WatcherLineRecorded(LedgerEventKind::RoundQueued));
+        $this->dispatcher()->dispatch(new WorkerMessageHandledEvent(new Envelope(new stdClass()), 'scheduler_default'));
+
+        $this->dispatcher()->dispatch(new WorkerMessageHandledEvent(new Envelope(new stdClass()), 'scheduler_default'));
+
+        self::assertCount(1, $this->shellUpdates());
     }
 
     public function testThePushedCardsAreTheOnesAPageLoadedAfterwardsShows(): void
@@ -138,10 +212,26 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         return new Crawler($last->getData());
     }
 
-    // A term's tooltip id is random so that ids stay unique on a page, so two renders of one list differ only there.
+    // A term's tooltip id is random so that ids stay unique on a page, so two renders of one list differ there; a figure's id is stripped too, as it names its place on the page.
     private function withoutTipIds(string $html): string
     {
         return (string) preg_replace('/(term|figure)-([a-z]+-)?\d+/', '$1', $html);
+    }
+
+    private function watcherLedger(): WatcherLedger
+    {
+        $ledger = self::getContainer()->get(WatcherLedger::class);
+        self::assertInstanceOf(WatcherLedger::class, $ledger);
+
+        return $ledger;
+    }
+
+    private function dispatcher(): EventDispatcherInterface
+    {
+        $dispatcher = self::getContainer()->get(EventDispatcherInterface::class);
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+
+        return $dispatcher;
     }
 
     private function roundUpdates(): RoundUpdates

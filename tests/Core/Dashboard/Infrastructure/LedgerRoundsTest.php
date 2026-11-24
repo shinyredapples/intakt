@@ -809,7 +809,7 @@ final class LedgerRoundsTest extends TestCase
     public function testARoundCarriesTheCostTheReviewModuleReadsForIt(): void
     {
         $this->costs = self::createStub(RoundCosts::class);
-        $this->costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+        $this->costs->method('costOfIn')->willReturn(Cost::inUsd(0.5));
 
         $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
 
@@ -937,7 +937,7 @@ final class LedgerRoundsTest extends TestCase
     private function noCosts(): RoundCosts
     {
         $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
+        $costs->method('costOfIn')->willReturn(Cost::none());
 
         return $costs;
     }

@@ -70,6 +70,10 @@ final class LedgerRounds
 
     private readonly LedgerTokens $tokens;
 
+    // Kept raw for the costs, so a round is priced from the rows of this read, the same ones its tokens are counted from.
+    /** @var list<RecordedEvent> */
+    private array $usageRows = [];
+
     public function __construct(
         private readonly RoundPayloads $payloads,
         private readonly RoundCosts $costs,
@@ -215,6 +219,7 @@ final class LedgerRounds
 
     private function addUsage(RecordedEvent $recorded): void
     {
+        $this->usageRows[] = $recorded;
         $usage = $this->payloads->usageOf($recorded);
 
         if (null !== $usage) {
@@ -342,7 +347,7 @@ final class LedgerRounds
 
     private function completed(ReviewedRound $round): ReviewedRound
     {
-        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
+        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOfIn($round->round, $this->usageRows))->markedAs($this->markOf($round)));
     }
 
     // A spelling other than its canonical form, kept apart from rounds of its pull request, is history only, because storage numbers every new round of that pull request on the canonical row.

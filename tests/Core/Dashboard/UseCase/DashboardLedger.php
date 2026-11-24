@@ -21,6 +21,9 @@ final class DashboardLedger implements Ledger
 
     private bool $failNextAppend = false;
 
+    /** @var array<string, int> */
+    private array $readsOfKind = [];
+
     public function failNextAppend(): void
     {
         $this->failNextAppend = true;
@@ -44,8 +47,15 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents($this->recorded);
     }
 
+    public function readsOfKind(LedgerEventKind $kind): int
+    {
+        return $this->readsOfKind[$kind->value] ?? 0;
+    }
+
     public function readOfKind(LedgerEventKind $kind): RecordedEvents
     {
+        $this->readsOfKind[$kind->value] = $this->readsOfKind($kind) + 1;
+
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 

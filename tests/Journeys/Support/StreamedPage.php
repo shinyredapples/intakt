@@ -18,7 +18,14 @@ final readonly class StreamedPage
      */
     public function after(string $round, array $updates, Crawler $opened): Crawler
     {
-        $topic = MercureRoundUpdates::topicOf($round);
+        return $this->afterTopic(MercureRoundUpdates::topicOf($round), $updates, $opened);
+    }
+
+    /**
+     * @param list<Update> $updates
+     */
+    public function afterTopic(string $topic, array $updates, Crawler $opened): Crawler
+    {
         $recorded = array_values(array_filter($updates, static fn (Update $update): bool => in_array($topic, $update->getTopics(), true)));
         $page = new Crawler($opened->outerHtml());
 

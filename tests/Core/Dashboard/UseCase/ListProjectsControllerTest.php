@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -15,7 +19,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(ProjectCard::class)]
 final class ListProjectsControllerTest extends DashboardPageTestCase
 {
-    public function testTheProjectListShowsACardForEveryProjectThatStartedAReview(): void
+    public function testTheReviewsOfTwoChangesOfOneProjectShareOneCard(): void
     {
         $this->ledger->startRoundOf('feat/z', 'round-1', 1);
         $this->ledger->startRoundOf('feat/a', 'round-2', 1);
@@ -24,6 +28,30 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame(['alpha'], $this->namesOn($crawler));
+    }
+
+    public function testEveryProjectThatStartedAReviewGetsACardOfItsOwn(): void
+    {
+        $this->ledger->startRound('round-1', 'zeta');
+        $this->ledger->startRound('round-2', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/projects');
+
+        self::assertSame(['alpha', 'zeta'], $this->namesOn($crawler));
+    }
+
+    public function testAProjectConfiguredWithTiersGetsACardBeforeItsFirstReview(): void
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(['idle-project']);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'model-a'));
+        self::getContainer()->set(TierResolver::class, $tiers);
+
+        $crawler = $this->browser->request('GET', '/projects');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(['idle-project'], $this->namesOn($crawler));
+        self::assertSame('Quiet', $crawler->filter('[data-project="idle-project"] .state')->text());
     }
 
     public function testACardCountsRunningAndJudgedReviewsOfItsOwnProjectOnly(): void
@@ -51,7 +79,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('[data-project="alpha"] .waits'));
     }
 
-    public function testAHandedOverHeadCountsAsWaitingOnTheOwner(): void
+    public function testAHeadHandedOverToTheMaintainerAddsNoWaitOnTheOwner(): void
     {
         $this->ledger->startRound('round-1', 'alpha');
         $this->ledger->failHead('alpha', 'pr-7', 1);
@@ -59,8 +87,31 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/projects');
 
-        self::assertSame('1 waits on you', $this->normalized($crawler->filter('[data-project="alpha"] .waits')->text()));
-        self::assertCount(1, $crawler->filter('[data-project="alpha"] .waits .count.needs'));
+        self::assertCount(0, $crawler->filter('[data-project="alpha"] .waits'));
+    }
+
+    public function testAProjectWhoseOnlyFailingHeadWasHandedOverShowsNoFailureCause(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->failHeadBecause('alpha', 'pr-7', 'commit a not fetched');
+        $this->ledger->handOverHead('alpha', 'pr-7', 'a');
+
+        $crawler = $this->browser->request('GET', '/projects');
+
+        self::assertSame('Running', $crawler->filter('[data-project="alpha"] .state')->text());
+        self::assertCount(0, $crawler->filter('[data-project="alpha"] .failing'));
+    }
+
+    public function testTheFailureCauseIsTheOneOfTheHeadStillRetrying(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->failHeadBecause('alpha', 'pr-7', 'commit a not fetched');
+        $this->ledger->handOverHead('alpha', 'pr-7', 'a');
+        $this->ledger->failHeadBecause('alpha', 'pr-8', 'the checks timed out');
+
+        $crawler = $this->browser->request('GET', '/projects');
+
+        self::assertSame('Failing: the checks timed out', $crawler->filter('[data-project="alpha"] .failing')->text());
     }
 
     public function testACardShowsTheTokensItsProjectUsed(): void
@@ -71,6 +122,18 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/projects');
 
         self::assertSame('1,500', $this->figuresOf($crawler, 'alpha')[0]);
+    }
+
+    public function testTheCardsPriceTheRoundsFromTheirOneReadOfTheLedger(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->startRound('round-2', 'alpha');
+        $this->ledger->useTokens('round-1', 1200, 300);
+
+        $this->browser->request('GET', '/projects');
+
+        self::assertSame('1,500', $this->figuresOf($this->browser->getCrawler(), 'alpha')[0]);
+        self::assertSame(0, $this->ledger->readsOfKind(LedgerEventKind::UsageRecorded));
     }
 
     public function testAProjectWhoseTiersDoNotResolveStillGetsItsCardWithTheProblem(): void
@@ -164,8 +227,4 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         return $page->filter('[data-project="'.$project.'"] dd')->each(static fn (Crawler $dd): string => $dd->text());
     }
 
-    private function normalized(string $text): string
-    {
-        return trim((string) preg_replace('/\s+/', ' ', $text));
-    }
 }

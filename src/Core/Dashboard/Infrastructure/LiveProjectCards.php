@@ -65,7 +65,7 @@ final readonly class LiveProjectCards
         return $this->signatureOf($cards);
     }
 
-    // The cards are compared, not the rendered streams, because a rendered figure label carries a fresh random id each time.
+    // The cards are compared, not the rendered streams, because a rendered term's tooltip carries a fresh random id each time.
     /**
      * @param list<object> $cards
      */
