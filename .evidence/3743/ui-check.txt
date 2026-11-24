@@ -58,23 +58,11 @@ waiting light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor f
 waiting dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 waiting dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 waiting dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-review light 1440: axe critical 0, serious 1, moderate 0, minor 1
-  minor aria-allowed-role: ARIA role should be appropriate for the element (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-none)
-  serious list: <ul> and <ol> must only directly contain <li>, <script> or <template> elements (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-reviewers)
-review light 1920: axe critical 0, serious 1, moderate 0, minor 1
-  minor aria-allowed-role: ARIA role should be appropriate for the element (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-none)
-  serious list: <ul> and <ol> must only directly contain <li>, <script> or <template> elements (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-reviewers)
-review light 390: axe critical 0, serious 1, moderate 0, minor 1, phone floor findings 0
-  minor aria-allowed-role: ARIA role should be appropriate for the element (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-none)
-  serious list: <ul> and <ol> must only directly contain <li>, <script> or <template> elements (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-reviewers)
-review dark 1440: axe critical 0, serious 1, moderate 0, minor 1
-  minor aria-allowed-role: ARIA role should be appropriate for the element (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-none)
-  serious list: <ul> and <ol> must only directly contain <li>, <script> or <template> elements (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-reviewers)
-review dark 1920: axe critical 0, serious 1, moderate 0, minor 1
-  minor aria-allowed-role: ARIA role should be appropriate for the element (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-none)
-  serious list: <ul> and <ol> must only directly contain <li>, <script> or <template> elements (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-reviewers)
-review dark 390: axe critical 0, serious 1, moderate 0, minor 1, phone floor findings 0
-  minor aria-allowed-role: ARIA role should be appropriate for the element (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-none)
-  serious list: <ul> and <ol> must only directly contain <li>, <script> or <template> elements (1 nodes: #round-01a20de6-955f-7ae4-a1d2-4dfbefbb00aa-now-reviewers)
-UI check: 66 runs, 6 serious or critical axe violations, 0 phone floor findings, 0 page errors.
+review light 1440: axe critical 0, serious 0, moderate 0, minor 0
+review light 1920: axe critical 0, serious 0, moderate 0, minor 0
+review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+review dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+review dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+UI check: 66 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
 Screenshots in var/ui-check/

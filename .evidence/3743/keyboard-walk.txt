@@ -1,14 +1,39 @@
-1. Open /history: History - Intakt
-Tab x8 -> select#projfilter.select "Project" outline solid 2px focus-visible
-2. ArrowDown on the project filter chooses "Beta"; rows shown: (no project), Beta, (no project)
-Tab x5 -> button.fchip "From the dashboard" outline solid 2px focus-visible
-3. Space on "From the dashboard": pressed chip "From the dashboard", rows shown 1
-Tab x5 -> input#history-text.input "history-text" outline solid 2px focus-visible
-4. Type "Beta" in the text filter: rows shown 1, "No entries match" hidden: true
+Keyboard walk at 1440 x 900, light
+1. Open /history: History - Intakt; rows shown: Beta, (no project), Beta, Alpha
+Tab x8 -> select#projfilter.select "Project" outline solid 2px focus-visible  (passing: a.brand "Intakt home" | a.nav "Now" | a.nav "You" | a.nav "History" | a.nav.in-more "Projects" | button.nav.collapse "Collapse" | button.search-trigger "Search tasks, pull requests, s")
+2. ArrowDown x2 on the project picker chooses "Beta"; rows shown: Beta, (no project), Beta
+Tab x5 -> button.fchip "From the dashboard" outline solid 2px focus-visible  (passing: button.icon-btn.theme-toggle "Switch light or dark theme" | a "Ledger" | a "Trends" | button.fchip "Everything")
+3. Space on "From the dashboard": pressed From the dashboard; rows shown: Beta
+Tab x5 -> input#history-text.input "history-text" outline solid 2px focus-visible  (passing: button.fchip "By Intakt" | button.fchip "Limits" | button.fchip "Projects" | button.fchip "Accounts")
+4. Type "owner" in the text filter: rows shown: Beta; "No entries match" hidden: true
 Tab x1 -> div.table-scroll "History" outline solid 2px focus-visible
-5. Shift+Tab back -> a "Trends" outline solid 2px focus-visible
+5. The scroll region takes focus (arrow keys scroll it).
+Shift+Tab x8 -> a "Trends" outline solid 2px focus-visible  (passing: input#history-text.input "history-text" | button.fchip "Accounts" | button.fchip "Projects" | button.fchip "Limits" | button.fchip "By Intakt" | button.fchip "From the dashboard" | button.fchip "Everything")
 6. Enter on Trends -> /trends, current sub-tab: Trends
-Tab x10 -> a "Ledger" outline solid 2px focus-visible
-7. Enter on Ledger -> /history, current sub-tab: Ledger, project filter keeps "Beta"
-8. Ctrl+K opens search: input#search-q "Search" outline solid 2px focus-visible
-9. Esc closes it: search hidden true, focus back on input#search-q "Search" outline solid 2px focus-visible
+Tab x10 -> a "Ledger" outline solid 2px focus-visible  (passing: a.brand "Intakt home" | a.nav "Now" | a.nav "You" | a.nav "History" | a.nav.in-more "Projects" | button.nav.collapse "Collapse" | button.search-trigger "Search tasks, pull requests, s" | select#projfilter.select "Project" | button.icon-btn.theme-toggle "Switch light or dark theme")
+7. Enter on Ledger -> /history, current sub-tab: Ledger, project picker keeps "Beta"; rows shown: Beta, (no project), Beta
+Tab x7 -> button.search-trigger "Search tasks, pull requests, s" outline solid 2px focus-visible  (passing: a.brand "Intakt home" | a.nav "Now" | a.nav "You" | a.nav "History" | a.nav.in-more "Projects" | button.nav.collapse "Collapse")
+8. Enter on the search button opens search: overlay hidden false, focus input#search-q "Search" outline solid 2px focus-visible
+9. Esc closes it: overlay hidden true, focus back on button.search-trigger "Search tasks, pull requests, s" outline solid 2px focus-visible
+10. With nothing focused, Ctrl+K opens search: overlay hidden false, focus input#search-q "Search" outline solid 2px focus-visible
+11. Esc closes it: overlay hidden true, focus body (nothing focused)
+
+Keyboard walk at 390 x 844 (phone), light
+1. Open /history: History - Intakt; rows shown: Beta, (no project), Beta, Alpha
+Tab x16 -> select#history-project.select "Project" outline solid 2px focus-visible  (passing: a.nav "Now" | a.nav "You" | a.nav "History" | button.nav.more "More" | a.brand-m "Intakt home" | button.search-trigger "Search tasks, pull requests, s" | button.icon-btn.theme-toggle "Switch light or dark theme" | a "Ledger" | a "Trends" | button.fchip "Everything" | button.fchip "From the dashboard" | button.fchip "By Intakt" | button.fchip "Limits" | button.fchip "Projects" | button.fchip "Accounts")
+2. ArrowDown x2 on the project picker chooses "Beta"; rows shown: Beta, (no project), Beta
+Shift+Tab x5 -> button.fchip "From the dashboard" outline solid 2px focus-visible  (passing: button.fchip "Accounts" | button.fchip "Projects" | button.fchip "Limits" | button.fchip "By Intakt")
+3. Space on "From the dashboard": pressed From the dashboard; rows shown: Beta
+Tab x6 -> input#history-text.input "history-text" outline solid 2px focus-visible  (passing: button.fchip "By Intakt" | button.fchip "Limits" | button.fchip "Projects" | button.fchip "Accounts" | select#history-project.select "Project")
+4. Type "owner" in the text filter: rows shown: Beta; "No entries match" hidden: true
+Tab x1 -> div.table-scroll "History" outline solid 2px focus-visible
+5. The scroll region takes focus (arrow keys scroll it).
+Shift+Tab x9 -> a "Trends" outline solid 2px focus-visible  (passing: input#history-text.input "history-text" | select#history-project.select "Project" | button.fchip "Accounts" | button.fchip "Projects" | button.fchip "Limits" | button.fchip "By Intakt" | button.fchip "From the dashboard" | button.fchip "Everything")
+6. Enter on Trends -> /trends, current sub-tab: Trends
+Tab x8 -> a "Ledger" outline solid 2px focus-visible  (passing: a.nav "Now" | a.nav "You" | a.nav "History" | button.nav.more "More" | a.brand-m "Intakt home" | button.search-trigger "Search tasks, pull requests, s" | button.icon-btn.theme-toggle "Switch light or dark theme")
+7. Enter on Ledger -> /history, current sub-tab: Ledger, project picker keeps "Beta"; rows shown: Beta, (no project), Beta
+Tab x6 -> button.search-trigger "Search tasks, pull requests, s" outline solid 2px focus-visible  (passing: a.nav "Now" | a.nav "You" | a.nav "History" | button.nav.more "More" | a.brand-m "Intakt home")
+8. Enter on the search button opens search: overlay hidden false, focus input#search-q "Search" outline solid 2px focus-visible
+9. Esc closes it: overlay hidden true, focus back on button.search-trigger "Search tasks, pull requests, s" outline solid 2px focus-visible
+10. With nothing focused, Ctrl+K opens search: overlay hidden false, focus input#search-q "Search" outline solid 2px focus-visible
+11. Esc closes it: overlay hidden true, focus body (nothing focused)
