@@ -33,8 +33,9 @@ final readonly class GitHubIssues
         return [] === $marked ? null : min(array_column($marked, 'number'));
     }
 
+    // Keyed by issue number, the value is the issue's first line that starts with the prefix, so a caller can tell which marker an open issue carries.
     /**
-     * @return array<int, string> the first line starting with the prefix, by the number of each open issue that holds one
+     * @return array<int, string>
      */
     public function openIssuesMarkedWith(string $prefix): array
     {

@@ -105,24 +105,6 @@ final readonly class InstallWalk
         return $this->recorded('install: '.$command, ($this->runner)($script, $directory, [...$this->environment, self::ENDED_IN => $home.'/'.self::ENDED_IN_FILE]), [0]);
     }
 
-    // Only a folder inside home counts, so a README line that ends elsewhere, or none that ran, leaves the commands in home.
-    private function cloneIn(string $home): string
-    {
-        $root = realpath($home);
-        $ended = realpath(trim((string) @file_get_contents($home.'/'.self::ENDED_IN_FILE)));
-
-        if (false === $root || false === $ended || $ended === $root || !str_starts_with($ended, $root.'/') || !is_dir($ended)) {
-            return $home;
-        }
-
-        return $home.substr($ended, strlen($root));
-    }
-
-    private function step(string $name, string $command, string $directory): InstallStepResult
-    {
-        return $this->recorded($name, $this->command($command, $directory), [0]);
-    }
-
     private function skipped(string $name, string $why): InstallStepResult
     {
         return new InstallStepResult($name, InstallStatus::Skipped, $why);
@@ -152,6 +134,24 @@ final readonly class InstallWalk
         $verdicts = array_map(static fn (ReviewExit $exit): int => $exit->value, ReviewExit::cases());
 
         return $this->recorded(self::KEYED, $this->command('docker compose up -d --wait && docker compose exec -T intakt php bin/console intakt:demo', $clone), $verdicts);
+    }
+
+    // Only a folder inside home counts, so a README line that ends elsewhere, or none that ran, leaves the commands in home.
+    private function cloneIn(string $home): string
+    {
+        $root = realpath($home);
+        $ended = realpath(trim((string) @file_get_contents($home.'/'.self::ENDED_IN_FILE)));
+
+        if (false === $root || false === $ended || $ended === $root || !str_starts_with($ended, $root.'/') || !is_dir($ended)) {
+            return $home;
+        }
+
+        return $home.substr($ended, strlen($root));
+    }
+
+    private function step(string $name, string $command, string $directory): InstallStepResult
+    {
+        return $this->recorded($name, $this->command($command, $directory), [0]);
     }
 
     /**

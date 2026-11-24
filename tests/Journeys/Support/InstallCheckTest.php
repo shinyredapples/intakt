@@ -100,9 +100,7 @@ final class InstallCheckTest extends TestCase
     {
         $home = $this->directory.'/home';
         new Filesystem()->mkdir($home);
-        $shell = new InstallProcessRunner(10);
-        $runner = static fn (string $command, string $directory, array $environment): array => str_starts_with($command, 'docker ') || str_starts_with($command, 'node ') ? [0, ''] : $shell($command, $directory, $environment);
-        $walk = new InstallWalk($runner, [], $this->directory.'/logs', $this->directory.'/checkout', [], new Filesystem());
+        $walk = new InstallWalk($this->shellButNoContainers(...), [], $this->directory.'/logs', $this->directory.'/checkout', [], new Filesystem());
 
         $report = $walk->through($home, ['mkdir -p intakt/subdir && cd intakt/subdir', 'test -d ../subdir && test "$(pwd)" = "$(cd '.escapeshellarg($home).' && pwd)/intakt/subdir"']);
 
@@ -336,12 +334,22 @@ final class InstallCheckTest extends TestCase
         $this->calls[] = ['command' => $command, 'directory' => $directory, 'environment' => $environment];
         $answer = array_find($this->answers, static fn (array $answer, string $part): bool => str_contains($command, $part)) ?? $this->madeBy($command, $directory);
 
-        // Stands in for the line the real shell adds after an install command: the README's cd into the clone.
+        // No real shell runs here, so the fake writes the folder the README's cd would have ended in, because the walk reads it for the next command.
         if (0 === $answer[0] && isset($environment['INTAKT_INSTALL_CHECK_ENDED_IN'])) {
             new Filesystem()->dumpFile($environment['INTAKT_INSTALL_CHECK_ENDED_IN'], str_starts_with($command, self::CLONE_COMMAND."\n") ? $directory.'/intakt' : $directory);
         }
 
         return $answer;
+    }
+
+    /**
+     * @param array<string, string> $environment
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function shellButNoContainers(string $command, string $directory, array $environment): array
+    {
+        return str_starts_with($command, 'docker ') || str_starts_with($command, 'node ') ? [0, ''] : new InstallProcessRunner(10)($command, $directory, $environment);
     }
 
     /**

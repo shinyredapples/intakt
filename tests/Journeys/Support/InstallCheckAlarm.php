@@ -46,26 +46,6 @@ final readonly class InstallCheckAlarm
         }
     }
 
-    // A README that lost a command shifts or drops the places after it, so once every install command passes, a task for a step this run did not have is closed.
-    /**
-     * @param list<string> $markers
-     *
-     * @return list<string>
-     */
-    private function closeMissing(array $markers): array
-    {
-        $lines = [];
-
-        foreach ($this->issues->openIssuesMarkedWith(self::MARKER) as $number => $marker) {
-            if (!in_array($marker, $markers, true)) {
-                $this->issues->close($number, 'The install check passes and no longer has this step.');
-                $lines[] = 'closed #'.$number.' (a step this run no longer has)';
-            }
-        }
-
-        return $lines;
-    }
-
     // The identity is hashed, so no step name can break the marker line.
     private function markerOf(string $identity): string
     {
@@ -125,5 +105,25 @@ final readonly class InstallCheckAlarm
         preg_match_all('/`+/', $text, $runs);
 
         return array_reduce($runs[0], static fn (int $longest, string $run): int => max($longest, strlen($run)), 0);
+    }
+
+    // A README that lost a command shifts or drops the places after it, so once every install command passes, a task for a step this run did not have is closed.
+    /**
+     * @param list<string> $markers
+     *
+     * @return list<string>
+     */
+    private function closeMissing(array $markers): array
+    {
+        $lines = [];
+
+        foreach ($this->issues->openIssuesMarkedWith(self::MARKER) as $number => $marker) {
+            if (!in_array($marker, $markers, true)) {
+                $this->issues->close($number, 'The install check passes and no longer has this step.');
+                $lines[] = 'closed #'.$number.' (a step this run no longer has)';
+            }
+        }
+
+        return $lines;
     }
 }
