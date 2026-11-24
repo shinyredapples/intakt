@@ -59,6 +59,44 @@ final class RedactionTest extends TestCase
         self::assertSame('fixtures/key_[redacted].txt', $redacted);
     }
 
+    public function testItRedactsAWebTokenThatStartsInASignatureBeforeAShorterLastStart(): void
+    {
+        $first = 'eyJ'.str_repeat('a', 8).'.eyJ'.str_repeat('a', 8).'.sig-eyJ'.str_repeat('d', 8).'-eyJx';
+
+        $redacted = new Redaction()->redact('k '.$first.'.eyJ'.str_repeat('e', 8).'.SECRETTAIL end');
+
+        self::assertSame('k [redacted] end', $redacted);
+    }
+
+    public function testItRedactsAJoinedWebTokenWhoseLastStartIsTooShortWhole(): void
+    {
+        $middle = 'eyJ'.str_repeat('B', 8);
+        $first = 'eyJ'.str_repeat('A', 8).'.'.$middle.'.FIRST';
+        $second = 'eyJ'.str_repeat('C', 8).'-eyJ.'.$middle.'.SECOND';
+
+        $redacted = new Redaction()->redact('fixtures/key_'.$first.'-'.$second.'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItRedactsABearerTokenInsideTheValueOfAnotherWhole(): void
+    {
+        $redacted = new Redaction()->redact('Bearer '.str_repeat('a', 8).'.Bearer '.str_repeat('b', 12).' end');
+
+        self::assertSame('[redacted] end', $redacted);
+    }
+
+    public function testItLeavesAMegabyteOfUnfinishedWebTokensUnchangedInUnderASecond(): void
+    {
+        $text = 'prefix '.str_repeat('eyJ'.str_repeat('0', 8).'_', 87_000).'.x.y suffix';
+        $start = hrtime(true);
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame($text, $redacted);
+        self::assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+    }
+
     public function testItRedactsALongRunOfApiKeysJoinedByHyphensWithinBoundedMemory(): void
     {
         $text = 'prefix '.str_repeat('sk-'.str_repeat('A', 20).'-', 3000).' suffix';
