@@ -318,10 +318,17 @@ final readonly class RoundLedgerReading implements RoundCosts
         return 'unsettled' === $unsettled?->phase ? $unsettled : null;
     }
 
+    private function costOfEnding(UsageSettled|UsageUnsettled $ended, ?string $model): Cost
+    {
+        $cost = $this->prices->costOf($model, $this->figuresOf($ended->usages));
+
+        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
+    }
+
     /**
      * @param array<array-key, Cost>        $costs
      * @param array<array-key, string|null> $rounds
-     * @param Closure(?string): Cost         $cost
+     * @param Closure(?string): Cost        $cost
      *
      * @return array<array-key, Cost>
      */
@@ -333,13 +340,6 @@ final readonly class RoundLedgerReading implements RoundCosts
         }
 
         return $costs;
-    }
-
-    private function costOfEnding(UsageSettled|UsageUnsettled $ended, ?string $model): Cost
-    {
-        $cost = $this->prices->costOf($model, $this->figuresOf($ended->usages));
-
-        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
     }
 
     // Priced as zero tokens, because a call still running or cut off before its ending row recorded none, yet a model without a price must still read as unknown.
