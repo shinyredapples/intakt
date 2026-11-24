@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
@@ -26,6 +27,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -454,6 +456,22 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(0, $reading->tokensOf(self::ROUND)->calls);
     }
 
+    public function testPricingOneRoundBesideManyUnrelatedEndedCallsGrowsPeakMemoryNoMoreThanTwiceWhatReadingItsTokensDoes(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->recordCallIn($ledger, 'target', self::ROUND, 1);
+
+        for ($call = 0; $call < 2000; ++$call) {
+            $this->recordCallIn($ledger, 'unrelated-'.$call, 'history-'.$call, 5);
+        }
+
+        $reading = $this->reading($ledger);
+        $tokens = $this->peakMemoryGrowthOf(static fn (): int => $reading->tokensOf(self::ROUND)->calls);
+        $cost = $this->peakMemoryGrowthOf(static fn (): ?float => $reading->costsOf(self::ROUND)->of(self::ROUND)->usd);
+
+        self::assertLessThanOrEqual(2 * $tokens, $cost);
+    }
+
     public function testUsageRowsOfAnotherRoundChangeNeitherTheRoundsTokensNorAReviewersTokens(): void
     {
         $this->recordReviewerCall('r1', 100);
@@ -677,6 +695,28 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::UsageRecorded, null === $round ? $started : $started + ['round' => $round]);
         $ended = ['call' => $call, 'phase' => $ending, 'usages' => [$this->usage()]];
         $this->append(LedgerEventKind::UsageRecorded, 'unsettled' === $ending ? $ended + ['failure' => 'RuntimeException'] : $ended);
+    }
+
+    // In a ledger of its own, because thousands of rows written to the database would make the memory test slow.
+    private function recordCallIn(Ledger $ledger, string $call, string $round, int $usages): void
+    {
+        foreach ([['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => 'big'], ['call' => $call, 'phase' => 'settled', 'usages' => array_fill(0, $usages, $this->usage())]] as $payload) {
+            self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
+        }
+    }
+
+    /**
+     * @param Closure(): mixed $read
+     */
+    // Measured from the memory in use just before the read, because only what the read itself holds at its peak is compared.
+    private function peakMemoryGrowthOf(Closure $read): int
+    {
+        gc_collect_cycles();
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+        $read();
+
+        return memory_get_peak_usage() - $before;
     }
 
     // Written through the payload classes from what the vendor's extractor read, because a row written by hand could carry a model the vendor never reports.
