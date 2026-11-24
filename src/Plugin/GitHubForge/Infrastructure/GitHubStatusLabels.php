@@ -33,6 +33,8 @@ final readonly class GitHubStatusLabels implements StatusLabels
     // About ten seconds in all, because a holder only reads the events and makes a few writes, so a longer hold means it is stuck.
     private const int WAIT_TRIES = 20;
     private const float WAIT_PAUSE_SECONDS = 0.5;
+    // The event list only grows, so a second read of the same length confirms the plan; a status written past the wait meanwhile makes it longer, and the plan is made again from it instead of writing an older status over the newer one.
+    private const int CONFIRM_READS = 3;
     private const string RESTORED = 'A person changed the status label on this change. Intakt sets it from the state of the review and put it back, so it always shows where the review stands.';
 
     public function __construct(
@@ -88,7 +90,23 @@ final readonly class GitHubStatusLabels implements StatusLabels
     private function write(string $project, ChangeId $change, Closure $plan): void
     {
         $address = $this->addressOf($project, $change);
-        $this->apply($project, $address, $plan($this->eventsOf($address->issuePath())));
+        $events = $this->eventsOf($address->issuePath());
+        for ($read = 1; $read <= self::CONFIRM_READS; ++$read) {
+            $planned = $plan($events);
+            if (!$planned instanceof StatusLabelPlan) {
+                return;
+            }
+
+            $current = $this->eventsOf($address->issuePath());
+            if (count($current) === count($events)) {
+                $this->apply($project, $address, $planned);
+
+                return;
+            }
+            $events = $current;
+        }
+
+        throw new ForgeWriteFailed('The labels of the change kept changing while Intakt planned its status label.');
     }
 
     // False when the lock stayed busy for every try; tried without blocking and paced by the clock, so the wait has a bound and a lock store that cannot block still serves.
@@ -119,8 +137,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
     private function addressOf(string $project, ChangeId $change): PullRequestAddress
     {
         $address = PullRequestAddress::of($change);
-        $configured = $this->repositories->addressOf($project);
-        if ($address->owner !== $configured->owner() || $address->repository !== $configured->name()) {
+        if (!$address->isIn($this->repositories->addressOf($project))) {
             throw ChangeNotFound::named($change);
         }
 

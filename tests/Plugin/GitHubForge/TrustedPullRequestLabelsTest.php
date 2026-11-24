@@ -11,6 +11,7 @@ use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
@@ -106,6 +107,20 @@ final class TrustedPullRequestLabelsTest extends TestCase
         self::assertSame([], $trusted->outvoted);
     }
 
+    public function testAPullRequestWhoseAddressSpellsTheRepositoryInOtherCaseStillSteers(): void
+    {
+        $trusted = $this->trustedOf([new LabelApplication('review:full', RecordedTrust::WRITER)], pull: 'https://github.com/Acme/Widget/pull/1');
+
+        self::assertTrue($trusted->steering->contains('review:full'));
+    }
+
+    public function testAPullRequestOfAnotherRepositoryIsRefused(): void
+    {
+        $this->expectException(ChangeNotFound::class);
+
+        $this->trustedOf([new LabelApplication('review:full', RecordedTrust::WRITER)], pull: 'https://github.com/acme/widgets/pull/1');
+    }
+
     /**
      * @param list<LabelApplication> $applied
      * @param ?list<string>          $current
@@ -119,13 +134,13 @@ final class TrustedPullRequestLabelsTest extends TestCase
      * @param list<LabelApplication> $applied
      * @param ?list<string>          $current
      */
-    private function trustedOf(array $applied, ?array $current = null): TrustedLabels
+    private function trustedOf(array $applied, ?array $current = null, string $pull = 'https://github.com/acme/widget/pull/1'): TrustedLabels
     {
         $names = $current ?? array_map(static fn (LabelApplication $application): string => $application->label, $applied);
         $histories = self::createStub(IssueHistories::class);
         $histories->method('of')->willReturn(new IssueHistory('alice', $applied, '', new IssueLabels(...$names)));
         $trust = new RecordedTrust();
 
-        return new TrustedPullRequestLabels($histories, TrustChecks::over($trust), new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]))->of('alpha', PullRequestAddress::of(new ChangeId('https://github.com/acme/widget/pull/1')), new DateTimeImmutable('2026-11-25 10:00:00'));
+        return new TrustedPullRequestLabels($histories, TrustChecks::over($trust), new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]))->of('alpha', PullRequestAddress::of(new ChangeId($pull)), new DateTimeImmutable('2026-11-25 10:00:00'));
     }
 }

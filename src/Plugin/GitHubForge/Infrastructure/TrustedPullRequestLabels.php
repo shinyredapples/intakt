@@ -36,7 +36,7 @@ final readonly class TrustedPullRequestLabels
     public function of(string $project, PullRequestAddress $pull, DateTimeImmutable $listedAt): TrustedLabels
     {
         $address = $this->repositories->addressOf($project);
-        if ($pull->owner !== $address->owner() || $pull->repository !== $address->name()) {
+        if (!$pull->isIn($address)) {
             throw new ChangeNotFound(sprintf('Pull request %s/%s#%d is not in the repository of project %s.', $pull->owner, $pull->repository, $pull->number, $project));
         }
 

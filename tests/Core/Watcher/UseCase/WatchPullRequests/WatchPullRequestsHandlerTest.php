@@ -496,6 +496,21 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['mirror 7 status:in-review', 'restore 7'], $this->statusLabels->writes);
     }
 
+    public function testAPendingHeadPushedAfterARoundPutsBackTheStatusLabelOfThePullRequest(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->checks = new RecordedChecks([str_repeat(self::GREEN, 40) => 'green', str_repeat(self::PENDING, 40) => 'pending']);
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:45:00Z'));
+        $this->tick();
+        $this->statusLabels->writes = [];
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:50:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['restore 7'], $this->statusLabels->writes);
+    }
+
     public function testARedHeadWithoutARoundPutsBackNoStatusLabel(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T09:00:00Z'));

@@ -62,6 +62,10 @@ final class GitHubStatusLabelsTest extends TestCase
 
     private ?Closure $whileWriting = null;
 
+    private ?Closure $whileReading = null;
+
+    private bool $writesShowInEvents = false;
+
     private LockFactory $locks;
 
     private MockClock $clock;
@@ -136,6 +140,43 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->restore();
 
         self::assertContains('POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}', $this->writes);
+    }
+
+    public function testAVerdictStatusWrittenPastTheWaitWhileARestorationReadsIsNotOverwrittenByTheRestoration(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', RecordedTrust::WRITER);
+        $this->writesShowInEvents = true;
+        $this->whileReading = function (): void {
+            $this->whileReading = null;
+            $this->mirror(RoundStatusLabel::WaitingOnYou);
+        };
+
+        $this->restore();
+
+        self::assertSame(['POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}'], $this->writes);
+    }
+
+    public function testALabelListThatKeepsChangingFailsTheWriteWithoutWriting(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->whileReading = function (): void {
+            $this->labeled('status:in-review', RecordedTrust::WRITER);
+        };
+
+        try {
+            $this->mirror(RoundStatusLabel::WaitingOnYou);
+            self::fail('The write should have failed.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame([], $this->writes);
+        }
+    }
+
+    public function testAStatusOfAPullRequestWhoseAddressSpellsTheRepositoryInOtherCaseIsWritten(): void
+    {
+        $this->labelsOf()->mirror('alpha', new ChangeId('https://github.com/Acme/Widget/pull/1'), RoundStatusLabel::InReview);
+
+        self::assertSame(['POST /repos/Acme/Widget/issues/1/labels {"labels":["status:in-review"]}'], $this->writes);
     }
 
     public function testAVerdictStatusThatArrivesWhileARestorationHoldsTheLockWaitsAndIsWritten(): void
@@ -309,7 +350,12 @@ final class GitHubStatusLabelsTest extends TestCase
     {
         $path = (string) parse_url($url, PHP_URL_PATH);
         if (str_ends_with($path, '/issues/1/events')) {
-            return new MockResponse(json_encode(200 === $this->eventsStatus ? $this->events : ['message' => 'no'], JSON_THROW_ON_ERROR), ['http_code' => $this->eventsStatus]);
+            $listed = json_encode(200 === $this->eventsStatus ? $this->events : ['message' => 'no'], JSON_THROW_ON_ERROR);
+            if ($this->whileReading instanceof Closure) {
+                ($this->whileReading)();
+            }
+
+            return new MockResponse($listed, ['http_code' => $this->eventsStatus]);
         }
         if (str_contains($path, '/issues/1/')) {
             return $this->write($method, $path, $options);
@@ -337,10 +383,28 @@ final class GitHubStatusLabelsTest extends TestCase
         }
 
         $this->writes[] = trim($method.' '.$path.' '.$body);
+        if ($this->writesShowInEvents) {
+            $this->showInEvents($method, $path, $body);
+        }
         if ($this->whileWriting instanceof Closure) {
             ($this->whileWriting)();
         }
 
         return new MockResponse('[]', ['http_code' => 200]);
+    }
+
+    // As GitHub does, so a later read of the events sees what Intakt wrote.
+    private function showInEvents(string $method, string $path, string $body): void
+    {
+        if ('DELETE' === $method) {
+            $this->unlabeled(rawurldecode(basename($path)), self::OWN);
+
+            return;
+        }
+
+        $labels = (array) ((array) json_decode($body, true, flags: JSON_THROW_ON_ERROR))['labels'];
+        foreach ($labels as $label) {
+            $this->labeled(is_string($label) ? $label : '', self::OWN);
+        }
     }
 }
