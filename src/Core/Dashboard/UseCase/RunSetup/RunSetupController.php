@@ -41,6 +41,12 @@ final readonly class RunSetupController
         ]));
     }
 
+    // A field sent as a list is no step and no address, so it reads as empty instead of failing the request.
+    private function text(mixed $value): string
+    {
+        return is_string($value) ? $value : '';
+    }
+
     private function repositoryOf(Request $request, SetupStep $step): RepositoryField
     {
         $fields = $request->request->all();
@@ -50,11 +56,5 @@ final readonly class RunSetupController
         }
 
         return RepositoryField::submitted($this->text($fields[self::REPOSITORY]));
-    }
-
-    // A field sent as a list is no step and no address, so it reads as empty instead of failing the request.
-    private function text(mixed $value): string
-    {
-        return is_string($value) ? $value : '';
     }
 }

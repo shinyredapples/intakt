@@ -56,8 +56,7 @@ final readonly class RepositoryField
         return null !== $this->repository || null !== $this->error;
     }
 
-    // An address that is no https URL on GitHub gives an empty path, so it fails as no address at all; another host gives null.
-    // Only the one leading slash and one trailing slash are dropped, so an empty segment such as github.com//owner/name stays wrong.
+    // An address that is no https URL on GitHub gives an empty path, so it fails as no address at all; another host gives null; only one slash is dropped at each end, so github.com//owner/name stays wrong.
     private static function pathOfUrl(string $address): ?string
     {
         $url = Uri::parse($address);
