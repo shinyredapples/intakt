@@ -138,7 +138,11 @@ final readonly class RoundLedgerReading implements RoundCosts
         foreach ($recorded as $row) {
             $ended = $this->endingOf($row);
 
-            foreach (null === $ended ? [] : $models[$ended->call] ?? [] as $round => $model) {
+            if (null === $ended) {
+                continue;
+            }
+
+            foreach ($models[$ended->call] ?? [] as $round => $model) {
                 $costs[$round] = $costs[$round]->plus($this->costOfEnding($ended, $model));
             }
         }
@@ -176,8 +180,8 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param list<string>        $roundIds
-     * @param list<RecordedEvent> $recorded
+     * @param array<array-key, string> $roundIds
+     * @param list<RecordedEvent>      $recorded
      *
      * @return array<string, array<array-key, string|null>>
      */
@@ -297,13 +301,6 @@ final readonly class RoundLedgerReading implements RoundCosts
         return new ModelNames(...array_values(array_unique($models)));
     }
 
-    private function costOfEnding(UsageSettled|UsageUnsettled $ended, ?string $model): Cost
-    {
-        $cost = $this->prices->costOf($model, $this->figuresOf($ended->usages));
-
-        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
-    }
-
     /**
      * @param list<TokenUsageRow> $usages
      */
@@ -324,5 +321,12 @@ final readonly class RoundLedgerReading implements RoundCosts
         $unsettled = $this->payloads->of($row, UsageUnsettled::class);
 
         return 'unsettled' === $unsettled?->phase ? $unsettled : null;
+    }
+
+    private function costOfEnding(UsageSettled|UsageUnsettled $ended, ?string $model): Cost
+    {
+        $cost = $this->prices->costOf($model, $this->figuresOf($ended->usages));
+
+        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
     }
 }
