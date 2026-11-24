@@ -121,13 +121,26 @@ final readonly class RoundLedgerReading implements RoundCosts
         return $figures;
     }
 
-    // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
+    // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages, or without an ending row yet, is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
     public function costOf(string $roundId): Cost
     {
         $recorded = $this->usageRows();
         $models = $this->callsStartedFor($roundId, $recorded);
+        $cost = Cost::none();
+        $unended = $models;
 
-        return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
+        foreach ($recorded as $row) {
+            $ended = $this->endingOf($row);
+
+            if (null === $ended || !array_key_exists($ended->call, $models)) {
+                continue;
+            }
+
+            unset($unended[$ended->call]);
+            $cost = $cost->plus($this->costOfEnding($ended, $models));
+        }
+
+        return $cost->plus($this->costOfUnended($unended));
     }
 
     /**
@@ -268,30 +281,6 @@ final readonly class RoundLedgerReading implements RoundCosts
         return new ModelNames(...array_values(array_unique($models)));
     }
 
-    /**
-     * @param array<string, string|null> $models
-     */
-    private function costOfEnding(RecordedEvent $row, array $models): Cost
-    {
-        $ended = $this->endingOf($row);
-
-        if (null === $ended || !array_key_exists($ended->call, $models)) {
-            return Cost::none();
-        }
-
-        $cost = $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
-
-        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
-    }
-
-    /**
-     * @param list<TokenUsageRow> $usages
-     */
-    private function figuresOf(array $usages): TokenFigures
-    {
-        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
-    }
-
     // Tried as settled first, because an unsettled row also reads into UsageSettled and only its phase tells the two apart.
     private function endingOf(RecordedEvent $row): UsageSettled|UsageUnsettled|null
     {
@@ -304,5 +293,32 @@ final readonly class RoundLedgerReading implements RoundCosts
         $unsettled = $this->payloads->of($row, UsageUnsettled::class);
 
         return 'unsettled' === $unsettled?->phase ? $unsettled : null;
+    }
+
+    /**
+     * @param array<string, string|null> $models
+     */
+    private function costOfEnding(UsageSettled|UsageUnsettled $ended, array $models): Cost
+    {
+        $cost = $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
+
+        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
+    }
+
+    /**
+     * @param array<string, string|null> $unended
+     */
+    // Priced as zero tokens, because a call still running or cut off before its ending row recorded none, yet a model without a price must still read as unknown.
+    private function costOfUnended(array $unended): Cost
+    {
+        return array_reduce($unended, fn (Cost $sum, ?string $model): Cost => $sum->plus($this->prices->costOf($model, TokenFigures::none())), Cost::none());
+    }
+
+    /**
+     * @param list<TokenUsageRow> $usages
+     */
+    private function figuresOf(array $usages): TokenFigures
+    {
+        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
     }
 }

@@ -23,15 +23,15 @@ enum DemoReadiness: string
         };
     }
 
-    // Plain words because a visitor there has no terminal; it names only an action a card below really offers.
+    // Plain words because a visitor there has no terminal; it names only an action the wizard really offers.
     public function firstRunLine(FirstRun $firstRun): string
     {
         return match ($this) {
             self::Ready => 'Two AI labs read a change, then the owl decides what to fix.',
             self::NotComposeDemo, self::NoRecording => match (true) {
-                $firstRun->providers->offersKeyForm() => 'This install has no recorded review. Add a key below to run one live.',
-                $firstRun->offersALiveReview() => 'This install has no recorded review. A live review can be started or opened from the cards below.',
-                default => 'This install has no recorded review, and no card below can start a live one yet.',
+                $firstRun->providers->offersKeyForm() => 'This install has no recorded review. Add a key in step 3, AI account, to run one live.',
+                $firstRun->offersALiveReview() => 'This install has no recorded review. A live review can be started or opened below.',
+                default => 'This install has no recorded review, and nothing below can start a live one yet.',
             },
             self::Played => 'The recorded review has played. Its rounds are in the review list.',
         };

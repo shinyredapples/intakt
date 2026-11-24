@@ -1465,7 +1465,7 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

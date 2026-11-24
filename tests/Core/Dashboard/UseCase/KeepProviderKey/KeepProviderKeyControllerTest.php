@@ -215,7 +215,7 @@ final class KeepProviderKeyControllerTest extends WebTestCase
     private function post(KernelBrowser $browser, string $key): void
     {
         $browser->request('POST', '/setup/provider-key', ['_token' => $this->token($browser), 'key' => $key]);
-        self::assertResponseRedirects('/setup');
+        self::assertResponseRedirects('/setup?step=3');
         $browser->followRedirect();
     }
 

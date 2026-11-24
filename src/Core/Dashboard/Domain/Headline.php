@@ -45,7 +45,7 @@ final readonly class Headline
         return 'The '.self::REVIEWERS.' are reviewing '.$running.' '.(1 === $running ? 'change' : 'changes').'.';
     }
 
-    // Asked by the line's partial, because the first-day opening asks for the first review and so links the first-run page (#2067, D3).
+    // Asked by the line's partial, because the first-day opening asks for the first review and so links the setup wizard (#2067, D3).
     public function isFirstDay(): bool
     {
         return 0 === $this->cards;
