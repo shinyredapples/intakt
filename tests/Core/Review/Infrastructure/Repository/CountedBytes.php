@@ -62,11 +62,13 @@ final class CountedBytes
         return match ($path) {
             self::EARLY_NUL => "\0".str_repeat('a', self::SIZE - 1),
             self::LATE_NUL => str_repeat('a', self::SIZE - 1)."\0",
+            default => throw new LogicException('No bytes at '.$path.'.'),
         };
     }
 
     private function opens(): Opens
     {
+        /** @var array<string, array<string, mixed>> $options */
         $options = stream_context_get_options($this->context ?? stream_context_get_default());
         $opens = $options[self::PROTOCOL]['opens'] ?? null;
 
