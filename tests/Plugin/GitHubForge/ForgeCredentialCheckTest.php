@@ -59,12 +59,6 @@ final class ForgeCredentialCheckTest extends TestCase
     private RateLimitReadings $shared;
     private int $requests = 0;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->shared = FreshReadings::at($this->clock);
-    }
-
     public function testTheForgeCredentialCheckPassesWhenTheInstallationReadsBack(): void
     {
         $result = $this->check(self::healthy(...))->run();
@@ -179,6 +173,12 @@ final class ForgeCredentialCheckTest extends TestCase
 
         self::assertTrue($result->passed);
         self::assertSame(3, $this->requests);
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->shared = FreshReadings::at($this->clock);
     }
 
     /**

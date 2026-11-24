@@ -28,7 +28,7 @@ final class DeadlineHttpClientTest extends TestCase
         });
 
         $client = new DeadlineHttpClient($http, $clock, $clock->now()->modify('+5 seconds'));
-        (void) $client->request('GET', 'https://api.github.com/', ['timeout' => 60, 'max_duration' => 0]);
+        $client->request('GET', 'https://api.github.com/', ['timeout' => 60, 'max_duration' => 0]);
 
         self::assertEqualsWithDelta(5.0, $sent['timeout'], 0.0);
         self::assertEqualsWithDelta(5.0, $sent['max_duration'], 0.0);
@@ -42,7 +42,7 @@ final class DeadlineHttpClientTest extends TestCase
 
         $this->expectException(TransportException::class);
 
-        (void) $client->request('GET', 'https://api.github.com/');
+        $client->request('GET', 'https://api.github.com/');
     }
 
     public function testAClientWithOtherOptionsKeepsTheSameDeadline(): void
@@ -53,6 +53,6 @@ final class DeadlineHttpClientTest extends TestCase
 
         $this->expectException(TransportException::class);
 
-        (void) $client->withOptions(['headers' => ['X-Test' => 'yes']])->request('GET', 'https://api.github.com/');
+        $client->withOptions(['headers' => ['X-Test' => 'yes']])->request('GET', 'https://api.github.com/');
     }
 }
