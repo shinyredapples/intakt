@@ -21,12 +21,13 @@ final readonly class ShowTeamCommand
     {
         $team = $this->roster->now();
 
+        // Raw, because a reviewer role name is the owner's text and may look like console markup.
         foreach ($team->accounts as $account) {
-            $output->writeln(sprintf('account %s: %s, serves %s', $account->account->key(), $account->state->value, $this->rolesOf($account)));
+            $output->writeln(sprintf('account %s: %s, serves %s', $account->account->key(), $account->state->value, $this->rolesOf($account)), OutputInterface::OUTPUT_RAW);
         }
 
         foreach ($team->roles as $role) {
-            $output->writeln(sprintf('role %s: %s', $role->label(), $this->providersOf($role)));
+            $output->writeln(sprintf('role %s: %s', $role->label(), $this->providersOf($role)), OutputInterface::OUTPUT_RAW);
         }
 
         return Command::SUCCESS;
@@ -39,6 +40,6 @@ final readonly class ShowTeamCommand
 
     private function providersOf(TeamRole $role): string
     {
-        return [] === $role->providers ? 'no provider' : implode(', ', array_map(static fn (Provider $provider): string => $provider->value, $role->providers));
+        return [] === $role->providers ? 'no provider' : implode(', ', array_map(static fn (Provider $provider): string => $provider->value.(in_array($provider, $role->notRunnable, true) ? ' (the build runtime cannot run it)' : ''), $role->providers));
     }
 }

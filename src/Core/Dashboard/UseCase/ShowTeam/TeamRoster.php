@@ -15,7 +15,6 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
-use Intakt\Core\Build\Contract\BuildRuntime;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
@@ -39,7 +38,7 @@ final readonly class TeamRoster
 
     public function now(): Team
     {
-        $roles = [TeamRole::developer(...$this->developerProviders()), ...$this->reviewerRoles()];
+        $roles = [TeamRole::developer($this->developerProviders()), ...$this->reviewerRoles()];
 
         return new Team($this->accountsServing($roles), $roles);
     }
@@ -57,8 +56,7 @@ final readonly class TeamRoster
             }
         }
 
-        // Only the build runtime's provider, because a build resolved to any other fails before it reaches an account.
-        return array_values(array_unique(array_filter($providers, static fn (?Provider $provider): bool => BuildRuntime::PROVIDER === $provider), SORT_REGULAR));
+        return array_values(array_unique(array_filter($providers, static fn (?Provider $provider): bool => null !== $provider), SORT_REGULAR));
     }
 
     // A `model:` label can pick every tier, so the strong tier that sensitive paths and a confirmed escalation route to is among these.

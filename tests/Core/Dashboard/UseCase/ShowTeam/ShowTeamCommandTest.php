@@ -68,10 +68,21 @@ final class ShowTeamCommandTest extends TestCase
 
     public function testItPrintsTheProvidersEachRoleCanRunOn(): void
     {
-        self::assertStringContainsString("role developer: claude_code\nrole reviewer correctness: anthropic\n", $this->execute()->getDisplay());
+        self::assertStringContainsString("role developer: openai (the build runtime cannot run it), claude_code\nrole reviewer correctness: anthropic\n", $this->execute()->getDisplay());
     }
 
-    private function execute(): CommandTester
+    public function testAReviewerNameThatLooksLikeConsoleMarkupIsPrintedAsConfigured(): void
+    {
+        $display = $this->execute('<info>security</info>')->getDisplay();
+
+        self::assertStringContainsString("account anthropic.default: ready, serves reviewer <info>security</info>\n", $display);
+        self::assertStringContainsString("role reviewer <info>security</info>: anthropic\n", $display);
+    }
+
+    /**
+     * @param non-empty-string $reviewer
+     */
+    private function execute(string $reviewer = 'correctness'): CommandTester
     {
         $listed = self::createStub(ListedAccounts::class);
         $listed->method('of')->willReturnCallback(static fn (Provider $provider): array => match ($provider) {
@@ -91,7 +102,7 @@ final class ShowTeamCommandTest extends TestCase
             Tier::Light => throw new TierNotMapped($project, $tier),
         });
         $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['src/Security/**'], 'escalate_on' => []]], new ModelRouting());
-        $panels = new ConfiguredPanels(['alpha' => ['quorum' => 'all', 'reviewers' => [['role' => 'correctness', 'tier' => Tier::Strong->value, 'provider' => Provider::Anthropic->value, 'prompt' => 'Review the change.', 'budget' => 1]]]]);
+        $panels = new ConfiguredPanels(['alpha' => ['quorum' => 'all', 'reviewers' => [['role' => $reviewer, 'tier' => Tier::Strong->value, 'provider' => Provider::Anthropic->value, 'prompt' => 'Review the change.', 'budget' => 1]]]]);
         $application = new Application();
         $application->addCommand(new ShowTeamCommand(new TeamRoster($listed, $enabled, $cooldowns, $tiers, $routing, $panels)));
         $tester = new CommandTester($application->find('intakt:team'));

@@ -116,15 +116,39 @@ final class TeamRosterTest extends TestCase
 
         $team = $this->teamOf($install->accounts(Provider::ClaudeCode, 'default')->accounts(Provider::OpenAi, 'default'));
 
-        self::assertSame([Provider::ClaudeCode], $this->developer($team)->providers);
+        self::assertSame([Provider::OpenAi, Provider::ClaudeCode], $this->developer($team)->providers);
         self::assertSame(['openai.default' => [], 'claude_code.default' => ['developer']], $this->accountRoles($team));
     }
 
-    public function testAProviderTheBuilderCannotRunOnIsLeftOutOfTheDeveloperRole(): void
+    public function testASensitivePathsTierOnAProviderTheBuildRuntimeCannotRunIsListedAsNotRunnable(): void
     {
-        $team = $this->teamOf(new GivenInstall()->routing('alpha', Tier::Standard)->tier(Tier::Standard, Provider::OpenAi)->tier(Tier::Strong, Provider::Anthropic));
+        $install = new GivenInstall()->routing('alpha', Tier::Standard, ['src/Security/**'])->tier(Tier::Standard, Provider::ClaudeCode)->tier(Tier::Strong, Provider::OpenAi);
 
-        self::assertSame([], $this->developer($team)->providers);
+        $developer = $this->developer($this->teamOf($install));
+
+        self::assertSame([Provider::ClaudeCode, Provider::OpenAi], $developer->providers);
+        self::assertSame([Provider::OpenAi], $developer->notRunnable);
+    }
+
+    public function testAnAccountOfAProviderTheBuildRuntimeCannotRunDoesNotServeTheDeveloper(): void
+    {
+        $team = $this->teamOf(new GivenInstall()->routing('alpha', Tier::Standard)->tier(Tier::Standard, Provider::OpenAi)->accounts(Provider::OpenAi, 'default'));
+
+        self::assertSame(['openai.default' => []], $this->accountRoles($team));
+    }
+
+    public function testEveryProviderTheBuildRuntimeCannotRunIsListedAsNotRunnable(): void
+    {
+        $developer = $this->developer($this->teamOf(new GivenInstall()->routing('alpha', Tier::Standard)->tier(Tier::Standard, Provider::OpenAi)->tier(Tier::Strong, Provider::Anthropic)));
+
+        self::assertSame([Provider::OpenAi, Provider::Anthropic], $developer->notRunnable);
+    }
+
+    public function testTheBuildRuntimesProviderIsNotListedAsNotRunnable(): void
+    {
+        $team = $this->teamOf(new GivenInstall()->routing('alpha', Tier::Strong)->tier(Tier::Strong, Provider::ClaudeCode));
+
+        self::assertSame([], $this->developer($team)->notRunnable);
     }
 
     public function testAProjectWhoseDefaultTierIsStrongListsItsProviderOnce(): void
@@ -138,7 +162,7 @@ final class TeamRosterTest extends TestCase
     {
         $team = $this->teamOf(new GivenInstall()->routing('alpha', Tier::Standard)->tier(Tier::Standard, Provider::OpenAi)->tier(Tier::Light, Provider::ClaudeCode));
 
-        self::assertSame([Provider::ClaudeCode], $this->developer($team)->providers);
+        self::assertContains(Provider::ClaudeCode, $this->developer($team)->providers);
     }
 
     public function testAProjectWithoutBuildRoutingIsLeftOutOfTheDeveloperRoleWithoutFailingTheRoster(): void
@@ -168,7 +192,7 @@ final class TeamRosterTest extends TestCase
     {
         $team = $this->teamOf($this->install()->reviewer('alpha', 'correctness', Provider::Anthropic)->reviewer('alpha', 'security', Provider::OpenAi));
 
-        self::assertSame(['developer' => [Provider::ClaudeCode], 'reviewer correctness' => [Provider::Anthropic], 'reviewer security' => [Provider::OpenAi]], $this->rolesWithProviders($team));
+        self::assertSame(['developer' => [Provider::OpenAi, Provider::ClaudeCode], 'reviewer correctness' => [Provider::Anthropic], 'reviewer security' => [Provider::OpenAi]], $this->rolesWithProviders($team));
     }
 
     public function testAReviewerOnlyAPanelRuleAddsIsListed(): void
@@ -198,7 +222,7 @@ final class TeamRosterTest extends TestCase
     {
         $fields = [...$this->publicFields(TeamAccount::class), ...$this->publicFields(TeamRole::class), ...$this->publicFields(Team::class)];
 
-        self::assertSame(['account', 'state', 'roles', 'kind', 'name', 'providers', 'accounts', 'roles'], $fields);
+        self::assertSame(['account', 'state', 'roles', 'kind', 'name', 'providers', 'notRunnable', 'accounts', 'roles'], $fields);
     }
 
     public function testTheDeveloperRoleIsOfTheDeveloperKind(): void

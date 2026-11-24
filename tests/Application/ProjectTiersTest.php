@@ -332,6 +332,14 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame(['team'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
     }
 
+    public function testAnExplicitlyListedDefaultAccountWithoutItsKeyStaysListed(): void
+    {
+        $this->listAccounts('anthropic: [default]');
+        $this->unsetVariable('ANTHROPIC_API_KEY');
+
+        self::assertSame(['default'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
+    }
+
     public function testAProviderWithoutAKeyThatKeepsItsImplicitDefaultAccountIsNotListed(): void
     {
         self::assertArrayNotHasKey(Provider::OpenAi->value, $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS));

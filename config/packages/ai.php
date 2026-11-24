@@ -278,6 +278,7 @@ return static function (ContainerConfigurator $container): void {
     $disabledAccounts = [];
     $enabledAccounts = [];
     $listedAccounts = [];
+    $explicitAccounts = is_array($contents['accounts'] ?? null) ? $contents['accounts'] : [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
@@ -302,8 +303,8 @@ return static function (ContainerConfigurator $container): void {
             $missingOf[$name] = $missing;
         }
 
-        // A provider without a key that keeps only its implicit default account is one the owner never set up, so only the disabled-provider note names it.
-        if ([] !== $enabled || [Account::DEFAULT] !== $configuration['accounts'][$provider->value]) {
+        // A provider without a key that the file does not list under accounts keeps only its implicit default account, so the owner never set it up and only the disabled-provider note names it.
+        if ([] !== $enabled || array_key_exists($provider->value, $explicitAccounts)) {
             $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
         }
 
