@@ -154,13 +154,17 @@ final class GitHubWorkSourceTest extends KernelTestCase
     public function testAPullRequestOpenedOnTheBranchDuringTheSteeringCheckMakesTheTaskARework(): void
     {
         $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'No closing keyword here.')]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
         $this->duringHistory = function (): void {
             $this->branches->branchOf = [12 => 'feat/7-add-intake'];
         };
 
-        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+        $pick = $source->nextWork('alpha', WorkerState::Free);
 
         self::assertEquals(new Task(7, 'Task 7', 12), $pick->task);
+        self::assertNotSame([], $this->historiesRead);
     }
 
     public function testNoBranchIsReadWhenNoTaskIsReady(): void
