@@ -20,11 +20,13 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Verdict::class)]
 final class GoalpostRuleTest extends TestCase
 {
-    // The whole finding is compared, so a row also proves the rule keeps everything but the severity.
+    // The expected finding is built through the constructor, not withSeverity, so a row fails when the rule and that helper agree on a wrong severity; the whole finding is compared, so a row also proves the rule keeps every other field.
     #[DataProvider('roundsAndSeverities')]
     public function testAFindingKeepsTheSeverityItsRoundAllowsAndTheRestOfItsFields(int $round, Finding $finding, Severity $severity): void
     {
-        self::assertEquals($finding->withSeverity($severity), new GoalpostRule()->applyTo($round, $finding));
+        $expected = self::finding($severity, $finding->requirement, $finding->regression);
+
+        self::assertEquals($expected, new GoalpostRule()->applyTo($round, $finding));
     }
 
     /**
