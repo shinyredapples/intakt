@@ -106,6 +106,9 @@ use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
+use Intakt\Core\Build\Contract\TaskKind;
+use Intakt\Core\Build\Domain\BugPart;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -259,6 +262,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
 #[UsesClass(BuildBrief::class)]
+#[UsesClass(TaskKind::class)]
+#[UsesClass(BugReport::class)]
+#[UsesClass(BugPart::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
@@ -944,6 +950,24 @@ final class BuildTaskTest extends TestCase
         self::assertSame(self::IMAGE, $ran->image);
         self::assertSame('feat/task', [...$ran->command][6]);
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body")->rendered(), $prompt);
+    }
+
+    public function testABugTaskWithAllFourPartsReachesTheBuildJobWithTheTestFirstInstruction(): void
+    {
+        $prompt = '';
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$prompt): JobResult {
+            $prompt = (string) file_get_contents($spec->inputs[1]->hostPath);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput());
+        });
+        $this->runner = $runner;
+        $body = "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d";
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'bug'], ['body' => $body])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertStringContainsString('write that test first', $prompt);
     }
 
     public function testATierLabelOfTheIssueChoosesTheBuildsTier(): void

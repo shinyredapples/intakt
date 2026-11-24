@@ -6,6 +6,7 @@ namespace Intakt\Core\Build\Domain;
 
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Rework;
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
@@ -27,6 +28,8 @@ final readonly class BuilderPrompt
 
     private const string FIRST_BUILD = 'When the change is complete, write the pull request text to PR.md in the checkout root: a title in Conventional Commits form on the first line, a blank line, then the body.';
 
+    private const string BUG_TEST_FIRST = 'This task is a bug. Its first acceptance criterion is a regression test that fails today: write that test first, run it and watch it fail for the reason the task gives under "Today", commit it on its own, and only then fix the bug, so that the same test passes on your last commit. Keep what the task lists under "Must keep working" unchanged. Only when the task itself says the bug cannot be reproduced by a test, write no regression test and give the Evidence the other tasks give; never decide this on your own.';
+
     private const string REWORK = 'This build is a rework of a published pull request: its commits are on the branch. Fix what the act list and the CI log below name, then edit the published pull request text: change only the lines this build changes, and write the result to PR.md in the checkout root.';
 
     private const string QUESTION = 'If you need a decision the task does not cover, do not guess and write no PR.md: write the file %s in the checkout root instead, a JSON object with "question" (text), "choices" (a list of one or more texts) and "recommendation" (one of the choices), and stop.';
@@ -44,8 +47,17 @@ final readonly class BuilderPrompt
             new PromptPart(self::INSTRUCTIONS),
             new PromptPart('The task:', $this->cut->fenced(UntrustedSource::Task, $brief->task)),
             ...$this->decisionsOf($brief),
+            ...$this->testFirstOf($brief->kind),
             ...$this->closingOf($brief->rework),
         );
+    }
+
+    /**
+     * @return list<PromptPart>
+     */
+    private function testFirstOf(TaskKind $kind): array
+    {
+        return TaskKind::Bug === $kind ? [new PromptPart(self::BUG_TEST_FIRST)] : [];
     }
 
     /**

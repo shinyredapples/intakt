@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Build\Domain;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\Rework;
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Review\Contract\Evidence;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(BuilderPrompt::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(Rework::class)]
+#[UsesClass(TaskKind::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(FencedText::class)]
 #[UsesClass(PromptCut::class)]
@@ -75,6 +77,36 @@ final class BuilderPromptTest extends TestCase
         self::assertSame(UntrustedSource::ActList, FencedPlants::sourceAround($this->plant(26), $prompt));
         self::assertSame(UntrustedSource::CiLog, FencedPlants::sourceAround($this->plant(30), $prompt));
         self::assertSame(UntrustedSource::PullRequestText, FencedPlants::sourceAround($this->plant(31), $prompt));
+    }
+
+    public function testThePromptForABugTaskTellsTheBuilderToWriteAndCommitTheFailingRegressionTestBeforeTheFix(): void
+    {
+        $prompt = $this->promptFor(new BuildBrief($this->plant(1), new Decisions(), null, TaskKind::Bug));
+
+        self::assertStringContainsString('Its first acceptance criterion is a regression test that fails today: write that test first, run it and watch it fail', $prompt);
+        self::assertStringContainsString('commit it on its own, and only then fix the bug', $prompt);
+        self::assertSame(1, substr_count($prompt, 'This task is a bug.'));
+    }
+
+    public function testTheTestFirstInstructionLetsOnlyTheTaskItselfWaiveTheTestForABugATestCannotReproduce(): void
+    {
+        $prompt = $this->promptFor(new BuildBrief($this->plant(1), new Decisions(), null, TaskKind::Bug));
+
+        self::assertStringContainsString('Only when the task itself says the bug cannot be reproduced by a test, write no regression test and give the Evidence the other tasks give; never decide this on your own.', $prompt);
+    }
+
+    public function testTheTestFirstInstructionComesAfterTheDecisionsOutsideTheTaskFence(): void
+    {
+        $prompt = $this->promptFor(new BuildBrief($this->plant(1), new Decisions($this->plant(2)), null, TaskKind::Bug));
+
+        self::assertGreaterThan(strrpos($prompt, $this->plant(2)), strpos($prompt, 'This task is a bug.'));
+        self::assertLessThan(strpos($prompt, 'PR.md', (int) strpos($prompt, 'This task is a bug.')), strpos($prompt, 'This task is a bug.'));
+        self::assertSame(UntrustedSource::Task, FencedPlants::sourceAround($this->plant(1), $prompt));
+    }
+
+    public function testThePromptForAnotherTaskHasNoTestFirstInstruction(): void
+    {
+        self::assertStringNotContainsString('regression test', $this->promptFor(new BuildBrief($this->plant(1), new Decisions(), null)));
     }
 
     public function testAFirstBuildIsAskedToWriteThePullRequestTextAndNotToEditOne(): void

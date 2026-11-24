@@ -323,7 +323,7 @@ final readonly class BuildTask
     {
         // No paths and no setback, because a first build has no file forecast and no earlier round.
         $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels(new Labels(...$task->labels), new Paths()));
-        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null);
+        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null, TaskKind::fromLabels(new Labels(...$task->labels)));
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }
