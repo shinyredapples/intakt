@@ -143,7 +143,7 @@ final class ShellLexer
             return $this->afterComment($offset);
         }
 
-        if ($this->notePatternStart($char)) {
+        if ($this->notePatternStart($offset)) {
             return $this->afterPatternOpening($offset);
         }
 
@@ -249,11 +249,12 @@ final class ShellLexer
         return $end;
     }
 
-    // Because blanks and line feeds may stand between a branch terminator and the next pattern, only another character ends the place where a pattern may start.
-    private function notePatternStart(string $char): bool
+    // Because blanks, line feeds and a backslash that joins two lines may stand between a branch terminator and the next pattern, only another character ends the place where a pattern may start.
+    private function notePatternStart(int $offset): bool
     {
+        $char = $this->source[$offset];
         $wasPatternStart = $this->atPatternStart;
-        $this->atPatternStart = $wasPatternStart && str_contains(" \t\n", $char);
+        $this->atPatternStart = $wasPatternStart && (str_contains(" \t\n", $char) || "\\\n" === substr($this->source, $offset, 2));
 
         return $wasPatternStart && '(' === $char;
     }
