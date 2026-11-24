@@ -21,6 +21,7 @@ use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
+use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -92,6 +93,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(BugReport::class)]
+#[UsesClass(ReadableLines::class)]
 #[UsesClass(BugPart::class)]
 #[UsesClass(TaskKind::class)]
 #[UsesClass(HandBackCheck::class)]

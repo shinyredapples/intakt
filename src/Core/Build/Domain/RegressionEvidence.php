@@ -18,54 +18,38 @@ final readonly class RegressionEvidence
 
     public function addedTo(string $body): string
     {
-        $lines = explode("\n", rtrim($body));
-        $heading = $this->headingIn($lines, 0);
+        $body = $this->closed(rtrim(ReadableLines::withLineFeeds($body)));
+        $lines = explode("\n", $body);
+        $readable = ReadableLines::of($body)->lines;
+        $heading = $this->headingIn($readable);
 
         if (null === $heading) {
-            return ltrim(implode("\n", $lines)."\n\n".self::HEADING."\n\n".$this->resultLines());
+            return ltrim($body."\n\n".self::HEADING."\n\n".$this->resultLines());
         }
 
-        $end = $this->sectionEndIn($lines, $heading + 1);
+        $end = $this->sectionEndIn($readable, $heading + 1);
         $section = rtrim(implode("\n", array_slice($lines, 0, $end)))."\n".$this->resultLines();
         $rest = array_slice($lines, $end);
 
         return [] === $rest ? $section : $section."\n\n".implode("\n", $rest);
     }
 
-    /**
-     * @param list<string> $lines
-     */
-    private function headingIn(array $lines, int $from): ?int
+    // A fence or comment the body never closes is closed first, because otherwise it would hold every line Intakt adds after it.
+    private function closed(string $body): string
     {
-        foreach ($this->linesOutsideFences($lines, $from) as $index => $line) {
-            if (self::HEADING === rtrim($line)) {
-                return $index;
-            }
-        }
+        $closer = ReadableLines::of($body)->closer;
 
-        return null;
+        return null === $closer ? $body : $body."\n".$closer;
     }
 
     /**
-     * @param list<string> $lines
-     *
-     * @return iterable<int, string>
+     * @param list<string> $readable
      */
-    private function linesOutsideFences(array $lines, int $from): iterable
+    private function headingIn(array $readable): ?int
     {
-        $fenced = false;
+        $found = array_find_key($readable, static fn (string $line): bool => self::HEADING === rtrim($line));
 
-        foreach (array_slice($lines, $from, preserve_keys: true) as $index => $line) {
-            if (1 === preg_match('/^ {0,3}(```|~~~)/', $line)) {
-                $fenced = !$fenced;
-
-                continue;
-            }
-
-            if (!$fenced) {
-                yield $index => $line;
-            }
-        }
+        return is_int($found) ? $found : null;
     }
 
     private function resultLines(): string
@@ -88,16 +72,16 @@ final readonly class RegressionEvidence
 
     // A third-level heading stays inside, because builders number their Evidence items as subheadings too.
     /**
-     * @param list<string> $lines
+     * @param list<string> $readable
      */
-    private function sectionEndIn(array $lines, int $from): int
+    private function sectionEndIn(array $readable, int $from): int
     {
-        foreach ($this->linesOutsideFences($lines, $from) as $index => $line) {
+        foreach (array_slice($readable, $from, preserve_keys: true) as $index => $line) {
             if (1 === preg_match('/^#{1,2}\s/', $line)) {
                 return $index;
             }
         }
 
-        return count($lines);
+        return count($readable);
     }
 }

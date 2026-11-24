@@ -26,6 +26,7 @@ use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
@@ -249,6 +250,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RegressionRuns::class)]
 #[UsesClass(RegressionRun::class)]
 #[UsesClass(RegressionEvidence::class)]
+#[UsesClass(ReadableLines::class)]
 #[UsesClass(Paths::class)]
 #[UsesClass(HandBackRefusal::class)]
 #[UsesClass(HandBackNotChecked::class)]

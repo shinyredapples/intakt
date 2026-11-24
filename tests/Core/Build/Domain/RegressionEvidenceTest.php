@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
+use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\RegressionRun;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RegressionEvidence::class)]
+#[UsesClass(ReadableLines::class)]
 #[UsesClass(RegressionRuns::class)]
 #[UsesClass(Paths::class)]
 final class RegressionEvidenceTest extends TestCase
@@ -61,6 +63,69 @@ final class RegressionEvidenceTest extends TestCase
         $added = $this->evidence()->addedTo("## Evidence\n\n~~~\n## not a heading\n~~~\n\n## Follow-ups");
 
         self::assertSame("## Evidence\n\n~~~\n## not a heading\n~~~\n".self::LINES."\n\n## Follow-ups", $added);
+    }
+
+    public function testATildeLineInsideABacktickFenceDoesNotCloseIt(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n```\n~~~\n## inside\n```\n\n## Next");
+
+        self::assertSame("## Evidence\n\n```\n~~~\n## inside\n```\n".self::LINES."\n\n## Next", $added);
+    }
+
+    public function testAThreeBacktickLineInsideAFourBacktickFenceDoesNotCloseIt(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: example output\n\n````text\n```\n## Example\n\n````\n\n## Next");
+
+        self::assertSame("## Evidence\n\n- E1: example output\n\n````text\n```\n## Example\n\n````\n".self::LINES."\n\n## Next", $added);
+    }
+
+    public function testALongerFenceOfTheSameCharacterClosesTheFence(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n```\n## inside\n`````\n\n## Next");
+
+        self::assertSame("## Evidence\n\n```\n## inside\n`````\n".self::LINES."\n\n## Next", $added);
+    }
+
+    public function testAFenceTheBodyNeverClosesIsClosedBeforeTheNewEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Summary\n\n```\ncode");
+
+        self::assertSame("## Summary\n\n```\ncode\n```\n\n## Evidence\n\n".self::LINES, $added);
+    }
+
+    public function testAnUnclosedFenceAtTheEndOfTheEvidenceSectionIsClosedBeforeTheResults(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: output\n\n~~~~\nout\n~~~");
+
+        self::assertSame("## Evidence\n\n- E1: output\n\n~~~~\nout\n~~~\n~~~~\n".self::LINES, $added);
+    }
+
+    public function testAnUnclosedFenceInAListItemIsClosedAtTheItemsIndent(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: output\n  ```\n  out");
+
+        self::assertSame("## Evidence\n\n- E1: output\n  ```\n  out\n  ```\n".self::LINES, $added);
+    }
+
+    public function testAnUnclosedCommentIsClosedBeforeTheResults(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: output\n<!-- a note");
+
+        self::assertSame("## Evidence\n\n- E1: output\n<!-- a note\n-->\n".self::LINES, $added);
+    }
+
+    public function testAnEvidenceHeadingInsideACommentIsNotTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("<!--\n## Evidence\n-->\n## Summary");
+
+        self::assertSame("<!--\n## Evidence\n-->\n## Summary\n\n## Evidence\n\n".self::LINES, $added);
+    }
+
+    public function testABodyWithWindowsLineEndingsIsReadLineByLine(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\r\n\r\n- E1: a test\r\n\r\n## Next");
+
+        self::assertSame("## Evidence\n\n- E1: a test\n".self::LINES."\n\n## Next", $added);
     }
 
     public function testABodyWithoutAnEvidenceSectionGetsOneAtItsEnd(): void
