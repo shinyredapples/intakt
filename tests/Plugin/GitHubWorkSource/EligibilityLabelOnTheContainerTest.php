@@ -118,7 +118,7 @@ final class EligibilityLabelOnTheContainerTest extends KernelTestCase
     private function vouched(ListedIssue $listed): QueuedIssue
     {
         $references = new IssueReferences();
-        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, $listed->author), $listed->labels), '', $listed->labels);
+        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, $listed->author), [...$listed->labels]), '', $listed->labels);
 
         return new QueuedIssue(new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)))
             ->vouchedBy(Vouching::of($listed->author, $history, static fn (string $account): bool => 'ana' === $account));

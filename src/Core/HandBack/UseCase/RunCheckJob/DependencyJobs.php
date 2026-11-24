@@ -6,7 +6,6 @@ namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
-use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -168,7 +167,7 @@ final readonly class DependencyJobs
             new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->installScript), 'intakt-install', self::LOCK, $step->platformProbe, $step->install, ...$step->lockFiles),
             [new JobInput($folder.'/lock', self::LOCK)],
             new JobLimits(self::INSTALL_MEMORY_BYTES, self::CPUS, self::INSTALL_SECONDS),
-            [] === $hosts ? JobEgress::none() : JobEgress::to(new EgressHosts(...$hosts)),
+            $hosts->isEmpty() ? JobEgress::none() : JobEgress::to($hosts),
             new JobKeptFolder($folder.'/kept'),
         );
     }

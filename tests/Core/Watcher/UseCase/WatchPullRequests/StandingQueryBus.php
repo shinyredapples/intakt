@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\BootHarness;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
@@ -42,7 +43,7 @@ final class StandingQueryBus implements MessageBusInterface
         private readonly VerdictIdentity $recorded,
         private readonly EntityManagerInterface $entities,
     ) {
-        $this->move = new HeadMove(HeadMoveKind::Unmoved, []);
+        $this->move = new HeadMove(HeadMoveKind::Unmoved, new Paths());
         $this->mainBoot = BootOutcome::booted();
         $this->headBoot = BootOutcome::booted();
     }
