@@ -84,14 +84,14 @@ final readonly class OwnerAsks
             $lines = [...$lines, '', self::UNREADABLE];
         }
 
-        if ([] === $changes->paths) {
+        if ($changes->paths->isEmpty()) {
             return [implode("\n", $lines)];
         }
 
         $parts = [];
         $part = implode("\n", [...$lines, '', self::LISTED]);
         $listed = 0;
-        foreach (array_map($this->lineOf(...), $changes->paths) as $line) {
+        foreach (array_map($this->lineOf(...), [...$changes->paths]) as $line) {
             // A part ends only after a path, so no part is posted that lists none.
             if ($listed > 0 && strlen($part) + 1 + strlen($line) > self::PART_BYTES) {
                 $parts[] = $part;
@@ -142,7 +142,7 @@ final readonly class OwnerAsks
             'change' => $round->change(),
             'head' => $ask->verdict->head->hash,
             'round' => $round->id()->toRfc4122(),
-            'paths' => $ask->changes->paths,
+            'paths' => [...$ask->changes->paths],
             'unreadable' => $ask->changes->unreadable,
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
     }

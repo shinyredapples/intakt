@@ -763,6 +763,13 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .status-line .grow { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .status-line > .i:first-child { color: var(--primary); }
 .status-line .go { transform: rotate(-90deg); }
+/* Infrastructure row: muted like the status line, so only a down source or an unhealthy hub draws the eye; it wraps, so a long reason never widens the page. */
+.infra-figures { display: flex; flex-wrap: wrap; gap: var(--s8) var(--s24); margin: var(--s24) 0 0; padding: 0 var(--s16); color: var(--muted); }
+.infra-figure { display: flex; gap: var(--s8); min-width: 0; }
+.infra-figure dt::after { content: ":"; }
+.infra-figure dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.infra-figure.down dd, .infra-figure.unhealthy dd { color: var(--red); }
+.infra-reason { color: var(--muted); }
 /* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }

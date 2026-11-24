@@ -146,6 +146,7 @@ use Intakt\Tests\Core\HandBack\FailingLockStore;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
 use Intakt\Tests\Core\HandBack\UnreadableLedger;
 use Intakt\Tests\Core\HandBack\UnreleasableLockStore;
+use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -535,7 +536,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame(self::IMAGE, $this->checked->image);
         self::assertSame([realpath(new Mirrors($this->mirrors)->pathOf('alpha')), RunCheckJob::MIRROR], [$this->checked->inputs[0]->hostPath, $this->checked->inputs[0]->containerPath]);
         self::assertSame(RunCheckJob::BUNDLE, $this->checked->inputs[1]->containerPath);
-        self::assertSame(['feat/task', '--', ...new PhpGate()->checkSteps(null)], array_slice($this->checked->command, 6));
+        self::assertSame(['feat/task', '--', ...new PhpGate()->checkSteps(null)], array_slice([...$this->checked->command], 6));
     }
 
     public function testAFailureAtThePrePushCheckEndsThereWithItsExitCodeRecordedNothingOfItsLogAndNoPush(): void
@@ -583,7 +584,7 @@ final class BuildTaskTest extends TestCase
         $this->checkRunner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$mainInTheMirror): JobResult {
             $mainInTheMirror = $this->git(['rev-parse', 'HEAD'], $spec->inputs[0]->hostPath);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
         });
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
@@ -932,7 +933,7 @@ final class BuildTaskTest extends TestCase
             $ran = $spec;
             $prompt = (string) file_get_contents($spec->inputs[1]->hostPath);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([]));
         });
         $this->runner = $runner;
 
@@ -941,7 +942,7 @@ final class BuildTaskTest extends TestCase
         self::assertInstanceOf(JobSpec::class, $ran);
         self::assertSame([realpath($this->clone), RunBuildJob::CLONE], [$ran->inputs[0]->hostPath, $ran->inputs[0]->containerPath]);
         self::assertSame(self::IMAGE, $ran->image);
-        self::assertSame('feat/task', $ran->command[6]);
+        self::assertSame('feat/task', [...$ran->command][6]);
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body")->rendered(), $prompt);
     }
 
@@ -1296,7 +1297,7 @@ final class BuildTaskTest extends TestCase
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($files): JobResult {
             $this->checked = $spec;
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput($files));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of($files));
         });
 
         return $runner;
@@ -1362,7 +1363,7 @@ final class BuildTaskTest extends TestCase
             $bundle = (string) file_get_contents($job.'.bundle');
             new Filesystem()->remove([$job, $job.'.bundle']);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
         });
 
         return $runner;

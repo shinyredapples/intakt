@@ -50,7 +50,7 @@ final readonly class PushStep
         return match (true) {
             $outcome instanceof PushedBranch => null,
             $outcome instanceof RefusedPush => $outcome->reason,
-            $outcome instanceof MainConflicts => sprintf('the branch conflicts with main, so nothing was pushed (conflicting paths: %d)', count($outcome->paths)),
+            $outcome instanceof MainConflicts => sprintf('the branch conflicts with main, so nothing was pushed (conflicting paths: %d)', iterator_count($outcome->paths)),
         };
     }
 }
