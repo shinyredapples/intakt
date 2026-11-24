@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\DocsGate;
 use Intakt\Gates\DocsLimits;
+use Intakt\Gates\DocsListGrowth;
 use Intakt\Gates\DocsRatchetList;
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\MarkdownCodeBlocks;
@@ -26,6 +27,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(DocsRatchetList::class)]
 #[CoversClass(UnneededDocsEntries::class)]
 #[CoversClass(DocsLimits::class)]
+#[CoversClass(DocsListGrowth::class)]
 #[UsesClass(MarkdownReader::class)]
 #[UsesClass(MarkdownCodeBlocks::class)]
 #[UsesClass(FencedCodeBlocks::class)]

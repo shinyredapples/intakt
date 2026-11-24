@@ -63,6 +63,14 @@ final readonly class DocsRatchetList
     }
 
     /**
+     * @return ?array<int|string, mixed>
+     */
+    private static function fieldsOf(mixed $value): ?array
+    {
+        return $value instanceof stdClass ? get_object_vars($value) : null;
+    }
+
+    /**
      * @param array<mixed> $decoded
      *
      * @return list<int|string>
@@ -73,14 +81,6 @@ final readonly class DocsRatchetList
         sort($keys);
 
         return $keys;
-    }
-
-    /**
-     * @return ?array<int|string, mixed>
-     */
-    private static function fieldsOf(mixed $value): ?array
-    {
-        return $value instanceof stdClass ? get_object_vars($value) : null;
     }
 
     /**
