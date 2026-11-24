@@ -2,7 +2,7 @@
 
 ### In short
 
-`bin/check` is the command that checks a change. It runs a fixed list of gates, from coding standards and static analysis to tests, secret scans and commit subjects, and prints one JSON line per gate, then a result line. CI runs the same command with the pull request's arguments, so a local run and a CI run check the same things. Each gate runs in a child process of its own, which `bin/check` stops as a whole when it runs too long or when `bin/check` gets a stop signal.
+`bin/check` is the command that checks a change. It runs a fixed list of gates, from coding standards and static analysis to tests, secret scans and commit subjects, and prints one JSON line per gate, then a result line; with `--reuse` and a reused pass it prints only the `audit` line, when that gate is selected, and the result line. CI runs the same command with the pull request's arguments, so a local run and a CI run check the same things. Each gate runs in a child process of its own, which `bin/check` stops as a whole when it runs too long or when `bin/check` gets a stop signal.
 
 Worth knowing:
 
