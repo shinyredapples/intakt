@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
+use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -95,7 +96,7 @@ final readonly class TierPlatform implements TierInvoker
         return $own;
     }
 
-    // The own model first, then its pinned fallbacks (same model on the own provider, another router provider), then every other substitute in the order listed, because a fallback that serves the same model owes no catch-up and a free one beats a substitute listed earlier.
+    // The own model first, then its pinned fallbacks (same model on the own provider, another router provider), then every other substitute in the order listed, because a fallback that serves the same model owes no catch-up and a free one beats a substitute listed earlier. An unpinned alias keeps its listed place, because the router may send it to the very provider whose pin cools.
     /**
      * @param list<ResolvedModel> $substitutes
      *
@@ -103,10 +104,17 @@ final readonly class TierPlatform implements TierInvoker
      */
     private function inOrderOfPreference(ResolvedModel $own, array $substitutes): array
     {
-        $fallbacks = array_values(array_filter($substitutes, fn (ResolvedModel $model): bool => $this->isFallbackOfTheOwnModel($own, $model)));
+        $fallbacks = array_values(array_filter($substitutes, fn (ResolvedModel $model): bool => $this->isPinnedFallbackOfTheOwnModel($own, $model)));
         $others = array_values(array_filter($substitutes, static fn (ResolvedModel $model): bool => !in_array($model, $fallbacks, true)));
 
         return [$own, ...$fallbacks, ...$others];
+    }
+
+    private function isPinnedFallbackOfTheOwnModel(ResolvedModel $own, ResolvedModel $model): bool
+    {
+        $pinned = PinnedProvider::parts($model->model)[1] ?? null;
+
+        return null !== $pinned && $pinned !== (PinnedProvider::parts($own->model)[1] ?? null) && $this->isFallbackOfTheOwnModel($own, $model);
     }
 
     // Another model on the own provider is a substitute. A provider is judged once by its first model, except the own provider, which is judged per model because each pin has its own window.

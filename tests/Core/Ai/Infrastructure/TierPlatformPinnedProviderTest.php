@@ -68,6 +68,8 @@ final class TierPlatformPinnedProviderTest extends TestCase
 
     private const array FALLBACK = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/model:other-router'];
 
+    private const array ALIAS = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/model'];
+
     private const array OTHER_MODEL = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/other:free-router'];
 
     private MockClock $clock;
@@ -171,6 +173,15 @@ final class TierPlatformPinnedProviderTest extends TestCase
         $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::SUBSTITUTE, self::FALLBACK])->answering('demo', Tier::Strong);
 
         self::assertSame([self::ROUTER, self::FALLBACK['model']], [$answering->provider, $answering->model]);
+    }
+
+    public function testAnUnpinnedAliasOfTheOwnModelKeepsItsListedPlaceAfterAnEarlierSubstitute(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::SUBSTITUTE, self::ALIAS])->answering('demo', Tier::Strong);
+
+        self::assertSame([Provider::Anthropic, 'other'], [$answering->provider, $answering->model]);
     }
 
     public function testAnotherModelOnTheOwnProviderIsRecordedAsASubstituteAndNotAsAFallback(): void
