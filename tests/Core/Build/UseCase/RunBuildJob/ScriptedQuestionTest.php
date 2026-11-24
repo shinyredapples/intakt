@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -176,7 +177,7 @@ final class ScriptedQuestionTest extends TestCase
 
     private function whenTheBuildJobReadsTheScriptsOutput(): BuildJobOutcome
     {
-        return $this->builds()->run(new BuildJob('demo', $this->history->work, 'task', new BuildBrief('task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+        return $this->builds()->run(new BuildJob('demo', $this->history->work, 'task', new BuildBrief('task', new Decisions(), null), Tier::Standard, 'intakt-job-demo:1'));
     }
 
     private function whenTheBuildCommandReadsTheScriptsOutput(): CommandTester

@@ -1,0 +1,44 @@
+{
+    "ThreadDebugStates": [
+        {
+            "Index": 0,
+            "Name": "Regular PHP Thread",
+            "State": "ready",
+            "IsWaiting": true,
+            "IsBusy": false,
+            "WaitingSinceMilliseconds": 85390,
+            "CurrentURI": "",
+            "CurrentMethod": "",
+            "RequestStartedAt": 0,
+            "RequestCount": 0,
+            "MemoryUsage": 0
+        },
+        {
+            "Index": 1,
+            "Name": "Worker PHP Thread - /app/public/index.php",
+            "State": "ready",
+            "IsWaiting": false,
+            "IsBusy": true,
+            "WaitingSinceMilliseconds": 0,
+            "CurrentURI": "/projects",
+            "CurrentMethod": "GET",
+            "RequestStartedAt": 1764000000000,
+            "RequestCount": 12,
+            "MemoryUsage": 842024
+        },
+        {
+            "Index": 2,
+            "Name": "Worker PHP Thread - /app/public/index.php",
+            "State": "ready",
+            "IsWaiting": false,
+            "IsBusy": true,
+            "WaitingSinceMilliseconds": 0,
+            "CurrentURI": "/",
+            "CurrentMethod": "GET",
+            "RequestStartedAt": 1764000000000,
+            "RequestCount": 9,
+            "MemoryUsage": 820440
+        }
+    ],
+    "ReservedThreadCount": 0
+}
