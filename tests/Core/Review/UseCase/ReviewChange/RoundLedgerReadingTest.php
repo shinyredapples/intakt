@@ -306,6 +306,16 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([(100 * 2.0 + 20 * 10.0) / 1_000_000, null, ['small']], [$costs->of(self::ROUND)->usd, $costs->of(self::OTHER_ROUND)->usd, [...$costs->of(self::OTHER_ROUND)->unpriced]]);
     }
 
+    public function testAStartedCallWithoutAnEndingRowMakesOnlyItsOwnRoundOfABatchUnknownOnAnUnpricedModel(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::OTHER_ROUND, 'model' => 'small']);
+
+        $costs = $this->reading()->costsOf(self::ROUND, self::OTHER_ROUND);
+
+        self::assertSame([(100 * 2.0 + 20 * 10.0) / 1_000_000, null, ['small']], [$costs->of(self::ROUND)->usd, $costs->of(self::OTHER_ROUND)->usd, [...$costs->of(self::OTHER_ROUND)->unpriced]]);
+    }
+
     public function testAUsageWithoutInputTokensMakesOnlyItsOwnRoundOfABatchUnknown(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');
