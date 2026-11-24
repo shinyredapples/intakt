@@ -9,7 +9,8 @@ const fs = require('fs');
 
 const [address, round, reviewer, out] = process.argv.slice(2);
 // Same viewports and full-page settings as the generator's task jobs: desktop and wide full page, phone a viewport capture,
-// and the phone's Live log tab as a full page and scrolled to the tabs (the generator's "log" and "log-scrolled" variants).
+// the phone's Live log tab as a full page and scrolled to the tabs (the generator's "log" and "log-scrolled" variants),
+// and the phone's Timeline tab scrolled to the tabs ("timeline-scrolled"), because the phone viewport stops above the Timeline.
 const SIZES = [
   { w: 1440, h: 900, full: true },
   { w: 1920, h: 1080, full: true },
@@ -17,6 +18,7 @@ const SIZES = [
   { w: 390, h: 844, full: false },
   { w: 390, h: 844, full: true, click: '.ttabs [data-pane="log"]', variant: '-log', only: 'built-record' },
   { w: 390, h: 844, full: false, click: '.ttabs [data-pane="log"]', scroll: '.ttabs', variant: '-log-scrolled', only: 'built-record' },
+  { w: 390, h: 844, full: false, scroll: '.ttabs', variant: '-timeline-scrolled', only: 'built-record' },
 ];
 
 function publishToolCalls() {
