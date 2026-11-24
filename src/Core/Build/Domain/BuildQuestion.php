@@ -27,6 +27,21 @@ final readonly class BuildQuestion
     }
 
     /**
+     * @param non-empty-list<BugPart> $missing
+     */
+    public static function forMissingBugParts(array $missing): self
+    {
+        $names = implode(', ', array_map(static fn (BugPart $part): string => $part->value, $missing));
+        $add = 'Add the missing parts to the task';
+
+        return new self(
+            sprintf('This bug task is missing: %s. A bug task states When (the steps or input), Today (what happens), Expected (what should happen) and Must keep working (what the fix must not change).', $names),
+            [$add, 'Remove the bug label'],
+            $add,
+        );
+    }
+
+    /**
      * @throws QuestionRefused
      */
     public static function fromHandedBack(string $text): self

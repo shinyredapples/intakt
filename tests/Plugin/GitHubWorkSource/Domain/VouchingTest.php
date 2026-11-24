@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Domain;
 
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -34,7 +35,7 @@ final class VouchingTest extends TestCase
 
     public function testAnAuthorWithoutWriteAccessYieldsAnUntrustedVouchingWithNoLabels(): void
     {
-        $history = new IssueHistory('ana', [new LabelApplication('ready', 'ana')], '', ['ready']);
+        $history = new IssueHistory('ana', [new LabelApplication('ready', 'ana')], '', new IssueLabels('ready'));
 
         $vouching = Vouching::of('mallory', $history, static fn (string $account): bool => 'ana' === $account);
 

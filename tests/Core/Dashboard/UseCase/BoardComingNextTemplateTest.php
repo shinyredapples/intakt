@@ -6,13 +6,18 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\InfrastructureFigure;
+use Intakt\Core\Dashboard\Domain\InfrastructureRow;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Twig\Environment;
 
 // On the page test case, because the layout around the board reads the ledger, which these tests answer from memory.
 #[CoversClass(Board::class)]
+#[UsesClass(InfrastructureRow::class)]
+#[UsesClass(InfrastructureFigure::class)]
 final class BoardComingNextTemplateTest extends DashboardPageTestCase
 {
     // No install can put a card in a folded column yet (#3154, decision 1), so the board's own template is handed the lists a board with a Building task would give it.
@@ -86,6 +91,7 @@ final class BoardComingNextTemplateTest extends DashboardPageTestCase
             'waiting' => [],
             'columns' => $columns,
             'coming_next' => $comingNext,
+            'infrastructure' => InfrastructureRow::refused('not read in this test'),
         ]);
     }
 }

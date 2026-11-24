@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -234,7 +235,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
         $this->deliver($queue, [self::FIRST => $this->changes([], [$this->finding('b', severity: Severity::P1)])]);
 
-        $counting = $this->fixture->verdictsOf(new VerdictsOfRound($roundId, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])))->counting;
+        $counting = $this->fixture->verdictsOf(new VerdictsOfRound($roundId, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())))->counting;
         $findings = array_merge(...array_map(static fn (PanelVerdict $panel): array => $panel->verdict->findings, $counting));
         self::assertSame([Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $findings));
         self::assertSame(Severity::P3, $this->fixture->storedFindings(self::CHANGE)[1]->latest->severity);

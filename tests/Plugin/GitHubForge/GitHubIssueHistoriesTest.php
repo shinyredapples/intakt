@@ -198,7 +198,7 @@ final class GitHubIssueHistoriesTest extends TestCase
         $history = $this->answering('history_edited.json')->histories()->of('alpha', 12, $this->listedAt());
 
         self::assertSame('Waits for #3', $history->body);
-        self::assertSame(['intakt', 'priority:high'], $history->currentLabels);
+        self::assertSame(['intakt', 'priority:high'], [...$history->currentLabels]);
     }
 
     public function testAnEmptyBodyIsReadAsTheEmptyText(): void

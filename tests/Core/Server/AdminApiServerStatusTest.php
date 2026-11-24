@@ -132,9 +132,29 @@ final class AdminApiServerStatusTest extends TestCase
     {
         $reading = new RecordedAdminApi()->unreachable()->status()->read();
 
-        self::assertEquals(new EndpointDown('/frankenphp/threads did not answer: Failed to connect to localhost port 2019'), $reading->threads);
+        self::assertEquals(new EndpointDown('/frankenphp/threads did not answer'), $reading->threads);
         self::assertInstanceOf(EndpointDown::class, $reading->metrics);
         self::assertInstanceOf(EndpointDown::class, $reading->hub);
+    }
+
+    public function testTheReasonOfAnUnreachableAdminApiLeavesOutTheConfiguredUrl(): void
+    {
+        $reading = new RecordedAdminApi()->unreachable()->status('http://localhost:2019?password=synthetic-query-password')->read();
+
+        self::assertSame(['/frankenphp/threads did not answer', '/metrics did not answer', '/mercure/health/ready did not answer'], array_map(
+            static fn (mixed $source): string => $source instanceof EndpointDown ? $source->reason : 'not down',
+            [$reading->threads, $reading->metrics, $reading->hub],
+        ));
+    }
+
+    public function testNoSourceSendsTheQueryOfTheConfiguredUrl(): void
+    {
+        $recorded = new RecordedAdminApi();
+
+        $reading = $recorded->status('http://localhost:2019?password=synthetic-query-secret')->read();
+
+        self::assertInstanceOf(WorkerThreads::class, $reading->threads);
+        self::assertSame([], array_filter($recorded->requestedUrls, static fn (string $url): bool => null !== parse_url($url, PHP_URL_QUERY)));
     }
 
     public function testAHubWithoutAHealthEndpointIsDown(): void

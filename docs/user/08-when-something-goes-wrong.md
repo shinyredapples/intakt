@@ -71,7 +71,13 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 
 - **What you see:** pages take seconds to load.
 - **Why:** the server is busy.
-- **What to do:** inside the container, `php bin/console intakt:server:status` shows how busy it is.
+- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts and the hub. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the same.
+
+## Docker says the container is unhealthy
+
+- **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
+- **Why:** the health check failed three times in a row: the dashboard did not answer, the live-update hub reported a problem, no worker was ready to take a request, or the server's figures could not be read.
+- **What to do:** run `docker exec intakt php bin/console intakt:server:health`. Each `unhealthy:` line names one problem and why.
 
 ## The dashboard says "Open the dashboard on localhost"
 

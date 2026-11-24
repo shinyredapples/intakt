@@ -75,21 +75,16 @@ final readonly class TierPlatform implements TierInvoker
     #[NoDiscard('the answer is only in the result')]
     public function invoke(ResolvedModel $model, TierRequest $request): DeferredResult
     {
-        return $this->platforms->get($model->provider->value)->invoke($model->model, $request->input, $this->withOutputLimit($model, $request->options));
+        return $this->withOutputLimit($model, $request)->invokeOn($this->platforms->get($model->provider->value), $model->model);
     }
 
-    /**
-     * @param array<string, mixed> $options
-     *
-     * @return array<string, mixed>
-     */
-    private function withOutputLimit(ResolvedModel $model, array $options): array
+    private function withOutputLimit(ResolvedModel $model, TierRequest $request): TierRequest
     {
         if (null === $model->maxOutput || !$model->provider->limitsOutput()) {
-            return $options;
+            return $request;
         }
 
-        return $options + [PlatformOptions::MAX_OUTPUT_TOKENS => $model->maxOutput];
+        return $request->withDefaults(...[PlatformOptions::MAX_OUTPUT_TOKENS => $model->maxOutput]);
     }
 
     // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked, but not for keys that were all rejected, because no wait brings them back.

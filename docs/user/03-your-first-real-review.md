@@ -52,13 +52,17 @@ While the round is in review, a box headed **Now** has three parts:
 - **To fix** stays empty until the owl has judged.
 - **The judge's call** says the owl has not judged yet.
 
-To watch more, open the Full record: its live log shows each reviewer at work, the files it reads, the searches it runs, and finally its verdict and one line per finding. A reviewer's heading, its role and model, appears with that reviewer's first live update: a tool call, streamed text, an answer or a retry notice. When a reviewer is asked again, the new try's text replaces the old one and the heading already shown stays as it is; a reload shows the model of the latest try. Everything else updates by itself without a reload.
+To watch more, open the Full record: its live log shows each reviewer at work, the files it reads, the searches it runs, and finally its verdict and one line per finding.
+
+The live log shows `[redacted]` in place of a recognized credential (a known token or key format) in a searched text or a path. The summary's list of files read does the same for a path.
+
+A reviewer's heading, its role and model, appears with that reviewer's first live update: a tool call, streamed text, an answer or a retry notice. When a reviewer is asked again, the new try's text replaces the old one and the heading already shown stays as it is; a reload shows the model of the latest try. Everything else updates by itself without a reload.
 
 ## While you wait
 
 On the board, the sample change sits in **In review** while the panel reads it. On an older 4-core desktop, the demo review took 42 seconds to its verdict (median of ten runs). A provider under load can take longer.
 
-If you change your mind, the **Stop** button asks the running reviewers to stop. Press it twice: the first press asks you to confirm. If the round has already ended, even when a page you left open still shows the button, Intakt refuses the press and stops nothing. The same goes for a **Stop this reviewer** button on a page you left open after all reviewers have finished: Intakt takes you back to the review with a notice that no reviewer runs, and stops nothing.
+If you change your mind, the **Stop** button beside the title asks the running reviewers to stop. On a phone, Stop sits under the review path. Press it twice: the first press asks you to confirm. If the round has already ended, even when a page you left open still shows the button, Intakt refuses the press and stops nothing. The same goes for a **Stop this reviewer** button on a page you left open after all reviewers have finished: Intakt takes you back to the review with a notice that no reviewer runs, and stops nothing.
 
 ## When the owl is done
 
