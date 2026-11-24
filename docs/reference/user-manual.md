@@ -151,7 +151,7 @@ It walks one journey, **First run without a key**, in five steps:
 
 1. `open /setup and see the start`: the heading "See a real review".
 2. `press the button "Play the demo run"`: the button on `/setup`.
-3. `reach /demo and see the demo run`: the press lands on `/demo` with the heading "The demo run"; the demo page then follows the run to its review page.
+3. `reach /demo and see the demo run`: the press leads to `/demo` of the checked dashboard (not of another address) and the page there loads without an error. While the page is still on `/demo` it must show the heading "The demo run"; the demo page follows the run to its review page as soon as the run started, and a page that already moved on passes this step.
 4. `wait for the verdict of the demo run`: any verdict heading on the review page ("Approved", "Changes needed", "Blocked: ...", "Failed: ..." or "Checked, but the outcome was not recorded"), and then it must be the recorded verdict, "Changes needed".
 5. `see the recorded finding on the review page`: the link of the recorded finding "The check changed from amount >= 100 to amount > 100.".
 
