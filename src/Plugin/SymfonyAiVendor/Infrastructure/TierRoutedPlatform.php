@@ -6,6 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\TierInvoker;
+use Intakt\Core\Ai\Contract\TierPart;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Override;
 use Symfony\AI\Platform\Model;
@@ -64,11 +65,11 @@ final class TierRoutedPlatform implements PlatformInterface
      */
     private function partsOf(array $input): TierRequest
     {
-        $request = TierRequest::ofParts();
-        foreach ($input as $key => $part) {
-            $request = $request->withPart($key, $part);
+        $parts = [];
+        foreach ($input as $key => $value) {
+            $parts[] = new TierPart($key, $value);
         }
 
-        return $request;
+        return TierRequest::ofParts(...$parts);
     }
 }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Contract;
 
 use ArrayObject;
+use Intakt\Core\Ai\Contract\TierPart;
 use Intakt\Core\Ai\Contract\TierRequest;
-use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Model;
@@ -15,6 +15,7 @@ use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 
 #[CoversClass(TierRequest::class)]
+#[CoversClass(TierPart::class)]
 final class TierRequestTest extends TestCase
 {
     public function testAnOptionTheCallerSetIsKeptOverADefaultAddedLater(): void
@@ -27,18 +28,25 @@ final class TierRequestTest extends TestCase
         self::assertSame(['temperature' => 0.1, 'max_output_tokens' => 10], $sent['options']);
     }
 
-    public function testAnInputMadeOfPartsReachesThePlatformWithItsKeysInTheOrderGiven(): void
+    public function testPartsWithSparseIntegerKeysReachThePlatformWithTheirKeysUnchanged(): void
     {
-        $sent = $this->whenSent(TierRequest::ofParts()->withPart('prompt', 'review')->withPart(4, 'context')->withPart(0, 'first'));
+        $sent = $this->whenSent(TierRequest::ofParts(new TierPart(7, 'context'), new TierPart(2, 'first')));
+
+        self::assertSame([7 => 'context', 2 => 'first'], $sent['input']);
+    }
+
+    public function testAStringKeyBeforeAnIntegerKeyKeepsItsOrder(): void
+    {
+        $sent = $this->whenSent(TierRequest::ofParts(new TierPart('prompt', 'review'), new TierPart(4, 'context'), new TierPart(0, 'first')));
 
         self::assertSame(['prompt' => 'review', 4 => 'context', 0 => 'first'], $sent['input']);
     }
 
-    public function testARequestMadeOfOneInputRefusesAPart(): void
+    public function testNoPartsGiveAnEmptyArrayInput(): void
     {
-        $this->expectException(LogicException::class);
+        $sent = $this->whenSent(TierRequest::ofParts());
 
-        TierRequest::of('review')->withPart(0, 'context');
+        self::assertSame([], $sent['input']);
     }
 
     public function testATextInputReachesThePlatformWithoutOptions(): void

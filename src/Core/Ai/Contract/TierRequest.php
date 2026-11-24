@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Contract;
 
-use LogicException;
 use NoDiscard;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
@@ -27,23 +26,16 @@ final readonly class TierRequest
         return new self($input, []);
     }
 
-    // Built one part at a time, so an array input keeps its keys and their order without an array crossing the contract.
-    public static function ofParts(): self
+    // Takes every part at once, so an array input keeps its keys and their order without an array crossing the contract.
+    public static function ofParts(TierPart ...$parts): self
     {
-        return new self([], []);
-    }
-
-    public function withPart(int|string $key, mixed $part): self
-    {
-        if (!is_array($this->input)) {
-            throw new LogicException('Only a request made with ofParts() takes parts.');
+        $input = [];
+        foreach ($parts as $part) {
+            // Assigned, not spread: spreading would renumber integer keys.
+            $input[$part->key] = $part->value;
         }
 
-        // Assigned, not spread: spreading would renumber integer keys.
-        $input = $this->input;
-        $input[$key] = $part;
-
-        return clone ($this, ['input' => $input]);
+        return new self($input, []);
     }
 
     // An option already set wins, so a caller's own value is kept over a default added later.

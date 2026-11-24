@@ -8,6 +8,7 @@ use ArrayObject;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\TierInvoker;
+use Intakt\Core\Ai\Contract\TierPart;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
@@ -24,6 +25,7 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 #[CoversClass(UnstreamedModelCatalog::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(TierRequest::class)]
+#[UsesClass(TierPart::class)]
 final class TierRoutedPlatformTest extends TestCase
 {
     public function testAnApiProviderModelCanStream(): void
@@ -63,7 +65,19 @@ final class TierRoutedPlatformTest extends TestCase
 
     public function testAnArrayInputKeepsItsOriginalKeysAndOrder(): void
     {
-        $input = ['prompt' => 'review', 4 => 'context', 1 => 'first'];
+        $this->assertInputReachesThePlatformUnchanged(['prompt' => 'review', 4 => 'context', 1 => 'first']);
+    }
+
+    public function testAnEmptyArrayInputReachesThePlatformAsAnEmptyArray(): void
+    {
+        $this->assertInputReachesThePlatformUnchanged([]);
+    }
+
+    /**
+     * @param array<mixed> $input
+     */
+    private function assertInputReachesThePlatformUnchanged(array $input): void
+    {
         $result = MockPlatformFactory::createPlatform('ok')->invoke('model', 'review');
         $inner = $this->createMock(PlatformInterface::class);
         $inner->expects(self::once())->method('invoke')->with('big', $input, [])->willReturn($result);
