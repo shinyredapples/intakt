@@ -71,7 +71,7 @@ final class ProjectTiersTest extends KernelTestCase
         $resolver = $this->bootedContainer()->get(TierResolver::class);
         self::assertInstanceOf(TierResolver::class, $resolver);
 
-        self::assertSame(['alpha-one', 'beta'], $resolver->projects());
+        self::assertSame(['alpha-one', 'beta'], [...$resolver->projects()]);
         self::assertSame('small', $resolver->resolve('alpha-one', Tier::Light)->model);
         self::assertSame(Provider::Anthropic, $resolver->resolve('alpha-one', Tier::Strong)->provider);
 

@@ -89,7 +89,7 @@ final readonly class ProbeProvidersCommand
         [$project, $tier] = $target;
 
         try {
-            $result = $this->tiers->invoke($this->resolver->resolve($project, $tier), new TierRequest(new MessageBag($this->assembly->notice(self::PROMPT))));
+            $result = $this->tiers->invoke($this->resolver->resolve($project, $tier), TierRequest::of(new MessageBag($this->assembly->notice(self::PROMPT))));
             $result->asText();
             $io->writeln(sprintf('%s: %s', $provider, $this->usageLine($result)));
             // Boundary: reports the failure class and fails this provider only, because the probe must go on to the next provider.

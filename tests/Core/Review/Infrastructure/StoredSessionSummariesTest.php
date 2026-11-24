@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Doctrine\DBAL\Types\Types;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -47,6 +48,7 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(StoredSessionSummaries::class)]
 #[CoversClass(RoundToolCalls::class)]
 #[CoversClass(RoundToolCall::class)]
+#[UsesClass(Redaction::class)]
 #[UsesClass(ReviewedRepository::class)]
 #[UsesClass(SessionSummary::class)]
 #[UsesClass(ToolCallCount::class)]
@@ -109,6 +111,17 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'read_file', ['path' => './RoundFixture.php']);
 
         self::assertSame(['RoundFixture.php'], $this->summaryOf($round)->filesRead);
+    }
+
+    public function testAFileReadWhosePathHoldsACredentialIsListedWithTheMarker(): void
+    {
+        $round = $this->fixture->start(1);
+        $token = 'ghp_'.str_repeat('B', 36);
+
+        $this->toolCalls()->read($round, 'read_file', 'fixtures/key_'.$token.'.txt');
+
+        $filesRead = $this->summaryOf($round->id()->toRfc4122())->filesRead;
+        self::assertSame(['fixtures/key_[redacted].txt'], $filesRead);
     }
 
     public function testARefusedReadCountsAsACallButNotAsAFileRead(): void
@@ -314,7 +327,12 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn($cost ?? Cost::none());
 
-        return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, new RoundToolCalls($this->fixture->entities, new NullLogger()));
+        return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, $this->toolCalls());
+    }
+
+    private function toolCalls(): RoundToolCalls
+    {
+        return new RoundToolCalls($this->fixture->entities, new NullLogger(), new Redaction());
     }
 
     /**

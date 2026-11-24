@@ -6,10 +6,7 @@ namespace Intakt\Core\Ai\Contract;
 
 interface TierResolver
 {
-    /**
-     * @return list<string>
-     */
-    public function projects(): array;
+    public function projects(): ProjectNames;
 
     /**
      * @throws TierResolutionFailure
