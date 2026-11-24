@@ -21,9 +21,6 @@ final class BranchWarning
     // A week of whole UTC days, so a weekly run a few seconds early still deletes what the run before warned about.
     private const int NOTICE_DAYS = 7;
 
-    #[ORM\Column(length: 64)]
-    private string $head;
-
     #[ORM\Column(name: 'warned_at', length: 26)]
     private string $warnedAt;
 
@@ -34,10 +31,10 @@ final class BranchWarning
         #[ORM\Id]
         #[ORM\Column(length: 255)]
         private readonly string $branch,
-        string $head,
+        #[ORM\Column(length: 64)]
+        private string $head,
         DateTimeImmutable $warnedAt,
     ) {
-        $this->head = $head;
         $this->warnedAt = $warnedAt->setTimezone(new DateTimeZone('UTC'))->format(self::MOMENT);
     }
 

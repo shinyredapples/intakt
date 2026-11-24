@@ -14,7 +14,7 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 final readonly class ProjectForges
 {
     /**
-     * @param iterable<ForgeBranches>                     $forges
+     * @param iterable<ForgeBranches>                  $forges
      * @param array<string, array{repository: string}> $projects
      */
     public function __construct(

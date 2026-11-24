@@ -143,7 +143,6 @@ return static function (ContainerConfigurator $container): void {
                 }
             }
 
-
             if (is_array($project) && array_key_exists('protected_paths', $project)) {
                 $protectedPaths[$name] = ['protected_paths' => $project['protected_paths']];
                 unset($project['protected_paths']);
@@ -379,7 +378,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(BuildServices::ROUTING, array_map(static fn (array $project): array => $project['build'], $projectBuilds));
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
     $container->parameters()->set(BranchCleanupServices::PROJECTS, $projectBranchCleanups);
-    $container->parameters()->set(GitServices::PROTECTED_PATHS,array_map(static fn (array $project): array => $project['protected_paths'], $projectProtectedPaths));
+    $container->parameters()->set(GitServices::PROTECTED_PATHS, array_map(static fn (array $project): array => $project['protected_paths'], $projectProtectedPaths));
     $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);

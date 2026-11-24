@@ -152,13 +152,13 @@ final class BranchCleanupScenario
         $local = new LocalForgeBranches($this->projects);
         $changes = $this->changes;
 
-        return new class($local, $changes) implements ForgeBranches {
+        return new readonly class($local, $changes) implements ForgeBranches {
             /**
              * @param array<string, BranchChange> $changes
              */
             public function __construct(
-                private readonly LocalForgeBranches $local,
-                private readonly array $changes,
+                private LocalForgeBranches $local,
+                private array $changes,
             ) {
             }
 

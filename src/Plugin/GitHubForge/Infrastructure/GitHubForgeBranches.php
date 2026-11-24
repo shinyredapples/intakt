@@ -104,7 +104,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), $failure);
         }
 
         if (self::OK !== $status) {
@@ -191,7 +191,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
             $options = ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], ...([] === $body ? [] : ['json' => $body])];
             $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw new ForgeWriteFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), $failure);
         } catch (ForgeReadFailed $noToken) {
             throw new ForgeWriteFailed($noToken->getMessage(), $noToken->getCode(), $noToken);
         }

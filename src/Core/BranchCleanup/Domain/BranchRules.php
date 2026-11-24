@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Core\BranchCleanup\Domain;
 
 use DateTimeImmutable;
+use Intakt\Core\Git\Contract\MirroredHead;
+use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
 
@@ -90,7 +92,7 @@ final readonly class BranchRules
 
     private function keptWhenTheHeadIsUnknown(Judgement $judgement): Judgement
     {
-        return null === $judgement->facts->head ? $judgement->decided(Verdict::Keep) : $judgement;
+        return $judgement->facts->head instanceof MirroredHead ? $judgement : $judgement->decided(Verdict::Keep);
     }
 
     private function dueWhenMerged(Judgement $judgement): Judgement
@@ -105,14 +107,14 @@ final readonly class BranchRules
             return $judgement;
         }
 
-        $due = !in_array(self::KEEP_LABEL, $change->labels, true) && null !== $change->closedAt && $judgement->isPast($change->closedAt, self::CLOSED_DAYS);
+        $due = !in_array(self::KEEP_LABEL, $change->labels, true) && $change->closedAt instanceof DateTimeImmutable && $judgement->isPast($change->closedAt, self::CLOSED_DAYS);
 
         return $judgement->decided($due ? Verdict::Due : Verdict::Keep);
     }
 
     private function keptWithAnOpenChange(Judgement $judgement): Judgement
     {
-        return null !== $judgement->facts->change ? $judgement->decided(Verdict::Keep) : $judgement;
+        return $judgement->facts->change instanceof BranchChange ? $judgement->decided(Verdict::Keep) : $judgement;
     }
 
     // A claimed branch may still be listed stale, but never becomes due.
@@ -147,6 +149,6 @@ final readonly class BranchRules
     {
         $head = $judgement->facts->head;
 
-        return null !== $head && $judgement->isPast($head->committedAt, $days);
+        return $head instanceof MirroredHead && $judgement->isPast($head->committedAt, $days);
     }
 }

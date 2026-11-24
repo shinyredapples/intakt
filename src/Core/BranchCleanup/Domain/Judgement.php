@@ -18,7 +18,7 @@ final readonly class Judgement
 
     public function decided(Verdict $verdict): self
     {
-        return null === $this->verdict ? clone($this, ['verdict' => $verdict]) : $this;
+        return $this->verdict instanceof Verdict ? $this : clone ($this, ['verdict' => $verdict]);
     }
 
     public function isPast(DateTimeImmutable $moment, int $days): bool
