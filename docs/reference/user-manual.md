@@ -162,7 +162,7 @@ docker run -d --name intakt -p 127.0.0.1:7781:7781 -v intakt-data:/app/var/data 
 - FrankenPHP's admin API listens on `localhost:2019` inside the container and nothing publishes it; read it with `docker exec intakt php bin/console intakt:server:status`.
 - A worker is replaced after `FRANKENPHP_LOOP_MAX` requests (default 500) and when it holds more than `WORKER_MEMORY_CEILING_MB` megabytes (default 256) after a request; it finishes sending the answer first, so no request fails. A crash is restarted by FrankenPHP itself.
 - The queue workers and the scheduler (see [Background work](#background-work)) run in the same container, beside the web server: `MESSENGER_CONSUMERS` workers (default 3, so the reviewers of a panel of three run at once) and one scheduler. When one of them stops, for any reason, it is started again a second later and the container logs `intakt: async ended with status 137, starting it again` (`scheduler_watcher` for the scheduler). A worker also ends on purpose after an hour or once it holds more than `WORKER_MEMORY_CEILING_MB` megabytes, between two messages, and is started again the same way. `docker stop` lets each worker finish the message it is on for up to 8 seconds, then stops what still runs; a message cut off is handed out again later.
-- Start the container with `--restart unless-stopped`, so Docker starts it again after a crash or a reboot. When the web server itself stops, the container stops the workers and the scheduler and exits, so this restart brings all of them back. The image has a health check (`intakt-healthcheck`) that asks FrankenPHP's metrics endpoint and the dashboard every 30 seconds and, in the demo, also waits for the seed; read it with `docker inspect --format '{{.State.Health.Status}}' intakt` (`healthy` or `unhealthy`).
+- Start the container with `--restart unless-stopped`, so Docker starts it again after a crash or a reboot. When the web server itself stops, the container stops the workers and the scheduler and exits, so this restart brings all of them back. The image has a health check (`intakt-healthcheck`) that runs `php bin/console intakt:server:health` (see [Checking the server](#checking-the-server)) and asks the dashboard every 30 seconds and, in the demo, also waits for the seed; read it with `docker inspect --format '{{.State.Health.Status}}' intakt` (`healthy` or `unhealthy`).
 
 ## Checking the server
 
@@ -178,6 +178,14 @@ hub: healthy
 Run it inside the container, because the admin API answers only there. It reads `FRANKENPHP_ADMIN_URL` (default `http://localhost:2019`), which must be plain `http` on `localhost`, `127.0.0.1` or `[::1]`; any other address is refused before anything is sent. A value that cannot be read shows `down` with the reason (the server did not answer, answered with an error status, or answered something Intakt cannot use), and the command then exits with a non-zero code. A thread that is starting or restarting counts as neither busy nor idle.
 
 The board shows the same reading in a row under its columns, read once each time the board loads (it is not pushed by live updates): **Threads busy**, **Threads idle**, **Queue depth**, **Worker restarts** and **Hub**. A source that cannot be read shows one red `down` figure with the reason in place of its values (**Worker threads** for both thread counts, **Server metrics** for the queue depth and the restarts), and an unhealthy hub shows `unhealthy` in red; the other figures still show. A refused `FRANKENPHP_ADMIN_URL` shows all three sources `down` with the reason instead of failing the board. Any credential in a reason is blanked out.
+
+`php bin/console intakt:server:health` reads the same and decides whether the server is healthy; the container's health check runs it. It prints `healthy` and exits with 0, or one `unhealthy:` line per problem and exits with a non-zero code: the hub reports unhealthy, no worker thread is ready (all of them starting or restarting; busy threads count as ready), or a source could not be read, with the reason. For example:
+
+```
+unhealthy: the hub reports unhealthy
+```
+
+The Caddyfile turns on Caddy's `metrics` option, because FrankenPHP reports its queue depth and worker restarts only then.
 
 ## Background work
 
@@ -995,7 +1003,7 @@ Between the two, three small pictures show what a review does: the reviewer (Rea
 
 Once a review has run, `/` opens the board on a computer and Waiting on you on a phone, or the newest review when every card is Done, nothing is running and nothing waits on you (the board is then at `/?board=1`, which the Now entry of the menu opens), and the Projects page's **Set up Intakt** button leads to the first-run page. Connecting a repository, creating the GitHub App and adding an account in the browser are not on the page yet: they are done in configuration today (`config/intakt.yaml` or the file `INTAKT_CONFIG` names, `.env.local`, and [Intakt's GitHub App](#intakts-github-app)).
 
-Once the server answers its health check and the dashboard answers, every start ends its log with one line, `intakt: the dashboard is ready at http://localhost:7781`; with `docker compose up -d --wait` the same moment is when the command returns. The start no longer prints the review command. Print it, and the line that connects an MCP client, when you want them, in the repository folder:
+Once the server's metrics endpoint and the dashboard answer, every start ends its log with one line, `intakt: the dashboard is ready at http://localhost:7781`. `docker compose up -d --wait` returns when the container's health check passes (`intakt:server:health` reports healthy, the dashboard answers and the sample is seeded), which can be a little after that line. The start no longer prints the review command. Print it, and the line that connects an MCP client, when you want them, in the repository folder:
 
 ```
 docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository
