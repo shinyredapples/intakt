@@ -26,7 +26,7 @@ final readonly class ShowTeamCommand
         }
 
         foreach ($team->roles as $role) {
-            $output->writeln(sprintf('role %s: %s', $role->name->value, $this->providersOf($role)));
+            $output->writeln(sprintf('role %s: %s', $role->label(), $this->providersOf($role)));
         }
 
         return Command::SUCCESS;
@@ -34,7 +34,7 @@ final readonly class ShowTeamCommand
 
     private function rolesOf(TeamAccount $account): string
     {
-        return [] === $account->roles ? 'no role' : implode(', ', array_column($account->roles, 'value'));
+        return [] === $account->roles ? 'no role' : implode(', ', array_map(static fn (TeamRole $role): string => $role->label(), $account->roles));
     }
 
     private function providersOf(TeamRole $role): string

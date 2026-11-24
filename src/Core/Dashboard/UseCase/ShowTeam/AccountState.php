@@ -9,4 +9,5 @@ enum AccountState: string
     case Ready = 'ready';
     case CoolingDown = 'cooling-down';
     case Rejected = 'rejected';
+    case NoKey = 'no-key';
 }

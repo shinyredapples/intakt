@@ -9,7 +9,7 @@ use Intakt\Core\Ai\Contract\Account;
 final readonly class TeamAccount
 {
     /**
-     * @param list<TeamRoleName> $roles
+     * @param list<TeamRole> $roles
      */
     public function __construct(
         public Account $account,

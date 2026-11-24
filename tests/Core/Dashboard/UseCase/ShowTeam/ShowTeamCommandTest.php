@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\ShowTeam;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
+use Intakt\Core\Ai\Contract\ListedAccounts;
 use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -23,6 +24,13 @@ use Intakt\Core\Dashboard\UseCase\ShowTeam\Team;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamAccount;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRole;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRoster;
+use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\Panel;
+use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerModel;
+use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -41,6 +49,13 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(BuildFacts::class)]
 #[UsesClass(TierChoice::class)]
 #[UsesClass(TierNotMapped::class)]
+#[UsesClass(ConfiguredPanels::class)]
+#[UsesClass(ChangeDescription::class)]
+#[UsesClass(Panel::class)]
+#[UsesClass(PanelReviewer::class)]
+#[UsesClass(QuorumPolicy::class)]
+#[UsesClass(ReviewerModel::class)]
+#[UsesClass(ReviewerRole::class)]
 final class ShowTeamCommandTest extends TestCase
 {
     public function testItPrintsEachAccountOnceWithItsStateAndTheRolesItServes(): void
@@ -48,30 +63,37 @@ final class ShowTeamCommandTest extends TestCase
         $tester = $this->execute();
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString("account anthropic.default: ready, serves developer\naccount openai.default: cooling-down, serves developer\naccount codex.default: ready, serves no role\n", $tester->getDisplay());
+        self::assertStringContainsString("account anthropic.default: ready, serves reviewer correctness\naccount anthropic.team: no-key, serves reviewer correctness\naccount openai.default: cooling-down, serves no role\naccount claude_code.default: ready, serves developer\n", $tester->getDisplay());
     }
 
-    public function testItPrintsTheProvidersTheDeveloperRoleCanBuildOn(): void
+    public function testItPrintsTheProvidersEachRoleCanRunOn(): void
     {
-        self::assertStringContainsString("role developer: openai, anthropic\n", $this->execute()->getDisplay());
+        self::assertStringContainsString("role developer: claude_code\nrole reviewer correctness: anthropic\n", $this->execute()->getDisplay());
     }
 
     private function execute(): CommandTester
     {
+        $listed = self::createStub(ListedAccounts::class);
+        $listed->method('of')->willReturnCallback(static fn (Provider $provider): array => match ($provider) {
+            Provider::Anthropic => [new Account($provider, Account::DEFAULT), new Account($provider, 'team')],
+            Provider::OpenAi, Provider::ClaudeCode => [new Account($provider, Account::DEFAULT)],
+            default => [],
+        });
         $enabled = self::createStub(EnabledAccounts::class);
-        $enabled->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, [Provider::Anthropic, Provider::OpenAi, Provider::Codex], true) ? [new Account($provider, Account::DEFAULT)] : []);
+        $enabled->method('of')->willReturnCallback(static fn (Provider $provider): array => [new Account($provider, Account::DEFAULT)]);
         $cooldowns = self::createStub(AccountCooldowns::class);
         $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => Provider::OpenAi === $account->provider);
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('projects')->willReturn(new ProjectNames('alpha'));
         $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => match ($tier) {
-            Tier::Strong => new ResolvedModel(Provider::Anthropic, 'model-l'),
+            Tier::Strong => new ResolvedModel(Provider::ClaudeCode, 'model-l'),
             Tier::Standard => new ResolvedModel(Provider::OpenAi, 'model-m'),
             Tier::Light => throw new TierNotMapped($project, $tier),
         });
         $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['src/Security/**'], 'escalate_on' => []]], new ModelRouting());
+        $panels = new ConfiguredPanels(['alpha' => ['quorum' => 'all', 'reviewers' => [['role' => 'correctness', 'tier' => Tier::Strong->value, 'provider' => Provider::Anthropic->value, 'prompt' => 'Review the change.', 'budget' => 1]]]]);
         $application = new Application();
-        $application->addCommand(new ShowTeamCommand(new TeamRoster($enabled, $cooldowns, $tiers, $routing)));
+        $application->addCommand(new ShowTeamCommand(new TeamRoster($listed, $enabled, $cooldowns, $tiers, $routing, $panels)));
         $tester = new CommandTester($application->find('intakt:team'));
         $tester->execute([]);
 

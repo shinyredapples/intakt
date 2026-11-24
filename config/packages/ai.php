@@ -277,6 +277,7 @@ return static function (ContainerConfigurator $container): void {
     $disabled = [];
     $disabledAccounts = [];
     $enabledAccounts = [];
+    $listedAccounts = [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
@@ -299,6 +300,11 @@ return static function (ContainerConfigurator $container): void {
             }
 
             $missingOf[$name] = $missing;
+        }
+
+        // A provider without a key that keeps only its implicit default account is one the owner never set up, so only the disabled-provider note names it.
+        if ([] !== $enabled || [Account::DEFAULT] !== $configuration['accounts'][$provider->value]) {
+            $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
         }
 
         // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
@@ -352,6 +358,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    $container->parameters()->set(AiServices::LISTED_ACCOUNTS, $listedAccounts);
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
         static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\ChooseBuildModel;
 
-use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\Contract\BuildRuntime;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -46,7 +46,7 @@ final readonly class ChooseBuildModel
     {
         $resolved = $this->tiers->resolve($project, $tier);
 
-        if (Provider::ClaudeCode !== $resolved->provider) {
+        if (BuildRuntime::PROVIDER !== $resolved->provider) {
             throw new BuilderNotOnClaudeCode($project, $tier, $resolved->provider);
         }
 
