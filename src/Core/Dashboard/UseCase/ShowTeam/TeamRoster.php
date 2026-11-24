@@ -56,7 +56,7 @@ final readonly class TeamRoster
             }
         }
 
-        return array_values(array_unique(array_filter($providers, static fn (?Provider $provider): bool => null !== $provider), SORT_REGULAR));
+        return array_values(array_unique(array_filter($providers, static fn (?Provider $provider): bool => $provider instanceof Provider), SORT_REGULAR));
     }
 
     // A `model:` label can pick every tier, so the strong tier that sensitive paths and a confirmed escalation route to is among these.
