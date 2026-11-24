@@ -3,7 +3,8 @@ set -euo pipefail
 
 # The admin API can change the whole server, so the start stops on a listener off loopback: the Caddyfile hands CADDY_ADMIN to Caddy as it is, and a bare port such as :2019 binds every interface.
 if [[ ! ${CADDY_ADMIN:-localhost:2019} =~ ^(localhost|127\.0\.0\.1|\[::1\]):[0-9]+$ ]]; then
-    echo "intakt: CADDY_ADMIN must be a port on localhost, 127.0.0.1 or [::1] (for example localhost:2019), not '${CADDY_ADMIN}'" >&2
+    # The refused value stays out of the log: an operator may have pasted a URL that carries a password.
+    echo "intakt: CADDY_ADMIN must be a port on localhost, 127.0.0.1 or [::1] (for example localhost:2019); the value set was refused" >&2
     exit 1
 fi
 

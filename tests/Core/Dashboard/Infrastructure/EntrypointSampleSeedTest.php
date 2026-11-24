@@ -551,6 +551,17 @@ final class EntrypointSampleSeedTest extends TestCase
         yield 'a second listener after the port' => ['localhost:2999 :3000'];
     }
 
+    public function testARefusedAdminListenerStaysOutOfTheLogBecauseItMayHoldACredential(): void
+    {
+        $this->startEntrypoint(['CADDY_ADMIN' => 'http://user:example-canary@localhost:2999']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('CADDY_ADMIN must be a port on localhost, 127.0.0.1 or [::1] (for example localhost:2019)', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('example-canary', (string) $this->entrypoint?->getErrorOutput().$this->entrypoint?->getOutput());
+    }
+
     #[DataProvider('adminListenersOnLoopback')]
     public function testAnAdminListenerOnLoopbackStartsTheServer(string $listener): void
     {
