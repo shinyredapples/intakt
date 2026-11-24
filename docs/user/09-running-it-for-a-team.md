@@ -24,6 +24,11 @@ This chapter's commands run on an install started from a clone with PHP, not in 
 Optional `rules` add reviewers to a bigger change or to sensitive paths, for example a security reviewer for anything under `config/`.
 
 Step 4 of the setup wizard, **Check the project** (<http://localhost:7781/setup?step=4>), shows each project Intakt has read with its reviewers, and whether its main branch failed to boot.
+
+Reviewer conversations hold your code and diffs. Intakt keeps each one for 30 days after its last message, and longer while its review round is still open (at most an hour per reviewer plus one for the judge). A scheduled run every ten minutes deletes the conversations past that point, so one goes at the next run, not at the exact moment.
+
+The number of days is `retention.conversation_days` in Intakt's installation-wide config file, `config/intakt.yaml` (or the file `INTAKT_CONFIG` names; see `config/intakt.example.yaml`). It applies to every project; set it to `forever` to keep them all ([the reference](../reference/user-manual.md#how-long-conversations-are-kept)). On an install from a clone, the cleanup runs only while a scheduler worker runs: keep `php bin/console messenger:consume scheduler_retention` running beside the `async` worker.
+
 ![Step 2 of the setup page, "Add a project", marked Done: "1 project is configured", the project sample, and its reviewers: correctness on the strong tier and security on the standard tier, both on openai_compatible](../assets/guide/add-a-project.webp)
 
 ## Check the panel, then review

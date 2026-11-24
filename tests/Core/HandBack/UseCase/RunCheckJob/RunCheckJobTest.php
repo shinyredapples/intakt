@@ -31,6 +31,7 @@ use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
+use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -43,6 +44,7 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Gate\Contract\CheckSteps;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
@@ -150,8 +152,8 @@ final class RunCheckJobTest extends TestCase
     {
         $this->history->commit('Build work');
         $gate = self::createStub(Gate::class);
-        $gate->method('checkSteps')->willReturn(['true']);
-        $gate->method('registryHosts')->willReturn([]);
+        $gate->method('checkSteps')->willReturn(new CheckSteps('true'));
+        $gate->method('registryHosts')->willReturn(new EgressHosts());
 
         (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['check-result' => "passed\n"]))), $gate)
             ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, new Paths()));

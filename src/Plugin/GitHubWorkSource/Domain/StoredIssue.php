@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use LogicException;
 
@@ -70,7 +71,7 @@ final class StoredIssue
     ) {
         $listed = $reading->listed;
         $this->title = mb_substr($listed->title, 0, 255);
-        $this->labels = $listed->labels;
+        $this->labels = [...$listed->labels];
         $this->author = $listed->author;
         $this->updatedAt = $this->moment($listed->updatedAt);
         $this->milestoneDue = $listed->milestoneDue instanceof DateTimeImmutable ? $this->moment($listed->milestoneDue) : null;
@@ -138,7 +139,7 @@ final class StoredIssue
     // The body comes back empty, because only the numbers it names steer the queue, and those are kept.
     public function queued(): QueuedIssue
     {
-        $listed = new ListedIssue($this->number, $this->title, '', $this->labels, $this->author, $this->instant($this->updatedAt), null === $this->milestoneDue ? null : $this->instant($this->milestoneDue), $this->pullRequest);
+        $listed = new ListedIssue($this->number, $this->title, '', new IssueLabels(...$this->labels), $this->author, $this->instant($this->updatedAt), null === $this->milestoneDue ? null : $this->instant($this->milestoneDue), $this->pullRequest);
         $reading = new ItemReading($listed, $this->waitsFor, $this->unreadableWaits, $this->closedBy);
 
         return new QueuedIssue($reading, $this->storedVouching());
