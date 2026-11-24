@@ -33,7 +33,7 @@ final readonly class ListProjectsTool
 
     public function __invoke(): ProjectList
     {
-        return new ProjectList(array_map($this->listed(...), $this->resolver->projects()));
+        return new ProjectList(array_map($this->listed(...), [...$this->resolver->projects()]));
     }
 
     private function listed(string $project): ListedProject

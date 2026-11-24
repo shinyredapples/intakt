@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\UseCase;
 
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\UseCase\ListProjects\ListedProject;
 use Intakt\Core\Ai\UseCase\ListProjects\ListProjectsTool;
@@ -55,7 +56,7 @@ final class ListProjectsToolTest extends TestCase
     private function tool(array $projects, array $replays): ListProjectsTool
     {
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('projects')->willReturn($projects);
+        $resolver->method('projects')->willReturn(new ProjectNames(...$projects));
         $bus = self::createStub(MessageBusInterface::class);
         $bus->method('dispatch')->willReturnCallback(static fn (ReplayMarkOfProject $query): Envelope => new Envelope($query)->with(new HandledStamp($replays[$query->project] ?? ReplayMark::Live, 'handler')));
 

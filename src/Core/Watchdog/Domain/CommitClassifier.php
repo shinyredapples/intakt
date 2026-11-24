@@ -49,9 +49,9 @@ final readonly class CommitClassifier
         $ownerPushes = [];
         $peerMerges = [];
         foreach ($walk as $commit) {
-            $status = $this->judge($main, $covered, $commit);
+            $status = $this->judge($main, $covered, $commit->name);
             if ($status instanceof Violation) {
-                $violations[] = new MainViolation($commit, $status);
+                $violations[] = new MainViolation($commit->name, $status);
             }
             if (SignatureStatus::OwnerSigned === $status) {
                 $ownerPushes[] = $commit;
@@ -74,7 +74,7 @@ final readonly class CommitClassifier
         $covered = [];
         foreach ($merges as $merge) {
             foreach ($this->history->broughtInBy($merge) as $commit) {
-                $covered[$commit] = true;
+                $covered[$commit->name] = true;
             }
         }
 

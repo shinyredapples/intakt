@@ -27,6 +27,10 @@ github:
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
 # A tier on provider codex must name this model: { provider: codex, model: gpt-6.2-sol }.
 codex: { model: gpt-6.2-sol, effort: high }
+# Optional: how many days a reviewer conversation (the prompts with the reviewed code and the replies) is kept after its last message, a whole number from 1 to 36500 (default 30), or forever to delete nothing.
+# A scheduled task deletes older ones every ten minutes, never one whose review round is still open (a round whose judging failed, or whose upper wait ran out, counts as finished); the ledger is never touched.
+retention:
+    conversation_days: 30
 # Each project maps the capability tiers to a provider (anthropic, openai, openai_compatible, claude_code, codex) and a model name.
 projects:
     alpha:
@@ -60,7 +64,7 @@ projects:
         # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
         # the task text is given to every round until the pull request text is read from the forge.
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
-        # `eligibility_label` (optional, `intakt` when left out, read by the work source that chooses the next task; the command that runs it comes with #1603) is the issue label that lets Intakt build a task; it must not be blank.
+        # `eligibility_label` (optional, `intakt` when left out, read by the work source that chooses the next task; `php bin/console intakt:queue:show <project>` prints the order it picks in) is the issue label that lets Intakt build a task; it must not be blank.
         watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha, eligibility_label: intakt }
         # Optional: the files and folders (everything below one counts) a change may only touch with an approval, from the repository's root;
         # .gitmodules and submodules always count. `php bin/console intakt:protected:list alpha <head>` lists what a head touches.

@@ -54,7 +54,7 @@ final readonly class IntakeRules
             $held[] = new HeldIssue($task, $reason);
         }
 
-        usort($ready, fn (QueuedIssue $a, QueuedIssue $b): int => $this->key($a, $pullRequests) <=> $this->key($b, $pullRequests));
+        $ready = QueueOrder::of($ready, $pullRequests);
 
         $openPullRequests = array_map(static fn (QueuedIssue $item): int => $item->number(), array_values(array_filter($items, static fn (QueuedIssue $item): bool => $item->isPullRequest())));
 
@@ -178,24 +178,5 @@ final readonly class IntakeRules
         }
 
         return in_array($task->number(), $item->closedBy(), true) ? [] : $item->closedBy();
-    }
-
-    /**
-     * @param array<int, int> $pullRequests
-     *
-     * @return array{int, int, int, int, int}
-     */
-    private function key(QueuedIssue $task, array $pullRequests): array
-    {
-        $priority = $task->priority();
-
-        // Only an urgent task goes before the ones whose pull request is open, because finished work waiting on a small step is cheaper to land; a missing due date sorts last.
-        return [
-            Priority::Urgent === $priority ? 0 : 1,
-            isset($pullRequests[$task->number()]) ? 0 : 1,
-            $priority->rank(),
-            $task->milestoneDue()?->getTimestamp() ?? PHP_INT_MAX,
-            $task->number(),
-        ];
     }
 }

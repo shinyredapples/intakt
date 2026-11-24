@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor\UseCase;
 
 use ArrayObject;
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -22,6 +23,8 @@ use RuntimeException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\UserMessage;
+use Symfony\AI\Platform\Model;
+use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -67,21 +70,23 @@ final class ProbeProvidersCommandTest extends TestCase
 
     public function testTheProbeSendsExactlyOneUserMessageHoldingTheFixedProbePrompt(): void
     {
-        /** @var ArrayObject<int, TierRequest> $requests */
-        $requests = new ArrayObject();
-        $invoker = self::createStub(TierInvoker::class);
-        $invoker->method('invoke')->willReturnCallback(static function (ResolvedModel $model, TierRequest $request) use ($requests): DeferredResult {
-            $requests->append($request);
+        /** @var ArrayObject<int, mixed> $inputs */
+        $inputs = new ArrayObject();
+        $platform = self::createStub(PlatformInterface::class);
+        $platform->method('invoke')->willReturnCallback(static function (Model|string $model, array|string|object $input) use ($inputs): DeferredResult {
+            $inputs->append($input);
 
-            return MockPlatformFactory::createPlatform('ok')->invoke('big', $request->input);
+            return MockPlatformFactory::createPlatform('ok')->invoke('big', $input);
         });
+        $invoker = self::createStub(TierInvoker::class);
+        $invoker->method('invoke')->willReturnCallback(static fn (ResolvedModel $model, TierRequest $request): DeferredResult => $request->invokeOn($platform, 'big'));
 
         $this->execute($this->resolver(), $invoker);
 
-        self::assertCount(2, $requests);
-        foreach ($requests as $request) {
-            self::assertInstanceOf(MessageBag::class, $request->input);
-            $messages = $request->input->getMessages();
+        self::assertCount(2, $inputs);
+        foreach ($inputs as $input) {
+            self::assertInstanceOf(MessageBag::class, $input);
+            $messages = $input->getMessages();
             self::assertCount(1, $messages);
             self::assertInstanceOf(UserMessage::class, $messages[0]);
             self::assertSame('Answer with the single word: ok', $messages[0]->asText());
@@ -151,7 +156,7 @@ final class ProbeProvidersCommandTest extends TestCase
     public function testWithoutAnEnabledProviderItSaysSo(): void
     {
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('projects')->willReturn(['alpha']);
+        $resolver->method('projects')->willReturn(new ProjectNames('alpha'));
         $resolver->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): never => throw new TierNotMapped($project, $tier));
         $calls = new ArrayObject();
 
@@ -164,7 +169,7 @@ final class ProbeProvidersCommandTest extends TestCase
     private function resolver(): TierResolver
     {
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('projects')->willReturn(['alpha']);
+        $resolver->method('projects')->willReturn(new ProjectNames('alpha'));
         $resolver->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => match ($tier) {
             Tier::Strong, Tier::Standard => new ResolvedModel(Provider::Anthropic, 'big'),
             Tier::Light => new ResolvedModel(Provider::OpenAi, 'big'),
@@ -183,7 +188,7 @@ final class ProbeProvidersCommandTest extends TestCase
         $invoker->method('invoke')->willReturnCallback(static function (ResolvedModel $model, TierRequest $request) use ($calls, $platform): DeferredResult {
             $calls->append($model->provider->value.'/'.$model->model);
 
-            return $platform->invoke('big', $request->input);
+            return $request->invokeOn($platform, 'big');
         });
 
         return $invoker;

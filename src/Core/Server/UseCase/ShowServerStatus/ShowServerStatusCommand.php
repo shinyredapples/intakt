@@ -15,7 +15,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-// A command is the door because the dashboard row and the health check (later parts of plan task T34) are not built yet.
+// A command is the door so an owner can read the figures inside the container, where the admin API answers; the board's row and intakt:server:health read the same figures.
 #[AsCommand(name: 'intakt:server:status', description: 'Read worker threads, queue depth, worker restarts and hub health from the FrankenPHP admin API')]
 final readonly class ShowServerStatusCommand
 {

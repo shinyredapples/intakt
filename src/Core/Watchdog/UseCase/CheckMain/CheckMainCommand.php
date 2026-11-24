@@ -58,7 +58,7 @@ final readonly class CheckMainCommand
     private function reported(SymfonyStyle $io, Classification $classification): int
     {
         foreach ($classification->peerMerges as $commit) {
-            $io->writeln(ConsoleReport::peerMergeLine($commit));
+            $io->writeln(ConsoleReport::peerMergeLine($commit->name));
         }
         if ($classification->isClean()) {
             $io->writeln('main is clean');

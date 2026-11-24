@@ -1,0 +1,11 @@
+[
+ {"number": 41, "title": "Show the build tier per task", "body": "", "labels": [{"name": "intakt"}, {"name": "priority:low"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:00:00+00:00", "milestone": null},
+ {"number": 42, "title": "Fix the dashboard clock", "body": "", "labels": [{"name": "intakt"}, {"name": "priority:urgent"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:01:00+00:00", "milestone": null},
+ {"number": 43, "title": "Add the queue page", "body": "", "labels": [{"name": "intakt"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:02:00+00:00", "milestone": null},
+ {"number": 44, "title": "Retry a failed listing", "body": "", "labels": [{"name": "intakt"}, {"name": "priority:high"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:03:00+00:00", "milestone": null},
+ {"number": 45, "title": "Document the queue page", "body": "Waits for #43", "labels": [{"name": "intakt"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:04:00+00:00", "milestone": null},
+ {"number": 46, "title": "Rename the lanes", "body": "", "labels": [{"name": "ready"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:05:00+00:00", "milestone": null},
+ {"number": 47, "title": "Trim the ledger page", "body": "", "labels": [{"name": "intakt"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:07:00+00:00", "milestone": {"title": "January", "due_on": "2027-01-15T08:00:00Z"}},
+ {"number": 48, "title": "Tidy the lanes page", "body": "", "labels": [{"name": "intakt"}], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:08:00+00:00", "milestone": {"title": "December", "due_on": "2026-12-15T08:00:00Z"}},
+ {"number": 50, "title": "Add the queue page", "body": "Closes #43", "labels": [], "user": {"login": "maintainer"}, "updated_at": "2026-11-20T09:06:00+00:00", "milestone": null, "pull_request": {"url": "https://api.github.com/repos/acme/widget/pulls/50"}}
+]

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\PhpGate;
 
+use Intakt\Core\Job\Contract\EgressHosts;
+use Intakt\Plugin\Gate\Contract\CheckSteps;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
+use Intakt\Plugin\Gate\Contract\LockFiles;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -12,33 +15,36 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(PhpGate::class)]
 #[UsesClass(DependencyStep::class)]
+#[UsesClass(CheckSteps::class)]
+#[UsesClass(LockFiles::class)]
+#[UsesClass(EgressHosts::class)]
 final class PhpGateTest extends TestCase
 {
     public function testWithoutAConfiguredCommandTheDependenciesAreInstalledAndTheFastCheckRuns(): void
     {
-        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], new PhpGate()->checkSteps(null));
+        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], [...new PhpGate()->checkSteps(null)]);
     }
 
     public function testAnEmptyConfiguredCommandCountsAsNone(): void
     {
-        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], new PhpGate()->checkSteps(' '));
+        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], [...new PhpGate()->checkSteps(' ')]);
     }
 
     public function testAConfiguredCommandIsTheOnlyStep(): void
     {
-        self::assertSame(['make check'], new PhpGate()->checkSteps('make check'));
+        self::assertSame(['make check'], [...new PhpGate()->checkSteps('make check')]);
     }
 
     public function testTheDependenciesComeFromPackagistAndGitHubArchives(): void
     {
-        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], new PhpGate()->registryHosts());
+        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], [...new PhpGate()->registryHosts()]);
     }
 
     public function testTheComposerLockInputsAreTheManifestTheLockFileAndThePhpVersionOfTheJobImage(): void
     {
         $step = $this->composerStep(null);
 
-        self::assertSame(['composer.json', 'composer.lock'], $step->lockFiles);
+        self::assertSame(['composer.json', 'composer.lock'], [...$step->lockFiles]);
         self::assertSame("php -r 'echo PHP_VERSION;'", $step->platformProbe);
     }
 
@@ -57,12 +63,12 @@ final class PhpGateTest extends TestCase
 
     public function testTheInstallACopiedSnapshotReplacesIsTheFirstOfTheGatesOwnCheckSteps(): void
     {
-        self::assertSame(new PhpGate()->checkSteps(null)[0], $this->composerStep(null)->checkInstall);
+        self::assertSame([...new PhpGate()->checkSteps(null)][0], $this->composerStep(null)->checkInstall);
     }
 
     public function testAnEmptyConfiguredCommandStillNamesTheComposerLockInputs(): void
     {
-        self::assertSame(['composer.json', 'composer.lock'], $this->composerStep(' ')->lockFiles);
+        self::assertSame(['composer.json', 'composer.lock'], [...$this->composerStep(' ')->lockFiles]);
     }
 
     public function testAProjectWithItsOwnCheckCommandReportsNoLockInputsSoItInstallsEveryTime(): void
