@@ -100,7 +100,7 @@ final readonly class PrePushCheck
 
     private function wordsOf(?RegressionRun $run): string
     {
-        return $run?->value ?? 'gave no run';
+        return $run->value ?? 'gave no run';
     }
 
     private function stoppedBy(ExceptionInterface $stopped): string

@@ -438,7 +438,7 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame(BuildStep::PrePushCheck, $outcome->last);
         self::assertSame(PrePushCheck::PASSES_ON_THE_BASE, $outcome->failure);
-        self::assertSame(PrePushCheck::PASSES_ON_THE_BASE, array_last($this->stepsIn($ledger))['failure']);
+        self::assertSame(PrePushCheck::PASSES_ON_THE_BASE, $this->stepsIn($ledger)[5]['failure']);
         self::assertNull($this->remoteTip());
         self::assertSame(0, $this->changes->opened);
     }

@@ -68,6 +68,24 @@ final readonly class RegressionEvidence
         }
     }
 
+    private function resultLines(): string
+    {
+        $tests = implode(', ', array_map($this->codeSpanOf(...), [...$this->runs->tests]));
+
+        return sprintf(
+            "- Regression tests, run by Intakt: %s\n- Regression result: %s on the base, %s on the head",
+            $tests,
+            $this->runs->base->value ?? 'no run',
+            $this->runs->head->value ?? 'no run',
+        );
+    }
+
+    // Control characters and backticks replaced, because a test path comes from the model-written diff and must not end its code span or start a line of its own.
+    private function codeSpanOf(string $path): string
+    {
+        return '`'.preg_replace('/[\x00-\x1F\x7F`]/', '?', $path).'`';
+    }
+
     // A third-level heading stays inside, because builders number their Evidence items as subheadings too.
     /**
      * @param list<string> $lines
@@ -81,23 +99,5 @@ final readonly class RegressionEvidence
         }
 
         return count($lines);
-    }
-
-    private function resultLines(): string
-    {
-        $tests = implode(', ', array_map($this->codeSpanOf(...), [...$this->runs->tests]));
-
-        return sprintf(
-            "- Regression tests, run by Intakt: %s\n- Regression result: %s on the base, %s on the head",
-            $tests,
-            $this->runs->base?->value ?? 'no run',
-            $this->runs->head?->value ?? 'no run',
-        );
-    }
-
-    // Control characters and backticks replaced, because a test path comes from the model-written diff and must not end its code span or start a line of its own.
-    private function codeSpanOf(string $path): string
-    {
-        return '`'.preg_replace('/[\x00-\x1F\x7F`]/', '?', $path).'`';
     }
 }
