@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Ai\Contract;
 
 use ArrayObject;
 use Intakt\Core\Ai\Contract\TierRequest;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Model;
@@ -26,11 +27,18 @@ final class TierRequestTest extends TestCase
         self::assertSame(['temperature' => 0.1, 'max_output_tokens' => 10], $sent['options']);
     }
 
-    public function testAListInputReachesThePlatformAsTheListItWasGiven(): void
+    public function testAnInputMadeOfPartsReachesThePlatformWithItsKeysInTheOrderGiven(): void
     {
-        $sent = $this->whenSent(TierRequest::ofList('first', 'second'));
+        $sent = $this->whenSent(TierRequest::ofParts()->withPart('prompt', 'review')->withPart(4, 'context')->withPart(0, 'first'));
 
-        self::assertSame(['first', 'second'], $sent['input']);
+        self::assertSame(['prompt' => 'review', 4 => 'context', 0 => 'first'], $sent['input']);
+    }
+
+    public function testARequestMadeOfOneInputRefusesAPart(): void
+    {
+        $this->expectException(LogicException::class);
+
+        TierRequest::of('review')->withPart(0, 'context');
     }
 
     public function testATextInputReachesThePlatformWithoutOptions(): void

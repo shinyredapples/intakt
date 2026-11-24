@@ -63,7 +63,7 @@ final class TierRoutedPlatformTest extends TestCase
 
     public function testAnArrayInputKeepsItsOriginalKeysAndOrder(): void
     {
-        $input = ['prompt' => 'review', 4 => 'context'];
+        $input = ['prompt' => 'review', 4 => 'context', 1 => 'first'];
         $result = MockPlatformFactory::createPlatform('ok')->invoke('model', 'review');
         $inner = $this->createMock(PlatformInterface::class);
         $inner->expects(self::once())->method('invoke')->with('big', $input, [])->willReturn($result);
