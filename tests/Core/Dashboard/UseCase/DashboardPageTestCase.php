@@ -9,6 +9,9 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Server\Contract\ServerReading;
+use Intakt\Core\Server\Contract\ServerStatus;
+use Intakt\Tests\Core\Server\RecordedAdminApi;
 use Intakt\Tests\Support\PinnableClock;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
@@ -26,6 +29,8 @@ abstract class DashboardPageTestCase extends WebTestCase
     protected DashboardLedger $ledger;
 
     protected KernelBrowser $browser;
+
+    protected ServerStatus $server;
 
     private ReplayMarkBus $replayMarks;
 
@@ -116,5 +121,10 @@ abstract class DashboardPageTestCase extends WebTestCase
     {
         $container->set(Ledger::class, $this->ledger);
         $container->set(ReplayMarks::class, new ReplayMarks($this->replayMarks));
+        // Recorded answers, because the board reads the server status on every load and no test may reach a live admin API; read through a stub, because the container refuses a second replacement.
+        $this->server = new RecordedAdminApi()->status();
+        $status = self::createStub(ServerStatus::class);
+        $status->method('read')->willReturnCallback(fn (): ServerReading => $this->server->read());
+        $container->set(ServerStatus::class, $status);
     }
 }

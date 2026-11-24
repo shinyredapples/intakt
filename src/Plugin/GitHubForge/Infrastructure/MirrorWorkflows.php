@@ -249,8 +249,8 @@ final readonly class MirrorWorkflows
      */
     private function run(string $repository, array $arguments): Process
     {
-        $call = $this->hardened->callInBareRepository($arguments, $repository);
-        $process = new Process($call->command, $call->directory, $call->environment);
+        $call = $this->hardened->callInBareRepository($repository, ...$arguments);
+        $process = new Process([...$call->command], $call->directory, [...$call->environment]);
         $process->run();
 
         return $process;

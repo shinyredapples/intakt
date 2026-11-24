@@ -22,7 +22,7 @@ flowchart TD
 | What you see | What it means | What to do |
 |---|---|---|
 | A card in **Waiting on you** | only a person can move it on | do what the card says |
-| **Draining** on build slots | Intakt is installing a new version that said it needs a drain: each slot lets its job finish before it moves to the new version, while the other slots and the reviews go on; a normal update drains nothing, because a running job finishes on the version it started on (planned) | nothing: it resumes in minutes; a build that runs too long is saved and continues on the new version, and a review or check that runs too long is run again on it |
+| **Draining** on build slots | Intakt is installing a new version that said it needs a drain: each slot lets its job finish and starts nothing new until Intakt has restarted on the new version and that version's own check and first build are fine; a normal update drains nothing, because a running job finishes on the version it started on (planned) | nothing: it resumes in minutes; a build that runs too long is saved and continues after the restart, and a review or check that runs too long is run again; if the new version's first checks fail, Intakt goes back to the old version and the saved builds continue there |
 | Nothing new starts for a few seconds during an update | Intakt's control process restarts once to switch to the new version; running jobs and reviews keep going (planned) | nothing: work resumes by itself, and results that arrived meanwhile are read once |
 | **Draining** everywhere | an update that changes stored data, which the old version could not read, pauses all work while it switches (planned) | nothing: it resumes in minutes; only if such an update fails after work has resumed does work stay paused until a newer version is installed, and Intakt tells you |
 | **Paused** | someone paused the project or the install | resume it from the dashboard |
@@ -64,7 +64,7 @@ None of this is built yet. Each rule in one sentence:
 
 ## Is the server itself busy?
 
-If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.
+If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. The board shows the same numbers in a row under its columns each time it loads. Planned: a container health check built on them.
 
 ## What is Intakt doing right now?
 
@@ -74,7 +74,7 @@ Run `php bin/console intakt:status --format=json`. It prints one line of JSON: f
 
 This is the service log, not the live job log on a task's card (described under "Still stuck?" below); they are two different things.
 
-Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened.
+Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened. To see more, such as notes about what Intakt skipped, set `INTAKT_LOG_LEVEL=info` and restart it.
 
 Intakt hides the secrets it knows about. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../reference/user-manual.md#the-log) lists the fields and the credentials by name.
 

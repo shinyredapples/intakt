@@ -22,6 +22,8 @@ use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
+use Intakt\Core\Build\Contract\BuildServices;
+use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
@@ -69,7 +71,7 @@ final class ProjectTiersTest extends KernelTestCase
         $resolver = $this->bootedContainer()->get(TierResolver::class);
         self::assertInstanceOf(TierResolver::class, $resolver);
 
-        self::assertSame(['alpha-one', 'beta'], $resolver->projects());
+        self::assertSame(['alpha-one', 'beta'], [...$resolver->projects()]);
         self::assertSame('small', $resolver->resolve('alpha-one', Tier::Light)->model);
         self::assertSame(Provider::Anthropic, $resolver->resolve('alpha-one', Tier::Strong)->provider);
 
@@ -114,7 +116,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $container = $this->bootedContainer();
 
-        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.']], $container->getParameter(WatcherServices::PROJECTS));
+        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.', 'eligibility_label' => 'intakt']], $container->getParameter(WatcherServices::PROJECTS));
         self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
     }
 
@@ -173,6 +175,30 @@ final class ProjectTiersTest extends KernelTestCase
         $this->expectExceptionMessageMatches('/"image" under "intakt\.projects\.beta" must be configured/');
 
         $this->bootedContainer();
+    }
+
+    public function testAProjectBuildSectionReachesTheRoutingAndAProjectWithoutOneGetsTheDefaults(): void
+    {
+        file_put_contents($this->file, <<<'YAML'
+            projects:
+                alpha-one:
+                    build:
+                        tier: strong
+                        sensitive_paths: ['config/gates/**']
+                    tiers:
+                        strong: { provider: anthropic, model: big }
+                beta:
+                    tiers:
+                        strong: { provider: openai, model: other }
+            YAML);
+        $escalateOn = array_column(Setback::cases(), 'value');
+
+        $routing = $this->bootedContainer()->getParameter(BuildServices::ROUTING);
+
+        self::assertSame([
+            'alpha-one' => ['tier' => 'strong', 'sensitive_paths' => ['config/gates/**'], 'escalate_on' => $escalateOn],
+            'beta' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => $escalateOn],
+        ], $routing);
     }
 
     public function testAProjectsValueThatIsNoMapStopsTheBoot(): void

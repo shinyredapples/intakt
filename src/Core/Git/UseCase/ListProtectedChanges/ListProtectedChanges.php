@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\ListProtectedChanges;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\ChangeNotRead;
@@ -45,7 +46,7 @@ final readonly class ListProtectedChanges
             return ProtectedChanges::unreadable($unreadable->getMessage());
         }
 
-        return ProtectedChanges::touching($protected->touchedBy($changes));
+        return ProtectedChanges::touching(new Paths(...$protected->touchedBy($changes)));
     }
 
     /**

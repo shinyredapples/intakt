@@ -252,6 +252,25 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertSame("Findings and the judge's call", $row->text());
     }
 
+    public function testTheNowBlockCountsOnlyReviewersThatNoLongerRunAsFinished(): void
+    {
+        $this->givenARunningRound();
+        $this->ledger->startReviewer('round-1', 'security');
+        $this->ledger->answer('round-1', 'security', 0);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('1 of 2 reviewers finished.', $crawler->filter('#round-round-1-now-progress')->text());
+    }
+
+    public function testTheReviewTemplateComparesReviewerProgressWithTheEnumCaseRatherThanItsName(): void
+    {
+        $template = (string) file_get_contents(dirname(__DIR__, 4).'/templates/dashboard/review.html.twig');
+
+        self::assertStringNotContainsString("'Running'", $template);
+        self::assertStringContainsString("constant('Intakt\\\\Core\\\\Dashboard\\\\Domain\\\\ReviewerProgress::Running')", $template);
+    }
+
     // Both images are checked, because the partial emits one per theme and CSS shows one; the attributes follow D1 and D4 of #2344.
     private function assertOneHeadPair(Crawler $holder, string $character, int $size): void
     {

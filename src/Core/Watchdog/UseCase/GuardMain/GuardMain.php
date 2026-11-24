@@ -43,9 +43,10 @@ final readonly class GuardMain
     public function guarded(GuardMainInput $input): GuardedMain
     {
         $this->mustNameAProject($input->project);
-        $checked = $this->check->checked($input->repository, $input->watchedMain(), $input->ownerKey);
+        $checked = $this->check->checked($input->repository, $input->watchedMain(), $input->trustedKeys());
+        // A peer merge alone takes no lock, because it writes nothing: it is shown, never noticed or halted on.
         if ($checked->classification->isClean() && [] === $checked->classification->ownerPushes) {
-            return new GuardedMain($this->halts->standingOf($input->project), []);
+            return new GuardedMain($this->halts->standingOf($input->project), [], $checked->classification->peerMerges);
         }
 
         return $this->recordedFor($input->project, $checked);
@@ -72,7 +73,7 @@ final readonly class GuardMain
             $standing = $this->halts->standingOf($project);
             $unnoticed = array_values(array_diff($checked->classification->ownerPushes, $this->notices->noticedOf($project)));
 
-            return new GuardedMain($standing, $this->noticesGivenFor($project, $unnoticed));
+            return new GuardedMain($standing, $this->noticesGivenFor($project, $unnoticed), $checked->classification->peerMerges);
         } finally {
             $lock->release();
         }

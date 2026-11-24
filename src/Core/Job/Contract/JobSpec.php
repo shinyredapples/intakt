@@ -12,13 +12,12 @@ final readonly class JobSpec
     public const string KEPT_FOLDER = '/kept';
 
     /**
-     * @param list<string>   $command
      * @param list<JobInput> $inputs
      */
     public function __construct(
         public JobId $id,
         public string $image,
-        public array $command,
+        public JobCommand $command,
         public array $inputs,
         public JobLimits $limits,
         public JobEgress $egress,
