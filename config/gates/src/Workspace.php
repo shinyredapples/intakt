@@ -173,7 +173,7 @@ final readonly class Workspace
     /**
      * @param list<string> $command
      */
-    public function containedCommand(array $command, int $seconds): ProcessResult
+    public function containedCommand(array $command, float $seconds): ProcessResult
     {
         return $this->runner->runWithin($command, $this->root, $seconds);
     }

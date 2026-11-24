@@ -70,7 +70,7 @@ final class Instance
         private readonly string $root,
         private readonly Server $web,
         private readonly array $command,
-        private readonly int $commandSeconds,
+        private readonly float $commandSeconds,
         private readonly DirectoryRemoval $directoryRemoval,
     ) {
     }
@@ -275,7 +275,7 @@ final class Instance
      */
     private function awaitExit($process): int
     {
-        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
+        $deadline = hrtime(true) + (int) ($this->commandSeconds * 1_000_000_000);
 
         while (hrtime(true) < $deadline) {
             $state = proc_get_status($process);
@@ -625,7 +625,7 @@ $argv ??= [];
 $command = array_slice($argv, 1);
 $command = '--' === array_first($command) ? array_slice($command, 1) : [];
 // Needed so a test can prove the cap without waiting for the full minute.
-$commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
+$commandSeconds = (float) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
 $root = dirname(__DIR__);
 // The image ships frankenphp, so there the instance runs the app the way the image serves it.

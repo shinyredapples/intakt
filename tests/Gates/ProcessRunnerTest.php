@@ -65,7 +65,7 @@ final class ProcessRunnerTest extends TestCase
     {
         $started = (hrtime(true) / 1_000_000_000);
 
-        $result = new ProcessRunner()->runWithin(['php', '-r', 'sleep(30);'], sys_get_temp_dir(), 1);
+        $result = new ProcessRunner()->runWithin(['php', '-r', 'sleep(30);'], sys_get_temp_dir(), 0.2);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
         self::assertLessThan(10, (hrtime(true) / 1_000_000_000) - $started);
@@ -82,11 +82,11 @@ final class ProcessRunnerTest extends TestCase
 
     public function testATimedOutCommandDiscardsItsPartialOutput(): void
     {
-        $result = new ProcessRunner()->runWithin(['php', '-r', 'echo "partial"; fwrite(STDERR, "partial"); sleep(30);'], sys_get_temp_dir(), 1);
+        $result = new ProcessRunner()->runWithin(['php', '-r', 'echo "partial"; fwrite(STDERR, "partial"); sleep(30);'], sys_get_temp_dir(), 0.5);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
         self::assertSame('', $result->output);
-        self::assertSame('php timed out after 1 seconds', $result->errors);
+        self::assertSame('php timed out after 0.5 seconds', $result->errors);
     }
 
     public function testACommandPastTheOverallTimeoutOfAConcurrentRunFailsAloneWhileTheOthersKeepTheirResult(): void
@@ -94,7 +94,7 @@ final class ProcessRunnerTest extends TestCase
         $results = new ProcessRunner()->runConcurrently([
             'slow' => [['php', '-r', 'echo "partial"; sleep(30);'], []],
             'quick' => [['php', '-r', 'echo "done";'], []],
-        ], sys_get_temp_dir(), 3);
+        ], sys_get_temp_dir(), 0.5);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $results['slow']->exitCode);
         self::assertSame('', $results['slow']->output);
@@ -165,6 +165,14 @@ final class ProcessRunnerTest extends TestCase
         self::assertFileDoesNotExist($marker);
     }
 
+    public function testATimeLimitBelowOneSecondStillRunsTheCommand(): void
+    {
+        $result = new ProcessRunner()->runWithin(['sh', '-c', 'echo ran'], sys_get_temp_dir(), 0.5);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame("ran\n", $result->output);
+    }
+
     public function testATimedCommandInAMissingDirectoryFailsClosedWithoutOutput(): void
     {
         $result = new ProcessRunner('/nonexistent/unshare')->runWithin(['php', '-r', 'echo "ran";'], '/nonexistent/intakt-directory', 10);
@@ -179,7 +187,7 @@ final class ProcessRunnerTest extends TestCase
         $marker = $this->markerFile();
         $runner = new ProcessRunner('/nonexistent/unshare');
 
-        $result = $runner->runWithin(['sh', '-c', 'sleep 30 & echo $! > '.escapeshellarg($marker).'; exit 0'], sys_get_temp_dir(), 1);
+        $result = $runner->runWithin(['sh', '-c', 'sleep 30 & echo $! > '.escapeshellarg($marker).'; exit 0'], sys_get_temp_dir(), 0.5);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
         self::assertSame(ProcessRunner::PROCESS_GROUP, $runner->containment());
@@ -190,7 +198,7 @@ final class ProcessRunnerTest extends TestCase
     {
         $marker = $this->markerFile();
 
-        $result = new ProcessRunner('/nonexistent/unshare')->runWithin(['sh', '-c', 'sleep 30 & echo $! > '.escapeshellarg($marker).'; wait'], sys_get_temp_dir(), 1);
+        $result = new ProcessRunner('/nonexistent/unshare')->runWithin(['sh', '-c', 'sleep 30 & echo $! > '.escapeshellarg($marker).'; wait'], sys_get_temp_dir(), 0.5);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
         $this->assertGoneSoon($this->pidIn($marker));
@@ -203,7 +211,7 @@ final class ProcessRunnerTest extends TestCase
         $marker = $this->markerFile();
         $duration = $this->uniqueDuration();
 
-        $result = $runner->runWithin(['sh', '-c', 'env -i setsid sh -c '.escapeshellarg(': > '.escapeshellarg($marker).'; exec sleep '.$duration).' & wait'], sys_get_temp_dir(), 1);
+        $result = $runner->runWithin(['sh', '-c', 'env -i setsid sh -c '.escapeshellarg(': > '.escapeshellarg($marker).'; exec sleep '.$duration).' & wait'], sys_get_temp_dir(), 0.5);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
         self::assertSame(ProcessRunner::PID_NAMESPACE, $runner->containment());
@@ -217,7 +225,8 @@ final class ProcessRunnerTest extends TestCase
         $marker = $this->markerFile();
         $duration = $this->uniqueDuration();
 
-        $result = $runner->runWithin(['sh', '-c', 'env -i setsid sh -c '.escapeshellarg(': > '.escapeshellarg($marker).'; exec sleep '.$duration).' >/dev/null 2>&1 & sleep 1; exit 0'], sys_get_temp_dir(), 10);
+        // The command ends only once the detached child has started, so the child always outlives it.
+        $result = $runner->runWithin(['sh', '-c', 'env -i setsid sh -c '.escapeshellarg(': > '.escapeshellarg($marker).'; exec sleep '.$duration).' >/dev/null 2>&1 & until [ -e '.escapeshellarg($marker).' ]; do sleep 0.01; done; exit 0'], sys_get_temp_dir(), 10);
 
         self::assertTrue($result->succeeded());
         $this->assertStartedAndGone($marker, $duration);

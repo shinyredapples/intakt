@@ -74,7 +74,7 @@ final class ProcessRunner
     /**
      * @param list<string> $command
      */
-    public function runWithin(array $command, string $directory, int $seconds): ProcessResult
+    public function runWithin(array $command, string $directory, float $seconds): ProcessResult
     {
         $refusal = $this->refusal($command[0], $seconds);
 
@@ -111,9 +111,9 @@ final class ProcessRunner
      *
      * @return array<Name, ProcessResult>
      */
-    public function runConcurrently(array $commands, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): array
+    public function runConcurrently(array $commands, string $directory, float $seconds = self::OVERALL_TIMEOUT_SECONDS): array
     {
-        if ($seconds < 1) {
+        if ($seconds <= 0) {
             return array_map(fn (array $command): ProcessResult => $this->timedOut($command[0][0], $seconds), $commands);
         }
 
@@ -137,7 +137,7 @@ final class ProcessRunner
     /**
      * @param list<string> $command
      */
-    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
+    public function runToItsEnd(array $command, string $directory, float $seconds =self::OVERALL_TIMEOUT_SECONDS): ProcessResult
     {
         return $this->toItsEnd($this->startedHeld(new Process($this->held($command), $directory, getenv(), null, null), $command[0], $seconds));
     }
@@ -187,7 +187,7 @@ final class ProcessRunner
         return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
     }
 
-    private function startedHeld(Process $process, string $program, int $seconds): RunningChild|ProcessResult
+    private function startedHeld(Process $process, string $program, float $seconds): RunningChild|ProcessResult
     {
         $refusal = $this->refusal($program, $seconds);
 
@@ -233,13 +233,13 @@ final class ProcessRunner
         }
     }
 
-    private function refusal(string $program, int $seconds): ?ProcessResult
+    private function refusal(string $program, float $seconds): ?ProcessResult
     {
         if (!function_exists('posix_kill')) {
             return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': the PHP posix extension is missing');
         }
 
-        return $seconds < 1 ? $this->timedOut($program, $seconds) : null;
+        return $seconds <= 0 ? $this->timedOut($program, $seconds) : null;
     }
 
     /**
@@ -332,7 +332,7 @@ final class ProcessRunner
     private function resultOf(Process $process, ?int $failure, string $program): ProcessResult
     {
         if (self::TIMED_OUT === $failure) {
-            return $this->timedOut($program, (int) $process->getTimeout());
+            return $this->timedOut($program, (float) $process->getTimeout());
         }
 
         $exitCode = null === $failure ? $process->getExitCode() : null;
@@ -384,7 +384,7 @@ final class ProcessRunner
         return $finished;
     }
 
-    private function timedOut(string $program, int $seconds): ProcessResult
+    private function timedOut(string $program, float $seconds): ProcessResult
     {
         return new ProcessResult(self::TIMED_OUT, '', $program.' timed out after '.$seconds.' seconds');
     }

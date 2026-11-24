@@ -15,7 +15,7 @@ final readonly class ProcessQueue
 
     private const int POLL_MICROSECONDS = 10000;
 
-    public function __construct(private int $seconds, private int $overallSeconds)
+    public function __construct(private float $seconds, private float $overallSeconds)
     {
     }
 
@@ -32,7 +32,7 @@ final readonly class ProcessQueue
         $order = array_keys($jobs);
         $results = [];
         $running = [];
-        $deadline = hrtime(true) + $this->overallSeconds * 1_000_000_000;
+        $deadline = hrtime(true) + (int) ($this->overallSeconds * 1_000_000_000);
         // A job builder must return without waiting, because the running processes are polled only between builds.
         $start = fn (int $worker, Closure $job): ?array => hrtime(true) < $deadline ? $this->started($this->built($job, $worker), $directory, $deadline) : null;
 
@@ -82,7 +82,7 @@ final readonly class ProcessQueue
             return [$this->notStarted(), ''];
         }
 
-        // Because the limits are whole seconds, the reason of a job timeout equal to the overall limit is the job's own, not a pass that started a moment before it; the process still stops at the time left.
+        // Because a job starts a moment after its pass, the time left is rounded up to whole seconds, so the reason of a job timeout equal to the overall limit is the job's own; the process still stops at the time left.
         $ownTimeout = $this->seconds <= ceil($left);
         $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->seconds, $left));
 
