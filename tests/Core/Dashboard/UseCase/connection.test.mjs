@@ -337,6 +337,57 @@ test('Try now leaves a try still under way to finish', async (t) => {
     assert.equal(source.es, slow);
 });
 
+test('a try still pending after three countdowns is replaced by a new try', async (t) => {
+    const { source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const hung = source.es;
+
+    t.mock.timers.tick(15000);
+
+    assert.notEqual(source.es, hung);
+    assert.equal(hung.readyState, FakeEventSource.CLOSED);
+});
+
+test('a try pending for less than three countdowns is still left to finish', async (t) => {
+    const { source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+
+    t.mock.timers.tick(14999);
+
+    assert.equal(source.es, slow);
+});
+
+test('Try now does not replace a pending try sooner than the countdowns would', async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+
+    shell.tryNow(new FakeClick());
+    shell.tryNow(new FakeClick());
+    shell.tryNow(new FakeClick());
+    shell.tryNow(new FakeClick());
+
+    assert.equal(source.es, slow);
+});
+
+test('Try now replaces a try pending for three countdowns', async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const hung = source.es;
+    t.mock.timers.tick(12000);
+    shell.tryNow(new FakeClick());
+    t.mock.timers.tick(3000);
+
+    shell.tryNow(new FakeClick());
+
+    assert.notEqual(source.es, hung);
+});
+
 test('a shell that leaves the page before Turbo is ready watches nothing', async (t) => {
     t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: DROPPED_AT });
     notes = [];
