@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
@@ -200,7 +201,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
     public function testWithTheSampleChangeTheOneActionStartsTheFirstReviewAsTheSetupPageDoes(): void
     {
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn([SampleChange::PROJECT]);
+        $tiers->method('projects')->willReturn(new ProjectNames(SampleChange::PROJECT));
         self::getContainer()->set(SampleChangeSource::class, new SampleChangeSource($tiers, '/repos/sample'));
 
         $page = $this->browser->request('GET', '/trends');

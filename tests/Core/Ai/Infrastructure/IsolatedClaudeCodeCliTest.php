@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewTools;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -145,7 +146,7 @@ final class IsolatedClaudeCodeCliTest extends TestCase
 
     private function access(): ReviewServerAccess
     {
-        return new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', self::BEARER, ['read_file']);
+        return new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', self::BEARER, new ReviewTools('read_file'));
     }
 
     /**

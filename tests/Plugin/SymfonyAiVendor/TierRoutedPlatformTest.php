@@ -7,16 +7,23 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\TierInvoker;
+use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
+use ArrayObject;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Capability;
+use Symfony\AI\Platform\Model;
+use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\AI\Platform\Test\MockPlatformFactory;
 
 #[CoversClass(TierRoutedPlatform::class)]
 #[CoversClass(UnstreamedModelCatalog::class)]
 #[UsesClass(ResolvedModel::class)]
+#[UsesClass(TierRequest::class)]
 final class TierRoutedPlatformTest extends TestCase
 {
     public function testAnApiProviderModelCanStream(): void
@@ -34,5 +41,40 @@ final class TierRoutedPlatformTest extends TestCase
 
         self::assertFalse($model->supports(Capability::OUTPUT_STREAMING));
         self::assertTrue($model->supports(Capability::OUTPUT_STRUCTURED));
+    }
+
+    public function testPerCallOptionsWinOverThePlatformsOwnOptions(): void
+    {
+        $answer = MockPlatformFactory::createPlatform('ok');
+        /** @var ArrayObject<string, mixed> $received */
+        $received = new ArrayObject();
+        $tiers = $this->createMock(TierInvoker::class);
+        $tiers->expects(self::once())->method('invoke')->willReturnCallback(function (ResolvedModel $model, TierRequest $request) use ($received, $answer): DeferredResult {
+            $received['options'] = $this->optionsSentBy($request);
+
+            return $answer->invoke('model', 'review');
+        });
+        $platform = new TierRoutedPlatform($tiers, new ResolvedModel(Provider::Anthropic, 'big'), ['x' => 'platform', 'y' => 'platform']);
+
+        $platform->invoke('big', 'review', ['x' => 'call']);
+
+        self::assertSame(['x' => 'call', 'y' => 'platform'], $received['options']);
+    }
+
+    private function optionsSentBy(TierRequest $request): mixed
+    {
+        /** @var ArrayObject<string, mixed> $sent */
+        $sent = new ArrayObject();
+        $answer = MockPlatformFactory::createPlatform('ok');
+        $inner = self::createStub(PlatformInterface::class);
+        $inner->method('invoke')->willReturnCallback(static function (Model|string $model, array|string|object $input, array $options) use ($sent, $answer): DeferredResult {
+            $sent['options'] = $options;
+
+            return $answer->invoke('model', 'review');
+        });
+
+        $request->invokeOn($inner, 'big')->asText();
+
+        return $sent['options'];
     }
 }

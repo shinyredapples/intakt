@@ -46,7 +46,8 @@ final class TierRoutedPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
-        $round = $this->tiers->invoke($this->answering, new TierRequest($input, $options + $this->options));
+        $request = is_array($input) ? TierRequest::ofList(...$input) : TierRequest::of($input);
+        $round = $this->tiers->invoke($this->answering, $request->withDefaults(...$options)->withDefaults(...$this->options));
         $this->rounds[] = $round;
 
         return $round;
