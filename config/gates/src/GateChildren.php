@@ -18,8 +18,8 @@ final readonly class GateChildren
 
     // Because no outside timing can put a stop between two starts of one launch round, a test needs to act right after each start.
     /**
-     * @param list<string>                                 $runningTheChangesCode
-     * @param Closure(RunningChild|ProcessResult): void    $afterEachStart
+     * @param list<string>                              $runningTheChangesCode
+     * @param Closure(RunningChild|ProcessResult): void $afterEachStart
      */
     public function __construct(
         private string $home,
@@ -27,7 +27,8 @@ final readonly class GateChildren
         private GateSlots $slots,
         private array $runningTheChangesCode,
         private ProcessRunner $runner = new ProcessRunner(),
-        private Closure $afterEachStart = static function (RunningChild|ProcessResult $child): void {},
+        private Closure $afterEachStart = static function (RunningChild|ProcessResult $child): void {
+        },
     ) {
     }
 
