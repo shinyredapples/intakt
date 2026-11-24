@@ -9,8 +9,8 @@ use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * @phpstan-type Step array{name?: string, id?: string, if?: string, run?: string, uses?: string, with?: array<string, string|int>}
- * @phpstan-type Job array{if?: string, needs?: string, permissions?: array<string, string>, steps?: list<Step>}
+ * @phpstan-type Step array{name?: string, id?: string, if?: string, run?: string, env?: array<string, string|int>, uses?: string, with?: array<string, string|int>}
+ * @phpstan-type Job array{if?: string, needs?: string, 'timeout-minutes'?: int, permissions?: array<string, string>, steps?: list<Step>}
  * @phpstan-type WorkflowFile array{permissions: array<string, string>, jobs: array<string, Job>}
  */
 #[CoversNothing]
@@ -37,7 +37,7 @@ final class CiMainJobTest extends SandboxTestCase
     {
         $step = $this->step('main', 'passed');
 
-        self::assertStringContainsString('tree=$(git rev-parse "$GITHUB_SHA^{tree}") && passed=$(.github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree")', $step['run'] ?? '');
+        self::assertStringContainsString('tree=$(git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree")', $step['run'] ?? '');
     }
 
     public function testAFailedLookupWarnsAndRunsEveryJob(): void
@@ -46,6 +46,20 @@ final class CiMainJobTest extends SandboxTestCase
 
         self::assertSame([0, "full=true\n"], [$exit, $written]);
         self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);
+    }
+
+    public function testALookupThatStallsIsStoppedAndRunsEveryJob(): void
+    {
+        [$exit, $printed, $written] = $this->decide('exec sleep 30', '1');
+
+        self::assertSame([0, "full=true\n"], [$exit, $written]);
+        self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);
+    }
+
+    public function testTheLookupLimitIsSetOnTheStepAndEndsWellBeforeTheJob(): void
+    {
+        self::assertSame(300, $this->step('main', 'passed')['env']['LOOKUP_TIMEOUT_SECONDS'] ?? null);
+        self::assertSame(20, $this->job('main')['timeout-minutes'] ?? null);
     }
 
     public function testAMatchingRunSkipsTheFullRun(): void
@@ -116,7 +130,7 @@ final class CiMainJobTest extends SandboxTestCase
     /**
      * @return array{int, string, string}
      */
-    private function decide(string $gh): array
+    private function decide(string $gh, string $limit = '300'): array
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('bin/gh', "#!/bin/sh\n".$gh."\n");
@@ -129,7 +143,8 @@ final class CiMainJobTest extends SandboxTestCase
             'GITHUB_SHA' => 'abcdef',
             'GITHUB_REPOSITORY' => 'example/intakt',
             'GITHUB_OUTPUT' => $sandbox->root.'/output',
-        ]);
+            'LOOKUP_TIMEOUT_SECONDS' => $limit,
+        ], timeout: 10);
         $exit = $process->run();
 
         return [$exit, $process->getOutput(), (string) file_get_contents($sandbox->root.'/output')];

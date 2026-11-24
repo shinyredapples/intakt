@@ -40,15 +40,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # A failed lookup (an API call or git) never reads as "passed": it warns and runs every job.
+      # A failed lookup (an API call or git), or one LOOKUP_TIMEOUT_SECONDS stops before the job's own limit, never reads as
+      # "passed": it warns and runs every job.
       - name: Decide whether the commit passed as the head of a pull request into main
         id: passed
         env:
           GH_TOKEN: ${{ github.token }}
+          LOOKUP_TIMEOUT_SECONDS: 300
         run: |
           set -eu
-          if ! { tree=$(git rev-parse "$GITHUB_SHA^{tree}") && passed=$(.github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree"); }; then
-            echo "::warning::The lookup of a passed pull request run for $GITHUB_SHA failed, so every job runs."
+          if ! { tree=$(git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree"); }; then
+            echo "::warning::The lookup of a passed pull request run for $GITHUB_SHA failed or took over $LOOKUP_TIMEOUT_SECONDS seconds, so every job runs."
             passed=unknown
           fi
           echo "full=$([ "$passed" = yes ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
