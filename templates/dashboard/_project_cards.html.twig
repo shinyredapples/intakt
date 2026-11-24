@@ -1,13 +1,13 @@
 {#- The page's cards and the push that replaces them share this partial, so a pushed list never differs from a page loaded after it. Without a card it holds the empty state. -#}
 <div id="project-cards">
 {% if projects is empty %}
-{{ include('dashboard/components/empty.html.twig', {title: 'No projects yet', text: 'No project has started a review yet.', action: {href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')), label: 'Set up Intakt'}}, with_context = false) }}
+{{ include('dashboard/components/empty.html.twig', {title: 'No projects yet', text: 'No project has started a review yet.', action: {href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP')), label: 'Set up Intakt'}}, with_context = false) }}
 {% else %}
 {% for project in projects %}
 {%- set reviews = path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: project.name}) -%}
 <article class="pblock" id="project-{{ loop.index }}" data-project="{{ project.name }}">
     <div>
-        <h2><span class="dot {{ project.failing ? 'broken' : (project.running ? 'ok' : 'idle') }}"></span><a class="plink" href="{{ reviews }}" title="{{ project.name }}">{{ project.name }}</a></h2>
+        <h2><span class="dot {{ {Failing: 'broken', Running: 'ok', Quiet: 'idle'}[project.status] }}"></span><a class="plink" href="{{ reviews }}" title="{{ project.name }}">{{ project.name }}</a></h2>
         <p class="small state{{ project.failing ? ' failing' : ' muted' }}">{{ project.status }}{% if project.problem is not null %}: {{ project.problem }}{% endif %}</p>
         <ul class="tiers">
             {% for tier in project.tiers %}

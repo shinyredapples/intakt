@@ -15,7 +15,7 @@ interface CommitHistory
 
     // Oldest first, because the violations are reported in the order the commits reached main. It throws when main no longer holds the commit, because a force push can land after contains() answered.
     /**
-     * @return list<string>
+     * @return list<CommitName>
      *
      * @throws MainHistoryRewritten
      * @throws MainNotRead
@@ -29,7 +29,7 @@ interface CommitHistory
 
     // Only what the head holds and its base does not, because a fast-forward puts these commits on main's first-parent line and everything below the base was main's already.
     /**
-     * @return list<string>
+     * @return list<CommitName>
      *
      * @throws MainNotRead
      */

@@ -1,2 +1,3 @@
 {#- Replaced from the page's own partial, and morphed so a push that carries the cards the page already shows keeps the links and the keyboard focus they hold. -#}
 <turbo-stream action="replace" method="morph" target="project-cards"><template>{{ include('dashboard/_project_cards.html.twig', {projects: projects}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" method="morph" target="projects-setup"><template>{{ include('dashboard/_projects_setup.html.twig', {projects: projects}, with_context = false) }}</template></turbo-stream>

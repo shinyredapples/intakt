@@ -28,6 +28,7 @@ use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
+use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -40,6 +41,7 @@ use Intakt\Tests\Core\Dashboard\UseCase\ReviewBoundLedger;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Tests\Support\UnpricedRoundCosts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -110,10 +112,10 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->ledger = $ledger;
         $asked = [];
         $costs = $this->createMock(RoundCosts::class);
-        $costs->expects($this->atLeastOnce())->method('costOfIn')->willReturnCallback(static function (string $round) use (&$asked): Cost {
-            $asked[$round] = true;
+        $costs->expects($this->atLeastOnce())->method('costsOf')->willReturnCallback(static function (string ...$rounds) use (&$asked): RoundCostList {
+            $asked += array_fill_keys($rounds, true);
 
-            return Cost::none();
+            return new UnpricedRoundCosts()->costsOf(...$rounds);
         });
         $this->costs = $costs;
 
@@ -710,8 +712,7 @@ final class MercureRoundUpdatesTest extends TestCase
     {
         $this->log = new BufferingLogger();
         $this->ledger = new DashboardLedger();
-        $this->costs = self::createStub(RoundCosts::class);
-        $this->costs->method('costOfIn')->willReturn(Cost::none());
+        $this->costs = new UnpricedRoundCosts();
     }
 
     private function readAnswer(string $title): ReadAnswer

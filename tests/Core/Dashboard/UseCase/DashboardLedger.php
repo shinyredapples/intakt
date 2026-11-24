@@ -24,6 +24,8 @@ final class DashboardLedger implements Ledger
     /** @var array<string, int> */
     private array $readsOfKind = [];
 
+    private int $fullReads = 0;
+
     public function failNextAppend(): void
     {
         $this->failNextAppend = true;
@@ -42,8 +44,15 @@ final class DashboardLedger implements Ledger
         return AppendResult::appended(Uuid::v7());
     }
 
+    public function fullReads(): int
+    {
+        return $this->fullReads;
+    }
+
     public function readInOrder(): RecordedEvents
     {
+        ++$this->fullReads;
+
         return new RecordedEvents($this->recorded);
     }
 

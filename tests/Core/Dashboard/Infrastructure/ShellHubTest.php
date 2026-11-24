@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\ProjectNames;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\ConfiguredProjects;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -59,6 +62,7 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(DashboardTopics::class)]
 #[UsesClass(PublishProjectFilter::class)]
 #[UsesClass(FilterProjects::class)]
+#[UsesClass(ConfiguredProjects::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
@@ -114,7 +118,7 @@ final class ShellHubTest extends TestCase
         $ledger->method('readInOrder')->willReturn(new RecordedEvents([
             new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":1}'), new DateTimeImmutable('2026-11-10T12:00:00+00:00')),
         ]));
-        $projects = new FilterProjects(ListedReviews::on($ledger));
+        $projects = new FilterProjects(ListedReviews::on($ledger), new ConfiguredProjects(self::createConfiguredStub(TierResolver::class, ['projects' => new ProjectNames()]), []));
         $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
 
         new PublishProjectFilter($projects, $twig, $this->updates(), new LockFactory(new InMemoryStore()), $this->logger)(new RoundOpened('r1', 'alpha'));

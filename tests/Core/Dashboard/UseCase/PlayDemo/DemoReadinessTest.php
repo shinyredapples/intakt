@@ -42,21 +42,21 @@ final class DemoReadinessTest extends TestCase
         self::assertSame('Two AI labs read a change, then the owl decides what to fix.', DemoReadiness::Ready->firstRunLine(self::withoutAKey()));
     }
 
-    public function testWithoutARecordingOrAKeyTheFirstRunLinePointsToTheKeyForm(): void
+    public function testWithoutARecordingOrAKeyTheFirstRunLinePointsToTheAiAccountStep(): void
     {
         self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::withoutAKey()), DemoReadiness::NotComposeDemo->firstRunLine(self::withoutAKey()));
-        self::assertStringContainsString('Add a key below', DemoReadiness::NoRecording->firstRunLine(self::withoutAKey()));
+        self::assertStringContainsString('Add a key in step 3, AI account', DemoReadiness::NoRecording->firstRunLine(self::withoutAKey()));
     }
 
-    public function testWithoutARecordingAndWithAKeyTheFirstRunLinePointsToTheCardThatStartsAReview(): void
+    public function testWithoutARecordingAndWithAKeyTheFirstRunLinePointsToTheFirstReviewThatStartsAReview(): void
     {
-        self::assertSame('This install has no recorded review. A live review can be started or opened from the cards below.', DemoReadiness::NoRecording->firstRunLine(self::withAKey(true)));
+        self::assertSame('This install has no recorded review. A live review can be started or opened below.', DemoReadiness::NoRecording->firstRunLine(self::withAKey(true)));
         self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::withAKey(true)), DemoReadiness::NotComposeDemo->firstRunLine(self::withAKey(true)));
     }
 
-    public function testWithAKeyButNoCardThatStartsAReviewTheFirstRunLinePromisesNoStart(): void
+    public function testWithAKeyButNothingThatStartsAReviewTheFirstRunLinePromisesNoStart(): void
     {
-        self::assertSame('This install has no recorded review, and no card below can start a live one yet.', DemoReadiness::NoRecording->firstRunLine(self::withAKey(false)));
+        self::assertSame('This install has no recorded review, and nothing below can start a live one yet.', DemoReadiness::NoRecording->firstRunLine(self::withAKey(false)));
     }
 
     private static function withoutAKey(): FirstRun

@@ -20,26 +20,20 @@ use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Domain\WorkingCard;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
-use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 // Every section comes from one read of the ledger, so one head never counts as both running and failing; a configured project the ledger never named still gets its card.
 final readonly class ProjectCards
 {
     private const int RECENT = 3;
 
-    /**
-     * @param array<string, mixed> $watched
-     */
     public function __construct(
         private Ledger $ledger,
         private LedgerReviewPages $reviewPages,
         private LedgerFailingHeads $failingHeads,
         private TierResolver $tiers,
         private Redactor $redactor,
-        #[Autowire(param: WatcherServices::PROJECTS)]
-        private array $watched,
+        private ConfiguredProjects $configured,
     ) {
     }
 
@@ -125,7 +119,6 @@ final readonly class ProjectCards
         }, Tier::cases());
     }
 
-    // Names are strings again here, because PHP turns a project name of digits into an integer key.
     /**
      * @param list<Review>      $reviews
      * @param list<FailingHead> $failing
@@ -135,8 +128,7 @@ final readonly class ProjectCards
     private function namesOf(array $reviews, array $failing): array
     {
         $names = [
-            ...array_map(strval(...), array_keys($this->watched)),
-            ...$this->tiers->projects(),
+            ...$this->configured->names(),
             ...array_map(static fn (Review $review): string => $review->project, $reviews),
             ...array_map(static fn (FailingHead $head): string => $head->project, $failing),
         ];

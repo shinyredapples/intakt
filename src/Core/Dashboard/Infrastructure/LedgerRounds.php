@@ -32,6 +32,7 @@ use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
+use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndingLookup;
@@ -69,10 +70,6 @@ final class LedgerRounds
     private ?RoundEndingLookup $lookup = null;
 
     private readonly LedgerTokens $tokens;
-
-    // Kept raw for the costs, so a round is priced from the rows of this read, the same ones its tokens are counted from.
-    /** @var list<RecordedEvent> */
-    private array $usageRows = [];
 
     public function __construct(
         private readonly RoundPayloads $payloads,
@@ -121,7 +118,7 @@ final class LedgerRounds
     {
         $rounds = $this->membersOf($round);
 
-        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds), $this->timelineOf($rounds));
+        return [] === $rounds ? null : $this->reviewOn($rounds, $this->costsOf($rounds));
     }
 
     // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.
@@ -149,19 +146,25 @@ final class LedgerRounds
      */
     public function reviews(): array
     {
-        $reviews = [];
+        $grouped = [];
         $seen = [];
 
         foreach ($this->started as $started) {
-            $review = isset($seen[$started->round]) ? null : $this->reviewOf($started->round);
+            $rounds = isset($seen[$started->round]) ? [] : $this->membersOf($started->round);
 
-            if ($review instanceof Review) {
-                $reviews[] = $review;
-                $seen += array_fill_keys(array_map(static fn (ReviewedRound $member): string => $member->round, $review->rounds), true);
+            if ([] !== $rounds) {
+                $grouped[] = $rounds;
+                $seen += array_fill_keys(array_map(static fn (ReviewedRound $member): string => $member->round, $rounds), true);
             }
         }
 
-        return $reviews;
+        if ([] === $grouped) {
+            return [];
+        }
+
+        $costs = $this->costsOf(array_merge(...$grouped));
+
+        return array_map(fn (array $rounds): Review => $this->reviewOn($rounds, $costs), $grouped);
     }
 
     // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round; without cost, tokens or replay mark, because the list shows none of them and each costs a query per round.
@@ -219,7 +222,6 @@ final class LedgerRounds
 
     private function addUsage(RecordedEvent $recorded): void
     {
-        $this->usageRows[] = $recorded;
         $usage = $this->payloads->usageOf($recorded);
 
         if (null !== $usage) {
@@ -345,9 +347,26 @@ final class LedgerRounds
         return Decision::Blocked === $decision ? self::UNRECORDED_REASON : null;
     }
 
-    private function completed(ReviewedRound $round): ReviewedRound
+    // Priced together, because each pricing reads every usage row of the ledger.
+    /**
+     * @param list<ReviewedRound> $rounds
+     */
+    private function costsOf(array $rounds): RoundCostList
     {
-        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOfIn($round->round, $this->usageRows))->markedAs($this->markOf($round)));
+        return $this->costs->costsOf(...array_map(static fn (ReviewedRound $round): string => $round->round, $rounds));
+    }
+
+    /**
+     * @param non-empty-list<ReviewedRound> $rounds
+     */
+    private function reviewOn(array $rounds, RoundCostList $costs): Review
+    {
+        return new Review(array_map(fn (ReviewedRound $member): ReviewedRound => $this->completed($member, $costs), $rounds), $this->timelineOf($rounds));
+    }
+
+    private function completed(ReviewedRound $round, RoundCostList $costs): ReviewedRound
+    {
+        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($costs->of($round->round))->markedAs($this->markOf($round)));
     }
 
     // A spelling other than its canonical form, kept apart from rounds of its pull request, is history only, because storage numbers every new round of that pull request on the canonical row.

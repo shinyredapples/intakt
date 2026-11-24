@@ -13,7 +13,7 @@ use Symfony\Component\Console\Command\SignalableCommandInterface;
 use Symfony\Component\Console\SignalRegistry\SignalRegistry;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'intakt:review', description: 'Review a branch of a local repository with the project\'s panel and print the outcome, the act list and the tokens used')]
+#[AsCommand(name: 'intakt:review', description: 'Review a branch of a local repository with the project\'s panel and print the outcome, the act list, the tokens used and the cost')]
 final readonly class ReviewChangeCommand implements SignalableCommandInterface
 {
     // The shell's convention for a process ended by a signal, so a caller sees 130 for Ctrl-C and 143 for SIGTERM.

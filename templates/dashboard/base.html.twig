@@ -57,8 +57,8 @@
     <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
     <button class="search-trigger" type="button" aria-haspopup="dialog" aria-controls="search" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
     <div class="grow"></div>
-    {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. The error page passes project_names, read where a failing ledger cannot take the shell down with it. #}
-    {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge((project_names ?? filter_projects())|map(name => {value: name, label: name}))}, with_context = false) }}
+    {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. The error page passes project_names, read where a failing ledger cannot take the shell down with it. A page that offers projects outside the shared list (History) names them in page_projects, compared strictly as the options are. #}
+    {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge((project_names ?? filter_projects())|map(name => {value: name, label: name, page: (page_projects ?? [])|filter(page_name => page_name is same as(name))|length > 0}))}, with_context = false) }}
     <button class="icon-btn theme-toggle" type="button" aria-label="Switch light or dark theme" data-theme-toggle>{{ include('dashboard/components/icon.html.twig', {name: 'moon', extra: 'moon'}, with_context = false) }}{{ include('dashboard/components/icon.html.twig', {name: 'sun', extra: 'sun'}, with_context = false) }}</button>
     {{ include('dashboard/components/offline.html.twig', {live: true}, with_context = false) }}
 </header>
@@ -111,6 +111,72 @@
             return null;
         }
     };
+    // FilterProjects' order (PHP's strnatcasecmp on the UTF-8 bytes) ported step by step, because a merged list must match the server's and no browser comparison does: localeCompare calls 'zeta-2' and 'zeta-02' equal.
+    const utf8 = new TextEncoder();
+    const isDigit = (byte) => byte >= 48 && byte <= 57;
+    const isSpace = (byte) => byte === 32 || (byte >= 9 && byte <= 13);
+    const upper = (byte) => (byte >= 97 && byte <= 122 ? byte - 32 : byte);
+    const natural = (a, b) => {
+        if (a.length === 0 || b.length === 0) {
+            return Math.sign(a.length - b.length);
+        }
+        let i = 0;
+        let j = 0;
+        let ca = a[0];
+        let cb = b[0];
+        while (ca === 48 && i + 1 < a.length && isDigit(a[i + 1])) {
+            ca = a[++i];
+        }
+        while (cb === 48 && j + 1 < b.length && isDigit(b[j + 1])) {
+            cb = b[++j];
+        }
+        for (;;) {
+            while (isSpace(ca)) {
+                ca = a[++i] ?? 0;
+            }
+            while (isSpace(cb)) {
+                cb = b[++j] ?? 0;
+            }
+            if (isDigit(ca) && isDigit(cb)) {
+                // A run starting with a zero compares left-aligned, digit by digit; any other run is longer or, at equal length, has the first greater digit.
+                const fractional = ca === 48 || cb === 48;
+                let result = 0;
+                for (;; i++, j++) {
+                    const digitA = i < a.length && isDigit(a[i]);
+                    const digitB = j < b.length && isDigit(b[j]);
+                    if (!digitA || !digitB) {
+                        result = digitA === digitB ? result : (digitA ? 1 : -1);
+                        break;
+                    }
+                    if (a[i] !== b[j] && (fractional || result === 0)) {
+                        result = a[i] < b[j] ? -1 : 1;
+                        if (fractional) {
+                            break;
+                        }
+                    }
+                }
+                if (result !== 0) {
+                    return result;
+                }
+                if (i === a.length || j === b.length) {
+                    return Math.sign((i === a.length ? 0 : 1) - (j === b.length ? 0 : 1));
+                }
+                ca = a[i];
+                cb = b[j];
+            }
+            if (upper(ca) !== upper(cb)) {
+                return upper(ca) < upper(cb) ? -1 : 1;
+            }
+            i++;
+            j++;
+            if (i >= a.length || j >= b.length) {
+                return Math.sign((i >= a.length ? 0 : 1) - (j >= b.length ? 0 : 1));
+            }
+            ca = a[i];
+            cb = b[j];
+        }
+    };
+    const nameOrder = (one, other) => natural(utf8.encode(one), utf8.encode(other));
     // Looks the select up when called, because a listener bound once calls it after a visit has replaced the body.
     const showProject = () => {
         const shownFilter = document.querySelector('#projfilter');
@@ -126,6 +192,10 @@
         const chosen = phone.matches ? '' : shownFilter.value;
         document.querySelectorAll('[data-project]').forEach((item) => {
             item.hidden = chosen !== '' && item.dataset.project !== chosen;
+        });
+        // A container whose rows the filter hid shows its empty line, so a project without rows there says so instead of leaving a bare heading.
+        document.querySelectorAll('[data-project-empty]').forEach((line) => {
+            line.hidden = [...line.parentElement.querySelectorAll('[data-project]')].some((item) => !item.hidden);
         });
         shownFilter.title = shownFilter.selectedOptions[0].textContent;
         // assets/column-more.js counts a crowded column's page limit over the cards left shown, so it hears of each run.
@@ -186,6 +256,15 @@
                 };
                 return;
             }
+            if (event.target.getAttribute('action') === 'replace' && replaced?.id === 'project-cards') {
+                const render = event.detail.render;
+                // The pushed cards are every project's, so the project choice is put back on them; the morph keeps the keyboard focus.
+                event.detail.render = (stream) => {
+                    render(stream);
+                    showProject();
+                };
+                return;
+            }
             if (event.target.getAttribute('action') === 'replace' && replaced?.matches('.board > .col')) {
                 const render = event.detail.render;
                 // The pushed column comes from the server with its start state and every card shown, so the person's own fold, Show more and project choice are put back on it; the Show more mark goes back before the filter runs, because assets/column-more.js reads it there.
@@ -218,7 +297,19 @@
             // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
             event.detail.render = (stream) => {
                 const chosen = shownFilter.value;
+                // The shared list lacks the projects a page offers for its own rows (History), so those are kept, or the push would take them and their choice away.
+                const pageOptions = [...shownFilter.options].filter((option) => 'pageOption' in option.dataset);
                 render(stream);
+                const lost = pageOptions.filter((kept) => ![...shownFilter.options].some((option) => option.value === kept.value));
+                if (lost.length > 0) {
+                    // The pushed list keeps its own order; each kept option goes after every name the order calls equal, as FilterProjects' stable sort puts it.
+                    const [all, ...named] = [...shownFilter.options];
+                    for (const kept of lost) {
+                        const after = named.findIndex((option) => nameOrder(option.value, kept.value) > 0);
+                        named.splice(after < 0 ? named.length : after, 0, kept);
+                    }
+                    shownFilter.replaceChildren(all, ...named);
+                }
                 shownFilter.value = [...shownFilter.options].some((option) => option.value === chosen) ? chosen : '';
                 showProject();
             };

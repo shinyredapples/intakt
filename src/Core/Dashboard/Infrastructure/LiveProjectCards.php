@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\LockFactory;
 use Throwable;
@@ -67,7 +68,7 @@ final readonly class LiveProjectCards
 
     // The cards are compared, not the rendered streams, because a rendered term's tooltip carries a fresh random id each time.
     /**
-     * @param list<object> $cards
+     * @param list<ProjectCard> $cards
      */
     private function signatureOf(array $cards): string
     {

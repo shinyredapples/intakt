@@ -11,6 +11,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Budget\Contract\Prices;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
@@ -130,16 +132,48 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         self::assertSame('1,500', $this->figuresOf($crawler, 'alpha')[0]);
     }
 
-    public function testTheCardsPriceTheRoundsFromTheirOneReadOfTheLedger(): void
+    public function testTheCardsPriceEveryRoundFromOneReadOfTheUsageHistory(): void
     {
-        $this->ledger->startRound('round-1', 'alpha');
-        $this->ledger->startRound('round-2', 'alpha');
-        $this->ledger->useTokens('round-1', 1200, 300);
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
+        $this->ledger->startRoundOf('feat/a', 'round-1', 1);
+        $this->ledger->startRoundOf('feat/b', 'round-2', 1);
+        $this->ledger->startRound('round-3', 'beta');
+        $this->ledger->useTokens('round-1', 1000, 600);
+        $this->ledger->useTokens('round-2', 1000, 40);
 
-        $this->browser->request('GET', '/projects');
+        $page = $this->browser->request('GET', '/projects');
 
-        self::assertSame('1,500', $this->figuresOf($this->browser->getCrawler(), 'alpha')[0]);
-        self::assertSame(0, $this->ledger->readsOfKind(LedgerEventKind::UsageRecorded));
+        self::assertSame('2,640', $this->figuresOf($page, 'alpha')[0]);
+        self::assertStringStartsWith('0.0104 USD', $page->filter('[data-project="alpha"] .stat')->text());
+        self::assertSame(1, $this->ledger->readsOfKind(LedgerEventKind::UsageRecorded));
+    }
+
+    public function testTheCardsReadTheLedgerOnce(): void
+    {
+        $this->ledger->startRoundOf('feat/a', 'round-1', 1);
+        $this->ledger->startRoundOf('feat/b', 'round-2', 1);
+        $cards = self::getContainer()->get(ProjectCards::class);
+        self::assertInstanceOf(ProjectCards::class, $cards);
+
+        $cards->now();
+
+        self::assertSame(1, $this->ledger->fullReads());
+    }
+
+    public function testACardOfAProjectKnownOnlyFromTiersOpensItsReviewsWithThatProjectChosen(): void
+    {
+        $this->browser->disableReboot();
+        $this->ledger->startRound('round-1', 'beta');
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(new ProjectNames('idle-project'));
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'model-a'));
+        self::getContainer()->set(TierResolver::class, $tiers);
+
+        $href = (string) $this->browser->request('GET', '/projects')->filter('[data-project="idle-project"] .plink')->attr('href');
+        $reviews = $this->browser->request('GET', $href);
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $reviews->filter('#projfilter option[value="idle-project"][selected]'));
     }
 
     public function testAProjectWhoseTiersDoNotResolveStillGetsItsCardWithTheProblem(): void

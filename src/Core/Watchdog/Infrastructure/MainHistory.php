@@ -7,6 +7,8 @@ namespace Intakt\Core\Watchdog\Infrastructure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
+use Intakt\Core\Watchdog\Contract\CommitName;
+use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\RecordedMerge;
@@ -71,11 +73,12 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @return list<string>
+     * @return list<CommitName>
      *
      * @throws MainNotRead
      * @throws RuntimeException
      * @throws MainHistoryRewritten
+     * @throws CommitNameNotFull
      */
     public function firstParentsSince(string $commit): array
     {
@@ -103,7 +106,7 @@ final readonly class MainHistory implements CommitHistory
             throw MainNotRead::brokenWalk($since, $tip);
         }
 
-        return $chain->commits;
+        return array_map(static fn (string $commit): CommitName => new CommitName($commit), $chain->commits);
     }
 
     /**
@@ -152,10 +155,11 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @return list<string>
+     * @return list<CommitName>
      *
      * @throws MainNotRead
      * @throws RuntimeException
+     * @throws CommitNameNotFull
      */
     public function broughtInBy(RecordedMerge $merge): array
     {
@@ -163,7 +167,7 @@ final readonly class MainHistory implements CommitHistory
         // Read with no shallow entries, because a cut during the read would hide what the base already held and pass it as brought in; a pruned commit then fails the read. The trailing -- keeps a file named like the base from making it ambiguous.
         $brought = trim($this->read(['rev-list', $merge->head, '--not', $merge->base, '--'], self::NO_SHALLOW_ENTRIES));
 
-        return '' === $brought ? [] : explode("\n", $brought);
+        return '' === $brought ? [] : array_map(static fn (string $commit): CommitName => new CommitName($commit), explode("\n", $brought));
     }
 
     /**

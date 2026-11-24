@@ -161,8 +161,20 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame(
             $this->withoutTipIds($loaded->filter('#project-cards')->outerHtml()),
-            $this->withoutTipIds(trim($pushed->filter('template')->html())),
+            $this->withoutTipIds(trim($pushed->filter('turbo-stream[target="project-cards"] template')->html())),
         );
+    }
+
+    public function testTheFirstPushedCardKeepsASetupLinkOnAnOpenEmptyPage(): void
+    {
+        $page = $this->browser->request('GET', '/projects');
+        self::assertCount(1, $page->filter('main a[href="/setup"]'));
+
+        $this->pushedCardsAfterAReviewerStarted();
+
+        $shown = new StreamedPage()->afterTopic(DashboardTopics::SHELL, $this->shellUpdates(), $page);
+        self::assertCount(1, $shown->filter('[data-project="alpha"]'));
+        self::assertCount(1, $shown->filter('main a[href="/setup"]'));
     }
 
     public function testARoundChangedPushesTheCardsToo(): void

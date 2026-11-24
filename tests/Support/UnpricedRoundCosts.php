@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Support;
 
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
-use Override;
 
 final readonly class UnpricedRoundCosts implements RoundCosts
 {
@@ -15,9 +15,8 @@ final readonly class UnpricedRoundCosts implements RoundCosts
         return Cost::none();
     }
 
-    #[Override]
-    public function costOfIn(string $roundId, array $usageRows): Cost
+    public function costsOf(string ...$roundIds): RoundCostList
     {
-        return Cost::none();
+        return new RoundCostList(array_fill_keys($roundIds, Cost::none()));
     }
 }

@@ -8,12 +8,7 @@
         <h1>Projects</h1>
         <p class="lead">Every project at a glance: what it works on now, what it has used, and what waits on you.</p>
     </div>
-    {# The board links the first-run page until a review has run; here the link shows once any project has a card, a configured project without a review included (#2067, D3). #}
-    {% if projects is not empty %}
-    <div class="actions">
-        <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Set up Intakt</a>
-    </div>
-    {% endif %}
+    {{ include('dashboard/_projects_setup.html.twig', {projects: projects}, with_context = false) }}
 </div>
 {{ include('dashboard/_project_cards.html.twig', {projects: projects}, with_context = false) }}
 {% endblock %}
