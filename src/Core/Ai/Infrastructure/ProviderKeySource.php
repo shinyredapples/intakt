@@ -18,8 +18,8 @@ final readonly class ProviderKeySource
     private array $vaultNames;
 
     /**
-     * @param array<string, string>        $keptValues
-     * @param Closure(string): (?string)   $environment
+     * @param array<string, string>      $keptValues
+     * @param Closure(string): (?string) $environment
      */
     public function __construct(
         private SodiumVault $vault,

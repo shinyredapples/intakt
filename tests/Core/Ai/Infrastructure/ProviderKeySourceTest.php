@@ -22,18 +22,6 @@ final class ProviderKeySourceTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/provider-key-source-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        unset($_SERVER[self::NAME], $_ENV[self::NAME]);
-        putenv(self::NAME);
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAnEmptyKeyCountsAsMissing(): void
     {
         $_SERVER[self::NAME] = '';
@@ -70,7 +58,10 @@ final class ProviderKeySourceTest extends TestCase
         $this->sealed('UNRELATED_VAULT_ENTRY', 'test-value');
         $vault = ProviderKeySource::openVault($this->directory, $this->malformedSecret());
 
-        self::assertTrue($this->source(vault: $vault, environment: static fn (): string => 'test-value')->isSet(self::NAME));
+        self::assertTrue($this->source(
+            vault: $vault,
+            environment: static fn (): string => 'test-value',
+        )->isSet(self::NAME));
     }
 
     public function testAKeyStoredOnlyInTheVaultBehindAMalformedDecryptionSecretCountsAsMissing(): void
@@ -114,7 +105,22 @@ final class ProviderKeySourceTest extends TestCase
         $this->sealed(self::NAME, 'test-value');
         $vault = ProviderKeySource::openVault($this->directory, $this->malformedSecret());
 
-        self::assertFalse($this->source(vault: $vault, kept: [self::NAME => 'kept-value'])->isSet(self::NAME));
+        self::assertFalse($this->source(
+            vault: $vault,
+            kept: [self::NAME => 'kept-value'],
+        )->isSet(self::NAME));
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/provider-key-source-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER[self::NAME], $_ENV[self::NAME]);
+        putenv(self::NAME);
+        new Filesystem()->remove($this->directory);
     }
 
     /**
