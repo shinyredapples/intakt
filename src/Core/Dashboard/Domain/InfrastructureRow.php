@@ -7,6 +7,8 @@ namespace Intakt\Core\Dashboard\Domain;
 use Closure;
 use Intakt\Core\Server\Contract\EndpointDown;
 use Intakt\Core\Server\Contract\HubHealth;
+use Intakt\Core\Server\Contract\HubState;
+use Intakt\Core\Server\Contract\HubVerdict;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\WorkerThreads;
@@ -77,10 +79,12 @@ final readonly class InfrastructureRow
      */
     private static function hubOf(HubHealth|EndpointDown $hub, Closure $redact): InfrastructureFigure
     {
-        return match (true) {
-            $hub instanceof EndpointDown => InfrastructureFigure::down(self::HUB, $redact($hub->reason)),
-            HubHealth::Healthy === $hub => new InfrastructureFigure(self::HUB, $hub->value),
-            HubHealth::Unhealthy === $hub => new InfrastructureFigure(self::HUB, $hub->value, FigureState::Unhealthy),
+        $verdict = HubVerdict::of($hub);
+
+        return match ($verdict->state) {
+            HubState::Down => InfrastructureFigure::down(self::HUB, $redact($verdict->detail)),
+            HubState::Healthy => new InfrastructureFigure(self::HUB, $verdict->detail),
+            HubState::Unhealthy => new InfrastructureFigure(self::HUB, $verdict->detail, FigureState::Unhealthy),
         };
     }
 }

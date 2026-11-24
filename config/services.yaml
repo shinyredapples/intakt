@@ -78,6 +78,11 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'
+    Intakt\Plugin\GitHubForge\Infrastructure\ForgeCredentialCheck:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
     # Lazy, so the forge can be built without an App (the demo) and the two settings are parsed only when a call first reaches GitHub.
     Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation:
         lazy: true

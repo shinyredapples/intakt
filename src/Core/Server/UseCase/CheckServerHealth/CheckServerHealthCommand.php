@@ -6,10 +6,10 @@ namespace Intakt\Core\Server\UseCase\CheckServerHealth;
 
 use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
 use Intakt\Core\Server\Contract\EndpointDown;
+use Intakt\Core\Server\Contract\HubVerdict;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
-use Intakt\Core\Server\Infrastructure\HubHealthCheck;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
@@ -20,7 +20,6 @@ final readonly class CheckServerHealthCommand
 {
     public function __construct(
         private ServerStatus $status,
-        private HubHealthCheck $hubCheck,
     ) {
     }
 
@@ -54,7 +53,7 @@ final readonly class CheckServerHealthCommand
         return array_values(array_filter([
             $this->threadsProblem($reading->threads),
             $reading->metrics instanceof EndpointDown ? 'server metrics down ('.$reading->metrics->reason.')' : null,
-            $this->hubCheck->problem($reading->hub),
+            HubVerdict::of($reading->hub)->problem(),
         ], is_string(...)));
     }
 

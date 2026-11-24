@@ -45,8 +45,6 @@ final readonly class InstallationTokenMinter
         try {
             $response = $this->http->request('POST', self::API.'/app/installations/'.rawurlencode($installationId).'/access_tokens', [
                 'auth_bearer' => $jwt,
-                'timeout' => 5,
-                'max_duration' => 15,
                 'headers' => ['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'],
             ]);
             $status = $response->getStatusCode();

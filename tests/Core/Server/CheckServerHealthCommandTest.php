@@ -12,7 +12,6 @@ use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
 use Intakt\Core\Server\Infrastructure\AdminApi;
 use Intakt\Core\Server\Infrastructure\AdminApiServerStatus;
-use Intakt\Core\Server\Infrastructure\HubHealthCheck;
 use Intakt\Core\Server\Infrastructure\PrometheusSamples;
 use Intakt\Core\Server\UseCase\CheckServerHealth\CheckServerHealthCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -23,7 +22,6 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 #[CoversClass(CheckServerHealthCommand::class)]
-#[UsesClass(HubHealthCheck::class)]
 #[UsesClass(AdminApi::class)]
 #[UsesClass(AdminApiServerStatus::class)]
 #[UsesClass(PrometheusSamples::class)]
@@ -100,7 +98,7 @@ final class CheckServerHealthCommandTest extends TestCase
     private function execute(ServerStatus $status): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new CheckServerHealthCommand($status, new HubHealthCheck($status)));
+        $application->addCommand(new CheckServerHealthCommand($status));
         $tester = new CommandTester($application->find('intakt:server:health'));
         $tester->execute([]);
 

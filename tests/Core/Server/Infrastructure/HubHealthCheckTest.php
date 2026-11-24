@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Server\Infrastructure;
 use Intakt\Core\Doctor\Contract\CheckResult;
 use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
 use Intakt\Core\Server\Contract\EndpointDown;
+use Intakt\Core\Server\Contract\HubVerdict;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\WorkerThreads;
@@ -29,6 +30,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ServerMetrics::class)]
 #[UsesClass(EndpointDown::class)]
 #[UsesClass(AdminApiNotOnLocalhost::class)]
+#[UsesClass(HubVerdict::class)]
 final class HubHealthCheckTest extends TestCase
 {
     public function testTheHubCheckPassesOnAHealthyHubReading(): void
@@ -43,7 +45,7 @@ final class HubHealthCheckTest extends TestCase
         $result = new HubHealthCheck(new RecordedAdminApi()->answering('/mercure/health/ready', '', 503)->status())->run();
 
         self::assertFalse($result->passed);
-        self::assertStringContainsString('the hub reports unhealthy. Run this inside the container', $result->fix);
+        self::assertStringContainsString('the hub reports unhealthy. Restart the container', $result->fix);
     }
 
     public function testTheHubCheckFailsWhenItsEndpointIsDown(): void
