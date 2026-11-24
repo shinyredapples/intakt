@@ -186,6 +186,33 @@ test('a Play the demo run button that leads to /demo on another origin fails the
     assert.equal(result.failure.error, 'the press did not lead to /demo with a success status within 10 s; it led to http://other.test/demo (HTTP 200), then http://other.test/reviews/r1 (HTTP 200)');
 });
 
+test('a demo page without its heading that leaves at once for /elsewhere, which shows the recorded verdict and finding, fails the first journey at step 3', async () => {
+    const pages = demoSite({ delayMs: 0 });
+    pages['/demo'] = pages['/setup'].replace(/<main>.*<\/main>/, '<main><script>location.assign(\'/elsewhere\');</script></main>');
+    pages['/elsewhere'] = pages['/reviews/r1'];
+
+    const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
+});
+
+test('a demo page that leaves at once for a review page on another origin fails the first journey at step 3', async () => {
+    const result = await runJourney(routedSite(demoSite({ demo: '<script>location.assign(\'http://other.test/reviews/r1\');</script>' })), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the page left /demo for http://other.test/reviews/r1, not for a review page on http://localhost');
+});
+
+test('a demo page that leaves at once for a page below a review page fails the first journey at step 3', async () => {
+    const pages = demoSite({ demo: '<script>location.assign(\'/reviews/r1/record\');</script>' });
+    pages['/reviews/r1/record'] = pages['/reviews/r1'];
+
+    const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/reviews/r1/record, not for a review page on http://localhost');
+});
+
 test('a demo page that stays and does not show its heading fails the first journey at step 3', async () => {
     const result = await runJourney(routedSite(demoSite({ demo: '<h1>Something else</h1>' })), ORIGIN, FIRST_RUN, scratch(), 1);
 

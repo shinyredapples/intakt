@@ -192,7 +192,13 @@ function holdsWithin(trail, holds, timeout) {
 function describe(trail) {
   if (trail.visits.length === 0) return 'no other address';
 
-  return trail.visits.map((visit) => `${new URL(visit).origin}${new URL(visit).pathname} (${status(trail.statuses.get(visit))})`).join(', then ');
+  return trail.visits.map((visit) => `${originAndPath(visit)} (${status(trail.statuses.get(visit))})`).join(', then ');
+}
+
+function originAndPath(address) {
+  const url = new URL(address);
+
+  return url.origin + url.pathname;
 }
 
 function status(code) {
@@ -259,21 +265,40 @@ function seeRole(role, name, timeout = STEP_TIMEOUT_MS) {
   };
 }
 
-// For a page that sends its visitor on by itself: what it shows is asked for only while the page is still there, and a page that already moved on passes, as nothing is wrong with it.
+// For a page that sends its visitor on by itself: what it shows is asked for only while the page is still there, and a page that already moved on passes only if it went to a review page of the same install, as any other page could show what a later step looks for.
 function seeRoleWhileAt(pathOnSite, role, name) {
   return {
     name: `see the ${role} "${name}" while at ${pathOnSite}`,
     run: async (page, address) => {
       const expected = new URL(address + pathOnSite);
-      if (!isAt(page.url(), expected)) return;
-      const seen = seeRole(role, name).run(page);
-      const left = page.waitForURL((url) => !isAt(url.href, expected), { waitUntil: 'commit' });
-      // The one that loses the race ends later, with nobody waiting for it.
-      seen.catch(() => {});
-      left.catch(() => {});
-      await Promise.race([seen, left]);
+      let departure;
+      if (isAt(page.url(), expected)) {
+        const seen = seeRole(role, name).run(page);
+        const left = page.waitForURL((url) => {
+          if (isAt(url.href, expected)) return false;
+          departure ??= url.href;
+
+          return true;
+        }, { waitUntil: 'commit' });
+        // The losing promise's rejection is caught so it does not become an unhandled rejection that stops the check.
+        seen.catch(() => {});
+        left.catch(() => {});
+        await Promise.race([seen, left]);
+      }
+      const where = departure ?? page.url();
+      if (!isAt(where, expected) && !isReviewPage(where, address)) {
+        throw new Error(`the page left ${pathOnSite} for ${originAndPath(where)}, not for a review page on ${new URL(address).origin}`);
+      }
     },
   };
+}
+
+// The SHOW_REVIEW route, /reviews/{round}, below the address the check was given; a page under it or on another install is not the review.
+function isReviewPage(where, address) {
+  const url = new URL(where);
+  const reviews = new URL(address + '/reviews/');
+
+  return url.origin === reviews.origin && url.pathname.startsWith(reviews.pathname) && /^[^/]+$/.test(url.pathname.slice(reviews.pathname.length));
 }
 
 // One step a person would name, made of the smaller steps that prove it, so the report says which part of the journey broke.
