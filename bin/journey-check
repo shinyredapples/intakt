@@ -28,13 +28,16 @@ const JOURNEYS = [
     steps: [
       named('open /setup and see the start', open('/setup'), seeRole('heading', 'See a real review')),
       press('button', 'Play the demo run'),
-      // The demo page follows the run to its review only once the queue worker starts it, so its heading is still there when the press lands.
-      named('reach /demo and see the demo run', arrive('/demo'), seeRole('heading', 'The demo run')),
+      // The demo page follows the run to its review as soon as the queue worker started it, which can be before the page is looked at, so its heading is asked for only while the page is still there.
+      named('reach /demo and see the demo run', arrive('/demo'), seeRoleWhileAt('/demo', 'heading', 'The demo run')),
       named('wait for the verdict of the demo run', seeRole('heading', OUTCOME, VERDICT_TIMEOUT_MS), seeRole('heading', RECORDED_VERDICT)),
       named('see the recorded finding on the review page', seeRole('link', RECORDED_FINDING)),
     ],
   },
 ];
+
+// Where each page's last press led: a page can move on by itself before the next step looks at it, so the addresses and their answers are kept from before the click.
+const TRAILS = new WeakMap();
 
 class CheckCouldNotRun extends Error {}
 
@@ -147,20 +150,101 @@ function open(pathOnSite) {
   };
 }
 
-// A button that posts somewhere else would leave the journey on a wrong page that still shows what a later step looks for, so the page's own address is checked.
+// A button that posts somewhere else, also on another install, would leave the journey on a wrong page that still shows what a later step looks for, so the origin and the path the press led to are checked, and the answer there must be a success.
 function arrive(pathOnSite) {
   return {
     name: `arrive at ${pathOnSite}`,
-    run: (page, address) => {
-      const expected = new URL(address + pathOnSite).pathname;
-
-      return page.waitForURL((url) => url.pathname === expected);
+    run: async (page, address) => {
+      const trail = TRAILS.get(page);
+      if (trail === undefined) throw new Error(`no press came before the arrival at ${pathOnSite}`);
+      const expected = new URL(address + pathOnSite);
+      const reached = () => trail.visits.some((visit) => isAt(visit, expected) && isSuccess(trail.statuses.get(visit)));
+      if (!(await holdsWithin(trail, reached, STEP_TIMEOUT_MS))) {
+        throw new Error(`the press did not lead to ${pathOnSite} with a success status within ${STEP_TIMEOUT_MS / 1000} s; it led to ${describe(trail)}`);
+      }
     },
   };
 }
 
+function isAt(address, expected) {
+  const url = new URL(address);
+
+  return url.origin === expected.origin && url.pathname === expected.pathname;
+}
+
+function isSuccess(status) {
+  return status !== undefined && status >= 200 && status < 300;
+}
+
+function holdsWithin(trail, holds, timeout) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeout);
+    trail.changed = () => {
+      if (!holds()) return;
+      clearTimeout(timer);
+      resolve(true);
+    };
+    trail.changed();
+  });
+}
+
+// Only the origin and the path are named, so a query string never reaches the output.
+function describe(trail) {
+  if (trail.visits.length === 0) return 'no other address';
+
+  return trail.visits.map((visit) => `${new URL(visit).origin}${new URL(visit).pathname} (${status(trail.statuses.get(visit))})`).join(', then ');
+}
+
+function status(code) {
+  return code === undefined ? 'no answer seen' : `HTTP ${code}`;
+}
+
+// The watch starts before the click, so no address the press leads to is missed, however soon the page leaves it again.
 function press(role, name) {
-  return { name: `press the ${role} "${name}"`, run: (page) => page.getByRole(role, { name, exact: true }).click() };
+  return {
+    name: `press the ${role} "${name}"`,
+    run: (page) => {
+      watch(page);
+
+      return page.getByRole(role, { name, exact: true }).click();
+    },
+  };
+}
+
+// A page can change its address with or without loading a new document (Turbo fetches the page and pushes the address), so the main frame's addresses and the answers to its requests are kept apart and joined by address.
+function watch(page) {
+  TRAILS.get(page)?.stop();
+  const trail = { visits: [], statuses: new Map(), changed: () => {} };
+  const visited = (frame) => {
+    if (frame !== page.mainFrame()) return;
+    trail.visits.push(withoutFragment(frame.url()));
+    trail.changed();
+  };
+  const answered = (response) => {
+    if (!isOfMainFrame(page, response)) return;
+    trail.statuses.set(withoutFragment(response.url()), response.status());
+    trail.changed();
+  };
+  trail.stop = () => {
+    page.off('framenavigated', visited);
+    page.off('response', answered);
+  };
+  page.on('framenavigated', visited);
+  page.on('response', answered);
+  TRAILS.set(page, trail);
+}
+
+function withoutFragment(address) {
+  return address.split('#')[0];
+}
+
+// Playwright throws when asked for the frame of a service worker's request, and a throw in a listener would stop the whole check.
+function isOfMainFrame(page, response) {
+  try {
+    return response.frame() === page.mainFrame();
+  } catch {
+    return false;
+  }
 }
 
 function see(text) {
@@ -172,6 +256,23 @@ function seeRole(role, name, timeout = STEP_TIMEOUT_MS) {
   return {
     name: name instanceof RegExp ? `see the ${role} matching ${name}` : `see the ${role} "${name}"`,
     run: (page) => page.getByRole(role, { name, exact: true }).filter({ visible: true }).first().waitFor({ timeout }),
+  };
+}
+
+// For a page that sends its visitor on by itself: what it shows is asked for only while the page is still there, and a page that already moved on passes, as nothing is wrong with it.
+function seeRoleWhileAt(pathOnSite, role, name) {
+  return {
+    name: `see the ${role} "${name}" while at ${pathOnSite}`,
+    run: async (page, address) => {
+      const expected = new URL(address + pathOnSite);
+      if (!isAt(page.url(), expected)) return;
+      const seen = seeRole(role, name).run(page);
+      const left = page.waitForURL((url) => !isAt(url.href, expected), { waitUntil: 'commit' });
+      // The one that loses the race ends later, with nobody waiting for it.
+      seen.catch(() => {});
+      left.catch(() => {});
+      await Promise.race([seen, left]);
+    },
   };
 }
 
@@ -223,6 +324,8 @@ module.exports = {
   press,
   see,
   seeRole,
+  seeRoleWhileAt,
+  arrive,
   named,
   report,
   exitCode,

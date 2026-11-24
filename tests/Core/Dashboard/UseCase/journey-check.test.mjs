@@ -37,6 +37,7 @@ function scratch() {
 function browserWithBrokenPage() {
     const page = {
         setDefaultTimeout() {},
+        on() {},
         getByRole: () => ({ click: async () => { throw new Error('locator.click: Timeout 10000ms exceeded.\nCall log: waiting for button'); } }),
         screenshot: async () => { throw new Error('the page is gone'); },
     };

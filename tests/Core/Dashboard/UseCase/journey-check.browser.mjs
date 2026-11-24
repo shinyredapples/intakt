@@ -41,24 +41,29 @@ function routedBrowser() {
 // Stand-ins for /setup, /demo and the review page, with what the first journey looks for: the start's button leads to /demo,
 // which follows the run to its review a moment later, and the verdict and the finding arrive a moment after the review page
 // loads, as the demo run's live update brings them.
-function demoSite({ playLabel = 'Play the demo run', playTarget = '/demo?play=p1', verdict = 'Changes needed', finding = 'to <code>amount &gt; 100</code>.', delayMs = 500 } = {}) {
+const DEMO_THAT_FOLLOWS_LATER = '<h1>The demo run</h1><script>setTimeout(() => location.assign(\'/reviews/r1\'), 300);</script>';
+// The order a quick queue worker forces: the run started before the demo page rendered, so the page leaves for the review with no timer, before anything on it can be looked at.
+const DEMO_THAT_FOLLOWS_AT_ONCE = '<script>location.assign(\'/reviews/r1\');</script><h1>The demo run</h1>';
+
+function demoSite({ playLabel = 'Play the demo run', playTarget = '/demo?play=p1', demo = DEMO_THAT_FOLLOWS_LATER, verdict = 'Changes needed', finding = 'to <code>amount &gt; 100</code>.', delayMs = 500 } = {}) {
     const html = (title, body) => `<!doctype html><html lang="en"><head><title>${title}</title></head><body><main>${body}</main></body></html>`;
     const arrive = `<h2>${verdict}</h2><a href="/reviews/r1/record#f1"><span>The check changed from <code>amount &gt;= 100</code> ${finding}</span> <span>src/discount.js:3</span></a>`;
 
     return {
         '/setup': html('Start', `<h1>See a real review</h1><p>1 minute · no key</p><button onclick="location.assign('${playTarget}')">${playLabel}</button>`),
-        '/demo': html('The demo run', '<h1>The demo run</h1><script>setTimeout(() => location.assign(\'/reviews/r1\'), 300);</script>'),
-        '/elsewhere': html('The demo run', '<h1>The demo run</h1><script>setTimeout(() => location.assign(\'/reviews/r1\'), 300);</script>'),
+        '/demo': html('The demo run', demo),
+        '/elsewhere': html('The demo run', DEMO_THAT_FOLLOWS_LATER),
         '/reviews/r1': html('Review', '<h1>Review of sample-change in sample</h1><section id="later"></section>'
             + `<script>setTimeout(() => { document.getElementById('later').innerHTML = ${JSON.stringify(arrive)}; }, ${delayMs});</script>`),
     };
 }
 
+// Every origin answers with the same pages, so a button that leads to another install finds a working demo there.
 function routedSite(pages) {
     return {
         newContext: async () => {
             const context = await browser.newContext();
-            await context.route(`${ORIGIN}/**`, (route) => {
+            await context.route('**/*', (route) => {
                 const body = pages[new URL(route.request().url()).pathname];
 
                 return body === undefined ? route.fulfill({ status: 404, body: 'Not found' }) : route.fulfill({ contentType: 'text/html', body });
@@ -158,6 +163,36 @@ test('a Play the demo run button that leads to another page than /demo fails the
     assert.deepEqual([result.failure.step, FIRST_RUN.steps[2].name], ['reach /demo and see the demo run', 'reach /demo and see the demo run']);
 });
 
+test('the first journey passes when the demo page follows to the review at once, before its heading can be seen', async () => {
+    const result = await runJourney(routedSite(demoSite({ demo: DEMO_THAT_FOLLOWS_AT_ONCE })), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(report([result], '/'), 'passed First run without a key\nJourney check: 1 journeys, 1 passed, 0 failed.');
+});
+
+test('the first journey passes when the button fetches the demo page and pushes its address, as Turbo does, and the page follows at once', async () => {
+    const pages = demoSite();
+    const fetchAndPush = 'fetch(\'/demo?play=p1\').then((answer) => answer.text()).then(() => { history.pushState({}, \'\', \'/demo?play=p1\'); location.assign(\'/reviews/r1\'); })';
+    pages['/setup'] = `<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>See a real review</h1><button onclick="${fetchAndPush}">Play the demo run</button></main></body></html>`;
+
+    const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure, null);
+});
+
+test('a Play the demo run button that leads to /demo on another origin fails the first journey at step 3', async () => {
+    const result = await runJourney(routedSite(demoSite({ playTarget: 'http://other.test/demo?play=p1' })), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the press did not lead to /demo with a success status within 10 s; it led to http://other.test/demo (HTTP 200), then http://other.test/reviews/r1 (HTTP 200)');
+});
+
+test('a demo page that stays and does not show its heading fails the first journey at step 3', async () => {
+    const result = await runJourney(routedSite(demoSite({ demo: '<h1>Something else</h1>' })), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.match(result.failure.error, /Timeout 10000ms exceeded/);
+});
+
 test('a verdict other than the recorded Changes needed fails the first journey at step 4', async () => {
     const result = await runJourney(routedSite(demoSite({ verdict: 'Approved', delayMs: 0 })), ORIGIN, FIRST_RUN, scratch(), 1);
 
@@ -188,4 +223,5 @@ test('a demo page that is missing fails the first journey at step 3', async () =
     const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
 
     assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the press did not lead to /demo with a success status within 10 s; it led to http://localhost/demo (HTTP 404)');
 });
