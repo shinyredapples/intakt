@@ -20,26 +20,37 @@ final readonly class NextLinks
      */
     public function namesNext(array $links, string $target): bool
     {
-        // Every link is read before the answer, because an unreadable link after a plain `next` must still fail the listing.
-        $relations = array_merge([], ...array_map(fn (string $link): array => $this->relationsOf($link, $target), $links));
+        return null !== $this->nextOf($links, $target);
+    }
 
-        return in_array('next', $relations, true);
+    // The reference of the first `next` link, so a caller can check where the listing goes on.
+    /**
+     * @param list<string> $links
+     *
+     * @throws ForgeReadFailed
+     */
+    public function nextOf(array $links, string $target): ?string
+    {
+        // Every link is read before the answer, because an unreadable link after a plain `next` must still fail the listing.
+        $linked = array_merge([], ...array_map(fn (string $link): array => $this->linksOf($link, $target), $links));
+
+        return array_find($linked, static fn (array $one): bool => in_array('next', $one['relations'], true))['reference'] ?? null;
     }
 
     // A `Link` this forge cannot read fails the listing, because taking it as naming no next page would end the listing early.
     /**
-     * @return list<string>
+     * @return list<array{reference: string, relations: list<string>}>
      *
      * @throws ForgeReadFailed
      */
-    private function relationsOf(string $link, string $target): array
+    private function linksOf(string $link, string $target): array
     {
-        $value = '<[^>]*>((?:\s*;\s*'.self::TOKEN.'\s*(?:=\s*(?:'.self::QUOTED.'|'.self::TOKEN.'))?)*)';
-        if (1 !== preg_match('/\A\s*'.$value.'(?:\s*,\s*'.$value.')*\s*\z/', $link) || false === preg_match_all('/'.$value.'/', $link, $values)) {
+        $value = '<([^>]*)>((?:\s*;\s*'.self::TOKEN.'\s*(?:=\s*(?:'.self::QUOTED.'|'.self::TOKEN.'))?)*)';
+        if (1 !== preg_match('/\A\s*'.$value.'(?:\s*,\s*'.$value.')*\s*\z/', $link) || false === preg_match_all('/'.$value.'/', $link, $values, PREG_SET_ORDER)) {
             throw $this->unreadable();
         }
 
-        return array_merge([], ...array_map(fn (string $parameters): array => $this->relationsIn($parameters, $target), $values[1]));
+        return array_map(fn (array $one): array => ['reference' => $one[1], 'relations' => $this->relationsIn($one[2], $target)], $values);
     }
 
     private function unreadable(): ForgeReadFailed

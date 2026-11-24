@@ -205,6 +205,49 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
     }
 
+    public function testAnObjectWithNumberedKeysInPlaceOfTheListingFailsTheRead(): void
+    {
+        $this->answers['GET '.$this->pulls()] = sprintf('{"0":{"state":"open","labels":[],"head":{"sha":"%s"}}}', self::HEAD);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
+    }
+
+    public function testAnObjectWithNumberedKeysInPlaceOfTheLabelsFailsTheRead(): void
+    {
+        $this->answers['GET '.$this->pulls()] = sprintf('[{"state":"open","labels":{"0":{"name":"keep"}},"head":{"sha":"%s"}}]', self::HEAD);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
+    }
+
+    public function testANextLinkBackToTheSamePageFailsTheReadAfterOneRequest(): void
+    {
+        $this->answers['GET '.$this->pulls()] = '[]';
+        $this->links['GET '.$this->pulls()] = '<'.self::REPOSITORY.'/pulls?page=1>; rel="next"';
+        $this->answers['GET '.$this->pulls(2)] = '[]';
+
+        try {
+            $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
+            self::fail('A next link back to the same page was followed.');
+        } catch (ForgeReadFailed) {
+            self::assertSame(['GET '.$this->pulls()], $this->requests);
+        }
+    }
+
+    public function testANextLinkThatSkipsAPageFailsTheRead(): void
+    {
+        $this->answers['GET '.$this->pulls()] = '[]';
+        $this->links['GET '.$this->pulls()] = '<'.self::REPOSITORY.'/pulls?page=3>; rel="next"';
+        $this->answers['GET '.$this->pulls(2)] = '[]';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
+    }
+
     public function testAListingOfMoreThanTenPagesIsReadInFull(): void
     {
         foreach (range(1, 11) as $page) {

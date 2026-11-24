@@ -42,7 +42,7 @@ final readonly class GitHubBranchCalls
         return is_array($data) && !array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered something other than an object with fields where one was expected.');
     }
 
-    // Every page and no cap, because a pull request or commit on a later page may be the open or kept one.
+    // Every page and no cap, because a pull request or commit on a later page may be the open or kept one; a `next` that does not name the following page fails, because a link back would page forever or turn a broken listing into an empty one.
     /**
      * @param array<string, int|string> $query
      *
@@ -58,8 +58,13 @@ final readonly class GitHubBranchCalls
             $query = [...$query, 'per_page' => self::PAGE_SIZE, 'page' => $page];
             $answer = $this->exchange($path, $query);
             $items = [...$items, ...$this->itemsOf($answer['body'], $key)];
-            if (!$this->nextLinks->namesNext($answer['headers']['link'] ?? [], $path.'?'.http_build_query($query, '', '&'))) {
+            $next = $this->nextLinks->nextOf($answer['headers']['link'] ?? [], $path.'?'.http_build_query($query, '', '&'));
+            if (null === $next) {
                 return $items;
+            }
+
+            if (!$this->namesPage($next, $page + 1)) {
+                throw new ForgeReadFailed(sprintf('GitHub named a next page that does not follow page %d.', $page));
             }
         }
     }
@@ -108,6 +113,15 @@ final readonly class GitHubBranchCalls
         }
     }
 
+    // Raw pairs and not `parse_str`, because it keeps only the last of a repeated `page` and `page=1&page=2` would read as the following page.
+    private function namesPage(string $reference, int $page): bool
+    {
+        $query = parse_url($reference, PHP_URL_QUERY);
+        $pages = array_filter(explode('&', is_string($query) ? $query : ''), static fn (string $pair): bool => str_starts_with($pair, 'page='));
+
+        return ['page='.$page] === array_values($pages);
+    }
+
     /**
      * @return list<mixed>
      */
@@ -153,11 +167,11 @@ final readonly class GitHubBranchCalls
         }
     }
 
-    // An empty object becomes null, because PHP has no empty array that is not a list, and `{}` read as `[]` would pass for an empty list of commits or labels; every read here needs an object with fields.
+    // An object whose fields read as a list (`{}`, or keys "0", "1" and so on) becomes null, because PHP turns it into a list that would pass for the commits, labels or pull requests; every object read here has named fields.
     private function typed(mixed $value): mixed
     {
         return match (true) {
-            $value instanceof stdClass => [] === get_object_vars($value) ? null : array_map($this->typed(...), get_object_vars($value)),
+            $value instanceof stdClass => array_is_list(get_object_vars($value)) ? null : array_map($this->typed(...), get_object_vars($value)),
             is_array($value) => array_map($this->typed(...), $value),
             default => $value,
         };

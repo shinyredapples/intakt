@@ -63,6 +63,16 @@ final class NextLinksTest extends TestCase
         self::assertFalse(new NextLinks()->namesNext(['<https://api.github.com/repositories/2/issues>; rel=prev; anchor="https://api.github.com/repositories/2/issues"'], self::TARGET));
     }
 
+    public function testTheReferenceOfTheNextLinkIsNamed(): void
+    {
+        self::assertSame('?page=3', new NextLinks()->nextOf(['<?page=1>; rel=prev, <?page=3>; rel=next'], self::TARGET));
+    }
+
+    public function testNoReferenceIsNamedWithoutANextLink(): void
+    {
+        self::assertNull(new NextLinks()->nextOf(['<?page=1>; rel=prev'], self::TARGET));
+    }
+
     public function testAnAnchoredNextToAnotherResourceAfterAPlainNextStillFailsTheRead(): void
     {
         $this->expectException(ForgeReadFailed::class);
