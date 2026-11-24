@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
@@ -31,6 +32,14 @@ final readonly class RoundStarts
         $queued = $this->rounds->startOnce($project->name, $decision->change, fn (): QueuedRound => $this->queue($project, $decision->change));
         $this->mirrorStatus($project, $decision->change, $queued);
         $this->recordQueued($project->name);
+    }
+
+    // For a head that starts no round now (its CI turned pending or red, or its boot failed) but has one already, because the person's change of the status label that made it due again is owed a restore all the same.
+    public function restoreIfStarted(WatchedProject $project, OpenChange $change): void
+    {
+        if ($this->rounds->roundAt($project->name, $change) instanceof StartedRound) {
+            $this->status->restore($project->name, $change->id);
+        }
     }
 
     // Every round of the project still owing its line, so a line whose append failed is written by a later tick even when no head is due.

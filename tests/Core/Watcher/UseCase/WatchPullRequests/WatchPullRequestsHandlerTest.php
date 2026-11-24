@@ -472,6 +472,39 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['mirror 7 status:in-review', 'restore 7'], $this->statusLabels->writes);
     }
 
+    public function testAStartedHeadWhoseCiTurnedRedPutsBackTheStatusLabelIntaktSetLast(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->checks = new RecordedChecks([str_repeat(self::GREEN, 40) => 'red']);
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:30:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['mirror 7 status:in-review', 'restore 7'], $this->statusLabels->writes);
+    }
+
+    public function testAStartedHeadWhoseCiTurnedPendingPutsBackTheStatusLabelIntaktSetLast(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->checks = new RecordedChecks([str_repeat(self::GREEN, 40) => 'pending']);
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:30:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['mirror 7 status:in-review', 'restore 7'], $this->statusLabels->writes);
+    }
+
+    public function testARedHeadWithoutARoundPutsBackNoStatusLabel(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([], $this->statusLabels->writes);
+    }
+
     public function testAFailedStartShowsNoStatusLabel(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));

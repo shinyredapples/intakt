@@ -29,6 +29,7 @@ final readonly class SettleHead
             return;
         }
 
+        $this->starts->restoreIfStarted($project, $decision->change);
         // Recorded before the stale check, because that check reads the new head from the repository and a commit not fetched yet must not keep a pending head from waiting its interval.
         $this->withoutRound->record($project->name, $decision);
         // Withdrawn before the stale check, because that check throws when the repository cannot be read and the head's next boot may pass or crash, so a withdrawal not owed by then would never be sent.
