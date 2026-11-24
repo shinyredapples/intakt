@@ -27,6 +27,10 @@ github:
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
 # A tier on provider codex must name this model: { provider: codex, model: gpt-6.2-sol }.
 codex: { model: gpt-6.2-sol, effort: high }
+# Optional: how many days a reviewer conversation (the prompts with the reviewed code and the replies) is kept after its last message, a whole number from 1 (default 30), or forever to delete nothing.
+# A scheduled task deletes older ones every hour, never one whose review round is still open; the ledger is never touched.
+retention:
+    conversation_days: 30
 # Each project maps the capability tiers to a provider (anthropic, openai, openai_compatible, claude_code, codex) and a model name.
 projects:
     alpha:
