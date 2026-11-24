@@ -423,7 +423,7 @@ The gate fails when your change adds a PHP, Twig, JavaScript or shell comment th
 
 The `docs` gate of `bin/check` (also with `--fast`) measures `README.md` and the Markdown under `docs/`. It fails when your change adds or changes a paragraph of more than 80 words (`docs/guide/start.md:3: paragraph of 81 words, over the limit of 80 words: ...`). To resolve it, split or cut the paragraph, one idea per paragraph.
 
-It also fails when a page under `docs/user/` or `docs/guide/` passes 1,500 words, and when a page under `docs/architecture/` of more than 1,500 words does not open with an "In short" section of at most 120 words that holds text, not only headings. To resolve it, split the page or move detail to `docs/reference/` or `docs/architecture/`, or write the summary.
+It also fails when a page under `docs/user/` or `docs/guide/` passes 1,500 words, and when a page under `docs/architecture/` of more than 1,500 words does not open with an "In short" section of at most 120 words that holds text a reader sees, not only headings or HTML comments, under the page's own heading (not one in a quote, list or code block). To resolve it, split the page or move detail to `docs/reference/` or `docs/architecture/`, or write the summary.
 
 What the target branch already had may stay while it does not grow, and `ratchet/docs.json` lists the rest. That list may only shrink: never add an entry or raise a count. When you fix a listed paragraph or page, the gate asks you to remove or lower its entry. The [quality gates](../architecture/quality-gates.md#the-docs-gate) page describes the list.
 

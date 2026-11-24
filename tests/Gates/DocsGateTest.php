@@ -241,6 +241,65 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($result->isPassing(), implode("\n", $result->findings));
     }
 
+    public function testALargeArchitecturePageWhoseInShortHoldsOnlyAnHtmlCommentFails(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n## In short\n\n<!-- editorial note -->\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertCount(1, $result->findings);
+        self::assertStringContainsString('has an empty "In short" section', $result->findings[0]);
+    }
+
+    public function testALargeArchitecturePageWhoseInShortHoldsOnlyAnHtmlCommentOverSeveralLinesFails(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n## In short\n\n<!-- an editorial\n\nnote over\nseveral lines -->\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertCount(1, $result->findings);
+        self::assertStringContainsString('has an empty "In short" section', $result->findings[0]);
+    }
+
+    public function testALargeArchitecturePageWhoseInShortHoldsAnUnclosedHtmlCommentFails(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n## In short\n\n<!-- an editorial note\n\nthat never closes\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertCount(1, $result->findings);
+        self::assertStringContainsString('has an empty "In short" section', $result->findings[0]);
+    }
+
+    public function testALargeArchitecturePageWhoseInShortHasAnHtmlCommentNextToTextPasses(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n## In short\n\n<!-- editorial note --> The topic in brief.\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertTrue($result->isPassing(), implode("\n", $result->findings));
+    }
+
+    public function testAQuotedInShortHeadingDoesNotSatisfyTheSummaryRule(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n> ## In short\n>\n> The topic in brief.\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertCount(1, $result->findings);
+        self::assertStringContainsString('has no "In short" section', $result->findings[0]);
+    }
+
+    public function testAnInShortHeadingInsideAFencedBlockDoesNotSatisfyTheSummaryRule(): void
+    {
+        $sandbox = $this->targetWith([]);
+
+        $result = $this->changeTo($sandbox, [self::ARCHITECTURE => "# Topic\n\n```\n## In short\n```\n\nThe topic in brief.\n\n## Detail\n\n".$this->page(1600), DocsRatchetList::PATH => $this->list()]);
+
+        self::assertCount(1, $result->findings);
+        self::assertStringContainsString('has no "In short" section', $result->findings[0]);
+    }
+
     public function testAPageDeletedInTheWorkingTreeBeforeItIsStagedIsNotMeasured(): void
     {
         $sandbox = $this->targetWith([self::GUIDE => 'Short.', DocsRatchetList::PATH => $this->list()]);

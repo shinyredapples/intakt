@@ -55,7 +55,7 @@ The `docs` gate (`DocsGate`) measures `README.md` and every `.md` file under `do
 
 - A paragraph has at most 80 words, on every measured page.
 - A page under `docs/user/` or `docs/guide/` has at most 1,500 words.
-- A page under `docs/architecture/` of more than 1,500 words opens with an "In short" section of at most 120 words; an empty one fails, and so does one that holds only headings (its headings still count toward the 120 words).
+- A page under `docs/architecture/` of more than 1,500 words opens with an "In short" section of at most 120 words; it fails unless it holds visible text, at least one word left after its headings, HTML comments (also over several lines) and blank lines are removed, and only the page's own heading counts, not one inside a block quote, list item or code block (headings and comments still count toward the 120 words).
 
 It measures the pages the working tree holds, so a page deleted but not yet staged is not read, while one that is there but cannot be read fails, also when its folder cannot be searched: a page counts as deleted only when the nearest folder of it that exists can be searched.
 
@@ -90,11 +90,11 @@ The page and summary limits were measured on the same 63 pull requests, counting
 
 A paragraph (`MarkdownParagraph`) carries its word count, the line it starts on and a key, the first 16 hex characters of the SHA-256 hash of its text with whitespace runs made one space. A word is a token between whitespace that holds a letter or a digit. Code, fenced or indented, has no words, also inside a list item.
 
-The summary (`MarkdownSummary`) holds the words of the "In short" section, whether it opens the page, and whether it has text beyond its headings. It opens the page when at most a title stands above its heading, so a code block (fenced or indented) between the title and "In short" means it does not.
+The summary (`MarkdownSummary`) holds the words of the "In short" section, whether it opens the page, and whether it has visible text: words outside its headings, code and HTML comments, where an unclosed comment hides the rest of the section. It opens the page when at most a title stands above its heading, so a code block (fenced or indented) between the title and "In short" means it does not.
 
 Tables count as words but not as paragraphs. A line framed by outer pipes is a table row by itself. With a delimiter row below its first line (indented less than four spaces, as many cells as that line, each one or more hyphens with an optional colon at either end), a table runs until a blank line, a heading, a list item, a thematic break or a change of quote depth, so a quoted line after a table is measured.
 
-The "In short" heading may be quoted and may close with hashes after a space (`## In short ##`; `## In short###` is another heading). Only an unquoted heading of the same or a higher level ends the "In short" section.
+The "In short" heading must be unquoted and may close with hashes after a space (`## In short ##`; `## In short###` is another heading). Only an unquoted heading of the same or a higher level ends the "In short" section.
 
 The reader is not a full CommonMark parser. It does not handle fenced code inside a blockquote, or setext titles (a title underlined with `===` or `---`). Nor does it handle constructs nested inside list items beyond plain prose and indented or fenced code.
 

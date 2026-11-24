@@ -91,7 +91,8 @@ final readonly class MarkdownPage
     public function summary(): ?MarkdownSummary
     {
         foreach ($this->contents as $index => $content) {
-            if (MarkdownLineKind::Heading === $this->kinds[$index] && 1 === preg_match(self::SUMMARY_HEADING, $content)) {
+            // Only the page's own heading counts, because a quoted "In short" belongs to the quote and not to the page.
+            if (MarkdownLineKind::Heading === $this->kinds[$index] && 0 === $this->depths[$index] && 1 === preg_match(self::SUMMARY_HEADING, $content)) {
                 return $this->summaryAt($index);
             }
         }
@@ -173,10 +174,21 @@ final readonly class MarkdownPage
     private function summaryAt(int $heading): MarkdownSummary
     {
         $lines = $this->sectionLines($heading);
-        // Because a subheading summarizes nothing, a section of headings alone has no text even though its headings count toward its size.
-        $text = array_filter($lines, fn (int $index): bool => MarkdownLineKind::Heading !== $this->kinds[$index]);
 
-        return new MarkdownSummary($this->wordsOf($lines), $this->opensPageAt($heading), 0 < $this->wordsOf($text));
+        return new MarkdownSummary($this->wordsOf($lines), $this->opensPageAt($heading), 0 < $this->wordsIn($this->visibleTextOf($lines)));
+    }
+
+    /**
+     * @param list<int> $lines
+     */
+    private function visibleTextOf(array $lines): string
+    {
+        // Because a reader sees neither subheadings nor HTML comments, a section of only those summarizes nothing even though they count toward its size.
+        $shown = array_filter($lines, fn (int $index): bool => !in_array($this->kinds[$index], [MarkdownLineKind::Heading, MarkdownLineKind::Code], true));
+        $text = implode("\n", array_map($this->textOf(...), $shown));
+
+        // An unclosed comment hides the rest of the section, because CommonMark's HTML block runs on until "-->".
+        return preg_replace('/<!--.*?(?:-->|\z)/s', ' ', $text) ?? $text;
     }
 
     /**
