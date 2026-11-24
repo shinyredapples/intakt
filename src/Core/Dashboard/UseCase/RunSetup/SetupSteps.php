@@ -129,7 +129,12 @@ final readonly class SetupSteps
             // A change with no lines, paths or labels matches no rule, so this is the core panel every change gets.
             $panel = $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels()));
         } catch (PanelConfigurationFailure $failure) {
-            return new PanelOfProject($project, $failure->getMessage(), configured: false, mainBootFailure: $mainBootFailure);
+            return new PanelOfProject(
+                $project,
+                $failure->getMessage(),
+                configured: false,
+                mainBootFailure: $mainBootFailure,
+            );
         }
 
         $reviewers = array_map(
