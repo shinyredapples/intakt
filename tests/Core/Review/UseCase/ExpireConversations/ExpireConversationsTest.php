@@ -51,9 +51,7 @@ final class ExpireConversationsTest extends KernelTestCase
 
     public function testAConversationOfARoundThatIsStillOpenIsKeptWhateverItsAge(): void
     {
-        $this->fixture->clock->modify('-400 days');
         $open = $this->startedReviewer();
-        $this->fixture->clock->modify('+400 days');
         $this->conversation($open, 400);
 
         $this->expire(30);
@@ -76,14 +74,12 @@ final class ExpireConversationsTest extends KernelTestCase
     // A failed judging moves no state, so the round stays complete for good and must count as finished.
     public function testAConversationOfARoundWhoseJudgingFailedIsDeletedWhenOld(): void
     {
-        $this->fixture->clock->modify('-400 days');
         $round = $this->fixture->start(1);
         $reviewer = $round->reviewers()[0];
         $reviewer->recordStart($this->fixture->clock->now());
         $round->moveTo(RoundState::Complete->value);
         $this->entities()->flush();
         $this->fixture->failedJudgingRecorder($this->commands(), new NullLogger())(new RecordFailedJudging($round->id()->toRfc4122()));
-        $this->fixture->clock->modify('+400 days');
         $this->conversation($reviewer->conversationId()->toRfc4122(), 400);
 
         $this->expire(30);
@@ -93,9 +89,7 @@ final class ExpireConversationsTest extends KernelTestCase
 
     public function testAConversationOfACompleteRoundWaitingForItsJudgingIsKept(): void
     {
-        $this->fixture->clock->modify('-400 days');
         $waiting = $this->startedReviewer(RoundState::Complete);
-        $this->fixture->clock->modify('+400 days');
         $this->conversation($waiting, 400);
 
         $this->expire(30);
@@ -106,12 +100,11 @@ final class ExpireConversationsTest extends KernelTestCase
     // A retry gives the reviewer a new conversation id, so the round no longer names the earlier one.
     public function testAnEarlierAttemptOfAReviewerIsKeptWhileItsRoundIsOpen(): void
     {
-        $this->fixture->clock->modify('-31 days');
         $reviewer = $this->fixture->start(1)->reviewers()[0];
         $reviewer->recordStart($this->fixture->clock->now());
         $this->entities()->flush();
-        $earlier = $this->conversation($reviewer->conversationId()->toRfc4122(), 0);
-        $this->fixture->clock->modify('+31 days');
+        $earlier = $this->conversation($reviewer->conversationId()->toRfc4122(), 40);
+        $this->fixture->clock->modify('+30 minutes');
         $reviewer->recordRestart();
         $reviewer->recordStart($this->fixture->clock->now());
         $this->entities()->flush();
@@ -125,15 +118,67 @@ final class ExpireConversationsTest extends KernelTestCase
     public function testAConversationStartedBeforeTheOldestOpenRoundIsDeletedWhenOld(): void
     {
         $before = $this->conversation($this->idStartedDaysAgo(50), 50);
-        $this->fixture->clock->modify('-40 days');
         $open = $this->startedReviewer();
-        $this->fixture->clock->modify('+40 days');
         $this->conversation($open, 40);
 
         $this->expire(30);
 
         self::assertSame([$open], $this->kept());
         self::assertNotContains($before, $this->kept());
+    }
+
+    // The review gives a round up at the same deadline, so a crashed reviewer's round cannot keep later reviews' code for good.
+    public function testARoundStuckLongPastItsDeadlineDoesNotKeepEveryLaterConversation(): void
+    {
+        $this->fixture->clock->modify('-365 days');
+        $this->startedReviewer();
+        $this->fixture->clock->modify('+265 days');
+        $judged = $this->startedReviewer(RoundState::Judged);
+        $this->fixture->clock->modify('+100 days');
+        $this->conversation($judged, 100);
+
+        $this->expire(30);
+
+        self::assertSame([], $this->kept());
+    }
+
+    public function testAnExpiredJudgedConversationIsDeletedWhileAnOlderRoundIsStillCollecting(): void
+    {
+        $this->fixture->clock->modify('-32 days');
+        $this->startedReviewer();
+        $this->fixture->clock->modify('+1 day');
+        $judged = $this->startedReviewer(RoundState::Judged);
+        $this->fixture->clock->modify('+31 days');
+        $this->conversation($judged, 31);
+
+        $this->expire(30);
+
+        self::assertSame([], $this->kept());
+    }
+
+    // One reviewer and the judge get an hour each, so the deadline falls two hours after the start.
+    public function testARoundCountsAsOpenUntilItsNoOutcomeDeadline(): void
+    {
+        $this->fixture->clock->modify('-7199 seconds');
+        $open = $this->startedReviewer();
+        $this->fixture->clock->modify('+7199 seconds');
+        $this->conversation($open, 40);
+
+        $this->expire(30);
+
+        self::assertSame([$open], $this->kept());
+    }
+
+    public function testARoundAtItsNoOutcomeDeadlineCountsAsFinished(): void
+    {
+        $this->fixture->clock->modify('-7200 seconds');
+        $ended = $this->startedReviewer();
+        $this->fixture->clock->modify('+7200 seconds');
+        $this->conversation($ended, 40);
+
+        $this->expire(30);
+
+        self::assertSame([], $this->kept());
     }
 
     public function testKeepingForeverDeletesNothing(): void
@@ -260,7 +305,7 @@ final class ExpireConversationsTest extends KernelTestCase
 
     private function expire(?int $days): void
     {
-        $stored = new StoredConversations($this->connection, $this->entities(), $this->fixture->noFailedJudgings());
+        $stored = new StoredConversations($this->connection, $this->entities(), $this->fixture->noFailedJudgings(), $this->fixture->clock);
 
         new ExpireConversationsHandler($stored, $this->fixture->clock, $days)();
     }

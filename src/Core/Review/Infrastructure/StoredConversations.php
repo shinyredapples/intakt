@@ -10,6 +10,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
+use Intakt\Core\Review\UseCase\ReviewChange\UpperWait;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
@@ -23,6 +25,8 @@ final readonly class StoredConversations
         private Connection $connection,
         private EntityManagerInterface $entities,
         private FailedJudgings $failedJudgings,
+        private ClockInterface $clock,
+        private UpperWait $upperWait = new UpperWait(),
     ) {
     }
 
@@ -38,40 +42,41 @@ final readonly class StoredConversations
         return (int) $this->connection->executeStatement('DELETE FROM reviewer_conversation WHERE updated_at < ? AND id < ?', [$limit->getTimestamp(), $oldestOpen]);
     }
 
-    // A round is open while it can still run: collecting, or complete and waiting for its judging. One whose failed judging the ledger records stays complete for good, so it counts as finished; a judging parked in the failure transport alone does not, because it can be retried.
+    // A round is open while it can still run: collecting, or complete and waiting for its judging, until its no-outcome deadline, the point where the review gives up on it too. The deadline is what keeps one stuck round from holding every later conversation for good. One whose failed judging the ledger records counts as finished at once.
     private function oldestOpenRoundStart(): ?string
     {
-        /** @var list<string|Uuid> $ids */
-        $ids = $this->entities->createQueryBuilder()
-            ->select('round.id')
+        $unjudged = $this->entities->createQueryBuilder()
+            ->select('round')
             ->from(ReviewRound::class, 'round')
             ->where('round.state != :judged')
             ->setParameter('judged', RoundState::Judged)
             ->getQuery()
-            ->getSingleColumnResult();
+            ->toIterable();
 
         $failed = $this->failedJudgings->recordedTimes();
         $starts = [];
 
-        foreach ($ids as $id) {
-            $round = $this->uuidOf($id);
-
-            if (!isset($failed[$round->toRfc4122()])) {
-                $starts[] = $this->startOf($round);
+        foreach ($unjudged as $round) {
+            if ($round instanceof ReviewRound && !isset($failed[$round->id()->toRfc4122()]) && $this->isBeforeItsDeadline($round)) {
+                $starts[] = $this->startOf($round->id());
             }
         }
 
         return [] === $starts ? null : min($starts);
     }
 
-    // Read in both forms because a scalar select returns the id as the platform stores it, binary on SQLite and MySQL and text on PostgreSQL.
-    private function uuidOf(string|Uuid $id): Uuid
+    // A round id that carries no time has no deadline either, so it stays open.
+    private function isBeforeItsDeadline(ReviewRound $round): bool
     {
-        if ($id instanceof Uuid) {
-            return $id;
+        $id = $round->id();
+
+        if (!$id instanceof UuidV7) {
+            return true;
         }
 
-        return Uuid::isValid($id) ? Uuid::fromString($id) : Uuid::fromBinary($id);
+        $seconds = $this->upperWait->secondsForReviewers(count($round->reviewers()));
+
+        return $this->clock->now() < $id->getDateTime()->modify('+'.$seconds.' seconds');
     }
 
     // A round id that carries no time keeps every conversation, because no start can be told apart from its own.
