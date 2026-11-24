@@ -67,13 +67,15 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
         ));
     }
 
+    // The wizard splits the first-run page: the key form is on the AI account step and the review on the Ready step.
     private function findTheKeyFormButNoStartButton(KernelBrowser $dashboard): void
     {
-        $page = $dashboard->request('GET', '/setup');
+        self::assertCount(1, $dashboard->request('GET', '/setup?step=3')->filter('form.keep-provider-key'));
 
-        self::assertCount(1, $page->filter('form.keep-provider-key'));
-        self::assertSame('Open the review', $page->filter('#step-first-review a.btn')->text());
-        self::assertCount(0, $page->filter('form.start-first-review'));
+        $ready = $dashboard->request('GET', '/setup?step=5');
+
+        self::assertSame('Open the review', $ready->filter('#step-first-review a.btn')->text());
+        self::assertCount(0, $ready->filter('form.start-first-review'));
     }
 
     private function readTheRouteTheJudgesPageGives(): void
