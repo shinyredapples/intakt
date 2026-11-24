@@ -442,7 +442,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->record('main', '2026-11-02 08:00:00');
         $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
         $clock = new MockClock('2026-11-02 12:00:00 UTC');
-        $worker = $this->measuredUseWhoseFirstEndFails($clock, new EventDispatcher(), $this->accountLock);
+        $worker = $this->measuredUseWhoseFirstEndFails($clock, new EventDispatcher());
         $this->recordWhileTheEndFails($worker);
         $clock->modify('+30 minutes');
 

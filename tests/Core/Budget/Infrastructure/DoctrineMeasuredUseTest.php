@@ -245,11 +245,6 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher(), $this->accountLock());
     }
 
-    private function accountLock(): AccountReadingLock
-    {
-        return new AccountReadingLock(new LockFactory(new InMemoryStore()));
-    }
-
     // Its clock is read before another worker stores a fresher reading, so its own, older reading is the one stored last.
     private function delayedWorker(WindowReading $fresher): DoctrineMeasuredUse
     {
@@ -271,6 +266,11 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
 
         return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock, new EventDispatcher(), $this->accountLock());
+    }
+
+    private function accountLock(): AccountReadingLock
+    {
+        return new AccountReadingLock(new LockFactory(new InMemoryStore()));
     }
 
     private function claude(string $name): Account

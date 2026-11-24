@@ -71,26 +71,6 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         return new WindowUse($latest->usage(), $latest->takenAt, max(0, $age));
     }
 
-    // Waiting for the lock, because a notice writer holds it only for its last look; held across the commit, because a writer that looked before the commit would otherwise miss this reading while this reading's update missed its notice.
-    private function recordAndCommit(WindowReading $reading, DateTimeImmutable $now): void
-    {
-        $lock = $this->accountLock->of($reading->account);
-        $lock->acquire(true);
-        $ended = 0;
-        try {
-            // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
-            $previous = $this->latestReadingBefore($reading->account, $now);
-            $record = new WindowReadingRecord($reading, $now);
-            $ended = $this->storeEndingOutages($record, $previous);
-            $ended += $this->moveLaterEndsTo($record, $previous);
-        } finally {
-            $lock->release();
-            if ($ended > 0) {
-                $this->events->dispatch(new OwnerNoticesChanged());
-            }
-        }
-    }
-
     // A refused reading stores nothing, so the last good one stays.
     private function refusalOf(WindowReading $reading, DateTimeImmutable $now): ?ReadingOutcome
     {
@@ -138,6 +118,26 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             $this->entities->detach($record);
 
             throw $failure;
+        }
+    }
+
+    // Waiting for the lock, because a notice writer holds it only for its last look; held across the commit, because a writer that looked before the commit would otherwise miss this reading while this reading's update missed its notice.
+    private function recordAndCommit(WindowReading $reading, DateTimeImmutable $now): void
+    {
+        $lock = $this->accountLock->of($reading->account);
+        $lock->acquire(true);
+        $ended = 0;
+        try {
+            // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
+            $previous = $this->latestReadingBefore($reading->account, $now);
+            $record = new WindowReadingRecord($reading, $now);
+            $ended = $this->storeEndingOutages($record, $previous);
+            $ended += $this->moveLaterEndsTo($record, $previous);
+        } finally {
+            $lock->release();
+            if ($ended > 0) {
+                $this->events->dispatch(new OwnerNoticesChanged());
+            }
         }
     }
 
