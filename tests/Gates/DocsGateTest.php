@@ -50,7 +50,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testBinCheckRunsTheDocsGate(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/architecture/new.md', self::words(81, 'fresh')."\n");
+        $sandbox->write('docs/architecture/new.md', $this->words(81, 'fresh')."\n");
 
         $run = $sandbox->check('--only=docs');
 
@@ -69,7 +69,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAParagraphOverTheLimitFailsNamingFileLineAndLimit(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/architecture/new.md', "# New\n\n".self::words(81, 'fresh')."\n");
+        $sandbox->write('docs/architecture/new.md', "# New\n\n".$this->words(81, 'fresh')."\n");
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
@@ -81,7 +81,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAParagraphOfExactlyTheLimitPasses(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/architecture/new.md', self::words(80, 'fresh')."\n");
+        $sandbox->write('docs/architecture/new.md', $this->words(80, 'fresh')."\n");
 
         self::assertSame([], $sandbox->gateResult($this->gate())->findings);
     }
@@ -89,7 +89,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAnOversizedParagraphInTheReadmeFails(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('README.md', self::words(81, 'fresh')."\n");
+        $sandbox->write('README.md', $this->words(81, 'fresh')."\n");
 
         self::assertStringStartsWith('README.md:1: paragraph of 81 words', $sandbox->gateResult($this->gate())->findings[0] ?? '');
     }
@@ -97,7 +97,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testMarkdownOutsideDocsAndTheReadmeIsNotMeasured(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('upstream/a/README.md', self::words(81, 'fresh')."\n");
+        $sandbox->write('upstream/a/README.md', $this->words(81, 'fresh')."\n");
 
         self::assertSame([], $sandbox->gateResult($this->gate())->findings);
     }
@@ -105,7 +105,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAPageOverTheLimitInUserDocsFailsNamingFileAndLimit(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/user/10-long.md', self::page(1501));
+        $sandbox->write('docs/user/10-long.md', $this->page(1501));
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
@@ -117,7 +117,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAPageOverTheLimitInTheGuideFails(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/guide/long.md', self::page(1501));
+        $sandbox->write('docs/guide/long.md', $this->page(1501));
 
         self::assertStringStartsWith('docs/guide/long.md: page of 1501 words', $sandbox->gateResult($this->gate())->findings[0] ?? '');
     }
@@ -125,7 +125,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAPageOfExactlyTheLimitPasses(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/guide/long.md', self::page(1500));
+        $sandbox->write('docs/guide/long.md', $this->page(1500));
 
         self::assertSame([], $sandbox->gateResult($this->gate())->findings);
     }
@@ -133,7 +133,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAPageOutsideUserAndGuideHasNoPageLimit(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/architecture/big.md', self::page(2251));
+        $sandbox->write('docs/architecture/big.md', $this->page(2251));
 
         self::assertSame([], $sandbox->gateResult($this->gate())->findings);
     }
@@ -141,7 +141,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAListedPageWithinItsCeilingPasses(): void
     {
         $sandbox = $this->listedTree(['docs/guide/long.md' => 1501]);
-        $sandbox->write('docs/guide/long.md', self::page(1501));
+        $sandbox->write('docs/guide/long.md', $this->page(1501));
 
         self::assertSame([], $sandbox->gateResult($this->gate())->findings);
     }
@@ -149,7 +149,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAListedPageThatGrowsPastItsCeilingFails(): void
     {
         $sandbox = $this->listedTree(['docs/guide/long.md' => 1501]);
-        $sandbox->write('docs/guide/long.md', self::page(1501)."\nMore.\n");
+        $sandbox->write('docs/guide/long.md', $this->page(1501)."\nMore.\n");
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
@@ -160,12 +160,12 @@ final class DocsGateTest extends SandboxTestCase
     public function testAChangedListedParagraphFailsBecauseItsKeyNoLongerMatches(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write(self::LISTED_PAGE, "# Long\n\n".self::words(90, 'changed')."\n");
+        $sandbox->write(self::LISTED_PAGE, "# Long\n\n".$this->words(90, 'changed')."\n");
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
         self::assertStringStartsWith(self::LISTED_PAGE.':3: paragraph of 90 words, over the limit of 80', $findings[0] ?? '');
-        self::assertStringContainsString('paragraph '.self::key(self::words(90, 'listed')).' of '.self::LISTED_PAGE.' is no longer on the page', implode("\n", $findings));
+        self::assertStringContainsString('paragraph '.$this->key($this->words(90, 'listed')).' of '.self::LISTED_PAGE.' is no longer on the page', implode("\n", $findings));
     }
 
     public function testDeletingTheListFails(): void
@@ -258,24 +258,24 @@ final class DocsGateTest extends SandboxTestCase
     public function testAKeyWhoseParagraphIsWithinTheLimitFails(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('docs/architecture/short.md', self::words(10, 'short')."\n");
-        $sandbox->write('ratchet/docs.json', self::listJson([...self::listedParagraph(), 'docs/architecture/short.md' => [self::key(self::words(10, 'short')) => 10]]));
+        $sandbox->write('docs/architecture/short.md', $this->words(10, 'short')."\n");
+        $sandbox->write('ratchet/docs.json', $this->listJson([...$this->listedParagraph(), 'docs/architecture/short.md' => [$this->key($this->words(10, 'short')) => 10]]));
 
-        self::assertSame(['ratchet/docs.json: paragraph '.self::key(self::words(10, 'short')).' of docs/architecture/short.md has 10 words, within the limit of 80; remove its key'], $sandbox->gateResult($this->gate())->findings);
+        self::assertSame(['ratchet/docs.json: paragraph '.$this->key($this->words(10, 'short')).' of docs/architecture/short.md has 10 words, within the limit of 80; remove its key'], $sandbox->gateResult($this->gate())->findings);
     }
 
     public function testALooseParagraphCeilingFails(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('ratchet/docs.json', self::listJson([self::LISTED_PAGE => [self::key(self::words(90, 'listed')) => 95]]));
+        $sandbox->write('ratchet/docs.json', $this->listJson([self::LISTED_PAGE => [$this->key($this->words(90, 'listed')) => 95]]));
 
-        self::assertSame(['ratchet/docs.json: paragraph '.self::key(self::words(90, 'listed')).' of '.self::LISTED_PAGE.' lists 95 words but has 90; lower it to 90'], $sandbox->gateResult($this->gate())->findings);
+        self::assertSame(['ratchet/docs.json: paragraph '.$this->key($this->words(90, 'listed')).' of '.self::LISTED_PAGE.' lists 95 words but has 90; lower it to 90'], $sandbox->gateResult($this->gate())->findings);
     }
 
     public function testAParagraphCeilingBelowItsWordsFails(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('ratchet/docs.json', self::listJson([self::LISTED_PAGE => [self::key(self::words(90, 'listed')) => 85]]));
+        $sandbox->write('ratchet/docs.json', $this->listJson([self::LISTED_PAGE => [$this->key($this->words(90, 'listed')) => 85]]));
 
         self::assertSame([self::LISTED_PAGE.':3: paragraph of 90 words, over its ceiling of 85 words in ratchet/docs.json and the limit of 80 words per paragraph; split it or cut words to at most 85'], $sandbox->gateResult($this->gate())->findings);
     }
@@ -291,7 +291,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAPageEntryWithoutAPageLimitFails(): void
     {
         $sandbox = $this->listedTree(['docs/architecture/big.md' => 2251]);
-        $sandbox->write('docs/architecture/big.md', self::page(2251));
+        $sandbox->write('docs/architecture/big.md', $this->page(2251));
 
         self::assertSame(['ratchet/docs.json: page docs/architecture/big.md has no page limit (only pages under docs/user/ and docs/guide/ do); remove its entry'], $sandbox->gateResult($this->gate())->findings);
     }
@@ -299,18 +299,18 @@ final class DocsGateTest extends SandboxTestCase
     public function testAListThatGrewAgainstTheTargetBranchFails(): void
     {
         $sandbox = $this->changeOnAMainWithTheGate();
-        $sandbox->write('docs/architecture/new.md', self::words(81, 'fresh')."\n");
-        $sandbox->write('ratchet/docs.json', self::listJson([...self::listedParagraph(), 'docs/architecture/new.md' => [self::key(self::words(81, 'fresh')) => 81]]));
+        $sandbox->write('docs/architecture/new.md', $this->words(81, 'fresh')."\n");
+        $sandbox->write('ratchet/docs.json', $this->listJson([...$this->listedParagraph(), 'docs/architecture/new.md' => [$this->key($this->words(81, 'fresh')) => 81]]));
         $sandbox->commitAll('docs: add a page');
 
-        self::assertSame(['ratchet/docs.json: paragraph '.self::key(self::words(81, 'fresh')).' of docs/architecture/new.md is not on the target branch\'s list; the list may only shrink, so bring the paragraph within 80 words instead'], $sandbox->gateResult($this->gate(), 'main')->findings);
+        self::assertSame(['ratchet/docs.json: paragraph '.$this->key($this->words(81, 'fresh')).' of docs/architecture/new.md is not on the target branch\'s list; the list may only shrink, so bring the paragraph within 80 words instead'], $sandbox->gateResult($this->gate(), 'main')->findings);
     }
 
     public function testARaisedPageCeilingAgainstTheTargetBranchFails(): void
     {
         $sandbox = $this->changeOnAMainWithTheGate(['docs/guide/long.md' => 1501]);
-        $sandbox->write('docs/guide/long.md', self::page(1501)."\nMore.\n");
-        $sandbox->write('ratchet/docs.json', self::listJson(self::listedParagraph(), ['docs/guide/long.md' => 1502]));
+        $sandbox->write('docs/guide/long.md', $this->page(1501)."\nMore.\n");
+        $sandbox->write('ratchet/docs.json', $this->listJson($this->listedParagraph(), ['docs/guide/long.md' => 1502]));
         $sandbox->commitAll('docs: grow the page');
 
         self::assertSame(['ratchet/docs.json: page docs/guide/long.md rose from 1501 to 1502 words; the list may only shrink, so cut the page to at most 1501 words instead'], $sandbox->gateResult($this->gate(), 'main')->findings);
@@ -319,8 +319,8 @@ final class DocsGateTest extends SandboxTestCase
     public function testAListThatShrankAgainstTheTargetBranchPasses(): void
     {
         $sandbox = $this->changeOnAMainWithTheGate(['docs/guide/long.md' => 1501]);
-        $sandbox->write('docs/guide/long.md', self::page(1500));
-        $sandbox->write('ratchet/docs.json', self::listJson(self::listedParagraph()));
+        $sandbox->write('docs/guide/long.md', $this->page(1500));
+        $sandbox->write('ratchet/docs.json', $this->listJson($this->listedParagraph()));
         $sandbox->commitAll('docs: shorten the page');
 
         self::assertSame([], $sandbox->gateResult($this->gate(), 'main')->findings);
@@ -368,8 +368,8 @@ final class DocsGateTest extends SandboxTestCase
     private function writeListedTree(Sandbox $sandbox, array $pages = []): void
     {
         $sandbox->write('README.md', "# Shop\n\nA short readme.\n");
-        $sandbox->write(self::LISTED_PAGE, "# Long\n\n".self::words(90, 'listed')."\n");
-        $sandbox->write('ratchet/docs.json', self::listJson(self::listedParagraph(), $pages));
+        $sandbox->write(self::LISTED_PAGE, "# Long\n\n".$this->words(90, 'listed')."\n");
+        $sandbox->write('ratchet/docs.json', $this->listJson($this->listedParagraph(), $pages));
     }
 
     /**
@@ -384,8 +384,8 @@ final class DocsGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: start');
         $sandbox->git('switch', '--quiet', '--create', 'change');
         $this->writeListedTree($sandbox);
-        $sandbox->write('docs/guide/long.md', self::page(1501));
-        $sandbox->write('ratchet/docs.json', self::listJson([...self::listedParagraph(), ...$paragraphs], ['docs/guide/long.md' => 1501, ...$pages]));
+        $sandbox->write('docs/guide/long.md', $this->page(1501));
+        $sandbox->write('ratchet/docs.json', $this->listJson([...$this->listedParagraph(), ...$paragraphs], ['docs/guide/long.md' => 1501, ...$pages]));
         $sandbox->commitAll('feat: add the docs gate');
 
         return $sandbox;
@@ -401,7 +401,7 @@ final class DocsGateTest extends SandboxTestCase
         $this->writeListedTree($sandbox, $pages);
 
         foreach (array_keys($pages) as $page) {
-            $sandbox->write($page, self::page(1501));
+            $sandbox->write($page, $this->page(1501));
         }
 
         $sandbox->commitAll('chore: start');
@@ -413,32 +413,32 @@ final class DocsGateTest extends SandboxTestCase
     /**
      * @return array<string, array<string, int>>
      */
-    private static function listedParagraph(): array
+    private function listedParagraph(): array
     {
-        return [self::LISTED_PAGE => [self::key(self::words(90, 'listed')) => 90]];
+        return [self::LISTED_PAGE => [$this->key($this->words(90, 'listed')) => 90]];
     }
 
     /**
      * @param array<string, array<string, int>> $paragraphs
      * @param array<string, int>                $pages
      */
-    private static function listJson(array $paragraphs, array $pages = []): string
+    private function listJson(array $paragraphs, array $pages = []): string
     {
         return json_encode(['paragraphs' => (object) $paragraphs, 'pages' => (object) $pages], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
     }
 
-    private static function key(string $text): string
+    private function key(string $text): string
     {
         return new MarkdownParagraph($text, 0, 1)->key();
     }
 
-    private static function words(int $count, string $word): string
+    private function words(int $count, string $word): string
     {
         return implode(' ', array_fill(0, $count, $word));
     }
 
     // Because only the page limit is under test, the words go into paragraphs that each stay within the paragraph limit.
-    private static function page(int $words): string
+    private function page(int $words): string
     {
         $paragraphs = array_map(static fn (array $chunk): string => implode(' ', $chunk), array_chunk(array_fill(0, $words - 1, 'step'), 79));
 
