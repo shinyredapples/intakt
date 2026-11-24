@@ -4,9 +4,24 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Domain;
 
-// Shared by the bug report and Intakt's Evidence lines, because both must read a line of a body as GitHub shows it: code, quoted outside text and comments are no heading and no part of the text's own statement.
+// Shared by the bug report and Intakt's Evidence lines, because both must read a line of a body as GitHub shows it: code, quoted outside text, raw HTML and comments are no heading and no part of the text's own statement.
 final readonly class ReadableLines
 {
+    // Also after list markers, because a heading in a list item still starts a new section.
+    public const string HEADING = '/^(?: {0,3}|[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)+)#{1,6}(?:[ \t]+(?<text>.*?)[ \t]*:?)?(?:[ \t]+#+)?[ \t]*$/';
+
+    private const string UNDERLINE = '/^ {0,3}(?:=+|-+)[ \t]*$/';
+
+    private const string LIST_ITEM = '/^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/';
+
+    private const string HTML_OPENS = '/^(?<lead>[ \t]*)<(?<slash>\/?)(?<tag>[a-zA-Z][a-zA-Z0-9-]*)(?:[ \t>]|\/>|$)/';
+
+    // Raw text up to their end tag, because CommonMark shows a heading or a fence inside them as written.
+    private const array RAW_HTML = ['pre', 'script', 'style', 'textarea'];
+
+    // Raw text up to the next blank line, the tags CommonMark names for that.
+    private const array HTML_BLOCKS = ['address', 'article', 'aside', 'base', 'basefont', 'blockquote', 'body', 'caption', 'center', 'col', 'colgroup', 'dd', 'details', 'dialog', 'dir', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'frame', 'frameset', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hr', 'html', 'iframe', 'legend', 'li', 'link', 'main', 'menu', 'menuitem', 'nav', 'noframes', 'ol', 'optgroup', 'option', 'p', 'param', 'search', 'section', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'title', 'tr', 'track', 'ul'];
+
     private const string LIST_CONTENT = '/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
 
     private const string FENCE_OPENS = '/^(?<lead>[ \t]*(?<markers>(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*))(?<fence>`{3,}|~{3,})(?<info>.*)$/';
@@ -21,12 +36,14 @@ final readonly class ReadableLines
     // The text after the closing marker stays, because GitHub shows it.
     private const string COMMENT_CLOSES = '/-->(?<rest>.*)$/';
 
-    // One line per line of the body, empty where it is code, outside text or a comment, and the closer of the block the body ends in, so a writer can close it before adding lines.
+    // One line per line of the body, empty where it is code, outside text, raw HTML or a comment, an underlined heading written as `#` or `##` on its first line; the content column of the list item each line is in, 0 outside any list; and the closer of the block the body ends in, so a writer can close it before adding lines (empty for a block only a blank line ends).
     /**
      * @param list<string> $lines
+     * @param list<int>    $columns
      */
     private function __construct(
         public array $lines,
+        public array $columns,
         public ?string $closer,
     ) {
     }
@@ -35,6 +52,7 @@ final readonly class ReadableLines
     public static function of(string $body): self
     {
         $kept = [];
+        $columns = [];
         $block = null;
         $lists = [];
 
@@ -42,16 +60,18 @@ final readonly class ReadableLines
             $block = self::stillOpen($line, $block);
 
             if (null !== $block) {
+                $columns[] = $block[1];
                 [$kept[], $block] = self::closedIn($line, $block);
 
                 continue;
             }
 
             $lists = self::listsAfter($line, $lists);
+            $columns[] = array_last($lists) ?? 0;
             [$kept[], $block] = self::openedIn($line, array_last($lists) ?? 0);
         }
 
-        return new self($kept, $block[3] ?? null);
+        return new self(self::withUnderlinedHeadingsMarked($kept), $columns, $block[3] ?? null);
     }
 
     public static function withLineFeeds(string $body): string
@@ -127,7 +147,71 @@ final readonly class ReadableLines
     {
         $block = self::blockOpenedBy($line, $container);
 
-        return null === $block ? self::withoutComments($line) : ['', $block];
+        if (null !== $block) {
+            return ['', $block];
+        }
+
+        $html = self::htmlOpenedBy($line, $container);
+
+        if (null === $html) {
+            return self::withoutComments($line);
+        }
+
+        // An end tag on the opening line ends the block with it.
+        return ['', 1 === preg_match($html[0], $line) ? null : $html];
+    }
+
+    /**
+     * @return ?array{string, int, int, string}
+     */
+    private static function htmlOpenedBy(string $line, int $container): ?array
+    {
+        if (1 !== preg_match(self::HTML_OPENS, $line, $found) || self::widthOf($found['lead']) - $container > 3) {
+            return null;
+        }
+
+        $tag = strtolower($found['tag']);
+
+        if ('' === $found['slash'] && in_array($tag, self::RAW_HTML, true)) {
+            return [sprintf('/<\/%s>/i', $tag), $container, PHP_INT_MAX, str_repeat(' ', $container).'</'.$tag.'>'];
+        }
+
+        return in_array($tag, self::HTML_BLOCKS, true) ? ['/^[ \t]*$/', $container, PHP_INT_MAX, ''] : null;
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private static function withUnderlinedHeadingsMarked(array $lines): array
+    {
+        $start = null;
+        $listItem = -1;
+
+        foreach ($lines as $index => $line) {
+            $heading = self::underlinedFrom($line, $start, $listItem);
+
+            if (null !== $heading) {
+                $text = implode(' ', array_map(trim(...), array_slice($lines, $heading, $index - $heading)));
+                $marker = str_contains($line, '=') ? '#' : '##';
+                array_splice($lines, $heading, $index - $heading + 1, [$marker.' '.$text, ...array_fill(0, $index - $heading, '')]);
+                $start = null;
+
+                continue;
+            }
+
+            $start = '' === trim($line) || 1 === preg_match(self::HEADING, $line) ? null : $start ?? $index;
+            $listItem = 1 === preg_match(self::LIST_ITEM, $line) ? $index : $listItem;
+        }
+
+        return $lines;
+    }
+
+    private static function underlinedFrom(string $line, ?int $start, int $listItem): ?int
+    {
+        // An underline makes a heading only of the paragraph right above it, because after a blank line, a heading or in a paragraph with a list item it is a rule.
+        return null !== $start && $listItem < $start && 1 === preg_match(self::UNDERLINE, $line) ? $start : null;
     }
 
     /**

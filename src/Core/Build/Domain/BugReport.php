@@ -7,13 +7,6 @@ namespace Intakt\Core\Build\Domain;
 // Plain code reads the shape, because a model must not decide whether a bug task is ready to build.
 final readonly class BugReport
 {
-    // Also after list markers, because a heading in a list item still starts a new section.
-    private const string HEADING = '/^(?: {0,3}|[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)+)#{1,6}(?:[ \t]+(?<text>.*?)[ \t]*:?)?(?:[ \t]+#+)?[ \t]*$/';
-
-    private const string UNDERLINE = '/^ {0,3}(?:=+|-+)[ \t]*$/';
-
-    private const string LIST_ITEM = '/^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/';
-
     private const string BOLD_LABEL = '/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(?<mark>\*\*|__)(?<label>.+?)[ \t]*:?[ \t]*\k<mark>[ \t]*:?[ \t]*(?<rest>.*)$/';
 
     /**
@@ -29,7 +22,7 @@ final readonly class BugReport
         $current = null;
 
         // Without code, quoted outside text and comments, because a part written there is an example or a quote, not the task's own statement.
-        foreach (self::withUnderlinedHeadingsMarked(ReadableLines::of($body)->lines) as $line) {
+        foreach (ReadableLines::of($body)->lines as $line) {
             $label = self::labelOf($line);
 
             // Any heading or bold label ends the part, also one of another section, so its text never counts as the part's.
@@ -55,45 +48,11 @@ final readonly class BugReport
     }
 
     /**
-     * @param list<string> $lines
-     *
-     * @return list<string>
-     */
-    private static function withUnderlinedHeadingsMarked(array $lines): array
-    {
-        $start = null;
-        $listItem = -1;
-
-        foreach ($lines as $index => $line) {
-            $heading = self::underlinedFrom($line, $start, $listItem);
-
-            if (null !== $heading) {
-                $text = implode(' ', array_map(trim(...), array_slice($lines, $heading, $index - $heading)));
-                array_splice($lines, $heading, $index - $heading + 1, ['# '.$text, ...array_fill(0, $index - $heading, '')]);
-                $start = null;
-
-                continue;
-            }
-
-            $start = '' === trim($line) || 1 === preg_match(self::HEADING, $line) ? null : $start ?? $index;
-            $listItem = 1 === preg_match(self::LIST_ITEM, $line) ? $index : $listItem;
-        }
-
-        return $lines;
-    }
-
-    private static function underlinedFrom(string $line, ?int $start, int $listItem): ?int
-    {
-        // An underline makes a heading only of the paragraph right above it, because after a blank line, a heading or in a paragraph with a list item it is a rule.
-        return null !== $start && $listItem < $start && 1 === preg_match(self::UNDERLINE, $line) ? $start : null;
-    }
-
-    /**
      * @return ?array{string, string}
      */
     private static function labelOf(string $line): ?array
     {
-        if (1 === preg_match(self::HEADING, $line, $found)) {
+        if (1 === preg_match(ReadableLines::HEADING, $line, $found)) {
             return [$found['text'] ?? '', ''];
         }
 

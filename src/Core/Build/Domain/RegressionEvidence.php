@@ -11,6 +11,12 @@ final readonly class RegressionEvidence
 {
     private const string HEADING = '## Evidence';
 
+    // Up to three spaces in and with closing hashes too, because CommonMark reads both as the same heading.
+    private const string EVIDENCE = '/^ {0,3}##[ \t]+Evidence(?:[ \t]+#+)?[ \t]*$/';
+
+    // A third-level heading stays inside, because builders number their Evidence items as subheadings too.
+    private const string SECTION_ENDS = '/^ {0,3}#{1,2}(?:[ \t]|$)/';
+
     public function __construct(
         private RegressionRuns $runs,
     ) {
@@ -18,36 +24,37 @@ final readonly class RegressionEvidence
 
     public function addedTo(string $body): string
     {
-        $body = $this->closed(rtrim(ReadableLines::withLineFeeds($body)));
+        $body = rtrim(ReadableLines::withLineFeeds($body));
         $lines = explode("\n", $body);
-        $readable = ReadableLines::of($body)->lines;
-        $heading = $this->headingIn($readable);
+        $read = ReadableLines::of($body);
+        $heading = $this->firstTopLevel(self::EVIDENCE, $read, 0);
 
         if (null === $heading) {
-            return ltrim($body."\n\n".self::HEADING."\n\n".$this->resultLines());
+            return ltrim(rtrim($this->closed($body))."\n\n".self::HEADING."\n\n".$this->resultLines());
         }
 
-        $end = $this->sectionEndIn($readable, $heading + 1);
-        $section = rtrim(implode("\n", array_slice($lines, 0, $end)))."\n".$this->resultLines();
+        $end = $this->firstTopLevel(self::SECTION_ENDS, $read, $heading + 1) ?? count($lines);
+        $section = $this->closed(rtrim(implode("\n", array_slice($lines, 0, $end))))."\n".$this->resultLines();
         $rest = array_slice($lines, $end);
 
         return [] === $rest ? $section : $section."\n\n".implode("\n", $rest);
     }
 
-    // A fence or comment the body never closes is closed first, because otherwise it would hold every line Intakt adds after it.
-    private function closed(string $body): string
+    // A block the text never closes is closed first, because otherwise it would hold every line Intakt adds after it; an HTML block's empty closer leaves the blank line that ends it.
+    private function closed(string $text): string
     {
-        $closer = ReadableLines::of($body)->closer;
+        $closer = ReadableLines::of($text)->closer;
 
-        return null === $closer ? $body : $body."\n".$closer;
+        return null === $closer ? $text : $text."\n".$closer;
     }
 
-    /**
-     * @param list<string> $readable
-     */
-    private function headingIn(array $readable): ?int
+    // Only outside list items, because a heading inside one does not end the section.
+    private function firstTopLevel(string $pattern, ReadableLines $read, int $from): ?int
     {
-        $found = array_find_key($readable, static fn (string $line): bool => self::HEADING === rtrim($line));
+        $found = array_find_key(
+            array_slice($read->lines, $from, preserve_keys: true),
+            static fn (string $line, int $index): bool => 0 === $read->columns[$index] && 1 === preg_match($pattern, $line),
+        );
 
         return is_int($found) ? $found : null;
     }
@@ -68,20 +75,5 @@ final readonly class RegressionEvidence
     private function codeSpanOf(string $path): string
     {
         return '`'.preg_replace('/[\x00-\x1F\x7F`]/', '?', $path).'`';
-    }
-
-    // A third-level heading stays inside, because builders number their Evidence items as subheadings too.
-    /**
-     * @param list<string> $readable
-     */
-    private function sectionEndIn(array $readable, int $from): int
-    {
-        foreach (array_slice($readable, $from, preserve_keys: true) as $index => $line) {
-            if (1 === preg_match('/^#{1,2}\s/', $line)) {
-                return $index;
-            }
-        }
-
-        return count($readable);
     }
 }

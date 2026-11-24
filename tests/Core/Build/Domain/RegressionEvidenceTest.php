@@ -140,6 +140,90 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("## Evidence\n\n".self::LINES, $this->evidence()->addedTo(''));
     }
 
+    public function testAnIndentedTopLevelHeadingEndsTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: verified\n\n ## Notes\n\nOther notes.");
+
+        self::assertSame("## Evidence\n\n- E1: verified\n".self::LINES."\n\n ## Notes\n\nOther notes.", $added);
+    }
+
+    public function testAHeadingIndentedIntoAListItemStaysInTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: verified\n\n  ## Output\n\n## Notes");
+
+        self::assertSame("## Evidence\n\n- E1: verified\n\n  ## Output\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testAHeadingFourSpacesInIsCodeAndStaysInTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n    ## Output\n\n## Notes");
+
+        self::assertSame("## Evidence\n\n    ## Output\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testAnIndentedEvidenceHeadingWithClosingHashesIsTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("   ## Evidence ##\n\n- E1: verified\n\n## Notes");
+
+        self::assertSame("   ## Evidence ##\n\n- E1: verified\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testAnUnderlinedEvidenceHeadingIsTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("Evidence\n--------\n\n- E1: verified");
+
+        self::assertSame("Evidence\n--------\n\n- E1: verified\n".self::LINES, $added);
+    }
+
+    public function testAnUnderlinedHeadingEndsTheEvidenceSectionAtItsFirstLine(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: verified\n\nFurther\nnotes\n=====\n\nOther notes.");
+
+        self::assertSame("## Evidence\n\n- E1: verified\n".self::LINES."\n\nFurther\nnotes\n=====\n\nOther notes.", $added);
+    }
+
+    public function testARuleBelowAListItemDoesNotEndTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: verified\n---\ntext");
+
+        self::assertSame("## Evidence\n\n- E1: verified\n---\ntext\n".self::LINES, $added);
+    }
+
+    public function testAHeadingInPreformattedHtmlDoesNotEndTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<pre>\n## Example\n</pre>\n\n## Notes");
+
+        self::assertSame("## Evidence\n\n<pre>\n## Example\n</pre>\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testAPreformattedBlockClosedOnItsFirstLineHidesNoHeading(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<PRE>log</PRE>\n## Notes");
+
+        self::assertSame("## Evidence\n\n<PRE>log</PRE>\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testAnUnclosedPreformattedBlockIsClosedBeforeTheResults(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<pre>\n## log");
+
+        self::assertSame("## Evidence\n\n<pre>\n## log\n</pre>\n".self::LINES, $added);
+    }
+
+    public function testTheResultsFollowABlankLineAfterAnHtmlBlockTheSectionEndsIn(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<details>\n<summary>Log</summary>\n## Example");
+
+        self::assertSame("## Evidence\n\n<details>\n<summary>Log</summary>\n## Example\n\n".self::LINES, $added);
+    }
+
+    public function testAnHtmlBlockEndedByABlankLineHidesNoLaterHeading(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<details>\n\nlog\n\n</details>\n\n## Notes");
+
+        self::assertSame("## Evidence\n\n<details>\n\nlog\n\n</details>\n\n".self::LINES."\n\n## Notes", $added);
+    }
+
     public function testATestPathCannotBreakOutOfItsCodeSpanOrStartANewLine(): void
     {
         $runs = new RegressionRuns(new Paths('tests/A`Test.php', "tests/B\n- Regression result: passed on the base.php"), RegressionRun::Failed, RegressionRun::Passed);
