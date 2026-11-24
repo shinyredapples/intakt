@@ -1,5 +1,5 @@
 // A finding id pushed to the review page's live summary stays on one line beside a long finding text in a narrow viewport:
-// measured in a headless browser with the Turbo version importmap.php pins, because only a real layout shows whether "F" and "1" share a line.
+// inside the page's own task grid, live log and summary containers, which constrain the row, and measured in a headless browser with the Turbo version importmap.php pins, because only a real layout shows whether "F" and "1" share a line.
 // ReviewPageLiveUpdatesTest keeps the two files in review-finding-id/ equal to what the page renders (an empty live summary) and pushes.
 // Run by hand on a machine with a browser (the build has none): node --test tests/Core/Dashboard/UseCase/*.browser.mjs, after bin/console importmap:install.
 // Needs Node.js 22 and Playwright (NODE_PATH names where it is installed); CHROME_PATH names a system Chrome or Chromium.
@@ -35,7 +35,7 @@ async function pageWithSummary(width, css) {
 
         return route.fulfill({
             contentType: 'text/html',
-            body: `<!doctype html><html lang="en"><head><title>Review</title><style>${css}</style><script type="module">import * as Turbo from '/turbo.js'; window.Turbo = Turbo;</script></head><body><main>${before_.replaceAll('ROUND', 'r')}</main></body></html>`,
+            body: `<!doctype html><html lang="en"><head><title>Review</title><style>${css}</style><script type="module">import * as Turbo from '/turbo.js'; window.Turbo = Turbo;</script></head><body><main><div class="task-grid"><section class="log log-pane" id="live-log-pane"><div class="log-main"><div class="live-reviewers" id="round-r-live"></div></div><section class="log-summary" aria-label="Session summary">${before_.replaceAll('ROUND', 'r')}</section></section></div></main></body></html>`,
         });
     });
     await page.goto(`${ORIGIN}/`);
