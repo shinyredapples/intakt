@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\HandBack\UseCase\CheckPullRequestText;
 
 use Intakt\Core\HandBack\Contract\FailedPullRequestText;
+use Intakt\Core\HandBack\Contract\MissingEvidenceItems;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
@@ -53,6 +54,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(OpenListItems::class)]
 #[UsesClass(ParagraphEnd::class)]
 #[UsesClass(PullRequestTextOutcome::class)]
+#[UsesClass(MissingEvidenceItems::class)]
 #[UsesClass(PullRequestTextVerdict::class)]
 final class CheckPullRequestTextCommandTest extends TestCase
 {
