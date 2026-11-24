@@ -1,0 +1,14 @@
+1. Open /history: History - Intakt
+Tab x8 -> select#projfilter.select "Project" outline solid 2px focus-visible
+2. ArrowDown on the project filter chooses "Beta"; rows shown: (no project), Beta, (no project)
+Tab x5 -> button.fchip "From the dashboard" outline solid 2px focus-visible
+3. Space on "From the dashboard": pressed chip "From the dashboard", rows shown 1
+Tab x5 -> input#history-text.input "history-text" outline solid 2px focus-visible
+4. Type "Beta" in the text filter: rows shown 1, "No entries match" hidden: true
+Tab x1 -> div.table-scroll "History" outline solid 2px focus-visible
+5. Shift+Tab back -> a "Trends" outline solid 2px focus-visible
+6. Enter on Trends -> /trends, current sub-tab: Trends
+Tab x10 -> a "Ledger" outline solid 2px focus-visible
+7. Enter on Ledger -> /history, current sub-tab: Ledger, project filter keeps "Beta"
+8. Ctrl+K opens search: input#search-q "Search" outline solid 2px focus-visible
+9. Esc closes it: search hidden true, focus back on input#search-q "Search" outline solid 2px focus-visible
