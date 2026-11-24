@@ -58,6 +58,8 @@ The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment 
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
+A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+
 The code that chooses tasks from a project's GitHub issues (nothing calls it yet) considers only issues that carry the project's eligibility label: `intakt`, unless the project's `watch` section names another `eligibility_label`. An issue that carries only another loop's label is not a task for Intakt.
 
 When that other loop merges into the same main, give its signing key to the watchdog commands with `--peer-key`. Its merges then show as `info: peer merge <commit> peer_signed` and halt nothing ([Running beside another loop](../reference/user-manual.md#running-beside-another-loop)).
