@@ -15,7 +15,7 @@ final readonly class GitHubIssues
     private const string ISSUE_LINK = '/\/issues\/(?<number>[1-9][0-9]*)$/';
     private const array TOKENS = ['GH_TOKEN', 'GITHUB_TOKEN'];
     private const int SECONDS = 60;
-    private const string LOGIN = '/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?$/';
+    private const string LOGIN = '/\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?\z/';
     private const string INTEGRATION_REFUSAL = 'Resource not accessible by integration';
 
     /**

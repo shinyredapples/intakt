@@ -220,6 +220,24 @@ final class InstallCheckTest extends TestCase
         $this->issues()->account("bot\nsecond");
     }
 
+    public function testANamedAccountEndingInANewlineStopsTheAlarmBeforeItWritesAnything(): void
+    {
+        $this->account = new GitHubCallFailed(self::INTEGRATION_REFUSAL);
+        $this->github = [];
+        $this->open = [['number' => 5, 'user' => ['login' => 'alarm[bot]'], 'body' => $this->markerOf('demo')]];
+        $alarm = new InstallCheckAlarm($this->issues(), new LockFactory(new InMemoryStore()), "alarm[bot]\n");
+
+        try {
+            $alarm->raise(new InstallReport([new InstallStepResult('demo', InstallStatus::Failed, 'boom')]), null);
+            self::fail('the alarm should have refused the account');
+        } catch (GitHubCallFailed $refused) {
+            self::assertSame('the alarm account is not an account login', $refused->getMessage());
+            self::assertSame([], $this->github);
+        } finally {
+            putenv('GH_TOKEN');
+        }
+    }
+
     public function testAPassClosesOnlyTheStepsOwnIssueNotAnOlderAlarmWhoseLogQuotesItsMarker(): void
     {
         $answer = $this->alarm(new InstallReport([new InstallStepResult('ui-check', InstallStatus::Passed, '')]), $this->olderAlarmQuotingUiCheckAndTheReal());
