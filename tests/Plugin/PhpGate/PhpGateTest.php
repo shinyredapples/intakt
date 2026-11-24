@@ -42,8 +42,8 @@ final class PhpGateTest extends TestCase
         $steps = [...new PhpGate()->testSteps(new Paths('tests/FooTest.php', "tests/it's/BarTest.php"))];
 
         self::assertCount(2, $steps);
-        self::assertStringContainsString("vendor/bin/phpunit --log-junit \"\${TMPDIR:-/work}/intakt-regression-junit.xml\" 'tests/FooTest.php';", $steps[0]);
-        self::assertStringContainsString("vendor/bin/phpunit --log-junit \"\${TMPDIR:-/work}/intakt-regression-junit.xml\" 'tests/it'\\''s/BarTest.php';", $steps[1]);
+        self::assertStringContainsString("vendor/bin/phpunit --fail-on-risky --log-junit \"\${TMPDIR:-/work}/intakt-regression-junit.xml\" 'tests/FooTest.php';", $steps[0]);
+        self::assertStringContainsString("vendor/bin/phpunit --fail-on-risky --log-junit \"\${TMPDIR:-/work}/intakt-regression-junit.xml\" 'tests/it'\\''s/BarTest.php';", $steps[1]);
     }
 
     public function testATestFileIsAPhpTestUnderTests(): void

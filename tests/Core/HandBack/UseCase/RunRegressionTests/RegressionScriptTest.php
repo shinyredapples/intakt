@@ -33,6 +33,20 @@ final class RegressionScriptTest extends TestCase
     }
     PHP_WRAP;
 
+    private const string DOES_NOT_PERFORM_ASSERTIONS = <<<'PHP_WRAP'
+    <?php
+    final class ValueTest extends \PHPUnit\Framework\TestCase
+    {
+        #[\PHPUnit\Framework\Attributes\DoesNotPerformAssertions]
+        public function testTheValueIsTwo(): void
+        {
+            if (2 !== require __DIR__.'/../src/value.php') {
+                throw new \PHPUnit\Framework\AssertionFailedError('The value is not two.');
+            }
+        }
+    }
+    PHP_WRAP;
+
     private BuildHistory $history;
 
     private string $base = '';
@@ -69,6 +83,27 @@ final class RegressionScriptTest extends TestCase
     public function testAHeadWhoseOnlyTestSkipsDoesNotPass(): void
     {
         $head = $this->history->commitFile(self::TEST, str_replace('self::assertSame(', "self::markTestSkipped('unavailable');\n        self::assertSame(", self::ASSERTS_TWO), 'Cover the value');
+
+        self::assertSame("errored 3\n", $this->headResult($head));
+    }
+
+    public function testAHeadWhoseTestDeclaresItPerformsNoAssertionsPassesWhenItRuns(): void
+    {
+        $head = $this->history->commitFile(self::TEST, self::DOES_NOT_PERFORM_ASSERTIONS, 'Cover the value');
+
+        self::assertSame("passed\n", $this->headResult($head));
+    }
+
+    public function testTheBaseRunFailsWhenATestThatDeclaresNoAssertionsFailsOnTheBaseCode(): void
+    {
+        $this->history->commitFile(self::TEST, self::DOES_NOT_PERFORM_ASSERTIONS, 'Cover the value');
+
+        self::assertSame("failed\n", $this->baseResult());
+    }
+
+    public function testAHeadWhoseTestIsRiskyForPerformingNoAssertionsDoesNotPass(): void
+    {
+        $head = $this->history->commitFile(self::TEST, str_replace('#[\PHPUnit\Framework\Attributes\DoesNotPerformAssertions]', '', self::DOES_NOT_PERFORM_ASSERTIONS), 'Cover the value');
 
         self::assertSame("errored 3\n", $this->headResult($head));
     }

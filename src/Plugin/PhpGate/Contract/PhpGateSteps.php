@@ -14,8 +14,8 @@ final readonly class PhpGateSteps
 
     public const string PHPUNIT = 'vendor/bin/phpunit';
 
-    // One test file of a bug's regression run, judged from PHPUnit's JUnit report and its status together, because PHPUnit exits 0 when every test skipped and an error such as a missing fixture is no failed assertion. Exit 0 only for a run that executed a test with an assertion and had no error, failure or skip; 1 only for failed assertions without an error; 3 for anything else, a report PHPUnit did not write included. %s is the escaped path.
-    public const string REGRESSION_TEST = 'rm -f '.self::REGRESSION_REPORT.'; '.self::PHPUNIT.' --log-junit '.self::REGRESSION_REPORT.' %s; php -r '.self::REGRESSION_VERDICT.' '.self::REGRESSION_REPORT.' "$?"';
+    // One test file of a bug's regression run, judged from PHPUnit's JUnit report and its status together, because PHPUnit exits 0 when every test skipped and an error such as a missing fixture is no failed assertion. Risky tests fail the run, because the JUnit report does not list them, while a test declared with DoesNotPerformAssertions is not risky and so passes without an assertion. Exit 0 only for a run that executed a test and had no error, failure, skip or risky test; 1 only for failed assertions without an error; 3 for anything else, a report PHPUnit did not write included. %s is the escaped path.
+    public const string REGRESSION_TEST = 'rm -f '.self::REGRESSION_REPORT.'; '.self::PHPUNIT.' --fail-on-risky --log-junit '.self::REGRESSION_REPORT.' %s; php -r '.self::REGRESSION_VERDICT.' '.self::REGRESSION_REPORT.' "$?"';
 
     // A status Composer's own failures do not use, so that a caller reads it as "this head cannot reuse an install" and not as a failed check.
     public const int REFUSED = 78;
@@ -168,7 +168,7 @@ final readonly class PhpGateSteps
         $suite = is_file($argv[1]) && @$report->load($argv[1], LIBXML_NONET) ? $report->getElementsByTagName("testsuite")->item(0) : null;
         if (!$suite instanceof DOMElement) { exit(3); }
         $count = static fn (string $name): int => (int) $suite->getAttribute($name);
-        if ("0" === $argv[2] && $count("tests") > 0 && $count("assertions") > 0 && 0 === $count("errors") + $count("failures") + $count("skipped")) { exit(0); }
+        if ("0" === $argv[2] && $count("tests") > 0 && 0 ===$count("errors") + $count("failures") + $count("skipped")) { exit(0); }
         exit("1" === $argv[2] && $count("failures") > 0 && 0 === $count("errors") ? 1 : 3);'
         SH;
 }

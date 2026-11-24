@@ -188,11 +188,13 @@ final readonly class RunRegressionTests implements RegressionTests
             return RegressionRun::NoResult;
         }
 
-        // Only an errored run names its status, so "failed 1" and a bare "errored" are no result.
-        return match ([$match['run'], null !== $match['status']]) {
-            ['passed', false] => RegressionRun::Passed,
-            ['failed', false] => RegressionRun::Failed,
-            ['errored', true] => RegressionRun::Errored,
+        // Only an errored run names its status, and the script reports status 1 as failed and can exit with no status above 255, so "failed 1", a bare "errored", "errored 1" and "errored 256" are no result.
+        $status = null === $match['status'] ? null : (int) $match['status'];
+
+        return match (true) {
+            'passed' === $match['run'] && null === $status => RegressionRun::Passed,
+            'failed' === $match['run'] && null === $status => RegressionRun::Failed,
+            'errored' === $match['run'] && null !== $status && $status >= 2 && $status <= 255 => RegressionRun::Errored,
             default => RegressionRun::NoResult,
         };
     }

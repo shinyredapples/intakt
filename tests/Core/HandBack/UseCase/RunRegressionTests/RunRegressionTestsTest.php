@@ -153,6 +153,28 @@ final class RunRegressionTestsTest extends TestCase
         self::assertSame(RegressionRun::Errored, $runs->head);
     }
 
+    public function testAnErroredRunWithTheFailedStatusIsReadAsNoResult(): void
+    {
+        $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
+
+        $runs = $this->whenTheJobsLeave(["errored 1\n", "errored 2\n"]);
+
+        self::assertInstanceOf(RegressionRuns::class, $runs);
+        self::assertSame(RegressionRun::NoResult, $runs->base);
+        self::assertSame(RegressionRun::Errored, $runs->head);
+    }
+
+    public function testAnErroredRunWithAStatusAboveTwoHundredFiftyFiveIsReadAsNoResult(): void
+    {
+        $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
+
+        $runs = $this->whenTheJobsLeave(["errored 256\n", "errored 999\n"]);
+
+        self::assertInstanceOf(RegressionRuns::class, $runs);
+        self::assertSame(RegressionRun::NoResult, $runs->base);
+        self::assertSame(RegressionRun::NoResult, $runs->head);
+    }
+
     public function testARunThatCouldNotInstallOrApplyLeavesNoResult(): void
     {
         $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
