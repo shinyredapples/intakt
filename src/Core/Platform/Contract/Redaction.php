@@ -83,12 +83,13 @@ final readonly class Redaction
     private function addSecretShapes(string $text, RedactedSpans $spans): bool
     {
         foreach (self::SECRET_SHAPES as $shapePattern) {
-            if (false === preg_match_all('~(?=('.$shapePattern.'))~s', $text, $matches, PREG_OFFSET_CAPTURE)) {
+            // The empty group at the end of the lookahead gives the offset where the shape ends: capturing the shape itself would copy every overlapping match, and memory would grow with the square of a run of joined tokens.
+            if (false === preg_match_all('~(?=(?:'.$shapePattern.')())~s', $text, $matches, PREG_OFFSET_CAPTURE)) {
                 return false;
             }
 
-            foreach ($matches[1] as [$shape, $at]) {
-                $spans->add($at, $at + strlen($shape));
+            foreach ($matches[0] as $i => [, $from]) {
+                $spans->add($from, $matches[1][$i][1]);
             }
         }
 

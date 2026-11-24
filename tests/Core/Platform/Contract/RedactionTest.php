@@ -57,6 +57,31 @@ final class RedactionTest extends TestCase
         self::assertSame('fixtures/key_[redacted].txt', $redacted);
     }
 
+    public function testItRedactsALongRunOfApiKeysJoinedByHyphensWithinBoundedMemory(): void
+    {
+        $text = 'prefix '.str_repeat('sk-'.str_repeat('A', 20).'-', 3000).' suffix';
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('prefix [redacted] suffix', $redacted);
+        self::assertLessThan(8 * 1024 * 1024, memory_get_peak_usage() - $before);
+    }
+
+    public function testItRedactsALongRunOfApiKeyPrefixesWithinBoundedMemory(): void
+    {
+        $text = str_repeat('sk-', 20_000);
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('[redacted]', $redacted);
+        // 20 000 starts keep one pair of offsets each (about 10 MiB), where a copy of each match took 650 MiB.
+        self::assertLessThan(32 * 1024 * 1024, memory_get_peak_usage() - $before);
+    }
+
     public function testItLeavesAWordThatContainsATokenPrefixAfterALetter(): void
     {
         $word = 'xghp_'.str_repeat('a', 30);
