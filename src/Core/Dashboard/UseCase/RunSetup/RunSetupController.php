@@ -30,7 +30,7 @@ final readonly class RunSetupController
     #[Route('/setup', name: DashboardRoutes::RUN_SETUP, methods: ['GET', 'POST'])]
     public function __invoke(Request $request): Response
     {
-        $step = SetupStep::fromQuery(self::text($request->query->all()[self::STEP] ?? ''));
+        $step = SetupStep::fromQuery($this->text($request->query->all()[self::STEP] ?? ''));
 
         return new Response($this->pages->render($request, 'dashboard/setup.html.twig', [
             'step' => $step,
@@ -49,11 +49,11 @@ final readonly class RunSetupController
             return RepositoryField::unsubmitted();
         }
 
-        return RepositoryField::submitted(self::text($fields[self::REPOSITORY]));
+        return RepositoryField::submitted($this->text($fields[self::REPOSITORY]));
     }
 
     // A field sent as a list is no step and no address, so it reads as empty instead of failing the request.
-    private static function text(mixed $value): string
+    private function text(mixed $value): string
     {
         return is_string($value) ? $value : '';
     }
