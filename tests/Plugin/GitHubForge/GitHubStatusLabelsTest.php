@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Closure;
+use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -23,6 +24,7 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
@@ -62,6 +64,8 @@ final class GitHubStatusLabelsTest extends TestCase
     private ?Closure $whileWriting = null;
 
     private LockFactory $locks;
+
+    private MockClock $clock;
 
     public function testAQueuedRoundWritesTheInReviewLabel(): void
     {
@@ -125,6 +129,52 @@ final class GitHubStatusLabelsTest extends TestCase
 
         self::assertInstanceOf(ForgeWriteFailed::class, $overlapping);
         self::assertCount(1, $this->comments);
+    }
+
+    public function testAVerdictStatusThatArrivesWhileARestorationHoldsTheLockWaitsAndIsWritten(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->locks = new LockFactory(new BusyForAWhileStore(1));
+
+        $this->mirror(RoundStatusLabel::WaitingOnYou);
+
+        self::assertSame(['DELETE /repos/acme/widget/issues/1/labels/status%3Ain-review', 'POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}'], $this->writes);
+        self::assertEquals(new DateTimeImmutable(self::MOMENT)->modify('+500 milliseconds'), $this->clock->now());
+    }
+
+    public function testAStatusWhoseLockStaysBusyForTheWholeWaitFailsWithoutAWrite(): void
+    {
+        $this->locks = new LockFactory(new BusyForAWhileStore(20));
+
+        try {
+            $this->mirror(RoundStatusLabel::WaitingOnYou);
+            self::fail('The busy lock should have failed the write.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame([], $this->writes);
+        }
+    }
+
+    public function testAStatusWhoseLockFreesOnTheLastTryOfTheWaitIsWritten(): void
+    {
+        $this->locks = new LockFactory(new BusyForAWhileStore(19));
+
+        $this->mirror(RoundStatusLabel::WaitingOnYou);
+
+        self::assertSame(['POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}'], $this->writes);
+    }
+
+    public function testARestorationThatFindsTheLockBusyLeavesTheLabelToItsHolderWithoutWaiting(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', RecordedTrust::WRITER);
+        $store = new BusyForAWhileStore(1);
+        $this->locks = new LockFactory($store);
+
+        $this->restore();
+
+        self::assertSame([], $this->writes);
+        self::assertSame([], $this->comments);
+        self::assertSame(1, $store->tries);
     }
 
     public function testAStatusLabelAPersonRemovedAfterTheVerdictIsPutBackWithOneComment(): void
@@ -200,6 +250,7 @@ final class GitHubStatusLabelsTest extends TestCase
     protected function setUp(): void
     {
         $this->locks = new LockFactory(new InMemoryStore());
+        $this->clock = new MockClock(self::MOMENT);
     }
 
     private function mirror(RoundStatusLabel $status): void
@@ -231,7 +282,7 @@ final class GitHubStatusLabelsTest extends TestCase
         $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]);
         $comments = new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345');
 
-        return new GitHubStatusLabels($wiring->calls, $wiring->tokens, $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens), $this->locks);
+        return new GitHubStatusLabels($wiring->calls, $wiring->tokens, $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens), $this->locks, $this->clock);
     }
 
     /**

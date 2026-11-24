@@ -20,7 +20,9 @@ use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
 use Intakt\Plugin\GitHubForge\Domain\StatusLabelPlan;
 use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use JsonException;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 // Read from the event list, because only it names who applied or removed a label, and a person's change is what gets restored.
@@ -28,6 +30,9 @@ final readonly class GitHubStatusLabels implements StatusLabels
 {
     private const int PAGE_SIZE = 100;
     private const int MAX_PAGES = 10;
+    // Twenty tries half a second apart, about ten seconds, which covers a holder's event read and its few writes.
+    private const int WAIT_TRIES = 20;
+    private const float WAIT_PAUSE_SECONDS = 0.5;
     private const string RESTORED = 'A person changed the status label on this change. Intakt sets it from the state of the review and put it back, so it always shows where the review stands.';
 
     public function __construct(
@@ -38,17 +43,22 @@ final readonly class GitHubStatusLabels implements StatusLabels
         private GitHubIssueComments $comments,
         private GitHubLabelWrites $writes,
         private LockFactory $locks,
+        private ClockInterface $clock,
     ) {
     }
 
+    // Waits a bounded while for a busy lock, because a new status that gave up would leave the old one standing, and a restoration aims at the status Intakt applied last.
     public function mirror(string $project, ChangeId $change, RoundStatusLabel $status): void
     {
-        $this->whileHeld($project, $change, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...)));
+        if (!$this->whileHeld($project, $change, self::WAIT_TRIES, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...)))) {
+            throw new ForgeWriteFailed('Another write held the status label of this change for longer than the wait.');
+        }
     }
 
+    // Not waited for, because the busy holder reads the events after the person's change and leaves the label as Intakt set it.
     public function restore(string $project, ChangeId $change): void
     {
-        $this->whileHeld($project, $change, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...)));
+        $this->whileHeld($project, $change, 1, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...)));
     }
 
     private function isOwn(string $login): bool
@@ -60,7 +70,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
     }
 
-    // Planned and written under one lock, because two writers that read the same events would both find the person's change last and both comment; not waited for, because the busy writer leaves the label to the one holding it.
+    // Planned and written under one lock, because two writers that read the same events would both find the person's change last and both comment; false when the lock stayed busy for every try.
     /**
      * @param Closure(list<LabelEvent>): ?StatusLabelPlan $plan
      *
@@ -68,12 +78,12 @@ final readonly class GitHubStatusLabels implements StatusLabels
      * @throws ForgeReadFailed
      * @throws ForgeWriteFailed
      */
-    private function whileHeld(string $project, ChangeId $change, Closure $plan): void
+    private function whileHeld(string $project, ChangeId $change, int $tries, Closure $plan): bool
     {
         $address = $this->addressOf($project, $change);
         $lock = $this->locks->createLock(GitHubForgeServices::STATUS_LABEL_LOCK_PREFIX.hash('sha256', json_encode([$project, $change->value], JSON_THROW_ON_ERROR)));
-        if (!$lock->acquire()) {
-            throw new ForgeWriteFailed('Another write is setting the status label of this change.');
+        if (!$this->acquired($lock, $tries)) {
+            return false;
         }
 
         try {
@@ -81,6 +91,21 @@ final readonly class GitHubStatusLabels implements StatusLabels
         } finally {
             $lock->release();
         }
+
+        return true;
+    }
+
+    // Tried without blocking and paced by the clock, so the wait has a bound and a lock store that cannot block still serves.
+    private function acquired(LockInterface $lock, int $tries): bool
+    {
+        for ($try = 1; !$lock->acquire(); ++$try) {
+            if ($try >= $tries) {
+                return false;
+            }
+            $this->clock->sleep(self::WAIT_PAUSE_SECONDS);
+        }
+
+        return true;
     }
 
     /**
