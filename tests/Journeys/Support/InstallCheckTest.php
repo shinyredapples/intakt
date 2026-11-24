@@ -26,7 +26,7 @@ final class InstallCheckTest extends TestCase
 {
     private const string CLONE_COMMAND = 'git clone https://github.com/shinyredapples/intakt.git && cd intakt';
     private const string ACCOUNT = 'alarm[bot]';
-    private const string README ="<!-- install-check -->\n```\n".self::CLONE_COMMAND."\ndocker compose up -d --wait\n```\n";
+    private const string README = "<!-- install-check -->\n```\n".self::CLONE_COMMAND."\ndocker compose up -d --wait\n```\n";
 
     private string $directory = '';
 
