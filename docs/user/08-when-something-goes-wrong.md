@@ -18,13 +18,13 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 - **Why:** `INTAKT_LOG_LEVEL` holds something other than one of those levels in lower case, or is empty. The message does not repeat the value, so a key set there by mistake is not printed.
 - **What to do:** set `INTAKT_LOG_LEVEL` to one of the listed levels (`warning` is the usual one, `info` shows more), or remove it from `.env.local` and your environment to get `warning`, then start Intakt again.
 
-## The setup page says a step is Missing
+## The setup wizard says no provider has a key
 
-- **What you see:** **1. Add a key here** is not Done, and lines such as Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
+- **What you see:** step 3, **Add an AI account**, says "No provider has a key yet", with lines such as Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
 - **Why:** no provider has a key, so no reviewer can run.
 - **What to do:** add a key as in [chapter 3](03-your-first-real-review.md), then restart Intakt.
 
-## The setup page refuses your key
+## The setup wizard refuses your key
 
 - **What you see:** "The provider refused the key", or "The key has the form of no listed provider".
 - **Why:** the provider said no, or the text is not a whole key of a provider Intakt knows.

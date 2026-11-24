@@ -23,8 +23,7 @@ This chapter's commands run on an install started from a clone with PHP, not in 
 
 Optional `rules` add reviewers to a bigger change or to sensitive paths, for example a security reviewer for anything under `config/`.
 
-The setup page's second step shows the projects Intakt has read, with their reviewers.
-
+Step 4 of the setup wizard, **Check the project** (<http://localhost:7781/setup?step=4>), shows each project Intakt has read with its reviewers, and whether its main branch failed to boot.
 ![Step 2 of the setup page, "Add a project", marked Done: "1 project is configured", the project sample, and its reviewers: correctness on the strong tier and security on the standard tier, both on openai_compatible](../assets/guide/add-a-project.webp)
 
 ## Check the panel, then review
