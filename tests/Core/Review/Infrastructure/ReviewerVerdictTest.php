@@ -221,7 +221,7 @@ final class ReviewerVerdictTest extends WebTestCase
         }
     }
 
-    public function testAStreamCutOffMidAnswerIsNotRetriedUnstreamed(): void
+    public function testAStreamCutOffMidAnswerIsNeitherRetriedUnstreamedNorPublished(): void
     {
         $this->catalog = new FallbackModelCatalog();
         $cutOff = new StreamResult((static function (): Generator {
@@ -236,6 +236,7 @@ final class ReviewerVerdictTest extends WebTestCase
         } catch (IncompleteStreamException) {
             self::assertCount(1, $this->sent);
             self::assertSame([], $this->ledger->kinds());
+            self::assertSame([], $this->updates->seen);
         }
     }
 
@@ -252,21 +253,34 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('final class Cart', $this->sent[1]);
     }
 
-    public function testEachToolCallOfTheReviewerIsPublishedWithTheReviewerThatMadeIt(): void
+    /**
+     * @param list<string>                $narration
+     * @param list<ToolCall>              $toolCalls
+     * @param list<array{string, string}> $published
+     */
+    #[DataProvider('publishedSteps')]
+    public function testEachStepOfTheReviewerIsPublishedWithTheReviewerThatMadeItInTheOrderItArrived(ModelCatalogInterface $catalog, array $narration, array $toolCalls, array $published): void
     {
-        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+        $this->catalog = $catalog;
+        $this->narration = $narration;
 
-        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
+        $this->review('Add a cart.', $toolCalls, self::APPROVE);
+
+        self::assertSame(array_map(fn (array $step): string => $this->seen(...$step), $published), $this->updates->seen);
     }
 
-    public function testTheStreamedNarrationBeforeAToolCallIsPublishedBeforeTheCallInTheOrderItArrived(): void
+    /**
+     * @return iterable<string, array{ModelCatalogInterface, list<string>, list<ToolCall>, list<array{string, string}>}>
+     */
+    public static function publishedSteps(): iterable
     {
-        $this->catalog = new FallbackModelCatalog();
-        $this->narration = ['I read ', 'the cart first.'];
+        $read = [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])];
+        $readAndApprove = [['tool', 'read src/Cart.php'], ['answer', 'approve']];
 
-        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
-
-        self::assertSame([$this->seen('text', 'I read the cart first.'), $this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
+        yield 'a tool call, then the read answer' => [new UnstreamedModelCatalog(), [], $read, $readAndApprove];
+        yield 'only the read answer of an answer in one piece' => [new UnstreamedModelCatalog(), [], [], [['answer', 'approve']]];
+        yield 'the streamed narration before a tool call' => [new FallbackModelCatalog(), ['I read ', 'the cart first.'], $read, [['text', 'I read the cart first.'], ...$readAndApprove]];
+        yield 'no narration of a JSON answer streamed before a tool call' => [new FallbackModelCatalog(), str_split(VerdictDocument::fromTheDesign()->with('resolved', [])->json(), 40), $read, $readAndApprove];
     }
 
     public function testAReviewersStructuredAnswerIsPublishedAsTheTypedAnswerAndItsJsonIsNeverStreamedAsText(): void
@@ -279,16 +293,6 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertEquals([ReadAnswer::of($verdict)], $this->updates->answers);
         self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'changes [P1 src/Cart.php:12 The discount ends one day early.]')], $this->updates->seen);
         self::assertStringNotContainsString('"verdict"', implode("\n", $this->updates->seen));
-    }
-
-    public function testAJsonAnswerStreamedBeforeAToolCallIsNeverPublishedAsNarration(): void
-    {
-        $this->catalog = new FallbackModelCatalog();
-        $this->narration = str_split(VerdictDocument::fromTheDesign()->with('resolved', [])->json(), 40);
-
-        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
-
-        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testAnUnreadableStreamedAnswerPublishesOnlyTheMarkerAndStillFailsTheReviewWithItsReason(): void
@@ -305,22 +309,6 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->refused('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], 'Looks good to me.');
 
         self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'unreadable')], $this->updates->seen);
-    }
-
-    public function testAStreamCutOffMidAnswerPublishesNeitherItsTextNorAnAnswer(): void
-    {
-        $cutOff = new StreamResult((static function (): Generator {
-            yield new TextDelta('{"verdict":"approve",');
-
-            throw new IncompleteStreamException('The stream ended before its last event.');
-        })());
-
-        try {
-            $this->review('Add a cart.', [], $cutOff);
-            self::fail('A cut-off stream gave a verdict.');
-        } catch (IncompleteStreamException) {
-            self::assertSame([], $this->updates->seen);
-        }
     }
 
     public function testAReviewOutsideARoundPublishesNoAnswer(): void
@@ -358,13 +346,6 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->expectException(VerdictUnreadable::class);
 
         $this->review('Add a cart.', [], self::streamed('Looks good ', 'to me.'));
-    }
-
-    public function testOnlyTheReadAnswerIsPublishedWhenTheModelAnswersInOnePiece(): void
-    {
-        $this->review('Add a cart.', [], self::APPROVE);
-
-        self::assertSame([$this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testTheFirstRoundPromptStatesEachReviewingRuleAndFencesTheTask(): void
