@@ -84,13 +84,7 @@ final readonly class MarkdownPage
 
     public function words(): int
     {
-        $words = 0;
-
-        foreach (array_keys($this->kinds) as $index) {
-            $words += $this->wordsOfLine($index);
-        }
-
-        return $words;
+        return array_sum(array_map($this->wordsOfLine(...), array_keys($this->kinds)));
     }
 
     public function summary(): ?MarkdownSummary
@@ -172,12 +166,17 @@ final readonly class MarkdownPage
 
     private function wordsOfLine(int $index): int
     {
-        return MarkdownLineKind::Code === $this->kinds[$index] ? 0 : $this->wordsIn($this->textOf($index));
+        return $this->wordsIn($this->measuredTextOf($index));
+    }
+
+    private function measuredTextOf(int $index): string
+    {
+        return MarkdownLineKind::Code === $this->kinds[$index] ? '' : $this->textOf($index);
     }
 
     private function isOwnHeading(int $index): bool
     {
-        // A heading inside a quote or a list item belongs to that block, not to the page.
+        // Because a heading inside a quote or a list item belongs to that block, only one outside both is the page's own.
         return MarkdownLineKind::Heading === $this->kinds[$index] && 0 === $this->depths[$index] && !isset($this->itemHeadings[$index]);
     }
 
@@ -197,15 +196,13 @@ final readonly class MarkdownPage
         $level = $this->headingLevel($heading);
         $lines = [];
 
-        foreach (array_slice($this->kinds, $heading + 1, preserve_keys: true) as $index => $kind) {
+        foreach (array_keys(array_slice($this->kinds, $heading + 1, preserve_keys: true)) as $index) {
             // Only the page's own heading ends the section, so an oversized summary cannot hide behind a quoted heading.
             if ($this->isOwnHeading($index) && $this->headingLevel($index) <= $level) {
                 break;
             }
 
-            if (MarkdownLineKind::Code !== $kind) {
-                $lines[$index] = $this->textOf($index);
-            }
+            $lines[$index] = $this->measuredTextOf($index);
         }
 
         return $lines;
@@ -216,7 +213,7 @@ final readonly class MarkdownPage
      */
     private function visibleWordsIn(array $lines): int
     {
-        // An HTML comment, also one over several lines or never closed, shows no text to a reader.
+        // Because a reader never sees an HTML comment, also one over several lines or never closed, its words do not count.
         return $this->wordsIn(preg_replace(self::HTML_COMMENT, ' ', implode("\n", $lines)) ?? '');
     }
 
@@ -227,7 +224,7 @@ final readonly class MarkdownPage
             static fn (MarkdownLineKind $kind): bool => MarkdownLineKind::Blank !== $kind,
         ));
 
-        return [] === $before || [MarkdownLineKind::Heading] === $before;
+        return in_array($before, [[], [MarkdownLineKind::Heading]], true);
     }
 
     private function startsATable(int $header): bool

@@ -392,9 +392,9 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('docs'), $run->output());
     }
 
-    private function gate(): DocsGate
+    private function words(int $count): string
     {
-        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
+        return trim(str_repeat('word ', $count));
     }
 
     /**
@@ -403,6 +403,23 @@ final class DocsGateTest extends SandboxTestCase
     private function changeWith(array $files): Sandbox
     {
         return $this->changeOver([], [DocsRatchetList::PATH => $this->listOf([]), ...$files]);
+    }
+
+    /**
+     * @param array<string, list<string>> $paragraphs
+     * @param array<string, int>          $pages
+     * @param list<string>                $summaries
+     */
+    private function listOf(array $paragraphs, array $pages = [], array $summaries = []): string
+    {
+        $keys = array_map(fn (array $texts): array => array_map($this->keyOf(...), $texts), $paragraphs);
+
+        return json_encode(['paragraphs' => (object) $keys, 'pages' => (object) $pages, 'summaries' => $summaries], JSON_THROW_ON_ERROR);
+    }
+
+    private function keyOf(string $paragraph): string
+    {
+        return new MarkdownParagraph($paragraph, 0, 1)->key();
     }
 
     /**
@@ -441,36 +458,14 @@ final class DocsGateTest extends SandboxTestCase
         return $sandbox;
     }
 
-    /**
-     * @param array<string, list<string>> $paragraphs
-     * @param array<string, int>          $pages
-     * @param list<string>                $summaries
-     */
-    private function listOf(array $paragraphs, array $pages = [], array $summaries = []): string
+    private function gate(): DocsGate
     {
-        $keys = array_map(fn (array $texts): array => array_map($this->keyOf(...), $texts), $paragraphs);
-
-        return json_encode(['paragraphs' => (object) $keys, 'pages' => (object) $pages, 'summaries' => $summaries], JSON_THROW_ON_ERROR);
-    }
-
-    private function keyOf(string $paragraph): string
-    {
-        return new MarkdownParagraph($paragraph, 0, 1)->key();
-    }
-
-    private function words(int $count): string
-    {
-        return trim(str_repeat('word ', $count));
+        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
     }
 
     private function pageOf(int $words): string
     {
         return "# T\n\n".$this->chapters($words - 1);
-    }
-
-    private function summarizedPage(string $summary, int $detailWords): string
-    {
-        return "# Big\n\n## In short\n\n".$summary."\n\n## Detail\n\n".$this->chapters($detailWords);
     }
 
     // Because the paragraph limit is 80 words, a long page is built from paragraphs of at most 50.
@@ -483,5 +478,10 @@ final class DocsGateTest extends SandboxTestCase
         }
 
         return implode("\n\n", $chapters)."\n";
+    }
+
+    private function summarizedPage(string $summary, int $detailWords): string
+    {
+        return "# Big\n\n## In short\n\n".$summary."\n\n## Detail\n\n".$this->chapters($detailWords);
     }
 }

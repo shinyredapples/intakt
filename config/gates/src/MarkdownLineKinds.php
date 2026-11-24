@@ -36,10 +36,7 @@ final readonly class MarkdownLineKinds
             $kind = isset($tableRows[$index]) ? MarkdownLineKind::Table : $this->kindOf($content, $previous, $lists);
             $lists = $this->continuesAParagraph($kind, $previous) ? $lists : $this->openLists($kind, $content, $lists);
             $kinds[] = MarkdownLineKind::CodeItem === $kind ? MarkdownLineKind::Code : $kind;
-
-            if (MarkdownLineKind::Heading === $kind && [] !== $lists) {
-                $itemHeadings[$index] = true;
-            }
+            $itemHeadings += $this->itemHeadingAt($index, $kind, $lists);
         }
 
         return [$kinds, $itemHeadings];
@@ -105,5 +102,15 @@ final readonly class MarkdownLineKinds
             in_array($kind, [MarkdownLineKind::Heading, MarkdownLineKind::Break, MarkdownLineKind::Table, MarkdownLineKind::Prose], true) => $this->indents->within($lists, $this->indents->indent($content)),
             default => $lists,
         };
+    }
+
+    /**
+     * @param list<int> $lists
+     *
+     * @return array<int, true>
+     */
+    private function itemHeadingAt(int $index, MarkdownLineKind $kind, array $lists): array
+    {
+        return MarkdownLineKind::Heading === $kind && [] !== $lists ? [$index => true] : [];
     }
 }
