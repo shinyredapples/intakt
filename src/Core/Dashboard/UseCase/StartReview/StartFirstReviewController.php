@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\StartReview;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Domain\SetupStep;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
+use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -32,9 +34,9 @@ final readonly class StartFirstReviewController
         $answer = $this->starts->startSampleChange() ?? throw new NotFoundHttpException('This install has no sample change to review, so nothing was started.');
         $this->press->flash($request, $answer->line);
 
-        // Back to the first-run page when nothing started, because its flash line says why and the step still offers the start.
+        // Back to the wizard's Ready step when nothing started, because its flash line says why and the step still offers the start.
         $target = null === $answer->round
-            ? $this->urls->generate(DashboardRoutes::FIRST_RUN)
+            ? $this->urls->generate(DashboardRoutes::RUN_SETUP, [RunSetupController::STEP => SetupStep::Ready->value])
             : $this->urls->generate(DashboardRoutes::SHOW_REVIEW, ['round' => $answer->round]);
 
         return new RedirectResponse($target, Response::HTTP_SEE_OTHER);

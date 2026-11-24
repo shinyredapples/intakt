@@ -31,6 +31,7 @@ docker compose up -d --wait
 
 The latest, with everything built after the deadline (main):
 
+<!-- install-check: the daily install check runs the commands of the code block right below this comment -->
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait

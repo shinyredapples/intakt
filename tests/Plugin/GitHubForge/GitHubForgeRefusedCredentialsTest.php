@@ -139,9 +139,32 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
         self::assertInstanceOf(ForgeCredentialsRefused::class, $failure->getPrevious()->getPrevious()->getPrevious());
     }
 
+    public function testATokenExchangeRefusedWith401ReachesAWriteAsRefusedCredentials(): void
+    {
+        $forge = $this->forgeAnswering(static fn (string $url): MockResponse => self::plain($url), exchangeStatus: 401);
+
+        $failure = $this->failureOf(fn () => $forge->postReview('widgets', $this->change(), new ReviewComment('Two reviewers approve.', new ReviewToken('round-7-token-0123456789'), new JobCredentials())));
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
+        self::assertNotEmpty(array_filter($this->causesOf($failure), static fn (Throwable $cause): bool => $cause instanceof ForgeCredentialsRefused));
+    }
+
     protected function setUp(): void
     {
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+    }
+
+    /**
+     * @return list<Throwable>
+     */
+    private function causesOf(Throwable $failure): array
+    {
+        $causes = [];
+        for ($cause = $failure->getPrevious(); $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            $causes[] = $cause;
+        }
+
+        return $causes;
     }
 
     /**

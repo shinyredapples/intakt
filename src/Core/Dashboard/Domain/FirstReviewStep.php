@@ -8,7 +8,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\SampleChange;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Excluded from the container, because FirstRunSteps builds one per page.
+// Excluded from the container, because SetupSteps builds one per page.
 #[Exclude]
 final readonly class FirstReviewStep
 {

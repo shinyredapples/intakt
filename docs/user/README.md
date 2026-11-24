@@ -54,15 +54,25 @@ The helper-order check of `bin/check` does not recognize a call from a property 
 
 Running `bin/check` again on a tree that has not changed since its last full pass? `bin/check --reuse` spares the gates that already passed on it (the audit still runs), while a run without `--reuse`, as CI and every gating step use, runs every gate ([reusing a passed check](../reference/user-manual.md#running-bincheck-again-on-an-unchanged-tree)). After you change an ignored file under `var/` by hand, run without `--reuse`.
 
+A reviewer's role prompt must come from the owner's panel configuration or the sample project's fixed roles, so the `phpstan` gate of `bin/check` limits where the objects that carry it are built: `new ReviewerRole` only in `ConfiguredPanels` and `SampleProject`, `new RoundReviewer` only in `ReviewRound` (`intakt.reviewerRole`), and `new ReviewerConversation` only in `ReviewWithReviewerHandler` and `SymfonyAiVendor` (`intakt.reviewerConversation`). A class string typed with an interface or parent class of one of these objects, such as `class-string<HasPlace>`, counts as naming that object; one typed with several (`class-string<HasPlace&Countable>`) counts only when the object has every one of them. Code under `tests/` is not checked ([details](../reference/user-manual.md#when-the-phpstan-gate-reports-a-prompt-message-finding)).
+
+Code in a trait counts as outside, even when an allowed class uses the trait. In a trait that a class uses, `new self`, `new static` or `new $class` is judged in each class that uses it, and is refused when it may build one of these objects or its type names no class. In a trait no class uses, all three are refused, except a `new self` or `new static` inside an anonymous class in the trait, which builds that anonymous class. An anonymous class (`new class () {}`) builds none of these objects and passes.
+
 Looking for a setting, a command option or an exact rule? The [complete reference](../reference/user-manual.md) keeps every detail.
 
-The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig, JavaScript and shell lines a change adds. The same words inside a string do not count, and neither does a line inside a shell here-document body (from `cat <<EOF` up to the `EOF` line), while a comment after the body still counts, and so does one after a shell function that computes, such as `f() { (( x <<= 1 )); }`. A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
+The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig, JavaScript, shell and YAML lines a change adds.
+
+Text that is not a comment does not count: a string, a line indented under a YAML `run: |`, or a shell here-document body (from `cat <<EOF` up to the `EOF` line). A comment after such a body still counts.
+
+A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
 A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks)).
 
-When all four parts are there, the builder is told to write the regression test that fails today first, commit it on its own and only then fix the bug. Only the task itself may say that a bug cannot be reproduced by a test ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+When all four parts are there, the builder writes the failing regression test first, commits it on its own, then fixes the bug. Only the task itself may say that no test can reproduce the bug ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+
+Before the push, Intakt runs the tests the work adds or changes twice: on the old code (they should fail) and on the fixed code (they should pass). It finds them in the work itself, not in the builder's word. For now both results only go to the log.
 
 Intakt chooses tasks only from GitHub issues that carry the project's eligibility label: `intakt`, unless the project's `watch` section names another `eligibility_label`. An issue that carries only another loop's label is not a task for Intakt. `php bin/console intakt:queue:show <project>` prints the order Intakt would pick the tasks in (tasks with an open pull request, including one found only by its task branch, come before tasks not started yet, also urgent ones), then the held tasks with their reasons; no build starts from it yet ([details](../reference/user-manual.md#showing-the-queue-of-tasks)).
 

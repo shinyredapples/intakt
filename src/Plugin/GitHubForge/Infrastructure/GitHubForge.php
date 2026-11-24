@@ -31,6 +31,7 @@ use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Domain\RefusedCredentials;
 use JsonException;
 use NoDiscard;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
@@ -47,7 +48,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private const string RAW = 'application/vnd.github.raw+json';
     private const int COMPARED_FILES_CAP = 300;
     private const int NOT_FOUND = 404;
-    private const int UNAUTHORIZED = 401;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -349,7 +349,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             return $body;
         }
 
-        throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+        throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: RefusedCredentials::STATUS === $status ? new ForgeCredentialsRefused() : null);
     }
 
     /**
@@ -369,7 +369,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: RefusedCredentials::STATUS === $status ? new ForgeCredentialsRefused() : null);
         }
     }
 
