@@ -55,7 +55,7 @@ final class YamlCommentsTest extends TestCase
         yield 'a comment after a block scalar with a tag and an anchor before its indicator' => ["key: !!str &text |\n  # a line of the text\n# TODO later\n", [3 => 'TODO']];
         yield 'a comment after a block scalar following an anchor that closes a flow sequence' => ["defaults: [&empty]\nscript: |\n  \"A shell line with no closing quote\n# TODO finish the mapping\n", [4 => 'TODO']];
         yield 'a comment after a block scalar following a tag that closes a flow mapping' => ["defaults: {a: !!null}\nscript: |\n  # a line of the script\n# TODO later\n", [4 => 'TODO']];
-        yield 'a comment after an empty block scalar' =>["key: |\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after an empty block scalar' => ["key: |\n# TODO later\n", [2 => 'TODO']];
         yield 'a comment after a byte order mark' => ["\u{FEFF}# TODO later\n", [1 => 'TODO']];
     }
 
@@ -90,7 +90,7 @@ final class YamlCommentsTest extends TestCase
         yield 'a marker in a block scalar behind an anchor and a tag before a compact key' => ["- &id !!str key: |\n    # TODO later\n"];
         yield 'a marker in a block scalar of a nested sequence entry' => ["- - key: |\n      # TODO later\n"];
         yield 'a marker in a block scalar following an anchor that closes a flow sequence' => ["defaults: [&empty]\nscript: |\n  # TODO later\n"];
-        yield 'a marker after the comment start' =>["# see the TODO list\n"];
+        yield 'a marker after the comment start' => ["# see the TODO list\n"];
         yield 'a reasoned exception' => ["# TODO(#123): drop once the forge sends it\n"];
         yield 'a marker as a key' => ["TODO: later\n"];
         yield 'an unclosed single-quoted value' => ["key: '\n# TODO later\n"];
