@@ -190,7 +190,7 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     {
         return 'mcp_tool_call' === ($item[self::TYPE] ?? null)
             && $access->name === ($item['server'] ?? null)
-            && in_array($item['tool'] ?? null, $access->tools, true)
+            && in_array($item['tool'] ?? null, [...$access->tools], true)
             && 'completed' === ($item['status'] ?? null)
             && null === ($item['error'] ?? null)
             && $this->answered($item['result'] ?? null);

@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
@@ -197,10 +198,8 @@ final readonly class GitHubIssueHistories implements IssueHistories
 
     /**
      * @param array<mixed> $issue
-     *
-     * @return list<string>
      */
-    private function currentLabelsOf(array $issue): array
+    private function currentLabelsOf(array $issue): IssueLabels
     {
         $labels = $this->at($issue, 'labels');
         $nodes = is_array($labels) ? ($labels['nodes'] ?? null) : null;
@@ -208,7 +207,7 @@ final readonly class GitHubIssueHistories implements IssueHistories
             throw new ForgeReadFailed('GitHub answered labels this forge cannot read whole.');
         }
 
-        return array_values(array_map(fn (mixed $label): string => $this->text(is_array($label) ? $label : [], 'name'), $nodes));
+        return new IssueLabels(...array_map(fn (mixed $label): string => $this->text(is_array($label) ? $label : [], 'name'), array_values($nodes)));
     }
 
     /**

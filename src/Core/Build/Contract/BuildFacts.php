@@ -5,30 +5,25 @@ declare(strict_types=1);
 namespace Intakt\Core\Build\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\Labels;
 
 // Only facts the loop knows about the build; nothing here comes from the builder's output, so a job cannot pick its own model.
 final readonly class BuildFacts
 {
     private const string TIER_LABEL_PREFIX = 'model:';
 
-    /**
-     * @param list<string> $paths
-     */
     public function __construct(
         public ?Tier $labelledTier,
-        public array $paths,
+        public Paths $paths,
         public ?Setback $setback = null,
         // The escalation outcome of the change's latest review round, read from the ledger, because a confirmed escalation sends the next build to the strong tier.
         public ?EscalationOutcome $escalation = null,
     ) {
     }
 
-    /**
-     * @param list<string> $labels
-     * @param list<string> $paths
-     */
-    public static function fromLabels(array $labels, array $paths, ?Setback $setback = null): self
+    public static function fromLabels(Labels $labels, Paths $paths, ?Setback $setback = null): self
     {
         $tiers = [];
 

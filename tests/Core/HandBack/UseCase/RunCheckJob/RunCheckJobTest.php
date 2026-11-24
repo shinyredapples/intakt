@@ -31,6 +31,7 @@ use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
+use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -43,11 +44,13 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Gate\Contract\CheckSteps;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use Intakt\Tests\Core\HandBack\CheckJobsFor;
+use Intakt\Tests\Core\Job\OutputFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -121,7 +124,7 @@ final class RunCheckJobTest extends TestCase
             [new JobInput((string) realpath($this->history->mirror), '/input/mirror'), new JobInput((string) realpath($bundle), '/input/handback.bundle')],
             $spec->inputs,
         );
-        self::assertSame(['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', '/input/mirror', '/input/handback.bundle', 'task', '--'], array_slice($spec->command, 0, 8));
+        self::assertSame(['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', '/input/mirror', '/input/handback.bundle', 'task', '--'], array_slice([...$spec->command], 0, 8));
         self::assertSame('job-image', $spec->image);
     }
 
@@ -132,8 +135,8 @@ final class RunCheckJobTest extends TestCase
         $this->whenTheJobLeaves(['check-result' => "passed\n"]);
 
         $spec = $this->ranSpec();
-        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice($spec->command, 8));
-        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], $spec->egress->hosts);
+        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice([...$spec->command], 8));
+        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], [...$spec->egress->hosts]);
     }
 
     public function testAConfiguredCommandReplacesTheGatesOwnSteps(): void
@@ -142,17 +145,17 @@ final class RunCheckJobTest extends TestCase
 
         $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), 'make check', []));
 
-        self::assertSame(['make check'], array_slice($this->ranSpec()->command, 8));
+        self::assertSame(['make check'], array_slice([...$this->ranSpec()->command], 8));
     }
 
     public function testAGateWithoutRegistriesGetsNoNetwork(): void
     {
         $this->history->commit('Build work');
         $gate = self::createStub(Gate::class);
-        $gate->method('checkSteps')->willReturn(['true']);
-        $gate->method('registryHosts')->willReturn([]);
+        $gate->method('checkSteps')->willReturn(new CheckSteps('true'));
+        $gate->method('registryHosts')->willReturn(new EgressHosts());
 
-        (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"]))), $gate)
+        (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['check-result' => "passed\n"]))), $gate)
             ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, new Paths()));
 
         self::assertTrue($this->ranSpec()->egress->isNone());
@@ -482,7 +485,7 @@ final class RunCheckJobTest extends TestCase
      */
     private function whenTheJobLeaves(array $files, ?CheckJob $job = null, ?JobEnd $end = null): CheckJobOutcome|RefusedHandBack
     {
-        $runner = $this->runnerLeaving(new JobResult($end ?? new JobEnd(JobCause::Exited, 1), new JobOutput($files)));
+        $runner = $this->runnerLeaving(new JobResult($end ?? new JobEnd(JobCause::Exited, 1), OutputFiles::of($files)));
 
         return $this->checkJob($runner)->run($job ?? $this->job($this->history->bundle('main..task'), null, []));
     }

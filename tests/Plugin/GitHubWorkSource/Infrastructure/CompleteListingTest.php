@@ -597,7 +597,7 @@ final class CompleteListingTest extends KernelTestCase
     {
         $references = new IssueReferences();
         $row = StoredIssue::of('alpha', new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
-        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), [...$listed->labels]), $listed->body, $listed->labels);
         $row->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => 'ana' === $account));
 
         return $row;

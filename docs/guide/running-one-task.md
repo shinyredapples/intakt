@@ -33,6 +33,7 @@ One check comes before every step: when the project has a `github` entry, `--rem
 
 - A step fails when, for example, GitHub cannot list the issues, the issue is not open, the Developer made no commit, the hand-back check refuses what came back, the checks fail, or the branch conflicts with main (then nothing is pushed).
 - When the Developer ends with a question instead of a change, the task stops at the build job: Intakt stores the question, runs no later step and the command still ends without an error.
+- When the task is labeled `bug` and misses one of its four parts (When, Today, Expected, Must keep working), the task also stops at the build job, after the clone and before the Developer runs: Intakt stores a question naming the missing parts, runs no later step and the command ends without an error ([writing a bug task](writing-a-good-task.md#writing-a-bug-task)).
 - When every step passes, the pull request is open and the command ends after the push.
 
 ## Finding the steps in the ledger

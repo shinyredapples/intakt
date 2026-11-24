@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -31,6 +32,7 @@ use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
+use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
@@ -185,6 +187,12 @@ return static function (ContainerConfigurator $container): void {
     /** @var array{github: array{reserve_percent: int}} $githubSettings */
     $githubSettings = new Processor()->processConfiguration(new GitHubConfiguration(), [$github]);
 
+    // How long conversations are kept is the owner's for the installation too, so it also sits beside the projects.
+    $retention = array_key_exists('retention', $contents) ? ['retention' => $contents['retention']] : [];
+    unset($contents['retention']);
+    /** @var array{retention: array{conversation_days: int|string}} $retentionSettings */
+    $retentionSettings = new Processor()->processConfiguration(new RetentionConfiguration(), [$retention]);
+
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
     $projects = $configuration['projects'];
@@ -242,7 +250,7 @@ return static function (ContainerConfigurator $container): void {
 
     // Each account gets a platform of its own, with the credentials of its own variables; the default account keeps the bundle's own platform and ids.
     $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform, $codexPlatform): array {
-        $variables = array_map($env, $account->variables());
+        $variables = array_map($env, [...$account->variables()]);
         $default = Account::DEFAULT === $account->name;
         $generic = Provider::OpenAiCompatible->value.($default ? '' : '_'.$account->name);
         $events = new Reference('event_dispatcher');
@@ -286,9 +294,9 @@ return static function (ContainerConfigurator $container): void {
 
         foreach ($configuration['accounts'][$provider->value] as $name) {
             $account = new Account($provider, $name);
-            $missing = array_values(array_filter($account->variables(), static fn (string $variable): bool => !$isSet($variable)));
+            $missing = new EnvironmentVariables(...array_filter([...$account->variables()], static fn (string $variable): bool => !$isSet($variable)));
 
-            if ([] === $missing) {
+            if ($missing->isEmpty()) {
                 $enabled[$name] = $account;
 
                 continue;
@@ -299,7 +307,7 @@ return static function (ContainerConfigurator $container): void {
 
         // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
         if ([] === $enabled) {
-            $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? []);
+            $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? new EnvironmentVariables());
 
             continue;
         }
@@ -350,7 +358,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
-        static fn (string $name): string => $env(new Account(Provider::OpenAiCompatible, $name)->variables()[0]),
+        static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),
         $enabledAccounts[Provider::OpenAiCompatible->value] ?? [],
     ));
     $container->parameters()->set(AiServices::PROJECTS, $projects);
@@ -365,6 +373,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
     $container->parameters()->set(BudgetServices::PRICE_DATE, $ceilings['budget']['price_date']);
+    $container->parameters()->set(ReviewServices::CONVERSATION_DAYS, RetentionConfiguration::daysOf($retentionSettings['retention']['conversation_days']));
     $container->parameters()->set(GitHubForgeServices::RESERVE_PERCENT, $githubSettings['github']['reserve_percent']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)

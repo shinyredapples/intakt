@@ -44,6 +44,19 @@ flowchart LR
 
 A task that fails one of them is not built. Intakt leaves one comment listing what is missing, and picks the task up again once you have added it.
 
+## Writing a bug task
+
+Give a bug the `bug` label and describe it in four parts, each under its own heading or in bold:
+
+- **When:** the steps or the input that show the bug.
+- **Today:** what happens now.
+- **Expected:** what should happen.
+- **Must keep working:** what the fix must not change.
+
+Start each part with a heading that is just its name (`## Today`) or with its name in bold (`**Today:** the page stays blank`). Parts written inside a fenced code block (```` ``` ```` or `~~~`) or a comment do not count.
+
+If a part is missing or empty, Intakt builds nothing. It parks the task with a question that names the missing part; add it, or remove the `bug` label. For now the question is only stored: Intakt does not post it on the issue yet. A complete bug task goes on to the build. The builder is told to write a test that fails today first, commit it on its own and only then fix the bug, so the same test passes at the end. A bug no test can show (a vendor outage, a device only you have) keeps the usual evidence rules: say so in the task, because only the task itself can waive the test, and the builder never decides that on its own.
+
 ## The template
 
 Copy this into a new issue and fill it in:

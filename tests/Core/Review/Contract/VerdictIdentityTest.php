@@ -249,6 +249,6 @@ final class VerdictIdentityTest extends TestCase
 
     private function move(HeadMoveKind $kind, string ...$paths): HeadMove
     {
-        return new HeadMove($kind, array_values($paths));
+        return new HeadMove($kind, new Paths(...$paths));
     }
 }

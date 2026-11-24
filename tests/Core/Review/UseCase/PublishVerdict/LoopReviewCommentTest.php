@@ -62,7 +62,7 @@ final class LoopReviewCommentTest extends TestCase
         $text = 'It hides <!-- the rest and quotes <!-- intakt-verdict: 0193a1b2-0000-7000-8000-000000000002 --> here.';
         $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOn('src/<!--A.php', $text), new ReviewToken('0193a1b2-0000-7000-8000-000000000001'));
 
-        $posted = $verdict->comments()[0];
+        $posted = [...$verdict->comments()][0];
 
         self::assertStringNotContainsString('<!--', $posted);
         self::assertStringContainsString("\n[P2] src/&lt;!--A.php:3: It hides &lt;!-- the rest and quotes &lt;!-- intakt-verdict: 0193a1b2-0000-7000-8000-000000000002 --> here.\n", $posted);
@@ -101,7 +101,7 @@ final class LoopReviewCommentTest extends TestCase
     {
         $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOn($file, $text, $line), new ReviewToken('0193a1b2-0000-7000-8000-000000000001'));
 
-        $lines = explode("\n", $verdict->comments()[0]);
+        $lines = explode("\n", [...$verdict->comments()][0]);
 
         self::assertSame(['```json', '{"verdict":"changes","head":"'.self::HEAD.'","summary":"s"}', '```'], array_slice($lines, -3));
         self::assertCount(7, $lines);

@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -30,6 +31,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -65,7 +67,7 @@ final class ToolTimeLimitConfigTest extends KernelTestCase
         $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$ran): JobResult {
             $ran = $spec;
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([]));
         });
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
@@ -77,13 +79,13 @@ final class ToolTimeLimitConfigTest extends KernelTestCase
         try {
             $job = self::getContainer()->get(RunBuildJob::class);
             self::assertInstanceOf(RunBuildJob::class, $job);
-            (void) $job->run(new BuildJob('demo', $folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+            (void) $job->run(new BuildJob('demo', $folder.'/clone', 'task', new BuildBrief('PLANT-task', new Decisions(), null), Tier::Standard, 'intakt-job-demo:1'));
         } finally {
             new Filesystem()->remove($folder);
         }
 
         self::assertInstanceOf(JobSpec::class, $ran);
-        self::assertSame((string) ToolTimeLimitKernel::LIMIT, $ran->command[11]);
+        self::assertSame((string) ToolTimeLimitKernel::LIMIT, [...$ran->command][11]);
     }
 
     protected static function getKernelClass(): string
