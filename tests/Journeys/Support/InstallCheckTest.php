@@ -17,6 +17,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(InstallReport::class)]
 #[CoversClass(InstallStepResult::class)]
 #[CoversClass(InstallCheckAlarm::class)]
+#[CoversClass(InstallWalk::class)]
 #[UsesClass(ReadmeInstallBlock::class)]
 #[UsesClass(GitHubIssues::class)]
 #[UsesClass(JourneyAlarmTask::class)]
@@ -36,6 +37,17 @@ final class InstallCheckTest extends TestCase
     private bool $withJourneyCheck = false;
 
     private string $keptEnvironmentFile = '';
+
+    /** @var array<string, array{0: int, 1: string}> */
+    private array $answers = [];
+
+    private string $readme = '';
+
+    /** @var list<array{number: int, body: string}> */
+    private array $open = [];
+
+    /** @var list<array{number: int, body: string}>|null */
+    private ?array $afterCreate = null;
 
     public function testABrokenInstallCommandFailsAtTheStepThatNamesItAndTheAlarmGetsTheStepAndItsLogTail(): void
     {
@@ -267,11 +279,93 @@ final class InstallCheckTest extends TestCase
     }
 
     /**
+     * @param array<string, array{0: int, 1: string}> $answers
+     * @param array<string, string>                   $keys
+     */
+    private function check(array $answers = [], array $keys = [], string $readme = self::README): InstallCheck
+    {
+        $this->answers = $answers;
+        $this->readme = $readme;
+
+        return new InstallCheck($this->fakeRun(...), $this->directory, $this->directory.'/logs', $this->directory.'/checkout', $keys);
+    }
+
+    /**
+     * @param array<string, string> $environment
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function fakeRun(string $command, string $directory, array $environment): array
+    {
+        $this->calls[] = ['command' => $command, 'directory' => $directory, 'environment' => $environment];
+
+        return array_find($this->answers, static fn (array $answer, string $part): bool => str_contains($command, $part)) ?? $this->madeBy($command, $directory);
+    }
+
+    /**
+     * @return array{0: int, 1: string}
+     */
+    private function madeBy(string $command, string $directory): array
+    {
+        $made = match (true) {
+            str_starts_with($command, 'git clone --') => [$this->directory.'/source/README.md', $this->readme],
+            self::CLONE_COMMAND === $command => [$directory.'/intakt/'.($this->withJourneyCheck ? 'bin/journey-check' : 'README.md'), ''],
+            str_contains($command, 'bin/ui-check') => [$directory.'/var/ui-check/start-light-390.png', 'png'],
+            str_contains($command, 'bin/journey-check') => [$directory.'/var/journey-check/run-1/01-first-install.png', 'png'],
+            default => null,
+        };
+
+        if (null !== $made) {
+            new Filesystem()->dumpFile(...$made);
+        }
+
+        if (str_contains($command, 'intakt:demo')) {
+            $this->keptEnvironmentFile = (string) file_get_contents($directory.'/.env.local');
+        }
+
+        return [0, 'ok'];
+    }
+
+    /**
      * @return array<string, string>
      */
     private function statuses(InstallReport $report): array
     {
         return array_column(array_map(static fn (InstallStepResult $step): array => ['name' => $step->name, 'status' => $step->status->value], $report->steps), 'status', 'name');
+    }
+
+    /**
+     * @param list<array{number: int, body: string}>      $open
+     * @param list<array{number: int, body: string}>|null $afterCreate
+     */
+    private function alarm(InstallReport $report, array $open = [], ?array $afterCreate = null): string
+    {
+        $this->github = [];
+        $this->open = $open;
+        $this->afterCreate = $afterCreate;
+        putenv('GH_TOKEN=stand-in');
+
+        try {
+            return new InstallCheckAlarm(new GitHubIssues('example/repo', $this->fakeGitHub(...)), new LockFactory(new InMemoryStore()))->raise($report, null);
+        } finally {
+            putenv('GH_TOKEN');
+        }
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function fakeGitHub(array $arguments, string $input): string
+    {
+        if ('api' === $arguments[0]) {
+            $created = [] !== array_filter($this->github, static fn (array $call): bool => 'create' === $call['arguments'][1]);
+
+            return json_encode([$created ? $this->afterCreate ?? $this->open : $this->open], JSON_THROW_ON_ERROR);
+        }
+
+        $this->github[] = ['arguments' => $arguments, 'input' => $input];
+
+        return 'create' === $arguments[1] ? 'https://github.com/example/repo/issues/7' : '';
     }
 
     /**
@@ -291,70 +385,5 @@ final class InstallCheckTest extends TestCase
         }
 
         return $logs;
-    }
-
-    /**
-     * @param array<string, array{0: int, 1: string}> $answers
-     * @param array<string, string>                   $keys
-     */
-    private function check(array $answers = [], array $keys = [], string $readme = self::README): InstallCheck
-    {
-        $files = new Filesystem();
-        $runner = function (string $command, string $directory, array $environment) use ($answers, $readme, $files): array {
-            $this->calls[] = ['command' => $command, 'directory' => $directory, 'environment' => $environment];
-
-            foreach ($answers as $part => $answer) {
-                if (str_contains($command, $part)) {
-                    return $answer;
-                }
-            }
-
-            $made = match (true) {
-                str_starts_with($command, 'git clone --') => [$this->directory.'/source/README.md', $readme],
-                self::CLONE_COMMAND === $command => [$directory.'/intakt/'.($this->withJourneyCheck ? 'bin/journey-check' : 'README.md'), ''],
-                str_contains($command, 'bin/ui-check') => [$directory.'/var/ui-check/start-light-390.png', 'png'],
-                str_contains($command, 'bin/journey-check') => [$directory.'/var/journey-check/run-1/01-first-install.png', 'png'],
-                default => null,
-            };
-
-            if (null !== $made) {
-                $files->dumpFile(...$made);
-            }
-
-            if (str_contains($command, 'intakt:demo')) {
-                $this->keptEnvironmentFile = (string) file_get_contents($directory.'/.env.local');
-            }
-
-            return [0, 'ok'];
-        };
-
-        return new InstallCheck($runner, $this->directory, $this->directory.'/logs', $this->directory.'/checkout', $keys);
-    }
-
-    /**
-     * @param list<array{number: int, body: string}> $open
-     * @param list<array{number: int, body: string}> $afterCreate
-     */
-    private function alarm(InstallReport $report, array $open = [], ?array $afterCreate = null): string
-    {
-        $this->github = [];
-        $created = false;
-        $runner = function (array $arguments, string $input) use ($open, $afterCreate, &$created): string {
-            if ('api' === $arguments[0]) {
-                return json_encode([$created && null !== $afterCreate ? $afterCreate : $open], JSON_THROW_ON_ERROR);
-            }
-
-            $this->github[] = ['arguments' => array_map(static fn (mixed $argument): string => is_string($argument) ? $argument : '', array_values($arguments)), 'input' => $input];
-            $created = $created || 'create' === $arguments[1];
-
-            return 'create' === $arguments[1] ? 'https://github.com/example/repo/issues/7' : '';
-        };
-        putenv('GH_TOKEN=stand-in');
-
-        try {
-            return new InstallCheckAlarm(new GitHubIssues('example/repo', $runner), new LockFactory(new InMemoryStore()))->raise($report, null);
-        } finally {
-            putenv('GH_TOKEN');
-        }
     }
 }

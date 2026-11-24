@@ -12,6 +12,7 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(InstallCheck::class)]
 #[CoversClass(InstallProcessRunner::class)]
+#[CoversClass(InstallWalk::class)]
 #[UsesClass(InstallCheckAlarm::class)]
 #[UsesClass(InstallReport::class)]
 #[UsesClass(InstallStepResult::class)]
@@ -21,7 +22,7 @@ final class InstallCheckCommandTest extends TestCase
 {
     private const string CHECKOUT = __DIR__.'/../../..';
     private const string README = "<!-- install-check -->\n```\ngit clone https://github.com/shinyredapples/intakt.git && cd intakt\n%s\n```\n";
-    // Answers like git clone: the README's address is rewritten the way git's url.<base>.insteadOf does, and only a folder with a README clones.
+    // It rewrites the README's address the way git's url.<base>.insteadOf does, so the test proves the rewrite reaches git without a network.
     private const string FAKE_GIT = <<<'PHP'
         <?php
         if (false !== getenv('OPENAI_API_KEY') || false !== getenv('GH_TOKEN')) { touch(__DIR__.'/leaked'); }

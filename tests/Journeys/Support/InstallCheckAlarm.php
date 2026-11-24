@@ -43,6 +43,12 @@ final readonly class InstallCheckAlarm
         }
     }
 
+    // The identity is hashed, so no step name can break the marker line.
+    private function markerOf(string $identity): string
+    {
+        return self::MARKER.hash('sha256', $identity).' -->';
+    }
+
     private function settle(InstallStepResult $step, string $marker, ?Uri $link): ?string
     {
         $open = $this->issues->oldestOpenIssueHolding($marker);
@@ -77,12 +83,6 @@ final readonly class InstallCheckAlarm
         $this->issues->replaceBody($oldest, $body);
 
         return 'updated #'.$oldest.', closed #'.$created['number'].' as its duplicate';
-    }
-
-    // The identity is hashed, so no step name can break the marker line.
-    private function markerOf(string $identity): string
-    {
-        return self::MARKER.hash('sha256', $identity).' -->';
     }
 
     private function body(InstallStepResult $step, string $marker, ?Uri $link): string
