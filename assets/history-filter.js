@@ -46,7 +46,7 @@ function narrow(page, phone) {
     const text = toolbar.querySelector('input').value.trim().toLowerCase();
     let shown = 0;
     page.querySelectorAll('.ledger tbody tr').forEach((row) => {
-        const matches = isChosen(row, chosen) && (project === '' || row.dataset.project === project) && (text === '' || row.textContent.toLowerCase().includes(text));
+        const matches = isChosen(row, chosen) && isOfProject(row, project) && (text === '' || row.textContent.toLowerCase().includes(text));
         row.toggleAttribute(OUT, !matches);
         if (matches && !row.hidden) {
             shown++;
@@ -65,6 +65,11 @@ function pickedProject(page, toolbar, phone) {
     picker.value = [...picker.options].some((option) => option.value === shared) ? shared : '';
 
     return phone.matches ? picker.value : '';
+}
+
+// As the shell's filter does, a row of no project shows under every project.
+function isOfProject(row, project) {
+    return project === '' || row.dataset.project === undefined || row.dataset.project === project;
 }
 
 function isChosen(row, chosen) {

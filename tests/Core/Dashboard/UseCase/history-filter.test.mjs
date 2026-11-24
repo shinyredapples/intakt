@@ -147,8 +147,8 @@ function historyOfAlphaAndBeta(phone, stored = '') {
 
 const shown = (...rows) => rows.map((row) => !row.hasAttribute('data-filtered-out'));
 
-test('on a phone the toolbar picker shows only the chosen project and hands the choice to the shared filter', () => {
-    const { page, picker, alpha, beta, intakt } = historyOfAlphaAndBeta(true);
+test('on a phone the toolbar picker hides the other projects and hands the choice to the shared filter', () => {
+    const { page, picker, alpha, beta } = historyOfAlphaAndBeta(true);
 
     picker.value = 'Beta';
     page.listeners.input({ target: picker });
@@ -156,7 +156,16 @@ test('on a phone the toolbar picker shows only the chosen project and hands the 
 
     assert.equal(page.shared.value, 'Beta');
     assert.equal(page.shared.changes, 1);
-    assert.deepEqual(shown(alpha, beta, intakt), [false, true, false]);
+    assert.deepEqual(shown(alpha, beta), [false, true]);
+});
+
+test('on a phone a row of no project stays shown under the chosen project, as the shell keeps it', () => {
+    const { page, picker, intakt } = historyOfAlphaAndBeta(true);
+
+    picker.value = 'Beta';
+    page.listeners.change({ target: picker });
+
+    assert.deepEqual(shown(intakt), [true]);
 });
 
 test('on a phone a project kept from an earlier page is shown in the picker and narrows the rows from the start', () => {
