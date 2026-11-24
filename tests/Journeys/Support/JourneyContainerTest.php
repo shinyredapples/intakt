@@ -175,11 +175,12 @@ final class JourneyContainerTest extends JourneyTestCase
     private function container(): TestContainer
     {
         $this->kernel?->shutdown();
-        $this->kernel = new Kernel('test', false);
-        $this->kernel->boot();
+        $kernel = new Kernel('test', false);
+        $this->kernel = $kernel;
+        $kernel->boot();
         // Before the test publishes too, because a recording an earlier test left in the same share directory would be read as this test's.
-        $this->forgetTheRecording($this->kernel);
-        $container = $this->kernel->getContainer()->get('test.service_container');
+        $this->forgetTheRecording($kernel);
+        $container = $kernel->getContainer()->get('test.service_container');
         self::assertInstanceOf(TestContainer::class, $container);
 
         return $container;
