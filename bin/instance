@@ -640,7 +640,10 @@ if (!is_finite($commandSeconds * 1_000_000_000)) {
     $refusal = 'INTAKT_INSTANCE_COMMAND_SECONDS is past the range of a time limit';
     fwrite(STDERR, $refusal."\n");
     $statusChannel = statusChannel();
-    null === $statusChannel || fwrite($statusChannel, InstanceStatus::failed($refusal)->toJson());
+
+    if (null !== $statusChannel) {
+        fwrite($statusChannel, InstanceStatus::failed($refusal)->toJson());
+    }
 
     exit(1);
 }
