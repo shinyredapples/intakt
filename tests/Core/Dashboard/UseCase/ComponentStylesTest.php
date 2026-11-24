@@ -218,11 +218,11 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/flex:\s*1\b/', $rules['.srow .ctl .select'] ?? '');
     }
 
-    public function testOnPhonesTheHistoryLedgerStacksEachShownRowWithoutItsHeader(): void
+    public function testOnPhonesTheHistoryLedgerStacksEachShownRowWithItsHeaderOnlyClipped(): void
     {
         $rules = $this->rulesOf($this->phoneBlock());
 
-        self::assertMatchesRegularExpression('/display:\s*none/', $rules['.ledger.history thead'] ?? '');
+        self::assertMatchesRegularExpression('/clip-path:\s*inset\(50%\)/', $rules['.ledger.history thead'] ?? '');
         self::assertMatchesRegularExpression('/display:\s*grid;\s*grid-template-columns:\s*minmax\(0, 1fr\)/', $rules['.ledger.history tr:not([hidden], [data-filtered-out])'] ?? '');
     }
 
