@@ -15,12 +15,20 @@ final readonly class GitHubIssues
     private const string ISSUE_LINK = '/\/issues\/(?<number>[1-9][0-9]*)$/';
     private const array TOKENS = ['GH_TOKEN', 'GITHUB_TOKEN'];
     private const int SECONDS = 60;
+    private const string LOGIN = '/\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?\z/';
+    private const string INTEGRATION_REFUSAL = 'Resource not accessible by integration';
 
     /**
      * @param (Closure(list<string>, string): string)|null $runner
      */
-    public function __construct(private string $repository, private ?Closure $runner = null)
+    public function __construct(private string $repository, private ?Closure $runner = null, private ?string $author = null)
     {
+    }
+
+    // Anyone can copy a marker into an issue of their own, so the copy this returns finds only the issues one account opened.
+    public function openedBy(string $account): self
+    {
+        return new self($this->repository, $this->runner, $account);
     }
 
     public function oldestOpenIssueHolding(string $marker): ?int
@@ -31,6 +39,25 @@ final readonly class GitHubIssues
         );
 
         return [] === $marked ? null : min(array_column($marked, 'number'));
+    }
+
+    // Only a body whose whole first line matches counts, because the alarm writes its marker there, and an issue that quotes a marker further down, or an example of one, is not the alarm's to close.
+    /**
+     * @return array<int, string>
+     */
+    public function openIssuesOpeningWith(string $pattern): array
+    {
+        $marked = [];
+
+        foreach ($this->openIssues() as $issue) {
+            $first = explode("\n", str_replace("\r", '', $issue['body']), 2)[0];
+
+            if (1 === preg_match($pattern, $first)) {
+                $marked[$issue['number']] = $first;
+            }
+        }
+
+        return $marked;
     }
 
     /**
@@ -60,8 +87,29 @@ final readonly class GitHubIssues
         $this->issueCommand(['close', (string) $number, '--comment', 'Duplicate of #'.$original], '');
     }
 
+    public function close(int $number, string $comment): void
+    {
+        $this->issueCommand(['close', (string) $number, '--comment', $comment], '');
+    }
+
+    // GitHub refuses this question to every installation token alike, the workflow's own and another app's, so the account is then never guessed: only the one the caller names stands in.
+    public function account(?string $given): string
+    {
+        try {
+            $login = $this->gh(['api', 'user', '--jq', '.login'], '');
+        } catch (GitHubCallFailed $refused) {
+            if (!str_contains($refused->getMessage(), self::INTEGRATION_REFUSAL)) {
+                throw $refused;
+            }
+
+            $login = $given ?? throw new AlarmAccountUnknown('GitHub refuses gh api user to this token, so INSTALL_CHECK_ALARM_ACCOUNT must name the login the alarm files its issues as', $refused->getCode(), $refused);
+        }
+
+        return 1 === preg_match(self::LOGIN, $login) ? $login : throw new GitHubCallFailed('the alarm account is not an account login');
+    }
+
     /**
-     * @return list<array{number: int, body: string}>
+     * @return list<array{number: int, body: string, author: ?string}>
      */
     private function openIssues(): array
     {
@@ -71,7 +119,9 @@ final readonly class GitHubIssues
         $items = array_merge([], ...array_map($this->pageFrom(...), is_array($pages) && array_is_list($pages) ? $pages : throw $this->notAnIssueList()));
         $issues = array_filter($items, static fn (mixed $item): bool => !is_array($item) || !array_key_exists('pull_request', $item));
 
-        return array_values(array_map($this->issueFrom(...), $issues));
+        $author = $this->author;
+
+        return array_values(array_filter(array_map($this->issueFrom(...), $issues), static fn (array $issue): bool => null === $author || $author === $issue['author']));
     }
 
     /**
@@ -112,7 +162,7 @@ final readonly class GitHubIssues
     }
 
     /**
-     * @return array{number: int, body: string}
+     * @return array{number: int, body: string, author: ?string}
      */
     private function issueFrom(mixed $issue): array
     {
@@ -124,7 +174,11 @@ final readonly class GitHubIssues
             throw $this->notAnIssueList();
         }
 
-        return ['number' => $number, 'body' => $body ?? ''];
+        // A missing author is kept as none rather than refused, because the journeys alarm reads every issue, and an issue with none is then no account's to change.
+        $user = $issue['user'] ?? null;
+        $author = is_array($user) && is_string($user['login'] ?? null) ? $user['login'] : null;
+
+        return ['number' => $number, 'body' => $body ?? '', 'author' => $author];
     }
 
     /**

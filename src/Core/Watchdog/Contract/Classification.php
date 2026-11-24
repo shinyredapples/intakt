@@ -8,8 +8,8 @@ final readonly class Classification
 {
     /**
      * @param list<MainViolation> $violations
-     * @param list<string>        $ownerPushes
-     * @param list<string>        $peerMerges
+     * @param list<CommitName>    $ownerPushes
+     * @param list<CommitName>    $peerMerges
      */
     public function __construct(
         public array $violations,
