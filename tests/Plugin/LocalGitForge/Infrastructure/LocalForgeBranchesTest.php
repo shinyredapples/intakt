@@ -96,6 +96,57 @@ final class LocalForgeBranchesTest extends TestCase
         }
     }
 
+    public function testABranchCheckedOutInALinkedWorktreeIsNotDeleted(): void
+    {
+        $this->git('worktree', 'add', $this->repository->path.'/linked', 'intakt/7-old');
+
+        try {
+            $this->forge()->deleteBranch('widgets', new ForgeBranch('intakt/7-old', new CommitId($this->head), false, false, false));
+            self::fail('A branch checked out in a linked worktree was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame($this->head, $this->git('rev-parse', 'refs/heads/intakt/7-old'));
+        }
+    }
+
+    public function testACheckedOutBranchIsNotDeletedWhenATagSharesItsName(): void
+    {
+        $this->repository->checkout('intakt/7-old');
+        $this->repository->tag('intakt/7-old');
+
+        try {
+            $this->forge()->deleteBranch('widgets', new ForgeBranch('intakt/7-old', new CommitId($this->head), false, false, false));
+            self::fail('A checked out branch was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame($this->head, $this->git('rev-parse', 'refs/heads/intakt/7-old'));
+        }
+    }
+
+    public function testACheckedOutBranchSharingItsNameWithATagIsTheDefault(): void
+    {
+        $this->repository->tag('main');
+
+        self::assertSame(['main'], array_values(array_map(static fn (ForgeBranch $branch): string => $branch->name, array_filter($this->forge()->branchesOf('widgets'), static fn (ForgeBranch $branch): bool => $branch->isDefault))));
+    }
+
+    public function testAMissingDefaultRefFailsTheCommitReadInsteadOfNamingAPath(): void
+    {
+        $this->repository->commitFile('refs/heads/unborn', "path\n");
+        $this->git('symbolic-ref', 'HEAD', 'refs/heads/unborn');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->hasCommitByPerson('widgets', new ForgeBranch('intakt/7-old', new CommitId($this->head), false, false, false));
+    }
+
+    public function testACommitWithAnEmptyAuthorEmailIsAPersons(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/9-anonymous');
+        $head = $this->repository->commitObject(sprintf("tree %s\nparent %s\nauthor Someone <> 1700000000 +0000\ncommitter Someone <> 1700000000 +0000\n\nanonymous\n", $this->git('rev-parse', $this->main.'^{tree}'), $this->main));
+        $this->repository->checkout('main');
+
+        self::assertTrue($this->forge()->hasCommitByPerson('widgets', new ForgeBranch('intakt/9-anonymous', new CommitId($head), false, false, false)));
+    }
+
     public function testAReleaseBranchIsReportedAsOne(): void
     {
         $this->git('branch', 'release/1.x', $this->main);

@@ -169,6 +169,75 @@ final class GitHubForgeBranchesTest extends TestCase
         self::assertEquals(new BranchChange(BranchChangeState::Open, null, ['keep']), $this->forge()->changeOf('alpha', $this->branch(self::HEAD)));
     }
 
+    public function testAKeepLabelOnAnOlderClosedPullRequestOfTheSameHeadIsKept(): void
+    {
+        $this->answers['GET '.$this->pulls()] = sprintf('[{"state":"closed","merged_at":null,"closed_at":"2026-10-02T08:00:00Z","labels":[],"head":{"sha":"%s"}}]', self::HEAD);
+        $this->links['GET '.$this->pulls()] = '<'.self::REPOSITORY.'/pulls?page=2>; rel="next"';
+        $this->answers['GET '.$this->pulls(2)] = sprintf('[{"state":"closed","merged_at":null,"closed_at":"2026-10-01T08:00:00Z","labels":[{"name":"keep"}],"head":{"sha":"%s"}}]', self::HEAD);
+
+        self::assertEquals(new BranchChange(BranchChangeState::ClosedUnmerged, new DateTimeImmutable('2026-10-02T08:00:00Z'), ['keep']), $this->forge()->changeOf('alpha', $this->branch(self::HEAD)));
+    }
+
+    public function testAPullRequestWithAMalformedHeadFailsTheRead(): void
+    {
+        $this->answers['GET '.$this->pulls()] = '[{"state":"open","labels":[],"head":{"sha":"not-a-commit"}}]';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
+    }
+
+    public function testAnEmptyObjectInPlaceOfTheLabelsFailsTheRead(): void
+    {
+        $this->answers['GET '.$this->pulls()] = sprintf('[{"state":"open","labels":{},"head":{"sha":"%s"}}]', self::HEAD);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
+    }
+
+    public function testAnEmptyObjectInPlaceOfAListingFailsTheRead(): void
+    {
+        $this->answers['GET '.$this->pulls()] = '{}';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->changeOf('alpha', $this->branch(self::HEAD));
+    }
+
+    public function testAListingOfMoreThanTenPagesIsReadInFull(): void
+    {
+        foreach (range(1, 11) as $page) {
+            $this->answers['GET '.$this->pulls($page)] = '[]';
+            $this->links['GET '.$this->pulls($page)] = '<'.self::REPOSITORY.'/pulls?page='.($page + 1).'>; rel="next"';
+        }
+        $this->answers['GET '.$this->pulls(12)] = sprintf('[{"state":"open","labels":[],"head":{"sha":"%s"}}]', self::HEAD);
+
+        self::assertSame(BranchChangeState::Open, $this->forge()->changeOf('alpha', $this->branch(self::HEAD))?->state);
+    }
+
+    public function testTheComparisonBaseIsPinnedToACommitBeforePaging(): void
+    {
+        $this->defaultBranchAt(self::OLDER);
+        $this->answers['GET https://api.github.com/app'] = '{"slug":"intakt-app"}';
+        $this->answers['GET '.$this->compare()] = '{"commits":[{"author":{"login":"intakt-app[bot]"}}]}';
+        $this->links['GET '.$this->compare()] = '<'.self::REPOSITORY.'/compare?page=2>; rel="next"';
+        $this->answers['GET '.$this->compare(2)] = '{"commits":[{"author":{"login":"alice"}}]}';
+
+        self::assertTrue($this->forge()->hasCommitByPerson('alpha', $this->branch(self::HEAD)));
+        self::assertNotContains('GET '.self::REPOSITORY.'/compare/main...'.self::HEAD.'?per_page=100&page=1', $this->requests);
+    }
+
+    public function testAnEmptyObjectInPlaceOfTheCommitsFailsTheRead(): void
+    {
+        $this->defaultBranchAt(self::OLDER);
+        $this->answers['GET '.$this->compare()] = '{"commits":{}}';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->hasCommitByPerson('alpha', $this->branch(self::HEAD));
+    }
+
     public function testAPullRequestReadGitHubCannotAnswerFailsInsteadOfMeaningNone(): void
     {
         $this->expectException(ForgeReadFailed::class);
@@ -178,7 +247,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testACommitByAPersonIsFoundOnALaterPage(): void
     {
-        $this->answers['GET '.self::REPOSITORY] = '{"default_branch":"main"}';
+        $this->defaultBranchAt(self::OLDER);
         $this->answers['GET https://api.github.com/app'] = '{"slug":"intakt-app"}';
         $this->answers['GET '.$this->compare()] = '{"commits":[{"author":{"login":"intakt-app[bot]"}}]}';
         $this->links['GET '.$this->compare()] = '<'.self::REPOSITORY.'/compare?page=2>; rel="next"';
@@ -189,7 +258,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testACommitWithoutAGitHubAccountIsAPersons(): void
     {
-        $this->answers['GET '.self::REPOSITORY] = '{"default_branch":"main"}';
+        $this->defaultBranchAt(self::OLDER);
         $this->answers['GET '.$this->compare()] = '{"commits":[{"author":null}]}';
 
         self::assertTrue($this->forge()->hasCommitByPerson('alpha', $this->branch(self::HEAD)));
@@ -197,7 +266,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testABranchOfOnlyIntaktsCommitsHasNoneByAPerson(): void
     {
-        $this->answers['GET '.self::REPOSITORY] = '{"default_branch":"main"}';
+        $this->defaultBranchAt(self::OLDER);
         $this->answers['GET https://api.github.com/app'] = '{"slug":"intakt-app"}';
         $this->answers['GET '.$this->compare()] = '{"commits":[{"author":{"login":"intakt-app[bot]"}}]}';
 
@@ -206,7 +275,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testACommitByAnotherBotIsAPersonsBecauseOnlyThisAppIsIntakt(): void
     {
-        $this->answers['GET '.self::REPOSITORY] = '{"default_branch":"main"}';
+        $this->defaultBranchAt(self::OLDER);
         $this->answers['GET https://api.github.com/app'] = '{"slug":"intakt-app"}';
         $this->answers['GET '.$this->compare()] = '{"commits":[{"author":{"login":"other-app[bot]"}}]}';
 
@@ -215,7 +284,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testACommitReadGitHubCannotAnswerFailsInsteadOfMeaningNoPerson(): void
     {
-        $this->answers['GET '.self::REPOSITORY] = '{"default_branch":"main"}';
+        $this->defaultBranchAt(self::OLDER);
 
         $this->expectException(ForgeReadFailed::class);
 
@@ -238,9 +307,15 @@ final class GitHubForgeBranchesTest extends TestCase
         self::assertFalse($this->forge()->servesProject('beta'));
     }
 
+    private function defaultBranchAt(string $head): void
+    {
+        $this->answers['GET '.self::REPOSITORY] = '{"default_branch":"main"}';
+        $this->answers['GET '.self::REPOSITORY.'/branches/main'] = sprintf('{"name":"main","commit":{"sha":"%s"}}', $head);
+    }
+
     private function compare(int $page = 1): string
     {
-        return self::REPOSITORY.'/compare/main...'.self::HEAD.'?per_page=100&page='.$page;
+        return self::REPOSITORY.'/compare/'.self::OLDER.'...'.self::HEAD.'?per_page=100&page='.$page;
     }
 
     private function pulls(int $page = 1): string

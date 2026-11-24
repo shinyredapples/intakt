@@ -12,14 +12,13 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use JsonException;
+use stdClass;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 // The reads and the delete of branch cleanup, each answer checked for its shape, because a branch read wrongly could be deleted.
 final readonly class GitHubBranchCalls
 {
     private const int PAGE_SIZE = 100;
-    // A listing of more pages than this fails, because a weekly run must end.
-    private const int MAX_PAGES = 10;
     private const int OK = 200;
     private const int UNAUTHORIZED = 401;
 
@@ -38,13 +37,12 @@ final readonly class GitHubBranchCalls
      */
     public function object(string $path): array
     {
-        $body = $this->exchange($path, [])['body'];
-        $data = $this->decode($body);
+        $data = $this->decode($this->exchange($path, [])['body']);
 
-        return !array_is_list($data) || [] === $data ? $data : throw new ForgeReadFailed('GitHub answered a list where an object was expected.');
+        return is_array($data) && !array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered something other than an object with fields where one was expected.');
     }
 
-    // Every page, because a pull request or commit on a later page may be the open or kept one.
+    // Every page and no cap, because a pull request or commit on a later page may be the open or kept one.
     /**
      * @param array<string, int|string> $query
      *
@@ -56,7 +54,7 @@ final readonly class GitHubBranchCalls
     public function pages(string $path, array $query, ?string $key = null): array
     {
         $items = [];
-        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
+        for ($page = 1; ; ++$page) {
             $query = [...$query, 'per_page' => self::PAGE_SIZE, 'page' => $page];
             $answer = $this->exchange($path, $query);
             $items = [...$items, ...$this->itemsOf($answer['body'], $key)];
@@ -64,8 +62,20 @@ final readonly class GitHubBranchCalls
                 return $items;
             }
         }
+    }
 
-        throw new ForgeReadFailed('GitHub lists more pages than this forge reads.');
+    /**
+     * @param array<mixed> $data
+     *
+     * @return list<mixed>
+     *
+     * @throws ForgeReadFailed
+     */
+    public function list(array $data, string $key): array
+    {
+        $items = $data[$key] ?? null;
+
+        return is_array($items) && array_is_list($items) ? $items : throw new ForgeReadFailed(sprintf('GitHub answered without the list "%s".', $key));
     }
 
     /**
@@ -104,10 +114,11 @@ final readonly class GitHubBranchCalls
     private function itemsOf(string $body, ?string $key): array
     {
         $data = $this->decode($body);
-        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        $items = null === $key && str_starts_with(ltrim($body), '[') ? $data : ($data[$key ?? ''] ?? null);
+        if (null === $key) {
+            return is_array($data) && array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
+        }
 
-        return is_array($items) && array_is_list($items) ? $items : throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
+        return $this->list(is_array($data) ? $data : [], $key);
     }
 
     /**
@@ -133,18 +144,23 @@ final readonly class GitHubBranchCalls
         return ['body' => $body, 'headers' => $headers];
     }
 
-    /**
-     * @return array<mixed>
-     */
-    private function decode(string $body): array
+    private function decode(string $body): mixed
     {
         try {
-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+            return $this->typed(json_decode($body, false, flags: JSON_THROW_ON_ERROR));
         } catch (JsonException $invalid) {
             throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
         }
+    }
 
-        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
+    // An empty object becomes null, because PHP has no empty array that is not a list, and `{}` read as `[]` would pass for an empty list of commits or labels; every read here needs an object with fields.
+    private function typed(mixed $value): mixed
+    {
+        return match (true) {
+            $value instanceof stdClass => [] === get_object_vars($value) ? null : array_map($this->typed(...), get_object_vars($value)),
+            is_array($value) => array_map($this->typed(...), $value),
+            default => $value,
+        };
     }
 
     private function bearer(): string

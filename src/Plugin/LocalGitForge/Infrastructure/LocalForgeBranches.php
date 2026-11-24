@@ -23,7 +23,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
 {
     private const int TIMEOUT_SECONDS = 60;
     private const string HEADS = 'refs/heads/';
-    // Only this email is Intakt, because any other author is someone whose work a delete would lose.
+    // Only this email is Intakt until the run that commits locally names its own, because any other author is someone whose work a delete would lose.
     public const string INTAKT_EMAIL = 'intakt@localhost';
 
     /**
@@ -33,7 +33,6 @@ final readonly class LocalForgeBranches implements ForgeBranches
         #[Autowire(param: WatcherServices::PROJECTS)]
         private array $projects,
         private HardenedGit $hardened = new HardenedGit(),
-        private string $intaktEmail = self::INTAKT_EMAIL,
     ) {
     }
 
@@ -52,7 +51,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
         return array_values(array_map(static function (string $line) use ($default): ForgeBranch {
             [$head, , $name] = explode(' ', $line, 3);
 
-            return new ForgeBranch($name, new CommitId($head), $name === $default, false, ForgeBranch::isReleaseName($name));
+            return new ForgeBranch($name, new CommitId($head), self::HEADS.$name === $default, false, ForgeBranch::isReleaseName($name));
         }, array_filter('' === $listed ? [] : explode("\n", $listed), static fn (string $line): bool => 1 === preg_match('/^\S+  \S/', $line))));
     }
 
@@ -64,7 +63,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     public function deleteBranch(string $project, ForgeBranch $branch): void
     {
         $repository = $this->repositoryOf($project);
-        if ($this->defaultOf($repository) === $branch->name) {
+        if (in_array(self::HEADS.$branch->name, $this->checkedOutRefs($repository), true)) {
             throw new ForgeWriteFailed(sprintf('The branch "%s" is checked out, so it was not deleted.', $branch->name));
         }
 
@@ -76,9 +75,25 @@ final readonly class LocalForgeBranches implements ForgeBranches
     {
         $repository = $this->repositoryOf($project);
         $default = $this->defaultOf($repository) ?? throw new ForgeReadFailed('The local repository has no checked out branch to compare against.');
-        $authors = $this->read($repository, ['log', '--format=%ae', $branch->head->hash, '--not', self::HEADS.$default]);
+        // The closing `--` makes a ref that does not resolve fail the read, because git would otherwise take it as a path and list no commits; each email is bracketed, because an empty one would vanish from the output.
+        $authors = $this->read($repository, ['log', '--format=<%ae>', $branch->head->hash, '--not', $default, '--']);
 
-        return array_any('' === $authors ? [] : explode("\n", $authors), fn (string $email): bool => $this->intaktEmail !== $email);
+        return array_any('' === $authors ? [] : explode("\n", $authors), static fn (string $email): bool => '<'.self::INTAKT_EMAIL.'>' !== $email);
+    }
+
+    // Every worktree's branch, because deleting one a linked worktree has checked out would leave that worktree on a missing ref.
+    /**
+     * @return list<string>
+     */
+    private function checkedOutRefs(string $repository): array
+    {
+        try {
+            $worktrees = $this->read($repository, ['worktree', 'list', '--porcelain']);
+        } catch (ForgeReadFailed $unread) {
+            throw new ForgeWriteFailed('The checked out branches could not be read, so nothing was deleted.', $unread->getCode(), $unread);
+        }
+
+        return array_values(array_map(static fn (string $line): string => substr($line, strlen('branch ')), array_filter(explode("\n", $worktrees), static fn (string $line): bool => str_starts_with($line, 'branch '))));
     }
 
     private function repositoryOf(string $project): string
@@ -86,9 +101,10 @@ final readonly class LocalForgeBranches implements ForgeBranches
         return $this->servesProject($project) ? $this->projects[$project]['repository'] : throw new ForgeReadFailed(sprintf('Project "%s" is not watched in a local repository.', $project));
     }
 
+    // The full ref name, because the short one turns ambiguous when a tag shares the branch's name.
     private function defaultOf(string $repository): ?string
     {
-        $process = $this->git($repository, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+        $process = $this->git($repository, ['symbolic-ref', '--quiet', 'HEAD']);
 
         return $process->isSuccessful() ? trim($process->getOutput()) : null;
     }

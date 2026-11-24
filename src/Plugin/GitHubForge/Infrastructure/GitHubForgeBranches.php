@@ -47,9 +47,12 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         $ofHead = array_values(array_filter(array_map($this->changeOfPull(...), $pulls), static fn (array $pull): bool => $pull[0] === $branch->head->hash));
         $changes = array_column($ofHead, 1);
         $open = array_filter($changes, static fn (BranchChange $change): bool => BranchChangeState::Open === $change->state);
-
         // GitHub lists the newest first, so the first closed one decides once none is open.
-        return array_first($open) ?? array_first($changes);
+        $deciding = array_first($open) ?? array_first($changes);
+        // The labels of every pull request of the head, because a `keep` on an older one still asks to keep the branch.
+        $labels = array_values(array_unique(array_merge([], ...array_map(static fn (BranchChange $change): array => $change->labels, $changes))));
+
+        return null === $deciding ? null : new BranchChange($deciding->state, $deciding->closedAt, $labels);
     }
 
     public function deleteBranch(string $project, ForgeBranch $branch): void
@@ -70,7 +73,9 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     {
         $path = $this->repositories->addressOf($project)->path();
         $default = $this->calls->text($this->calls->object($path), 'default_branch');
-        $commits = $this->calls->pages($path.'/compare/'.$this->segments($default).'...'.$branch->head->hash, [], 'commits');
+        // Compared with the default branch's commit and not its name, because a default branch that advanced between two pages would shift commits onto a page already read.
+        $base = $this->commitOf($this->calls->text($this->calls->object($path.'/branches/'.$this->segments($default)), 'commit', 'sha'));
+        $commits = $this->calls->pages($path.'/compare/'.$base->hash.'...'.$branch->head->hash, [], 'commits');
 
         return array_any($commits, fn (mixed $commit): bool => !$this->isIntakts($commit));
     }
@@ -126,7 +131,8 @@ final readonly class GitHubForgeBranches implements ForgeBranches
             default => throw new ForgeReadFailed(sprintf('GitHub listed a pull request in the state "%s" without the moment it closed.', $state)),
         };
 
-        return [$this->calls->text($data, 'head', 'sha'), $change];
+        // Checked before the head is compared, because a malformed head would otherwise read as another commit and hide an open pull request.
+        return [$this->commitOf($this->calls->text($data, 'head', 'sha'))->hash, $change];
     }
 
     /**
@@ -136,9 +142,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
      */
     private function labelsOf(array $pull): array
     {
-        $labels = $pull['labels'] ?? null;
-
-        return is_array($labels) ? array_values(array_map(fn (mixed $label): string => $this->calls->text(is_array($label) ? $label : [], 'name'), $labels)) : throw new ForgeReadFailed('GitHub listed a pull request without "labels".');
+        return array_map(fn (mixed $label): string => $this->calls->text(is_array($label) ? $label : [], 'name'), $this->calls->list($pull, 'labels'));
     }
 
     // Each part encoded, because a branch name holds slashes GitHub reads as part of the path.
@@ -152,7 +156,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         try {
             return new CommitId($sha);
         } catch (CommitIdMalformed $malformed) {
-            throw new ForgeReadFailed('GitHub listed a branch whose head is not a commit id.', $malformed->getCode(), $malformed);
+            throw new ForgeReadFailed('GitHub answered a commit that is not a commit id.', $malformed->getCode(), $malformed);
         }
     }
 }
