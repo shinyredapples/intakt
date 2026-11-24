@@ -399,7 +399,8 @@ final readonly class BuiltInServer implements Server
 
     public function environment(string $scratch): array
     {
-        return [];
+        // This server has no admin API; a non-loopback host makes AdminApi refuse before any request, so the board never reaches a stray listener on the default port.
+        return ['FRANKENPHP_ADMIN_URL' => 'http://admin-api.invalid'];
     }
 
     public function port(string $log): ?int
@@ -441,7 +442,12 @@ final class WorkerServer implements Server
     public function environment(string $scratch): array
     {
         // Caddy keeps its autosaved config and data under these, so it writes nothing outside the scratch directory.
-        return ['XDG_DATA_HOME' => $scratch.'/xdg-data', 'XDG_CONFIG_HOME' => $scratch.'/xdg-config'];
+        return ['XDG_DATA_HOME' => $scratch.'/xdg-data', 'XDG_CONFIG_HOME' => $scratch.'/xdg-config', 'FRANKENPHP_ADMIN_URL' => $this->adminUrl()];
+    }
+
+    private function adminUrl(): string
+    {
+        return 'http://127.0.0.1:'.$this->adminPort;
     }
 
     public function port(string $log): ?int
@@ -452,7 +458,7 @@ final class WorkerServer implements Server
 
     public function commandEnvironment(): array
     {
-        return ['INTAKT_INSTANCE_ADMIN_URL' => 'http://127.0.0.1:'.$this->adminPort];
+        return ['INTAKT_INSTANCE_ADMIN_URL' => $this->adminUrl()];
     }
 
     public function labeled(InstanceStatus $status): InstanceStatus

@@ -34,6 +34,12 @@ final class InstanceWorkerModeTest extends InstanceTestCase
                 if (hexdec($hexPort) === $port) { $addresses[] = $address; }
             }
         }
+        foreach (glob("/proc/[0-9]*/cmdline") ?: [] as $file) {
+            if (!str_ends_with(explode("\0", (string) @file_get_contents($file))[0], "frankenphp")) { continue; }
+            foreach (explode("\0", (string) @file_get_contents(dirname($file)."/environ")) as $entry) {
+                if (str_starts_with($entry, "FRANKENPHP_ADMIN_URL=")) { echo "server ", $entry, "\n"; }
+            }
+        }
         echo "listeners: ", implode(",", array_unique($addresses)), "\n";
         for ($i = 0; $i < 100; ++$i) {
             $states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? [];
@@ -45,12 +51,14 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         exit(3);
         PHP_WRAP;
 
-        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()], [PHP_BINARY, '-r', $command]);
+        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp(), 'FRANKENPHP_ADMIN_URL' => 'http://localhost:2019'], [PHP_BINARY, '-r', $command]);
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame(0, $run['exit']);
         self::assertMatchesRegularExpression('#^Worker PHP Thread - '.preg_quote((string) realpath(self::ROOT), '#').'/public/index\.php served [1-9]\d*$#m', $run['output']);
         self::assertMatchesRegularExpression('/^listeners: 0100007F$/m', $run['output']);
+        self::assertMatchesRegularExpression('#^server FRANKENPHP_ADMIN_URL=http://127\.0\.0\.1:\d+$#m', $run['output']);
+        self::assertStringNotContainsString('localhost:2019', $run['output']);
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
     }
