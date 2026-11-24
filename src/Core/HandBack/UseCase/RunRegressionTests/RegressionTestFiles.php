@@ -46,7 +46,7 @@ final readonly class RegressionTestFiles
 
     private function isRegressionTest(ChangedFile $file): bool
     {
-        // A deleted file, a submodule and a link have no test to run, and a rename counts under its new path.
+        // A deleted file, a submodule and a link have no test to run, because there is no file content to execute; a rename counts under its new path.
         if ($file->isGone() || !str_starts_with($file->newMode, self::REGULAR_FILE_MODE)) {
             return false;
         }

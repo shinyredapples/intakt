@@ -195,7 +195,7 @@ final class RunRegressionTestsTest extends TestCase
     }
 
     /**
-     * @param list<string> $results the base run's result file, then the head run's
+     * @param list<string> $results
      */
     private function whenTheJobsLeave(array $results): RegressionRuns|RefusedHandBack
     {

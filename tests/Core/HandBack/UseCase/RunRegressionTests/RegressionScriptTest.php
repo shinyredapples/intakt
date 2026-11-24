@@ -47,12 +47,12 @@ final class RegressionScriptTest extends TestCase
 
     public function testAnInstallStepThatFailsLeavesNotInstalled(): void
     {
-        self::assertSame("not-installed\n", $this->resultOf($this->head, false, self::STEP, 'false'));
+        self::assertSame("not-installed\n", $this->scriptResult(['task', $this->head, '-', '0', 'false', self::STEP]));
     }
 
     public function testABundleOfAnotherBranchLeavesNotApplied(): void
     {
-        self::assertSame("not-applied\n", $this->resultOf($this->head, false, self::STEP, '-', 'other'));
+        self::assertSame("not-applied\n", $this->scriptResult(['other', $this->head, '-', '0', '-', self::STEP]));
     }
 
     protected function setUp(): void
@@ -70,13 +70,21 @@ final class RegressionScriptTest extends TestCase
         $this->history->remove();
     }
 
-    private function resultOf(string $revision, bool $overlay, string $step = self::STEP, string $install = '-', string $branch = 'task'): string
+    private function resultOf(string $revision, bool $overlay, string $step = self::STEP): string
+    {
+        return $this->scriptResult(['task', $revision, $overlay ? 'task' : '-', $overlay ? '1' : '0', '-', ...($overlay ? ['tests/FooTest.php'] : []), $step]);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function scriptResult(array $arguments): string
     {
         $output = $this->history->folder.'/output-'.bin2hex(random_bytes(3));
         $work = $this->history->folder.'/work-'.bin2hex(random_bytes(3));
         new Filesystem()->mkdir([$output, $work]);
         $process = new Process(
-            ['/bin/sh', self::SCRIPT, $this->history->mirror, $this->history->bundle('main..task'), $branch, $revision, $overlay ? 'task' : '-', $overlay ? '1' : '0', $install, ...($overlay ? ['tests/FooTest.php'] : []), $step],
+            ['/bin/sh', self::SCRIPT, $this->history->mirror, $this->history->bundle('main..task'), ...$arguments],
             null,
             ['INTAKT_JOB_OUTPUT' => $output, 'TMPDIR' => $work],
         );

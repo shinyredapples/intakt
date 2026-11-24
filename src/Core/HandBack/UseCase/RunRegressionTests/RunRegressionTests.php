@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\UseCase\RunRegressionTests;
 
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
@@ -26,6 +25,7 @@ use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use NoDiscard;
 use Override;
@@ -92,8 +92,8 @@ final readonly class RunRegressionTests implements RegressionTests
         // Two jobs of their own, because the base must fail and the head must pass, and one run could not tell which side a failure came from.
         return new RegressionRuns(
             $tests,
-            $this->ranOn($job, $repository, RegressionCheckout::base($base, $accepted->head, $tests), $tests),
-            $this->ranOn($job, $repository, RegressionCheckout::head($accepted->head), $tests),
+            $this->ranOn($job, $repository, RegressionCheckout::base($base, $accepted->head, $tests)),
+            $this->ranOn($job, $repository, RegressionCheckout::head($accepted->head, $tests)),
         );
     }
 
@@ -114,12 +114,12 @@ final readonly class RunRegressionTests implements RegressionTests
      * @throws DockerEngineFailed
      * @throws JobEventNotRecorded
      */
-    private function ranOn(CheckJob $job, string $repository, RegressionCheckout $checkout, Paths $tests): RegressionRun
+    private function ranOn(CheckJob $job, string $repository, RegressionCheckout $checkout): RegressionRun
     {
         $spec = new JobSpec(
             $checkout->id,
             $job->image,
-            $this->commandOf($job, $checkout, $tests),
+            $this->commandOf($job, $checkout),
             [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)],
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             $this->egress(),
@@ -128,10 +128,11 @@ final readonly class RunRegressionTests implements RegressionTests
         return $this->runOf($this->ranJob($spec));
     }
 
-    private function commandOf(CheckJob $job, RegressionCheckout $checkout, Paths $tests): JobCommand
+    private function commandOf(CheckJob $job, RegressionCheckout $checkout): JobCommand
     {
         $overlay = [...$checkout->overlay];
-        $install = $this->gate->dependencyStep($job->configuredCommand)?->checkInstall ?? self::NONE;
+        $step = $this->gate->dependencyStep($job->configuredCommand);
+        $install = $step instanceof DependencyStep ? $step->checkInstall : self::NONE;
 
         return new JobCommand(...[
             '/bin/sh',
@@ -146,7 +147,7 @@ final readonly class RunRegressionTests implements RegressionTests
             (string) count($overlay),
             $install,
             ...$overlay,
-            ...$this->gate->testSteps($tests),
+            ...$this->gate->testSteps($checkout->tests),
         ]);
     }
 

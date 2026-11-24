@@ -9,7 +9,7 @@ use Intakt\Core\HandBack\Contract\RegressionRuns;
 use Intakt\Core\HandBack\Contract\RegressionTests;
 use Override;
 
-// For build task tests that are not about the regression runs: a head holding no test.
+// A head holding no test, because the build task tests that use it are not about the regression runs.
 final class NoRegressionTests implements RegressionTests
 {
     #[Override]

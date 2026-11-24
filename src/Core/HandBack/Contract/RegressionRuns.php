@@ -6,7 +6,7 @@ namespace Intakt\Core\HandBack\Contract;
 
 use Intakt\Core\Git\Contract\Paths;
 
-// The regression tests a head adds or changes, read from the diff, and how they ran against the base commit's code and against the head. Both runs are null when the head holds no test, which is a result and not a failure.
+// Both runs are null when the head holds no test, because that is a result and not a failure; the tests are read from the diff, never from the builder's claim.
 final readonly class RegressionRuns
 {
     public function __construct(
