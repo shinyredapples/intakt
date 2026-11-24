@@ -6,7 +6,6 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use Exception;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 
@@ -58,14 +57,8 @@ final readonly class HistoryRow
 
     private static function expiryOf(?string $text): ?DateTimeImmutable
     {
-        if (null === $text) {
-            return null;
-        }
+        $expires = null === $text ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $text);
 
-        try {
-            return new DateTimeImmutable($text)->setTimezone(new DateTimeZone('UTC'));
-        } catch (Exception) {
-            return null;
-        }
+        return false === $expires ? null : $expires->setTimezone(new DateTimeZone('UTC'));
     }
 }

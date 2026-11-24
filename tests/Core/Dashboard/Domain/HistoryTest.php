@@ -25,10 +25,10 @@ final class HistoryTest extends TestCase
     public function testEventsRecordedInTheSameSecondKeepAStableNewestFirstOrder(): void
     {
         $history = History::of(new RecordedEvents([
-            $this->recorded('first', '2026-10-28T12:00:00+00:00'),
-            $this->recorded('second', '2026-10-28T12:00:00+00:00'),
-            $this->recorded('third', '2026-10-28T12:00:00+00:00'),
-            $this->recorded('oldest', '2026-10-28T11:00:00+00:00'),
+            $this->recorded('first', $this->noon()),
+            $this->recorded('second', $this->noon()),
+            $this->recorded('third', $this->noon()),
+            $this->recorded('oldest', new DateTimeImmutable('2026-10-28T11:00:00+00:00')),
         ]));
 
         self::assertSame(['third', 'second', 'first', 'oldest'], array_map(static fn (HistoryRow $row): string => $row->who, $history->rows));
@@ -37,9 +37,9 @@ final class HistoryTest extends TestCase
     public function testAProjectFilterKeepsThatProjectsRowsAndRowsWithoutAProject(): void
     {
         $history = History::of(new RecordedEvents([
-            $this->recorded('a', '2026-10-28T12:00:00+00:00', 'alpha'),
-            $this->recorded('b', '2026-10-28T12:00:00+00:00', 'beta'),
-            $this->recorded('c', '2026-10-28T12:00:00+00:00'),
+            $this->recorded('a', $this->noon(), 'alpha'),
+            $this->recorded('b', $this->noon(), 'beta'),
+            $this->recorded('c', $this->noon()),
         ]));
 
         self::assertSame(['c', 'a'], array_map(static fn (HistoryRow $row): string => $row->who, $history->ofProject('alpha')->rows));
@@ -47,10 +47,15 @@ final class HistoryTest extends TestCase
         self::assertCount(3, $history->ofProject('')->rows);
     }
 
-    private function recorded(string $who, string $at, ?string $project = null): RecordedEvent
+    private function noon(): DateTimeImmutable
     {
-        $payload = json_encode(array_filter(['actor' => $who, 'project' => $project]), JSON_THROW_ON_ERROR);
+        return new DateTimeImmutable('2026-10-28T12:00:00+00:00');
+    }
 
-        return new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::OwnerAsked, $payload), new DateTimeImmutable($at));
+    private function recorded(string $who, DateTimeImmutable $at, ?string $project = null): RecordedEvent
+    {
+        $payload = json_encode(null === $project ? ['actor' => $who] : ['actor' => $who, 'project' => $project], JSON_THROW_ON_ERROR);
+
+        return new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::OwnerAsked, $payload), $at);
     }
 }

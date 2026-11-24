@@ -8,8 +8,9 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 final readonly class History
 {
+    // Newest first.
     /**
-     * @param list<HistoryRow> $rows newest first
+     * @param list<HistoryRow> $rows
      */
     private function __construct(public array $rows)
     {
