@@ -187,7 +187,7 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.round .ledger.reviewers .stop-reviewer .btn'] ?? '');
     }
 
-    // A blocked reviewer's unbroken 100-character note widened an `auto` outcome track past 390 px and pushed the findings and Stop offscreen.
+    // Needed because a blocked reviewer's unbroken 100-character note widened an `auto` outcome track to 983 px at 390 wide and pushed the findings and Stop offscreen.
     public function testOnAPhoneAReviewersLongNoteWrapsInsideAnOutcomeColumnThatCanShrink(): void
     {
         $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
@@ -197,7 +197,7 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*flex-wrap:\s*wrap;\s*$/', $rules['.round .ledger.reviewers .reviewer-outcome'] ?? '');
     }
 
-    // The count says what it counts in each row, and the Findings heading stays visible with the newest round's "counted" label and its source tooltip.
+    // Needed because clipping the whole heading row hid the newest round's "counted" label and its source tooltip, which appear nowhere else on a phone.
     public function testOnAPhoneTheFindingsHeadingWithItsCountedLabelStaysVisibleWhileTheOtherHeadingsAreClipped(): void
     {
         $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
