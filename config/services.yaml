@@ -126,11 +126,11 @@ services:
             $vault: '@?secrets.vault'
             $kept: '@Intakt\Core\Ai\Contract\KeptProviderKeys'
 
-    # Replaces the framework's fallback logger so every record is a redacted JSON line with the failure's class and trace on the service output (the journal).
+    # Replaces the framework's fallback logger so every record is a redacted JSON line with the failure's class and trace on the service output (the journal), at every level INTAKT_LOG_LEVEL lets through.
     logger:
         class: Symfony\Component\HttpKernel\Log\Logger
         arguments:
-            $minLevel: warning
+            $minLevel: '%env(log_level:INTAKT_LOG_LEVEL)%'
             $output: 'php://stderr'
             $formatter: '@Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter'
 

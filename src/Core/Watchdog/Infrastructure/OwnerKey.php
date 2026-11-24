@@ -42,14 +42,15 @@ final readonly class OwnerKey
     /**
      * @throws OwnerKeyRefused
      */
-    public static function fromLine(string $line, int $position): self
+    public static function fromLine(string $line, string $signer, int $position): self
     {
-        if (1 !== preg_match(self::PUBLIC_KEY, $line, $parts) || !self::isAWholeKey((string) base64_decode($parts['key'], true), $parts['type'])) {
-            throw OwnerKeyRefused::notAPublicKey($position);
+        $blob = 1 === preg_match(self::PUBLIC_KEY, $line, $parts) ? (string) base64_decode($parts['key'], true) : '';
+        if ('' === $blob || !self::isAWholeKey($blob, $parts['type'])) {
+            throw OwnerKeyRefused::notAPublicKey($signer, $position);
         }
 
-        // Without the comment, because only the type and the key bytes decide who signed.
-        return new self($parts['type'].' '.$parts['key']);
+        // Without the comment and encoded anew, because only the type and the key bytes decide who signed, and the unused bits of a last base64 digit would let one key read as two.
+        return new self($parts['type'].' '.base64_encode($blob));
     }
 
     // The whole key, because a key cut short or with bytes left over would be accepted here and then fail every check later.
@@ -95,29 +96,31 @@ final readonly class OwnerKey
      */
     private static function isAKeyOpenSshReads(string $plain, array $fields): bool
     {
-        // The RSA exponent must be a positive number, and the second field holds the RSA modulus or the ECDSA point, the one part ssh-keygen judges beyond its length.
+        // The RSA exponent and modulus must each be a positive number in its one spelling, and the second field holds the RSA modulus or the ECDSA point, the one part ssh-keygen judges beyond its length.
         return match ($plain) {
             'ssh-ed25519' => true,
-            'ssh-rsa' => self::isAPositiveNumber($fields[0]) && self::modulusBits($fields[1]) >= self::RSA_MINIMUM_BITS,
+            'ssh-rsa' => array_all($fields, self::isAPositiveNumberInItsOneSpelling(...)) && self::modulusBits($fields[1]) >= self::RSA_MINIMUM_BITS,
             default => self::isOnItsCurve($plain, $fields[1]),
         };
     }
 
-    private static function isAPositiveNumber(string $mpint): bool
+    private static function isAPositiveNumberInItsOneSpelling(string $mpint): bool
     {
-        // Not positive when the top bit is set, because that makes the SSH number negative, nor when only zero bytes are left.
-        return '' !== $mpint && ord($mpint[0]) < 0x80 && '' !== ltrim($mpint, "\x00");
+        // Not positive when the top bit is set, because that makes the SSH number negative.
+        if ('' === $mpint || ord($mpint[0]) >= 0x80) {
+            return false;
+        }
+
+        // A leading zero byte only where it keeps the number positive, because OpenSSH drops any other one when it reads the key, so a padded copy of an owner key would be the same key and still pass as a different peer key.
+        return "\x00" !== $mpint[0] || (strlen($mpint) > 1 && ord($mpint[1]) >= 0x80);
     }
 
+    // Asked only of a positive number in its one spelling, so at most one leading zero byte is left to skip.
     private static function modulusBits(string $modulus): int
     {
-        // No bits for a negative mpint, because a set top bit makes the SSH number negative and no RSA modulus is.
-        if ('' !== $modulus && ord($modulus[0]) >= 0x80) {
-            return 0;
-        }
         $significant = ltrim($modulus, "\x00");
 
-        return '' === $significant ? 0 : (strlen($significant) - 1) * 8 + strlen(decbin(ord($significant[0])));
+        return (strlen($significant) - 1) * 8 + strlen(decbin(ord($significant[0])));
     }
 
     private static function isOnItsCurve(string $plain, string $point): bool

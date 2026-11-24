@@ -209,6 +209,24 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertSame('Binary file, not shown: 150001 bytes', $answers[0]);
     }
 
+    public function testALargeFileWhoseNulByteLiesWithinTheReadLimitIsNamedAsBinaryWithItsWholeSize(): void
+    {
+        $this->fixture->write('early.bin', "\0".str_repeat('a', 150_000));
+
+        $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 'early.bin']));
+
+        self::assertSame('Binary file, not shown: 150001 bytes', $answers[0]);
+    }
+
+    public function testAFileOfOneNulByteIsNamedAsBinaryInTheSingular(): void
+    {
+        $this->fixture->write('one.bin', "\0");
+
+        $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 'one.bin']));
+
+        self::assertSame('Binary file, not shown: 1 byte', $answers[0]);
+    }
+
     public function testAFileWithoutANulByteThatIsNotUtf8AnswersTheModelWithAnError(): void
     {
         $this->fixture->write('latin1.txt', "caf\xe9\n");

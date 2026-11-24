@@ -19,7 +19,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
-#[AsCommand(name: self::NAME, description: 'Check main like intakt:watchdog:check and halt the project with an owner card for each violation, and give a once-only notice for the owner\'s own push')]
+#[AsCommand(name: self::NAME, description: 'Check main like intakt:watchdog:check and halt the project with an owner card for each violation, and give a once-only notice for the owner\'s own push; a peer loop\'s merge is shown as info')]
 final readonly class GuardMainCommand
 {
     public const string NAME = 'intakt:watchdog:guard';
@@ -53,6 +53,9 @@ final readonly class GuardMainCommand
         }
 
         $this->noticed($io, $input->project, $guarded->noticedOwnerPushes);
+        foreach ($guarded->peerMerges as $commit) {
+            $io->writeln(ConsoleReport::peerMergeLine($commit));
+        }
 
         return $this->reported($io, $input->project, $guarded->standingCards);
     }
