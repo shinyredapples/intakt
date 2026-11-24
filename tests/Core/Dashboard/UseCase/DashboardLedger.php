@@ -288,12 +288,25 @@ final class DashboardLedger implements Ledger
         $this->useRecordedTokens($round, ['prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]);
     }
 
+    public function spendOn(string $account, int $prompt, DateTimeImmutable $settledAt): void
+    {
+        $this->recordSpend(['account' => $account, 'model' => 'model-a', 'prompt' => $prompt], $settledAt);
+    }
+
+    public function spendOnAnUnpricedModel(string $account, int $prompt, DateTimeImmutable $settledAt): void
+    {
+        $this->recordSpend(['account' => $account, 'model' => 'model-z', 'prompt' => $prompt], $settledAt);
+    }
+
     // Started a day before it settles, so a read that keeps only this week's endings still finds the call's model.
-    public function spendOn(string $account, int $prompt, DateTimeImmutable $settledAt, string $model = 'model-a'): void
+    /**
+     * @param array{account: string, model: string, prompt: int} $usage
+     */
+    private function recordSpend(array $usage, DateTimeImmutable $settledAt): void
     {
         $call = Uuid::v7()->toRfc4122();
-        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => $model], $settledAt->modify('-1 day'));
-        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['account' => $account, 'model' => $model, 'prompt' => $prompt, 'completion' => 0, 'total' => $prompt]]], $settledAt);
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => $usage['model']], $settledAt->modify('-1 day'));
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [[...$usage, 'completion' => 0, 'total' => $usage['prompt']]]], $settledAt);
     }
 
     /**

@@ -137,7 +137,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
     public function testASpendWithoutAPriceReadsAsUnknownNeverAsZero(): void
     {
-        $this->ledger->spendOn('openai.default', 1_000, new DateTimeImmutable('2026-10-28T09:00:00+00:00'), 'model-z');
+        $this->ledger->spendOnAnUnpricedModel('openai.default', 1_000, new DateTimeImmutable('2026-10-28T09:00:00+00:00'));
         $this->serve([new Account(Provider::OpenAi, 'default')]);
 
         $spend = $this->spendOf($this->browser->request('GET', '/team'));

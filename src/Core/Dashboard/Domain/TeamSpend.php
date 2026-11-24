@@ -6,7 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use Intakt\Core\Budget\Contract\Cost;
 
-// The paid spend of a pay-per-use account, estimated at the configured prices from the usage the ledger recorded.
+// Estimated at the configured prices, because the ledger records tokens and no vendor bill reaches Intakt.
 final readonly class TeamSpend
 {
     public function __construct(

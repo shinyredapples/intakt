@@ -19,7 +19,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 use Symfony\Component\Clock\ClockInterface;
 
-// Today from midnight and this week from Monday, both in UTC, priced per call by the model its start named, as a round's cost is.
+// Days and weeks in UTC, because the ledger records UTC times; priced first by the model a call's start named, so an account's spend agrees with a round's cost.
 final readonly class LedgerAccountSpend
 {
     public function __construct(
@@ -31,7 +31,7 @@ final readonly class LedgerAccountSpend
     }
 
     /**
-     * @return array<string, TeamSpend> by account key
+     * @return array<string, TeamSpend>
      */
     public function ofEachAccount(): array
     {

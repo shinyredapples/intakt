@@ -30,7 +30,7 @@ final readonly class TeamRole
 
         foreach ($providersByRole as $name => $providers) {
             $serving = array_filter($accounts, static fn (TeamAccount $account): bool => in_array($account->account->provider, $providers, true));
-            $roles[] = new self((string) $name, array_values(array_map(static fn (TeamAccount $account): string => $account->label(), $serving)));
+            $roles[] = new self($name, array_values(array_map(static fn (TeamAccount $account): string => $account->label(), $serving)));
         }
 
         return $roles;
