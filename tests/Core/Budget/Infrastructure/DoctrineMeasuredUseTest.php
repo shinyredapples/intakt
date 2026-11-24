@@ -19,6 +19,7 @@ use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
+use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
@@ -28,9 +29,12 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineMeasuredUse::class)]
+#[UsesClass(AccountReadingLock::class)]
 #[CoversClass(WindowReadingRecord::class)]
 #[CoversClass(WindowUse::class)]
 #[CoversClass(UsageWindow::class)]
@@ -188,7 +192,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
             return $this->clock->now();
         });
 
-        self::assertSame(ReadingOutcome::Recorded, new DoctrineMeasuredUse($this->entities, $stampedFirst, new EventDispatcher())->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+        self::assertSame(ReadingOutcome::Recorded, new DoctrineMeasuredUse($this->entities, $stampedFirst, new EventDispatcher(), $this->accountLock())->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
 
         self::assertSame(42.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
         self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
@@ -199,7 +203,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
     {
         $write = "INSERT INTO budget_window_reading (provider, account, usage_window, used_percent, resets_at, taken_at) VALUES ('claude_code', 'main', 'five-hour', 43.0, NULL, '2026-11-01 08:00:00')";
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new AnotherWorkerWritesBeforeTheCleanup($write)]));
-        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $this->clock, new EventDispatcher());
+        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $this->clock, new EventDispatcher(), $this->accountLock());
 
         self::assertSame(ReadingOutcome::Recorded, $worker->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
 
@@ -238,7 +242,12 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->clock = new MockClock('2026-11-01 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher());
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher(), $this->accountLock());
+    }
+
+    private function accountLock(): AccountReadingLock
+    {
+        return new AccountReadingLock(new LockFactory(new InMemoryStore()));
     }
 
     // Its clock is read before another worker stores a fresher reading, so its own, older reading is the one stored last.
@@ -253,7 +262,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
             return $stampedAt;
         });
 
-        return new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher());
+        return new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher(), $this->accountLock());
     }
 
     // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
@@ -261,7 +270,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
     {
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
 
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock, new EventDispatcher());
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock, new EventDispatcher(), $this->accountLock());
     }
 
     private function claude(string $name): Account

@@ -30,6 +30,7 @@ use Intakt\Core\Budget\Domain\OutageNoticeRecord;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
+use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
 use Intakt\Core\Budget\Infrastructure\DoctrineOwnerNotices;
@@ -52,6 +53,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(DoctrineOwnerNotices::class)]
 #[CoversClass(DoctrineMeasuredUse::class)]
 #[CoversClass(DoctrineOutageNotices::class)]
+#[UsesClass(AccountReadingLock::class)]
 #[UsesClass(OutageWatch::class)]
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(WindowUse::class)]
@@ -67,6 +69,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 final class DoctrineOwnerNoticesTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
+    private LockFactory $locks;
+    private AccountReadingLock $accountLock;
 
     public function testOutageNoticesAreListedOldestFirst(): void
     {
@@ -126,7 +130,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher(), $this->accountLock);
         $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
         $use->record($reading);
         $clock->modify('+4 hours');
@@ -159,7 +163,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher(), $this->accountLock);
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->modify('+4 hours');
         $this->entities->persist(new OutageNoticeRecord($account, new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $clock->now()));
@@ -174,7 +178,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             return $stampedAt;
         });
 
-        new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher())->record($reading);
+        new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher(), $this->accountLock)->record($reading);
 
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
@@ -184,7 +188,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher(), $this->accountLock);
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->sleep(1);
         $use->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, null)));
@@ -199,7 +203,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning')->with(self::anything(), ['account' => 'claude_code.main', 'since' => '2026-11-02T08:00:01+00:00']);
         $dispatcher = new EventDispatcher();
-        $dispatcher->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), $logger)->noticeOnce(...));
+        $dispatcher->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger, $this->accountLock)->noticeOnce(...));
 
         new OutageWatch($slowLookups, $clock, $dispatcher)->watch($account);
 
@@ -438,7 +442,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->record('main', '2026-11-02 08:00:00');
         $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
         $clock = new MockClock('2026-11-02 12:00:00 UTC');
-        $worker = $this->measuredUseWhoseFirstEndFails($clock, new EventDispatcher());
+        $worker = $this->measuredUseWhoseFirstEndFails($clock, new EventDispatcher(), $this->accountLock);
         $this->recordWhileTheEndFails($worker);
         $clock->modify('+30 minutes');
 
@@ -528,7 +532,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             }
         };
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
-        $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+        $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), $this->locks, self::createStub(LoggerInterface::class), $this->accountLock);
 
         $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
@@ -561,7 +565,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             }
         };
         $writer = DriverManager::getConnection($connection->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
-        $notices = new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+        $notices = new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), $this->locks, self::createStub(LoggerInterface::class), $this->accountLock);
 
         $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
@@ -574,11 +578,54 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->record('main', '2026-11-02 12:00:00');
         $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndRunsBeforeTheNotice()]));
-        $late = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 11:59:00 UTC'), new EventDispatcher());
+        $late = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 11:59:00 UTC'), new EventDispatcher(), $this->accountLock);
 
         $late->record($this->readingOf('main'));
 
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    // On a read-committed engine the notice writer could store its notice and look for a reading between the reading's update and its commit, see no recovery, and leave the notice without an end; the writer must wait, so its look runs after the commit and gives the notice the reading's moment.
+    public function testTheOnlyRecoveryReadingHoldsTheAccountsLockUntilItCommitsAndThenGivesTheNoticeItsMomentAsTheEnd(): void
+    {
+        $heldByTheReading = null;
+        $hook = $this->afterTheReadingsEndOfOutages(function () use (&$heldByTheReading): void {
+            $heldByTheReading = !$this->accountLock->of(new Account(Provider::ClaudeCode, 'main'))->acquire(false);
+        });
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
+        $reading = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $this->accountLock);
+
+        $reading->record($this->readingOf('main'));
+        $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        self::assertTrue($heldByTheReading);
+        self::assertSame(['main'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+        self::assertSame('12:00', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    public function testTheLockOfAReadingIsGivenBackOnceItIsCommitted(): void
+    {
+        new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $this->accountLock)->record($this->readingOf('main'));
+
+        $lock = $this->accountLock->of(new Account(Provider::ClaudeCode, 'main'));
+
+        self::assertTrue($lock->acquire(false));
+        $lock->release();
+    }
+
+    public function testAReadingOfOneAccountDoesNotHoldTheLockOfAnother(): void
+    {
+        $otherFree = null;
+        $hook = $this->afterTheReadingsEndOfOutages(function () use (&$otherFree): void {
+            $other = $this->accountLock->of(new Account(Provider::ClaudeCode, 'other'));
+            $otherFree = $other->acquire(false);
+            $other->release();
+        });
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
+
+        new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $this->accountLock)->record($this->readingOf('main'));
+
+        self::assertTrue($otherFree);
     }
 
     // The end saved in the transaction is committed before the second update runs, so its failure keeps that end, still announces it, and reaches the caller.
@@ -591,7 +638,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             ++$heard;
         });
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new SecondOutageEndFails()]));
-        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), $events);
+        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), $events, $this->accountLock);
 
         try {
             $worker->record($this->readingOf('main'));
@@ -745,6 +792,8 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->accountLock = new AccountReadingLock($this->locks);
         $this->entities = $entities;
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
@@ -766,12 +815,33 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame(ReadingOutcome::Recorded, $this->measuredUseAt($at)->record($this->readingOf($account)));
     }
 
+    // The reading's first update of the notices is the one in its transaction, so the hook runs while the reading is not yet committed.
+    private function afterTheReadingsEndOfOutages(Closure $inside): AbstractLogger
+    {
+        return new class($inside) extends AbstractLogger {
+            public function __construct(private ?Closure $inside)
+            {
+            }
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (!$this->inside instanceof Closure || !str_starts_with(is_string($context['sql'] ?? null) ? $context['sql'] : '', 'UPDATE budget_outage_notice ')) {
+                    return;
+                }
+
+                $run = $this->inside;
+                $this->inside = null;
+                $run();
+            }
+        };
+    }
+
     // Its own connection, because the failure is wired into the driver it connects through.
     private function measuredUseWhoseFirstEndFails(ClockInterface $clock, EventDispatcher $events): DoctrineMeasuredUse
     {
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndFails()]));
 
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $clock, $events);
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $clock, $events, $this->accountLock);
     }
 
     private function recordWhileTheEndFails(DoctrineMeasuredUse $worker): void
@@ -784,9 +854,10 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         }
     }
 
+    // Its own lock store, because the tests that run it while a notice writer works stand for another process, which holds a lock this process would wait for.
     private function measuredUseAt(string $at, EventDispatcher $events = new EventDispatcher()): DoctrineMeasuredUse
     {
-        return new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), $events);
+        return new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), $events, new AccountReadingLock(new LockFactory(new InMemoryStore())));
     }
 
     private function readingOf(string $account): WindowReading
@@ -796,7 +867,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
     private function outageNotices(): DoctrineOutageNotices
     {
-        return new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+        return new DoctrineOutageNotices($this->entities, $this->locks, self::createStub(LoggerInterface::class), $this->accountLock);
     }
 
     /**

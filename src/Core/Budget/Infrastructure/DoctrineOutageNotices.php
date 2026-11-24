@@ -21,6 +21,7 @@ final readonly class DoctrineOutageNotices
         private EntityManagerInterface $entities,
         private LockFactory $locks,
         private LoggerInterface $logger,
+        private AccountReadingLock $accountLock,
     ) {
     }
 
@@ -34,9 +35,22 @@ final readonly class DoctrineOutageNotices
         }
 
         try {
-            $this->noticeUnlessNoticed($outage);
+            $this->noticeWhileNoReadingIsCommitting($outage);
         } finally {
             $lock->release();
+        }
+    }
+
+    // Waiting, because a reading holds the lock only while it commits; the last look then runs either before the reading's update, which ends the notice, or after its commit, which the look sees.
+    private function noticeWhileNoReadingIsCommitting(UsageReadingsStayedAway $outage): void
+    {
+        $reading = $this->accountLock->of($outage->account);
+        $reading->acquire(true);
+
+        try {
+            $this->noticeUnlessNoticed($outage);
+        } finally {
+            $reading->release();
         }
     }
 

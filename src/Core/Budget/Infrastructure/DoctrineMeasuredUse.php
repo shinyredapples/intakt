@@ -30,6 +30,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         private EntityManagerInterface $entities,
         private ClockInterface $clock,
         private EventDispatcherInterface $events,
+        private AccountReadingLock $accountLock,
     ) {
     }
 
@@ -42,24 +43,14 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             return $refusal;
         }
 
-        // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
-        $previous = $this->latestReadingBefore($reading->account, $now);
-        // Inside a caller's transaction nothing is committed yet, and its rollback would erase an end a listener already heard of, so the caller that owns the commit announces.
+        // Inside a caller's transaction nothing is committed yet, and its rollback would erase an end a listener already heard of, so the caller that owns the commit announces; it also owns the commit, so no lock here could span it.
         if ($this->entities->getConnection()->isTransactionActive()) {
-            $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
+            $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $this->latestReadingBefore($reading->account, $now));
 
             return ReadingOutcome::Recorded;
         }
 
-        $record = new WindowReadingRecord($reading, $now);
-        $ended = $this->storeEndingOutages($record, $previous);
-        try {
-            $ended += $this->moveLaterEndsTo($record, $previous);
-        } finally {
-            if ($ended > 0) {
-                $this->events->dispatch(new OwnerNoticesChanged());
-            }
-        }
+        $this->recordAndCommit($reading, $now);
 
         return ReadingOutcome::Recorded;
     }
@@ -78,6 +69,26 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         $age = $this->clock->now()->getTimestamp() - $latest->takenAt->getTimestamp();
 
         return new WindowUse($latest->usage(), $latest->takenAt, max(0, $age));
+    }
+
+    // Waiting for the lock, because a notice writer holds it only for its last look; held across the commit, because a writer that looked before the commit would otherwise miss this reading while this reading's update missed its notice.
+    private function recordAndCommit(WindowReading $reading, DateTimeImmutable $now): void
+    {
+        $lock = $this->accountLock->of($reading->account);
+        $lock->acquire(true);
+        $ended = 0;
+        try {
+            // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
+            $previous = $this->latestReadingBefore($reading->account, $now);
+            $record = new WindowReadingRecord($reading, $now);
+            $ended = $this->storeEndingOutages($record, $previous);
+            $ended += $this->moveLaterEndsTo($record, $previous);
+        } finally {
+            $lock->release();
+            if ($ended > 0) {
+                $this->events->dispatch(new OwnerNoticesChanged());
+            }
+        }
     }
 
     // A refused reading stores nothing, so the last good one stays.

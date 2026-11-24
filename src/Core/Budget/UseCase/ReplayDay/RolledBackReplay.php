@@ -11,6 +11,7 @@ use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
+use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
@@ -63,9 +64,10 @@ final readonly class RolledBackReplay
     private function dayReplayOn(MockClock $clock, LoggerInterface $logger): DayReplay
     {
         $events = new EventDispatcher();
-        $measured = new DoctrineMeasuredUse($this->entities, $clock, $events);
+        $accountLock = new AccountReadingLock($this->locks);
+        $measured = new DoctrineMeasuredUse($this->entities, $clock, $events, $accountLock);
         $holds = new DoctrineHolds($this->entities, $clock);
-        $events->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger)->noticeOnce(...));
+        $events->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger, $accountLock)->noticeOnce(...));
         $guard = new BudgetGuard($holds, new CeilingStartGuard($measured, $clock, $this->ceilings), new OutageWatch($measured, $clock, $events), $this->halts);
 
         return new DayReplay($measured, $holds, $guard);
