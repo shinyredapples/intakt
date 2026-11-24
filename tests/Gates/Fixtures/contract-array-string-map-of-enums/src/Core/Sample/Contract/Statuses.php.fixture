@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+enum Status: string
+{
+    case Open = 'open';
+    case Closed = 'closed';
+}
+
+interface Statuses
+{
+    /**
+     * @param array<string, Status> $byName
+     */
+    public function record(array $byName): void;
+
+    /**
+     * @return array<non-empty-string, Status>
+     */
+    public function all(): array;
+}

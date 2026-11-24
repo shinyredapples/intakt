@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract\Event;
+
+enum Happened: string
+{
+    case Started = 'started';
+
+    /**
+     * @return array<string, string>
+     */
+    public static function labels(): array
+    {
+        return ['started' => 'Started'];
+    }
+}

@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+final readonly class Report
+{
+    /**
+     * @param array{passed: bool, notes: string} $outcome
+     * @param array<string, int>                 $counts
+     */
+    public function __construct(
+        public array $outcome,
+        private array $counts,
+    ) {
+    }
+
+    public function passed(): bool
+    {
+        return $this->outcome['passed'] && [] !== $this->counts;
+    }
+}
