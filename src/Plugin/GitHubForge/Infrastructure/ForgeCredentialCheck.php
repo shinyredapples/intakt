@@ -8,7 +8,7 @@ use Intakt\Core\Doctor\Contract\CheckResult;
 use Intakt\Core\Doctor\Contract\HealthCheck;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 
-// One read of the installation, the same read the start makes; its failure messages carry a status or a class only, never a key.
+// One read of the installation, the same read the start makes, so the doctor and the start never disagree; its failure messages carry a status or a class only, because they must not leak a key.
 final readonly class ForgeCredentialCheck implements HealthCheck
 {
     public function __construct(

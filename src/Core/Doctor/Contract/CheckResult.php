@@ -20,7 +20,7 @@ final readonly class CheckResult
         return new self(true, '');
     }
 
-    // The fix is plain words for the owner, never a stack trace or a credential.
+    // The fix is plain words for the owner, because a stack trace or a credential would end up on the terminal.
     public static function failed(string $fix): self
     {
         return new self(false, $fix);
