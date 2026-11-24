@@ -55,6 +55,6 @@ final readonly class StoredConversations
             ->getQuery()
             ->getSingleColumnResult();
 
-        return array_values(array_map(static fn (string|UuidV7 $id): string => $id instanceof UuidV7 ? $id->toRfc4122() : (Uuid::isValid($id) ? $id : Uuid::fromBinary($id)->toRfc4122()), $ids));
+        return array_map(static fn (string|UuidV7 $id): string => $id instanceof UuidV7 ? $id->toRfc4122() : (Uuid::isValid($id) ? $id : Uuid::fromBinary($id)->toRfc4122()), $ids);
     }
 }
