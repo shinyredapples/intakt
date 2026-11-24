@@ -22,7 +22,7 @@ final class CountedBytes
 
     public function stream_open(string $path): bool
     {
-        $this->bytes = self::bytesAt($path);
+        $this->bytes = $this->bytesAt($path);
         $this->opens()->count();
 
         return true;
@@ -46,7 +46,7 @@ final class CountedBytes
      */
     public function stream_stat(): array
     {
-        return self::statOf($this->bytes);
+        return $this->statOf($this->bytes);
     }
 
     /**
@@ -54,10 +54,10 @@ final class CountedBytes
      */
     public function url_stat(string $path): array
     {
-        return self::statOf(self::bytesAt($path));
+        return $this->statOf($this->bytesAt($path));
     }
 
-    private static function bytesAt(string $path): string
+    private function bytesAt(string $path): string
     {
         return match ($path) {
             self::EARLY_NUL => "\0".str_repeat('a', self::SIZE - 1),
@@ -76,7 +76,7 @@ final class CountedBytes
     /**
      * @return array<string, int>
      */
-    private static function statOf(string $bytes): array
+    private function statOf(string $bytes): array
     {
         return ['mode' => 0100644, 'size' => strlen($bytes)];
     }
