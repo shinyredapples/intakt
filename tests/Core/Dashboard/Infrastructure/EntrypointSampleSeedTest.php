@@ -559,7 +559,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
         self::assertNotSame(0, $this->entrypoint?->getExitCode());
         self::assertStringContainsString('CADDY_ADMIN must be a port on localhost, 127.0.0.1 or [::1] (for example localhost:2019)', (string) $this->entrypoint?->getErrorOutput());
-        self::assertStringNotContainsString('example-canary', (string) $this->entrypoint?->getErrorOutput().$this->entrypoint?->getOutput());
+        self::assertStringNotContainsString('example-canary', $this->entrypoint?->getErrorOutput().$this->entrypoint?->getOutput());
     }
 
     #[DataProvider('adminListenersOnLoopback')]
