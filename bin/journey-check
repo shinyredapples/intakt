@@ -1,0 +1,160 @@
+#!/usr/bin/env node
+// The journey check: walks user journeys in a headless browser against a running Intakt and reports each one as passed or
+// failed, with the step where it broke and, where one can be saved, a screenshot in var/journey-check/<run>/.
+// Usage: bin/journey-check <address of a running dashboard>
+// Exit code 0 when every journey passed, 1 when one failed, 2 when the check could not run.
+// Needs Node.js 22 and Playwright (NODE_PATH names where it is installed); CHROME_PATH names a system Chrome or Chromium.
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+const OUT = path.join(ROOT, 'var', 'journey-check');
+const STEP_TIMEOUT_MS = 10_000;
+const USAGE = 'usage: bin/journey-check <address of a running dashboard>';
+// Part 2 of #3677 adds the first journey; until then the check starts, finds the dashboard answering and walks none.
+const JOURNEYS = [];
+
+class CheckCouldNotRun extends Error {}
+
+async function main(argv) {
+  const address = parseAddress(argv[0]);
+  await expectAnswer(address, STEP_TIMEOUT_MS);
+  const { chromium } = require('playwright');
+  const folder = path.join(OUT, runName(new Date()));
+  const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
+  try {
+    const results = [];
+    for (const journey of JOURNEYS) results.push(await runJourney(browser, address, journey, folder));
+    console.log(report(results, ROOT));
+
+    return exitCode(results);
+  } finally {
+    await browser.close();
+  }
+}
+
+// The address may carry a user name and password, which must never reach the output, so only the parsed address without them is kept.
+function parseAddress(text) {
+  if (text === undefined) throw new CheckCouldNotRun(USAGE);
+  if (!URL.canParse(text)) throw new CheckCouldNotRun('the dashboard address is not a URL; ' + USAGE);
+  const url = new URL(text);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new CheckCouldNotRun('the dashboard address is not an http or https address; ' + USAGE);
+  url.username = '';
+  url.password = '';
+
+  return url.href.replace(/\/+$/, '');
+}
+
+// A server that accepts the connection and never answers would otherwise hold the check forever.
+async function expectAnswer(address, timeout) {
+  try {
+    const response = await fetch(address + '/', { signal: AbortSignal.timeout(timeout), redirect: 'manual' });
+    await response.body?.cancel();
+  } catch {
+    throw new CheckCouldNotRun(`nothing answers at ${address} within ${timeout / 1000} s`);
+  }
+}
+
+function runName(now) {
+  return now.toISOString().replace(/[:.]/g, '-');
+}
+
+// A fresh context per journey, so cookies and storage one journey leaves behind never help or hinder the next.
+async function runJourney(browser, address, journey, folder) {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(STEP_TIMEOUT_MS);
+    const failure = await firstFailingStep(page, address, journey.steps);
+    if (failure === null) return { journey: journey.name, failure: null };
+
+    return { journey: journey.name, failure: { ...failure, ...(await screenshot(page, folder, journey.name)) } };
+  } finally {
+    await context.close();
+  }
+}
+
+async function firstFailingStep(page, address, steps) {
+  for (const step of steps) {
+    try {
+      await step.run(page, address);
+    } catch (error) {
+      return { step: step.name, error: firstLine(error) };
+    }
+  }
+
+  return null;
+}
+
+// Playwright's messages go on with a call log; the first line says what broke.
+function firstLine(error) {
+  return String(error?.message ?? error).split('\n')[0];
+}
+
+// A missing screenshot must not hide the broken step, so a failure to save one is reported beside it.
+async function screenshot(page, folder, name) {
+  const file = path.join(folder, name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png');
+  try {
+    fs.mkdirSync(folder, { recursive: true });
+    await page.screenshot({ path: file, fullPage: true });
+
+    return { screenshot: file };
+  } catch (error) {
+    return { screenshotError: firstLine(error) };
+  }
+}
+
+// Steps find what a person sees, by role and visible text and never by CSS classes, so a redesign keeps the journeys while a renamed button fails them.
+function open(pathOnSite) {
+  return {
+    name: `open ${pathOnSite}`,
+    run: async (page, address) => {
+      const response = await page.goto(address + pathOnSite);
+      if (!response.ok()) throw new Error(`HTTP ${response.status()} for ${pathOnSite}`);
+    },
+  };
+}
+
+function press(role, name) {
+  return { name: `press the ${role} "${name}"`, run: (page) => page.getByRole(role, { name, exact: true }).click() };
+}
+
+function see(text) {
+  return { name: `see "${text}"`, run: (page) => page.getByText(text, { exact: true }).first().waitFor() };
+}
+
+function report(results, root) {
+  const lines = results.flatMap((result) => resultLines(result, root));
+  const failed = results.filter((result) => result.failure !== null).length;
+  lines.push(`Journey check: ${results.length} journeys, ${results.length - failed} passed, ${failed} failed.`);
+
+  return lines.join('\n');
+}
+
+function resultLines(result, root) {
+  if (result.failure === null) return [`passed ${result.journey}`];
+  const { step, error, screenshot: file, screenshotError } = result.failure;
+
+  return [
+    `failed ${result.journey} at step "${step}": ${error}`,
+    file === undefined ? `  no screenshot: ${screenshotError}` : `  screenshot: ${path.relative(root, file)}`,
+  ];
+}
+
+function exitCode(results) {
+  return results.some((result) => result.failure !== null) ? 1 : 0;
+}
+
+module.exports = { STEP_TIMEOUT_MS, parseAddress, expectAnswer, runName, runJourney, open, press, see, report, exitCode };
+
+if (require.main === module) {
+  main(process.argv.slice(2)).then(
+    (code) => (process.exitCode = code),
+    (error) => {
+      console.error('Journey check stopped: ' + error.message);
+      process.exitCode = 2;
+    },
+  );
+}
