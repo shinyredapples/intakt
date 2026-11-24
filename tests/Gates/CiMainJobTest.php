@@ -37,7 +37,7 @@ final class CiMainJobTest extends SandboxTestCase
     {
         $step = $this->step('main', 'passed');
 
-        self::assertStringContainsString('tree=$(git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree")', $step['run'] ?? '');
+        self::assertStringContainsString('tree=$(timeout "$LOOKUP_TIMEOUT_SECONDS" git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree")', $step['run'] ?? '');
     }
 
     public function testAFailedLookupWarnsAndRunsEveryJob(): void
@@ -51,6 +51,14 @@ final class CiMainJobTest extends SandboxTestCase
     public function testALookupThatStallsIsStoppedAndRunsEveryJob(): void
     {
         [$exit, $printed, $written] = $this->decide('exec sleep 30', '1');
+
+        self::assertSame([0, "full=true\n"], [$exit, $written]);
+        self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);
+    }
+
+    public function testAStalledGitIsStoppedAndRunsEveryJobToo(): void
+    {
+        [$exit, $printed, $written] = $this->decide('echo 1', '1', 'exec sleep 30');
 
         self::assertSame([0, "full=true\n"], [$exit, $written]);
         self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);
@@ -130,11 +138,11 @@ final class CiMainJobTest extends SandboxTestCase
     /**
      * @return array{int, string, string}
      */
-    private function decide(string $gh, string $limit = '300'): array
+    private function decide(string $gh, string $limit = '300', string $git = 'echo '.self::TREE): array
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('bin/gh', "#!/bin/sh\n".$gh."\n");
-        $sandbox->write('bin/git', "#!/bin/sh\necho ".self::TREE."\n");
+        $sandbox->write('bin/git', "#!/bin/sh\n".$git."\n");
         $sandbox->write('output', '');
         chmod($sandbox->root.'/bin/gh', 0o755);
         chmod($sandbox->root.'/bin/git', 0o755);
