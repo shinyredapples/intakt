@@ -275,9 +275,11 @@ final class Instance
      */
     private function awaitExit($process): int
     {
-        $deadline = hrtime(true) + (int) ($this->commandSeconds * 1_000_000_000);
+        // A float, because a large override times a billion nanoseconds is past the integer range.
+        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
 
-        while (hrtime(true) < $deadline) {
+        // The status is read once more after the last wait, because a command may end during it.
+        while (true) {
             $state = proc_get_status($process);
 
             if (!$state['running']) {
@@ -286,7 +288,13 @@ final class Instance
                 return $state['exitcode'];
             }
 
-            usleep(50_000);
+            $left = $deadline - hrtime(true);
+
+            if ($left <= 0) {
+                break;
+            }
+
+            usleep((int) min(50_000, ceil($left / 1000)));
         }
 
         proc_terminate($process, 9);

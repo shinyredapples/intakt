@@ -94,18 +94,27 @@ final class ProcessQueueTest extends SandboxTestCase
     {
         $late = static function (int $worker): array {
             // Half the limit, because a build that a busy runner lets overrun the limit never starts its job, and the job still runs past the limit.
-            usleep(250_000);
+            usleep(400_000);
 
-            return [['php', '-r', 'usleep(5000000); echo "done";'], []];
+            return [['php', '-r', 'echo "started\n"; sleep(5);'], []];
         };
         $started = hrtime(true);
 
-        $results = new ProcessQueue(0.5, 0.5)->run(['late' => $late], 1, $this->emptySandbox()->root);
+        $results = new ProcessQueue(0.8, 0.8)->run(['late' => $late], 1, $this->emptySandbox()->root);
         $elapsed = (hrtime(true) - $started) / 1_000_000_000;
 
-        self::assertLessThan(1.3, $elapsed);
+        // Below the 1.2 seconds at which the job's own limit would stop it, so the stop is the time left in the pass.
+        self::assertLessThan(1.1, $elapsed);
         self::assertSame(ProcessRunner::TIMED_OUT, $results['late']->exitCode);
-        self::assertSame('timed out after 0.5 seconds', $results['late']->firstErrorLine());
+        self::assertSame('timed out: the test pass reached its overall limit of 0.8 seconds, last output: started', $results['late']->firstErrorLine());
+    }
+
+    public function testAJobStoppedByAFractionalPassLimitShorterThanItsOwnNamesThePassLimit(): void
+    {
+        $results = new ProcessQueue(0.8, 0.3)->run(['hang' => $this->php('echo "started\n"; sleep(30);')], 1, $this->emptySandbox()->root);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['hang']->exitCode);
+        self::assertSame('timed out: the test pass reached its overall limit of 0.3 seconds, last output: started', $results['hang']->firstErrorLine());
     }
 
     public function testAJobBuiltPastTheOverallLimitDoesNotStartAndNoJobAfterItIsBuilt(): void

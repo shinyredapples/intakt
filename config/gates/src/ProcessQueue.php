@@ -15,6 +15,8 @@ final readonly class ProcessQueue
 
     private const int POLL_MICROSECONDS = 10000;
 
+    private const float START_SLACK_SECONDS = 0.05;
+
     public function __construct(private float $seconds, private float $overallSeconds)
     {
     }
@@ -82,8 +84,8 @@ final readonly class ProcessQueue
             return [$this->notStarted(), ''];
         }
 
-        // Because a job starts a moment after its pass, the time left is rounded up to whole seconds, so the reason of a job timeout equal to the overall limit is the job's own; the process still stops at the time left.
-        $ownTimeout = $this->seconds <= ceil($left);
+        // Because a job starts a moment after its pass, a short slack keeps the reason of a job timeout equal to the overall limit the job's own; the process still stops at the time left.
+        $ownTimeout = $this->seconds <= $left + self::START_SLACK_SECONDS;
         $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->seconds, $left));
 
         try {

@@ -169,6 +169,24 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
+    // Shorter than one wait between two status reads, so the command ends during the last wait.
+    public function testACommandThatEndsDuringTheLastWaitBeforeAFractionalLimitIsNotKilled(): void
+    {
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'printf "done\n"'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.025']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertStringNotContainsString('was killed', $run['errors']);
+    }
+
+    public function testACommandLimitPastTheIntegerRangeOfNanosecondsLetsTheCommandFinish(): void
+    {
+        $run = $this->runInstance(self::stubProject(), ['true'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '10000000000']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertStringNotContainsString('was killed', $run['errors']);
+        self::assertStringNotContainsString('Warning', $run['errors']);
+    }
+
     #[DataProvider('signals')]
     public function testAConsoleCommandStoppedBySignalExitsWith128PlusTheSignalNumberThroughTheInstance(int $signal, int $expected): void
     {
