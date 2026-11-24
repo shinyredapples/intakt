@@ -23,7 +23,8 @@ final readonly class ForcedOrder implements Middleware
      */
     public function __construct(
         private Closure $statement,
-        private Closure $beforeCommit = static function (): void {},
+        private Closure $beforeCommit = static function (): void {
+        },
     ) {
     }
 
