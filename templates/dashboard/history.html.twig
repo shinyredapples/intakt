@@ -1,0 +1,35 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}History - Intakt{% endblock %}
+
+{% block body %}
+<div class="page-head">
+    <div>
+        <h1>History</h1>
+        <p class="lead">What changed and who changed it, newest first.</p>
+    </div>
+</div>
+{% if history.rows is empty %}
+{{ include('dashboard/components/empty.html.twig', {title: 'No history yet', text: 'Nothing has been recorded yet.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
+{% else %}
+<section class="section">
+<ol class="review-rows" aria-label="History">
+{% for row in history.rows %}
+    <li class="review-row"{% if row.project is not null %} data-project="{{ row.project }}"{% endif %}>
+        <div class="review-line">
+            <span class="review-title">{{ row.label }}</span>
+            <span class="review-facts">
+                <span class="who">{{ row.who }}</span>
+                {% if row.project is not null %}<span class="pname">{{ row.project }}</span>{% endif %}
+                {% if row.fingerprint is not null %}<span class="fingerprint">Fingerprint <code>{{ row.fingerprint }}</code></span>{% endif %}
+                {% if row.showsChange %}<span class="change"><code>{{ row.before }}</code> &rarr; <code>{{ row.after }}</code></span>{% endif %}
+                {% if row.expires is not null %}<time class="expiry" datetime="{{ row.expires|date('c', 'UTC') }}">Expires {{ row.expires|date('Y-m-d H:i:s', 'UTC') }} UTC</time>{% endif %}
+                <time class="when" datetime="{{ row.at|date('c', 'UTC') }}">{{ row.at|date('Y-m-d H:i:s', 'UTC') }} UTC</time>
+            </span>
+        </div>
+    </li>
+{% endfor %}
+</ol>
+</section>
+{% endif %}
+{% endblock %}

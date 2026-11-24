@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Dashboard\UseCase\FirstRun;
+namespace Intakt\Core\Dashboard\UseCase\RunSetup;
 
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
@@ -21,18 +21,22 @@ use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
 use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// Reads the same sources as intakt:ai:tiers and the project configuration, so the page shows what the install really has.
-final readonly class FirstRunSteps
+// Reads the same sources as intakt:ai:tiers, the project configuration and the board's boot banner, so the wizard shows what the install really has.
+final readonly class SetupSteps
 {
     /**
      * @param array<string, string> $disabledProviders
@@ -45,6 +49,9 @@ final readonly class FirstRunSteps
         private Panels $panels,
         private LedgerReviewPages $reviews,
         private SampleChangeSource $sample,
+        private Ledger $ledger,
+        private FailingMains $failingMains,
+        private Redactor $redactor,
         #[Autowire(param: AiServices::DISABLED_PROVIDERS)]
         private array $disabledProviders,
     ) {
@@ -53,11 +60,26 @@ final readonly class FirstRunSteps
     public function firstRun(): FirstRun
     {
         $projects = [...$this->tiers->projects()];
+        $failing = $this->failingMainsByProject();
 
         return new FirstRun(
             $this->providers(array_first($projects)),
-            new ProjectStep(array_map($this->panelOf(...), $projects)),
+            new ProjectStep(array_map(fn (string $project): PanelOfProject => $this->panelOf($project, $failing[$project] ?? null), $projects)),
             new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource),
+        );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function failingMainsByProject(): array
+    {
+        $failing = $this->failingMains->in($this->ledger->readInOrder());
+
+        // Redacted as on the board, because a boot reason can quote a tool's output.
+        return array_combine(
+            array_map(static fn (FailingMain $main): string => $main->project, $failing),
+            array_map(fn (FailingMain $main): string => $this->redactor->redact($main->reason), $failing),
         );
     }
 
@@ -101,13 +123,18 @@ final readonly class FirstRunSteps
         }, Tier::cases());
     }
 
-    private function panelOf(string $project): PanelOfProject
+    private function panelOf(string $project, ?string $mainBootFailure): PanelOfProject
     {
         try {
             // A change with no lines, paths or labels matches no rule, so this is the core panel every change gets.
             $panel = $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels()));
         } catch (PanelConfigurationFailure $failure) {
-            return new PanelOfProject($project, $failure->getMessage());
+            return new PanelOfProject(
+                $project,
+                $failure->getMessage(),
+                configured: false,
+                mainBootFailure: $mainBootFailure,
+            );
         }
 
         $reviewers = array_map(
@@ -115,6 +142,6 @@ final readonly class FirstRunSteps
             $panel->reviewers,
         );
 
-        return new PanelOfProject($project, 'Reviewers: '.implode(', ', $reviewers).'.');
+        return new PanelOfProject($project, 'Reviewers: '.implode(', ', $reviewers).'.', mainBootFailure: $mainBootFailure);
     }
 }
