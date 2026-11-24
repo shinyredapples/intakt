@@ -39,6 +39,7 @@ use Intakt\Plugin\PhpGate\Contract\PhpGateSteps;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use Intakt\Tests\Core\HandBack\CheckJobsFor;
+use Intakt\Tests\Core\Job\OutputFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -143,7 +144,7 @@ final class CheckDependenciesTest extends TestCase
         $this->leaseFor($this->head())?->release();
 
         self::assertSame('job-image', $this->ran[0]->image);
-        self::assertSame(PhpGateSteps::PHP_VERSION_PROBE, $this->ran[0]->command[4]);
+        self::assertSame(PhpGateSteps::PHP_VERSION_PROBE, [...$this->ran[0]->command][4]);
     }
 
     public function testTheInstallGetsTheStepsProbeInstallAndLockFiles(): void
@@ -151,7 +152,7 @@ final class CheckDependenciesTest extends TestCase
         $this->leaseFor($this->head())?->release();
 
         self::assertSame('job-image', $this->ran[1]->image);
-        self::assertSame([DependencyJobs::LOCK, PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::LOCKED_INSTALL, 'composer.json', 'composer.lock'], array_slice($this->ran[1]->command, 4));
+        self::assertSame([DependencyJobs::LOCK, PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::LOCKED_INSTALL, 'composer.json', 'composer.lock'], array_slice([...$this->ran[1]->command], 4));
     }
 
     public function testTheSnapshotCarriesTheProbedPlatformAndTheHeadsLockFiles(): void
@@ -277,7 +278,7 @@ final class CheckDependenciesTest extends TestCase
                 new Filesystem()->dumpFile($spec->kept->hostPath.'/vendor/composer/installed.json', "{\"packages\": []}\n");
             }
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n", 'platform' => $this->platform]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['install-result' => "installed\n", 'platform' => $this->platform]));
         });
 
         return $runner;

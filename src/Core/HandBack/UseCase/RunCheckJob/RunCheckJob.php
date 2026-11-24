@@ -14,7 +14,9 @@ use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
+use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
@@ -122,10 +124,7 @@ final readonly class RunCheckJob implements CheckJobs
         return $absolute;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function commandOf(CheckJob $job, ?CheckSnapshot $dependencies): array
+    private function commandOf(CheckJob $job, ?CheckSnapshot $dependencies): JobCommand
     {
         $script = $this->filesystem->readFile($this->checkScript);
         $options = [];
@@ -143,7 +142,7 @@ final readonly class RunCheckJob implements CheckJobs
             ];
         }
 
-        return ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...$options, '--', ...$this->gate->checkSteps($job->configuredCommand)];
+        return new JobCommand(...['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...$options, '--', ...$this->gate->checkSteps($job->configuredCommand)]);
     }
 
     /**
@@ -164,7 +163,7 @@ final readonly class RunCheckJob implements CheckJobs
     {
         $hosts = $this->gate->registryHosts();
 
-        return [] === $hosts ? JobEgress::none() : JobEgress::to($hosts);
+        return [] === $hosts ? JobEgress::none() : JobEgress::to(new EgressHosts(...$hosts));
     }
 
     private function ranJob(JobSpec $spec): ?JobResult
