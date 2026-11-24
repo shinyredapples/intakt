@@ -145,16 +145,16 @@ The address defaults to `http://localhost:7780`. `CHROME_PATH` names a Chrome or
 
 ### Walking user journeys with the journey check
 
-`bin/journey-check <dashboard address>` walks user journeys in a headless browser against a running Intakt, each journey from a fresh page (its own cookies and storage), and prints one line per journey (a query string or fragment on the address is dropped): `passed <journey>`, or `failed <journey> at step "<step>": <what broke>`. A failed journey also gets a screenshot where one can be saved, `var/journey-check/<run>/<journey>.png` (the run is named by its start in UTC and eight random hex digits, for example `2026-11-24T09-05-07-012Z-1a2b3c4d`); when the folder cannot be created or the page cannot be captured, the line `no screenshot: <reason>` takes its place and the journey still counts as failed. The last line counts the journeys, those that passed and those that failed. The check has no journey of its own yet, so on a running dashboard it reports `Journey check: 0 journeys, 0 passed, 0 failed.`
+`bin/journey-check <dashboard address>` walks user journeys in a headless browser against a running Intakt, each journey from a fresh page (its own cookies and storage), and prints one line per journey (a query string or fragment on the address is dropped): `passed <journey>`, or `failed <journey> at step "<step>": <what broke>`. A failed journey also gets a screenshot where one can be saved, `var/journey-check/<run>/<position>-<journey>.png` (the run is named by its start in UTC and eight random hex digits, for example `2026-11-24T09-05-07-012Z-1a2b3c4d`, and the file by the journey's place in the run, two digits, and its name, for example `01-read-a-verdict.png`); when the folder cannot be created or the page cannot be captured, the line `no screenshot: <reason>` takes its place and the journey still counts as failed. The last line counts the journeys, those that passed and those that failed. The check has no journey of its own yet, so on a running dashboard it reports `Journey check: 0 journeys, 0 passed, 0 failed.`
 
-Before it opens a browser it asks the address for an answer and waits at most 10 seconds (the same limit each step has). It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run: no address, an address that is not an http or https URL (its text is not printed back), nothing answering within that time, or no browser. Any output names the address without a user name or password.
+Before it opens a browser it asks the address for an answer and waits at most 10 seconds, the startup deadline. The same 10 seconds is the default timeout of each page action (a page load, a click, waiting for a text); the check has no deadline for a whole step. It ends with exit code 0 when every journey passed, 1 when one failed, and 2 when it could not run: no address, an address that is not an http or https URL (its text is not printed back), nothing answering within that time, or no browser. Any output names the address without a user name or password.
 
 It needs Node.js 22 or later and Playwright, like the UI check:
 
 ```sh
 npm install --global playwright
 npx playwright install chromium
-NODE_PATH="$(npm root --global)" bin/journey-check http://localhost:7780
+NODE_PATH="$(npm root --global)" bin/journey-check http://localhost:7781
 ```
 
 `CHROME_PATH` names a Chrome or Chromium to use in place of Playwright's own browser.

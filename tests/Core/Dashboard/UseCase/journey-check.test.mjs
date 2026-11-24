@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('../../../../bin/journey-check', import.meta.url));
-const { STEP_TIMEOUT_MS, parseAddress, expectAnswer, runName, runJourney, press, report, exitCode } = createRequire(import.meta.url)(script);
+const { STEP_TIMEOUT_MS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, press, report, exitCode } = createRequire(import.meta.url)(script);
 
 // The runner's port, as the maintainer chose for the check's stand-in servers.
 const PORT = 7781;
@@ -123,7 +123,7 @@ test('a failed journey keeps its step and exit 1 when its folder cannot be creat
     const blocked = join(scratch(), 'a-file');
     writeFileSync(blocked, '');
 
-    const result = await runJourney(browserWithBrokenPage(), 'http://localhost', { name: 'Broken start', steps: [press('button', 'Start')] }, join(blocked, 'run'));
+    const result = await runJourney(browserWithBrokenPage(), 'http://localhost', { name: 'Broken start', steps: [press('button', 'Start')] }, join(blocked, 'run'), 1);
 
     assert.equal(result.failure.step, 'press the button "Start"');
     assert.equal(result.failure.error, 'locator.click: Timeout 10000ms exceeded.');
@@ -132,23 +132,32 @@ test('a failed journey keeps its step and exit 1 when its folder cannot be creat
 });
 
 test('a failed journey keeps its step when the page cannot take a screenshot', async () => {
-    const result = await runJourney(browserWithBrokenPage(), 'http://localhost', { name: 'Broken start', steps: [press('button', 'Start')] }, scratch());
+    const result = await runJourney(browserWithBrokenPage(), 'http://localhost', { name: 'Broken start', steps: [press('button', 'Start')] }, scratch(), 1);
 
     assert.equal(result.failure.step, 'press the button "Start"');
     assert.equal(result.failure.screenshotError, 'the page is gone');
 });
 
+test('two journeys whose names reduce to the same file name get different screenshots', () => {
+    const first = screenshotFile('/repo/var/journey-check/run', 1, 'Read a verdict');
+    const second = screenshotFile('/repo/var/journey-check/run', 2, 'Read a verdict!');
+
+    assert.equal(first, '/repo/var/journey-check/run/01-read-a-verdict.png');
+    assert.equal(second, '/repo/var/journey-check/run/02-read-a-verdict.png');
+    assert.notEqual(first, second);
+});
+
 test('the report names each journey, the step that broke and where its screenshot is', () => {
     const results = [
         { journey: 'Reading a verdict', failure: null },
-        { journey: 'First run', failure: { step: 'press the button "Start"', error: 'Timeout', screenshot: '/repo/var/journey-check/run/first-run.png' } },
+        { journey: 'First run', failure: { step: 'press the button "Start"', error: 'Timeout', screenshot: '/repo/var/journey-check/run/02-first-run.png' } },
         { journey: 'Setup', failure: { step: 'open /setup', error: 'HTTP 500 for /setup', screenshotError: 'the page is gone' } },
     ];
 
     assert.equal(report(results, '/repo'), [
         'passed Reading a verdict',
         'failed First run at step "press the button "Start"": Timeout',
-        '  screenshot: var/journey-check/run/first-run.png',
+        '  screenshot: var/journey-check/run/02-first-run.png',
         'failed Setup at step "open /setup": HTTP 500 for /setup',
         '  no screenshot: the page is gone',
         'Journey check: 3 journeys, 1 passed, 2 failed.',

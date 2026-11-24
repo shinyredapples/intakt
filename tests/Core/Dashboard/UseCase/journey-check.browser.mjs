@@ -45,7 +45,7 @@ function scratch() {
 test('a journey whose steps all pass is reported as passed and the run exits 0', async () => {
     const journey = { name: 'Start a review', steps: [open('/'), press('button', 'Start review'), see('Started')] };
 
-    const result = await runJourney(routedBrowser(), ORIGIN, journey, scratch());
+    const result = await runJourney(routedBrowser(), ORIGIN, journey, scratch(), 1);
 
     assert.equal(report([result], '/'), 'passed Start a review\nJourney check: 1 journeys, 1 passed, 0 failed.');
     assert.equal(exitCode([result]), 0);
@@ -55,10 +55,10 @@ test('a journey whose button was renamed fails at that step with a screenshot an
     const folder = scratch();
     const journey = { name: 'Start a review', steps: [open('/'), press('button', 'Start'), see('Started')] };
 
-    const result = await runJourney(routedBrowser(), ORIGIN, journey, folder);
+    const result = await runJourney(routedBrowser(), ORIGIN, journey, folder, 1);
 
     assert.equal(result.failure.step, 'press the button "Start"');
-    assert.equal(result.failure.screenshot, join(folder, 'start-a-review.png'));
+    assert.equal(result.failure.screenshot, join(folder, '01-start-a-review.png'));
     assert.ok(existsSync(result.failure.screenshot));
     assert.equal(exitCode([result]), 1);
 });
@@ -75,8 +75,8 @@ test('each journey starts from a fresh page without the storage and cookies of t
 
     const routed = routedBrowser();
 
-    const first = await runJourney(routed, ORIGIN, { name: 'first', steps: [open('/'), leaveTraces] }, scratch());
-    const second = await runJourney(routed, ORIGIN, { name: 'second', steps: [open('/'), findNoTraces] }, scratch());
+    const first = await runJourney(routed, ORIGIN, { name: 'first', steps: [open('/'), leaveTraces] }, scratch(), 1);
+    const second = await runJourney(routed, ORIGIN, { name: 'second', steps: [open('/'), findNoTraces] }, scratch(), 2);
 
     assert.equal(first.failure, null);
     assert.equal(second.failure, null);
@@ -91,7 +91,7 @@ test('seeing a text passes when a hidden copy comes first and a visible copy fol
         return context;
     } };
 
-    const result = await runJourney(routed, ORIGIN, { name: 'hidden first', steps: [open('/'), see('Started')] }, scratch());
+    const result = await runJourney(routed, ORIGIN, { name: 'hidden first', steps: [open('/'), see('Started')] }, scratch(), 1);
 
     assert.equal(result.failure, null);
 });
