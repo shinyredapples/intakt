@@ -137,7 +137,7 @@ final class ProcessRunner
     /**
      * @param list<string> $command
      */
-    public function runToItsEnd(array $command, string $directory, float $seconds =self::OVERALL_TIMEOUT_SECONDS): ProcessResult
+    public function runToItsEnd(array $command, string $directory, float $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
     {
         return $this->toItsEnd($this->startedHeld(new Process($this->held($command), $directory, getenv(), null, null), $command[0], $seconds));
     }
