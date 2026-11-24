@@ -84,12 +84,6 @@ final readonly class Redaction
 
     private function addSecretShapes(string $text, RedactedSpans $spans): bool
     {
-        foreach (self::SECRET_SHAPES as $shape) {
-            if (!new SecretShape($shape)->addFoundIn($text, $spans)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all(self::SECRET_SHAPES, fn ($shape) => new SecretShape($shape)->addFoundIn($text, $spans));
     }
 }
