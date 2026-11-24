@@ -58,7 +58,11 @@ Code in a trait counts as outside, even when an allowed class uses the trait. In
 
 Looking for a setting, a command option or an exact rule? The [complete reference](../reference/user-manual.md) keeps every detail.
 
-The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig, JavaScript and shell lines a change adds. The same words inside a string do not count, and neither does a line inside a shell here-document body (from `cat <<EOF` up to the `EOF` line), while a comment after the body still counts, and so does one after a shell function that computes, such as `f() { (( x <<= 1 )); }`. A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
+The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig, JavaScript, shell and YAML lines a change adds.
+
+Text that is not a comment does not count: a string, a line indented under a YAML `run: |`, or a shell here-document body (from `cat <<EOF` up to the `EOF` line). A comment after such a body still counts.
+
+A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
