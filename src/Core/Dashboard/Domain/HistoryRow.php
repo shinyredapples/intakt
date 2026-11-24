@@ -9,7 +9,9 @@ use DateTimeZone;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
+#[Exclude]
 final readonly class HistoryRow
 {
     private const string UNNAMED_ACTOR = 'Intakt';

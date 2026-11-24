@@ -102,6 +102,9 @@ final class HistoryRowTest extends TestCase
         self::assertSame(['Intakt', null], [$row->who, $row->project]);
     }
 
+    /**
+     * @param array<string, string>|string $payload
+     */
     private function recorded(array|string $payload): RecordedEvent
     {
         $json = is_string($payload) ? $payload : json_encode($payload, JSON_THROW_ON_ERROR);
