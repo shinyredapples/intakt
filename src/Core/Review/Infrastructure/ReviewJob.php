@@ -26,7 +26,6 @@ use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 
-// Not called by the review flow yet, because the choice between this and the in-process reviewer belongs to part 2 of #2017.
 final readonly class ReviewJob
 {
     public const string CHECKOUT = '/input/checkout';
