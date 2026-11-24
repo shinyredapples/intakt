@@ -31,7 +31,7 @@ The walk leaves out `.git` (the commits and the index are parts of their own) an
 
 #### Files read, choices and failures
 
-Apart from that listing the walk reads files itself, so git's ignore rules (`.gitignore`, `.git/info/exclude`, the global excludes) hide nothing from it, and nothing is written to the index or the object store. The issue asked for the tree hash, the lock file and the gate configuration; the commits, the ignored files, the PHP and the environment are this change's choice, so that a reused result stands only for inputs that would give the same verdict. A tree without `.git`, a failed git call, an unreadable file or folder or a refused `info/attributes` gives no fingerprint, and the gates run.
+Apart from that listing the walk reads files itself, so git's ignore rules (`.gitignore`, `.git/info/exclude`, the global excludes) hide nothing from it, and nothing is written to the index or the object store. The issue asked for the tree hash, the lock file and the gate configuration; the commits, the ignored files, the PHP and the environment are this change's choice, so that a reused result stands only for inputs that would give the same verdict. A tree without `.git`, a failed git call, an unreadable file or folder, a refused `info/attributes` or a walk past `TreeFingerprint::MOST_ENTRIES` entries (counted as the walk yields them, so it stops there) gives no fingerprint, and the gates run.
 
 #### Reusing and recording a pass
 

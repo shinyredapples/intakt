@@ -151,6 +151,31 @@ final class CheckReuseTest extends SandboxTestCase
         self::assertFileExists($sandbox->root.'/'.PassedTree::RECORD);
     }
 
+    // Because many links to one folder each count what is behind them, a few hundred files make a tree past the limit of the fingerprint.
+    public function testATreeTooLargeForAFingerprintRunsEverySelectedGateAgain(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "clean\n");
+        $sandbox->write('.gitignore', "/var/\n/vendor/\n");
+        mkdir($sandbox->root.'/var');
+        $sandbox->commitAll('feat: start');
+        mkdir($sandbox->root.'/vendor/links', recursive: true);
+        for ($number = 0; $number < 330; ++$number) {
+            $sandbox->write('vendor/files/'.$number, '');
+            $sandbox->symlink('vendor/links/'.$number, '../files');
+        }
+        $this->waitForTheNextSecond();
+        $first = $this->check($sandbox);
+
+        $second = $this->check($sandbox, '--reuse');
+
+        self::assertSame([0, 0], [$first->exitCode(), $second->exitCode()], $first->output().$second->output());
+        self::assertTrue($second->passed('dashes'), $second->output());
+        self::assertStringNotContainsString('"reused"', $second->output());
+        self::assertFileDoesNotExist($sandbox->root.'/'.PassedTree::RECORD);
+    }
+
     public function testAFailedCheckIsNeverReused(): void
     {
         $sandbox = $this->committedSandbox("a long dash \u{2014} here\n");

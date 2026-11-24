@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use DirectoryIterator;
 use Generator;
 use UnexpectedValueException;
 
@@ -245,16 +246,12 @@ final readonly class TreeWalk
      */
     private function entriesIn(string $folder, string $key, array $entered): iterable
     {
-        $names = @scandir($folder);
-
-        if (false === $names) {
-            throw new UnexpectedValueException('cannot read '.$folder);
-        }
-
-        foreach (array_diff($names, ['.', '..']) as $name) {
+        // Because a folder of any size would otherwise be listed whole into memory, the names are read one at a time, so a walk that is stopped reads no more of them; the iterator refuses an unreadable folder.
+        foreach (new DirectoryIterator($folder) as $item) {
+            $name = $item->getFilename();
             $child = '' === $key ? $name : $key.'/'.$name;
 
-            if (!in_array($child, $this->skipped, true)) {
+            if (!$item->isDot() && !in_array($child, $this->skipped, true)) {
                 yield from $this->entries($folder.'/'.$name, $child, $entered);
             }
         }

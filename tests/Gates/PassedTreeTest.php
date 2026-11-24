@@ -709,6 +709,22 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
     }
 
+    public function testATreeWithMoreEntriesThanTheFingerprintHoldsGivesNoFingerprintAndRecordsNoPass(): void
+    {
+        [$root] = $this->checkedTreeAndHome();
+        // Because the folder itself, README.md and .gitignore count, and .git and var do not.
+        $within = $this->fingerprintOfAtMost(3, $root);
+        $beyond = $this->fingerprintOfAtMost(2, $root);
+
+        $tree = PassedTree::before($beyond, $this->settledClock());
+
+        self::assertNotNull($within->taken());
+        self::assertNull($beyond->taken());
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($tree->hasPassed());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+    }
+
     public function testARecordOfAnotherFingerprintIsNotReused(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
@@ -811,6 +827,12 @@ final class PassedTreeTest extends SandboxTestCase
     private function fingerprint(Sandbox $root, Sandbox $home, string ...$arguments): TreeFingerprint
     {
         return new TreeFingerprint($root->root, $home->root, Options::fromArguments(array_values($arguments)), self::ENVIRONMENT);
+    }
+
+    // Because the home is the checked tree here, only the entries of that one tree count.
+    private function fingerprintOfAtMost(int $entries, Sandbox $root): TreeFingerprint
+    {
+        return new TreeFingerprint($root->root, $root->root, Options::fromArguments([]), self::ENVIRONMENT, mostEntries: $entries);
     }
 
     // Because a change made while the gates ran shows only against files that were settled before, the run starts on the real clock, in the second after the last write.

@@ -20,6 +20,9 @@ final readonly class TreeFingerprint
     // Because the gates run their tools from the home of bin/check, which may be another tree than the one checked.
     private const array HOME_INPUTS = ['bin/check', 'config/gates', 'composer.lock', 'vendor'];
 
+    // Because every entry is held in memory until the walk ends and PHP cannot catch running out of it, a walk past this many entries gives no fingerprint: about four times Intakt's own tree with vendor/ installed, and still within PHP's default limit of 128 MB.
+    private const int MOST_ENTRIES = 100_000;
+
     /**
      * @param array<string, string> $environment
      */
@@ -29,6 +32,7 @@ final readonly class TreeFingerprint
         private Options $options,
         private array $environment,
         private ProcessRunner $runner = new ProcessRunner(),
+        private int $mostEntries = self::MOST_ENTRIES,
     ) {
     }
 
@@ -120,24 +124,7 @@ final readonly class TreeFingerprint
     // Because the gates read files that git ignores (vendor/, .env.*.local, phpunit.xml) and ignore rules differ between the gates and git, every file counts, ignored or not.
     private function checkedTree(?int $settledBefore): string
     {
-        $root = $this->real($this->root);
-        $found = [new TreeWalk([self::GIT_FOLDER, ...self::WRITTEN_BY_THE_CHECK], $settledBefore)->entries($root, '', [$root])];
-
-        $walk = new TreeWalk([], $settledBefore);
-
-        foreach ($this->gateInputsAmongWhatTheCheckWrites($root) as $path) {
-            $found[] = $walk->entries($root.'/'.$path, $path, [$root]);
-
-            if (is_link($root.'/'.$path)) {
-                $found[] = $walk->foldersOnTheRoute($root.'/'.$path, $path, $root);
-            }
-
-            foreach ($this->foldersAbove($path) as $folder) {
-                $found[] = $walk->folderAlone($root.'/'.$folder, $folder, $root);
-            }
-        }
-
-        return $this->sealed($found);
+        return $this->sealed($this->foundInTheCheckedTree($this->real($this->root), $settledBefore));
     }
 
     /**
@@ -152,6 +139,32 @@ final readonly class TreeFingerprint
         }
 
         return $real;
+    }
+
+    /**
+     * @return iterable<iterable<string, string>>
+     *
+     * @throws ScopeFailure
+     * @throws UnexpectedValueException
+     */
+    // Because the walk stops once it counted too many entries, each part is started only when the one before it is counted.
+    private function foundInTheCheckedTree(string $root, ?int $settledBefore): iterable
+    {
+        yield new TreeWalk([self::GIT_FOLDER, ...self::WRITTEN_BY_THE_CHECK], $settledBefore)->entries($root, '', [$root]);
+
+        $walk = new TreeWalk([], $settledBefore);
+
+        foreach ($this->gateInputsAmongWhatTheCheckWrites($root) as $path) {
+            yield $walk->entries($root.'/'.$path, $path, [$root]);
+
+            if (is_link($root.'/'.$path)) {
+                yield $walk->foldersOnTheRoute($root.'/'.$path, $path, $root);
+            }
+
+            foreach ($this->foldersAbove($path) as $folder) {
+                yield $walk->folderAlone($root.'/'.$folder, $folder, $root);
+            }
+        }
     }
 
     /**
@@ -195,6 +208,8 @@ final readonly class TreeFingerprint
 
     /**
      * @param iterable<iterable<string, string>> $found
+     *
+     * @throws UnexpectedValueException
      */
     private function sealed(iterable $found): string
     {
@@ -203,6 +218,10 @@ final readonly class TreeFingerprint
         foreach ($found as $group) {
             foreach ($group as $key => $entry) {
                 $entries[$key] = $entry;
+
+                if (count($entries) > $this->mostEntries) {
+                    throw new UnexpectedValueException('more entries than the fingerprint holds');
+                }
             }
         }
 
