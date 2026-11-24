@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Contract;
 
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\GitHubForge\Domain\RefusedCredentials;
 use RuntimeException;
 
 // Messages carry the status or the exception class only, because they are logged and shown and must not leak the key or a token.
@@ -19,7 +20,7 @@ final class InstallationTokenNotMinted extends RuntimeException
     {
         return new self(
             sprintf('GitHub refused the installation token exchange with status %d.', $status),
-            previous: 401 === $status ? new ForgeCredentialsRefused() : null,
+            previous: RefusedCredentials::STATUS === $status ? new ForgeCredentialsRefused() : null,
         );
     }
 

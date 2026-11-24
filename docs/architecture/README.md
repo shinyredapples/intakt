@@ -55,7 +55,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Review job](review-job.md): how one reviewer's CLI runs in a job container.
 - [Reviewer agent](reviewer-agent.md): the reviewer that runs through Symfony AI.
 - [Reviewer repository tools](reviewer-repository-tools.md): the three read-only tools a reviewer reads the change with.
-- [Prompt assembly](prompt-assembly.md): the one class that builds every message sent to a model.
+- [Prompt assembly](prompt-assembly.md): the one class that builds every message sent to a model, and the only places that may build its carriers (`ReviewerRole`, `RoundReviewer`, `ReviewerConversation`).
 - [Boot step](boot-step.md): booting a commit once to see whether it starts.
 - [Project memory](project-memory.md): what Intakt learned about a project, handed to reviewers.
 - [Ledger](ledger.md): the append-only event log that everything else reads.
@@ -107,6 +107,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [CI](ci.md): what runs on GitHub Actions and when. Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
 - [Journeys](journeys.md): end-to-end tests of what a user does in a fresh install.
 - [Journey check](journey-check.md): `bin/journey-check`, user journeys walked in a real browser against a running Intakt.
+- [The install check](install-check.md): `bin/install-check` installs the project the way the README says, on a clean clone, and reports a failing step.
 - [The journey page](journey-page.md): how `docs/journey.md` and its charts are regenerated.
 - [Releases](releases.md): the labels each pull request gets from its title type, for the release notes.
 - [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors.

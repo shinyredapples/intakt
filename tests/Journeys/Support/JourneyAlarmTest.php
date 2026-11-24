@@ -18,6 +18,9 @@ use Uri\Rfc3986\Uri;
 #[UsesClass(JourneyAlarmTask::class)]
 #[UsesClass(JourneyRun::class)]
 #[UsesClass(JourneyFailure::class)]
+#[UsesClass(InstallCheckAlarm::class)]
+#[UsesClass(InstallReport::class)]
+#[UsesClass(InstallStepResult::class)]
 final class JourneyAlarmTest extends TestCase
 {
     private const string COMMAND = __DIR__.'/../../../bin/journey-alarm';
@@ -27,7 +30,15 @@ final class JourneyAlarmTest extends TestCase
         #!/usr/bin/env php
         <?php
         $arguments = array_slice($argv, 1);
-        $action = 'api' === $arguments[0] ? 'api' : $arguments[1];
+        $action = 'api' === $arguments[0] ? ('user' === $arguments[1] ? 'user' : 'api') : $arguments[1];
+        if ('user' === $action) {
+            if (is_file(__DIR__.'/user-refused')) {
+                fwrite(STDERR, "gh: Resource not accessible by integration (HTTP 403)\n");
+                exit(1);
+            }
+            echo 'alarm[bot]';
+            exit(0);
+        }
         $input = in_array('--body-file', $arguments, true) ? stream_get_contents(STDIN) : '';
         file_put_contents(__DIR__.'/calls.jsonl', json_encode(['arguments' => $arguments, 'input' => $input])."\n", FILE_APPEND | LOCK_EX);
         // A listing waits up to 2 seconds for a second one, so two runs without serialization both list before either creates.
@@ -85,6 +96,39 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame(['issue', 'create', '--title', 'fix(journeys): journey "broken" fails on main', '--label', 'priority:urgent', '--label', 'ready', '--body-file', '-', '--repo', self::REPOSITORY], $create[0]['arguments']);
         self::assertStringContainsString('journey "broken" failed at step "read the second page": Failed asserting that two strings are identical.', $create[0]['input']);
         self::assertStringContainsString("```\n".trim((string) file_get_contents($this->fixture()))."\n```", $create[0]['input']);
+    }
+
+    public function testAnInstallCheckReportFilesOneTaskForItsFailingStepAndAnUnreadableReportStopsWithTwo(): void
+    {
+        $report = $this->directory.'/report.json';
+        file_put_contents($report, new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')])->toJson());
+
+        $alarm = $this->alarm(['--install-check='.$report]);
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertStringContainsString('failed at the step `journey-check`', $this->callsOf('create')[0]['input']);
+        self::assertSame(2, $this->alarm(['--install-check='.$this->directory.'/missing.json'])->getExitCode());
+    }
+
+    public function testAnInstallCheckAlarmWhoseAccountGitHubRefusesActsAsTheAccountTheSettingNames(): void
+    {
+        new Filesystem()->touch($this->directory.'/user-refused');
+        $this->openIssues((string) json_encode([['number' => 5, 'user' => ['login' => 'custom-app[bot]'], 'body' => '<!-- intakt:install-check:'.hash('sha256', 'journey-check').' -->']]));
+
+        $alarm = $this->alarm(['--install-check='.$this->failedInstallReport()], environment: ['INSTALL_CHECK_ALARM_ACCOUNT' => 'custom-app[bot]']);
+
+        self::assertSame("updated #5\n", $alarm->getOutput(), $alarm->getErrorOutput());
+    }
+
+    public function testAnInstallCheckAlarmWhoseAccountGitHubRefusesWithoutTheSettingWritesNothingAndStopsWithTwo(): void
+    {
+        new Filesystem()->touch($this->directory.'/user-refused');
+
+        $alarm = $this->alarm(['--install-check='.$this->failedInstallReport()], environment: ['INSTALL_CHECK_ALARM_ACCOUNT' => false]);
+
+        self::assertSame(2, $alarm->getExitCode());
+        self::assertStringContainsString('INSTALL_CHECK_ALARM_ACCOUNT must name the login', $alarm->getErrorOutput());
+        self::assertSame([], $this->calls());
     }
 
     public function testASecondRedRunEditsTheOpenTaskAndCreatesNone(): void
@@ -379,6 +423,14 @@ final class JourneyAlarmTest extends TestCase
     private function openIssues(string $json): void
     {
         new Filesystem()->dumpFile($this->directory.'/issues.json', $json);
+    }
+
+    private function failedInstallReport(): string
+    {
+        $report = $this->directory.'/report.json';
+        file_put_contents($report, new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')])->toJson());
+
+        return $report;
     }
 
     /**

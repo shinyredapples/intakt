@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Contract;
+
+final readonly class SampleServices
+{
+    public const string ACCOUNTS = '%intakt.ai.accounts%';
+
+    public const string PLATFORM = '@intakt.ai.platform';
+}

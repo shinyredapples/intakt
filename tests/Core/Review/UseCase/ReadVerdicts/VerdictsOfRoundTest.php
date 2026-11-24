@@ -63,7 +63,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     {
         $round = $this->reviewedRound();
 
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
 
         self::assertSame(Standing::Current, $verdicts->standing->standing);
         self::assertSame([Decision::Approve, Decision::Approve], array_map(static fn (PanelVerdict $verdict): Decision => $verdict->verdict->verdict, $verdicts->counting));
@@ -73,7 +73,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     {
         $round = $this->reviewedRound();
 
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::NEW_HEAD, 2), new HeadMove(HeadMoveKind::Commits, ['src/Feature.php'])));
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::NEW_HEAD, 2), new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'))));
 
         self::assertSame(Standing::Stale, $verdicts->standing->standing);
         self::assertSame([IdentityField::Head], $verdicts->standing->changed);
@@ -84,7 +84,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     {
         $round = $this->reviewedRound();
 
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::NEW_HEAD, 2), new HeadMove(HeadMoveKind::Commits, ['docs/feature.md'])));
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::NEW_HEAD, 2), new HeadMove(HeadMoveKind::Commits, new Paths('docs/feature.md'))));
 
         self::assertSame(Standing::KeptForUntouchedParts, $verdicts->standing->standing);
         self::assertSame(['docs/feature.md'], [...$verdicts->standing->reviewAgain]);
@@ -95,7 +95,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     {
         $round = $this->reviewedRound();
 
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 3), new HeadMove(HeadMoveKind::Unmoved, [])));
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 3), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
 
         self::assertSame(Standing::Stale, $verdicts->standing->standing);
         self::assertSame([IdentityField::PanelPolicy], $verdicts->standing->changed);
@@ -106,7 +106,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $round = $this->reviewedRound();
         $this->fixture->entities->getConnection()->executeStatement("UPDATE review_round SET verdict_identity = ''");
 
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
 
         self::assertSame(Standing::Stale, $verdicts->standing->standing);
         self::assertSame(IdentityField::cases(), $verdicts->standing->changed);
@@ -118,7 +118,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $this->flag('alpha');
         $round = $this->reviewedRound();
 
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
 
         self::assertSame(Standing::Current, $verdicts->standing->standing);
         self::assertSame([], $verdicts->counting);
@@ -129,7 +129,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $this->flag('beta');
         $round = $this->reviewedRound();
 
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
 
         self::assertCount(2, $verdicts->counting);
     }
@@ -138,7 +138,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     {
         $this->expectException(RoundNotFound::class);
 
-        $this->fixture->verdictsOf(new VerdictsOfRound('not-a-round', $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+        $this->fixture->verdictsOf(new VerdictsOfRound('not-a-round', $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
     }
 
     public function testARoundIsStoredWithAnIdentityOfItsOwnTaskAndPanel(): void
@@ -146,7 +146,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $round = $this->fixture->startWithIdentityOf(RoundFixture::TASK, 2, 2);
 
         self::assertCount(1, $this->fixture->storedRounds());
-        self::assertSame(Standing::Current, $this->fixture->round($round)->standingAt($this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, []))->standing);
+        self::assertSame(Standing::Current, $this->fixture->round($round)->standingAt($this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths()))->standing);
     }
 
     public function testARoundWhoseIdentityNamesAnotherTaskIsRefused(): void
