@@ -6,11 +6,11 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 
-// The last applied wins, because the design gives a family one value (docs/design/05-architecture/04-labels.md), except `review:`, which takes several.
+// The last applied wins, because the design gives each of its one-value families one value (docs/design/05-architecture/04-labels.md); any other prefix (`review:`, `status:`, a project's own `area:`) is no such family, so none of its labels is ever removed.
 final readonly class LabelFamilies
 {
     private const string SEPARATOR = ':';
-    private const array MANY_VALUES = ['review'];
+    private const array ONE_VALUE = ['priority', 'class', 'model', 'plan'];
 
     /**
      * @param list<LabelApplication> $applied
@@ -58,6 +58,6 @@ final readonly class LabelFamilies
 
         $family = substr($label, 0, $at);
 
-        return in_array($family, self::MANY_VALUES, true) ? null : $family;
+        return in_array($family, self::ONE_VALUE, true) ? $family : null;
     }
 }

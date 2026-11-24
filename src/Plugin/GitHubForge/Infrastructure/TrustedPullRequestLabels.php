@@ -6,6 +6,7 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use DateTimeImmutable;
 use Intakt\Core\Review\Contract\Labels;
+use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -25,15 +26,21 @@ final readonly class TrustedPullRequestLabels
     ) {
     }
 
+    // A pull request of another repository is refused, because the history and the trust are read for the configured one, so a removal sent to the pull request's own address would act on a repository nothing was checked for.
     /**
+     * @throws ChangeNotFound
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
      * @throws TrustNotChecked
      */
-    public function of(string $project, int $number, DateTimeImmutable $listedAt): TrustedLabels
+    public function of(string $project, PullRequestAddress $pull, DateTimeImmutable $listedAt): TrustedLabels
     {
-        $history = $this->histories->of($project, $number, $listedAt);
         $address = $this->repositories->addressOf($project);
+        if ($pull->owner !== $address->owner() || $pull->repository !== $address->name()) {
+            throw new ChangeNotFound(sprintf('Pull request %s/%s#%d is not in the repository of project %s.', $pull->owner, $pull->repository, $pull->number, $project));
+        }
+
+        $history = $this->histories->of($project, $pull->number, $listedAt);
         $repository = $address->owner().'/'.$address->name();
 
         $steering = [];

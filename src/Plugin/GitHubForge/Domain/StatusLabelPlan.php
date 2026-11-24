@@ -30,11 +30,13 @@ final readonly class StatusLabelPlan
     public static function of(RoundStatusLabel $wanted, array $events, Closure $isOwn): self
     {
         $last = self::lastEventOfEachStatus($events);
-        $remove = array_keys(array_filter($last, static fn (LabelEvent $event): bool => $event->applied && $event->label !== $wanted->value));
         $changedByPerson = array_filter($last, static fn (LabelEvent $event): bool => !$isOwn($event->actor) && $event->applied !== ($event->label === $wanted->value));
         $present = isset($last[$wanted->value]) && $last[$wanted->value]->applied;
+        // A wanted status a person applied is taken off and applied again, because a restore aims at the status Intakt applied last and would otherwise put back an older one.
+        $ownPresent = $present && $isOwn($last[$wanted->value]->actor);
+        $remove = array_keys(array_filter($last, static fn (LabelEvent $event): bool => $event->applied && ($event->label !== $wanted->value || !$ownPresent)));
 
-        return new self($wanted, $remove, !$present, [] !== $changedByPerson);
+        return new self($wanted, $remove, !$ownPresent, [] !== $changedByPerson);
     }
 
     // Toward the status Intakt applied last, because that is the round as Intakt last mirrored it; null when Intakt never set one, so there is nothing to put back.

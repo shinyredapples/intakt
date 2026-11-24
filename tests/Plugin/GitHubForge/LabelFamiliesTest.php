@@ -37,6 +37,21 @@ final class LabelFamiliesTest extends TestCase
         self::assertSame([], new LabelFamilies()->losers($applied));
     }
 
+    public function testTwoValuesBehindAPrefixTheDesignDoesNotNameAsAFamilyAreBothKept(): void
+    {
+        $applied = $this->applied('area:docs', 'area:api');
+
+        self::assertSame(['area:docs', 'area:api'], $this->names(new LabelFamilies()->winners($applied)));
+        self::assertSame([], new LabelFamilies()->losers($applied));
+    }
+
+    public function testTwoValuesOfTheClassAndPlanFamiliesResolveToTheOneAppliedLast(): void
+    {
+        $applied = $this->applied('class:core', 'plan:skip', 'class:feature', 'plan:required');
+
+        self::assertSame(['class:core', 'plan:skip'], new LabelFamilies()->losers($applied));
+    }
+
     public function testALabelWithoutAFamilyIsNeverRemoved(): void
     {
         $applied = $this->applied('hands-off', 'take-over', 'keep');

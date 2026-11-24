@@ -6,6 +6,7 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Plugin\Forge\Contract\ChangeLabels;
+use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -34,9 +35,9 @@ final readonly class GitHubChangeLabels implements ChangeLabels
     private function trustedOf(string $project, PullRequestAddress $address, OpenChange $open): TrustedLabels
     {
         try {
-            return $this->trusted->of($project, $address->number, $open->updatedAt);
+            return $this->trusted->of($project, $address, $open->updatedAt);
             // Boundary: a failed read counts no label, because a read that failed is never a decision; the round runs on the configured panel.
-        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+        } catch (ChangeNotFound|ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
             $this->logger->warning('The labels of {change} of {project} could not be read, so none steers: {reason}', ['change' => $open->id->value, 'project' => $project, 'reason' => $failure->getMessage()]);
 
             return new TrustedLabels(new Labels(), []);

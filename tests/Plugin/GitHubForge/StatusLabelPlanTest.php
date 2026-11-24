@@ -76,6 +76,32 @@ final class StatusLabelPlanTest extends TestCase
         self::assertTrue($plan->commentOnRestore);
     }
 
+    public function testTheWantedStatusAPersonAppliedFirstIsAppliedAgainByIntaktWithoutAComment(): void
+    {
+        $events = [new LabelEvent('status:in-review', 'intakt[bot]', true), new LabelEvent('status:waiting-on-you', 'alice', true)];
+
+        $plan = StatusLabelPlan::of(RoundStatusLabel::WaitingOnYou, $events, $this->own(...));
+
+        self::assertSame(['status:in-review', 'status:waiting-on-you'], $plan->remove);
+        self::assertTrue($plan->add);
+        self::assertFalse($plan->commentOnRestore);
+    }
+
+    public function testARestoreAfterAVerdictWhoseStatusAPersonSetFirstAimsAtTheVerdictsStatus(): void
+    {
+        $events = [new LabelEvent('status:in-review', 'intakt[bot]', true), new LabelEvent('status:waiting-on-you', 'alice', true)];
+        $plan = StatusLabelPlan::of(RoundStatusLabel::WaitingOnYou, $events, $this->own(...));
+        foreach ($plan->remove as $label) {
+            $events[] = new LabelEvent($label, 'intakt[bot]', false);
+        }
+        if ($plan->add) {
+            $events[] = new LabelEvent($plan->wanted->value, 'intakt[bot]', true);
+        }
+        $events[] = new LabelEvent('status:waiting-on-you', 'alice', false);
+
+        self::assertSame(RoundStatusLabel::WaitingOnYou, StatusLabelPlan::restoring($events, $this->own(...))?->wanted);
+    }
+
     public function testARestoreOnAChangeIntaktNeverGaveAStatusPlansNothing(): void
     {
         self::assertNull(StatusLabelPlan::restoring([new LabelEvent('status:in-review', 'alice', true)], $this->own(...)));

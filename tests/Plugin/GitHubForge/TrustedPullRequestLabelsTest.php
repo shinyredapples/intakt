@@ -17,6 +17,8 @@ use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Domain\LabelFamilies;
 use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
 use Intakt\Plugin\GitHubForge\Domain\TrustedLabels;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringTrustCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\TrustedPullRequestLabels;
@@ -32,6 +34,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(IssueLabels::class)]
 #[UsesClass(WatchedRepositories::class)]
 #[UsesClass(RepositoryAddress::class)]
+#[UsesClass(PullRequestAddress::class)]
+#[UsesClass(ChangeId::class)]
 #[UsesClass(SteeringTrust::class)]
 #[UsesClass(TrustedLabels::class)]
 #[UsesClass(SteeringTrustCheck::class)]
@@ -122,6 +126,6 @@ final class TrustedPullRequestLabelsTest extends TestCase
         $histories->method('of')->willReturn(new IssueHistory('alice', $applied, '', new IssueLabels(...$names)));
         $trust = new RecordedTrust();
 
-        return new TrustedPullRequestLabels($histories, TrustChecks::over($trust), new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]))->of('alpha', 1, new DateTimeImmutable('2026-11-25 10:00:00'));
+        return new TrustedPullRequestLabels($histories, TrustChecks::over($trust), new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]))->of('alpha', PullRequestAddress::of(new ChangeId('https://github.com/acme/widget/pull/1')), new DateTimeImmutable('2026-11-25 10:00:00'));
     }
 }

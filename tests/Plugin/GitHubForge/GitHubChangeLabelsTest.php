@@ -91,6 +91,28 @@ final class GitHubChangeLabelsTest extends TestCase
         self::assertSame([], $this->comments);
     }
 
+    public function testAPullRequestOfAnotherRepositorySteersNothingAndRemovesNothing(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning');
+        $foreign = new OpenChange(new ChangeId('https://github.com/acme/another/pull/7'), new CommitId(str_repeat('a', 40)), new DateTimeImmutable('2026-11-25 10:00:00'));
+
+        $labels = $this->labelsOver($this->history('model:light', 'model:strong'), $logger)->steeringOf('alpha', $foreign);
+
+        self::assertSame([], [...$labels]);
+        self::assertSame([], $this->writes);
+        self::assertSame([], $this->comments);
+    }
+
+    public function testTwoValuesOfAFamilyTheDesignDoesNotNameAreBothKept(): void
+    {
+        $labels = $this->labelsOver($this->history('area:docs', 'area:api'), new NullLogger())->steeringOf('alpha', $this->open());
+
+        self::assertSame(['area:docs', 'area:api'], [...$labels]);
+        self::assertSame([], $this->writes);
+        self::assertSame([], $this->comments);
+    }
+
     private function history(string ...$labels): IssueHistories
     {
         $histories = self::createStub(IssueHistories::class);
