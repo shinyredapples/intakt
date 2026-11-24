@@ -614,6 +614,14 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAnIntersectionBoundWithAPropertyNoCarrierHasPasses(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Fixture.php', "<?php\nnamespace Intakt\\Sample;\n\nuse Intakt\\Core\\Review\\Domain\\HasPlace;\n\nfinal class Fixture implements HasPlace\n{\n    public string \$label = 'fixture';\n\n    public function place(): string { return ''; }\n    public function moveTo(string \$place): void {}\n}\n\nfinal class Factory\n{\n    /** @param class-string<HasPlace&object{label: string}> \$class */\n    private function build(string \$class): HasPlace\n    {\n        return new \$class();\n    }\n\n    public function fixture(): HasPlace\n    {\n        return \$this->build(Fixture::class);\n    }\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAnIntersectionBoundACarrierSatisfiesIsRefused(): void
     {
         $sandbox = $this->emptySandbox();

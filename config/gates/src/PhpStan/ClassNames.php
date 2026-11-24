@@ -75,7 +75,7 @@ final readonly class ClassNames
         return array_values(array_filter($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, $candidate))));
     }
 
-    // because a `class-string<HasPlace>` may name any class that implements HasPlace, but a `class-string<HasPlace&Countable>` only one that implements both, a candidate counts as named when it is, or extends or implements, every class of one member of the expression's union
+    // because a `class-string<HasPlace>` may name any class that implements HasPlace, but a `class-string<HasPlace&Countable>` only one that satisfies every part, a candidate counts as named unless every member of the expression's union rules it out
     /**
      * @param list<string> $candidates
      *
@@ -83,13 +83,13 @@ final readonly class ClassNames
      */
     public function standingFor(Name|Expr|Class_ $class, array $candidates, Scope $scope): array
     {
-        $members = match (true) {
-            $class instanceof Name => [[$scope->resolveName($class)]],
-            $class instanceof Expr => $this->unionMembersOf($scope->getType($class)),
-            default => [],
-        };
+        if (!$class instanceof Expr) {
+            return array_values(array_filter($candidates, fn (string $candidate): bool => array_any($this->namesOf($class, $scope), fn (string $name): bool => $this->isOrExtends($candidate, $name))));
+        }
 
-        return array_values(array_filter($candidates, static fn (string $candidate): bool => array_any($members, static fn (array $classes): bool => [] !== $classes && array_all($classes, static fn (string $name): bool => 0 === strcasecmp($name, $candidate) || new ObjectType($name)->isSuperTypeOf(new ObjectType($candidate))->yes()))));
+        $members = TypeUtils::flattenTypes($scope->getType($class));
+
+        return array_values(array_filter($candidates, fn (string $candidate): bool => array_any($members, fn (Type $member): bool => $this->mayName($member, $candidate))));
     }
 
     // because PHP accepts at most one leading backslash in a class string
@@ -98,24 +98,20 @@ final readonly class ClassNames
         return str_starts_with($name, '\\') ? substr($name, 1) : $name;
     }
 
-    // because an intersection such as `HasPlace&Countable` is one member whose classes a candidate must all satisfy, while each member of a union is judged on its own
-    /**
-     * @return list<list<string>>
-     */
-    private function unionMembersOf(Type $type): array
+    private function isOrExtends(string $candidate, string $name): bool
     {
-        $members = [];
+        return 0 === strcasecmp($name, $candidate) || new ObjectType($name)->isSuperTypeOf(new ObjectType($candidate))->yes();
+    }
 
-        foreach (TypeUtils::flattenTypes($type) as $member) {
-            foreach (TypeUtils::flattenTypes($member->getObjectTypeOrClassStringObjectType()) as $object) {
-                $members[] = $object->getObjectClassNames();
-            }
+    // because an intersection such as `HasPlace&object{label: string}` is one type whose every part a candidate must satisfy, the whole type is asked and "maybe" counts, so an undecided bound is refused; a name string is compared as a class name, since the type of an unknown class answers "maybe" for every candidate
+    private function mayName(Type $member, string $candidate): bool
+    {
+        $strings = $member->getConstantStrings();
 
-            foreach ($member->getConstantStrings() as $name) {
-                $members[] = [$this->withoutLeadingBackslash($name->getValue())];
-            }
+        if ([] !== $strings) {
+            return array_any($strings, fn (ConstantStringType $string): bool => $this->isOrExtends($candidate, $this->withoutLeadingBackslash($string->getValue())));
         }
 
-        return $members;
+        return array_any(TypeUtils::flattenTypes($member->getObjectTypeOrClassStringObjectType()), static fn (Type $object): bool => [] !== $object->getObjectClassNames() && !$object->isSuperTypeOf(new ObjectType($candidate))->no());
     }
 }
