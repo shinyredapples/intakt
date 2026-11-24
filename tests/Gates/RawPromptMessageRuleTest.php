@@ -622,6 +622,22 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAShapeBoundThatCanNameAConversationIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Factory.php', "<?php\nnamespace Intakt\\Sample;\n\nuse Intakt\\Core\\Review\\Contract\\ReviewerConversation as Conversation;\nuse Symfony\\Component\\Uid\\Uuid;\n\nfinal class Factory\n{\n    /** @param class-string<object{rolePrompt: string}> \$class */\n    private function make(string \$class): object\n    {\n        return new \$class('fixture prompt', Uuid::v7());\n    }\n\n    public function conversation(): object\n    {\n        return \$this->make(Conversation::class);\n    }\n}\n");
+
+        self::assertStringContainsString('src/Sample/Factory.php:12 intakt.reviewerConversation', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAShapeBoundNoCarrierHasPasses(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Factory.php', "<?php\nnamespace Intakt\\Sample;\n\nfinal class Labeled\n{\n    public string \$label = 'fixture';\n}\n\nfinal class Factory\n{\n    /** @param class-string<object{label: string}> \$class */\n    private function make(string \$class): object\n    {\n        return new \$class();\n    }\n\n    public function labeled(): object\n    {\n        return \$this->make(Labeled::class);\n    }\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAnIntersectionBoundACarrierSatisfiesIsRefused(): void
     {
         $sandbox = $this->emptySandbox();

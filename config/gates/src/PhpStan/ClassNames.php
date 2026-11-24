@@ -10,6 +10,7 @@ use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ObjectType;
+use PHPStan\Type\ObjectWithoutClassType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeUtils;
 
@@ -112,6 +113,12 @@ final readonly class ClassNames
             return array_any($strings, fn (ConstantStringType $string): bool => $this->isOrExtends($candidate, $this->withoutLeadingBackslash($string->getValue())));
         }
 
-        return array_any(TypeUtils::flattenTypes($member->getObjectTypeOrClassStringObjectType()), static fn (Type $object): bool => [] !== $object->getObjectClassNames() && !$object->isSuperTypeOf(new ObjectType($candidate))->no());
+        return array_any(TypeUtils::flattenTypes($member->getObjectTypeOrClassStringObjectType()), fn (Type $object): bool => !$this->isAnyObject($object) && !$object->isSuperTypeOf(new ObjectType($candidate))->no());
+    }
+
+    // because a plain `class-string`, `object` or `string` leaves the class to run time, which outside a trait is not judged, while a shape such as `object{rolePrompt: string}` without a class name still bounds the class and is judged
+    private function isAnyObject(Type $object): bool
+    {
+        return $object->isSuperTypeOf(new ObjectWithoutClassType())->yes();
     }
 }
