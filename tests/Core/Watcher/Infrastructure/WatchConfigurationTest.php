@@ -127,6 +127,13 @@ final class WatchConfigurationTest extends TestCase
         self::assertSame('intakt', $labels->of('123'));
     }
 
+    public function testAProjectWithoutAWatchSectionGetsNoEligibilityLabel(): void
+    {
+        $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('alpha'));
+
+        WatchConfiguration::eligibilityLabelsOf(['beta' => ['eligibility_label' => 'intakt']])->of('alpha');
+    }
+
     /**
      * @return array<string, array{eligibility_label: string}>
      */
@@ -136,13 +143,6 @@ final class WatchConfigurationTest extends TestCase
         $projects = json_decode($json, true);
 
         return $projects;
-    }
-
-    public function testAProjectWithoutAWatchSectionGetsNoEligibilityLabel(): void
-    {
-        $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('alpha'));
-
-        WatchConfiguration::eligibilityLabelsOf(['beta' => ['eligibility_label' => 'intakt']])->of('alpha');
     }
 
     /**
