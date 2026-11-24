@@ -9,10 +9,11 @@ use Intakt\Core\Build\Contract\BuildRuntime;
 
 final readonly class TeamRole
 {
+    // Not runnable apart from the providers, because the role is routed there but its runtime cannot use them.
     /**
      * @param non-empty-string $name
      * @param list<Provider>   $providers
-     * @param list<Provider>   $notRunnable the providers the role is routed to that its runtime cannot use
+     * @param list<Provider>   $notRunnable
      */
     public function __construct(
         public TeamRoleKind $kind,
