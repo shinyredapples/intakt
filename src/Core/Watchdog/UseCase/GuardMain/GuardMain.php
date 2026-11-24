@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watchdog\UseCase\GuardMain;
 
+use Intakt\Core\Watchdog\Contract\CommitName;
 use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Domain\CheckedMain;
@@ -46,7 +47,7 @@ final readonly class GuardMain
         $checked = $this->check->checked($input->repository, $input->watchedMain(), $input->trustedKeys());
         // A peer merge alone takes no lock, because it writes nothing: it is shown, never noticed or halted on.
         if ($checked->classification->isClean() && [] === $checked->classification->ownerPushes) {
-            return new GuardedMain($this->halts->standingOf($input->project), [], $checked->classification->peerMerges);
+            return new GuardedMain($this->halts->standingOf($input->project), [], $this->namesOf($checked->classification->peerMerges));
         }
 
         return $this->recordedFor($input->project, $checked);
@@ -71,12 +72,22 @@ final readonly class GuardMain
         try {
             $this->raiseCardsFor($project, $checked);
             $standing = $this->halts->standingOf($project);
-            $unnoticed = array_values(array_diff($checked->classification->ownerPushes, $this->notices->noticedOf($project)));
+            $unnoticed = array_values(array_diff($this->namesOf($checked->classification->ownerPushes), $this->notices->noticedOf($project)));
 
-            return new GuardedMain($standing, $this->noticesGivenFor($project, $unnoticed), $checked->classification->peerMerges);
+            return new GuardedMain($standing, $this->noticesGivenFor($project, $unnoticed), $this->namesOf($checked->classification->peerMerges));
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * @param list<CommitName> $commits
+     *
+     * @return list<string>
+     */
+    private function namesOf(array $commits): array
+    {
+        return array_map(static fn (CommitName $commit): string => $commit->name, $commits);
     }
 
     private function raiseCardsFor(string $project, CheckedMain $checked): void

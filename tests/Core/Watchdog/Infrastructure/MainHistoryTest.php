@@ -585,7 +585,7 @@ final class MainHistoryTest extends TestCase
         $this->repository->checkout('main');
         $merge = $this->repository->merge('change');
 
-        self::assertSame([$first, $merge], $this->history([])->firstParentsSince($seen));
+        self::assertEquals(array_map(static fn (string $c): CommitName => new CommitName($c), [$first, $merge]), $this->history([])->firstParentsSince($seen));
     }
 
     public function testMainReadsNoCommitsSinceItsOwnHead(): void
@@ -773,7 +773,7 @@ final class MainHistoryTest extends TestCase
         $this->repository->checkout('main');
         $this->repository->resetTo($merge);
 
-        self::assertSame([$side, $merge], $this->history([])->firstParentsSince($seen));
+        self::assertEquals(array_map(static fn (string $c): CommitName => new CommitName($c), [$side, $merge]), $this->history([])->firstParentsSince($seen));
     }
 
     public function testACommitMainAlreadyHeldThroughASecondParentIsNotReadAsNewWhenTheRepositoryIsCutShallowDuringTheWalk(): void
