@@ -137,22 +137,12 @@ final class InstallCheckTest extends TestCase
     {
         $home = $this->directory.'/home';
         new Filesystem()->mkdir($home);
-        $downIn = [];
-        $runner = static function (string $command, string $directory, array $environment) use (&$downIn): array {
-            if (str_starts_with($command, 'docker ')) {
-                $downIn[] = $directory;
-
-                return is_file($directory.'/compose.yaml') ? [0, ''] : [1, 'no compose file'];
-            }
-
-            return new InstallProcessRunner(10)($command, $directory, $environment);
-        };
-        $walk = new InstallWalk($runner, [], $this->directory.'/logs', $this->directory.'/checkout', [], new Filesystem());
+        $walk = new InstallWalk($this->composeOnlyBesideItsFile(...), [], $this->directory.'/logs', $this->directory.'/checkout', [], new Filesystem());
 
         $report = $walk->through($home, ['mkdir -p intakt && touch intakt/compose.yaml && cd intakt', 'docker compose up -d --wait', 'cd .. && false']);
 
         self::assertSame('passed', $this->statuses($report)['teardown: stop the containers and remove their volume']);
-        self::assertSame($home.'/intakt', array_last($downIn));
+        self::assertSame($home.'/intakt', $this->callOf('docker compose down')['directory']);
     }
 
     public function testAStepMissingFromAFailedInstallKeepsItsIssueOpen(): void
@@ -387,6 +377,22 @@ final class InstallCheckTest extends TestCase
     private function shellButNoContainers(string $command, string $directory, array $environment): array
     {
         return str_starts_with($command, 'docker ') || str_starts_with($command, 'node ') ? [0, ''] : new InstallProcessRunner(10)($command, $directory, $environment);
+    }
+
+    /**
+     * @param array<string, string> $environment
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function composeOnlyBesideItsFile(string $command, string $directory, array $environment): array
+    {
+        if (!str_starts_with($command, 'docker ')) {
+            return new InstallProcessRunner(10)($command, $directory, $environment);
+        }
+
+        $this->calls[] = ['command' => $command, 'directory' => $directory, 'environment' => $environment];
+
+        return is_file($directory.'/compose.yaml') ? [0, ''] : [1, 'no compose file'];
     }
 
     /**
