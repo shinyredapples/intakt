@@ -39,7 +39,7 @@ final class ConfiguredTierResolverTest extends TestCase
 
     public function testProjectsAreListedInConfiguredOrder(): void
     {
-        self::assertSame(['alpha', 'beta'], $this->resolver()->projects());
+        self::assertSame(['alpha', 'beta'], [...$this->resolver()->projects()]);
     }
 
     public function testATierPointingAtADisabledProviderNamesTheProviderMessage(): void
