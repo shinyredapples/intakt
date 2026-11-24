@@ -169,12 +169,13 @@ final class ExpireConversationsTest extends KernelTestCase
     {
         $entrypoint = (string) file_get_contents(self::getContainer()->getParameter('kernel.project_dir').'/docker/entrypoint.sh');
         self::assertSame(1, preg_match('/messenger:consume scheduler_watcher scheduler_retention .*--time-limit=(\d+)/', $entrypoint, $match));
+        $timeLimit = (int) ($match[1] ?? 0);
         $start = new DateTimeImmutable('2026-11-24 10:20:20');
 
         $firstDue = new RetentionSchedule()->getSchedule()->getRecurringMessages()[0]->getTrigger()->getNextRunDate($start);
 
         self::assertNotNull($firstDue);
-        self::assertLessThanOrEqual(intdiv((int) $match[1], 2), $firstDue->getTimestamp() - $start->getTimestamp());
+        self::assertLessThanOrEqual(intdiv($timeLimit, 2), $firstDue->getTimestamp() - $start->getTimestamp());
     }
 
     #[DataProvider('settings')]
