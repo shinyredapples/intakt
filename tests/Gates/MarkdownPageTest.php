@@ -186,6 +186,27 @@ final class MarkdownPageTest extends TestCase
         self::assertEquals(new MarkdownSummary(204, true, true), $summary);
     }
 
+    public function testACodeSpanWrappedOntoALineStartingWithACommentOpenerHidesNoWords(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', 'Blocks start with `the', '<!--` marker and '.$this->words(200), '', '## Next', 'More.')->summary();
+
+        self::assertEquals(new MarkdownSummary(206, true, true), $summary);
+    }
+
+    public function testACommentInsideACodeSpanOverTwoLinesHidesNoWords(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', 'Overview `<!--', $this->words(121).' -->`', '', '## Body')->summary();
+
+        self::assertEquals(new MarkdownSummary(122, true, true), $summary);
+    }
+
+    public function testACodeSpanDoesNotReachOverABlankLine(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', 'One `two', '', '<!-- three', '-->` four')->summary();
+
+        self::assertEquals(new MarkdownSummary(3, true, true), $summary);
+    }
+
     public function testACommentOpenerInsideIndentedCodeHidesNoWords(): void
     {
         $summary = $this->page('# Title', '', '## In short', '', 'One.', '', '    <!--', '', 'Two three.')->summary();

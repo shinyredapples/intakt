@@ -6,8 +6,9 @@ namespace Intakt\Gates;
 
 final readonly class MarkdownComments
 {
-    // A code span comes first so a "<!--" a reader sees in it opens no comment; an unclosed comment hides the rest only as a block at a line start.
-    private const string CODE_SPAN_OR_COMMENT = '/(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)|<!--(?s:.*?)-->|^ {0,3}<!--(?s:.*)/m';
+    // A code span comes first so a "<!--" a reader sees in it opens no comment; CommonMark lets it wrap within its paragraph, so it stops only at a blank line or code.
+    // An unclosed comment hides the rest only as a block at a line start.
+    private const string CODE_SPAN_OR_COMMENT = '/(?<!`)(`+)(?!`)(?:[^\n\0]|\n(?![ \t]*(?:\n|\z)|\0))*?(?<!`)\1(?!`)|<!--(?s:.*?)-->|^ {0,3}<!--(?s:.*)/m';
 
     private const string CODE_LINE = "\0";
 

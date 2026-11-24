@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\MarkdownCodeBlocks;
+use Intakt\Gates\MarkdownComments;
 use Intakt\Gates\MarkdownDelimiterRow;
 use Intakt\Gates\MarkdownLineKind;
 use Intakt\Gates\MarkdownLineKinds;
@@ -14,6 +15,7 @@ use Intakt\Gates\MarkdownPage;
 use Intakt\Gates\MarkdownParagraph;
 use Intakt\Gates\MarkdownReader;
 use Intakt\Gates\MarkdownReadFailure;
+use Intakt\Gates\MarkdownSummary;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -29,6 +31,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(MarkdownParagraph::class)]
 #[UsesClass(MarkdownLineKind::class)]
 #[UsesClass(MarkdownLineKinds::class)]
+#[UsesClass(MarkdownComments::class)]
+#[UsesClass(MarkdownSummary::class)]
 final class MarkdownReaderTest extends TestCase
 {
     private string $root;
@@ -48,6 +52,33 @@ final class MarkdownReaderTest extends TestCase
         $page = $this->reader()->pages($this->root, ['docs/fenced.md'])[0];
 
         self::assertSame(['Before.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testAFenceInsideAMultilineCommentOpensNoCodeBlock(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/commented.md', "# Title\n\n<!--\n```\n-->\n\n## In short\n\nOverview.\n\n```text\nexample\n```\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/commented.md'])[0];
+
+        self::assertEquals(new MarkdownSummary(1, true, true), $page->summary());
+    }
+
+    public function testACommentOpenerInsideAFenceOpensNoComment(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/fenced-comment.md', "Before.\n\n```\n<!--\n```\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/fenced-comment.md'])[0];
+
+        self::assertSame(['Before.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testACommentClosedOnItsOpeningLineLetsTheNextFenceOpen(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/one-line-comment.md', "<!-- note -->\n```\ncode words\n```\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/one-line-comment.md'])[0];
+
+        self::assertSame(['<!-- note -->', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
     }
 
     public function testFencedCodeNestedInAListIsNotCounted(): void
