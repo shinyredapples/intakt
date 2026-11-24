@@ -22,7 +22,12 @@ final readonly class ReadableLines
     // Raw text up to the next blank line, because CommonMark ends the HTML blocks these tags open there.
     private const array HTML_BLOCKS = ['address', 'article', 'aside', 'base', 'basefont', 'blockquote', 'body', 'caption', 'center', 'col', 'colgroup', 'dd', 'details', 'dialog', 'dir', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'frame', 'frameset', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hr', 'html', 'iframe', 'legend', 'li', 'link', 'main', 'menu', 'menuitem', 'nav', 'noframes', 'ol', 'optgroup', 'option', 'p', 'param', 'search', 'section', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'title', 'tr', 'track', 'ul'];
 
-    private const string LIST_CONTENT = '/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
+    // A complete open or closing tag alone on its line, because CommonMark opens an HTML block with any such tag that is not raw text.
+    private const string LONE_TAG = '/^[ \t]*<(?<slash>\/)?(?<tag>[a-zA-Z][a-zA-Z0-9-]*)(?(slash)[ \t]*|(?:[ \t]+[a-zA-Z_:][a-zA-Z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"\'=<>`]+|\'[^\']*\'|"[^"]*"))?)*[ \t]*\/?)>[ \t]*$/';
+
+    private const string BLANK_LINE = '/^[ \t]*$/';
+
+    private const string LIST_CONTENT ='/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
 
     private const string FENCE_OPENS = '/^(?<lead>[ \t]*(?<markers>(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*))(?<fence>`{3,}|~{3,})(?<info>.*)$/';
 
@@ -55,6 +60,7 @@ final readonly class ReadableLines
         $columns = [];
         $block = null;
         $lists = [];
+        $paragraph = false;
 
         foreach (explode("\n", self::withLineFeeds($body)) as $line) {
             $block = self::stillOpen($line, $block);
@@ -62,16 +68,20 @@ final readonly class ReadableLines
             if (null !== $block) {
                 $columns[] = $block[1];
                 [$kept[], $block] = self::closedIn($line, $block);
+                $paragraph = false;
 
                 continue;
             }
 
             $lists = self::listsAfter($line, $lists);
-            $columns[] = array_last($lists) ?? 0;
-            [$kept[], $block] = self::openedIn($line, array_last($lists) ?? 0);
+            $container = array_last($lists) ?? 0;
+            $columns[] = $container;
+            // A lone tag inside a paragraph stays text, because CommonMark lets no such HTML block interrupt one.
+            [$kept[], $block] = $paragraph ? self::openedIn($line, $container) : self::openedOutsideAParagraphIn($line, $container);
+            $paragraph = null === $block && self::isParagraphText((string) array_last($kept)) && ($paragraph || !self::isIndentedCode($line, $container));
         }
 
-        return new self(self::withUnderlinedHeadingsMarked($kept), $columns, $block[3] ?? null);
+        return new self(self::withUnderlinedHeadingsMarked($kept, $columns), $columns, $block[3] ?? null);
     }
 
     public static function withLineFeeds(string $body): string
@@ -197,19 +207,46 @@ final readonly class ReadableLines
 
         $tag = strtolower($found['tag']);
 
+        // Any of the four end tags ends the raw block, because CommonMark does not match it to the tag that opened it.
         if ('' === $found['slash'] && in_array($tag, self::RAW_HTML, true)) {
-            return [sprintf('/<\/%s>/i', $tag), $container, PHP_INT_MAX, str_repeat(' ', $container).'</'.$tag.'>'];
+            return [sprintf('/<\/(?:%s)>/i', implode('|', self::RAW_HTML)), $container, PHP_INT_MAX, str_repeat(' ', $container).'</'.$tag.'>'];
         }
 
-        return in_array($tag, self::HTML_BLOCKS, true) ? ['/^[ \t]*$/', $container, PHP_INT_MAX, ''] : null;
+        return in_array($tag, self::HTML_BLOCKS, true) ? [self::BLANK_LINE, $container, PHP_INT_MAX, ''] : null;
+    }
+
+    /**
+     * @return array{string, ?array{string, int, int, string}}
+     */
+    private static function openedOutsideAParagraphIn(string $line, int $container): array
+    {
+        $opened = self::openedIn($line, $container);
+
+        if (null !== $opened[1] || 1 !== preg_match(self::LONE_TAG, $line, $found) || self::isIndentedCode($line, $container) || in_array(strtolower($found['tag']), self::RAW_HTML, true)) {
+            return $opened;
+        }
+
+        return ['', [self::BLANK_LINE, $container, PHP_INT_MAX, '']];
+    }
+
+    // An underline, a heading or a blank line is no paragraph text, because each ends the paragraph above it.
+    private static function isParagraphText(string $kept): bool
+    {
+        return '' !== trim($kept) && 1 !== preg_match(self::HEADING, $kept) && 1 !== preg_match(self::UNDERLINE, $kept);
+    }
+
+    private static function isIndentedCode(string $line, int $container): bool
+    {
+        return self::indentOf($line) - $container > 3;
     }
 
     /**
      * @param list<string> $lines
+     * @param list<int>    $columns
      *
      * @return list<string>
      */
-    private static function withUnderlinedHeadingsMarked(array $lines): array
+    private static function withUnderlinedHeadingsMarked(array $lines, array $columns): array
     {
         $start = null;
         $listItem = -1;
@@ -224,7 +261,12 @@ final readonly class ReadableLines
                 continue;
             }
 
-            $start = '' === trim($line) || 1 === preg_match(self::HEADING, $line) ? null : $start ?? $index;
+            // Indented code starts no paragraph, because CommonMark makes no heading of code above an underline.
+            $start = match (true) {
+                '' === trim($line), 1 === preg_match(self::HEADING, $line) => null,
+                null === $start && self::isIndentedCode($line, $columns[$index]) => null,
+                default => $start ?? $index,
+            };
             $listItem = 1 === preg_match(self::LIST_ITEM, $line) ? $index : $listItem;
         }
 

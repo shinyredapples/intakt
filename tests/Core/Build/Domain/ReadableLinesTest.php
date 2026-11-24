@@ -66,9 +66,14 @@ final class ReadableLinesTest extends TestCase
         self::assertSame('', ReadableLines::of("<details>\n<summary>Log</summary>")->closer);
     }
 
-    public function testAnUnknownTagStartsNoHtmlBlock(): void
+    public function testAnUnknownTagWithTextAfterItStartsNoHtmlBlock(): void
     {
-        self::assertSame(['<span>', '## B'], ReadableLines::of("<span>\n## B")->lines);
+        self::assertSame(['<span>text', '## B'], ReadableLines::of("<span>text\n## B")->lines);
+    }
+
+    public function testALoneUnknownTagStartsAnHtmlBlockUpToTheNextBlankLine(): void
+    {
+        self::assertSame(['', '', '', '## B'], ReadableLines::of("<span>\n## A\n\n## B")->lines);
     }
 
     public function testAnUnderlinedParagraphBecomesAHeadingOfItsLevel(): void

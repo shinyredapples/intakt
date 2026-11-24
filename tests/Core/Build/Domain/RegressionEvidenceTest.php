@@ -189,6 +189,48 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("## Evidence\n\n- E1: verified\n---\ntext\n".self::LINES, $added);
     }
 
+    public function testAnIndentedEvidenceLineAboveARuleIsCodeAndNotTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Summary\n\n    Evidence\n---\n\n## Evidence\n\n- E1: verified");
+
+        self::assertSame("## Summary\n\n    Evidence\n---\n\n## Evidence\n\n- E1: verified\n".self::LINES, $added);
+    }
+
+    public function testAHeadingInsideABlockALoneOpenTagStartsDoesNotEndTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<span>\n## Example\n</span>\n\n## Notes");
+
+        self::assertSame("## Evidence\n\n<span>\n## Example\n</span>\n\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testALoneOpenTagWithAttributesStartsABlock(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<span class=\"log\" hidden>\n## Example\n\n## Notes");
+
+        self::assertSame("## Evidence\n\n<span class=\"log\" hidden>\n## Example\n\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testAHeadingInsideABlockALoneClosingTagStartsDoesNotEndTheEvidenceSection(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n</span>\n## Example\n\n## Notes");
+
+        self::assertSame("## Evidence\n\n</span>\n## Example\n\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testALoneTagInsideAParagraphStartsNoBlock(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n- E1: verified\n<span>\n## Notes");
+
+        self::assertSame("## Evidence\n\n- E1: verified\n<span>\n".self::LINES."\n\n## Notes", $added);
+    }
+
+    public function testAPreformattedBlockEndsAtAnyOfTheRawEndTags(): void
+    {
+        $added = $this->evidence()->addedTo("## Evidence\n\n<pre>\nx</script>\n## Notes");
+
+        self::assertSame("## Evidence\n\n<pre>\nx</script>\n".self::LINES."\n\n## Notes", $added);
+    }
+
     public function testAHeadingInPreformattedHtmlDoesNotEndTheEvidenceSection(): void
     {
         $added = $this->evidence()->addedTo("## Evidence\n\n<pre>\n## Example\n</pre>\n\n## Notes");
