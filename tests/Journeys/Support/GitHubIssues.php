@@ -34,6 +34,24 @@ final readonly class GitHubIssues
     }
 
     /**
+     * @return array<int, string> the first line starting with the prefix, by the number of each open issue that holds one
+     */
+    public function openIssuesMarkedWith(string $prefix): array
+    {
+        $marked = [];
+
+        foreach ($this->openIssues() as $issue) {
+            $line = array_find(explode("\n", str_replace("\r", '', $issue['body'])), static fn (string $line): bool => str_starts_with($line, $prefix));
+
+            if (null !== $line) {
+                $marked[$issue['number']] = $line;
+            }
+        }
+
+        return $marked;
+    }
+
+    /**
      * @param list<string> $labels
      *
      * @return array{number: int, link: string}

@@ -18,6 +18,8 @@ final readonly class InstallWalk
     private const string UI = 'ui-check: every page';
     private const string JOURNEYS = 'journey-check';
     private const string KEYED = 'keyed: review the sample with a provider key';
+    private const string ENDED_IN = 'INTAKT_INSTALL_CHECK_ENDED_IN';
+    private const string ENDED_IN_FILE = '.install-check-ended-in';
     // Only what .env.local can hold unquoted, because a quote or a space would change the key the container reads.
     private const string KEY_SHAPE = '/\A[A-Za-z0-9._~+\/=-]+\z/';
 
@@ -74,7 +76,7 @@ final readonly class InstallWalk
         $installed = true;
 
         foreach ($commands as $command) {
-            $result = $installed ? $this->step('install: '.$command, $command, $this->cloneIn($home)) : $this->skipped('install: '.$command, 'an earlier install command failed');
+            $result = $installed ? $this->installStep($command, $home) : $this->skipped('install: '.$command, 'an earlier install command failed');
             $installed = $installed && InstallStatus::Failed !== $result->status;
             $results[] = $result;
         }
@@ -94,12 +96,26 @@ final readonly class InstallWalk
         return $results;
     }
 
-    // Before the README's clone command there is no folder, and after it the later commands must run where its cd went, which is the one folder it made.
+    // Each README line is its own shell, so a cd in one would be lost for the next: the shell writes where it ended, and the next line starts there.
+    private function installStep(string $command, string $home): InstallStepResult
+    {
+        $directory = $this->cloneIn($home);
+        $script = $command."\n".'intakt_status=$?; pwd > "$'.self::ENDED_IN.'"; exit "$intakt_status"';
+
+        return $this->recorded('install: '.$command, ($this->runner)($script, $directory, [...$this->environment, self::ENDED_IN => $home.'/'.self::ENDED_IN_FILE]), [0]);
+    }
+
+    // Only a folder inside home counts, so a README line that ends elsewhere, or none that ran, leaves the commands in home.
     private function cloneIn(string $home): string
     {
-        $folders = $this->found($home.'/*', GLOB_ONLYDIR);
+        $root = realpath($home);
+        $ended = realpath(trim((string) @file_get_contents($home.'/'.self::ENDED_IN_FILE)));
 
-        return 1 === count($folders) ? $folders[0] : $home;
+        if (false === $root || false === $ended || $ended === $root || !str_starts_with($ended, $root.'/') || !is_dir($ended)) {
+            return $home;
+        }
+
+        return $home.substr($ended, strlen($root));
     }
 
     private function step(string $name, string $command, string $directory): InstallStepResult
@@ -168,9 +184,9 @@ final readonly class InstallWalk
     /**
      * @return list<string>
      */
-    private function found(string $pattern, int $flags = 0): array
+    private function found(string $pattern): array
     {
-        $paths = glob($pattern, $flags);
+        $paths = glob($pattern);
 
         return false === $paths ? [] : $paths;
     }

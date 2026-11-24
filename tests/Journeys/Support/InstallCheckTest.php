@@ -19,6 +19,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(InstallCheckAlarm::class)]
 #[CoversClass(InstallWalk::class)]
 #[UsesClass(ReadmeInstallBlock::class)]
+#[UsesClass(InstallProcessRunner::class)]
 #[UsesClass(GitHubIssues::class)]
 #[UsesClass(JourneyAlarmTask::class)]
 final class InstallCheckTest extends TestCase
@@ -93,6 +94,41 @@ final class InstallCheckTest extends TestCase
         $this->check()->run(Path::makeRelative($this->directory.'/repository', (string) getcwd()));
 
         self::assertStringContainsString(escapeshellarg((string) realpath($this->directory.'/repository')), $this->callOf('git clone --')['command']);
+    }
+
+    public function testAnInstallCommandStartsWhereTheOneBeforeItsCdEnded(): void
+    {
+        $home = $this->directory.'/home';
+        new Filesystem()->mkdir($home);
+        $shell = new InstallProcessRunner(10);
+        $runner = static fn (string $command, string $directory, array $environment): array => str_starts_with($command, 'docker ') || str_starts_with($command, 'node ') ? [0, ''] : $shell($command, $directory, $environment);
+        $walk = new InstallWalk($runner, [], $this->directory.'/logs', $this->directory.'/checkout', [], new Filesystem());
+
+        $report = $walk->through($home, ['mkdir -p intakt/subdir && cd intakt/subdir', 'test -d ../subdir && test "$(pwd)" = "$(cd '.escapeshellarg($home).' && pwd)/intakt/subdir"']);
+
+        self::assertSame(['passed', 'passed'], array_slice(array_values($this->statuses($report)), 0, 2));
+    }
+
+    public function testAStepTheReadmeNoLongerHasClosesItsIssueOnceTheInstallPasses(): void
+    {
+        $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Passed, ''), new InstallStepResult('install: two', InstallStatus::Failed, 'boom')]));
+        $open = $this->github[0]['input'];
+
+        $answer = $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Passed, '')]), [['number' => 7, 'body' => $open]]);
+
+        self::assertSame('closed #7 (a step this run no longer has)', $answer);
+        self::assertSame(['issue', 'close', '7', '--comment', 'The install check passes and no longer has this step.', '--repo', 'example/repo'], $this->github[0]['arguments']);
+    }
+
+    public function testAStepMissingFromAFailedInstallKeepsItsIssueOpen(): void
+    {
+        $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Passed, ''), new InstallStepResult('install: two', InstallStatus::Failed, 'boom')]));
+        $open = $this->github[0]['input'];
+
+        $answer = $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Failed, 'other')]), [['number' => 7, 'body' => $open]]);
+
+        self::assertStringStartsWith('filed ', $answer);
+        self::assertSame([], array_filter($this->github, static fn (array $call): bool => 'close' === $call['arguments'][1]));
     }
 
     public function testEachRunUsesItsOwnComposeProject(): void
@@ -298,8 +334,14 @@ final class InstallCheckTest extends TestCase
     private function fakeRun(string $command, string $directory, array $environment): array
     {
         $this->calls[] = ['command' => $command, 'directory' => $directory, 'environment' => $environment];
+        $answer = array_find($this->answers, static fn (array $answer, string $part): bool => str_contains($command, $part)) ?? $this->madeBy($command, $directory);
 
-        return array_find($this->answers, static fn (array $answer, string $part): bool => str_contains($command, $part)) ?? $this->madeBy($command, $directory);
+        // Stands in for the line the real shell adds after an install command: the README's cd into the clone.
+        if (0 === $answer[0] && isset($environment['INTAKT_INSTALL_CHECK_ENDED_IN'])) {
+            new Filesystem()->dumpFile($environment['INTAKT_INSTALL_CHECK_ENDED_IN'], str_starts_with($command, self::CLONE_COMMAND."\n") ? $directory.'/intakt' : $directory);
+        }
+
+        return $answer;
     }
 
     /**
@@ -309,7 +351,7 @@ final class InstallCheckTest extends TestCase
     {
         $made = match (true) {
             str_starts_with($command, 'git clone --') => [$this->directory.'/source/README.md', $this->readme],
-            self::CLONE_COMMAND === $command => [$directory.'/intakt/'.($this->withJourneyCheck ? 'bin/journey-check' : 'README.md'), ''],
+            str_starts_with($command, self::CLONE_COMMAND."\n") =>[$directory.'/intakt/'.($this->withJourneyCheck ? 'bin/journey-check' : 'README.md'), ''],
             str_contains($command, 'bin/ui-check') => [$directory.'/var/ui-check/start-light-390.png', 'png'],
             str_contains($command, 'bin/journey-check') => [$directory.'/var/journey-check/run-1/01-first-install.png', 'png'],
             default => null,

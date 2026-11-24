@@ -43,10 +43,10 @@ final readonly class InstallCheck
         $this->files->mkdir($this->logs);
 
         try {
-            [$code] = $walk->command('docker compose version', $this->temporary);
+            [$code, $output] = $walk->command('docker compose version', $this->temporary);
 
             if (0 !== $code) {
-                throw new InstallCheckCouldNotRun('docker compose is not available, so the install cannot be tried');
+                throw new InstallCheckCouldNotRun('docker compose is not available, so the install cannot be tried: '.$walk->tail($output));
             }
 
             $commands = $this->commandsOf($repository, $walk);

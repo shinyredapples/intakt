@@ -11,6 +11,7 @@ use Symfony\Component\Process\Process;
 final readonly class InstallProcessRunner
 {
     public const int TIMED_OUT = 124;
+    private const int KILL = 9;
     private const array PASSED_ON = ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR', 'XDG_RUNTIME_DIR', 'DOCKER_HOST', 'DOCKER_CONFIG', 'DOCKER_CONTEXT', 'NODE_PATH', 'CHROME_PATH', 'PLAYWRIGHT_BROWSERS_PATH', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy'];
 
     public function __construct(private int $seconds)
@@ -24,11 +25,18 @@ final readonly class InstallProcessRunner
      */
     public function __invoke(string $command, string $directory, array $environment): array
     {
-        $process = Process::fromShellCommandline($command, $directory, [...$this->inherited(), ...$environment], null, $this->seconds);
+        // setsid makes the step's shell the leader of its own process group, so a timeout can stop everything the step started, not only the shell.
+        $process = new Process(['setsid', 'sh', '-c', $command], $directory, [...$this->inherited(), ...$environment], null, $this->seconds);
+        $process->start();
+        $group = $process->getPid();
 
         try {
-            $process->run();
+            $process->wait();
         } catch (ProcessTimedOutException) {
+            if (null !== $group) {
+                posix_kill(-$group, self::KILL);
+            }
+
             return [self::TIMED_OUT, $process->getOutput().$process->getErrorOutput()."\nstopped after ".$this->seconds.' seconds'];
         }
 

@@ -27,20 +27,43 @@ final readonly class InstallCheckAlarm
 
         try {
             $lines = [];
+            $markers = [];
             $installs = 0;
 
             foreach ($report->steps as $step) {
                 // An install step is known by its place in the README block, so a fixed command closes the task its broken spelling filed.
                 $identity = str_starts_with($step->name, self::INSTALL) ? self::INSTALL.' #'.++$installs : $step->name;
-                $lines[] = $this->settle($step, $this->markerOf($identity), $link);
+                $markers[] = $this->markerOf($identity);
+                $lines[] = $this->settle($step, array_last($markers), $link);
             }
 
-            $lines = array_values(array_filter($lines, static fn (?string $line): bool => null !== $line));
+            $installed = $installs > 0 && !array_any($report->steps, static fn (InstallStepResult $step): bool => str_starts_with($step->name, self::INSTALL) && InstallStatus::Failed === $step->status);
+            $lines = array_values(array_filter([...$lines, ...($installed ? $this->closeMissing($markers) : [])], static fn (?string $line): bool => null !== $line));
 
             return [] === $lines ? 'no install step failed: nothing filed' : implode("\n", $lines);
         } finally {
             $lock->release();
         }
+    }
+
+    // A README that lost a command shifts or drops the places after it, so once every install command passes, a task for a step this run did not have is closed.
+    /**
+     * @param list<string> $markers
+     *
+     * @return list<string>
+     */
+    private function closeMissing(array $markers): array
+    {
+        $lines = [];
+
+        foreach ($this->issues->openIssuesMarkedWith(self::MARKER) as $number => $marker) {
+            if (!in_array($marker, $markers, true)) {
+                $this->issues->close($number, 'The install check passes and no longer has this step.');
+                $lines[] = 'closed #'.$number.' (a step this run no longer has)';
+            }
+        }
+
+        return $lines;
     }
 
     // The identity is hashed, so no step name can break the marker line.
