@@ -63,15 +63,9 @@ final readonly class DoctrineOutageNotices
         ]);
     }
 
-    // Waiting, because recording a reading is brief, and while this row is stored and ended no reading of the account can run its end before the row exists or commit after this look (#3293); inside a caller's transaction the caller owns both sides on one connection, and its worker may hold the lock itself, so there is nothing to wait for.
+    // Waiting, because recording a reading is brief, and while this row is stored and ended no reading of the account can run its end before the row exists or commit after this look (#3293); also inside a caller's transaction, because a reading recorded inside one holds no lock, so this wait cannot be on the caller itself.
     private function storeWhileNoReadingIsRecorded(UsageReadingsStayedAway $outage): void
     {
-        if ($this->entities->getConnection()->isTransactionActive()) {
-            $this->store($outage);
-
-            return;
-        }
-
         $lock = $this->locks->createLock(DoctrineMeasuredUse::READINGS_LOCK.$outage->account->key());
         $lock->acquire(true);
         try {

@@ -47,7 +47,10 @@ use Stringable;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\BlockingStoreInterface;
+use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
@@ -600,37 +603,68 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame(['save', 'commit', 'delete'], $store->events);
     }
 
-    public function testAReadingRecordedInsideACallersTransactionKeepsTheLockUntilTheCallersCommit(): void
+    public function testAReadingRecordedInsideACallersTransactionLeavesTheLockFreeAfterItReturns(): void
     {
         $locks = new LockFactory(new InMemoryStore());
         $connection = $this->entities->getConnection();
 
         $connection->beginTransaction();
         try {
-            $worker = new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $locks);
-            $worker->record($this->readingOf('main'));
+            new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $locks)->record($this->readingOf('main'));
 
-            self::assertTrue(self::readingsLockIsHeld($locks));
+            self::assertFalse(self::readingsLockIsHeld($locks));
         } finally {
             $connection->rollBack();
         }
     }
 
-    public function testANoticeStoredInsideACallersTransactionDoesNotWaitForTheLockOfItsOwnProcess(): void
+    public function testANoticeStoredInsideACallersTransactionWaitsForTheLockOfAnotherWriter(): void
     {
-        $locks = new LockFactory(new InMemoryStore());
-        $held = $locks->createLock(DoctrineMeasuredUse::READINGS_LOCK.'claude_code.main');
-        $held->acquire();
         $connection = $this->entities->getConnection();
+        $store = new class implements PersistingStoreInterface, BlockingStoreInterface {
+            public bool $waited = false;
+            private InMemoryStore $inner;
+
+            public function __construct()
+            {
+                $this->inner = new InMemoryStore();
+            }
+
+            public function save(Key $key): void
+            {
+                $this->inner->save($key);
+            }
+
+            public function delete(Key $key): void
+            {
+                $this->inner->delete($key);
+            }
+
+            public function exists(Key $key): bool
+            {
+                return $this->inner->exists($key);
+            }
+
+            public function putOffExpiration(Key $key, float $ttl): void
+            {
+                $this->inner->putOffExpiration($key, $ttl);
+            }
+
+            public function waitAndSave(Key $key): void
+            {
+                $this->waited = true;
+                $this->save($key);
+            }
+        };
 
         $connection->beginTransaction();
         try {
-            new DoctrineOutageNotices($this->entities, $locks, self::createStub(LoggerInterface::class))->noticeOnce($this->outageOf('main'));
+            new DoctrineOutageNotices($this->entities, new LockFactory($store), self::createStub(LoggerInterface::class))->noticeOnce($this->outageOf('main'));
         } finally {
             $connection->rollBack();
         }
 
-        self::assertTrue($held->isAcquired());
+        self::assertTrue($store->waited);
     }
 
     public function testARecordedReadingLeavesTheAccountsReadingsLockFree(): void
