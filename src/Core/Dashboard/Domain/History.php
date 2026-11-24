@@ -19,22 +19,18 @@ final readonly class History
     public static function of(RecordedEvents $events): self
     {
         $rows = [];
+        $projectOfRound = [];
         foreach ($events as $recorded) {
-            array_unshift($rows, HistoryRow::of($recorded));
+            $row = HistoryRow::of($recorded);
+            $rows[] = $row;
+            if (null !== $row->round && null !== $row->project) {
+                $projectOfRound[$row->round] ??= $row->project;
+            }
         }
 
+        $rows = array_map(static fn (HistoryRow $row): HistoryRow => $row->inProjectOf($projectOfRound), array_reverse($rows));
         usort($rows, static fn (HistoryRow $a, HistoryRow $b): int => $b->at <=> $a->at);
 
         return new self($rows);
-    }
-
-    // A row that names no project belongs to every project, because it is no project's change alone.
-    public function ofProject(?string $project): self
-    {
-        if (null === $project || '' === $project) {
-            return $this;
-        }
-
-        return new self(array_values(array_filter($this->rows, static fn (HistoryRow $row): bool => null === $row->project || $project === $row->project)));
     }
 }

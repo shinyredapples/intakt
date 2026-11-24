@@ -34,17 +34,17 @@ final class HistoryTest extends TestCase
         self::assertSame(['third', 'second', 'first', 'oldest'], array_map(static fn (HistoryRow $row): string => $row->who, $history->rows));
     }
 
-    public function testAProjectFilterKeepsThatProjectsRowsAndRowsWithoutAProject(): void
+    public function testAnEventNamingOnlyItsRoundBelongsToTheProjectTheRoundStartNames(): void
     {
+        $round = Uuid::v7()->toRfc4122();
+
         $history = History::of(new RecordedEvents([
-            $this->recorded('a', $this->noon(), 'alpha'),
-            $this->recorded('b', $this->noon(), 'beta'),
-            $this->recorded('c', $this->noon()),
+            $this->event(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha'], $this->noon()),
+            $this->event(LedgerEventKind::ReviewerStarted, ['round' => $round, 'role' => 'correctness'], $this->noon()),
+            $this->event(LedgerEventKind::ReviewerStarted, ['round' => Uuid::v7()->toRfc4122()], $this->noon()),
         ]));
 
-        self::assertSame(['c', 'a'], array_map(static fn (HistoryRow $row): string => $row->who, $history->ofProject('alpha')->rows));
-        self::assertCount(3, $history->ofProject(null)->rows);
-        self::assertCount(3, $history->ofProject('')->rows);
+        self::assertSame([null, 'alpha', 'alpha'], array_map(static fn (HistoryRow $row): ?string => $row->project, $history->rows));
     }
 
     private function noon(): DateTimeImmutable
@@ -52,10 +52,16 @@ final class HistoryTest extends TestCase
         return new DateTimeImmutable('2026-10-28T12:00:00+00:00');
     }
 
-    private function recorded(string $who, DateTimeImmutable $at, ?string $project = null): RecordedEvent
+    private function recorded(string $who, DateTimeImmutable $at): RecordedEvent
     {
-        $payload = json_encode(null === $project ? ['actor' => $who] : ['actor' => $who, 'project' => $project], JSON_THROW_ON_ERROR);
+        return $this->event(LedgerEventKind::OwnerAsked, ['actor' => $who], $at);
+    }
 
-        return new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::OwnerAsked, $payload), $at);
+    /**
+     * @param array<string, string> $payload
+     */
+    private function event(LedgerEventKind $kind, array $payload, DateTimeImmutable $at): RecordedEvent
+    {
+        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), $at);
     }
 }

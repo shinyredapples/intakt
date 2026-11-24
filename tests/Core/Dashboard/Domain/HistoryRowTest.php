@@ -28,6 +28,28 @@ final class HistoryRowTest extends TestCase
         self::assertFalse($one->showsChange());
     }
 
+    public function testARowShowsNoChangeWhenBeforeAndAfterAreEqual(): void
+    {
+        self::assertFalse(HistoryRow::of($this->recorded(['before' => 'low', 'after' => 'low']))->showsChange());
+    }
+
+    public function testAnImpossibleExpiryDateIsUnreadableRatherThanRolledOver(): void
+    {
+        $impossible = HistoryRow::of($this->recorded(['expires_at' => '2026-02-30T10:00:00+00:00']));
+        $lastDay = HistoryRow::of($this->recorded(['expires_at' => '2026-02-28T10:00:00+00:00']));
+
+        self::assertNull($impossible->expires);
+        self::assertSame('2026-02-28', $lastDay->expires?->format('Y-m-d'));
+    }
+
+    public function testAnEmptyFingerprintStillHidesBeforeAndAfter(): void
+    {
+        $row = HistoryRow::of($this->recorded(['fingerprint' => '', 'before' => 'sk-old-secret', 'after' => 'sk-new-secret']));
+
+        self::assertNull($row->before);
+        self::assertNull($row->after);
+    }
+
     public function testARowShowsTheExpiryOnlyWhenTheEventHasOne(): void
     {
         $with = HistoryRow::of($this->recorded(['expires_at' => '2026-12-01T10:00:00+02:00']));

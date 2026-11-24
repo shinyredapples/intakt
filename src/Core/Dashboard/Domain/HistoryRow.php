@@ -19,6 +19,7 @@ final readonly class HistoryRow
         public string $kind,
         public string $who,
         public ?string $project,
+        public ?string $round,
         public ?string $before,
         public ?string $after,
         public ?DateTimeImmutable $expires,
@@ -37,6 +38,7 @@ final readonly class HistoryRow
             $recorded->event->kind->value,
             $fields->text('actor') ?? self::UNNAMED_ACTOR,
             $fields->text('project'),
+            $fields->text('round'),
             $isSecret ? null : $fields->text('before'),
             $isSecret ? null : $fields->text('after'),
             self::expiryOf($fields->text('expires_at')),
@@ -44,10 +46,23 @@ final readonly class HistoryRow
         );
     }
 
-    // The arrow is for a literal change, so it needs both values.
+    // A reviewer's or the judge's event names only its round, so its project is the one the round's start names.
+    /**
+     * @param array<string, string> $projectOfRound
+     */
+    public function inProjectOf(array $projectOfRound): self
+    {
+        if (null !== $this->project || null === $this->round || !isset($projectOfRound[$this->round])) {
+            return $this;
+        }
+
+        return clone($this, ['project' => $projectOfRound[$this->round]]);
+    }
+
+    // The arrow is for a literal change, so it needs two values that differ.
     public function showsChange(): bool
     {
-        return null !== $this->before && null !== $this->after;
+        return null !== $this->before && null !== $this->after && $this->before !== $this->after;
     }
 
     public function label(): string
@@ -55,10 +70,15 @@ final readonly class HistoryRow
         return ucfirst(str_replace('_', ' ', $this->kind));
     }
 
+    // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable.
     private static function expiryOf(?string $text): ?DateTimeImmutable
     {
-        $expires = null === $text ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $text, new DateTimeZone('UTC'));
+        if (null === $text) {
+            return null;
+        }
 
-        return false === $expires ? null : $expires->setTimezone(new DateTimeZone('UTC'));
+        $expires = DateTimeImmutable::createFromFormat(DATE_ATOM, $text, new DateTimeZone('UTC'));
+
+        return false === $expires || false !== DateTimeImmutable::getLastErrors() ? null : $expires->setTimezone(new DateTimeZone('UTC'));
     }
 }

@@ -22,13 +22,12 @@ final readonly class ShowHistoryController
     }
 
     #[Route('/history', name: DashboardRoutes::SHOW_HISTORY, methods: ['GET'])]
+    // The project only chooses the top bar filter: every row stays on the page, so the filter can switch to any project it offers.
     public function __invoke(Request $request, #[MapQueryParameter] ?string $project = null): Response
     {
-        $history = History::of($this->ledger->readInOrder())->ofProject($project);
-
         return new Response($this->pages->render($request, 'dashboard/history.html.twig', [
-            'history' => $history,
-            'project' => $project,
+            'history' => History::of($this->ledger->readInOrder()),
+            'linked_project' => $project,
         ]));
     }
 }

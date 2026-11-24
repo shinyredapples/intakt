@@ -32,14 +32,14 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         self::assertSame('low → high', $crawler->filter('.review-row')->last()->filter('.change')->text());
     }
 
-    public function testTheHistoryPageShowsOnlyTheChosenProjectsEventsWhenFilteredByProject(): void
+    public function testAProjectLinkKeepsEveryProjectsRowsSoTheFilterCanShowThemAgain(): void
     {
         $this->record(['actor' => 'owner', 'project' => 'alpha']);
         $this->record(['actor' => 'maintainer', 'project' => 'beta']);
 
         $crawler = $this->browser->request('GET', '/history?project=beta');
 
-        self::assertSame(['maintainer'], $crawler->filter('.review-row .who')->each(static fn ($who): string => $who->text()));
+        self::assertSame(['beta', 'alpha'], $crawler->filter('.review-row')->each(static fn ($row): string => (string) $row->attr('data-project')));
     }
 
     public function testTheHistoryPageShowsASecretOnlyAsItsFingerprint(): void
