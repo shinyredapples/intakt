@@ -25,7 +25,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 final class InstallCheckTest extends TestCase
 {
     private const string CLONE_COMMAND = 'git clone https://github.com/shinyredapples/intakt.git && cd intakt';
-    private const string README = "<!-- install-check -->\n```\n".self::CLONE_COMMAND."\ndocker compose up -d --wait\n```\n";
+    private const string ACCOUNT = 'alarm[bot]';
+    private const string README ="<!-- install-check -->\n```\n".self::CLONE_COMMAND."\ndocker compose up -d --wait\n```\n";
 
     private string $directory = '';
 
@@ -44,11 +45,13 @@ final class InstallCheckTest extends TestCase
 
     private string $readme = '';
 
-    /** @var list<array{number: int, body: string}> */
+    /** @var list<array{number: int, body: string, user?: array{login: string}|null}> */
     private array $open = [];
 
     /** @var list<array{number: int, body: string}>|null */
     private ?array $afterCreate = null;
+
+    private string|GitHubCallFailed $account = self::ACCOUNT;
 
     public function testABrokenInstallCommandFailsAtTheStepThatNamesItAndTheAlarmGetsTheStepAndItsLogTail(): void
     {
@@ -131,6 +134,59 @@ final class InstallCheckTest extends TestCase
         $answer = $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Passed, '')]), $open);
 
         self::assertSame('closed #7 (a step this run no longer has)', $answer);
+    }
+
+    public function testAPassingRunClosesNoIssueAnotherAccountOpenedWithACopiedMarker(): void
+    {
+        $marker = static fn (int $place): string => '<!-- intakt:install-check:'.hash('sha256', 'install: #'.$place).' -->';
+        $open = [
+            ['number' => 7, 'body' => $marker(2)."\nOld alarm"],
+            ['number' => 8, 'user' => ['login' => 'contributor'], 'body' => $marker(2)."\nCopied example"],
+            ['number' => 9, 'user' => ['login' => 'contributor'], 'body' => "Quoted marker:\n".$marker(1)],
+            ['number' => 10, 'user' => null, 'body' => $marker(2)],
+        ];
+
+        $answer = $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Passed, '')]), $open);
+
+        self::assertSame('closed #7 (a step this run no longer has)', $answer);
+        self::assertSame([['issue', 'close', '7']], array_map(static fn (array $call): array => array_slice($call['arguments'], 0, 3), $this->github));
+    }
+
+    public function testAFailingStepFilesItsOwnIssueRatherThanEditOneAnotherAccountOpenedWithItsMarker(): void
+    {
+        $failed = new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')]);
+        $this->alarm($failed);
+        $marker = explode("\n", $this->github[0]['input'])[0];
+
+        $answer = $this->alarm($failed, [['number' => 3, 'user' => ['login' => 'contributor'], 'body' => $marker]]);
+
+        self::assertSame('filed https://github.com/example/repo/issues/7', $answer);
+        self::assertSame(['create'], array_map(static fn (array $call): string => $call['arguments'][1], $this->github));
+    }
+
+    public function testAWorkflowTokenThatCannotReadItsAccountActsAsTheActionsBot(): void
+    {
+        $this->account = new GitHubCallFailed('gh api user failed: gh: Resource not accessible by integration (HTTP 403)');
+
+        self::assertSame('github-actions[bot]', $this->issues()->account());
+    }
+
+    public function testAnAccountThatCannotBeReadForAnotherReasonStopsTheAlarm(): void
+    {
+        $this->account = new GitHubCallFailed('gh api user failed: gh: Bad credentials (HTTP 401)');
+
+        $this->expectExceptionMessage('Bad credentials');
+
+        $this->issues()->account();
+    }
+
+    public function testAnAnswerThatIsNoLoginIsRefusedAsTheAccount(): void
+    {
+        $this->account = "alarm\nsecond line";
+
+        $this->expectExceptionMessage('not an account login');
+
+        $this->issues()->account();
     }
 
     public function testTeardownStopsTheContainersWhereComposeRanAfterALaterLineLeftTheClone(): void
@@ -337,6 +393,7 @@ final class InstallCheckTest extends TestCase
     protected function tearDown(): void
     {
         new Filesystem()->remove($this->directory);
+        putenv('GH_TOKEN');
     }
 
     /**
@@ -439,10 +496,17 @@ final class InstallCheckTest extends TestCase
         putenv('GH_TOKEN=stand-in');
 
         try {
-            return new InstallCheckAlarm(new GitHubIssues('example/repo', $this->fakeGitHub(...)), new LockFactory(new InMemoryStore()))->raise($report, null);
+            return new InstallCheckAlarm($this->issues(), new LockFactory(new InMemoryStore()))->raise($report, null);
         } finally {
             putenv('GH_TOKEN');
         }
+    }
+
+    private function issues(): GitHubIssues
+    {
+        putenv('GH_TOKEN=stand-in');
+
+        return new GitHubIssues('example/repo', $this->fakeGitHub(...));
     }
 
     /**
@@ -450,10 +514,15 @@ final class InstallCheckTest extends TestCase
      */
     private function fakeGitHub(array $arguments, string $input): string
     {
+        if (['api', 'user'] === array_slice($arguments, 0, 2)) {
+            return $this->account instanceof GitHubCallFailed ? throw $this->account : $this->account;
+        }
+
         if ('api' === $arguments[0]) {
             $created = [] !== array_filter($this->github, static fn (array $call): bool => 'create' === $call['arguments'][1]);
+            $listed = $created ? $this->afterCreate ?? $this->open : $this->open;
 
-            return json_encode([$created ? $this->afterCreate ?? $this->open : $this->open], JSON_THROW_ON_ERROR);
+            return json_encode([array_map(static fn (array $issue): array => $issue + ['user' => ['login' => self::ACCOUNT]], $listed)], JSON_THROW_ON_ERROR);
         }
 
         $this->github[] = ['arguments' => $arguments, 'input' => $input];

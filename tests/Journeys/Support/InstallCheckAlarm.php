@@ -29,16 +29,18 @@ final readonly class InstallCheckAlarm
             $lines = [];
             $markers = [];
             $installs = 0;
+            // Only issues the alarm's own account opened are its to edit or close, because anyone can copy a marker into an issue.
+            $account = $this->issues->account();
 
             foreach ($report->steps as $step) {
                 // An install step is known by its place in the README block, so a fixed command closes the task its broken spelling filed.
                 $identity = str_starts_with($step->name, self::INSTALL) ? self::INSTALL.' #'.++$installs : $step->name;
                 $markers[] = $this->markerOf($identity);
-                $lines[] = $this->settle($step, array_last($markers), $link);
+                $lines[] = $this->settle($step, array_last($markers), $link, $account);
             }
 
             $installed = $installs > 0 && !array_any($report->steps, static fn (InstallStepResult $step): bool => str_starts_with($step->name, self::INSTALL) && InstallStatus::Failed === $step->status);
-            $lines = array_values(array_filter([...$lines, ...($installed ? $this->closeMissing($markers) : [])], static fn (?string $line): bool => null !== $line));
+            $lines = array_values(array_filter([...$lines, ...($installed ? $this->closeMissing($markers, $account) : [])], static fn (?string $line): bool => null !== $line));
 
             return [] === $lines ? 'no install step failed: nothing filed' : implode("\n", $lines);
         } finally {
@@ -52,9 +54,9 @@ final readonly class InstallCheckAlarm
         return self::MARKER.hash('sha256', $identity).' -->';
     }
 
-    private function settle(InstallStepResult $step, string $marker, ?Uri $link): ?string
+    private function settle(InstallStepResult $step, string $marker, ?Uri $link, string $account): ?string
     {
-        $open = $this->issues->oldestOpenIssueHolding($marker);
+        $open = $this->issues->oldestOpenIssueHolding($marker, $account);
 
         if (InstallStatus::Passed === $step->status && null !== $open) {
             $this->issues->close($open, 'The install check passes this step again.');
@@ -76,7 +78,7 @@ final readonly class InstallCheckAlarm
 
         $created = $this->issues->create('fix(install): install check step "'.mb_strimwidth($step->name, 0, 60, '...').'" fails', $body, JourneyAlarmTask::LABELS);
         // The lock holds only on one machine, so a run elsewhere may have filed the same task meanwhile: the oldest stays.
-        $oldest = $this->issues->oldestOpenIssueHolding($marker);
+        $oldest = $this->issues->oldestOpenIssueHolding($marker, $account);
 
         if (null === $oldest || $oldest >= $created['number']) {
             return 'filed '.$created['link'];
@@ -113,11 +115,11 @@ final readonly class InstallCheckAlarm
      *
      * @return list<string>
      */
-    private function closeMissing(array $markers): array
+    private function closeMissing(array $markers, string $account): array
     {
         $lines = [];
 
-        foreach ($this->issues->openIssuesOpeningWith('/\A'.preg_quote(self::MARKER, '/').'[0-9a-f]{64} -->\z/') as $number => $marker) {
+        foreach ($this->issues->openIssuesOpeningWith('/\A'.preg_quote(self::MARKER, '/').'[0-9a-f]{64} -->\z/', $account) as $number => $marker) {
             if (!in_array($marker, $markers, true)) {
                 $this->issues->close($number, 'The install check passes and no longer has this step.');
                 $lines[] = 'closed #'.$number.' (a step this run no longer has)';

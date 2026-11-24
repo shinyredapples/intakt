@@ -30,7 +30,11 @@ final class JourneyAlarmTest extends TestCase
         #!/usr/bin/env php
         <?php
         $arguments = array_slice($argv, 1);
-        $action = 'api' === $arguments[0] ? 'api' : $arguments[1];
+        $action = 'api' === $arguments[0] ? ('user' === $arguments[1] ? 'user' : 'api') : $arguments[1];
+        if ('user' === $action) {
+            echo 'alarm[bot]';
+            exit(0);
+        }
         $input = in_array('--body-file', $arguments, true) ? stream_get_contents(STDIN) : '';
         file_put_contents(__DIR__.'/calls.jsonl', json_encode(['arguments' => $arguments, 'input' => $input])."\n", FILE_APPEND | LOCK_EX);
         // A listing waits up to 2 seconds for a second one, so two runs without serialization both list before either creates.

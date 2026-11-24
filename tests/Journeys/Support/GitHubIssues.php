@@ -15,6 +15,9 @@ final readonly class GitHubIssues
     private const string ISSUE_LINK = '/\/issues\/(?<number>[1-9][0-9]*)$/';
     private const array TOKENS = ['GH_TOKEN', 'GITHUB_TOKEN'];
     private const int SECONDS = 60;
+    private const string LOGIN = '/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?$/';
+    private const string INTEGRATION_REFUSAL = 'Resource not accessible by integration';
+    private const string ACTIONS_BOT = 'github-actions[bot]';
 
     /**
      * @param (Closure(list<string>, string): string)|null $runner
@@ -23,11 +26,13 @@ final readonly class GitHubIssues
     {
     }
 
-    public function oldestOpenIssueHolding(string $marker): ?int
+    // An author narrows the search to issues that account opened, because anyone can copy a marker into an issue of their own.
+    public function oldestOpenIssueHolding(string $marker, ?string $author = null): ?int
     {
         $marked = array_filter(
             $this->openIssues(),
-            static fn (array $issue): bool => in_array($marker, explode("\n", str_replace("\r", '', $issue['body'])), true),
+            static fn (array $issue): bool => (null === $author || $author === $issue['author'])
+                && in_array($marker, explode("\n", str_replace("\r", '', $issue['body'])), true),
         );
 
         return [] === $marked ? null : min(array_column($marked, 'number'));
@@ -37,14 +42,14 @@ final readonly class GitHubIssues
     /**
      * @return array<int, string>
      */
-    public function openIssuesOpeningWith(string $pattern): array
+    public function openIssuesOpeningWith(string $pattern, string $author): array
     {
         $marked = [];
 
         foreach ($this->openIssues() as $issue) {
             $first = explode("\n", str_replace("\r", '', $issue['body']), 2)[0];
 
-            if (1 === preg_match($pattern, $first)) {
+            if ($author === $issue['author'] && 1 === preg_match($pattern, $first)) {
                 $marked[$issue['number']] = $first;
             }
         }
@@ -84,8 +89,20 @@ final readonly class GitHubIssues
         $this->issueCommand(['close', (string) $number, '--comment', $comment], '');
     }
 
+    // A workflow's own token may not read its account, and such a token always files as the Actions bot.
+    public function account(): string
+    {
+        try {
+            $login = $this->gh(['api', 'user', '--jq', '.login'], '');
+        } catch (GitHubCallFailed $refused) {
+            $login = str_contains($refused->getMessage(), self::INTEGRATION_REFUSAL) ? self::ACTIONS_BOT : throw $refused;
+        }
+
+        return 1 === preg_match(self::LOGIN, $login) ? $login : throw new GitHubCallFailed('gh api user answered something that is not an account login');
+    }
+
     /**
-     * @return list<array{number: int, body: string}>
+     * @return list<array{number: int, body: string, author: ?string}>
      */
     private function openIssues(): array
     {
@@ -136,7 +153,7 @@ final readonly class GitHubIssues
     }
 
     /**
-     * @return array{number: int, body: string}
+     * @return array{number: int, body: string, author: ?string}
      */
     private function issueFrom(mixed $issue): array
     {
@@ -148,7 +165,11 @@ final readonly class GitHubIssues
             throw $this->notAnIssueList();
         }
 
-        return ['number' => $number, 'body' => $body ?? ''];
+        // An issue without a readable author belongs to no account, so no author-bound search finds it.
+        $user = $issue['user'] ?? null;
+        $author = is_array($user) && is_string($user['login'] ?? null) ? $user['login'] : null;
+
+        return ['number' => $number, 'body' => $body ?? '', 'author' => $author];
     }
 
     /**

@@ -50,7 +50,7 @@ final class InstallCheckCommandTest extends TestCase
         $arguments = array_slice($argv, 1);
         $input = in_array('--body-file', $arguments, true) ? stream_get_contents(STDIN) : '';
         file_put_contents(__DIR__.'/gh-calls.jsonl', json_encode(['arguments' => $arguments, 'input' => $input])."\n", FILE_APPEND);
-        echo 'api' === $arguments[0] ? '[[]]' : ('create' === $arguments[1] ? 'https://github.com/example/repo/issues/7' : '');
+        echo ['api', 'user'] === array_slice($arguments, 0, 2) ? 'alarm[bot]' : ('api' === $arguments[0] ? '[[]]' :('create' === $arguments[1] ? 'https://github.com/example/repo/issues/7' : ''));
         PHP;
 
     private string $directory = '';
