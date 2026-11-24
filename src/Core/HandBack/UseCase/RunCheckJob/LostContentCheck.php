@@ -49,16 +49,7 @@ final readonly class LostContentCheck
      */
     private function changedFiles(string $repository, string $base, string $head): array
     {
-        $fields = explode("\0", $this->git->exactOutput($repository, ['diff', '--raw', '-z', '-M', '--no-abbrev', $base, $head, '--']));
-        $files = [];
-        $index = 0;
-
-        while (($file = $this->entryAt($fields, $index)) instanceof ChangedFile) {
-            $files[] = $file;
-            $index += $file->fieldCount();
-        }
-
-        return $files;
+        return RawDiffEntries::of($this->git->exactOutput($repository, ['diff', '--raw', '-z', '-M', '--no-abbrev', $base, $head, '--']));
     }
 
     /**
@@ -75,7 +66,7 @@ final readonly class LostContentCheck
         $index = 0;
 
         while ($index < count($fields)) {
-            $file = $this->entryAt($fields, $index);
+            $file = RawDiffEntries::entryAt($fields, $index);
 
             // A field that is no entry starts a commit, because git prints the hash before the commit's entries.
             if (!$file instanceof ChangedFile) {
@@ -96,25 +87,6 @@ final readonly class LostContentCheck
         $commits[] = $moves;
 
         return $commits;
-    }
-
-    /**
-     * @param list<string> $fields
-     */
-    private function entryAt(array $fields, int $index): ?ChangedFile
-    {
-        // Trimmed, because "log -z" puts a line break before a commit's first entry.
-        $field = ltrim($fields[$index] ?? '', "\n");
-
-        if (!str_starts_with($field, ':')) {
-            return null;
-        }
-
-        [$oldMode, $newMode, $oldBlob, $newBlob, $status] = explode(' ', substr($field, 1), 5) + ['', '', '', '', ''];
-        // Two paths for a rename or a copy, because git names the old path and then the new one.
-        $count = str_starts_with($status, 'R') || str_starts_with($status, 'C') ? 2 : 1;
-
-        return new ChangedFile($status, $oldMode, $newMode, $oldBlob, $newBlob, array_slice($fields, $index + 1, $count));
     }
 
     /**

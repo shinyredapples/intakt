@@ -193,6 +193,10 @@
         document.querySelectorAll('[data-project]').forEach((item) => {
             item.hidden = chosen !== '' && item.dataset.project !== chosen;
         });
+        // A container whose rows the filter hid shows its empty line, so a project without rows there says so instead of leaving a bare heading.
+        document.querySelectorAll('[data-project-empty]').forEach((line) => {
+            line.hidden = [...line.parentElement.querySelectorAll('[data-project]')].some((item) => !item.hidden);
+        });
         shownFilter.title = shownFilter.selectedOptions[0].textContent;
         // assets/column-more.js counts a crowded column's page limit over the cards left shown, so it hears of each run.
         document.dispatchEvent(new Event('intakt:project-shown'));
