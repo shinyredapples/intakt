@@ -179,19 +179,6 @@ final readonly class MarkdownPage
     }
 
     /**
-     * @param list<int> $lines
-     */
-    private function visibleTextOf(array $lines): string
-    {
-        // Because a reader sees neither subheadings nor HTML comments, a section of only those summarizes nothing even though they count toward its size.
-        $shown = array_filter($lines, fn (int $index): bool => !in_array($this->kinds[$index], [MarkdownLineKind::Heading, MarkdownLineKind::Code], true));
-        $text = implode("\n", array_map($this->textOf(...), $shown));
-
-        // An unclosed comment hides the rest of the section, because CommonMark's HTML block runs on until "-->".
-        return preg_replace('/<!--.*?(?:-->|\z)/s', ' ', $text) ?? $text;
-    }
-
-    /**
      * @return list<int>
      */
     private function sectionLines(int $heading): array
@@ -227,6 +214,19 @@ final readonly class MarkdownPage
         ));
 
         return [] === $before || [MarkdownLineKind::Heading] === $before;
+    }
+
+    /**
+     * @param list<int> $lines
+     */
+    private function visibleTextOf(array $lines): string
+    {
+        // Because a reader sees neither subheadings nor HTML comments, a section of only those summarizes nothing even though they count toward its size.
+        $shown = array_filter($lines, fn (int $index): bool => !in_array($this->kinds[$index], [MarkdownLineKind::Heading, MarkdownLineKind::Code], true));
+        $text = implode("\n", array_map($this->textOf(...), $shown));
+
+        // An unclosed comment hides the rest of the section, because CommonMark's HTML block runs on until "-->".
+        return preg_replace('/<!--.*?(?:-->|\z)/s', ' ', $text) ?? $text;
     }
 
     private function startsATable(int $header): bool
