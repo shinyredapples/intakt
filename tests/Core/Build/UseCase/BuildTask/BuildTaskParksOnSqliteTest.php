@@ -25,6 +25,7 @@ use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\HtmlBlocks;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
@@ -94,6 +95,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(BugReport::class)]
 #[UsesClass(ReadableLines::class)]
+#[UsesClass(HtmlBlocks::class)]
 #[UsesClass(BugPart::class)]
 #[UsesClass(TaskKind::class)]
 #[UsesClass(HandBackCheck::class)]

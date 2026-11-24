@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
+use Intakt\Core\Build\Domain\HtmlBlocks;
 use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Git\Contract\Paths;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RegressionEvidence::class)]
 #[UsesClass(ReadableLines::class)]
+#[UsesClass(HtmlBlocks::class)]
 #[UsesClass(RegressionRuns::class)]
 #[UsesClass(Paths::class)]
 final class RegressionEvidenceTest extends TestCase

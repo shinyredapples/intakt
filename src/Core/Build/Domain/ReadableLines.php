@@ -14,19 +14,6 @@ final readonly class ReadableLines
 
     private const string LIST_ITEM = '/^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/';
 
-    private const string HTML_OPENS = '/^(?<lead>[ \t]*)<(?<slash>\/?)(?<tag>[a-zA-Z][a-zA-Z0-9-]*)(?:[ \t>]|\/>|$)/';
-
-    // Raw text up to their end tag, because CommonMark shows a heading or a fence inside them as written.
-    private const array RAW_HTML = ['pre', 'script', 'style', 'textarea'];
-
-    // Raw text up to the next blank line, because CommonMark ends the HTML blocks these tags open there.
-    private const array HTML_BLOCKS = ['address', 'article', 'aside', 'base', 'basefont', 'blockquote', 'body', 'caption', 'center', 'col', 'colgroup', 'dd', 'details', 'dialog', 'dir', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'frame', 'frameset', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hr', 'html', 'iframe', 'legend', 'li', 'link', 'main', 'menu', 'menuitem', 'nav', 'noframes', 'ol', 'optgroup', 'option', 'p', 'param', 'search', 'section', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'title', 'tr', 'track', 'ul'];
-
-    // A complete open or closing tag alone on its line, because CommonMark opens an HTML block with any such tag that is not raw text.
-    private const string LONE_TAG = '/^[ \t]*<(?<slash>\/)?(?<tag>[a-zA-Z][a-zA-Z0-9-]*)(?(slash)[ \t]*|(?:[ \t]+[a-zA-Z_:][a-zA-Z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"\'=<>`]+|\'[^\']*\'|"[^"]*"))?)*[ \t]*\/?)>[ \t]*$/';
-
-    private const string BLANK_LINE = '/^[ \t]*$/';
-
     private const string LIST_CONTENT = '/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
 
     private const string FENCE_OPENS = '/^(?<lead>[ \t]*(?<markers>(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*))(?<fence>`{3,}|~{3,})(?<info>.*)$/';
@@ -87,6 +74,11 @@ final readonly class ReadableLines
     public static function withLineFeeds(string $body): string
     {
         return str_replace(["\r\n", "\r"], "\n", $body);
+    }
+
+    public static function isIndentedCode(string $line, int $container): bool
+    {
+        return self::indentOf($line) - $container > 3;
     }
 
     /**
@@ -161,7 +153,7 @@ final readonly class ReadableLines
             return ['', $block];
         }
 
-        $html = self::htmlOpenedBy($line, $container);
+        $html = HtmlBlocks::openedBy($line, $container);
 
         if (null === $html) {
             return self::withoutComments($line);
@@ -197,47 +189,20 @@ final readonly class ReadableLines
     }
 
     /**
-     * @return ?array{string, int, int, string}
-     */
-    private static function htmlOpenedBy(string $line, int $container): ?array
-    {
-        if (1 !== preg_match(self::HTML_OPENS, $line, $found) || self::widthOf($found['lead']) - $container > 3) {
-            return null;
-        }
-
-        $tag = strtolower($found['tag']);
-
-        // Any of the four end tags ends the raw block, because CommonMark does not match it to the tag that opened it.
-        if ('' === $found['slash'] && in_array($tag, self::RAW_HTML, true)) {
-            return [sprintf('/<\/(?:%s)>/i', implode('|', self::RAW_HTML)), $container, PHP_INT_MAX, str_repeat(' ', $container).'</'.$tag.'>'];
-        }
-
-        return in_array($tag, self::HTML_BLOCKS, true) ? [self::BLANK_LINE, $container, PHP_INT_MAX, ''] : null;
-    }
-
-    /**
      * @return array{string, ?array{string, int, int, string}}
      */
     private static function openedOutsideAParagraphIn(string $line, int $container): array
     {
         $opened = self::openedIn($line, $container);
+        $tag = null === $opened[1] ? HtmlBlocks::openedByALoneTag($line, $container) : null;
 
-        if (null !== $opened[1] || 1 !== preg_match(self::LONE_TAG, $line, $found) || self::isIndentedCode($line, $container) || in_array(strtolower($found['tag']), self::RAW_HTML, true)) {
-            return $opened;
-        }
-
-        return ['', [self::BLANK_LINE, $container, PHP_INT_MAX, '']];
+        return null === $tag ? $opened : ['', $tag];
     }
 
     // An underline, a heading or a blank line is no paragraph text, because each ends the paragraph above it.
     private static function isParagraphText(string $kept): bool
     {
         return '' !== trim($kept) && 1 !== preg_match(self::HEADING, $kept) && 1 !== preg_match(self::UNDERLINE, $kept);
-    }
-
-    private static function isIndentedCode(string $line, int $container): bool
-    {
-        return self::indentOf($line) - $container > 3;
     }
 
     /**

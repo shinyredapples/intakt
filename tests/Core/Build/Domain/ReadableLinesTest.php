@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
+use Intakt\Core\Build\Domain\HtmlBlocks;
 use Intakt\Core\Build\Domain\ReadableLines;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReadableLines::class)]
+#[CoversClass(HtmlBlocks::class)]
 final class ReadableLinesTest extends TestCase
 {
     public function testLinesInsideAFenceAreEmptyAndTheOthersKept(): void
