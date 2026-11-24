@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use ArrayObject;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
-use ArrayObject;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
