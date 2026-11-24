@@ -29,6 +29,12 @@ The picture charts show tokens per day by kind of work and by account, tokens pe
 
 Tokens per merged pull request divides each day's tokens by the pull requests merged that day. Merges keep coming in after a day is over, so counting them again every time would change old figures. So the first time the program counts the merges for a given usage file, it writes the counts into a hidden line at the end of that chart's part. While the usage file stays the same, later runs reuse those counts, and the token charts stay exactly as they were. Once the usage file changes, the merges are counted again and the line is written anew.
 
+## A journey page for every project (planned)
+
+Today only Intakt has a journey page. The plan is to give every project one on the dashboard, with the same kinds of figures worked out from what Intakt records. When a milestone closes, the Maintainer will draft a short dated entry from the issues' decisions, the stalls and the send-backs, each claim linking its issue or pull request.
+
+You approve that entry, and a pull request adds it to the project's `docs/journey.md`; the first one creates the file when the project has none. How close you are to your subscription limits shows only in the dashboard's admin area, on Team and accounts, never on the journey page or in the repository. A project can turn the page off. The design is in [the dashboard design](../design/05-architecture/13-dashboard.md#journey-page).
+
 ## Where you can read it
 
 On GitHub the page shows as it is. The project's published site carries a copy beside the highlights page, with the timeline drawn as a picture, because the site cannot draw the timeline itself.

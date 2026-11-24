@@ -200,6 +200,18 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([1 => 51], $plan->pullRequests);
     }
 
+    public function testEveryTrustedOpenPullRequestClosingATaskIsKeptLowestFirst(): void
+    {
+        $plan = $this->plan([
+            $this->row(Issues::task(1)),
+            $this->row(Issues::pullRequest(52, 'Fixes #1')),
+            $this->row(Issues::pullRequest(51, 'Fixes #1')),
+            $this->row(Issues::pullRequest(50, 'Fixes #1', 'mallory')),
+        ]);
+
+        self::assertSame([1 => [51, 52]], $plan->closingPullRequests);
+    }
+
     public function testAnEligibilityLabelATriageAccountAppliedMakesNoTask(): void
     {
         self::assertSame([], $this->readyOf([$this->row(Issues::task(1), $this->history('ana', ['intakt' => 'tom']))]));

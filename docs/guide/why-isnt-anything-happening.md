@@ -64,7 +64,7 @@ None of this is built yet. Each rule in one sentence:
 
 ## Is the server itself busy?
 
-If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.
+If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. The board shows the same numbers in a row under its columns each time it loads. Planned: a container health check built on them.
 
 ## What is Intakt doing right now?
 
@@ -74,7 +74,7 @@ Run `php bin/console intakt:status --format=json`. It prints one line of JSON: f
 
 This is the service log, not the live job log on a task's card (described under "Still stuck?" below); they are two different things.
 
-Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened.
+Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened. To see more, such as notes about what Intakt skipped, set `INTAKT_LOG_LEVEL=info` and restart it.
 
 Intakt hides the secrets it knows about. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../reference/user-manual.md#the-log) lists the fields and the credentials by name.
 
