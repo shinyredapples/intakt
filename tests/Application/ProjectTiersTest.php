@@ -120,26 +120,6 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
     }
 
-    public function testAWatchSectionWithoutItsTaskStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "projects:\n    beta:\n        watch: { repository: repos/beta, base: main }\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/"task" under "intakt\.projects\.beta" must be configured/');
-
-        $this->bootedContainer();
-    }
-
-    public function testAnUnknownProjectModeStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "projects:\n    beta:\n        mode: quiet\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/"quiet" is not allowed for path "intakt\.projects\.beta\.mode"/');
-
-        $this->bootedContainer();
-    }
-
     public function testAShadowModeStopsTheBootAsAnUnknownMode(): void
     {
         file_put_contents($this->file, "projects:\n    beta:\n        mode: shadow\n        tiers:\n            strong: { provider: openai, model: other }\n");
@@ -201,28 +181,15 @@ final class ProjectTiersTest extends KernelTestCase
         ], $routing);
     }
 
-    public function testAProjectsValueThatIsNoMapStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "projects: broken\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/Invalid type for path "intakt\.projects"/');
-
-        $this->bootedContainer();
-    }
-
-    public function testTheOwnersCeilingsBesideTheProjectsReachTheBudgetWithTheDefaultForAWindowLeftOut(): void
-    {
-        file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter(BudgetServices::CEILINGS));
-    }
-
-    public function testTheOwnersPricesBesideTheCeilingsReachTheBudgetWithTheInputPriceForACachePriceLeftOut(): void
+    // One compile for both sections, because BudgetConfigurationTest proves the defaults and this test only that the merged trees reach the budget.
+    public function testTheOwnersCeilingsAndPricesBesideTheProjectsReachTheBudgetWithTheDefaultsForWhatIsLeftOut(): void
     {
         file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\n    prices:\n        other: { input: 2, output: 8 }\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
-        self::assertSame(['other' => ['input' => 2.0, 'output' => 8.0, 'cache_read' => 2.0, 'cache_write' => 2.0]], $this->bootedContainer()->getParameter(BudgetServices::PRICES));
+        $container = $this->bootedContainer();
+
+        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $container->getParameter(BudgetServices::CEILINGS));
+        self::assertSame(['other' => ['input' => 2.0, 'output' => 8.0, 'cache_read' => 2.0, 'cache_write' => 2.0]], $container->getParameter(BudgetServices::PRICES));
     }
 
     public function testTheStartGuardOfTheContainerRefusesAStartAtTheOwnersCeiling(): void
@@ -265,16 +232,6 @@ final class ProjectTiersTest extends KernelTestCase
         $tester->execute(['account' => 'wiring']);
 
         self::assertStringContainsString('gpt-6.2-sol', $tester->getDisplay());
-    }
-
-    public function testACeilingAboveAHundredPercentStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "budget:\n    ceilings:\n        weekly: 120\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/intakt\.budget\.ceilings\.weekly/');
-
-        $this->bootedContainer();
     }
 
     public function testTheTierPlatformReachesTheProjectModelsThroughTheBundleModelCatalog(): void

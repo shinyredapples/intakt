@@ -99,6 +99,14 @@ final class WatchConfigurationTest extends TestCase
         $this->processed(['repository' => 5, 'base' => 'main', 'task' => 'Review.']);
     }
 
+    public function testAMissingTaskIsRefusedNamingItsProject(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/"task" under "intakt\.projects\.alpha" must be configured/');
+
+        $this->processed(['repository' => '/r', 'base' => 'main']);
+    }
+
     public function testAMissingBaseIsRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);
