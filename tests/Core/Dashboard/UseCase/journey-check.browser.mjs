@@ -213,6 +213,51 @@ test('a demo page that leaves at once for a page below a review page fails the f
     assert.equal(result.failure.error, 'the page left /demo for http://localhost/reviews/r1/record, not for a review page on http://localhost');
 });
 
+test('a demo page that leaves at once for a review path whose encoded slash the router reads as a page below the review fails the first journey at step 3', async () => {
+    const pages = demoSite({ demo: '<script>location.assign(\'/reviews/r1%2Frecord\');</script>' });
+    pages['/reviews/r1%2Frecord'] = pages['/reviews/r1'];
+
+    const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/reviews/r1%2Frecord, not for a review page on http://localhost');
+});
+
+test('a demo page that leaves at once for a review path whose encoding cannot be decoded fails the first journey at step 3', async () => {
+    const pages = demoSite({ demo: '<script>location.assign(\'/reviews/r1%E0%A4%A\');</script>' });
+    pages['/reviews/r1%E0%A4%A'] = pages['/reviews/r1'];
+
+    const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/reviews/r1%E0%A4%A, not for a review page on http://localhost');
+});
+
+test('the first journey passes when the demo page leaves at once for a review whose name holds a twice-encoded slash, which the router reads as one segment', async () => {
+    const pages = demoSite({ demo: '<script>location.assign(\'/reviews/r1%252Frecord\');</script>' });
+    pages['/reviews/r1%252Frecord'] = pages['/reviews/r1'];
+
+    const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure, null);
+});
+
+test('a demo page that went to /elsewhere and from there to a review page before the press returned fails the first journey at step 3', async () => {
+    const pages = demoSite({ demo: '<script>location.assign(\'/elsewhere\');</script>' });
+    pages['/elsewhere'] = pages['/demo'].replace('/elsewhere', '/reviews/r1');
+    // Forces the order: the press returns only once the page has reached the review page, so step 3 never sees /elsewhere as the page's own address.
+    const pressAndSettle = { name: FIRST_RUN.steps[1].name, run: async (page) => {
+        await FIRST_RUN.steps[1].run(page);
+        await page.waitForURL(`${ORIGIN}/reviews/r1`);
+    } };
+    const journey = { name: FIRST_RUN.name, steps: [FIRST_RUN.steps[0], pressAndSettle, ...FIRST_RUN.steps.slice(2)] };
+
+    const result = await runJourney(routedSite(pages), ORIGIN, journey, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
+});
+
 test('a demo page that stays and does not show its heading fails the first journey at step 3', async () => {
     const result = await runJourney(routedSite(demoSite({ demo: '<h1>Something else</h1>' })), ORIGIN, FIRST_RUN, scratch(), 1);
 

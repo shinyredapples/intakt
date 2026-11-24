@@ -285,7 +285,8 @@ function seeRoleWhileAt(pathOnSite, role, name) {
         left.catch(() => {});
         await Promise.race([seen, left]);
       }
-      const where = departure ?? page.url();
+      // A page that was gone before this step looked may have passed a wrong address on its way, so the press's trail is asked first.
+      const where = firstAddressAfter(TRAILS.get(page), expected) ?? departure ?? page.url();
       if (!isAt(where, expected) && !isReviewPage(where, address)) {
         throw new Error(`the page left ${pathOnSite} for ${originAndPath(where)}, not for a review page on ${new URL(address).origin}`);
       }
@@ -293,12 +294,31 @@ function seeRoleWhileAt(pathOnSite, role, name) {
   };
 }
 
-// The SHOW_REVIEW route, /reviews/{round}, below the address the check was given; a page under it or on another install is not the review.
+function firstAddressAfter(trail, expected) {
+  const visits = trail?.visits ?? [];
+  const arrival = visits.findIndex((visit) => isAt(visit, expected));
+  if (arrival === -1) return undefined;
+
+  return visits.slice(arrival).find((visit) => !isAt(visit, expected));
+}
+
+// Only the review page shows the run's own verdict, so a page below it or on another install could pass the later steps by accident.
 function isReviewPage(where, address) {
   const url = new URL(where);
   const reviews = new URL(address + '/reviews/');
+  if (url.origin !== reviews.origin || !url.pathname.startsWith(reviews.pathname)) return false;
+  const round = decoded(url.pathname.slice(reviews.pathname.length));
 
-  return url.origin === reviews.origin && url.pathname.startsWith(reviews.pathname) && /^[^/]+$/.test(url.pathname.slice(reviews.pathname.length));
+  return round !== null && round !== '' && !round.includes('/');
+}
+
+// The dashboard's router decodes the path before it matches, so %2F in the address is a slash to it; a segment that cannot be decoded is no review page.
+function decoded(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }
 
 // One step a person would name, made of the smaller steps that prove it, so the report says which part of the journey broke.
