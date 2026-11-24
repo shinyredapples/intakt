@@ -954,13 +954,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tick();
 
         $redKeys = [];
+        $redHeads = [];
         foreach ($this->ledger->kinds() as $index => $kind) {
             if (LedgerEventKind::HeadRed === $kind) {
                 $redKeys[] = array_keys($this->ledger->payloads()[$index]);
+                $redHeads[] = $this->ledger->payloads()[$index]['head'];
             }
         }
 
         self::assertSame([['project', 'change', 'head', 'read_again_at']], $redKeys);
+        self::assertSame([str_repeat(self::RED, 40)], $redHeads);
     }
 
     public function testARedMovedHeadIsCheckedAgainForStaleVerdictsOnceItsCommitArrives(): void

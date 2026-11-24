@@ -34,7 +34,7 @@ Say a pull request went red last week and you wonder what Intakt still remembers
 | **The log** | written to the service output (the journal, or `docker logs`), warnings and errors only unless you raise the level; how long it lasts is up to the journal or Docker, not Intakt | Set with `INTAKT_LOG_LEVEL`. Secrets Intakt knows about are written as `[redacted]`. |
 | **CI logs** | on GitHub, 90 days by default | Intakt stores none. Change the time in the repository's Actions settings on GitHub, not in Intakt. |
 
-Deleting a conversation never touches the ledger. For a red head, the ledger holds the head and when Intakt looks again, but no CI log text. A CI excerpt that a builder receives lives only in that builder's conversation, so the 30 days apply to it too.
+Deleting a conversation never touches the ledger. For a red head, the ledger holds the head and when Intakt looks again, but no CI log text. One case differs: when a head, or main, fails Intakt's own start-up check, the ledger also keeps the reason for the failure, which can include output of the tools Intakt ran (with known secrets redacted), and it stays there for good. A CI excerpt that a builder receives lives only in that builder's conversation, so the 30 days apply to it too.
 
 In the container image, all of this lives in `/app/var/data`, which you must mount as a volume: the image declares none, so without one your data is lost with the container (see [Running the container image](../reference/user-manual.md#running-the-container-image)).
 
