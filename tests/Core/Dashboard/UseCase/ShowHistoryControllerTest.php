@@ -45,7 +45,7 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
 
     public function testAProjectWithOnlyWatcherEventsCanBeChosenInTheHistoryFilter(): void
     {
-        // The payload the watcher writes when a project's main fails to boot: no review or build follows it.
+        // The watcher's payload for a main that fails to boot, because no review or build follows it and the shared filter never lists such a project.
         $payload = ['project' => 'beta', 'main' => str_repeat('a', 40), 'tool_fingerprint' => 'sample', 'reason' => 'sample'];
         $this->ledger->append(new LedgerEvent(LedgerEventKind::MainBootFailed, json_encode($payload, JSON_THROW_ON_ERROR)));
 
