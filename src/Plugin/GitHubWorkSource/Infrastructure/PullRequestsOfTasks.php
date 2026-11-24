@@ -121,8 +121,21 @@ final readonly class PullRequestsOfTasks
         }
 
         $history = $this->histories->of($project, $pull->number, $pull->updatedAt);
+        if (!Vouching::of($pull->author, $history, $steers)->trusted) {
+            return null;
+        }
 
-        return Vouching::of($pull->author, $history, $steers)->trusted ? $history : null;
+        return $this->sameBodyAsListed($pull, $history);
+    }
+
+    // The update times compare whole seconds, so an edit in the second of the branch listing passes the history read; its body may close a task the listed body did not make a candidate, so that edit fails the read like any other since the listing.
+    private function sameBodyAsListed(BranchPullRequest $pull, IssueHistory $history): IssueHistory
+    {
+        if ($history->body !== $pull->body) {
+            throw new ForgeReadFailed(sprintf('GitHub changed the body of pull request #%d after the branch listing, so the tasks it closes are not known until the next listing.', $pull->number));
+        }
+
+        return $history;
     }
 
     // A trusted pull request that is not on the task's branch must close the task in the history just read, not only in the plan, because a trusted edit between the tick's listing and the branch read can point it at another task.

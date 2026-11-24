@@ -255,7 +255,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
     {
         $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7', 'bea')]);
         $this->branches->during = function (): void {
-            $this->editedBodies[12] = 'Closes #8';
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Closes #8';
         };
 
         $pick = $this->source()->nextWork('alpha', WorkerState::Free);
@@ -264,12 +264,44 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertSame('GitHub holds pull request #12 without the closing reference to #7 it was listed with, so the pull request of that task is not known until the next listing.', $this->onlyLog()['context']['reason'] ?? null);
     }
 
+    // The update time has whole seconds, so the history read passes an edit made in the second of the branch listing: only its body differs from the one listed.
+    public function testAPullRequestEditedInTheSecondOfTheBranchListingToCloseAnotherTaskShowsNoQueue(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::task(10), Issues::pullRequest(12, 'Closes #9', 'bea')]);
+        $this->branches->bodyOf = [12 => 'Closes #10'];
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Closes #7';
+        };
+
+        $queue = $this->source()->queue('alpha');
+
+        self::assertFalse($queue->complete);
+        self::assertSame([], $queue->ready());
+        self::assertSame('GitHub changed the body of pull request #12 after the branch listing, so the tasks it closes are not known until the next listing.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testAPullRequestOnTheTaskBranchEditedAfterTheBranchListingToCloseAnotherTaskShowsNoQueue(): void
+    {
+        $this->branches->branchOf = [12 => 'fix/8'];
+        $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
+        $this->branches->bodyOf = [12 => 'Closes #10'];
+        $this->reads->lists([Issues::task(7), Issues::task(8), Issues::pullRequest(12, 'Closes #9', 'bea')]);
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Closes #7';
+        };
+
+        $queue = $this->source()->queue('alpha');
+
+        self::assertFalse($queue->complete);
+        self::assertSame('GitHub changed the body of pull request #12 after the branch listing, so the tasks it closes are not known until the next listing.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
     public function testAPullRequestOnTheTaskBranchEditedToCloseAnotherTaskStillMakesTheTaskARework(): void
     {
         $this->branches->branchOf = [12 => 'fix/7-intake'];
         $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7', 'bea')]);
         $this->branches->during = function (): void {
-            $this->editedBodies[12] = 'Closes #8';
+            $this->editedBodies[12] = $this->branches->bodyOf[12] = 'Closes #8';
         };
 
         self::assertEquals(new Task(7, 'Task 7', 12), $this->source()->nextWork('alpha', WorkerState::Free)->task);
