@@ -445,11 +445,6 @@ final class WorkerServer implements Server
         return ['XDG_DATA_HOME' => $scratch.'/xdg-data', 'XDG_CONFIG_HOME' => $scratch.'/xdg-config', 'FRANKENPHP_ADMIN_URL' => $this->adminUrl()];
     }
 
-    private function adminUrl(): string
-    {
-        return 'http://127.0.0.1:'.$this->adminPort;
-    }
-
     public function port(string $log): ?int
     {
         // Caddy logs this only once every listener is bound, so an unrelated listener on the chosen port cannot answer the readiness request in FrankenPHP's place.
@@ -464,6 +459,11 @@ final class WorkerServer implements Server
     public function labeled(InstanceStatus $status): InstanceStatus
     {
         return $status->inMode('worker');
+    }
+
+    private function adminUrl(): string
+    {
+        return 'http://127.0.0.1:'.$this->adminPort;
     }
 
     /**
