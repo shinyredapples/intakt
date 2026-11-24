@@ -51,10 +51,7 @@ final readonly class DoctrineOutageNotices
             'account' => $outage->account->key(),
             'since' => $outage->lastReadingAt->format(DateTimeInterface::ATOM),
         ]);
-        $notice = new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt);
-        $this->entities->persist($notice);
-        $this->entities->flush();
-        $this->endIfReadSince($notice);
+        $this->storeWhileNoReadingIsRecorded($outage);
     }
 
     private function wasNoticed(UsageReadingsStayedAway $outage): bool
@@ -66,18 +63,27 @@ final readonly class DoctrineOutageNotices
         ]);
     }
 
-    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself. It looks again until the earliest reading stays the same across an update, because an earlier reading stored meanwhile skips a notice with no end yet (it cannot tell it from one that predates ends being kept), and a competing writer may have saved the same end first, which moves no row here; the loop stops once a pass changes nothing: it finds no reading after the outage, or the same earliest reading as the one it just ended with.
+    // Waiting, because recording a reading is brief, and while this row is stored and ended no reading of the account can run its end before the row exists or commit after this look (#3293).
+    private function storeWhileNoReadingIsRecorded(UsageReadingsStayedAway $outage): void
+    {
+        $lock = $this->locks->createLock(DoctrineMeasuredUse::READINGS_LOCK.$outage->account->key());
+        $lock->acquire(true);
+        try {
+            $notice = new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt);
+            $this->entities->persist($notice);
+            $this->entities->flush();
+            $this->endIfReadSince($notice);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    // A reading stored before this row found no row to end, so the earliest of them ends it here; one stored later finds the row itself.
     private function endIfReadSince(OutageNoticeRecord $notice): void
     {
-        $endedWith = null;
-        while (true) {
-            $earliest = $this->earliestReadingSince($notice);
-            if (!$earliest instanceof DateTimeImmutable || $earliest->getTimestamp() === $endedWith?->getTimestamp()) {
-                return;
-            }
-
+        $earliest = $this->earliestReadingSince($notice);
+        if ($earliest instanceof DateTimeImmutable) {
             $this->endWith($notice, $earliest);
-            $endedWith = $earliest;
         }
     }
 
@@ -101,14 +107,13 @@ final readonly class DoctrineOutageNotices
         return [] === $later ? null : $later[0]->takenAt;
     }
 
-    // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
+    // One statement past the entity, because the row is already flushed and its end alone changes.
     private function endWith(OutageNoticeRecord $notice, DateTimeImmutable $takenAt): void
     {
         $this->entities->createQueryBuilder()
             ->update(OutageNoticeRecord::class, 'notice')
             ->set('notice.endedAt', ':takenAt')
             ->where('notice.position = :position')
-            ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
             ->setParameter('takenAt', $takenAt, 'utc_datetime_immutable')
             ->setParameter('position', $notice->position)
             ->getQuery()

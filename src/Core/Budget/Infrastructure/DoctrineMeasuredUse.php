@@ -19,17 +19,21 @@ use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
-// Readings are appended, never updated in place, so two workers recording one window at once need no lock: the later takenAt is the latest, and the higher position breaks a tie within one second.
+// Readings are appended, never updated in place, so the later takenAt is the latest and the higher position breaks a tie within one second; the per-account lock is for the outage notices only.
 #[AsAlias(MeasuredUse::class)]
 final readonly class DoctrineMeasuredUse implements MeasuredUse
 {
+    public const string READINGS_LOCK = 'budget-readings-';
+
     public function __construct(
         private EntityManagerInterface $entities,
         private ClockInterface $clock,
         private EventDispatcherInterface $events,
+        private LockFactory $locks,
     ) {
     }
 
@@ -42,23 +46,10 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             return $refusal;
         }
 
-        // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
-        $previous = $this->latestReadingBefore($reading->account, $now);
+        $ended = $this->storeWhileNoNoticeIsWritten($reading, $now);
         // Inside a caller's transaction nothing is committed yet, and its rollback would erase an end a listener already heard of, so the caller that owns the commit announces.
-        if ($this->entities->getConnection()->isTransactionActive()) {
-            $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
-
-            return ReadingOutcome::Recorded;
-        }
-
-        $record = new WindowReadingRecord($reading, $now);
-        $ended = $this->storeEndingOutages($record, $previous);
-        try {
-            $ended += $this->moveLaterEndsTo($record, $previous);
-        } finally {
-            if ($ended > 0) {
-                $this->events->dispatch(new OwnerNoticesChanged());
-            }
+        if ($ended > 0 && !$this->entities->getConnection()->isTransactionActive()) {
+            $this->events->dispatch(new OwnerNoticesChanged());
         }
 
         return ReadingOutcome::Recorded;
@@ -89,6 +80,21 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         }
 
         return $reading->window->refusalOfReset($resetsAt, $now);
+    }
+
+    // Waiting and held across the commit, because on a read-committed engine a notice of this account stored meanwhile could miss this reading's end while its writer's look misses this uncommitted reading (#3293).
+    private function storeWhileNoNoticeIsWritten(WindowReading $reading, DateTimeImmutable $now): int
+    {
+        $lock = $this->locks->createLock(self::READINGS_LOCK.$reading->account->key());
+        $lock->acquire(true);
+        try {
+            // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
+            $previous = $this->latestReadingBefore($reading->account, $now);
+
+            return $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
+        } finally {
+            $lock->release();
+        }
     }
 
     private function latestReadingBefore(Account $account, DateTimeImmutable $moment): ?DateTimeImmutable
@@ -148,11 +154,11 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->execute();
     }
 
-    // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one; a reading between the outage and this one already ended it, so a notice left with no end from before ends were kept is not ended now.
+    // The earlier reading wins, because a slow writer can store its reading after a later one; a reading between the outage and this one already ended it, so a notice left with no end from before ends were kept is not ended now.
     private function endOutagesBefore(WindowReadingRecord $record, ?DateTimeImmutable $previous): int
     {
         $query = $this->endingQuery($record, $previous);
-        // A fresher reading of the account ended every outage before it when it was stored, so a notice it left with no end is from before ends were kept, even with no earlier reading to guard by.
+        // A fresher reading of the account ended every outage before it when it was stored, and no notice of the account is written meanwhile, so a notice it left with no end is from before ends were kept, even with no earlier reading to guard by.
         if ($this->wasReadAfter($record)) {
             $query->andWhere('notice.endedAt IS NOT NULL');
         }
@@ -160,17 +166,6 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         $ended = $query->getQuery()->execute();
 
         return is_int($ended) ? $ended : 0;
-    }
-
-    // Once more after the commit, because a notice writer may have stored its notice after this reading's update and given it a later reading's end before this reading was visible to its re-check; only a saved end moves, since a notice still without one is either being ended by its writer, which now sees this reading, or from before ends were kept.
-    private function moveLaterEndsTo(WindowReadingRecord $record, ?DateTimeImmutable $previous): int
-    {
-        $moved = $this->endingQuery($record, $previous)
-            ->andWhere('notice.endedAt IS NOT NULL')
-            ->getQuery()
-            ->execute();
-
-        return is_int($moved) ? $moved : 0;
     }
 
     private function endingQuery(WindowReadingRecord $record, ?DateTimeImmutable $previous): QueryBuilder

@@ -7,6 +7,8 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\Configuration;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Driver\Middleware as DriverMiddleware;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\ORM\EntityManager;
@@ -126,7 +128,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher(), new LockFactory(new InMemoryStore()));
         $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
         $use->record($reading);
         $clock->modify('+4 hours');
@@ -159,7 +161,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher(), new LockFactory(new InMemoryStore()));
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->modify('+4 hours');
         $this->entities->persist(new OutageNoticeRecord($account, new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $clock->now()));
@@ -174,7 +176,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             return $stampedAt;
         });
 
-        new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher())->record($reading);
+        new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher(), new LockFactory(new InMemoryStore()))->record($reading);
 
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
@@ -184,7 +186,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher(), new LockFactory(new InMemoryStore()));
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->sleep(1);
         $use->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, null)));
@@ -504,105 +506,99 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
 
-    // A notice whose writer is still saving its end looks, to an earlier reading stored meanwhile, like one from before ends were kept, so the writer must look again.
-    public function testAnEarlierReadingStoredWhileTheNoticeSavesItsEndStillMovesTheEndToItsMoment(): void
+    // A reading stored while the writer saves its end would see a notice with no end yet, which it cannot tell from one from before ends were kept, so it waits for the writer instead.
+    public function testAnEarlierReadingRecordedWhileTheNoticeSavesItsEndStillMovesTheEndToItsMoment(): void
     {
         $this->record('main', '2026-11-02 12:00:00');
-        $late = function (): void {
-            $this->record('main', '2026-11-02 11:59:00');
-        };
-        $hook = new class($late) extends AbstractLogger {
-            public function __construct(private ?Closure $late)
-            {
-            }
-
-            public function log(mixed $level, string|Stringable $message, array $context = []): void
-            {
-                if (!$this->late instanceof Closure || !str_starts_with(is_string($context['sql'] ?? null) ? $context['sql'] : '', 'UPDATE budget_outage_notice ')) {
-                    return;
+        $locks = new LockFactory(new InMemoryStore());
+        $late = new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 11:59:00 UTC'), new EventDispatcher(), $locks);
+        $waited = null;
+        $writer = $this->connectionWith(new ForcedOrder(function (string $sql) use ($locks, $late, &$waited): string {
+            if (null === $waited && str_starts_with($sql, 'UPDATE budget_outage_notice ')) {
+                $waited = self::readingsLockIsHeld($locks);
+                if (!$waited) {
+                    $late->record($this->readingOf('main'));
                 }
-
-                $record = $this->late;
-                $this->late = null;
-                $record();
-            }
-        };
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
-        $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
-
-        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
-
-        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
-    }
-
-    // The writer's own update moves no row here, so it must still look again, find the earlier reading stored meanwhile, and move the end to it.
-    public function testANoticeWhoseSameEndWasSavedFirstByAnotherWriterStillMovesToAnEarlierReading(): void
-    {
-        $this->record('main', '2026-11-02 12:00:00');
-        $connection = $this->entities->getConnection();
-        $first = function () use ($connection): void {
-            $this->record('main', '2026-11-02 11:59:00');
-            $connection->executeStatement("UPDATE budget_outage_notice SET ended_at = '2026-11-02 12:00:00'");
-        };
-        $hook = new class($first) extends AbstractLogger {
-            public function __construct(private ?Closure $first)
-            {
             }
 
-            public function log(mixed $level, string|Stringable $message, array $context = []): void
-            {
-                if (!$this->first instanceof Closure || !str_starts_with(is_string($context['sql'] ?? null) ? $context['sql'] : '', 'UPDATE budget_outage_notice SET ended_at = ?')) {
-                    return;
-                }
+            return $sql;
+        }));
 
-                $run = $this->first;
-                $this->first = null;
-                $run();
-            }
-        };
-        $writer = DriverManager::getConnection($connection->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
-        $notices = new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
-
-        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
-
-        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
-    }
-
-    // The earlier reading's own end ran before the notice was stored, and the notice writer's re-check ran before that reading committed, so only the reading, once committed, can move the end to its moment.
-    public function testAnEarlierReadingCommittedAfterTheNoticeWritersReCheckStillMovesTheEndToItsMoment(): void
-    {
-        $this->record('main', '2026-11-02 12:00:00');
-        $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndRunsBeforeTheNotice()]));
-        $late = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 11:59:00 UTC'), new EventDispatcher());
-
-        $late->record($this->readingOf('main'));
-
-        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
-    }
-
-    // The end saved in the transaction is committed before the second update runs, so its failure keeps that end, still announces it, and reaches the caller.
-    public function testAFailedUpdateAfterTheCommitKeepsTheEndAnnouncesItOnceAndReachesTheCaller(): void
-    {
-        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
-        $heard = 0;
-        $events = new EventDispatcher();
-        $events->addListener(OwnerNoticesChanged::class, static function () use (&$heard): void {
-            ++$heard;
-        });
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new SecondOutageEndFails()]));
-        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), $events);
-
-        try {
-            $worker->record($this->readingOf('main'));
-            self::fail('The update after the commit did not fail.');
-        } catch (RuntimeException $failure) {
-            self::assertSame(SecondOutageEndFails::FAILURE, $failure->getMessage());
+        new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), $locks, self::createStub(LoggerInterface::class))->noticeOnce($this->outageOf('main'));
+        if (true === $waited) {
+            $late->record($this->readingOf('main'));
         }
 
-        self::assertSame(1, $heard);
-        self::assertSame('12:00', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
-        self::assertSame('12:00', $this->measuredUseAt('2026-11-02 12:00:00')->of(new Account(Provider::ClaudeCode, 'main'), UsageWindow::FiveHour)?->takenAt->format('H:i'));
+        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    // The reading's own end runs before the notice row exists, so on a read-committed engine a writer whose look ran before the reading committed would leave the notice with no end, unless the two exclude each other until the commit.
+    public function testANoticeStoredWhileItsOnlyRecoveryReadingIsBeingRecordedEndsAtThatReadingsMoment(): void
+    {
+        $this->record('main', '2026-11-02 08:00:00');
+        $locks = new LockFactory(new InMemoryStore());
+        $heldAtTheCommit = false;
+        $reading = $this->connectionWith(new ForcedOrder(
+            static fn (string $sql): string => $sql,
+            static function () use ($locks, &$heldAtTheCommit): void {
+                $heldAtTheCommit = self::readingsLockIsHeld($locks);
+            },
+        ));
+        new DoctrineMeasuredUse(new EntityManager($reading, $this->entities->getConfiguration()), new MockClock('2026-11-02 11:59:00 UTC'), new EventDispatcher(), $locks)->record($this->readingOf('main'));
+        $writer = $this->connectionWith(new ForcedOrder(
+            static fn (string $sql): string => $heldAtTheCommit && self::readingsLockIsHeld($locks) ? $sql : self::beforeTheReading($sql),
+        ));
+
+        new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), $locks, self::createStub(LoggerInterface::class))->noticeOnce($this->outageOf('main'));
+
+        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    // The writer ends the notice with the later reading while the earlier one is recorded, so on a read-committed engine that reading's own end could run before the row exists and leave only an update after its commit, which may fail, unless the two exclude each other.
+    public function testANoticeEndedWhileAnEarlierReadingIsBeingRecordedEndsAtTheEarlierReadingsMoment(): void
+    {
+        $this->record('main', '2026-11-02 12:00:00');
+        $locks = new LockFactory(new InMemoryStore());
+        $heldWhileEnded = false;
+        $writer = $this->connectionWith(new ForcedOrder(static function (string $sql) use ($locks, &$heldWhileEnded): string {
+            if (str_starts_with($sql, 'UPDATE budget_outage_notice ')) {
+                $heldWhileEnded = self::readingsLockIsHeld($locks);
+            }
+
+            return $sql;
+        }));
+        new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), $locks, self::createStub(LoggerInterface::class))->noticeOnce($this->outageOf('main'));
+        $firstEnd = true;
+        $reading = $this->connectionWith(new SecondOutageEndFails(), new ForcedOrder(static function (string $sql) use ($locks, &$heldWhileEnded, &$firstEnd): string {
+            if (!$firstEnd || !str_starts_with($sql, 'UPDATE budget_outage_notice ')) {
+                return $sql;
+            }
+            $firstEnd = false;
+
+            return $heldWhileEnded && self::readingsLockIsHeld($locks) ? $sql : self::beforeTheNotice($sql);
+        }));
+
+        self::assertSame(ReadingOutcome::Recorded, new DoctrineMeasuredUse(new EntityManager($reading, $this->entities->getConfiguration()), new MockClock('2026-11-02 11:59:00 UTC'), new EventDispatcher(), $locks)->record($this->readingOf('main')));
+
+        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    public function testARecordedReadingLeavesTheAccountsReadingsLockFree(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+
+        new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $locks)->record($this->readingOf('main'));
+
+        self::assertFalse(self::readingsLockIsHeld($locks));
+    }
+
+    public function testAStoredNoticeLeavesTheAccountsReadingsLockFree(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+
+        new DoctrineOutageNotices($this->entities, $locks, self::createStub(LoggerInterface::class))->noticeOnce($this->outageOf('main'));
+
+        self::assertFalse(self::readingsLockIsHeld($locks));
     }
 
     // The caller's rollback would erase the end, so a reading recorded inside its transaction tells nobody.
@@ -771,7 +767,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndFails()]));
 
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $clock, $events);
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $clock, $events, new LockFactory(new InMemoryStore()));
     }
 
     private function recordWhileTheEndFails(DoctrineMeasuredUse $worker): void
@@ -786,12 +782,46 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
     private function measuredUseAt(string $at, EventDispatcher $events = new EventDispatcher()): DoctrineMeasuredUse
     {
-        return new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), $events);
+        return new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), $events, new LockFactory(new InMemoryStore()));
     }
 
     private function readingOf(string $account): WindowReading
     {
         return new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(12.0, null));
+    }
+
+    private function connectionWith(DriverMiddleware ...$middlewares): Connection
+    {
+        return DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares($middlewares));
+    }
+
+    private function outageOf(string $account): UsageReadingsStayedAway
+    {
+        return new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+    }
+
+    // Free only when no writer of the account's readings or notices holds it, because a probe that gets it gives it back at once.
+    private static function readingsLockIsHeld(LockFactory $locks): bool
+    {
+        $probe = $locks->createLock(DoctrineMeasuredUse::READINGS_LOCK.'claude_code.main');
+        if (!$probe->acquire(false)) {
+            return true;
+        }
+        $probe->release();
+
+        return false;
+    }
+
+    // The writer's look at the readings then runs as before the reading committed, when it could not see it yet.
+    private static function beforeTheReading(string $sql): string
+    {
+        return str_starts_with($sql, 'SELECT') && str_contains($sql, ' FROM budget_window_reading ') ? str_replace(' WHERE ', ' WHERE 1 = 0 AND ', $sql) : $sql;
+    }
+
+    // The reading's own end then runs as before the notice row existed, when it matched no row.
+    private static function beforeTheNotice(string $sql): string
+    {
+        return str_replace(' WHERE ', ' WHERE 1 = 0 AND (', $sql).')';
     }
 
     private function outageNotices(): DoctrineOutageNotices

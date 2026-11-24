@@ -26,6 +26,8 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 // Through the Doctrine store, because a worker decides on the readings it keeps, refusals and ages included.
 #[Group('persistence')]
@@ -79,7 +81,7 @@ final class ScriptedDayTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher());
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher(), new LockFactory(new InMemoryStore()));
         $this->guard = new CeilingStartGuard($this->measured, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
     }
 

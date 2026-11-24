@@ -63,7 +63,7 @@ final readonly class RolledBackReplay
     private function dayReplayOn(MockClock $clock, LoggerInterface $logger): DayReplay
     {
         $events = new EventDispatcher();
-        $measured = new DoctrineMeasuredUse($this->entities, $clock, $events);
+        $measured = new DoctrineMeasuredUse($this->entities, $clock, $events, $this->locks);
         $holds = new DoctrineHolds($this->entities, $clock);
         $events->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger)->noticeOnce(...));
         $guard = new BudgetGuard($holds, new CeilingStartGuard($measured, $clock, $this->ceilings), new OutageWatch($measured, $clock, $events), $this->halts);
