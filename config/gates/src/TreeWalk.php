@@ -66,6 +66,10 @@ final readonly class TreeWalk
 
         $target = yield from $this->foldersOnTheRoute($path, $key, $root);
 
+        if (!file_exists($path)) {
+            throw new UnexpectedValueException('a link leads nowhere: '.$path);
+        }
+
         yield $key."\0" => $this->settledStatusOf($target);
     }
 
@@ -74,7 +78,7 @@ final readonly class TreeWalk
      *
      * @throws UnexpectedValueException
      */
-    // Because the walk skips the folders the check writes, a link there (to a folder or to a file) shows that a folder on its way was moved away and back only by the folders and links its route passes within $root and the folders above where it leads.
+    // Because the walk skips the folders the check writes, a link there (to a folder or to a file) shows that a folder on its way was moved away and back only by the folders and links its route passes within $root and the folders above where it leads; where the target is missing, the route ends at the last part that exists, so a target that came and went shows in that folder's times.
     public function foldersOnTheRoute(string $link, string $key, string $root): Generator
     {
         $target = yield from $this->route($link, $key, $root);
@@ -100,6 +104,10 @@ final readonly class TreeWalk
         for ($links = 1; [] !== $names;) {
             $next = $this->stepped($folder, array_shift($names));
 
+            if (!file_exists($next) && !is_link($next)) {
+                break;
+            }
+
             yield from $this->statusWithin($next, $key, $root);
 
             if (is_link($next)) {
@@ -110,7 +118,7 @@ final readonly class TreeWalk
             }
         }
 
-        return $this->existing($folder, $link);
+        return '' === $folder ? '/' : $folder;
     }
 
     /**
@@ -169,20 +177,6 @@ final readonly class TreeWalk
         if ($links > self::MOST_LINKS_ON_A_ROUTE) {
             throw new UnexpectedValueException('a link leads back into itself: '.$link);
         }
-    }
-
-    /**
-     * @throws UnexpectedValueException
-     */
-    private function existing(string $folder, string $link): string
-    {
-        $end = '' === $folder ? '/' : $folder;
-
-        if (!file_exists($end)) {
-            throw new UnexpectedValueException('a link leads nowhere: '.$link);
-        }
-
-        return $end;
     }
 
     /**

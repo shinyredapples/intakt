@@ -381,6 +381,44 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertTrue($this->tree($root, $home)->hasPassed());
     }
 
+    public function testAMissingTargetOfATrackedFileLinkThatCameAndWentWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home, $parent] = $this->trackedFileLinkUnderVar();
+        unlink($parent.'/notes/example.md');
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        $root->write('var/backing/parent/notes/example.md', "clean\n");
+        unlink($parent.'/notes/example.md');
+
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testAMissingFolderOnTheRouteOfATrackedFileLinkThatCameAndWentWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home, $parent] = $this->trackedFileLinkUnderVar();
+        unlink($parent.'/notes/example.md');
+        rmdir($parent.'/notes');
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        $root->write('var/backing/parent/notes/example.md', "clean\n");
+        unlink($parent.'/notes/example.md');
+        rmdir($parent.'/notes');
+
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testATrackedFileLinkWhoseTargetStaysMissingWhileTheGatesRanRecordsAPass(): void
+    {
+        [$root, $home, $parent] = $this->trackedFileLinkUnderVar();
+        unlink($parent.'/notes/example.md');
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        self::assertTrue($tree->recordPass());
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testAnAbsoluteLinkPartWayAlongTheRouteToATrackedFolderMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
     {
         [$root, $home, $alias] = $this->trackedNoteUnderVarBehindTwoLinks();
