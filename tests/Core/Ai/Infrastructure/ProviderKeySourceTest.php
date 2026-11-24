@@ -6,16 +6,21 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
 
 // Serial because the tests set process-wide variables.
 #[CoversClass(ProviderKeySource::class)]
+#[UsesClass(Account::class)]
+#[UsesClass(EnvironmentVariables::class)]
+#[UsesClass(Provider::class)]
 #[Group('serial')]
 final class ProviderKeySourceTest extends TestCase
 {
