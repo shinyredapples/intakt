@@ -106,7 +106,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         try {
             $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class));
+            throw $this->unreachableForWrite($failure::class);
         }
 
         // Tolerated, because a label someone removed meanwhile is the state the removal asks for.
@@ -194,5 +194,11 @@ final readonly class GitHubStatusLabels implements StatusLabels
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeWriteFailed('No GitHub write of a label: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 }

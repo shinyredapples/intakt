@@ -93,7 +93,7 @@ final class TrustedPullRequestLabelsTest extends TestCase
     private function labelsOf(array $applied, ?array $current = null): Labels
     {
         $names = $current ?? array_map(static fn (LabelApplication $application): string => $application->label, $applied);
-        $histories = $this->createStub(IssueHistories::class);
+        $histories = self::createStub(IssueHistories::class);
         $histories->method('of')->willReturn(new IssueHistory('alice', $applied, '', new IssueLabels(...$names)));
         $trust = new RecordedTrust();
 
