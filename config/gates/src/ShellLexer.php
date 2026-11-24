@@ -40,6 +40,7 @@ final class ShellLexer
     private const array COMMAND_PREFIX_WORDS = ['then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time'];
     // Because a backslash in `$' '` escapes the next character, the quote ends at the first `'` no backslash escapes, or at the end of the source.
     private const string ANSI_C_QUOTED = '/(?:[^\'\\\\]++|\\\\.?)*+\'?/As';
+    private const string FUNCTION_PARENTHESES = '/(?<!=)\(\)/A';
 
     private readonly int $length;
     private readonly ShellHereDocuments $hereDocuments;
@@ -326,7 +327,7 @@ final class ShellLexer
     // Because the `()` of a function definition holds nothing, the body after it starts a command, so a `case` right after `f() {` is a keyword; after `=` the `()` is an empty array and starts nothing.
     private function functionParenthesesAt(int $offset): bool
     {
-        return ')' === ($this->source[$offset + 1] ?? '') && (0 === $offset || '=' !== $this->source[$offset - 1]);
+        return 1 === preg_match(self::FUNCTION_PARENTHESES, $this->source, $parentheses, 0, $offset);
     }
 
     private function afterParenthesisClosing(int $offset, ?int $frame): int
