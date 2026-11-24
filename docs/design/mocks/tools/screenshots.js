@@ -9,14 +9,16 @@ const path = require('path');
 const MOCKS = path.resolve(__dirname, '..');
 const OUT = path.join(MOCKS, 'screens');
 
-// The Waiting on you, task, settings and components pages land with the next part of the mocks.
+// The Waiting on you, settings and components pages land with the next part of the mocks.
 // Their jobs below stay; allJobs() drops them until their page is listed here.
 const PAGES = {
+  task: 'Task',
   index: 'Board',
   projects: 'Projects',
   project: 'Project acme-shop',
   'add-project': 'Add a project',
   health: 'Projects: health',
+  journey: 'Project acme-shop: journey',
   team: 'Team and accounts',
   'add-account': 'Add an account',
   history: 'History: ledger',
@@ -52,6 +54,12 @@ function jobsFor(theme) {
   add('index', PHONE, { search: 'gift', variant: 'search', note: 'search sheet, "gift"' });
   add('index', PHONE, { click: '.banner.broken .banner-toggle', variant: 'banner-open', note: 'CI banner expanded' });
   add('waiting', PHONE, { click: '#w-login .why summary', variant: 'why-open', note: 'first item, Why expanded' });
+  // A phone shows one pane at a time, so the live log gets a capture of its own, as a full page because the log and its summary run below the fold.
+  add('task', PHONE, { full: true, click: '.ttabs [data-pane="log"]', variant: 'log', note: 'Live log tab selected' });
+  // The full page draws the fixed phone navigation over the log's lines, so they also get a scrolled capture.
+  add('task', PHONE, { click: '.ttabs [data-pane="log"]', scroll: '.ttabs', variant: 'log-scrolled', note: 'Live log tab selected, scrolled to the tabs' });
+  // The phone viewport stops above the Timeline, so the default tab gets a scrolled capture too, to show the folded and active rounds.
+  add('task', PHONE, { scroll: '.ttabs', variant: 'timeline-scrolled', note: 'Timeline tab selected, scrolled to the tabs' });
   add('index', DESKTOP, { full: true, click: '#working summary', variant: 'working-open', note: 'Who is working expanded' });
   add('trends', DESKTOP, { full: true, click: '#c-merges summary', variant: 'table-open', note: 'merges chart as table' });
 

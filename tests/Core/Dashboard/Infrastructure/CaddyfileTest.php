@@ -44,6 +44,11 @@ final class CaddyfileTest extends TestCase
         self::assertSame(['localhost:2019'], (array) $this->at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'admin', 'listen'));
     }
 
+    public function testCaddyMetricsAreOnSoTheAdminApiServesFrankenPhpsSeries(): void
+    {
+        self::assertIsArray($this->at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'apps', 'http', 'metrics'));
+    }
+
     public function testTheAppWorkerRunsTheFrontControllerInWorkerMode(): void
     {
         $worker = $this->worker('app');

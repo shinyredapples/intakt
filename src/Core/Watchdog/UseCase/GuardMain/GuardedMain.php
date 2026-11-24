@@ -11,11 +11,13 @@ final readonly class GuardedMain
     /**
      * @param list<OwnerCard> $standingCards
      * @param list<string>    $noticedOwnerPushes
+     * @param list<string>    $peerMerges
      */
     public function __construct(
         public array $standingCards,
         // Only the notices this run gave, because a notice another run or clone gave already is not given again.
         public array $noticedOwnerPushes,
+        public array $peerMerges,
     ) {
     }
 }

@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewTools;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
@@ -556,7 +557,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     private function servers(): ReviewServerAccesses
     {
         $servers = self::createStub(ReviewServerAccesses::class);
-        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
+        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', new ReviewTools('read_file', 'list_directory', 'search_files')));
 
         return $servers;
     }

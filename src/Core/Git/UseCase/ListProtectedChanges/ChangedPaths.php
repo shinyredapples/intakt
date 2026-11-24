@@ -201,10 +201,10 @@ final readonly class ChangedPaths
      */
     private function run(string $repository, array $arguments): Process
     {
-        $call = $this->hardened->callInBareRepository($arguments, $repository);
+        $call = $this->hardened->callInBareRepository($repository, ...$arguments);
 
         // Empty input, because only hash-object reads it.
-        $process = new Process($call->command, $call->directory, $call->environment, '');
+        $process = new Process([...$call->command], $call->directory, [...$call->environment], '');
         $process->run();
 
         return $process;

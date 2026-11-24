@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\KeepProviderKey;
 use ArrayObject;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
@@ -208,7 +209,7 @@ final class KeepProviderKeyTest extends TestCase
     {
         $tiers = self::createStub(TierResolver::class);
         // One project per provider, each with its light tier on that provider, so every key has a check model.
-        $tiers->method('projects')->willReturn(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()));
+        $tiers->method('projects')->willReturn(new ProjectNames(...array_map(static fn (Provider $provider): string => $provider->value, Provider::cases())));
         $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel(Provider::from($project), 'light-'.$project));
 
         return $tiers;

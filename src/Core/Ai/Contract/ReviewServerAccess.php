@@ -13,33 +13,29 @@ final readonly class ReviewServerAccess
     public const string OPTION = 'intakt_review_server';
 
     /**
-     * @param non-empty-string       $name
-     * @param non-empty-string       $url
-     * @param non-empty-list<string> $tools
+     * @param non-empty-string $name
+     * @param non-empty-string $url
      */
     public function __construct(
         public string $name,
         public string $url,
         #[SensitiveParameter]
         public string $bearer,
-        public array $tools,
+        public ReviewTools $tools,
     ) {
     }
 
-    /**
-     * @return array{mcpServers: array<string, array{type: string, url: string, headers: array{Authorization: string}}>}
-     */
-    public function mcpConfiguration(): array
+    // Written as the JSON the CLI reads, because the file is its only use and a nested array would cross the module as an untyped shape.
+    public function mcpConfigurationJson(): string
     {
-        return ['mcpServers' => [$this->name => ['type' => 'http', 'url' => $this->url, 'headers' => ['Authorization' => 'Bearer '.$this->bearer]]]];
+        $configuration = ['mcpServers' => [$this->name => ['type' => 'http', 'url' => $this->url, 'headers' => ['Authorization' => 'Bearer '.$this->bearer]]]];
+
+        return json_encode($configuration, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
     }
 
     // The names the Claude Code CLI gives this server's tools, so the tools it is allowed and the reads it reports are matched by the same names.
-    /**
-     * @return non-empty-list<string>
-     */
-    public function mcpToolNames(): array
+    public function mcpToolNames(): ReviewTools
     {
-        return array_map(fn (string $tool): string => sprintf('mcp__%s__%s', $this->name, $tool), $this->tools);
+        return new ReviewTools(...array_map(fn (string $tool): string => sprintf('mcp__%s__%s', $this->name, $tool), [...$this->tools]));
     }
 }

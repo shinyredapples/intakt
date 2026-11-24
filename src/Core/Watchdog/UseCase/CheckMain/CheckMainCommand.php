@@ -29,7 +29,7 @@ final readonly class CheckMainCommand
     public function __invoke(SymfonyStyle $io, #[MapInput] CheckMainInput $input): int
     {
         try {
-            $classification = $this->check->classified($input->repository, $this->watched($input->lastSeenHead, $input->recordedMerge), $input->ownerKey);
+            $classification = $this->check->classified($input->repository, $this->watched($input->lastSeenHead, $input->recordedMerge), $input->trustedKeys());
         } catch (CommitNameNotFull|RecordedMergeNotARange|OwnerKeyRefused $refused) {
             $io->error(ConsoleReport::printable($refused->getMessage()));
 
@@ -57,6 +57,9 @@ final readonly class CheckMainCommand
 
     private function reported(SymfonyStyle $io, Classification $classification): int
     {
+        foreach ($classification->peerMerges as $commit) {
+            $io->writeln(ConsoleReport::peerMergeLine($commit->name));
+        }
         if ($classification->isClean()) {
             $io->writeln('main is clean');
 

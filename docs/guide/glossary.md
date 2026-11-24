@@ -43,14 +43,14 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Integrity hash** | a fingerprint (sha384) of a module's exact bytes in the import map; the browser refuses a module that does not match it | [Symfony in Intakt](symfony-in-intakt.md#waiting-before-taking-a-new-release) |
 | **Issue / task** | one piece of work; on GitHub it is an issue | [writing a good task](writing-a-good-task.md) |
 | **Job** | one build, one check or one review, in its own container | [containers](containers-and-services.md) |
-| **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
+| **Journey check** | a run that walks one path a person takes, to prove the whole product still works: `bin/check --journeys` starts a fresh copy of Intakt for each journey, and `bin/journey-check` walks its journeys in a real browser against an Intakt that is already running (it has none of its own yet) | [checking the whole product](checking-the-whole-product.md) |
 | **Judge step** | the Code reviewers' last step, a quick call that sorts the findings: a serious one (P1 or P2) is always fixed now, with the judge's doubt written beside it, and a small one (P3) is fixed now, later, or not at all | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Judge's note** | the judge's one-sentence reason, kept beside a serious finding (P1 or P2) it doubts, on the list of things to fix; the finding stays on the list either way | [assistant](using-intakt-from-your-assistant.md#the-judges-note-on-the-act-list) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Ledger** | Intakt's permanent record of what it did, one line per event, which is only ever added to (removing the demo project also removes the events it replayed) | [running one task](running-one-task.md#finding-the-steps-in-the-ledger) |
 | **Live (version)** | planned: a new version of Intakt during an update, once it holds the one right to write the records (the owner generation) and its start checks passed; from then on it hands out the work | [engine room](the-engine-room.md#draining-and-updates) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
-| **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
+| **Log** | Intakt's own record of its warnings and errors (or more, with a lower log level), one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
 | **Maintainer** | the AI agent that settles stuck work, so it rarely reaches you, and looks at speed and quality every week (planned) (formerly the maintainer agent) | [how it works](how-intakt-works.md#what-needs-you-and-what-doesnt) |
 | **MCP** | a standard way for AI assistants to use tools | [assistant](using-intakt-from-your-assistant.md) |

@@ -36,7 +36,7 @@ The other mocks load their fonts from Google Fonts, so opening them or running `
 
 ## Screenshots
 
-The screenshots are not committed. `tools/screenshots.js` writes all of them for the pages in this folder, light and dark, at 1440 and 390 wide, to `screens/` with an index in `screens/INDEX.md`. It needs Node.js and Playwright:
+The screenshots are not committed. `tools/screenshots.js` writes all of them for the pages in this folder, light and dark, at 1440 and 390 wide (the board and the task page also at 1920 and 2560), to `screens/` with an index in `screens/INDEX.md`. It needs Node.js and Playwright:
 
 ```sh
 npm install --global playwright

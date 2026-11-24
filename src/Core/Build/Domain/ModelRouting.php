@@ -43,7 +43,7 @@ final readonly class ModelRouting
         foreach ($rules->sensitivePaths as $glob) {
             $pattern = new PathGlob($glob);
 
-            if ([] !== array_filter($facts->paths, $pattern->matches(...))) {
+            if (array_any([...$facts->paths], $pattern->matches(...))) {
                 return true;
             }
         }

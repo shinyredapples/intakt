@@ -14,6 +14,7 @@ use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -122,7 +123,7 @@ final class BuildJobImageCommandTest extends TestCase
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$probed): JobResult {
             $probed[] = $spec->image;
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['php.json' => $this->probe]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(new JobOutputFile('php.json', $this->probe)));
         });
         $calls = 0;
         $client = new MockHttpClient(function () use (&$calls): MockResponse {
@@ -320,7 +321,7 @@ final class BuildJobImageCommandTest extends TestCase
             return $response;
         });
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['php.json' => $this->probe])));
+        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(new JobOutputFile('php.json', $this->probe))));
         $files = new ProjectFiles();
         $build = new BuildJobImage(new JobImagePlanner($files), new BuildContext($files), new DockerEngine($client, $this->socket), new PhpInImage($runner));
         $application = new Application();

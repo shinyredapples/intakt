@@ -18,11 +18,13 @@ use Intakt\Core\Watchdog\Infrastructure\FirstParentChain;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeOption;
+use Intakt\Core\Watchdog\UseCase\CheckMain\TrustedKeys;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Support\ConsoleDisplay;
 use Override;
@@ -39,11 +41,13 @@ use Symfony\Component\Process\Process;
 #[CoversClass(CheckMainCommand::class)]
 #[CoversClass(CheckMain::class)]
 #[CoversClass(CheckMainInput::class)]
+#[CoversClass(TrustedKeys::class)]
 #[CoversClass(RecordedMergeOption::class)]
 #[CoversClass(RecordedMergeNotARange::class)]
 #[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(CommitClassifier::class)]
 #[UsesClass(MainHistory::class)]
+#[UsesClass(TrustedSignatures::class)]
 #[UsesClass(FirstParentChain::class)]
 #[UsesClass(OwnerKey::class)]
 #[UsesClass(OwnerKeyRefused::class)]
@@ -306,6 +310,50 @@ final class CheckMainCommandTest extends TestCase
         self::assertSame(Command::INVALID, $tester->getStatusCode());
         self::assertStringContainsString('Owner key 2', $tester->getDisplay());
         self::assertStringNotContainsString('secret-looking-value', $tester->getDisplay());
+    }
+
+    public function testAMalformedPeerKeyExitsWithTwoWithoutEchoingTheKey(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--peer-key' => ['cert-authority secret-looking-value']]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('Peer key 1', $tester->getDisplay());
+        self::assertStringNotContainsString('secret-looking-value', $tester->getDisplay());
+    }
+
+    public function testAMergeSignedByAPeerKeyIsShownAsAnInfoLineAndMainIsClean(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--owner-key' => [$this->publicKey('owner')], '--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(sprintf("info: peer merge %s peer_signed\nmain is clean\n", $peer), $tester->getDisplay());
+    }
+
+    public function testAPeerMergeIsShownBeforeTheViolationsAndTheCheckStillFails(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $unsigned = $this->repository->commitEmpty('Unsigned change');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(sprintf("info: peer merge %s peer_signed\nviolation %s unsigned\n", $peer, $unsigned), $tester->getDisplay());
+    }
+
+    public function testAnOwnerPushIsNoPeerMergeAndPrintsNothingExtra(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--owner-key' => [$this->publicKey('owner')], '--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame("main is clean\n", $tester->getDisplay());
     }
 
     public function testAShallowRepositoryExitsWithOneAndIsNeverReportedClean(): void

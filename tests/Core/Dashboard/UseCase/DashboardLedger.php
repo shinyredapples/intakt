@@ -351,9 +351,12 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::HeadRed, ['project' => $project, 'change' => $change, 'head' => $head, 'read_again_at' => null]);
     }
 
-    public function queueRoundOf(string $project, string $change, string $head): void
+    public function queueRoundOf(string $project, string $change, string $head): string
     {
-        $this->add(LedgerEventKind::RoundQueued, ['project' => $project, 'change' => $change, 'head' => $head, 'round' => Uuid::v7()->toRfc4122()]);
+        $round = Uuid::v7()->toRfc4122();
+        $this->add(LedgerEventKind::RoundQueued, ['project' => $project, 'change' => $change, 'head' => $head, 'round' => $round]);
+
+        return $round;
     }
 
     public function forgetHead(string $project, string $change, string $head): void

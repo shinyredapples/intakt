@@ -14,6 +14,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubPullRequestBranches;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
@@ -67,6 +68,13 @@ final class RecordedIssueApi
         [$calls, $checked] = $this->wiring();
 
         return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments());
+    }
+
+    public function pullRequestBranches(): GitHubPullRequestBranches
+    {
+        [$calls, $checked] = $this->wiring();
+
+        return new GitHubPullRequestBranches($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments());
     }
 
     public static function fixture(string $name): string

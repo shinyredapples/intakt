@@ -7,6 +7,8 @@ namespace Intakt\Core\Watchdog\Infrastructure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
+use Intakt\Core\Watchdog\Contract\CommitName;
+use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\RecordedMerge;
@@ -17,14 +19,13 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
-// Signatures are checked with ssh-keygen against the owner's keys alone, because HardenedGit pins git's own signature programs to /dev/null on purpose.
 final readonly class MainHistory implements CommitHistory
 {
+    // One limit for every git call, because a hung call must not hold the watchdog forever.
+    public const float TIMEOUT_SECONDS = 60;
+
     // The full ref, because a tag or a remote branch named main must not stand in for the branch.
     private const string MAIN = 'refs/heads/main';
-
-    // One limit for every git and ssh-keygen call, because a hung call must not hold the watchdog forever.
-    private const float TIMEOUT_SECONDS = 60;
 
     // One header per object format, because git names the signature header after the hash the repository uses.
     private const array SIGNATURE_HEADERS = ['sha1' => 'gpgsig', 'sha256' => 'gpgsig-sha256'];
@@ -34,16 +35,11 @@ final readonly class MainHistory implements CommitHistory
     // An empty shallow file is git's own way to read no shallow entries, so git follows the real parents and fails on one that is missing.
     private const array NO_SHALLOW_ENTRIES = ['--shallow-file', ''];
 
-    private const string SSH_ARMOR = '-----BEGIN SSH SIGNATURE-----';
-    private const string NAMESPACE = 'git';
-    private const string PRINCIPAL = 'owner';
-    private const string PROGRAM = 'ssh-keygen';
-
-    /** @var list<string> */
-    private array $ownerKeys;
+    private TrustedSignatures $signatures;
 
     /**
      * @param list<string> $ownerKeys
+     * @param list<string> $peerKeys
      *
      * @throws OwnerKeyRefused
      */
@@ -51,11 +47,12 @@ final readonly class MainHistory implements CommitHistory
         private HardenedGit $git,
         private string $repository,
         array $ownerKeys,
-        private Filesystem $filesystem,
+        Filesystem $filesystem,
+        array $peerKeys = [],
         // Main's head read once for a whole check, because every read of one check must see the same main.
         private ?string $pinnedTip = null,
     ) {
-        $this->ownerKeys = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys));
+        $this->signatures = new TrustedSignatures($ownerKeys, $peerKeys, $filesystem);
     }
 
     /**
@@ -76,11 +73,12 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @return list<string>
+     * @return list<CommitName>
      *
      * @throws MainNotRead
      * @throws RuntimeException
      * @throws MainHistoryRewritten
+     * @throws CommitNameNotFull
      */
     public function firstParentsSince(string $commit): array
     {
@@ -108,7 +106,7 @@ final readonly class MainHistory implements CommitHistory
             throw MainNotRead::brokenWalk($since, $tip);
         }
 
-        return $chain->commits;
+        return array_map(static fn (string $commit): CommitName => new CommitName($commit), $chain->commits);
     }
 
     /**
@@ -130,7 +128,7 @@ final readonly class MainHistory implements CommitHistory
             return SignatureStatus::Unsigned;
         }
 
-        return $this->ownerSigned(...$signed) ? SignatureStatus::OwnerSigned : SignatureStatus::UnknownKey;
+        return $this->signatures->signerOf(...$signed);
     }
 
     /**
@@ -157,10 +155,11 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @return list<string>
+     * @return list<CommitName>
      *
      * @throws MainNotRead
      * @throws RuntimeException
+     * @throws CommitNameNotFull
      */
     public function broughtInBy(RecordedMerge $merge): array
     {
@@ -168,7 +167,7 @@ final readonly class MainHistory implements CommitHistory
         // Read with no shallow entries, because a cut during the read would hide what the base already held and pass it as brought in; a pruned commit then fails the read. The trailing -- keeps a file named like the base from making it ambiguous.
         $brought = trim($this->read(['rev-list', $merge->head, '--not', $merge->base, '--'], self::NO_SHALLOW_ENTRIES));
 
-        return '' === $brought ? [] : explode("\n", $brought);
+        return '' === $brought ? [] : array_map(static fn (string $commit): CommitName => new CommitName($commit), explode("\n", $brought));
     }
 
     /**
@@ -313,7 +312,7 @@ final readonly class MainHistory implements CommitHistory
         $directory = $this->directory();
 
         try {
-            $call = $this->git->call($arguments, $directory);
+            $call = $this->git->call($directory, ...$arguments);
         } catch (RepositoryAttributesRefused $refused) {
             throw MainNotRead::because($refused->getMessage());
         } catch (RuntimeException $failed) {
@@ -322,7 +321,8 @@ final readonly class MainHistory implements CommitHistory
         }
 
         // Options go right after the program, because git reads its global options only before the command.
-        $process = new Process([$call->command[0], ...$options, ...array_slice($call->command, 1)], $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
+        $command = [...$call->command];
+        $process = new Process([$command[0], ...$options, ...array_slice($command, 1)], $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
         $process->run();
 
         return $process;
@@ -380,51 +380,5 @@ final readonly class MainHistory implements CommitHistory
         }
 
         return $lines;
-    }
-
-    /**
-     * @throws IOException
-     */
-    private function ownerSigned(string $payload, string $signature): bool
-    {
-        if (!str_starts_with($signature, self::SSH_ARMOR."\n") || [] === $this->ownerKeys) {
-            return false;
-        }
-
-        $files = [];
-
-        try {
-            // Allocated inside the try, because a failure on the second file must still remove the first.
-            $files[] = $signers = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signers-');
-            $files[] = $signatureFile = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signature-');
-            $this->filesystem->dumpFile($signers, $this->allowedSigners());
-            $this->filesystem->dumpFile($signatureFile, $signature);
-
-            return $this->verifies($signers, $signatureFile, $payload);
-        } catch (IOException) {
-            // Fail closed: a check that could not be prepared proves no owner signed, so the commit is an unknown key.
-            return false;
-        } finally {
-            $this->filesystem->remove($files);
-        }
-    }
-
-    private function allowedSigners(): string
-    {
-        $lines = array_map(static fn (string $key): string => sprintf('%s namespaces="%s" %s'."\n", self::PRINCIPAL, self::NAMESPACE, $key), $this->ownerKeys);
-
-        return implode('', $lines);
-    }
-
-    private function verifies(string $signers, string $signatureFile, string $payload): bool
-    {
-        $check = new Process([self::PROGRAM, '-Y', 'verify', '-f', $signers, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, self::TIMEOUT_SECONDS);
-
-        try {
-            return 0 === $check->run();
-        } catch (RuntimeException) {
-            // Fail closed: a check that timed out or did not start proves no owner signed, so the commit is a violation.
-            return false;
-        }
     }
 }

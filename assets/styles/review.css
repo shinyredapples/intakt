@@ -54,8 +54,8 @@
 .reviewer-faces .no .glyph { color: var(--red); font-weight: 700; }
 .verdict-reviewers .agreement { margin: 0; font-size: var(--t15); color: var(--muted); }
 
-/* Each button's line under it says what happens next. */
-.task-actions .next-step { margin: var(--s4) 0 0; font-size: var(--t15); color: var(--muted); }
+/* Each button's line under it says what happens next; capped so the actions beside the title leave the title its room. */
+.task-actions .next-step { max-width: 28ch; margin: var(--s4) 0 0; font-size: var(--t15); color: var(--muted); }
 
 /* The findings to fix: one group per urgency, stacked, and side by side from 1024 px as in the mock; each row is the headline with the chevron, and the place on its own line under it. The whole row opens the finding. */
 .to-fix { display: grid; gap: var(--s16); margin: var(--s16) 0 var(--s24); }

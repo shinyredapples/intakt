@@ -69,7 +69,7 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
         return [
             ...self::CONFINEMENT,
             ReviewServerAccess::OPTION => $access,
-            'allowed_tools' => $access->mcpToolNames(),
+            'allowed_tools' => [...$access->mcpToolNames()],
             'disallowed_tools' => self::BUILT_IN_TOOLS,
             'append_system_prompt' => sprintf(self::WITH_TOOLS, $access->name),
             ...$schema,

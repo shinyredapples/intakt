@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\MarkVerdictsStale;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\RoundVerdicts;
@@ -94,6 +95,6 @@ final class MarkVerdictsStaleTest extends KernelTestCase
 
     private function verdictsAtTheSameHead(string $round): RoundVerdicts
     {
-        return $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+        return $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
     }
 }
