@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
+use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
@@ -139,21 +140,14 @@ final readonly class RoundLedgerReading implements RoundCosts
         foreach ($recorded as $row) {
             $ended = $this->endingOf($row);
 
-            if (null === $ended || !array_key_exists($ended->call, $models)) {
-                continue;
-            }
-
-            unset($unended[$ended->call]);
-
-            foreach ($models[$ended->call] as $round => $model) {
-                $costs[$round] = $costs[$round]->plus($this->costOfEnding($ended, $model));
+            if (null !== $ended) {
+                unset($unended[$ended->call]);
+                $costs = $this->withCall($costs, $models[$ended->call] ?? [], fn (?string $model): Cost => $this->costOfEnding($ended, $model));
             }
         }
 
         foreach ($unended as $rounds) {
-            foreach ($rounds as $round => $model) {
-                $costs[$round] = $costs[$round]->plus($this->costOfUnended($model));
-            }
+            $costs = $this->withCall($costs, $rounds, $this->costOfUnended(...));
         }
 
         return new RoundCostList($costs);
@@ -322,6 +316,23 @@ final readonly class RoundLedgerReading implements RoundCosts
         $unsettled = $this->payloads->of($row, UsageUnsettled::class);
 
         return 'unsettled' === $unsettled?->phase ? $unsettled : null;
+    }
+
+    /**
+     * @param array<array-key, Cost>        $costs
+     * @param array<array-key, string|null> $rounds
+     * @param Closure(?string): Cost         $cost
+     *
+     * @return array<array-key, Cost>
+     */
+    // Added to each round that started the call, with that round's model, because a call id started in two rounds counts in each.
+    private function withCall(array $costs, array $rounds, Closure $cost): array
+    {
+        foreach ($rounds as $round => $model) {
+            $costs[$round] = $costs[$round]->plus($cost($model));
+        }
+
+        return $costs;
     }
 
     private function costOfEnding(UsageSettled|UsageUnsettled $ended, ?string $model): Cost
