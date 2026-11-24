@@ -21,6 +21,7 @@ use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Dashboard\Domain\Ago;
@@ -313,9 +314,9 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
         $builds = $this->builds;
         $routing = self::createStub(BuildRouting::class);
-        $routing->method('tierFor')->willReturnCallback(static fn (string $project, BuildFacts $facts): TierChoice => null === $facts->setback
-            ? new TierChoice(Tier::Standard, TierReason::Default)
-            : new TierChoice(Tier::Strong, TierReason::Setback));
+        $routing->method('tierFor')->willReturnCallback(static fn (string $project, BuildFacts $facts): TierChoice => $facts->setback instanceof Setback
+            ? new TierChoice(Tier::Strong, TierReason::Setback)
+            : new TierChoice(Tier::Standard, TierReason::Default));
         $container->set(BuildRouting::class, $routing);
 
         $tiers = self::createStub(TierResolver::class);
