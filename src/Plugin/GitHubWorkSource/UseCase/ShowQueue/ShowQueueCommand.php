@@ -67,13 +67,6 @@ final readonly class ShowQueueCommand
         }
     }
 
-    private function lineOf(Task $task): string
-    {
-        $line = sprintf('#%d %s', $task->number, $task->title);
-
-        return null === $task->reworkOf ? $line : sprintf('%s (rework of #%d)', $line, $task->reworkOf);
-    }
-
     // Raw and without control characters, because a title or a quoted wait line is issue text anyone can write, and it must not restyle or rewrite the terminal; the headings go raw too, so a project name is printed as configured.
     private function printLine(SymfonyStyle $io, string $line): void
     {
@@ -84,5 +77,12 @@ final readonly class ShowQueueCommand
     {
         // Unicode's controls, format characters and line breaks too (CSI as U+009B, a next line, a direction override), the set ConsoleReport escapes; text that is not UTF-8 keeps only its printable ASCII, as BuildTaskCommand does, since its other bytes cannot be told from control characters.
         return preg_replace(self::UNICODE_CONTROLS, ' ', $line) ?? (string) preg_replace('/[^\x20-\x7E]/', '?', $line);
+    }
+
+    private function lineOf(Task $task): string
+    {
+        $line = sprintf('#%d %s', $task->number, $task->title);
+
+        return null === $task->reworkOf ? $line : sprintf('%s (rework of #%d)', $line, $task->reworkOf);
     }
 }
