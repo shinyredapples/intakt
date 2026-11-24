@@ -18,6 +18,8 @@
 	mercure {
 		# One prefix-less name for the hub and the app (config/packages/mercure.yaml), because the dashboard answers over plain http on localhost, where a __Secure- cookie is refused.
 		cookie_name mercure_access_token
+		# The browser's reload client subscribes without a token, as FrankenPHP's hot reload expects; private updates still need one.
+		anonymous
 		# Modern mode: the issuer block names who may sign a token and the key for each role.
 		issuer {$MERCURE_JWT_ISSUER} {
 			publisher {

@@ -13,5 +13,7 @@ docs
 upstream
 mate
 Dockerfile
+compose.dev.yaml
+docker/dev
 .dockerignore
 PR.md

@@ -46,7 +46,7 @@ final class DevelopmentCaddyfileTest extends TestCase
         }
     }
 
-    public function testTheDevelopmentCaddyfileDiffersFromTheShippedOneOnlyByItsWatchAndHotReloadLines(): void
+    public function testTheDevelopmentCaddyfileDiffersFromTheShippedOneOnlyByItsWatchHotReloadAndAnonymousLines(): void
     {
         $shipped = $this->lines(self::ROOT.'/Caddyfile');
         $development = $this->lines(self::ROOT.'/docker/dev/Caddyfile');
@@ -57,7 +57,7 @@ final class DevelopmentCaddyfileTest extends TestCase
         foreach ($development as $line) {
             $inHotReload = $inHotReload || 'hot_reload {' === $line;
 
-            if (!$inHotReload && !str_starts_with($line, 'watch ') && !str_starts_with($line, 'hot_reload')) {
+            if (!$inHotReload && !str_starts_with($line, 'watch ') && !str_starts_with($line, 'hot_reload') && 'anonymous' !== $line) {
                 $kept[] = $line;
             }
 
@@ -92,6 +92,40 @@ final class DevelopmentCaddyfileTest extends TestCase
         self::assertContains('.:/app', $override['services']['intakt']['volumes']);
         self::assertContains('./docker/dev/Caddyfile:/app/Caddyfile:ro', $override['services']['intakt']['volumes']);
         self::assertSame('dev', $override['services']['intakt']['environment']['APP_ENV']);
+    }
+
+    // The checkout under /app may belong to another user id than the image's, so every path the entrypoint writes under var/ must sit on a named volume, which Docker fills from the image's own var/ and its owner.
+    public function testEveryPathTheEntrypointWritesUnderVarLiesOnANamedVolumeOfTheOverride(): void
+    {
+        /** @var array{services: array{intakt: array{volumes: list<string>}}} $override */
+        $override = Yaml::parse((string) file_get_contents(self::ROOT.'/compose.dev.yaml'));
+        $named = [];
+
+        foreach ($override['services']['intakt']['volumes'] as $volume) {
+            [$source, $target] = explode(':', $volume);
+
+            if (1 === preg_match('/^\w[\w-]*$/', $source)) {
+                $named[] = rtrim($target, '/').'/';
+            }
+        }
+
+        preg_match_all('#\bvar/[\w./-]*#', (string) file_get_contents(self::ROOT.'/docker/entrypoint.sh'), $written);
+        self::assertContains('var/sample-ready', $written[0]);
+
+        foreach (array_unique($written[0]) as $path) {
+            $onVolume = array_filter($named, static fn (string $mount): bool => str_starts_with('/app/'.$path, $mount));
+            self::assertNotEmpty($onVolume, $path.' is not on a named volume');
+        }
+    }
+
+    public function testTheBuildContextLeavesOutTheDevelopmentFiles(): void
+    {
+        $excluded = file(self::ROOT.'/.dockerignore', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        self::assertIsArray($excluded);
+
+        self::assertContains('compose.dev.yaml', $excluded);
+        self::assertContains('docker/dev', $excluded);
+        self::assertNotContains('docker', $excluded);
     }
 
     private function frankenphp(): string
