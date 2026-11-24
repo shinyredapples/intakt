@@ -143,14 +143,14 @@ final class BranchRulesTest extends TestCase
         self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, $this->now()));
     }
 
-    private function facts(?BranchChange $change, string $lastCommit): BranchFacts
-    {
-        return new BranchFacts($this->branch('intakt/7'), $change, new MirroredHead($this->now()->modify($lastCommit), false));
-    }
-
     private function now(): DateTimeImmutable
     {
         return new DateTimeImmutable('2026-11-24T03:00:00Z');
+    }
+
+    private function facts(?BranchChange $change, string $lastCommit): BranchFacts
+    {
+        return new BranchFacts($this->branch('intakt/7'), $change, new MirroredHead($this->now()->modify($lastCommit), false));
     }
 
     private function rules(): BranchRules
