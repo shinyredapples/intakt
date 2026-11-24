@@ -38,7 +38,7 @@ final readonly class StoredConversations
         );
     }
 
-    // A scalar select returns the column as the platform stores it: binary on SQLite and MySQL, text on PostgreSQL.
+    // Both forms are read because a scalar select returns the id as the platform stores it, binary on SQLite and MySQL and text on PostgreSQL.
     /**
      * @return list<string>
      */

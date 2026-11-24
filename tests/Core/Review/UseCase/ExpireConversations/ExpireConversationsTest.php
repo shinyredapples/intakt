@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Review\UseCase\ExpireConversations;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\StoredConversations;
@@ -34,13 +33,6 @@ final class ExpireConversationsTest extends KernelTestCase
 
     private RoundFixture $fixture;
     private Connection $connection;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->connection = self::getContainer()->get('doctrine.dbal.default_connection');
-        $this->connection->executeStatement('CREATE TABLE reviewer_conversation (id VARCHAR(36) NOT NULL PRIMARY KEY, version VARCHAR(36) NOT NULL, messages CLOB NOT NULL, updated_at INTEGER NOT NULL)');
-    }
 
     public function testAConversationOlderThanTheRetentionIsDeletedAndOneWithinItIsKept(): void
     {
@@ -150,6 +142,13 @@ final class ExpireConversationsTest extends KernelTestCase
         yield 'negative' => [-3];
         yield 'text' => ['soon'];
         yield 'fraction' => [1.5];
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->connection = self::getContainer()->get('doctrine.dbal.default_connection');
+        $this->connection->executeStatement('CREATE TABLE reviewer_conversation (id VARCHAR(36) NOT NULL PRIMARY KEY, version VARCHAR(36) NOT NULL, messages CLOB NOT NULL, updated_at INTEGER NOT NULL)');
     }
 
     private function expire(?int $days): void

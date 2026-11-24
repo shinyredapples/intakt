@@ -27,7 +27,7 @@ final class RetentionConfiguration implements ConfigurationInterface
         return $tree;
     }
 
-    // Null stands for keeping forever.
+    // Null stands for keeping forever, because no number of days can mean never.
     public static function daysOf(int|string $setting): ?int
     {
         return self::FOREVER === $setting ? null : (int) $setting;

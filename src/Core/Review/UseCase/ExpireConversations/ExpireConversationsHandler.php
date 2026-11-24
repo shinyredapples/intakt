@@ -10,7 +10,7 @@ use Intakt\Core\Review\Infrastructure\StoredConversations;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-#[AsCommandHandler]
+#[AsCommandHandler(handles: ExpireConversations::class)]
 final readonly class ExpireConversationsHandler
 {
     public function __construct(
@@ -22,7 +22,7 @@ final readonly class ExpireConversationsHandler
     ) {
     }
 
-    public function __invoke(ExpireConversations $tick): void
+    public function __invoke(): void
     {
         if (null === $this->days) {
             return;
