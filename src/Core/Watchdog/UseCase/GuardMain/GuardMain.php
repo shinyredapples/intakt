@@ -64,6 +64,16 @@ final readonly class GuardMain
         }
     }
 
+    /**
+     * @param list<CommitName> $commits
+     *
+     * @return list<string>
+     */
+    private function namesOf(array $commits): array
+    {
+        return array_map(static fn (CommitName $commit): string => $commit->name, $commits);
+    }
+
     // Every ledger read runs before the first notice is appended, because a read that fails after an append would lose a notice the ledger already took.
     private function recordedFor(string $project, CheckedMain $checked): GuardedMain
     {
@@ -78,16 +88,6 @@ final readonly class GuardMain
         } finally {
             $lock->release();
         }
-    }
-
-    /**
-     * @param list<CommitName> $commits
-     *
-     * @return list<string>
-     */
-    private function namesOf(array $commits): array
-    {
-        return array_map(static fn (CommitName $commit): string => $commit->name, $commits);
     }
 
     private function raiseCardsFor(string $project, CheckedMain $checked): void
