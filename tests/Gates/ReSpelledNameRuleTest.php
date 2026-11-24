@@ -31,6 +31,31 @@ final class ReSpelledNameRuleTest extends PhpStanRuleTestCase
         ], 'src/');
     }
 
+    public function testAParameterReferenceToAContainerNameFailsStaticAnalysis(): void
+    {
+        self::assertStringContainsString("src/ReferenceLookup.php:11 intakt.reSpelledName '%intakt.ai.accounts%' re-spells a container id or parameter name", $this->ruleFindingsOf('re-spelled-reference-ids'));
+    }
+
+    public function testAServiceReferenceToAContainerIdFailsStaticAnalysis(): void
+    {
+        self::assertStringContainsString("src/ReferenceLookup.php:16 intakt.reSpelledName '@intakt.ai.platform' re-spells a container id or parameter name", $this->ruleFindingsOf('re-spelled-reference-ids'));
+    }
+
+    public function testAnInterpolatedServiceReferenceFailsStaticAnalysis(): void
+    {
+        self::assertStringContainsString("src/ReferenceLookup.php:21 intakt.reSpelledName '@intakt.ai.platform.' re-spells a container id or parameter name", $this->ruleFindingsOf('re-spelled-reference-ids'));
+    }
+
+    public function testAnEscapedPercentBeforeAContainerNamePassesStaticAnalysis(): void
+    {
+        self::assertStringNotContainsString('ReferenceLookup.php:26', $this->ruleFindingsOf('re-spelled-reference-ids'));
+    }
+
+    public function testReferenceFormsInTheirIdsClassPassStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('reference-ids-in-their-ids-class');
+    }
+
     #[DataProvider('casesOfOneRun')]
     public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
