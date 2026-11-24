@@ -39,7 +39,7 @@ final readonly class RegressionTestFiles
     public function in(string $repository, string $base, string $head): Paths
     {
         $changed = RawDiffEntries::of($this->git->exactOutput($repository, ['diff', '--raw', '-z', '-M', '--no-abbrev', $base, $head, '--']));
-        $tests = array_filter($changed, fn (ChangedFile $file): bool => $this->isRegressionTest($file));
+        $tests = array_filter($changed, $this->isRegressionTest(...));
 
         return new Paths(...array_values(array_unique(array_map(static fn (ChangedFile $file): string => $file->path(), $tests))));
     }
