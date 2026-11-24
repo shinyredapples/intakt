@@ -207,6 +207,29 @@ final class GateChildrenTest extends SandboxTestCase
         }
     }
 
+    // Because the launcher becomes the leader of its own group only once `setsid` runs, a stand-in writes its pid and lingers before it hands over to the real `setsid`, and the stop lands there.
+    public function testAStopThatArrivesBeforeAChildsLauncherHasItsOwnSessionAlsoStopsThatLauncher(): void
+    {
+        $home = $this->fakeGatesHome();
+        $home->write('stop-during-start.php', $this->launchRoundStoppedDuringItsSecondStart());
+        $home->write('tools/setsid', $this->setsidThatLingersBeforeItsSessionForTheGate('dashes', (string) shell_exec('command -v setsid')));
+        chmod($home->root.'/tools/setsid', 0o700);
+        $marker = $home->root.'/dashes-launcher.pid';
+
+        new ProcessRunner()->run([PHP_BINARY, $home->root.'/stop-during-start.php', dirname(__DIR__, 2).'/vendor/autoload.php', $home->root.'/tools', $marker, $this->emptySandbox()->root], $home->root, ['PATH' => $home->root.'/tools:'.getenv('PATH'), 'GATE_LAUNCHER_PID' => $marker]);
+
+        $pid = (int) @file_get_contents($marker);
+
+        try {
+            self::assertNotSame(0, $pid, 'the second child\'s launcher wrote its process id');
+            self::assertFalse($this->runsOnAfterAWhile($pid));
+        } finally {
+            if (0 !== $pid && $this->runs($pid)) {
+                posix_kill($pid, 9);
+            }
+        }
+    }
+
     public function testAGateWhoseChildCrashesFailsWithTheChildsOutput(): void
     {
         $run = $this->checkWithFakeGates('--only=rector');
@@ -360,6 +383,23 @@ final class GateChildrenTest extends SandboxTestCase
             ."for argument; do\n"
             ."    if [ \"\$argument\" = {$gate} ]; then\n"
             ."        exec {$real} sh -c 'echo \$\$ > \"\$GATE_LAUNCHER_PID\"; sleep 120; exec \"\$@\"' sh \"\$@\"\n"
+            ."    fi\n"
+            ."done\n"
+            ."exec {$real} \"\$@\"\n";
+    }
+
+    // Because only short sleeps are left behind when the stop ends the stand-in, it waits in steps of a tenth of a second, past the test's limit in all.
+    private function setsidThatLingersBeforeItsSessionForTheGate(string $gate, string $setsid): string
+    {
+        $real = escapeshellarg(trim($setsid));
+
+        return "#!/bin/sh\n"
+            ."for argument; do\n"
+            ."    if [ \"\$argument\" = {$gate} ]; then\n"
+            ."        echo \$\$ > \"\$GATE_LAUNCHER_PID\"\n"
+            ."        i=0\n"
+            ."        while [ \$i -lt 1200 ]; do sleep 0.1; i=\$((i + 1)); done\n"
+            ."        exec {$real} \"\$@\"\n"
             ."    fi\n"
             ."done\n"
             ."exec {$real} \"\$@\"\n";

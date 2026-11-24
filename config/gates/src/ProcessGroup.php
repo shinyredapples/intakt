@@ -19,7 +19,7 @@ final readonly class ProcessGroup
 
     public function kill(): void
     {
-        posix_kill(-$this->id, 9);
+        $this->signal(9);
     }
 
     // Because only the gate child can reach the session of its contained run, it is asked to stop first and killed when it does not.
@@ -32,7 +32,7 @@ final readonly class ProcessGroup
 
     public function askToStop(): void
     {
-        posix_kill(-$this->id, 15);
+        $this->signal(15);
     }
 
     public function outlives(float $deadline): bool
@@ -44,8 +44,28 @@ final readonly class ProcessGroup
         return $this->isAlive();
     }
 
+    // Because `setsid` makes the launcher the leader of its group only once it runs, a launcher still in bin/check's own group is reached by its process ID; once it has left that group, the group exists.
+    private function signal(int $signal): void
+    {
+        $notYetLeader = $this->isNotYetLeader();
+        posix_kill(-$this->id, $signal);
+
+        if ($notYetLeader) {
+            posix_kill($this->id, $signal);
+        }
+    }
+
+    private function isNotYetLeader(): bool
+    {
+        return posix_getpgid($this->id) === posix_getpgrp();
+    }
+
     private function isAlive(): bool
     {
+        if ($this->isNotYetLeader()) {
+            return $this->isLiveLauncher();
+        }
+
         if (!posix_kill(-$this->id, 0)) {
             return false;
         }
@@ -57,6 +77,14 @@ final readonly class ProcessGroup
         }
 
         return [] !== array_filter($statuses, fn (string $status): bool => $this->isLiveMember((string) @file_get_contents($status)));
+    }
+
+    private function isLiveLauncher(): bool
+    {
+        $status = (string) @file_get_contents('/proc/'.$this->id.'/stat');
+        $end = strrpos($status, ')');
+
+        return false === $end || self::ZOMBIE !== substr($status, $end + 2, 1);
     }
 
     private function isLiveMember(string $status): bool
