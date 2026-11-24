@@ -103,9 +103,7 @@ final class ExpireConversationsTest extends KernelTestCase
     #[DataProvider('settings')]
     public function testTheSettingIsDaysOrForever(mixed $value, ?int $days): void
     {
-        $settings = new Processor()->processConfiguration(new RetentionConfiguration(), [['retention' => ['conversation_days' => $value]]]);
-
-        self::assertSame($days, RetentionConfiguration::daysOf($settings['retention']['conversation_days']));
+        self::assertSame($days, $this->daysSetBy(['retention' => ['conversation_days' => $value]]));
     }
 
     /**
@@ -120,9 +118,7 @@ final class ExpireConversationsTest extends KernelTestCase
 
     public function testTheDefaultIsThirtyDays(): void
     {
-        $settings = new Processor()->processConfiguration(new RetentionConfiguration(), [[]]);
-
-        self::assertSame(30, RetentionConfiguration::daysOf($settings['retention']['conversation_days']));
+        self::assertSame(30, $this->daysSetBy([]));
     }
 
     #[DataProvider('refused')]
@@ -151,9 +147,14 @@ final class ExpireConversationsTest extends KernelTestCase
         $this->connection->executeStatement('CREATE TABLE reviewer_conversation (id VARCHAR(36) NOT NULL PRIMARY KEY, version VARCHAR(36) NOT NULL, messages CLOB NOT NULL, updated_at INTEGER NOT NULL)');
     }
 
+    private function conversation(string $id, int $daysOld): void
+    {
+        $this->connection->executeStatement('INSERT INTO reviewer_conversation (id, version, messages, updated_at) VALUES (?, ?, ?, ?)', [$id, 'v', '[]', $this->fixture->clock->now()->getTimestamp() - $daysOld * self::DAY - 60]);
+    }
+
     private function expire(?int $days): void
     {
-        new ExpireConversationsHandler(new StoredConversations($this->connection, $this->entities()), $this->fixture->clock, $days)(new ExpireConversations());
+        new ExpireConversationsHandler(new StoredConversations($this->connection, $this->entities()), $this->fixture->clock, $days)();
     }
 
     private function entities(): EntityManagerInterface
@@ -161,9 +162,15 @@ final class ExpireConversationsTest extends KernelTestCase
         return self::getContainer()->get('doctrine.orm.entity_manager');
     }
 
-    private function conversation(string $id, int $daysOld): void
+    /**
+     * @param array<string, mixed> $configuration
+     */
+    private function daysSetBy(array $configuration): ?int
     {
-        $this->connection->executeStatement('INSERT INTO reviewer_conversation (id, version, messages, updated_at) VALUES (?, ?, ?, ?)', [$id, 'v', '[]', $this->fixture->clock->now()->getTimestamp() - $daysOld * self::DAY - 60]);
+        /** @var array{retention: array{conversation_days: int|string}} $settings */
+        $settings = new Processor()->processConfiguration(new RetentionConfiguration(), [$configuration]);
+
+        return RetentionConfiguration::daysOf($settings['retention']['conversation_days']);
     }
 
     /**
@@ -171,6 +178,9 @@ final class ExpireConversationsTest extends KernelTestCase
      */
     private function kept(): array
     {
-        return $this->connection->fetchFirstColumn('SELECT id FROM reviewer_conversation ORDER BY id');
+        /** @var list<string> $ids */
+        $ids = $this->connection->fetchFirstColumn('SELECT id FROM reviewer_conversation ORDER BY id');
+
+        return $ids;
     }
 }

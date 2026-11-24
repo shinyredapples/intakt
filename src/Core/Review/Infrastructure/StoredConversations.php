@@ -44,6 +44,7 @@ final readonly class StoredConversations
      */
     private function openConversationIds(): array
     {
+        /** @var list<string|UuidV7> $ids */
         $ids = $this->entities->createQueryBuilder()
             ->select('r.conversationId')
             ->from(RoundReviewer::class, 'r')
