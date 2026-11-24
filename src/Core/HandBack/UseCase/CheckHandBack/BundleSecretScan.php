@@ -56,7 +56,7 @@ final readonly class BundleSecretScan
 
     private function holdsAny(string $contents, JobCredentials $credentials): bool
     {
-        return array_any([...$credentials],static fn (string $credential): bool => str_contains($contents, $credential));
+        return array_any([...$credentials], static fn (string $credential): bool => str_contains($contents, $credential));
     }
 
     /**

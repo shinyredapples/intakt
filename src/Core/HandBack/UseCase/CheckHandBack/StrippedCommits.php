@@ -48,7 +48,7 @@ final readonly class StrippedCommits
     private function redactionOf(JobCredentials $credentials): array
     {
         // For strtr(), which tries the longest value first, so a credential that contains another is redacted whole.
-        return array_fill_keys([...$credentials],Redaction::MARKER);
+        return array_fill_keys([...$credentials], Redaction::MARKER);
     }
 
     /**

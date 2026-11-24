@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\BootHarness;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
@@ -17,7 +18,6 @@ use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Override;

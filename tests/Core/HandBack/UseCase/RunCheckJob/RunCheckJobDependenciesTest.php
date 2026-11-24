@@ -39,6 +39,7 @@ use Intakt\Core\HandBack\UseCase\RunCheckJob\LockInputs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
+use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -52,7 +53,6 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
-use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Plugin\Gate\Contract\CheckSteps;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
@@ -187,7 +187,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $gate = self::createStub(Gate::class);
         $gate->method('checkSteps')->willReturn(new CheckSteps('npm ci', 'npm test'));
         $gate->method('registryHosts')->willReturn(new EgressHosts());
-        $gate->method('dependencyStep')->willReturn(new DependencyStep(new LockFiles('package-lock.json'),'node --version', 'npm ci --ignore-scripts', 'npm rebuild', 'npm ci'));
+        $gate->method('dependencyStep')->willReturn(new DependencyStep(new LockFiles('package-lock.json'), 'node --version', 'npm ci --ignore-scripts', 'npm rebuild', 'npm ci'));
 
         $this->whenTheCheckRuns(gate: $gate);
 

@@ -6,7 +6,6 @@ namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
-use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;

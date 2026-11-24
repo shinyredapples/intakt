@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -31,7 +32,6 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\MarkVerdictsStale;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\RoundVerdicts;
@@ -17,7 +18,6 @@ use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;

@@ -14,7 +14,6 @@ use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
-use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
