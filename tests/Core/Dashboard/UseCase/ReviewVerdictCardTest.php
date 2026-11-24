@@ -46,7 +46,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(['Changes needed', '3 to fix'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
-        self::assertSame('To fix', $crawler->filter('.to-fix h2')->text());
+        self::assertCount(3, $crawler->filter('.to-fix .fix-row'));
     }
 
     public function testOneFindingToFixIsCountedAsOneToFix(): void
@@ -87,7 +87,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         self::assertSame([1, 0], [$crawler->filter('.verdict-card')->count(), $crawler->filter('.verdict-card .verdict-count')->count()]);
     }
 
-    public function testEachFindingToFixIsOneCardWithItsUrgencyTitleAndPlace(): void
+    public function testEachFindingToFixIsOneRowWithItsTitleAndPlaceInItsUrgencysGroup(): void
     {
         $this->givenAChangesRound();
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one.');
@@ -95,17 +95,17 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['Urgent', 'The total is off by one.', 'src/A.php:7']],
-            $crawler->filter('.to-fix .fix-card')->each(static fn (Crawler $card): array => [$card->filter('.urgency')->text(), $card->filter('.fix-title')->text(), $card->filter('.fix-place')->text()]),
+            [['The total is off by one.', 'src/A.php:7']],
+            $crawler->filter('.to-fix .fix-group.urgent .fix-row')->each(static fn (Crawler $row): array => [$row->filter('.fix-title')->text(), $row->filter('.fix-place')->text()]),
         );
     }
 
-    public function testEachFindingCardOpensTheFindingInTheFullRecord(): void
+    public function testEachFindingRowOpensTheFindingInTheFullRecord(): void
     {
         $this->givenAChangesRoundWith(['F1' => 'act', 'F2' => 'act']);
         $this->browser->disableReboot();
 
-        $targets = $this->browser->request('GET', '/reviews/round-1')->filter('.to-fix a.fix-card')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
+        $targets = $this->browser->request('GET', '/reviews/round-1')->filter('.to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
 
         self::assertSame(['/reviews/round-1/record#round-round-1-finding-F1', '/reviews/round-1/record#round-round-1-finding-F2'], $targets);
         $record = $this->browser->request('GET', '/reviews/round-1/record');
@@ -119,7 +119,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('src/report:2026', $crawler->filter('.fix-card .fix-place')->text());
+        self::assertSame('src/report:2026', $crawler->filter('.fix-row .fix-place')->text());
     }
 
     public function testAPathHoldingAColonKeepsItsRecordedLine(): void
@@ -129,7 +129,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('src/long:folder/<draft>.php:1234', $crawler->filter('.fix-card .fix-place')->text());
+        self::assertSame('src/long:folder/<draft>.php:1234', $crawler->filter('.fix-row .fix-place')->text());
     }
 
     public function testAnUrgentFindingIsCountedBesideTheFindingsToFix(): void
@@ -140,26 +140,6 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('1 to fix', $crawler->filter('.verdict-card .verdict-count')->text());
-    }
-
-    public function testACardShowsTheHeadlineAsItsTitleAndTheRestOfTheTextAsItsExplanation(): void
-    {
-        $this->givenAChangesRound();
-        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one. It drops the last item.');
-
-        $card = $this->browser->request('GET', '/reviews/round-1')->filter('.fix-card');
-
-        self::assertSame(['The total is off by one.', 'It drops the last item.'], [$card->filter('.fix-title')->text(), $card->filter('.fix-more')->text()]);
-    }
-
-    public function testACardOfOneSentenceHasNoExplanationLine(): void
-    {
-        $this->givenAChangesRound();
-        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one.');
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        self::assertCount(0, $crawler->filter('.fix-card .fix-more'));
     }
 
     public function testTheBarHasOneSegmentPerFindingToFixAndTheCountsAreInWords(): void

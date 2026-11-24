@@ -11,6 +11,9 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Contract\TaskKind;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
@@ -19,12 +22,14 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -52,6 +57,7 @@ final readonly class BuildTask
         private RunBuildJob $builds,
         private HandBackCheck $handBacks,
         private PrePushCheck $prePushChecks,
+        private PullRequestTextCheck $textChecks,
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
@@ -150,16 +156,18 @@ final readonly class BuildTask
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
-                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main.
-                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)),
+                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
+                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
                 BuildStep::Push => $this->push($request, $results),
             };
 
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
 
-            if ($result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion) {
-                return $this->park($run, $task, $result->question);
+            $question = $this->questionIn($result);
+
+            if ($question instanceof BuildQuestion) {
+                return $this->park($run, $task, $question);
             }
 
             $failure = $this->failureIn($result);
@@ -197,8 +205,14 @@ final readonly class BuildTask
     }
 
     // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failure's text.
-    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|string
+    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
     {
+        $incomplete = $this->incompleteBugQuestion($task);
+
+        if ($incomplete instanceof BuildQuestion) {
+            return $incomplete;
+        }
+
         try {
             $outcome = $this->builds->run($this->jobOf($request, $task));
         } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|InvalidArgumentException|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
@@ -210,7 +224,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function bundleIn(array $results): string
     {
@@ -219,7 +233,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function builtIn(array $results): BuildJobOutcome
     {
@@ -229,21 +243,40 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
+     */
+    private function textIn(array $results): string
+    {
+        // Never null, because the checks and the push run only after a build job that built, and such a job always hands back its text.
+        return $this->builtIn($results)->pullRequestText ?? throw new LogicException('the checks and the push run only after a build job that handed back its text');
+    }
+
+    private function bodyOf(string $text): string
+    {
+        return trim(explode("\n", $text, 2)[1] ?? '');
+    }
+
+    /**
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function push(BuildTaskRequest $request, array $results): ?string
     {
         $accepted = $results[BuildStep::HandBackCheck->value] ?? null;
-        $text = $this->builtIn($results)->pullRequestText;
+        $text = $this->textIn($results);
 
-        // Never otherwise, because the push runs only after a hand-back check that accepted the head, and a build job that built always hands back its text.
-        if (!$accepted instanceof AcceptedHandBack || null === $text) {
-            throw new LogicException('the push runs only after an accepted hand-back of a build job that handed back its text');
+        // Never otherwise, because the push runs only after a hand-back check that accepted the head.
+        if (!$accepted instanceof AcceptedHandBack) {
+            throw new LogicException('the push runs only after an accepted hand-back');
         }
 
         $changeText = $this->changeTextOf($text);
 
         return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
+    }
+
+    private function questionIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?BuildQuestion
+    {
+        return $result instanceof BuildJobOutcome ? $result->question : ($result instanceof BuildQuestion ? $result : null);
     }
 
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
@@ -261,7 +294,7 @@ final readonly class BuildTask
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
-    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
+    private function failureIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?string
     {
         return is_string($result) ? $result : null;
     }
@@ -269,16 +302,28 @@ final readonly class BuildTask
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
     private function changeTextOf(string $text): ChangeText|string
     {
-        [$title, $body] = [...explode("\n", $text, 2), ''];
+        $title = explode("\n", $text, 2)[0];
 
-        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), trim($body));
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $this->bodyOf($text));
+    }
+
+    // Asked before the build job runs, because a bug without its four parts has no failing test to write first and the builder would guess it.
+    private function incompleteBugQuestion(ListedIssue $task): ?BuildQuestion
+    {
+        if (TaskKind::Bug !== TaskKind::fromLabels(new Labels(...$task->labels))) {
+            return null;
+        }
+
+        $missing = BugReport::fromBody($task->body)->missingParts();
+
+        return [] === $missing ? null : BuildQuestion::forMissingBugParts($missing);
     }
 
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
     {
         // No paths and no setback, because a first build has no file forecast and no earlier round.
-        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($task->labels, []));
-        $brief = new BuildBrief($task->title."\n\n".$task->body, [], null);
+        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels(new Labels(...$task->labels), new Paths()));
+        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null);
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }

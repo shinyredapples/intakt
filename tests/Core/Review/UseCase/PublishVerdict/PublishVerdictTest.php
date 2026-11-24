@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\PublishVerdict;
 
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
@@ -91,6 +93,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ChangesHandedToIntakt::class)]
 #[UsesClass(WatcherLedger::class)]
 #[UsesClass(HandedOverChanges::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(ProtectedChanges::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[UsesClass(PublishedVerdict::class)]
@@ -155,7 +158,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAHandedOverHeadThatTouchesProtectedPathsGetsTheReviewWithTheOwnerAskAndAPendingStatus(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['.github/workflows/ci.yaml', 'bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('.github/workflows/ci.yaml', 'bin/check'));
 
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -184,7 +187,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAProtectedPathThatCouldForgeTheAskIsPostedEscaped(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(["bin/a\n- <code>b</code> `c` <!-- d **e** #12 [f](g)\\h"]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths("bin/a\n- <code>b</code> `c` <!-- d **e** #12 [f](g)\\h"));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -194,7 +197,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAProtectedPathThatIsNotUtf8IsPostedWithItsInvalidBytesReplaced(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(["bin/\xff"]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths("bin/\xff"));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -205,7 +208,7 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $this->handOver('alpha', self::PULL);
         $paths = array_map(static fn (int $n): string => sprintf('bin/%02d', $n), range(1, 51));
-        $this->protectedChanges = ProtectedChanges::touching($paths);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths(...$paths));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -218,7 +221,7 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $this->handOver('alpha', self::PULL);
         $paths = array_map(static fn (int $n): string => sprintf('protected/%s/%04d', str_repeat('x', 60), $n), range(1, 2000));
-        $this->protectedChanges = ProtectedChanges::touching($paths);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths(...$paths));
 
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -233,7 +236,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAProtectedFileNameThatHoldsASecretPublishesOnlyAnErrorStatus(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -244,7 +247,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testARetryWhoseProtectedPathsChangedPostsTheAskItRecords(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/old']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/old'));
         $roundId = $this->judgedRound(self::PULL, []);
         $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 502);
         $handler = $this->handler(new ConfiguredProjectModes([]));
@@ -253,7 +256,7 @@ final class PublishVerdictTest extends KernelTestCase
             self::fail('A refused status must fail the publication.');
         } catch (ForgeWriteFailed) {
         }
-        $this->protectedChanges = ProtectedChanges::touching(['bin/new']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/new'));
 
         $handler(new PublishVerdict($roundId));
 
@@ -264,7 +267,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAnAskWhosePathsFillAPartToItsLastByteNeedsNoSecondPart(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/a', $this->pathFillingThePartWith(0)]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/a', $this->pathFillingThePartWith(0)));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -275,7 +278,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAnAskWhosePathsPassAPartByOneByteGetsASecondPartWithTheLastPath(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/a', $this->pathFillingThePartWith(1)]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/a', $this->pathFillingThePartWith(1)));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -286,7 +289,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testARetriedPublicationOfAProtectedHeadPostsTheAskOnceAndRecordsOneAsk(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
         $roundId = $this->judgedRound(self::PULL, []);
         $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 502);
         $handler = $this->handler(new ConfiguredProjectModes([]));
@@ -314,7 +317,7 @@ final class PublishVerdictTest extends KernelTestCase
             self::fail('A refused status must fail the publication.');
         } catch (ForgeWriteFailed) {
         }
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $handler(new PublishVerdict($roundId));
 
@@ -328,7 +331,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAnOwnerAskTheForgeDidNotPublishIsNotRecorded(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
         $roundId = $this->judgedRound(self::PULL, []);
         $forge = self::createStub(ForgeWrites::class);
         $forge->method('publishVerdict')->willReturn(false);
@@ -341,7 +344,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testASecondRoundOfTheSameProtectedHeadRecordsNoSecondAsk(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $first = $this->judgedApprovalAt(SampleIdentity::HEAD);
         $this->handler(new ConfiguredProjectModes([]))(new PublishVerdict($first));
@@ -354,7 +357,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testARoundThatNamesTheSamePullRequestInAnotherLetterCaseRecordsNoSecondAsk(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $first = $this->judgedApprovalAt(SampleIdentity::HEAD);
         $this->handler(new ConfiguredProjectModes([]))(new PublishVerdict($first));
@@ -453,7 +456,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAHandedOverProtectedHeadWithChangesAsksNoOwner(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('A', Severity::P2, 'Fix the guard.'))], new ConfiguredProjectModes([]));
 
@@ -464,7 +467,7 @@ final class PublishVerdictTest extends KernelTestCase
 
     public function testAProtectedHeadThatIsNotHandedToIntaktIsPublishedForTheLoopWithoutAnAsk(): void
     {
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $this->publishRoundJudgedOn([]);
 
@@ -475,7 +478,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAnAskTheLedgerRefusesFailsThePublicationAfterTheForgeShowsIt(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
         $roundId = $this->judgedRound(self::PULL, []);
 
         try {
@@ -896,7 +899,7 @@ final class PublishVerdictTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $this->github = new ScriptedGitHub();
         $this->locks = new LockFactory(new InMemoryStore());
-        $this->protectedChanges = ProtectedChanges::touching([]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths());
     }
 
     // The application's command bus, so the publication the mark queues lands on the application's queue.

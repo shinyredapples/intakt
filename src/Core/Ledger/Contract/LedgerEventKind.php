@@ -37,6 +37,9 @@ enum LedgerEventKind: string
     case HandBackAccepted = 'hand_back_accepted';
     case HandBackSentBack = 'hand_back_sent_back';
     case HandBackHandedOver = 'hand_back_handed_over';
+    case PullRequestTextPassed = 'pull_request_text_passed';
+    case PullRequestTextSentBack = 'pull_request_text_sent_back';
+    case PullRequestTextToReviewers = 'pull_request_text_to_reviewers';
     case ModelChosen = 'model_chosen';
     case PushIntended = 'push_intended';
     case BranchPushed = 'branch_pushed';

@@ -12,9 +12,9 @@ flowchart TD
   b --> slotsB[Builds and reviews for B]
 ```
 
-- **Shares:** each project gets a share of the week, for example 70% and 30%. When a build slot comes free, the project furthest behind its share goes first.
+- **Shares:** each project gets a share of the week, for example 70% and 30%. When a build slot comes free, the project furthest behind its share goes first, within the build order below.
 - **Nothing is wasted:** a project with nothing to build lends its share to the others. When it has work again, it goes first until it has caught up.
-- **Urgent beats shares:** an `urgent` task in any project gets the next free slot first.
+- **The build order beats shares:** the next free slot goes, in any project, first to what an approved pull request still needs, then to `urgent` fixes of open pull requests, then to other fixes of open pull requests, then to `urgent` new tasks, then to the rest. Among approved pull requests the one approved first goes first, whichever project it is in. Shares decide only in the later steps, between projects whose next work is in the same step.
 - **A share of 0** pauses the project. Nothing new is built or reviewed for it, open pull requests included, so it spends none of the allowance. A job already running finishes. Its work waits where it is and carries on when you raise the share again.
 - **Reviews aren't rationed by share** (except a share of 0, which pauses them): the review lane takes turns between projects, so no project's finished work waits on another's.
 
@@ -28,6 +28,8 @@ On the dashboard every card and lane carries its project, and a filter shows one
 The AI accounts, and the builders and reviewers using them, are shown **once** for the whole install, each with the project and task it is working on, so you never see the same reviewer counted twice.
 
 *(Planned:)* The **New task** box at the top of the dashboard always asks which project the work is for (the filter's project, if it shows one), and words that describe work for two projects become two drafts, one per project ([starting a task from the dashboard](a-tour-of-the-dashboard.md#starting-a-task-from-the-dashboard)).
+
+*(Planned:)* The **Ask** panel answers questions about one project or about all of them; each project is read on its own and every fact says which project it is about ([asking a question](a-tour-of-the-dashboard.md#asking-a-question)).
 
 ## Each project keeps to itself
 

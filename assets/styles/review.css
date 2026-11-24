@@ -36,10 +36,11 @@
 .urgency-counts { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s16); margin: 0; padding: 0; list-style: none; font-size: var(--t15); color: var(--ink); }
 .urgency-counts li { display: inline-flex; align-items: center; gap: 6px; }
 .urgency-counts .shape { width: 14px; height: 14px; flex: none; }
-.urgency-counts .shape.urgent { fill: var(--red); }
-.urgency-counts .shape.should-fix { fill: var(--amber); stroke: color-mix(in srgb, var(--amber) 60%, var(--ink)); stroke-width: 1.5; }
-.urgency-counts .shape.nice-to-have { fill: none; stroke: var(--muted); stroke-width: 3; }
-.urgency-counts .shape.unranked { fill: var(--muted); }
+/* The legend's shapes, also on the findings' group headings, so a group matches its line of the legend by shape as well as color. */
+.shape.urgent { fill: var(--red); }
+.shape.should-fix { fill: var(--amber); stroke: color-mix(in srgb, var(--amber) 60%, var(--ink)); stroke-width: 1.5; }
+.shape.nice-to-have { fill: none; stroke: var(--muted); stroke-width: 3; }
+.shape.unranked { fill: var(--muted); }
 /* The faces wrap and the labels break, so a configured panel larger than two or a long label stays inside the row the reviewers get. */
 .verdict-reviewers { flex: 0 1 auto; min-width: 0; display: grid; gap: var(--s8); justify-items: center; }
 .reviewer-faces { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s8) var(--s16); margin: 0; padding: 0; list-style: none; }
@@ -53,23 +54,28 @@
 .reviewer-faces .no .glyph { color: var(--red); font-weight: 700; }
 .verdict-reviewers .agreement { margin: 0; font-size: var(--t15); color: var(--muted); }
 
-/* Each button's line under it says what happens next. */
-.task-actions .next-step { margin: var(--s4) 0 0; font-size: var(--t15); color: var(--muted); }
+/* Each button's line under it says what happens next; capped so the actions beside the title leave the title its room. */
+.task-actions .next-step { max-width: 28ch; margin: var(--s4) 0 0; font-size: var(--t15); color: var(--muted); }
 
-/* The To fix cards: the urgency word first, the finding's headline, one line of explanation (DESIGN.md, list row) and the place; the whole card opens the finding. */
-.to-fix { margin: var(--s16) 0 var(--s24); }
-.to-fix-list { display: grid; gap: var(--s12); margin: 0; padding: 0; list-style: none; }
-.fix-card { display: flex; align-items: flex-start; gap: var(--s12); min-height: 44px; padding: var(--s16); border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--raised); color: var(--ink); text-decoration: none; }
-.fix-card:hover .fix-title { text-decoration: underline; }
-.fix-body { display: grid; gap: var(--s4); flex: 1 1 0; min-width: 0; }
-.fix-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; font-weight: 700; overflow-wrap: anywhere; }
-.fix-more { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; color: var(--muted); overflow-wrap: anywhere; }
-.fix-place { font-size: var(--t15); color: var(--muted); overflow-wrap: anywhere; }
-.fix-card code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
-.fix-chev { flex: none; align-self: center; transform: rotate(-90deg); color: var(--muted); }
-.urgency { flex: none; padding: 2px 10px; border-radius: var(--r-round); font-size: var(--t13); font-weight: 700; white-space: nowrap; background: var(--tint-2); color: var(--ink); }
-.urgency.urgent { background: color-mix(in srgb, var(--red) 6%, var(--raised)); color: color-mix(in srgb, var(--red) 80%, var(--ink)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 50%, transparent); }
-.urgency.should-fix { background: var(--amber-tint); box-shadow: inset 0 0 0 1px var(--amber); }
+/* The findings to fix: one group per urgency, stacked, and side by side from 1024 px as in the mock; each row is the headline with the chevron, and the place on its own line under it. The whole row opens the finding. */
+.to-fix { display: grid; gap: var(--s16); margin: var(--s16) 0 var(--s24); }
+.fix-group { min-width: 0; }
+.fix-group h2 { display: flex; align-items: center; gap: var(--s8); margin: 0 0 var(--s4); font-size: var(--t17); }
+.fix-group h2 .shape { width: 14px; height: 14px; flex: none; }
+.fix-group-count { color: var(--muted); font-weight: 500; }
+.fix-rows, .fix-none { margin: 0; padding: var(--s4); list-style: none; background: var(--raised); border: 1px solid var(--hairline); border-radius: var(--r-card); }
+.fix-group.urgent .fix-rows { border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+.fix-none { padding: var(--s12); color: var(--muted); }
+.fix-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s12); min-height: 44px; padding: var(--s8) var(--s12); border-radius: var(--r-btn); color: var(--ink); text-decoration: none; }
+.fix-row:hover { background: var(--tint); }
+.fix-row:hover .fix-title { text-decoration: underline; }
+.fix-title { flex: 1 1 0; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; font-weight: 600; overflow-wrap: anywhere; }
+.fix-place { flex-basis: 100%; font-size: var(--t13); color: var(--muted); overflow-wrap: anywhere; }
+.fix-row code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
+.fix-chev { flex: none; transform: rotate(-90deg); color: var(--muted); }
+@media (min-width: 1024px) {
+  .to-fix { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+}
 
 /* The one link from the main view to the Full record. */
 .full-record { display: flex; align-items: center; gap: var(--s12); min-height: 44px; margin: var(--s24) 0; padding: var(--s16); border: 1px solid var(--hairline); border-radius: var(--r-card); color: var(--ink); text-decoration: none; }
@@ -81,9 +87,6 @@
 .page-head .meta > span.mono, .page-head .meta > span .mono, .page-head .meta #review-summary-cost { white-space: normal; overflow-wrap: anywhere; }
 
 @media (max-width: 599px) {
-  .fix-card { display: grid; grid-template-columns: 1fr auto; }
-  .fix-card .urgency { justify-self: start; }
-  .fix-card .fix-chev { grid-column: 2; grid-row: 1 / 3; }
   .verdict-card .character { width: 72px; height: 72px; }
   .verdict-card .verdict-text { flex: 1 1 0; }
   .verdict-card .reviewer-faces .character { width: 48px; height: 48px; }

@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
 
 use ArrayObject;
 use Closure;
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -203,7 +204,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     public function testAProjectWhoseLightTierCannotBeReadIsSkipped(): void
     {
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(['broken', 'mapped']);
+        $tiers->method('projects')->willReturn(new ProjectNames('broken', 'mapped'));
         $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => 'broken' === $project
             ? throw new TierNotMapped($project, Tier::Light) : new ResolvedModel(Provider::Anthropic, 'light-mapped'));
 
@@ -449,7 +450,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     {
         $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
+        $tiers->method('projects')->willReturn(new ProjectNames(...array_map(strval(...), array_keys($lightTiers))));
         $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
 
         return $tiers;

@@ -5,14 +5,25 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Symfony\AI\Platform\Bridge\Codex\TokenUsageExtractor;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Untrusted, because the reviewer wrote it: only its shape is checked here, and the verdict in it is checked by whoever reads it.
+#[Exclude]
 final readonly class ReviewJobAnswer
 {
     private const string TYPE = 'type';
 
+    /**
+     * @param list<TokenUsageInterface> $usage
+     */
     private function __construct(
         public string $text,
+        // Read from the CLI's own events, never from the model's text, so the vendor counts an approve only when the job read a file of the checkout.
+        public bool $readTheCheckout,
+        // What the CLI reported it spent; empty when it reported nothing, so the vendor leaves the call unsettled instead of settling it as zero.
+        public array $usage,
     ) {
     }
 
@@ -21,34 +32,53 @@ final readonly class ReviewJobAnswer
      */
     public static function read(Provider $provider, string $output): self
     {
+        $events = self::events($output) ?? [];
+        $claudeCode = new ClaudeCodeJobEvents($events);
         $text = match ($provider) {
-            Provider::ClaudeCode => self::claudeCodeResult($output),
-            Provider::Codex => self::codexMessage($output),
+            Provider::ClaudeCode => $claudeCode->answer(),
+            Provider::Codex => self::codexMessage($events),
             default => null,
         };
 
-        return null === $text || '' === $text ? throw ReviewJobFailure::unreadableAnswer($provider) : new self($text);
-    }
-
-    // Refused when marked as an error, because such a result (a rate limit, a refused login) is the CLI's own text, never the reviewer's answer.
-    private static function claudeCodeResult(string $output): ?string
-    {
-        $result = json_decode($output, true);
-
-        if (!is_array($result) || 'result' !== ($result[self::TYPE] ?? null) || false !== ($result['is_error'] ?? null)) {
-            return null;
+        if (null === $text || '' === $text) {
+            throw ReviewJobFailure::unreadableAnswer($provider);
         }
 
-        return is_string($result['result'] ?? null) ? $result['result'] : null;
+        return Provider::ClaudeCode === $provider
+            ? new self($text, $claudeCode->readACheckoutFile(), $claudeCode->usage())
+            // No read counts, because the job's Codex has its shell and every other tool off, so its events can show no file it read.
+            : new self($text, false, self::codexUsage($events));
+    }
+
+    /**
+     * @return list<array<mixed>>|null
+     */
+    // Every line must be an event, so output that is not the CLI's event stream is never searched for an answer, a read or usage.
+    private static function events(string $output): ?array
+    {
+        $events = [];
+
+        foreach (array_filter(explode("\n", $output), static fn (string $line): bool => '' !== trim($line)) as $line) {
+            $event = json_decode($line, true);
+            if (!is_array($event) || array_is_list($event)) {
+                return null;
+            }
+            $events[] = $event;
+        }
+
+        return $events;
     }
 
     // The last message answers only once its own turn completed, because a turn that failed or was cut off may end on a message the reviewer had not finished, and a later turn's turn.completed says nothing about it.
-    private static function codexMessage(string $output): ?string
+    /**
+     * @param list<array<mixed>> $events
+     */
+    private static function codexMessage(array $events): ?string
     {
         $answer = null;
         $pending = null;
 
-        foreach (self::codexEvents($output) ?? [] as $event) {
+        foreach ($events as $event) {
             $message = self::agentMessageOf($event);
             if (null !== $message) {
                 [$answer, $pending] = [null, $message];
@@ -65,23 +95,15 @@ final readonly class ReviewJobAnswer
         return $answer;
     }
 
+    // Each completed turn reports its own usage, so every one is kept.
     /**
-     * @return list<array<mixed>>|null
+     * @param list<array<mixed>> $events
+     *
+     * @return list<TokenUsageInterface>
      */
-    // Every line must be an event, so output that is not the CLI's event stream is never searched for a message.
-    private static function codexEvents(string $output): ?array
+    private static function codexUsage(array $events): array
     {
-        $events = [];
-
-        foreach (array_filter(explode("\n", $output), static fn (string $line): bool => '' !== trim($line)) as $line) {
-            $event = json_decode($line, true);
-            if (!is_array($event) || array_is_list($event)) {
-                return null;
-            }
-            $events[] = $event;
-        }
-
-        return $events;
+        return ReportedUsage::in(new TokenUsageExtractor(), array_filter($events, static fn (array $event): bool => 'turn.completed' === ($event[self::TYPE] ?? null)));
     }
 
     /**

@@ -12,13 +12,12 @@ final readonly class IssueHistory
 {
     /**
      * @param list<LabelApplication> $labels
-     * @param list<string>           $currentLabels
      */
     public function __construct(
         public string $lastEditor,
         public array $labels,
         public string $body,
-        public array $currentLabels,
+        public IssueLabels $currentLabels,
     ) {
     }
 }

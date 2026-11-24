@@ -12,12 +12,16 @@ final readonly class IntakePlan
      * @param list<HeldIssue>       $held
      * @param array<int, int>       $pullRequests
      * @param array<int, list<int>> $dependsOn
+     * @param list<int>             $openPullRequests
+     * @param array<int, list<int>> $closingPullRequests
      */
     public function __construct(
         public array $ready,
         public array $held,
         public array $pullRequests,
         public array $dependsOn,
+        public array $openPullRequests,
+        public array $closingPullRequests,
     ) {
     }
 }

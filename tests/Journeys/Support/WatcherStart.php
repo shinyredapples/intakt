@@ -61,9 +61,9 @@ final readonly class WatcherStart
 
     private function sampleHeadIn(string $repository): string
     {
-        $call = $this->hardened->call(['rev-parse', '--verify', SampleRepository::BRANCH.'^{commit}'], $repository);
+        $call = $this->hardened->call($repository, 'rev-parse', '--verify', SampleRepository::BRANCH.'^{commit}');
 
-        return trim(new Process($call->command, $call->directory, $call->environment, timeout: self::GIT_SECONDS)->mustRun()->getOutput());
+        return trim(new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::GIT_SECONDS)->mustRun()->getOutput());
     }
 
     // Written beside the configuration, so the journey's directory holds and removes everything this start adds.

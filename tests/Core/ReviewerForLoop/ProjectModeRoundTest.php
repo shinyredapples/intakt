@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\ReviewerForLoop;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -144,7 +145,7 @@ final class ProjectModeRoundTest extends KernelTestCase
     {
         $handler = self::getContainer()->get(VerdictsOfRoundHandler::class);
 
-        return $handler(new VerdictsOfRound($review->roundId, SampleIdentity::of(RoundFixture::TASK, $this->panel()), new HeadMove(HeadMoveKind::Unmoved, [])));
+        return $handler(new VerdictsOfRound($review->roundId, SampleIdentity::of(RoundFixture::TASK, $this->panel()), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
     }
 
     private function modes(): ProjectModes

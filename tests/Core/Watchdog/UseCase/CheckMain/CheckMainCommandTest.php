@@ -18,12 +18,15 @@ use Intakt\Core\Watchdog\Infrastructure\FirstParentChain;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeOption;
+use Intakt\Core\Watchdog\UseCase\CheckMain\TrustedKeys;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Support\ConsoleDisplay;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -38,10 +41,13 @@ use Symfony\Component\Process\Process;
 #[CoversClass(CheckMainCommand::class)]
 #[CoversClass(CheckMain::class)]
 #[CoversClass(CheckMainInput::class)]
+#[CoversClass(TrustedKeys::class)]
 #[CoversClass(RecordedMergeOption::class)]
 #[CoversClass(RecordedMergeNotARange::class)]
+#[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(CommitClassifier::class)]
 #[UsesClass(MainHistory::class)]
+#[UsesClass(TrustedSignatures::class)]
 #[UsesClass(FirstParentChain::class)]
 #[UsesClass(OwnerKey::class)]
 #[UsesClass(OwnerKeyRefused::class)]
@@ -219,7 +225,7 @@ final class CheckMainCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringNotContainsString($control, $tester->getDisplay());
-        self::assertStringContainsString('missing'.$escaped.'path', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing'.$escaped.'path'));
     }
 
     public function testAReasonThatIsNotUtf8HasItsHighBytesPrintedEscaped(): void
@@ -228,14 +234,14 @@ final class CheckMainCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringNotContainsString("\xC2", $tester->getDisplay());
-        self::assertStringContainsString('missing\302path', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\302path'));
     }
 
     public function testAPrintableUnicodeCharacterInAReasonIsKept(): void
     {
         $tester = $this->whenTheCommandRunsIn($this->repository->path.'/missing-Ä', str_repeat('a', 40), []);
 
-        self::assertStringContainsString('missing-Ä', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing-Ä'));
     }
 
     /**
@@ -306,6 +312,50 @@ final class CheckMainCommandTest extends TestCase
         self::assertStringNotContainsString('secret-looking-value', $tester->getDisplay());
     }
 
+    public function testAMalformedPeerKeyExitsWithTwoWithoutEchoingTheKey(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--peer-key' => ['cert-authority secret-looking-value']]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('Peer key 1', $tester->getDisplay());
+        self::assertStringNotContainsString('secret-looking-value', $tester->getDisplay());
+    }
+
+    public function testAMergeSignedByAPeerKeyIsShownAsAnInfoLineAndMainIsClean(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--owner-key' => [$this->publicKey('owner')], '--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(sprintf("info: peer merge %s peer_signed\nmain is clean\n", $peer), $tester->getDisplay());
+    }
+
+    public function testAPeerMergeIsShownBeforeTheViolationsAndTheCheckStillFails(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $peer = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $unsigned = $this->repository->commitEmpty('Unsigned change');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(sprintf("info: peer merge %s peer_signed\nviolation %s unsigned\n", $peer, $unsigned), $tester->getDisplay());
+    }
+
+    public function testAnOwnerPushIsNoPeerMergeAndPrintsNothingExtra(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        $tester = $this->whenTheCommandRuns($seen, ['--owner-key' => [$this->publicKey('owner')], '--peer-key' => [$this->publicKey('peer')]]);
+
+        self::assertSame("main is clean\n", $tester->getDisplay());
+    }
+
     public function testAShallowRepositoryExitsWithOneAndIsNeverReportedClean(): void
     {
         $this->repository->commitEmpty('Old');
@@ -316,8 +366,34 @@ final class CheckMainCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns($seen, []);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('shallow repository', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('shallow repository'));
         self::assertStringNotContainsString('main is clean', $tester->getDisplay());
+    }
+
+    public function testAShallowRepositoryInALongFolderIsStillNamedShallow(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitEmpty('New');
+        $this->repository->cutHistoryBelow($seen);
+        $filesystem = new Filesystem();
+        $path = $this->repository->path;
+        $wrappedAtLeastOnce = false;
+
+        // A block is at most 120 columns wide, so 130 lengths put a line break inside the phrase at least once.
+        foreach (range(1, 130) as $length) {
+            $folder = $this->keys.'/'.str_repeat('d', $length);
+            $filesystem->mkdir($folder);
+            $filesystem->rename($path, $folder.'/repo');
+            $path = $folder.'/repo';
+
+            $tester = $this->whenTheCommandRunsIn($path, $seen, []);
+
+            self::assertSame(Command::FAILURE, $tester->getStatusCode());
+            self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('shallow repository'));
+            $wrappedAtLeastOnce = $wrappedAtLeastOnce || !str_contains($tester->getDisplay(), 'shallow repository');
+        }
+
+        self::assertTrue($wrappedAtLeastOnce);
     }
 
     public function testARecordedHeadTheRepositoryDoesNotHoldExitsWithOne(): void
@@ -332,12 +408,32 @@ final class CheckMainCommandTest extends TestCase
         self::assertStringNotContainsString('main is clean', $tester->getDisplay());
     }
 
+    public function testAReasonWhosePathIsLongerThan200CharactersIsStillShownEscaped(): void
+    {
+        $wrappedAtLeastOnce = false;
+
+        // A block is at most 120 columns wide, so 130 lengths put a line break inside the text at least once.
+        foreach (range(200, 330) as $length) {
+            $path = $this->repository->path.'/'.str_repeat('d', $length)."/missing\u{2028}path";
+
+            $tester = $this->whenTheCommandRunsIn($path, str_repeat('a', 40), []);
+
+            self::assertSame(Command::FAILURE, $tester->getStatusCode());
+            self::assertStringNotContainsString("\u{2028}", $tester->getDisplay());
+            self::assertThat($tester->getDisplay(), ConsoleDisplay::shows(str_repeat('d', 50)));
+            self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\u{2028}path'));
+            $wrappedAtLeastOnce = $wrappedAtLeastOnce || !str_contains($tester->getDisplay(), 'missing\u{2028}path');
+        }
+
+        self::assertTrue($wrappedAtLeastOnce);
+    }
+
     public function testAReasonWithALineBreakIsPrintedOnOneEscapedLine(): void
     {
         $tester = $this->whenTheCommandRunsIn($this->repository->path."/missing\nviolation", str_repeat('a', 40), []);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('missing\nviolation', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows('missing\nviolation'));
     }
 
     #[Override]

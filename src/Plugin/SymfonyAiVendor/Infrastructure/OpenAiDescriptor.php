@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\Provider;
 use SensitiveParameter;
 use Symfony\AI\Platform\Bridge\OpenResponses\Factory;
@@ -31,7 +32,7 @@ final readonly class OpenAiDescriptor implements SymfonyAiProvider
     }
 
     // Read from the enum, because its accounts still build their variables from it until its match arms move into descriptors.
-    public function variables(): array
+    public function variables(): EnvironmentVariables
     {
         return Provider::OpenAi->variables();
     }
