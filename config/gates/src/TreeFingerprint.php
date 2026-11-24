@@ -23,6 +23,9 @@ final readonly class TreeFingerprint
     // Because every entry is held in memory until the walk ends and PHP cannot catch running out of it, a walk past this many entries gives no fingerprint: about four times Intakt's own tree with vendor/ installed, and still within PHP's default limit of 128 MB.
     private const int MOST_ENTRIES = 100_000;
 
+    // Because long paths fill that memory with far fewer entries, the bytes of the keys and entries are bounded too: several times Intakt's own tree with vendor/ installed.
+    private const int MOST_BYTES = 16 * 1024 * 1024;
+
     /**
      * @param array<string, string> $environment
      */
@@ -33,6 +36,7 @@ final readonly class TreeFingerprint
         private array $environment,
         private ProcessRunner $runner = new ProcessRunner(),
         private int $mostEntries = self::MOST_ENTRIES,
+        private int $mostBytes = self::MOST_BYTES,
     ) {
     }
 
@@ -147,7 +151,7 @@ final readonly class TreeFingerprint
      * @throws ScopeFailure
      * @throws UnexpectedValueException
      */
-    // Because the walk stops once it counted too many entries, each part is started only when the one before it is counted.
+    // Because the walk stops once it counted too many entries or bytes, each part is started only when the one before it is counted.
     private function foundInTheCheckedTree(string $root, ?int $settledBefore): iterable
     {
         yield new TreeWalk([self::GIT_FOLDER, ...self::WRITTEN_BY_THE_CHECK], $settledBefore)->entries($root, '', [$root]);
@@ -213,21 +217,51 @@ final readonly class TreeFingerprint
      */
     private function sealed(iterable $found): string
     {
+        $entries = $this->held($found);
+        ksort($entries, SORT_STRING);
+
+        // Because joining the entries first would hold all of them a second time, each is hashed by itself.
+        $hash = hash_init('sha256');
+
+        foreach ($entries as $key => $entry) {
+            hash_update($hash, $this->framed(strval($key)));
+            hash_update($hash, $this->framed($entry));
+        }
+
+        return hash_final($hash);
+    }
+
+    /**
+     * @param iterable<iterable<string, string>> $found
+     *
+     * @return array<string, string>
+     *
+     * @throws UnexpectedValueException
+     */
+    private function held(iterable $found): array
+    {
         $entries = [];
+        $bytes = 0;
 
         foreach ($found as $group) {
             foreach ($group as $key => $entry) {
+                $bytes += strlen($entry) + (isset($entries[$key]) ? -strlen($entries[$key]) : strlen($key));
                 $entries[$key] = $entry;
-
-                if (count($entries) > $this->mostEntries) {
-                    throw new UnexpectedValueException('more entries than the fingerprint holds');
-                }
+                $this->expectWithinLimits(count($entries), $bytes);
             }
         }
 
-        ksort($entries, SORT_STRING);
+        return $entries;
+    }
 
-        return $this->joined([...array_map(strval(...), array_keys($entries)), ...array_values($entries)]);
+    /**
+     * @throws UnexpectedValueException
+     */
+    private function expectWithinLimits(int $entries, int $bytes): void
+    {
+        if ($entries > $this->mostEntries || $bytes > $this->mostBytes) {
+            throw new UnexpectedValueException('more than the fingerprint holds');
+        }
     }
 
     /**
@@ -269,7 +303,12 @@ final readonly class TreeFingerprint
      */
     private function joined(array $parts): string
     {
-        // Because each part is prefixed by its length, no value can pass for the boundary between two parts.
-        return hash('sha256', implode('', array_map(static fn (?string $part): string => null === $part ? 'n' : strlen($part).':'.$part, $parts)));
+        return hash('sha256', implode('', array_map($this->framed(...), $parts)));
+    }
+
+    // Because each part is prefixed by its length, no value can pass for the boundary between two parts.
+    private function framed(?string $part): string
+    {
+        return null === $part ? 'n' : strlen($part).':'.$part;
     }
 }

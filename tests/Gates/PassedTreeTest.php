@@ -725,6 +725,43 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
     }
 
+    public function testATreeWithFewEntriesButLongPathsGivesNoFingerprintAndRecordsNoPass(): void
+    {
+        [$root] = $this->checkedTreeAndHome();
+        $within = $this->fingerprintOfAtMostBytes(1_000, $root);
+        self::assertNotNull($within->taken());
+
+        $folder = $root->root.'/'.str_repeat('a', 200).'/'.str_repeat('b', 200);
+        mkdir($folder, 0o777, true);
+        touch($folder.'/'.str_repeat('c', 200));
+        $tree = PassedTree::before($within, $this->settledClock());
+
+        self::assertNull($within->taken());
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($tree->hasPassed());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+    }
+
+    public function testATreeOfExactlyTheBytesTheFingerprintHoldsGivesAFingerprintAndOneByteLessGivesNone(): void
+    {
+        [$root] = $this->checkedTreeAndHome();
+        [$refused, $bytes] = [0, 2_000];
+
+        while ($bytes - $refused > 1) {
+            $most = intdiv($refused + $bytes, 2);
+            null === $this->fingerprintOfAtMostBytes($most, $root)->taken() ? $refused = $most : $bytes = $most;
+        }
+
+        // Because the search ends between a limit that holds the tree and one byte less, the limit is the tree's own size.
+        self::assertNotNull($this->fingerprintOfAtMostBytes($bytes, $root)->taken());
+        self::assertNull($this->fingerprintOfAtMostBytes($bytes - 1, $root)->taken());
+
+        rename($root->root.'/README.md', $root->root.'/READMEE.md');
+
+        self::assertNull($this->fingerprintOfAtMostBytes($bytes, $root)->taken());
+        self::assertNotNull($this->fingerprintOfAtMostBytes($bytes + 1, $root)->taken());
+    }
+
     public function testARecordOfAnotherFingerprintIsNotReused(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
@@ -830,6 +867,11 @@ final class PassedTreeTest extends SandboxTestCase
     }
 
     // Because the home is the checked tree here, only the entries of that one tree count.
+    private function fingerprintOfAtMostBytes(int $bytes, Sandbox $root): TreeFingerprint
+    {
+        return new TreeFingerprint($root->root, $root->root, Options::fromArguments([]), self::ENVIRONMENT, mostBytes: $bytes);
+    }
+
     private function fingerprintOfAtMost(int $entries, Sandbox $root): TreeFingerprint
     {
         return new TreeFingerprint($root->root, $root->root, Options::fromArguments([]), self::ENVIRONMENT, mostEntries: $entries);
