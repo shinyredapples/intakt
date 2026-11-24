@@ -4,14 +4,21 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\Infrastructure;
 
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 
 #[CoversClass(WatchConfiguration::class)]
+#[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
+#[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 final class WatchConfigurationTest extends TestCase
 {
     public function testAWatchSectionWithOnlyTheRequiredKeysIsAccepted(): void
@@ -111,6 +118,20 @@ final class WatchConfigurationTest extends TestCase
      *
      * @return array<string, mixed>
      */
+    public function testEachWatchedProjectGetsTheEligibilityLabelItsSectionNames(): void
+    {
+        $labels = WatchConfiguration::eligibilityLabelsOf(['alpha' => ['eligibility_label' => 'intakt'], 'beta' => ['eligibility_label' => 'build']]);
+
+        self::assertSame(['intakt', 'build'], [$labels->of('alpha'), $labels->of('beta')]);
+    }
+
+    public function testAProjectWithoutAWatchSectionGetsNoEligibilityLabel(): void
+    {
+        $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('alpha'));
+
+        WatchConfiguration::eligibilityLabelsOf(['beta' => ['eligibility_label' => 'intakt']])->of('alpha');
+    }
+
     private function processed(array $watch): array
     {
         /** @var array<string, mixed> $projects */
