@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -289,7 +290,7 @@ final class ReviewerInJobTest extends TestCase
             $clone = $spec->inputs[0]->hostPath;
             $this->mounted[] = $clone;
             $this->seen['prompt'] = (string) file_get_contents($spec->inputs[1]->hostPath);
-            $this->seen['command'] = implode("\n", array_slice($spec->command, 3));
+            $this->seen['command'] = implode("\n", array_slice([...$spec->command], 3));
             $this->seen['config'] = (string) file_get_contents($clone.'/.git/config');
             $this->seen['commits'] = trim($this->git($clone, 'rev-list', '--all'));
             $this->changeModes($clone, static fn (int $mode): int => $mode & ~0o222);
@@ -302,7 +303,7 @@ final class ReviewerInJobTest extends TestCase
             $this->seen['log'] = (string) @file_get_contents($this->folder.'/output/'.ReviewJob::LOG);
             $this->seen['head'] = trim((string) @file_get_contents($this->folder.'/head'));
 
-            return new JobResult(new JobEnd(JobCause::Exited, $run->getExitCode() ?? 1), new JobOutput([ReviewJob::ANSWER => (string) @file_get_contents($this->folder.'/output/'.ReviewJob::ANSWER), ReviewJob::LOG => $this->seen['log']]));
+            return new JobResult(new JobEnd(JobCause::Exited, $run->getExitCode() ?? 1), new JobOutput(new JobOutputFile(ReviewJob::ANSWER, (string) @file_get_contents($this->folder.'/output/'.ReviewJob::ANSWER)), new JobOutputFile(ReviewJob::LOG, $this->seen['log'])));
         });
 
         return $runner;
