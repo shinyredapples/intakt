@@ -44,6 +44,19 @@ final class CodexLoginsTest extends TestCase
         self::assertSame(0o400, fileperms($home.'/auth.json') & 0o777);
     }
 
+    public function testAnAccountWithAKeptLoginFileHasALogin(): void
+    {
+        $logins = $this->logins();
+        $this->storeLogin($logins, '2026-11-01T00:00:00Z');
+
+        self::assertTrue($logins->hasLogin('team'));
+    }
+
+    public function testAnAccountWithoutAKeptLoginFileHasNoLogin(): void
+    {
+        self::assertFalse($this->logins()->hasLogin('team'));
+    }
+
     public function testTheCallHomeNeverHoldsTheKeptLogin(): void
     {
         $logins = $this->logins();

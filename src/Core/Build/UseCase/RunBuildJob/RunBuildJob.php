@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
-use Intakt\Core\Build\Contract\BuildRuntime;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
@@ -120,7 +120,7 @@ final readonly class RunBuildJob
     {
         $resolved = $this->tiers->resolve($job->project, $job->tier);
 
-        if (BuildRuntime::PROVIDER !== $resolved->provider) {
+        if (Provider::ClaudeCode !== $resolved->provider) {
             throw new BuilderNotOnClaudeCode($job->project, $job->tier, $resolved->provider);
         }
 

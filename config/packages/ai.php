@@ -283,8 +283,12 @@ return static function (ContainerConfigurator $container): void {
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
-        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
+        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command; accounts the file lists for it still show, without credentials.
         if (Provider::Codex === $provider && !isset($configuration[Provider::Codex->configKey()])) {
+            if (array_key_exists($provider->value, $explicitAccounts)) {
+                $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
+            }
+
             continue;
         }
 

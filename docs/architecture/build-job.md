@@ -6,7 +6,7 @@ Plan task T49, the job itself (#1709; design: [overview](../design/05-architectu
 
 ## The steps
 
-1. **Model:** `TierResolver::resolve(<project>, <tier>)` picks the model from the project's tier map ([Capability tiers](capability-tiers.md)); the tier is the caller's choice (`--tier`, `standard` by default, for `intakt:build:run`; the routing rules' choice for `intakt:build:task`). A tier on any provider but `claude_code` (`Build\Contract\BuildRuntime::PROVIDER`) is `BuilderNotOnClaudeCode`, because the job runs the Claude Code CLI and holds no vendor API key; a tier that cannot be resolved (`TierResolutionFailure`) is thrown as it is. No job starts in either case.
+1. **Model:** `TierResolver::resolve(<project>, <tier>)` picks the model from the project's tier map ([Capability tiers](capability-tiers.md)); the tier is the caller's choice (`--tier`, `standard` by default, for `intakt:build:run`; the routing rules' choice for `intakt:build:task`). A tier on any provider but `claude_code` is `BuilderNotOnClaudeCode`, because the job runs the Claude Code CLI and holds no vendor API key; a tier that cannot be resolved (`TierResolutionFailure`) is thrown as it is. No job starts in either case.
 2. **Clone:** `<clone>` is a [build clone](build-clone.md) made with `intakt:build:clone` (resolved with `realpath`); a path that is no folder is a `BuildCloneIsNoFolder`. The job gets the build clone, never the mirror, so it sees main, the task's branch and a verified source and no other branch.
 3. **Prompt:** `BuilderPrompt::textFor()` of the `BuildBrief`, written to a file of its own, `var/prompts/prompt-<random>.md` (mode 0600), which is removed after the job, also when the job throws.
 4. **Job** (`JobRunner::run()`):

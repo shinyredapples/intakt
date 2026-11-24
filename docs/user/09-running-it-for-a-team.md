@@ -62,14 +62,6 @@ accounts:
 
 The `team` account reads `ANTHROPIC_API_KEY_TEAM`. When one account hits a rate limit, the reviewer moves to the next.
 
-To see every account you listed, once, with its state and the roles it serves, run:
-
-```bash
-php bin/console intakt:team
-```
-
-An account whose key is not set shows `no-key`. The command is described in [the user manual](../reference/user-manual.md#listing-the-accounts-and-the-roles-they-serve).
-
 ## Who can open the dashboard
 
 The dashboard has no login. It answers only on `localhost`, and `compose.yaml` publishes its port on the loopback address only. If you publish it on another address, anyone who reaches it can use it. Keep it on your machine, or behind your own access control.

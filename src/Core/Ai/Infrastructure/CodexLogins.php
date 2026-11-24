@@ -46,6 +46,11 @@ final readonly class CodexLogins
         return $this->directory.'/logins/'.$account.'/'.self::LOGIN_FILE;
     }
 
+    public function hasLogin(string $account): bool
+    {
+        return is_file($this->loginFile($account));
+    }
+
     // The name becomes a path and a lock key, so only a name an account can have is accepted.
     private function assertAccountName(string $account): void
     {

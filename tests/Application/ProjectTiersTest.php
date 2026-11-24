@@ -24,6 +24,9 @@ use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Contract\Setback;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\AccountState;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamAccount;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRoster;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
@@ -350,6 +353,40 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertArrayNotHasKey(Provider::OpenAiCompatible->value, $this->parameterList($container, AiServices::ACCOUNTS));
     }
 
+    public function testTheWiredRosterShowsAnAccountListedUnderTheHyphenatedProviderKeyAsHavingNoKey(): void
+    {
+        $this->listAccounts('openai-compatible: [team]');
+
+        self::assertSame(AccountState::NoKey, $this->rosterOf($this->bootedContainer())['openai_compatible.team'] ?? null);
+    }
+
+    public function testTheWiredRosterShowsACodexAccountListedWithoutTheCodexSectionAsHavingNoKey(): void
+    {
+        $this->listAccounts('codex: [team]');
+
+        self::assertSame(AccountState::NoKey, $this->rosterOf($this->bootedContainer())['codex.team'] ?? null);
+    }
+
+    public function testTheWiredRosterLeavesOutCodexWhenTheFileNeitherListsItsAccountsNorHasItsSection(): void
+    {
+        self::assertArrayNotHasKey('codex.default', $this->rosterOf($this->bootedContainer()));
+    }
+
+    public function testTheWiredRosterShowsACodexAccountWithoutItsLoginFileAsHavingNoKey(): void
+    {
+        file_put_contents($this->file, "codex: { model: gpt-6.2-sol, effort: high }\n");
+        $this->listAccounts('codex: [nologin]');
+
+        self::assertSame(AccountState::NoKey, $this->rosterOf($this->bootedContainer())['codex.nologin'] ?? null);
+    }
+
+    public function testTheWiredRosterShowsAnAccountWithItsKeyAsReady(): void
+    {
+        $this->listAccounts('anthropic: [default]');
+
+        self::assertSame(AccountState::Ready, $this->rosterOf($this->bootedContainer())['anthropic.default'] ?? null);
+    }
+
     public function testAProviderWithoutAKeyThatKeepsItsImplicitDefaultAccountIsNotListed(): void
     {
         self::assertArrayNotHasKey(Provider::OpenAi->value, $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS));
@@ -534,6 +571,18 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertIsArray($parameter);
 
         return $parameter;
+    }
+
+    /**
+     * @return array<string, AccountState>
+     */
+    private function rosterOf(ContainerInterface $container): array
+    {
+        $roster = $container->get('test.intakt.team_roster');
+        self::assertInstanceOf(TeamRoster::class, $roster);
+        $accounts = $roster->now()->accounts;
+
+        return array_combine(array_map(static fn (TeamAccount $account): string => $account->account->key(), $accounts), array_map(static fn (TeamAccount $account): AccountState => $account->state, $accounts));
     }
 
     private function bootedContainer(): ContainerInterface
