@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\BranchCleanup\UseCase;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use RuntimeException;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\BranchCleanup\Infrastructure\CleanupPolicies;
 use Intakt\Core\BranchCleanup\Infrastructure\ProjectForges;
@@ -33,6 +32,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\PushScenario;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
