@@ -179,6 +179,7 @@ final readonly class CheckCommand
             new RatchetListsGate(),
             new WorkflowsGate(),
             new LeftUndoneGate(),
+            new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents()))),
         ];
     }
 

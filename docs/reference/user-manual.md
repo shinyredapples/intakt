@@ -288,7 +288,7 @@ The file lies in the checked folder (`--root`, else the repository), under `var/
 For example:
 
 ```
-{"static":["cs","rector",...,"ratchet","workflows","left-undone"],"order":["cs","phpstan","rector",...,"container","ratchet","workflows","left-undone"]}
+{"static":["cs","rector",...,"ratchet","workflows","left-undone","docs"],"order":["cs","phpstan","rector",...,"container","ratchet","workflows","left-undone","docs"]}
 ```
 
 With any other argument beside it, `bin/check` runs no gate: it prints an `error` line with its usage and exits with 2. A normal `bin/check` run is unchanged: it still starts the static gates before the gates that run your change's code.
