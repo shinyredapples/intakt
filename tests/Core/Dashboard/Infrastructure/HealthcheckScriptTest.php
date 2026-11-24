@@ -5,21 +5,75 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// Runs the image's health script with a stand-in for curl, because what is proven here is when the container is called healthy, not the server's answer.
+// Runs the image's health script with stand-ins for curl and php, because what is proven here is when the container is called healthy, not the server's answer (CheckServerHealthCommandTest proves the server's health).
 #[CoversNothing]
 final class HealthcheckScriptTest extends TestCase
 {
     private string $directory;
 
-    public function testTheHealthCheckFailsWhileTheServerDoesNotAnswer(): void
+    public function testTheHealthCheckFailsWhileTheServerHealthCommandFails(): void
     {
-        $process = $this->check(['FAIL_ON' => 'http://localhost:2019/metrics']);
+        $process = $this->check(['FAIL_ON' => 'intakt:server:health']);
 
         self::assertNotSame(0, $process->getExitCode());
+        self::assertStringContainsString('bin/console intakt:server:health', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    public function testTheHealthCheckPointsTheServerHealthCommandAtAMovedAdminApi(): void
+    {
+        $process = $this->check(['CADDY_ADMIN' => 'localhost:2999']);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('admin=http://localhost:2999 bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    public function testTheHealthCheckChecksTheListenerOfItsOwnServerWhenAnAdminUrlIsSetBesideIt(): void
+    {
+        $process = $this->check(['CADDY_ADMIN' => 'localhost:2999', 'FRANKENPHP_ADMIN_URL' => 'http://localhost:3000']);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('admin=http://localhost:2999 bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    public function testABarePortInTheMovedAdminApiMeansLocalhost(): void
+    {
+        $process = $this->check(['CADDY_ADMIN' => ':2999']);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('admin=http://localhost:2999 bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    public function testWithoutAMovedAdminApiTheServerHealthCommandReadsTheDefaultListener(): void
+    {
+        $process = $this->check([]);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('admin=http://localhost:2019 bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    #[DataProvider('listenersBesideAStaleAdminUrl')]
+    public function testTheHealthCheckIgnoresAStaleAdminUrlForEveryListener(false|string $listener, string $expected): void
+    {
+        $process = $this->check(['CADDY_ADMIN' => $listener, 'FRANKENPHP_ADMIN_URL' => 'http://localhost:3000']);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('admin=http://'.$expected.' bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    /**
+     * @return iterable<string, array{false|string, string}>
+     */
+    public static function listenersBesideAStaleAdminUrl(): iterable
+    {
+        yield 'an explicit host' => ['localhost:2999', 'localhost:2999'];
+        yield 'a bare port' => [':2999', 'localhost:2999'];
+        yield 'the default listener' => [false, 'localhost:2019'];
+        yield 'an empty listener setting' => ['', 'localhost:2019'];
     }
 
     public function testTheHealthCheckFailsWhileTheDashboardDoesNotAnswer(): void
@@ -76,7 +130,8 @@ final class HealthcheckScriptTest extends TestCase
         $this->directory = sys_get_temp_dir().'/intakt-healthcheck-'.bin2hex(random_bytes(6));
         $filesystem = new Filesystem();
         $filesystem->dumpFile($this->directory.'/stubs/curl', "#!/bin/bash\necho \"\$*\" >> \"\$CALLS\"\n[[ \" \$* \" == *\" \$FAIL_ON \"* ]] && exit 22\nexit 0\n");
-        $filesystem->chmod($this->directory.'/stubs/curl', 0755);
+        $filesystem->dumpFile($this->directory.'/stubs/php', "#!/bin/bash\necho \"admin=\${FRANKENPHP_ADMIN_URL:-} \$*\" >> \"\$CALLS\"\n[[ \" \$* \" == *\" \$FAIL_ON \"* ]] && exit 1\nexit 0\n");
+        $filesystem->chmod([$this->directory.'/stubs/curl', $this->directory.'/stubs/php'], 0755);
         $filesystem->mkdir($this->directory.'/var');
     }
 
@@ -96,6 +151,7 @@ final class HealthcheckScriptTest extends TestCase
             'SERVER_PORT' => '7781',
             'DASHBOARD_PORT' => '7781',
             'CADDY_ADMIN' => false,
+            'FRANKENPHP_ADMIN_URL' => false,
             'INTAKT_SAMPLE_REPOSITORY' => false,
             'FAIL_ON' => '-none-',
             ...$environment,

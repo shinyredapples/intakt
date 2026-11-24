@@ -41,4 +41,16 @@ It reads stdin when you give no file, and `--run` is optional. It talks to GitHu
 In GitHub, the journeys run on every push to main. On a pull request they run when it changes anything outside `docs/`, `tests/` and `upstream/` (the product, its app image or the CI configuration) or the journeys' own test code; a pull request that only changes docs or other tests skips them and its check still shows green. They run as the `journeys` job of the `ci` workflow. When one fails there, that pull request's checks (or that push's) turn red, and no task is filed. The `journeys` workflow also runs them on main every night. Start a run of it with its "Run workflow" button or `gh workflow run journeys.yml`. Only a red run of this workflow files or updates the urgent task. The nightly run stays for now; it is removed once the journeys in the `ci` workflow have been green on main for a week.
 A run that times out files or updates a task that says so; a run you cancel files nothing.
 
+`bin/install-check` tries the install the README describes and, when `GITHUB_REPOSITORY` is set, hands its report to `bin/journey-alarm --install-check=<report.json>` itself: one task per failing step, closed when the step passes ([the install check](../architecture/install-check.md)).
+
 The technical side is in [Journeys](../architecture/journeys.md).
+
+## Journeys in a real browser
+
+A second kind of journey check clicks through a dashboard that is already running, in a real browser without a window:
+
+```
+bin/journey-check http://localhost:7781
+```
+
+Each journey starts on a fresh page, finds buttons and text by what they say on screen, and passes or fails. A failing one names the step that broke and, when it can, saves a picture of the page in `var/journey-check/` under a folder for that run. It ends with 0 when every journey passed, 1 when one failed and 2 when it could not run, for example when nothing answers at the address. It has no journeys of its own yet; the first one is planned. It needs Node.js and Playwright: the [user manual](../reference/user-manual.md#walking-user-journeys-with-the-journey-check) has the commands, and the technical side is in [Journey check](../architecture/journey-check.md).

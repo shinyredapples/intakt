@@ -53,6 +53,11 @@ final class FailureInWordsTest extends TestCase
         self::assertSame('failed with an unexpected error', new FailureInWords()->of(RuntimeException::class));
     }
 
+    public function testANamespacedClassNameThatDoesNotExistIsToldInGenericWordsWithoutTheName(): void
+    {
+        self::assertSame('failed with an unexpected error', new FailureInWords()->of('Intakt\No\Such\Failure'));
+    }
+
     public function testASentenceAlreadyInWordsIsKept(): void
     {
         self::assertSame('the reviewer had no result within the review ceiling', new FailureInWords()->of('the reviewer had no result within the review ceiling'));

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Domain;
 
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
@@ -14,6 +15,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(IntakeRules::class)]
 #[CoversClass(Priority::class)]
+#[CoversClass(QueueOrder::class)]
 #[CoversClass(QueuedIssue::class)]
 #[CoversClass(Vouching::class)]
 #[UsesClass(IntakePlan::class)]
@@ -251,12 +254,24 @@ final class IntakeRulesTest extends TestCase
         self::assertSame(Priority::Normal, Priority::of(['intakt', 'priority:unknown']));
     }
 
-    public function testAnUrgentTaskGoesBeforeATaskWhoseChangeIsOpen(): void
+    public function testATaskWhoseChangeIsOpenGoesBeforeAnUrgentTaskNotStartedYet(): void
     {
         $ready = $this->readyOf([
             $this->row(Issues::task(1, ['intakt', 'priority:high'])),
             $this->row(Issues::pullRequest(50, 'Closes #1')),
             $this->row(Issues::task(2, ['intakt', 'priority:urgent'])),
+        ]);
+
+        self::assertSame([1, 2], $ready);
+    }
+
+    public function testAnUrgentTaskWhoseChangeIsOpenGoesBeforeAnotherTaskWhoseChangeIsOpen(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:urgent'])),
+            $this->row(Issues::pullRequest(50, 'Closes #1')),
+            $this->row(Issues::pullRequest(51, 'Closes #2')),
         ]);
 
         self::assertSame([2, 1], $ready);
@@ -421,7 +436,7 @@ final class IntakeRulesTest extends TestCase
     // Without a history the author last edited the item and applied every label, because most cases are about something else.
     private function vouched(QueuedIssue $row, ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
     {
-        return $row->vouchedBy(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys($listed->labels, $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
+        return $row->vouchedBy(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys([...$listed->labels], $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
     }
 
     // Keyed by label, earliest application first, because a label applied again takes its later place.
@@ -431,6 +446,6 @@ final class IntakeRulesTest extends TestCase
      */
     private function history(string $lastEditor, array $applications): IssueHistory
     {
-        return new IssueHistory($lastEditor, array_map(static fn (string $label, string $account): LabelApplication => new LabelApplication($label, $account), array_keys($applications), array_values($applications)), '', array_keys($applications));
+        return new IssueHistory($lastEditor, array_map(static fn (string $label, string $account): LabelApplication => new LabelApplication($label, $account), array_keys($applications), array_values($applications)), '', new IssueLabels(...array_keys($applications)));
     }
 }

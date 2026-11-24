@@ -19,6 +19,7 @@ use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -855,7 +856,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatMovesDuringARoundMakesThatRoundsVerdictsStaleAndStoresIt(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -868,7 +869,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAStaleRoundIsRecordedOnceWhileTheMovedHeadIsReadAgain(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
         $this->tick();
 
@@ -880,7 +881,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
     public function testAHeadThatMovesWhileItsRoundIsStillStartingMakesThatRoundsVerdictsStaleOnTheNextTick(): void
     {
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
         $this->commands->whileStarting = function (): void {
             $this->commands->whileStarting = null;
@@ -898,7 +899,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatMovesOnlyInDocumentationLeavesTheVerdictsStanding(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['docs/feature.md']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('docs/feature.md'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -910,7 +911,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAMovedHeadWithPendingCiMakesTheVerdictsStaleButStartsNoNewRound(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -945,11 +946,31 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testARedHeadIsRecordedWithItsHeadAndNoCiLogText(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        $redKeys = [];
+        $redHeads = [];
+        foreach ($this->ledger->kinds() as $index => $kind) {
+            if (LedgerEventKind::HeadRed === $kind) {
+                $redKeys[] = array_keys($this->ledger->payloads()[$index]);
+                $redHeads[] = $this->ledger->payloads()[$index]['head'];
+            }
+        }
+
+        self::assertSame([['project', 'change', 'head', 'read_again_at']], $redKeys);
+        self::assertSame([str_repeat(self::RED, 40)], $redHeads);
+    }
+
     public function testARedMovedHeadIsCheckedAgainForStaleVerdictsOnceItsCommitArrives(): void
     {
         $this->startRoundOnGreenHead();
         $this->queries->fetched = false;
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->queries->fetched = true;
@@ -976,7 +997,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAStaleLineTheLedgerCouldNotTakeIsRecordedByALaterTick(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->useLedger(new InMemoryLedger(0));
         $this->tickExpectingFailure();
@@ -991,7 +1012,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAStaleRoundWhoseLineWasRecordedIsNotRecordedAgainByALaterMove(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:06:00Z'));
@@ -1113,7 +1134,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatReturnsToAnEarlierHeadWhoseRoundStandsStartsNoSecondRound(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['docs/feature.md']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('docs/feature.md'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
@@ -1298,7 +1319,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $this->failToWithdrawOnARefusedHead();
         $this->queries->headBoot = BootOutcome::booted();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:10:00Z'));
 
         $this->clock->modify('+61 seconds');
@@ -1338,7 +1359,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $this->startRoundOnGreenHead();
         $this->queries->headBoot = BootOutcome::failed('The server did not start.');
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -1366,7 +1387,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatReturnsAndFailsToBootWithdrawsTheApprovalsOfItsRoundAlreadyFoundStale(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->queries->headBoot = BootOutcome::failed('The server did not start.');
@@ -1487,7 +1508,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private function moveFromGreenToNextGreenAndBack(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
@@ -1499,7 +1520,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private function returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->queries->headBoot = BootOutcome::failed('The server did not start.');

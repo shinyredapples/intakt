@@ -314,6 +314,31 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSelectorNotExists('.failing-heads');
     }
 
+    public function testTheReviewListCarriesAHiddenEmptyLineForAProjectFilterThatHidesEveryRow(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame(['No review for this project yet'], $crawler->filter('.review-rows ~ [data-project-empty][hidden] > .col-empty')->each(static fn ($line): string => $line->text()));
+    }
+
+    public function testTheFailedPullRequestsCarryAHiddenEmptyLineForAProjectFilterThatHidesEveryCard(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame(['No failed pull request for this project'], $crawler->filter('.failing-heads > [data-project-empty][hidden] > .col-empty')->each(static fn ($line): string => $line->text()));
+    }
+
+    public function testAnEmptyLedgerShowsNoProjectEmptyLine(): void
+    {
+        $this->browser->request('GET', '/reviews');
+
+        self::assertSelectorNotExists('[data-project-empty]');
+    }
+
     public function testTheEmptyReviewListShowsTheWaitingOctopusAt144PxAboveItsUnchangedWords(): void
     {
         $empty = $this->browser->request('GET', '/reviews')->filter('main .empty');

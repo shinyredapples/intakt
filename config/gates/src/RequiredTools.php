@@ -28,7 +28,7 @@ final readonly class RequiredTools
 
     private const array BY_GATE = [
         'audit' => ['composer'],
-        'journeys' => ['sh', 'env', 'setsid'],
+        'journeys' => ['sh', 'env', 'setsid', 'unshare', 'true'],
         'tests' => ['sh', 'unshare', 'setsid', 'true', 'bash', 'jq'],
         'secrets' => [self::SCANNER, 'env'],
         'secrets-history' => [self::SCANNER, 'env'],

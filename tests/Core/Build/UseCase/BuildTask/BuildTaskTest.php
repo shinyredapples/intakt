@@ -15,7 +15,10 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
+use Intakt\Core\Build\Domain\BugPart;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -259,6 +262,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
 #[UsesClass(BuildBrief::class)]
+#[UsesClass(TaskKind::class)]
+#[UsesClass(BugReport::class)]
+#[UsesClass(BugPart::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
@@ -946,6 +952,24 @@ final class BuildTaskTest extends TestCase
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body")->rendered(), $prompt);
     }
 
+    public function testABugTaskWithAllFourPartsReachesTheBuildJobWithTheTestFirstInstruction(): void
+    {
+        $prompt = '';
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$prompt): JobResult {
+            $prompt = (string) file_get_contents($spec->inputs[1]->hostPath);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput());
+        });
+        $this->runner = $runner;
+        $body = "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d";
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'bug'], ['body' => $body])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertStringContainsString('write that test first', $prompt);
+    }
+
     public function testATierLabelOfTheIssueChoosesTheBuildsTier(): void
     {
         $tiers = $this->createMock(TierResolver::class);
@@ -1441,7 +1465,7 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

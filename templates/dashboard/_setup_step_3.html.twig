@@ -1,0 +1,42 @@
+{%- set providers = first_run.providers %}
+<section class="step" id="step-providers" data-s="3" data-state="{{ providers.state.value }}" aria-labelledby="s3h">
+    <h1 id="s3h">Add an AI account</h1>
+    <p class="lead{% if providers.keptUnreadable %} step-error{% endif %}"{% if providers.keptUnreadable %} role="alert"{% endif %}>{{ providers.sentence }}</p>
+    {%- if providers.offersKeyForm %}
+    <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::KEEP_PROVIDER_KEY')) }}" class="keep-provider-key" id="keep-provider-key">
+        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::TOKEN_ID')) }}">
+        <div class="field">
+            <label for="provider-key">A key or token for {{ providers.keyLabels|join(', ', ' or ') }}</label>
+            <input type="password" class="input mono" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" placeholder="Paste the key" autocomplete="off" required aria-describedby="provider-key-hint">
+            <span class="hint" id="provider-key-hint">Intakt asks the provider once, then keeps the key here.</span>
+        </div>
+    </form>
+    {%- endif %}
+    {%- if providers.keyless is not empty %}
+    <ul class="keyless">
+        {%- for message in providers.keyless %}
+        <li>{{ message }}</li>
+        {%- endfor %}
+    </ul>
+    {%- endif %}
+    {%- if providers.firstProject is not null %}
+    <p class="tiers-of">The tiers of the project {{ providers.firstProject }}:</p>
+    <table class="ledger tiers">
+        <thead><tr><th scope="col">Tier</th><th scope="col">Provider</th><th scope="col">Model or problem</th></tr></thead>
+        <tbody>
+            {%- for line in providers.tiers %}
+            <tr><td>{{ line.tier }}</td><td>{{ line.provider }}</td><td>{{ line.modelOrProblem }}</td></tr>
+            {%- endfor %}
+        </tbody>
+    </table>
+    {%- endif %}
+    <div class="step-nav">
+        <a class="btn quiet" href="{{ back }}">Back</a><span class="grow"></span>
+        {%- if providers.offersKeyForm %}
+        <a class="btn secondary" href="{{ continue }}">Skip</a>
+        <button class="btn primary" type="submit" form="keep-provider-key">Keep the key</button>
+        {%- else %}
+        <a class="btn primary" href="{{ continue }}">Continue</a>
+        {%- endif %}
+    </div>
+</section>

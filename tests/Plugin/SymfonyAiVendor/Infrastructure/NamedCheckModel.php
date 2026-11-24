@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProvider;
 use Symfony\AI\Platform\PlatformInterface;
@@ -32,7 +33,7 @@ final readonly class NamedCheckModel implements SymfonyAiProvider
         return $this->provider->label();
     }
 
-    public function variables(): array
+    public function variables(): EnvironmentVariables
     {
         return $this->provider->variables();
     }

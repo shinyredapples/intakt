@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\Contract\SampleProjectData;
 use SensitiveParameter;
@@ -31,9 +32,9 @@ final readonly class HuggingFaceDescriptor implements SymfonyAiProvider
         return 'Hugging Face';
     }
 
-    public function variables(): array
+    public function variables(): EnvironmentVariables
     {
-        return ['HF_TOKEN'];
+        return new EnvironmentVariables('HF_TOKEN');
     }
 
     public function keyPattern(): string
