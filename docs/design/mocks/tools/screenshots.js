@@ -58,6 +58,8 @@ function jobsFor(theme) {
   add('task', PHONE, { full: true, click: '.ttabs [data-pane="log"]', variant: 'log', note: 'Live log tab selected' });
   // The full page draws the fixed phone navigation over the log's lines, so they also get a scrolled capture.
   add('task', PHONE, { click: '.ttabs [data-pane="log"]', scroll: '.ttabs', variant: 'log-scrolled', note: 'Live log tab selected, scrolled to the tabs' });
+  // The phone viewport stops above the Timeline, so the default tab gets a scrolled capture too, to show the folded and active rounds.
+  add('task', PHONE, { scroll: '.ttabs', variant: 'timeline-scrolled', note: 'Timeline tab selected, scrolled to the tabs' });
   add('index', DESKTOP, { full: true, click: '#working summary', variant: 'working-open', note: 'Who is working expanded' });
   add('trends', DESKTOP, { full: true, click: '#c-merges summary', variant: 'table-open', note: 'merges chart as table' });
 
