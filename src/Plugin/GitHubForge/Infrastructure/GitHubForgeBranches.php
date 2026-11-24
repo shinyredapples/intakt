@@ -89,6 +89,15 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         }
     }
 
+    private function commitOf(string $sha): CommitId
+    {
+        try {
+            return new CommitId($sha);
+        } catch (CommitIdMalformed $malformed) {
+            throw new ForgeReadFailed('GitHub answered a commit that is not a commit id.', $malformed->getCode(), $malformed);
+        }
+    }
+
     // A commit without a GitHub account is a person's, because only this App's own bot account is Intakt.
     private function isIntakts(mixed $commit): bool
     {
@@ -149,14 +158,5 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     private function segments(string $branch): string
     {
         return implode('/', array_map(rawurlencode(...), explode('/', $branch)));
-    }
-
-    private function commitOf(string $sha): CommitId
-    {
-        try {
-            return new CommitId($sha);
-        } catch (CommitIdMalformed $malformed) {
-            throw new ForgeReadFailed('GitHub answered a commit that is not a commit id.', $malformed->getCode(), $malformed);
-        }
     }
 }
