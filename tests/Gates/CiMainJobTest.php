@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\TestCase;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -14,11 +14,13 @@ use Symfony\Component\Yaml\Yaml;
  * @phpstan-type WorkflowFile array{permissions: array<string, string>, jobs: array<string, Job>}
  */
 #[CoversNothing]
-final class CiMainJobTest extends TestCase
+final class CiMainJobTest extends SandboxTestCase
 {
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/ci.yml';
 
     private const string INTO_MAIN = "github.event_name == 'pull_request' && github.base_ref == 'main'";
+
+    private const string TREE = '0123456789012345678901234567890123456789';
 
     private const string GUARD = "(github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push')";
 
@@ -35,7 +37,23 @@ final class CiMainJobTest extends TestCase
     {
         $step = $this->step('main', 'passed');
 
-        self::assertStringContainsString('.github/ci/pr-run-passed.sh "$GITHUB_SHA" "$(git rev-parse "$GITHUB_SHA^{tree}")"', $step['run'] ?? '');
+        self::assertStringContainsString('tree=$(git rev-parse "$GITHUB_SHA^{tree}") && passed=$(.github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree")', $step['run'] ?? '');
+    }
+
+    public function testAFailedLookupWarnsAndRunsEveryJob(): void
+    {
+        [$exit, $printed, $written] = $this->decide("echo 'gh: temporary API outage' >&2; exit 1");
+
+        self::assertSame([0, "full=true\n"], [$exit, $written]);
+        self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);
+    }
+
+    public function testAMatchingRunSkipsTheFullRun(): void
+    {
+        [$exit, $printed, $written] = $this->decide('case "$*" in */artifacts*) echo main-tested-tree-'.self::TREE.';; *) echo 1;; esac');
+
+        self::assertSame([0, "full=false\n"], [$exit, $written]);
+        self::assertStringNotContainsString('::warning::', $printed);
     }
 
     public function testASkippedPushFillsAndSavesOnlyTheCacheThatIsMissing(): void
@@ -93,6 +111,28 @@ final class CiMainJobTest extends TestCase
         self::assertMatchesRegularExpression('/^actions\/upload-artifact@[0-9a-f]{40}$/', $upload['uses'] ?? '');
         self::assertSame('main-tested-tree-${{ steps.tested-tree.outputs.tree }}', $upload['with']['name'] ?? null);
         self::assertTrue($upload['with']['overwrite'] ?? null);
+    }
+
+    /**
+     * @return array{int, string, string}
+     */
+    private function decide(string $gh): array
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('bin/gh', "#!/bin/sh\n".$gh."\n");
+        $sandbox->write('bin/git', "#!/bin/sh\necho ".self::TREE."\n");
+        $sandbox->write('output', '');
+        chmod($sandbox->root.'/bin/gh', 0o755);
+        chmod($sandbox->root.'/bin/git', 0o755);
+        $process = new Process(['bash', '-e', '-c', $this->step('main', 'passed')['run'] ?? 'exit 9'], dirname(__DIR__, 2), [
+            'PATH' => $sandbox->root.'/bin:'.getenv('PATH'),
+            'GITHUB_SHA' => 'abcdef',
+            'GITHUB_REPOSITORY' => 'example/intakt',
+            'GITHUB_OUTPUT' => $sandbox->root.'/output',
+        ]);
+        $exit = $process->run();
+
+        return [$exit, $process->getOutput(), (string) file_get_contents($sandbox->root.'/output')];
     }
 
     /**

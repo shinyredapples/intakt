@@ -40,14 +40,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # A failing API call fails the step and the run, so it never reads as "passed".
+      # A failed lookup (an API call or git) never reads as "passed": it warns and runs every job.
       - name: Decide whether the commit passed as the head of a pull request into main
         id: passed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          passed=$(.github/ci/pr-run-passed.sh "$GITHUB_SHA" "$(git rev-parse "$GITHUB_SHA^{tree}")")
+          if ! { tree=$(git rev-parse "$GITHUB_SHA^{tree}") && passed=$(.github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree"); }; then
+            echo "::warning::The lookup of a passed pull request run for $GITHUB_SHA failed, so every job runs."
+            passed=unknown
+          fi
           echo "full=$([ "$passed" = yes ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
           echo "passed as the head of a pull request into main: $passed"
       - name: Name the CI image cache
@@ -239,8 +242,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # Decided in a step, like the image job's, so the check always reports: every push to main that the main job lets run
-      # runs the journeys, a pull request only when it needs the app image (.github/ci/image-needed.sh) or touches the journeys' test code (the paths
-      # below). git diff exits 1 for a change and 0 for none; any other status is a git error and fails the step.
+      # runs the journeys, a pull request only when it needs the app image (.github/ci/image-needed.sh) or touches the
+      # journeys' test code (the paths below). git diff exits 1 for a change and 0 for none; any other status is a git error
+      # and fails the step.
       - name: Decide on the journeys
         id: journeys
         env:

@@ -9,7 +9,8 @@
 # skips every job behind the fork guard and still ends green.
 # A run the API lists under a pull request into another branch does not count either; the list is empty after a merge, so
 # an empty list says nothing.
-# Needs GH_TOKEN with actions: read and GITHUB_REPOSITORY. A failing API call exits non-zero, never prints no or yes.
+# Needs GH_TOKEN with actions: read and GITHUB_REPOSITORY. A failing API call exits non-zero, never prints no or yes;
+# the main job of ci.yml then runs every job.
 set -eu
 # An empty argument (a failed command substitution in the caller) must not ask about the record of an empty tree.
 if [ "$#" -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then

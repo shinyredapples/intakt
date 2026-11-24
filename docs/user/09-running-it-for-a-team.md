@@ -68,7 +68,7 @@ The dashboard has no login. It answers only on `localhost`, and `compose.yaml` p
 
 ## Running Intakt's own CI on your machines
 
-If you maintain a copy of the Intakt repository, its CI can run on your own runner. Set the repository variable `CI_RUNS_ON` to your runner's labels. The runner must be ephemeral: one job per clean machine, with no network path to your other machines. The steps are in [Running Intakt's CI on your own runner](../reference/self-hosted-ci.md).
+If you maintain a copy of the Intakt repository, its CI can run on your own runner. Set the repository variable `CI_RUNS_ON` to your runner's labels. The runner must be ephemeral: one job per clean machine, with no network path to your other machines. A push to main whose commit already passed as a pull request into main, with the same tested tree, runs only the `main` job: it saves the caches, and the run still ends green. The steps are in [Running Intakt's CI on your own runner](../reference/self-hosted-ci.md).
 
 ## Moving a project over from another build loop
 
