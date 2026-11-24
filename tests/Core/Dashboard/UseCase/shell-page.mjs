@@ -207,6 +207,7 @@ export class Browser {
             history,
             URL,
             Event,
+            TextEncoder,
         };
         const window = {
             page,

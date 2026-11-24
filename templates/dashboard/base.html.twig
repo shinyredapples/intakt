@@ -111,6 +111,80 @@
             return null;
         }
     };
+    // FilterProjects' order (PHP's strnatcasecmp on the UTF-8 bytes, then strcmp) ported step by step, because a merged list must match the server's and no browser comparison does: localeCompare calls 'zeta-2' and 'zeta-02' equal.
+    const utf8 = new TextEncoder();
+    const isDigit = (byte) => byte >= 48 && byte <= 57;
+    const isSpace = (byte) => byte === 32 || (byte >= 9 && byte <= 13);
+    const upper = (byte) => (byte >= 97 && byte <= 122 ? byte - 32 : byte);
+    const natural = (a, b) => {
+        if (a.length === 0 || b.length === 0) {
+            return Math.sign(a.length - b.length);
+        }
+        let i = 0;
+        let j = 0;
+        let ca = a[0];
+        let cb = b[0];
+        while (ca === 48 && i + 1 < a.length && isDigit(a[i + 1])) {
+            ca = a[++i];
+        }
+        while (cb === 48 && j + 1 < b.length && isDigit(b[j + 1])) {
+            cb = b[++j];
+        }
+        for (;;) {
+            while (isSpace(ca)) {
+                ca = a[++i] ?? 0;
+            }
+            while (isSpace(cb)) {
+                cb = b[++j] ?? 0;
+            }
+            if (isDigit(ca) && isDigit(cb)) {
+                // A run starting with a zero compares left-aligned, digit by digit; any other run is longer or, at equal length, has the first greater digit.
+                const fractional = ca === 48 || cb === 48;
+                let result = 0;
+                for (;; i++, j++) {
+                    const digitA = i < a.length && isDigit(a[i]);
+                    const digitB = j < b.length && isDigit(b[j]);
+                    if (!digitA || !digitB) {
+                        result = digitA === digitB ? result : (digitA ? 1 : -1);
+                        break;
+                    }
+                    if (a[i] !== b[j] && (fractional || result === 0)) {
+                        result = a[i] < b[j] ? -1 : 1;
+                        if (fractional) {
+                            break;
+                        }
+                    }
+                }
+                if (result !== 0) {
+                    return result;
+                }
+                if (i === a.length || j === b.length) {
+                    return Math.sign((i === a.length ? 0 : 1) - (j === b.length ? 0 : 1));
+                }
+                ca = a[i];
+                cb = b[j];
+            }
+            if (upper(ca) !== upper(cb)) {
+                return upper(ca) < upper(cb) ? -1 : 1;
+            }
+            i++;
+            j++;
+            if (i >= a.length || j >= b.length) {
+                return Math.sign((i >= a.length ? 0 : 1) - (j >= b.length ? 0 : 1));
+            }
+            ca = a[i];
+            cb = b[j];
+        }
+    };
+    const bytewise = (a, b) => {
+        const differs = a.findIndex((byte, index) => byte !== b[index]);
+        return differs < 0 || differs >= b.length ? Math.sign(a.length - b.length) : Math.sign(a[differs] - b[differs]);
+    };
+    const nameOrder = (one, other) => {
+        const a = utf8.encode(one);
+        const b = utf8.encode(other);
+        return natural(a, b) || bytewise(a, b);
+    };
     // Looks the select up when called, because a listener bound once calls it after a visit has replaced the body.
     const showProject = () => {
         const shownFilter = document.querySelector('#projfilter');
@@ -218,13 +292,13 @@
             // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
             event.detail.render = (stream) => {
                 const chosen = shownFilter.value;
-                // The shared list lacks the projects a page offers for its own rows (History), so those are kept, in the server's natural, case-insensitive name order, or the push would take them and their choice away.
+                // The shared list lacks the projects a page offers for its own rows (History), so those are kept, or the push would take them and their choice away.
                 const pageOptions = [...shownFilter.options].filter((option) => 'pageOption' in option.dataset);
                 render(stream);
                 const lost = pageOptions.filter((kept) => ![...shownFilter.options].some((option) => option.value === kept.value));
                 if (lost.length > 0) {
                     const [all, ...named] = [...shownFilter.options];
-                    shownFilter.replaceChildren(all, ...[...named, ...lost].sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true, sensitivity: 'base' })));
+                    shownFilter.replaceChildren(all, ...[...named, ...lost].sort((a, b) => nameOrder(a.value, b.value)));
                 }
                 shownFilter.value = [...shownFilter.options].some((option) => option.value === chosen) ? chosen : '';
                 showProject();

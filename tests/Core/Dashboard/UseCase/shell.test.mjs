@@ -362,6 +362,22 @@ test('a kept page project stays marked as the page own, so a second push keeps i
     assert.equal(page.projectFilter.value, 'zeta');
 });
 
+test('a kept page project goes back where the server put it, also before a shared name a loose comparison calls equal', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['alpha', 'zeta-02', 'zeta-2'], rows: ['zeta-02'], pageProjects: ['zeta-02'] }).open();
+
+    page.pushStream('projfilter', ['alpha', 'zeta-2']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha', 'zeta-02', 'zeta-2']);
+});
+
+test('a kept page project that differs from a shared one only in case goes after it, in byte order as on the server', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['Zeta', 'zeta'], rows: ['zeta'], pageProjects: ['zeta'] }).open();
+
+    page.pushStream('projfilter', ['Zeta']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'Zeta', 'zeta']);
+});
+
 test('after several visits a pushed list without the chosen project falls back to all projects', () => {
     const page = new Browser('light').open().visit().visit();
     page.chooseProject('beta');
