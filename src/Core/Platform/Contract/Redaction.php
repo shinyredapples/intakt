@@ -14,15 +14,17 @@ final readonly class Redaction
 
     public const string MASK = "\0";
 
-    private const string SECRET_SHAPES = '~'
-        .'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)'
-        .'|\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})'
-        .'|\bsk-[A-Za-z0-9_-]{20,}'
-        .'|\bAKIA[0-9A-Z]{16}\b'
-        .'|\bxox[abprs]-[A-Za-z0-9-]{10,}'
-        .'|\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+'
-        .'|\bBearer\s+[A-Za-z0-9._\\~+/=-]{8,}'
-        .'~s';
+    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`). A start inside the match of a key, a run-shaped token or an `AKIA` key ends where that match ends, so those shapes go on after their match. A key block runs to its end line in possessive steps, since a lazy `.*?` takes one backtrack per byte and gives up on a long block with no end line. Every start of a web token inside one run of word characters and hyphens ends its first part at the same dot, so when the rest fails, `(*SKIP)` goes on after that run instead of trying its later starts, and after a match the scan resumes at the second part, where the next token may start. A `Bearer` value may hold another `Bearer`, so that scan resumes at the value.
+    private const array SECRET_SHAPES = [
+        '-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[^-]++|-(?!----END [A-Z ]*PRIVATE KEY-----))*+(?:-----END [A-Z ]*PRIVATE KEY-----|\z)',
+        '(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}',
+        '(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}',
+        '(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}',
+        '(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}\b',
+        '(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}',
+        '(?<![A-Za-z0-9])eyJ[\w-]{8,}+(*SKIP)\.(?<resume>)eyJ[\w-]{8,}+\.[\w-]++',
+        '\bBearer\s+(?<resume>)[A-Za-z0-9._\\~+/=-]{8,}',
+    ];
 
     // Headers, URLs and secret shapes are looked for both in the original text and with the held credentials masked: a held credential may spell a header name or a scheme, or end right before one and hide the word boundary its pattern needs. All parts are replaced at the end, so overlapping parts become one marker.
     #[NoDiscard]
@@ -81,14 +83,6 @@ final readonly class Redaction
 
     private function addSecretShapes(string $text, RedactedSpans $spans): bool
     {
-        if (false === preg_match_all(self::SECRET_SHAPES, $text, $matches, PREG_OFFSET_CAPTURE)) {
-            return false;
-        }
-
-        foreach ($matches[0] as [$shape, $at]) {
-            $spans->add($at, $at + strlen($shape));
-        }
-
-        return true;
+        return array_all(self::SECRET_SHAPES, fn ($shape) => new SecretShape($shape)->addFoundIn($text, $spans));
     }
 }

@@ -90,14 +90,14 @@
     {% endif %}
 </div>
 {% if not record and active is not null %}
-{# The newest round's judged live update removes it by its id, because the To fix cards take its place as on a reload. #}
+{# The newest round's judged live update removes it by its id, because the finding groups take its place as on a reload. #}
 <section class="state-block" id="review-state-block" aria-labelledby="state-block-title">
     <div class="sb-head">
         <h2 id="state-block-title">Now: {{ include(term_tpl, {term: 'pass', words: 'Review pass ' ~ (active.number ?? '(number not recorded)'), ask: true}, with_context = false) }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
     <div class="sb-grid">
         <div>
             <h3>Reviewers</h3>
-            <p class="muted" id="round-{{ active.round }}-now-progress">{{ active.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ active.reviewers }} reviewers finished.</p>
+            <p class="muted" id="round-{{ active.round }}-now-progress">{{ active.outcomes|filter(o => o.progress != constant('Intakt\\Core\\Dashboard\\Domain\\ReviewerProgress::Running'))|length }} of {{ active.reviewers }} reviewers finished.</p>
             <ul class="sb-list" id="round-{{ active.round }}-now-reviewers">
                 {% for outcome in active.outcomes %}
                 {{ include('dashboard/_now_reviewer.html.twig', {round: active.round, reviewer: outcome.id, outcome: outcome, state: outcome.progress.value}, with_context = false) }}
@@ -109,7 +109,7 @@
         </div>
         <div>
             <h3>{{ include(term_tpl, {term: 'fix', words: 'To fix', ask: true}, with_context = false) }}</h3>
-            {# The newest round's judged live update removes the whole state block, this list with it, and puts in the To fix cards. #}
+            {# The newest round's judged live update removes the whole state block, this list with it, and puts in the finding groups. #}
             {{ include('dashboard/_now_findings.html.twig', {round: active.round, open: open, judged: judged.round ?? null}, with_context = false) }}
         </div>
         <div>
@@ -121,7 +121,7 @@
 </section>
 {% endif %}
 {% if not record %}
-{# The To fix cards only while no round is in review, because the state block lists the findings to fix then, so they never show twice on one screen; the empty holder lets the newest round's judged live update put them in. #}
+{# The finding groups only while no round is in review, because the state block lists the findings to fix then, so they never show twice on one screen; the empty holder lets the newest round's judged live update put them in. #}
 {% if active is null and open is not empty %}
 {{ include('dashboard/_to_fix.html.twig', {open: open, judged: judged.round}, with_context = false) }}
 {% else %}

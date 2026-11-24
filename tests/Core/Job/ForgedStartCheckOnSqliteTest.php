@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Job;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
@@ -88,7 +89,7 @@ final class ForgedStartCheckOnSqliteTest extends KernelTestCase
             return [0, false];
         });
 
-        (void) $this->runnerOn($engine)->run(new JobSpec(new JobId('build-1'), 'sample:latest', ['composer', 'test'], [new JobInput('/srv/mirror/sample.git', '/input/repository')], new JobLimits(512 * 1024 * 1024, 1.0, 60), JobEgress::none()));
+        (void) $this->runnerOn($engine)->run(new JobSpec(new JobId('build-1'), 'sample:latest', new JobCommand('composer', 'test'), [new JobInput('/srv/mirror/sample.git', '/input/repository')], new JobLimits(512 * 1024 * 1024, 1.0, 60), JobEgress::none()));
 
         self::assertSame(
             [

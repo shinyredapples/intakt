@@ -21,3 +21,8 @@ services:
         autowire: true
         arguments:
             $jobs: '@Intakt\Tests\Core\Build\ScriptedJobRunner'
+    # The check's probe and install jobs too, so a check never reaches a container engine; a folder without a platform file leaves the check without a snapshot.
+    Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs:
+        autowire: true
+        arguments:
+            $jobs: '@Intakt\Tests\Core\Build\ScriptedJobRunner'

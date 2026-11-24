@@ -6,6 +6,8 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Closure;
 use GuzzleHttp\Psr7\Response;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
@@ -265,7 +267,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 
-        return $reviewer->review($this->request(), $platform, 'reviewer-model');
+        return $reviewer->review($this->request(), $platform, new ResolvedModel(Provider::Anthropic, 'reviewer-model'));
     }
 
     // Through the container, so the configured mcp_server entry and its connection are what the test exercises.

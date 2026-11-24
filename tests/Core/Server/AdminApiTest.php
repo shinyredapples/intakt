@@ -68,6 +68,27 @@ final class AdminApiTest extends TestCase
         new RecordedAdminApi()->adminApi('http://local host')->get('/metrics');
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function urlsWithAQueryOrFragment(): iterable
+    {
+        yield 'a query' => ['http://localhost:2019?password=synthetic-query-secret'];
+        yield 'a query after a path' => ['http://localhost:2019/?password=synthetic-query-secret'];
+        yield 'a fragment' => ['http://localhost:2019#synthetic-query-secret'];
+        yield 'a query and a fragment' => ['http://localhost:2019?password=synthetic-query-secret#more'];
+    }
+
+    #[DataProvider('urlsWithAQueryOrFragment')]
+    public function testTheQueryAndFragmentOfTheConfiguredUrlAreNeverSent(string $baseUrl): void
+    {
+        $recorded = new RecordedAdminApi();
+
+        $recorded->adminApi($baseUrl)->get('/metrics');
+
+        self::assertSame(['http://localhost:2019/metrics'], $recorded->requestedUrls);
+    }
+
     public function testARedirectIsNeverFollowed(): void
     {
         $recorded = new RecordedAdminApi();

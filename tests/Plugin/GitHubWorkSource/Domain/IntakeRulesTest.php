@@ -200,6 +200,18 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([1 => 51], $plan->pullRequests);
     }
 
+    public function testEveryTrustedOpenPullRequestClosingATaskIsKeptLowestFirst(): void
+    {
+        $plan = $this->plan([
+            $this->row(Issues::task(1)),
+            $this->row(Issues::pullRequest(52, 'Fixes #1')),
+            $this->row(Issues::pullRequest(51, 'Fixes #1')),
+            $this->row(Issues::pullRequest(50, 'Fixes #1', 'mallory')),
+        ]);
+
+        self::assertSame([1 => [51, 52]], $plan->closingPullRequests);
+    }
+
     public function testAnEligibilityLabelATriageAccountAppliedMakesNoTask(): void
     {
         self::assertSame([], $this->readyOf([$this->row(Issues::task(1), $this->history('ana', ['intakt' => 'tom']))]));
@@ -302,6 +314,22 @@ final class IntakeRulesTest extends TestCase
         $plan = new IntakeRules('build')->planOf([$this->row(Issues::task(1, ['intakt'])), $this->row(Issues::task(2, ['build']))], []);
 
         self::assertSame([2], $this->numbers($plan->ready));
+    }
+
+    public function testATaskCarryingOnlyTheLoopsLabelIsNotEligible(): void
+    {
+        $rules = new IntakeRules('intakt');
+        $task = Issues::task(1, ['ready']);
+
+        self::assertSame([], $this->numbers($rules->planOf([$this->row($task)], [])->ready));
+        self::assertSame([], $this->numbers($rules->itemsNeedingHistory($this->unread($task))));
+    }
+
+    public function testATaskCarryingTheProjectsLabelBesideTheLoopsLabelIsEligible(): void
+    {
+        $plan = new IntakeRules('intakt')->planOf([$this->row(Issues::task(1, ['ready', 'intakt']))], []);
+
+        self::assertSame([1], $this->numbers($plan->ready));
     }
 
     public function testAWaitOnAPullRequestWithoutAClosingKeywordHoldsTheTaskWhenOnlyTheHistoryTheRuleAsksForIsRead(): void

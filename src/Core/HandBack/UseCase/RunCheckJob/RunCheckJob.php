@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
-use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\CheckJobs;
@@ -15,7 +14,9 @@ use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
+use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
@@ -39,6 +40,8 @@ final readonly class RunCheckJob implements CheckJobs
 
     public const string BUNDLE = '/input/handback.bundle';
 
+    public const string DEPENDENCIES = '/input/dependencies';
+
     public const string RESULT = 'check-result';
 
     public const string LOG = 'check.log';
@@ -56,6 +59,7 @@ final readonly class RunCheckJob implements CheckJobs
     public function __construct(
         private CheckHandBack $handBacks,
         private LostContentCheck $lostContent,
+        private CheckDependencies $dependencies,
         private JobRunner $jobs,
         private Gate $gate,
         private Filesystem $filesystem,
@@ -89,7 +93,23 @@ final readonly class RunCheckJob implements CheckJobs
             return new CheckJobOutcome(CheckVerdict::LostContent, lostContent: $lost);
         }
 
-        return $this->outcomeOf($this->ranJob($job, $repository, $accepted));
+        $dependencies = $this->dependencies->leaseFor($job, $repository, $accepted->head);
+
+        // Held until the job is gone, because a released pin lets an eviction remove the mounted snapshot.
+        try {
+            $spec = new JobSpec(
+                new JobId('check-'.substr($accepted->head, 0, 40)),
+                $job->image,
+                $this->commandOf($job, $dependencies),
+                $this->inputsOf($job, $repository, $dependencies),
+                new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
+                $this->egress(),
+            );
+
+            return $this->outcomeOf($this->ranJob($spec));
+        } finally {
+            $dependencies?->release();
+        }
     }
 
     private function absolute(string $path): string
@@ -104,36 +124,56 @@ final readonly class RunCheckJob implements CheckJobs
         return $absolute;
     }
 
-    private function ranJob(CheckJob $job, string $repository, AcceptedHandBack $accepted): ?JobResult
-    {
-        try {
-            return $this->jobs->run($this->specOf($job, $repository, $accepted));
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read, which says nothing for the change.
-            return null;
-        }
-    }
-
-    private function specOf(CheckJob $job, string $repository, AcceptedHandBack $accepted): JobSpec
+    private function commandOf(CheckJob $job, ?CheckSnapshot $dependencies): JobCommand
     {
         $script = $this->filesystem->readFile($this->checkScript);
-        $steps = $this->gate->checkSteps($job->configuredCommand);
+        $options = [];
 
-        return new JobSpec(
-            new JobId('check-'.substr($accepted->head, 0, 40)),
-            $job->image,
-            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, '--', ...$steps],
-            [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)],
-            new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
-            $this->egress(),
-        );
+        if ($dependencies instanceof CheckSnapshot) {
+            // The script probes the platform again and swaps the install for the generate step only once it copied the snapshot, so a check that cannot use it still installs.
+            $options = [
+                '--dependencies',
+                self::DEPENDENCIES,
+                $dependencies->platform,
+                $dependencies->step->platformProbe,
+                $dependencies->step->checkInstall,
+                $dependencies->step->generate,
+                ...$dependencies->lockFileArguments(),
+            ];
+        }
+
+        return new JobCommand(...['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...$options, '--', ...$this->gate->checkSteps($job->configuredCommand)]);
+    }
+
+    /**
+     * @return list<JobInput>
+     */
+    private function inputsOf(CheckJob $job, string $repository, ?CheckSnapshot $dependencies): array
+    {
+        $inputs = [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
+
+        if ($dependencies instanceof CheckSnapshot) {
+            $inputs[] = new JobInput($dependencies->lease->folder, self::DEPENDENCIES);
+        }
+
+        return $inputs;
     }
 
     private function egress(): JobEgress
     {
         $hosts = $this->gate->registryHosts();
 
-        return [] === $hosts ? JobEgress::none() : JobEgress::to($hosts);
+        return [] === $hosts ? JobEgress::none() : JobEgress::to(new EgressHosts(...$hosts));
+    }
+
+    private function ranJob(JobSpec $spec): ?JobResult
+    {
+        try {
+            return $this->jobs->run($spec);
+        } catch (JobOutputRefused) {
+            // No result, because the job wrote what the runner refuses to read, which says nothing for the change.
+            return null;
+        }
     }
 
     private function outcomeOf(?JobResult $result): CheckJobOutcome

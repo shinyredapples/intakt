@@ -19,6 +19,7 @@ use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\LostContent;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
@@ -27,6 +28,9 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJobCommand;
@@ -44,8 +48,11 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\HandBack\CheckJobsFor;
+use Intakt\Tests\Core\Job\OutputFiles;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -53,12 +60,16 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
-use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunCheckJobCommand::class)]
 #[CoversClass(RunCheckJobInput::class)]
 #[UsesClass(RunCheckJob::class)]
 #[UsesClass(LostContentCheck::class)]
+#[UsesClass(CheckDependencies::class)]
+#[UsesClass(CheckedLockFiles::class)]
+#[UsesClass(DependencyJobs::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyStep::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(Paths::class)]
@@ -96,8 +107,6 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobRefused::class)]
 final class RunCheckJobCommandTest extends TestCase
 {
-    private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
-
     private BuildHistory $history;
 
     public function testAGreenCheckPrintsTheEndOfItsLogAndPassed(): void
@@ -164,8 +173,8 @@ final class RunCheckJobCommandTest extends TestCase
         $this->history->commit('Build work');
         $runner = $this->createMock(JobRunner::class);
         $runner->expects(self::once())->method('run')
-            ->with(self::callback(static fn (JobSpec $spec): bool => ['make check'] === array_slice($spec->command, 8)))
-            ->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"])));
+            ->with(self::callback(static fn (JobSpec $spec): bool => ['make check'] === array_slice([...$spec->command], 8)))
+            ->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['check-result' => "passed\n"])));
 
         $tester = $this->executed($runner, ['--check-command' => 'make check']);
 
@@ -243,7 +252,7 @@ final class RunCheckJobCommandTest extends TestCase
     private function runnerLeaving(array $files): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput($files)));
+        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of($files)));
 
         return $runner;
     }
@@ -253,15 +262,7 @@ final class RunCheckJobCommandTest extends TestCase
      */
     private function executed(JobRunner $runner, array $options): CommandTester
     {
-        $git = new RepositoryGit(new HardenedGit());
-        $checks = new RunCheckJob(
-            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
-            new LostContentCheck($git),
-            $runner,
-            new PhpGate(),
-            new Filesystem(),
-            self::SCRIPT,
-        );
+        $checks = new CheckJobsFor($this->history->folder)->runCheckJob($runner);
         $application = new Application();
         $application->addCommand(new RunCheckJobCommand($checks));
         $tester = new CommandTester($application->find('intakt:check:run'));
