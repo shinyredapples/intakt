@@ -102,7 +102,7 @@ final readonly class GitHubIssues
                 throw $refused;
             }
 
-            $login = $given ?? throw new AlarmAccountUnknown('GitHub refuses gh api user to this token, so INSTALL_CHECK_ALARM_ACCOUNT must name the login the alarm files its issues as');
+            $login = $given ?? throw new AlarmAccountUnknown('GitHub refuses gh api user to this token, so INSTALL_CHECK_ALARM_ACCOUNT must name the login the alarm files its issues as', $refused->getCode(), $refused);
         }
 
         return 1 === preg_match(self::LOGIN, $login) ? $login : throw new GitHubCallFailed('the alarm account is not an account login');
