@@ -255,7 +255,9 @@ export class Browser {
                 delete shownElements['[data-project-trail]'];
             };
         }
-        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': [...rows, ...workingNow.cards], '[data-section-current]': trail ? [projectsItem] : [] };
+        // The rows' empty line as the server renders them: hidden, its container holding the rows.
+        const emptyLine = Object.assign(new FakeElement(page), { hidden: true, parentElement: Object.assign(new FakeElement(page), { querySelectorAll: (selector) => (selector === '[data-project]' ? rows : []) }) });
+        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': [...rows, ...workingNow.cards], '[data-section-current]': trail ? [projectsItem] : [], '[data-project-empty]': [emptyLine] };
 
         show(shownElements, allShown);
         context.location.href = this.address;
@@ -283,6 +285,7 @@ export class Browser {
             projectsMarked: () => projectsItem.hasAttribute('aria-current'),
             history,
             shownRows: () => rows.filter((row) => !row.hidden).map((row) => row.dataset.project),
+            emptyLineShown: () => !emptyLine.hidden,
             // What a script listening on the document, such as assets/column-more.js, sees of each filter run: the rows it left shown.
             listenForShownProjects: () => {
                 const seen = [];
