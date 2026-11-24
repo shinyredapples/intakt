@@ -37,15 +37,15 @@ $second = '0195f3a0-0000-7000-8000-000000000599';
 $change = 'feat/hold-pushes-while-main-is-red';
 $task = 'Hold pushes while main is red: before each push to a pull request, read the latest status of main and hold the push while it is red.';
 $started = ['project' => 'intakt', 'reviewers' => 2, 'quorum' => 'all', 'change' => $change, 'repository' => '/repos/intakt', 'base' => 'main', 'task' => $task];
-// Round 2's reviewers carry the ids of its stored reviewers (live.php publishes tool calls under the first), as a round the application opened writes them.
+// Round 2's reviewers carry the ids of its stored reviewers, because the page places a live tool call (live.php) by the reviewer id the ledger names.
 $reviewerIds = [$second => ['correctness' => '0195f3a0-0000-7000-8000-000000000601', 'security' => '0195f3a0-0000-7000-8000-000000000602']];
 $reviewer = static fn (string $round, string $role): array => ['round' => $round, 'reviewer' => $reviewerIds[$round][$role] ?? $round.'-'.$role, 'role' => $role, 'tier' => 'standard'];
-$finding = static fn (string $id, string $severity, string $text, string $file, int $line): array => ['id' => $id, 'severity' => $severity, 'file' => $file, 'line' => $line, 'symbol' => null, 'text' => $text, 'fixable_by' => 'builder', 'repeat' => false, 'requirement' => null, 'evidence' => null, 'regression' => false, 'gate_gap' => false];
-$open = [
-    $finding('F1', 'P1', 'The gate reads the status of main once at startup, so main turning red later is never seen.', 'src/Forge/PushGate.php', 88),
-    $finding('F2', 'P2', 'Pushes on hold are released in no fixed order. Release the oldest first.', 'src/Forge/PushGate.php', 131),
-    $finding('F3', 'P3', 'The guide says "blocked" where the dashboard says "held".', 'docs/guide/holds.md', 12),
-];
+$finding = static fn (array $shown): array => $shown + ['symbol' => null, 'fixable_by' => 'builder', 'repeat' => false, 'requirement' => null, 'evidence' => null, 'regression' => false, 'gate_gap' => false];
+$open = array_map($finding, [
+    ['id' => 'F1', 'severity' => 'P1', 'text' => 'The gate reads the status of main once at startup, so main turning red later is never seen.', 'file' => 'src/Forge/PushGate.php', 'line' => 88],
+    ['id' => 'F2', 'severity' => 'P2', 'text' => 'Pushes on hold are released in no fixed order. Release the oldest first.', 'file' => 'src/Forge/PushGate.php', 'line' => 131],
+    ['id' => 'F3', 'severity' => 'P3', 'text' => 'The guide says "blocked" where the dashboard says "held".', 'file' => 'docs/guide/holds.md', 'line' => 12],
+]);
 $securityCall = '0195f3a0-0000-7000-8000-000000000611';
 
 // Round 2 as a stored round with the findings of round 1 open, because the session summary is read from the stored round (StoredSessionSummaries) and the ledger alone leaves it out.

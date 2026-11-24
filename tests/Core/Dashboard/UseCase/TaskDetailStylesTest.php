@@ -159,7 +159,7 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*white-space:\s*nowrap;\s*overflow-wrap:\s*normal;\s*$/', $rules['.page-head .meta .figure-kind'] ?? '');
     }
 
-    // As a flex row, the figure, its kind label and the price date each shrank to a narrow column of its own at 390 wide; as one text they wrap between words.
+    // One text, because as a flex row the figure, its kind label and the price date each shrank to a narrow column of its own at 390 wide.
     public function testTheCostInTheHeadsFactsFlowsAsOneTextInsteadOfAColumnPerPart(): void
     {
         $rules = $this->rulesOf($this->sheet());

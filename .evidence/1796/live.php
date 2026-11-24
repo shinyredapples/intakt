@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-// Sends scripted tool calls of one reviewer to the open review page of #1796's seeded round, through the services a real tool call goes through:
-// RoundToolCalls records the call (as the review server does), RoundUpdates publishes the log line and the changed summary to the hub.
-// Usage: php live.php <round> <reviewer>, with the environment of the running install (APP_ENV=dev, its database and its hub).
+// Sends scripted tool calls of one reviewer to the open review page of #1796's seeded round (php live.php <round> <reviewer>, in the running install's environment) through RoundToolCalls and RoundUpdates, because those two record and publish a real tool call.
 
 use Intakt\Core\Review\Contract\ReviewTool;
 use Intakt\Core\Review\Contract\RoundUpdates;
@@ -63,10 +61,11 @@ if (!Uuid::isValid($roundId) || !Uuid::isValid($reviewer)) {
 $environment = $_SERVER['APP_ENV'] ?? 'dev';
 $kernel = new EvidenceKernel(is_string($environment) ? $environment : 'dev', false);
 $kernel->boot();
-$container = $kernel->getContainer();
-$updates = $container->get(RoundUpdates::class);
-$recorded = $container->get(RoundToolCalls::class);
-$rounds = $container->get(ReviewRounds::class);
+[$updates, $recorded, $rounds] = array_map($kernel->getContainer()->get(...), EvidenceKernel::SERVICES);
+if (!$updates instanceof RoundUpdates || !$recorded instanceof RoundToolCalls || !$rounds instanceof ReviewRounds) {
+    fwrite(STDERR, "the container did not hand out the round's services\n");
+    exit(1);
+}
 $round = $rounds->stored($roundId);
 
 $script = [
