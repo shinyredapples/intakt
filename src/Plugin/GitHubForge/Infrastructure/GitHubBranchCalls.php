@@ -54,7 +54,7 @@ final readonly class GitHubBranchCalls
     public function pages(string $path, array $query, ?string $key = null): array
     {
         $items = [];
-        for ($page = 1; ; ++$page) {
+        for ($page = 1;; ++$page) {
             $query = [...$query, 'per_page' => self::PAGE_SIZE, 'page' => $page];
             $answer = $this->exchange($path, $query);
             $items = [...$items, ...$this->itemsOf($answer['body'], $key)];
