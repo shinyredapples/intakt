@@ -88,7 +88,6 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Component\Uid\UuidV7;
-use Symfony\Contracts\Service\ResetInterface;
 
 #[CoversClass(ReviewerAgent::class)]
 #[CoversClass(OpenFindingIds::class)]
@@ -242,7 +241,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     public function testTheAgentReadsAFileAtTheHeadAndReturnsTheVerdictTheModelAnswered(): void
     {
-        $this->open = [self::openFinding('F1'), self::openFinding('F2')];
+        $this->open = [$this->openFinding('F1'), $this->openFinding('F2')];
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], VerdictDocument::fromTheDesign()->json());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
@@ -255,37 +254,41 @@ final class ReviewerVerdictTest extends WebTestCase
 
     /**
      * @param list<string>                $narration
-     * @param list<ToolCall>              $toolCalls
      * @param list<array{string, string}> $published
      */
     #[DataProvider('publishedSteps')]
-    public function testEachStepOfTheReviewerIsPublishedWithTheReviewerThatMadeItInTheOrderItArrived(ModelCatalogInterface $catalog, array $narration, array $toolCalls, array $published): void
+    public function testEachStepOfAReviewerThatReadsAFileIsPublishedWithTheReviewerThatMadeItInTheOrderItArrived(ModelCatalogInterface $catalog, array $narration, array $published): void
     {
         $this->catalog = $catalog;
         $this->narration = $narration;
 
-        $this->review('Add a cart.', $toolCalls, self::APPROVE);
+        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
         self::assertSame(array_map(fn (array $step): string => $this->seen(...$step), $published), $this->updates->seen);
     }
 
     /**
-     * @return iterable<string, array{ModelCatalogInterface, list<string>, list<ToolCall>, list<array{string, string}>}>
+     * @return iterable<string, array{ModelCatalogInterface, list<string>, list<array{string, string}>}>
      */
     public static function publishedSteps(): iterable
     {
-        $read = [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])];
         $readAndApprove = [['tool', 'read src/Cart.php'], ['answer', 'approve']];
 
-        yield 'a tool call, then the read answer' => [new UnstreamedModelCatalog(), [], $read, $readAndApprove];
-        yield 'only the read answer of an answer in one piece' => [new UnstreamedModelCatalog(), [], [], [['answer', 'approve']]];
-        yield 'the streamed narration before a tool call' => [new FallbackModelCatalog(), ['I read ', 'the cart first.'], $read, [['text', 'I read the cart first.'], ...$readAndApprove]];
-        yield 'no narration of a JSON answer streamed before a tool call' => [new FallbackModelCatalog(), str_split(VerdictDocument::fromTheDesign()->with('resolved', [])->json(), 40), $read, $readAndApprove];
+        yield 'a tool call, then the read answer' => [new UnstreamedModelCatalog(), [], $readAndApprove];
+        yield 'the streamed narration before a tool call' => [new FallbackModelCatalog(), ['I read ', 'the cart first.'], [['text', 'I read the cart first.'], ...$readAndApprove]];
+        yield 'no narration of a JSON answer streamed before a tool call' => [new FallbackModelCatalog(), str_split(VerdictDocument::fromTheDesign()->with('resolved', [])->json(), 40), $readAndApprove];
+    }
+
+    public function testOnlyTheReadAnswerIsPublishedWhenTheModelAnswersInOnePiece(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertSame([$this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testAReviewersStructuredAnswerIsPublishedAsTheTypedAnswerAndItsJsonIsNeverStreamedAsText(): void
     {
-        $this->open = [self::openFinding('F1'), self::openFinding('F2')];
+        $this->open = [$this->openFinding('F1'), $this->openFinding('F2')];
         $answer = VerdictDocument::fromTheDesign()->withFinding('file', 'src/Cart.php')->withFinding('text', "The discount ends one day early.\nThe boundary is exclusive.")->json();
 
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::streamed(...str_split($answer, 40)));
@@ -368,7 +371,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     public function testTheRoundTwoPromptCarriesEveryOpenFindingFencedAfterTheTask(): void
     {
-        $this->open = [self::openFinding('F1'), self::openFinding('F2')];
+        $this->open = [$this->openFinding('F1'), $this->openFinding('F2')];
 
         $this->review('Add a cart.', [], self::APPROVE);
 
@@ -381,7 +384,7 @@ final class ReviewerVerdictTest extends WebTestCase
     #[DataProvider('openFindingListings')]
     public function testAnOpenFindingIsListedAsFileAndLineFollowedByItsSymbolOnlyWhenItHasOne(?string $symbol, string $listed): void
     {
-        $this->open = [self::openFinding('F1', $symbol)];
+        $this->open = [$this->openFinding('F1', $symbol)];
 
         $this->review('Add a cart.', [], self::APPROVE);
 
@@ -397,10 +400,13 @@ final class ReviewerVerdictTest extends WebTestCase
         yield 'with a symbol' => ['Cart::add', 'F1 [P2] src\/A.php:3 Cart::add\nrequirement'];
     }
 
+    /**
+     * @param non-empty-string $reason
+     */
     #[DataProvider('idsTheAnswerMayNotUse')]
     public function testAnAnswerNamingIdsItMayNotUseIsRefusedWithAKeySafeReason(string $open, string $answer, string $reason): void
     {
-        $this->open = [self::openFinding($open)];
+        $this->open = [$this->openFinding($open)];
 
         $refused = $this->refused('Add a cart.', [], $answer);
 
@@ -409,7 +415,7 @@ final class ReviewerVerdictTest extends WebTestCase
     }
 
     /**
-     * @return iterable<string, array{string, string, string}>
+     * @return iterable<string, array{string, string, non-empty-string}>
      */
     public static function idsTheAnswerMayNotUse(): iterable
     {
@@ -421,7 +427,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     public function testAnIdThatWasNotOpenAndIsNotShapedLikeALedgerIdLeavesNoKeySafeReason(): void
     {
-        $this->open = [self::openFinding('F1')];
+        $this->open = [$this->openFinding('F1')];
 
         $refused = $this->refused('Add a cart.', [], '{"verdict":"approve","findings":[],"resolved":["F9","F1234567890"],"follow_ups":[]}');
 
@@ -461,7 +467,7 @@ final class ReviewerVerdictTest extends WebTestCase
     #[DataProvider('idsTheAnswerMayUse')]
     public function testAnAnswerWithAnIdItMayUseIsAccepted(array $open, string $answer, string $id): void
     {
-        $this->open = array_map(self::openFinding(...), $open);
+        $this->open = array_map($this->openFinding(...), $open);
 
         $verdict = $this->review('Add a cart.', [], $answer);
 
@@ -637,15 +643,11 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('cut', $verdict->findings[0]->text);
     }
 
-    /**
-     * @param list<Finding> $open
-     */
     #[DataProvider('changesThatCannotCountAsApproval')]
-    public function testChangesThatCannotCountAsApprovalOnACutDiffStayChangesWithTheReviewersFindings(int $round, array $open, string $answer, Severity $severity): void
+    public function testChangesThatCannotCountAsApprovalOnACutDiffStayChangesWithTheReviewersFindings(int $round, string $answer, Severity $severity): void
     {
         $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
         $this->roundNumber = $round;
-        $this->open = $open;
 
         $verdict = $this->review('Add a cart.', [], $answer);
 
@@ -654,15 +656,15 @@ final class ReviewerVerdictTest extends WebTestCase
     }
 
     /**
-     * @return iterable<string, array{int, list<Finding>, string, Severity}>
+     * @return iterable<string, array{int, string, Severity}>
      */
     public static function changesThatCannotCountAsApproval(): iterable
     {
-        $p2 = VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('severity', 'P2');
+        $unresolved = VerdictDocument::fromTheDesign()->with('resolved', []);
 
-        yield 'a P1' => [1, [self::openFinding('F1'), self::openFinding('F2')], VerdictDocument::fromTheDesign()->json(), Severity::P1];
-        yield 'a P2 that names a requirement in the second round' => [2, [], $p2->json(), Severity::P2];
-        yield 'a P2 without a requirement in the first round' => [1, [], $p2->withFinding('requirement', null)->json(), Severity::P2];
+        yield 'a P1' => [1, $unresolved->json(), Severity::P1];
+        yield 'a P2 that names a requirement in the second round' => [2, $unresolved->withFinding('severity', 'P2')->json(), Severity::P2];
+        yield 'a P2 without a requirement in the first round' => [1, $unresolved->withFinding('severity', 'P2')->withFinding('requirement', null)->json(), Severity::P2];
     }
 
     /**
@@ -769,9 +771,7 @@ final class ReviewerVerdictTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->fixture->remove();
-        $resetter = self::getContainer()->get('services_resetter');
-        assert($resetter instanceof ResetInterface);
-        $resetter->reset();
+        self::getContainer()->get('services_resetter')->reset();
         self::getContainer()->set(self::COLLECTOR, null);
     }
 
@@ -904,7 +904,7 @@ final class ReviewerVerdictTest extends WebTestCase
         return sprintf('%s %s %s', $kind, $this->conversation->toRfc4122(), $what);
     }
 
-    private static function openFinding(string $id, ?string $symbol = null): Finding
+    private function openFinding(string $id, ?string $symbol = null): Finding
     {
         return new Finding($id, Severity::P2, 'src/A.php', 3, $symbol, 'Text '.$id, FixableBy::Builder, false, null, null);
     }
