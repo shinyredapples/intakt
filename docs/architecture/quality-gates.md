@@ -59,7 +59,7 @@ The "In short" section counts only text a reader sees, so one that holds nothing
 
 `ratchet/docs.json` (`DocsRatchetList`) lists what was oversized when the gate arrived. Under `paragraphs`, each page maps to the keys of its oversized paragraphs; under `pages`, a long user or guide page maps to its word ceiling; `summaries` lists the architecture pages excused from the summary rule. A key excuses one paragraph of its own page only, so an edited or copied paragraph fails. A listed page passes up to its ceiling.
 
-The list must be in place and valid. A missing, empty or unreadable list fails the gate, and so does one without all three sections, with another section, or with a key that is not 16 lowercase hex characters, a page without keys, a ceiling of 1,500 words or less, or a page listed twice under `summaries`.
+The list must be in place and valid. A missing, empty or unreadable list fails the gate, and so does one without all three sections, with another section, or with a key that is not 16 lowercase hex characters, a page that is not a path ending in `.md` (a numeric one such as `"1"` too), a page without keys, a ceiling of 1,500 words or less, or a page listed twice under `summaries`.
 
 On every run, also without git history, `UnneededDocsEntries` fails a stale entry: a key no oversized paragraph of its page matches, a ceiling above the page's words or on a page within the limit, and an excuse the page no longer needs.
 
@@ -73,9 +73,9 @@ A paragraph (`MarkdownParagraph`) carries its word count, its first line and a k
 
 The summary (`MarkdownSummary`) holds the words of the "In short" section, whether text other than headings is left, and whether it opens the page. It is read from the page with its HTML comments removed first (`MarkdownComments`), so a heading inside a comment ends no section and a comment above "In short" does not stand between it and the title.
 
-A `<!--` inside a code span or code block opens no comment, and an unclosed `<!--` hides the rest of the page only at the start of a line. A heading after a list marker (`- ### Detail`) is no summary text.
+A `<!--` inside a code span or code block opens no comment, and an unclosed `<!--` hides the rest of the page only at the start of a line. A comment at the start of a line opens an HTML block, so the rest of its closing line is text, never a heading (`<!-- note -->## In short` opens no section). A heading after a list marker (`- ### Detail`) is no summary text.
 
-It opens the page when at most a title stands above its heading, so a code block (fenced or indented) between the title and "In short" means it does not.
+It opens the page when at most the page's own title stands above its heading, so a quoted heading (`> # Quote`) or a code block (fenced or indented) between the title and "In short" means it does not.
 
 Tables count as words but not as paragraphs. A line framed by outer pipes is a table row by itself. With a delimiter row below its first line (indented less than four spaces, as many cells as that line, each one or more hyphens with an optional colon at either end), a table runs until a blank line, a heading, a list item, a thematic break or a change of quote depth, so a quoted line after a table is measured.
 
