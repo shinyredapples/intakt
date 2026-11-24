@@ -113,8 +113,8 @@ final class ProcessRunner
      */
     public function runConcurrently(array $commands, string $directory, float $seconds = self::OVERALL_TIMEOUT_SECONDS): array
     {
-        if (!is_finite($seconds) || $seconds <= 0) {
-            return array_map(fn (array $command): ProcessResult => $this->limitRefusal($command[0][0], $seconds), $commands);
+        if (!TimeLimit::allows($seconds)) {
+            return array_map(static fn (array $command): ProcessResult => TimeLimit::refusal($command[0][0], $seconds), $commands);
         }
 
         $processes = [];
@@ -239,13 +239,7 @@ final class ProcessRunner
             return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': the PHP posix extension is missing');
         }
 
-        return !is_finite($seconds) || $seconds <= 0 ? $this->limitRefusal($program, $seconds) : null;
-    }
-
-    // Because a process given an infinite or NAN limit would run without any effective timeout.
-    private function limitRefusal(string $program, float $seconds): ProcessResult
-    {
-        return is_finite($seconds) ? $this->timedOut($program, $seconds) : new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': its time limit is not a finite number of seconds');
+        return TimeLimit::allows($seconds) ? null : TimeLimit::refusal($program, $seconds);
     }
 
     /**
@@ -392,7 +386,7 @@ final class ProcessRunner
 
     private function timedOut(string $program, float $seconds): ProcessResult
     {
-        return new ProcessResult(self::TIMED_OUT, '', $program.' timed out after '.$seconds.' seconds');
+        return TimeLimit::exceeded($program, $seconds);
     }
 
     /**

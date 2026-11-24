@@ -8,6 +8,7 @@ use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\TimeLimit;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ProcessGroup::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGitCall::class)]
+#[UsesClass(TimeLimit::class)]
 final class ProcessRunnerTest extends TestCase
 {
     /** @var list<string> */
