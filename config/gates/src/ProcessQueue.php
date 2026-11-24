@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 use Closure;
+use InvalidArgumentException;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
@@ -19,6 +20,10 @@ final readonly class ProcessQueue
 
     public function __construct(private float $seconds, private float $overallSeconds)
     {
+        // Because an infinite pass limit would disable the overall deadline, and a NAN one would compare false with every time left.
+        if (!is_finite($seconds) || !is_finite($overallSeconds)) {
+            throw new InvalidArgumentException('A test pass takes only time limits that are a finite number of seconds.');
+        }
     }
 
     /**

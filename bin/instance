@@ -277,29 +277,46 @@ final class Instance
     {
         // A float, because a large override times a billion nanoseconds is past the integer range.
         $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
+        // Blocked, so the wait below wakes the moment the command ends instead of at its next poll.
+        pcntl_sigprocmask(SIG_BLOCK, [SIGCHLD], $previousMask);
 
-        // The status is read once more after the last wait, because a command may end during it.
+        try {
+            return $this->exitWithin($process, $deadline);
+        } finally {
+            pcntl_sigprocmask(SIG_SETMASK, $previousMask);
+        }
+    }
+
+    /**
+     * @param resource $process
+     */
+    private function exitWithin($process, float|int $deadline): int
+    {
         while (true) {
+            // Read before the status, so an ended command counts only when the read proves it ended by the deadline: a launcher paused past the deadline cannot tell when its command ended.
+            $left = $deadline - hrtime(true);
             $state = proc_get_status($process);
 
             if (!$state['running']) {
                 proc_close($process);
 
-                return $state['exitcode'];
+                return $left >= 0 ? $state['exitcode'] : $this->timedOut('');
             }
-
-            $left = $deadline - hrtime(true);
 
             if ($left <= 0) {
-                break;
+                proc_terminate($process, 9);
+                proc_close($process);
+
+                return $this->timedOut(' and was killed');
             }
 
-            usleep((int) min(50_000, ceil($left / 1000)));
+            pcntl_sigtimedwait([SIGCHLD], $information, 0, (int) min(50_000_000, ceil($left)));
         }
+    }
 
-        proc_terminate($process, 9);
-        proc_close($process);
-        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
+    private function timedOut(string $outcome): int
+    {
+        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds.' seconds'.$outcome."\n");
 
         return self::COMMAND_TIMED_OUT;
     }

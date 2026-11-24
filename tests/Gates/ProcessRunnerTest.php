@@ -173,6 +173,31 @@ final class ProcessRunnerTest extends TestCase
         self::assertSame("ran\n", $result->output);
     }
 
+    public function testConcurrentCommandsWithALimitThatIsNotANumberAreRefusedWithoutRunning(): void
+    {
+        $result = new ProcessRunner()->runConcurrently(['job' => [['sh', '-c', 'echo ran'], []]], sys_get_temp_dir(), NAN)['job'];
+
+        self::assertSame(127, $result->exitCode);
+        self::assertSame('', $result->output);
+        self::assertSame('cannot run sh: its time limit is not a finite number of seconds', $result->errors);
+    }
+
+    public function testATimedCommandWithAnInfiniteLimitIsRefusedWithoutRunning(): void
+    {
+        $result = new ProcessRunner()->runWithin(['sh', '-c', 'echo ran'], sys_get_temp_dir(), INF);
+
+        self::assertSame(127, $result->exitCode);
+        self::assertSame('cannot run sh: its time limit is not a finite number of seconds', $result->errors);
+    }
+
+    public function testACommandRunToItsEndWithAnInfiniteLimitIsRefusedWithoutRunning(): void
+    {
+        $result = new ProcessRunner()->runToItsEnd(['sh', '-c', 'echo ran'], sys_get_temp_dir(), INF);
+
+        self::assertSame(127, $result->exitCode);
+        self::assertSame('', $result->output);
+    }
+
     public function testATimedCommandInAMissingDirectoryFailsClosedWithoutOutput(): void
     {
         $result = new ProcessRunner('/nonexistent/unshare')->runWithin(['php', '-r', 'echo "ran";'], '/nonexistent/intakt-directory', 10);

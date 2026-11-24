@@ -180,6 +180,28 @@ final class InstanceTest extends InstanceTestCase
         self::assertStringNotContainsString('was killed', $run['errors']);
     }
 
+    // The instance is stopped while it waits, and resumed only after the limit passed and the command ended, so it cannot tell when the command ended.
+    public function testACommandThatEndsWhileTheInstanceIsPausedPastItsLimitCountsAsTimedOut(): void
+    {
+        $release = $this->scratch.'/release';
+        $command = 'echo "$$"; while [ ! -e "$1" ]; do sleep 0.01; done; echo late';
+        $instance = $this->startedInstance(self::stubProject(), ['sh', '-c', $command, 'sh', $release], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
+        $instance->waitUntil(static fn (string $type, string $output): bool => str_contains($output, "\n"));
+        $child = (int) $instance->getOutput();
+        $launcher = (int) $instance->getPid();
+        $this->awaitState($launcher, 'S');
+        posix_kill($launcher, SIGSTOP);
+        usleep(300_000);
+        touch($release);
+        $this->awaitState($child, 'Z');
+        posix_kill($launcher, SIGCONT);
+
+        $instance->wait();
+
+        self::assertSame(124, $instance->getExitCode());
+        self::assertStringContainsString('ran longer than 0.2 seconds', $instance->getErrorOutput());
+    }
+
     public function testACommandLimitPastTheIntegerRangeOfNanosecondsLetsTheCommandFinish(): void
     {
         $run = $this->runInstance(self::stubProject(), ['true'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '10000000000']);
@@ -244,6 +266,16 @@ final class InstanceTest extends InstanceTestCase
     {
         yield 'interrupt' => [SIGINT, 130];
         yield 'terminate' => [SIGTERM, 143];
+    }
+
+    private function awaitState(int $pid, string $state): void
+    {
+        $until = hrtime(true) + 5_000_000_000;
+
+        while (1 !== preg_match('/\) '.$state.' /', (string) file_get_contents('/proc/'.$pid.'/stat'))) {
+            self::assertLessThan($until, hrtime(true), 'process '.$pid.' never reached state '.$state);
+            usleep(1000);
+        }
     }
 
     /**

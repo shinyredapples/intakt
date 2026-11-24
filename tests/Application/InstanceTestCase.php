@@ -40,18 +40,30 @@ abstract class InstanceTestCase extends TestCase
      */
     protected function runInstance(string $project, array $command = [], array $environment = []): array
     {
-        $statusFile = $this->scratch.'/status';
-        $arguments = [] === $command ? [] : ['--', ...$command];
-        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($statusFile);
-        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$environment]);
-        $process->run();
+        $process = $this->startedInstance($project, $command, $environment);
+        $process->wait();
 
         return [
-            'status' => trim((string) file_get_contents($statusFile)),
+            'status' => trim((string) file_get_contents($this->scratch.'/status')),
             'exit' => (int) $process->getExitCode(),
             'output' => $process->getOutput(),
             'errors' => $process->getErrorOutput(),
         ];
+    }
+
+    /**
+     * @param list<string>                $command
+     * @param array<string, string|false> $environment
+     */
+    protected function startedInstance(string $project, array $command, array $environment): Process
+    {
+        $arguments = [] === $command ? [] : ['--', ...$command];
+        // Through exec, so the process's own id is the instance's.
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($this->scratch.'/status');
+        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$environment]);
+        $process->start();
+
+        return $process;
     }
 
     /**

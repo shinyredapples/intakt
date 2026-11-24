@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Closure;
+use InvalidArgumentException;
 use Intakt\Gates\ProcessQueue;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
@@ -15,6 +16,27 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(ProcessResult::class)]
 final class ProcessQueueTest extends SandboxTestCase
 {
+    public function testAnInfinitePassLimitIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessQueue(1, INF);
+    }
+
+    public function testAJobLimitThatIsNotANumberIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessQueue(NAN, 60);
+    }
+
+    public function testAFiniteFractionalLimitIsAccepted(): void
+    {
+        $results = new ProcessQueue(0.5, 0.5)->run(['done' => $this->php('')], 1, $this->emptySandbox()->root);
+
+        self::assertTrue($results['done']->succeeded(), $results['done']->errors);
+    }
+
     public function testEachJobRunsInTheWorkerWhoseIndexItWasBuiltFor(): void
     {
         $results = new ProcessQueue(30, 60)->run(['first' => $this->printing('worker %d'), 'second' => $this->printing('worker %d')], 2, $this->emptySandbox()->root);
