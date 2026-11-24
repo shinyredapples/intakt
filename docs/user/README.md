@@ -60,7 +60,9 @@ One rule to know before your first build: for a project with a `github` entry, t
 
 A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks)).
 
-When all four parts are there, the builder is told to write the regression test that fails today first, commit it on its own and only then fix the bug. Before the push, Intakt finds the tests the builder added or changed (from the work itself, not from the builder's word) and runs them on the old code and on the fixed code; both results are written to the log (at info level) and do not yet hold the work back. Only the task itself may say that a bug cannot be reproduced by a test ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+When all four parts are there, the builder writes the failing regression test first, commits it on its own, then fixes the bug. Only the task itself may say that no test can reproduce the bug ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+
+Before the push, Intakt runs the tests the work adds or changes twice: on the old code (they should fail) and on the fixed code (they should pass). It finds them in the work itself, not in the builder's word. For now both results only go to the log.
 
 Intakt chooses tasks only from GitHub issues that carry the project's eligibility label: `intakt`, unless the project's `watch` section names another `eligibility_label`. An issue that carries only another loop's label is not a task for Intakt. `php bin/console intakt:queue:show <project>` prints the order Intakt would pick the tasks in (tasks with an open pull request, including one found only by its task branch, come before tasks not started yet, also urgent ones), then the held tasks with their reasons; no build starts from it yet ([details](../reference/user-manual.md#showing-the-queue-of-tasks)).
 

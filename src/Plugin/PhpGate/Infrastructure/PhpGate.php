@@ -31,13 +31,13 @@ final readonly class PhpGate implements Gate
 
     public function isTestFile(string $path): bool
     {
-        // Under tests/ only, so a path never starts with a dash that phpunit would read as an option; the dot excludes a line break.
-        return 1 === preg_match('#\Atests/.+Test\.php\z#D', $path);
+        // Under tests/ only, so a path never starts with a dash that phpunit would read as an option; PHPUnit's suffix alone counts too (tests/Test.php); the dot excludes a line break.
+        return 1 === preg_match('#\Atests/.*Test\.php\z#D', $path);
     }
 
     public function testSteps(Paths $tests): CheckSteps
     {
-        return new CheckSteps(...array_map(static fn (string $path): string => PhpGateSteps::PHPUNIT.' '.escapeshellarg($path), [...$tests]));
+        return new CheckSteps(...array_map(static fn (string $path): string => sprintf(PhpGateSteps::REGRESSION_TEST, escapeshellarg($path)), [...$tests]));
     }
 
     public function registryHosts(): EgressHosts

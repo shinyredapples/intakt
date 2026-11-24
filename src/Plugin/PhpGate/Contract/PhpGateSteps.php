@@ -14,6 +14,9 @@ final readonly class PhpGateSteps
 
     public const string PHPUNIT = 'vendor/bin/phpunit';
 
+    // One test file of a bug's regression run, judged from PHPUnit's JUnit report and its status together, because PHPUnit exits 0 when every test skipped and an error such as a missing fixture is no failed assertion. Exit 0 only for a run that executed a test with an assertion and had no error, failure or skip; 1 only for failed assertions without an error; 3 for anything else, a report PHPUnit did not write included. %s is the escaped path.
+    public const string REGRESSION_TEST = 'rm -f '.self::REGRESSION_REPORT.'; '.self::PHPUNIT.' --log-junit '.self::REGRESSION_REPORT.' %s; php -r '.self::REGRESSION_VERDICT.' '.self::REGRESSION_REPORT.' "$?"';
+
     // A status Composer's own failures do not use, so that a caller reads it as "this head cannot reuse an install" and not as a failed check.
     public const int REFUSED = 78;
 
@@ -154,5 +157,18 @@ final readonly class PhpGateSteps
 
     private const string LOCK_UNCHANGED = <<<'SH'
         php -r 'if ($argv[1] !== (is_file("composer.lock") ? hash_file("sha256", "composer.lock") : "")) { fwrite(STDERR, "composer.lock changed during the install, so Composer resolved the dependencies instead of installing the locked packages.\n"); exit(1); }' "$intakt_lock_before"
+        SH;
+
+    // Outside the clone, so the report never shows up in the tree under test.
+    private const string REGRESSION_REPORT = '"${TMPDIR:-/work}/intakt-regression-junit.xml"';
+
+    // The outermost testsuite element holds the run's totals.
+    private const string REGRESSION_VERDICT = <<<'SH'
+        '$report = new DOMDocument();
+        $suite = is_file($argv[1]) && @$report->load($argv[1], LIBXML_NONET) ? $report->getElementsByTagName("testsuite")->item(0) : null;
+        if (!$suite instanceof DOMElement) { exit(3); }
+        $count = static fn (string $name): int => (int) $suite->getAttribute($name);
+        if ("0" === $argv[2] && $count("tests") > 0 && $count("assertions") > 0 && 0 === $count("errors") + $count("failures") + $count("skipped")) { exit(0); }
+        exit("1" === $argv[2] && $count("failures") > 0 && 0 === $count("errors") ? 1 : 3);'
         SH;
 }

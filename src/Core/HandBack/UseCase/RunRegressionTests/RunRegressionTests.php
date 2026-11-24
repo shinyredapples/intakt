@@ -41,7 +41,7 @@ final readonly class RunRegressionTests implements RegressionTests
     public const string RESULT = 'regression-result';
 
     // Exactly what docker/job/regression.sh writes for a run that reached its tests, so anything else the code under test leaves there is no result.
-    private const string WELL_FORMED = '/\A(?:passed|failed [1-9]\d{0,2})\n\z/D';
+    private const string WELL_FORMED = '/\A(?<run>passed|failed|errored)(?: (?<status>[1-9]\d{0,2}))?\n\z/D';
 
     private const int MEMORY_BYTES = 4 * 1024 ** 3;
 
@@ -184,10 +184,16 @@ final readonly class RunRegressionTests implements RegressionTests
 
     private function reported(string $result): RegressionRun
     {
-        if (1 !== preg_match(self::WELL_FORMED, $result)) {
+        if (1 !== preg_match(self::WELL_FORMED, $result, $match, PREG_UNMATCHED_AS_NULL)) {
             return RegressionRun::NoResult;
         }
 
-        return str_starts_with($result, 'passed') ? RegressionRun::Passed : RegressionRun::Failed;
+        // Only an errored run names its status, so "failed 1" and a bare "errored" are no result.
+        return match ([$match['run'], null !== $match['status']]) {
+            ['passed', false] => RegressionRun::Passed,
+            ['failed', false] => RegressionRun::Failed,
+            ['errored', true] => RegressionRun::Errored,
+            default => RegressionRun::NoResult,
+        };
     }
 }

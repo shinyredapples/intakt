@@ -27,6 +27,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Throwable;
 
@@ -90,6 +91,18 @@ final class PrePushCheckTest extends TestCase
     {
         $regressionTests = self::createStub(RegressionTests::class);
         $regressionTests->method('run')->willThrowException(HandBackNotChecked::in('mirror', 'it is gone'));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning');
+
+        $failure = $this->passingCheck($regressionTests, $logger)->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+
+        self::assertNull($failure);
+    }
+
+    public function testARegressionScriptThatCannotBeReadDoesNotChangeThePrePushVerdict(): void
+    {
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willThrowException(new IOException('Failed to read file "docker/job/regression.sh"'));
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects(self::once())->method('warning');
 

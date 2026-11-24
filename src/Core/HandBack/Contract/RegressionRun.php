@@ -9,6 +9,8 @@ enum RegressionRun: string
 {
     case Passed = 'passed';
     case Failed = 'failed';
+    // The tests ran but reached no verdict (an error such as a missing fixture, a skip, no executed test), so the run neither reproduces the bug nor shows it fixed.
+    case Errored = 'errored';
     case NoResult = 'no-result';
     case TimedOut = 'timed-out';
 }

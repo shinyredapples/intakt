@@ -65,7 +65,7 @@ final class RunRegressionTestsTest extends TestCase
     {
         $head = $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
 
-        $runs = $this->whenTheJobsLeave(["failed 1\n", "passed\n"]);
+        $runs = $this->whenTheJobsLeave(["failed\n", "passed\n"]);
 
         self::assertInstanceOf(RegressionRuns::class, $runs);
         self::assertSame(RegressionRun::Failed, $runs->base);
@@ -82,7 +82,7 @@ final class RunRegressionTestsTest extends TestCase
         $this->whenTheJobsLeave(["passed\n", "passed\n"]);
 
         $command = [...$this->ran[0]->command];
-        self::assertSame(['intakt-regression', '/input/mirror', '/input/handback.bundle', 'task', $base, 'task', '1', 'composer install --no-interaction --no-progress', 'tests/FooTest.php', "vendor/bin/phpunit 'tests/FooTest.php'"], array_slice($command, 3));
+        self::assertSame(['intakt-regression', '/input/mirror', '/input/handback.bundle', 'task', $base, 'task', '1', 'composer install --no-interaction --no-progress', 'tests/FooTest.php', ...new PhpGate()->testSteps(new Paths('tests/FooTest.php'))], array_slice($command, 3));
     }
 
     public function testTheHeadRunChecksOutTheHeadAndLaysNothingOverIt(): void
@@ -92,7 +92,7 @@ final class RunRegressionTestsTest extends TestCase
         $this->whenTheJobsLeave(["passed\n", "passed\n"]);
 
         $command = [...$this->ran[1]->command];
-        self::assertSame(['intakt-regression', '/input/mirror', '/input/handback.bundle', 'task', $head, '-', '0', 'composer install --no-interaction --no-progress', "vendor/bin/phpunit 'tests/FooTest.php'"], array_slice($command, 3));
+        self::assertSame(['intakt-regression', '/input/mirror', '/input/handback.bundle', 'task', $head, '-', '0', 'composer install --no-interaction --no-progress', ...new PhpGate()->testSteps(new Paths('tests/FooTest.php'))], array_slice($command, 3));
     }
 
     public function testBothJobsReadTheScriptAndReachOnlyTheGatesRegistries(): void
@@ -124,11 +124,33 @@ final class RunRegressionTestsTest extends TestCase
     {
         $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
 
-        $runs = $this->whenTheJobsLeave(["passed\nextra\n", "failed 0\n"]);
+        $runs = $this->whenTheJobsLeave(["passed\nextra\n", "errored 0\n"]);
 
         self::assertInstanceOf(RegressionRuns::class, $runs);
         self::assertSame(RegressionRun::NoResult, $runs->base);
         self::assertSame(RegressionRun::NoResult, $runs->head);
+    }
+
+    public function testAFailedRunWithAStatusOrAnErroredRunWithoutOneIsReadAsNoResult(): void
+    {
+        $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
+
+        $runs = $this->whenTheJobsLeave(["failed 1\n", "errored\n"]);
+
+        self::assertInstanceOf(RegressionRuns::class, $runs);
+        self::assertSame(RegressionRun::NoResult, $runs->base);
+        self::assertSame(RegressionRun::NoResult, $runs->head);
+    }
+
+    public function testATestThatReachedNoVerdictIsErroredAndNotFailed(): void
+    {
+        $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
+
+        $runs = $this->whenTheJobsLeave(["errored 3\n", "errored 255\n"]);
+
+        self::assertInstanceOf(RegressionRuns::class, $runs);
+        self::assertSame(RegressionRun::Errored, $runs->base);
+        self::assertSame(RegressionRun::Errored, $runs->head);
     }
 
     public function testARunThatCouldNotInstallOrApplyLeavesNoResult(): void

@@ -53,7 +53,8 @@ fi
 count="$overlay_count"
 if [ "$overlay_from" != '-' ]; then
     while [ "$count" -gt 0 ]; do
-        own_git -C "$clone" checkout --quiet "refs/heads/$overlay_from" -- "$1" >> "$log" 2>&1 || { result 'not-applied'; exit 1; }
+        # Literal pathspecs, because a test path such as tests/Example[2]Test.php would otherwise also lay tests/Example2Test.php over the base.
+        own_git --literal-pathspecs -C "$clone" checkout --quiet "refs/heads/$overlay_from" -- "$1" >> "$log" 2>&1 || { result 'not-applied'; exit 1; }
         shift
         count=$((count - 1))
     done
@@ -71,14 +72,16 @@ if [ "$install_step" != '-' ]; then
     fi
 fi
 
+# A test step exits 0 when its tests ran and passed and 1 when a test failed; any other status (an error before an assertion, a skip, no test) shows no reproduction.
 for step in "$@"; do
     printf '$ %s\n' "$step" >> "$log"
     sh -c "$step" >> "$log" 2>&1 < /dev/null
     status=$?
-    if [ "$status" -ne 0 ]; then
-        result "failed $status"
-        exit "$status"
-    fi
+    case "$status" in
+        0) ;;
+        1) result 'failed'; exit 1 ;;
+        *) result "errored $status"; exit "$status" ;;
+    esac
 done
 
 result 'passed'

@@ -15,7 +15,7 @@ interface Gate
     // Test layout is language-specific, so the gate says which repository-relative paths are test files.
     public function isTestFile(string $path): bool;
 
-    // One shell step for each given test file (never a project's own command), so the first test that fails ends the run.
+    // One shell step for each given test file (never a project's own command), so the first test that fails ends the run. A step exits 0 only when its tests ran and passed, 1 only when a test failed, and any other status when they reached no verdict (an error, a skip, no test).
     public function testSteps(Paths $tests): CheckSteps;
 
     // The hosts the steps fetch dependencies from, because the check job starts with an empty dependency cache.
