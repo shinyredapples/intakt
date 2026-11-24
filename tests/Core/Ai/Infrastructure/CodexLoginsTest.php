@@ -57,6 +57,14 @@ final class CodexLoginsTest extends TestCase
         self::assertFalse($this->logins()->hasLogin('team'));
     }
 
+    public function testAnAccountWhoseKeptLoginFileHoldsNoTokensHasNoLogin(): void
+    {
+        $logins = $this->logins();
+        new Filesystem()->dumpFile($logins->loginFile('team'), '{}');
+
+        self::assertFalse($logins->hasLogin('team'));
+    }
+
     public function testTheCallHomeNeverHoldsTheKeptLogin(): void
     {
         $logins = $this->logins();

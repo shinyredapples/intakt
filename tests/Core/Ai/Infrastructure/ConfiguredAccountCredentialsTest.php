@@ -6,7 +6,9 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Infrastructure\CodexLogin;
 use Intakt\Core\Ai\Infrastructure\CodexLogins;
+use Intakt\Core\Ai\Infrastructure\CodexLoginUnusable;
 use Intakt\Core\Ai\Infrastructure\CodexTokenRefresh;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccountCredentials;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
@@ -21,6 +23,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(ConfiguredAccountCredentials::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(CodexLogin::class)]
+#[UsesClass(CodexLoginUnusable::class)]
 #[UsesClass(CodexLogins::class)]
 #[UsesClass(CodexTokenRefresh::class)]
 #[UsesClass(ConfiguredAccounts::class)]
@@ -45,14 +49,21 @@ final class ConfiguredAccountCredentialsTest extends TestCase
 
     public function testAnEnabledCodexAccountWithItsLoginFileHasItsCredentials(): void
     {
-        new Filesystem()->dumpFile($this->root.'/logins/team/auth.json', '{}');
+        new Filesystem()->dumpFile($this->root.'/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
 
         self::assertTrue($this->credentials(['codex' => ['team']])->areSet(new Account(Provider::Codex, 'team')));
     }
 
-    public function testACodexLoginFileDoesNotMakeAnAccountThatIsNotEnabledReady(): void
+    public function testAnEnabledCodexAccountWhoseLoginFileHoldsNoTokensLacksItsCredentials(): void
     {
         new Filesystem()->dumpFile($this->root.'/logins/team/auth.json', '{}');
+
+        self::assertFalse($this->credentials(['codex' => ['team']])->areSet(new Account(Provider::Codex, 'team')));
+    }
+
+    public function testACodexLoginFileDoesNotMakeAnAccountThatIsNotEnabledReady(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
 
         self::assertFalse($this->credentials([])->areSet(new Account(Provider::Codex, 'team')));
     }
