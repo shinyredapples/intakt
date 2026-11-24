@@ -67,14 +67,14 @@ final class HardenedGitCallTest extends TestCase
     public function testTheForgeCopyBuildsTheSameCalls(): void
     {
         $gate = new HardenedGitCall()->call(['status'], $this->sandbox->root);
-        $forge = new HardenedGit()->call(['status'], $this->sandbox->root);
+        $forge = new HardenedGit()->call($this->sandbox->root, 'status');
 
-        self::assertSame($gate->command, $forge->command);
+        self::assertSame($gate->command, [...$forge->command]);
         self::assertSame($gate->directory, $forge->directory);
-        self::assertSame($gate->environment, $forge->environment);
+        self::assertSame($gate->environment, [...$forge->environment]);
         self::assertSame(
             new HardenedGitCall()->callWithPathspecMagic(['status'], $this->sandbox->root)->command,
-            new HardenedGit()->callWithPathspecMagic(['status'], $this->sandbox->root)->command,
+            [...new HardenedGit()->callWithPathspecMagic($this->sandbox->root, 'status')->command],
         );
     }
 
@@ -100,7 +100,7 @@ final class HardenedGitCallTest extends TestCase
         $this->sandbox->git('config', 'diff.evil.textconv', 'cat');
         $this->sandbox->git('config', 'filter.evil.clean', 'cat');
 
-        self::assertSame(new HardenedGitCall()->environment($this->sandbox->root), new HardenedGit()->environment($this->sandbox->root));
+        self::assertSame(new HardenedGitCall()->environment($this->sandbox->root), [...new HardenedGit()->environment($this->sandbox->root)]);
     }
 
     public function testGitStartedByAnotherToolRunsNoTextconvDriverThatTheRepositoryAttributesName(): void

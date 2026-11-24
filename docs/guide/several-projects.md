@@ -29,6 +29,8 @@ The AI accounts, and the builders and reviewers using them, are shown **once** f
 
 *(Planned:)* The **New task** box at the top of the dashboard always asks which project the work is for (the filter's project, if it shows one), and words that describe work for two projects become two drafts, one per project ([starting a task from the dashboard](a-tour-of-the-dashboard.md#starting-a-task-from-the-dashboard)).
 
+*(Planned:)* The **Ask** panel answers questions about one project or about all of them; each project is read on its own and every fact says which project it is about ([asking a question](a-tour-of-the-dashboard.md#asking-a-question)).
+
 ## Each project keeps to itself
 
 - Each project has its **own** tasks, queue, settings, checks, protected files and project memory.

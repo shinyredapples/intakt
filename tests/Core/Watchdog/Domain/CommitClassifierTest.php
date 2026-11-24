@@ -112,6 +112,48 @@ final class CommitClassifierTest extends TestCase
         self::assertSame([], $classification->ownerPushes);
     }
 
+    public function testAPeerSignedCommitIsNamedAsAPeerMergeAndIsNoViolation(): void
+    {
+        $history = $this->history([self::OTHER => SignatureStatus::PeerSigned, self::BASE => SignatureStatus::Unsigned]);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertSame([self::OTHER], $classification->peerMerges);
+        self::assertEquals([new MainViolation(self::BASE, Violation::Unsigned)], $classification->violations);
+    }
+
+    public function testAPeerMergeIsNoOwnerPush(): void
+    {
+        $history = $this->history([self::OTHER => SignatureStatus::PeerSigned]);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertTrue($classification->isClean());
+        self::assertSame([], $classification->ownerPushes);
+    }
+
+    public function testAnOwnerPushIsNoPeerMerge(): void
+    {
+        $history = $this->history([self::OTHER => SignatureStatus::OwnerSigned]);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertSame([], $classification->peerMerges);
+    }
+
+    public function testAPeerSignedRecordedHeadOrCommitItsMergeBroughtInIsNoPeerMerge(): void
+    {
+        $history = self::createStub(CommitHistory::class);
+        $history->method('contains')->willReturn(true);
+        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
+        $history->method('broughtInBy')->willReturn([self::MERGE, self::OTHER]);
+        $history->method('signatureOf')->willReturn(SignatureStatus::PeerSigned);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertSame([], $classification->peerMerges);
+    }
+
     public function testAHistoryRewriteNamesNoOwnerPush(): void
     {
         $history = self::createStub(CommitHistory::class);

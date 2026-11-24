@@ -6,6 +6,7 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
@@ -60,7 +61,7 @@ final readonly class PhpInImage
             // A random part as well, because two builds that end in the same image id would otherwise share the probe's job id and container name.
             new JobId(sprintf('image-probe-%s-%s', substr(hash('xxh128', $image), 0, 16), bin2hex(random_bytes(8)))),
             $image,
-            ['php', '-r', sprintf(self::PROBE, JobSpec::OUTPUT_DIRECTORY, self::ANSWER)],
+            new JobCommand('php', '-r', sprintf(self::PROBE, JobSpec::OUTPUT_DIRECTORY, self::ANSWER)),
             [],
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::none(),

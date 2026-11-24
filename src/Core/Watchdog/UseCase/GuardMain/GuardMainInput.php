@@ -8,6 +8,7 @@ use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeOption;
+use Intakt\Core\Watchdog\UseCase\CheckMain\TrustedKeys;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -32,6 +33,15 @@ final class GuardMainInput
     /** @var list<string> */
     #[Option('An SSH public key the owner registered, "<type> <base64>" (repeatable)')]
     public array $ownerKey = [];
+
+    /** @var list<string> */
+    #[Option('An SSH public key of the peer loop whose merges are info events, "<type> <base64>" (repeatable)')]
+    public array $peerKey = [];
+
+    public function trustedKeys(): TrustedKeys
+    {
+        return new TrustedKeys($this->ownerKey, $this->peerKey);
+    }
 
     /**
      * @throws CommitNameNotFull

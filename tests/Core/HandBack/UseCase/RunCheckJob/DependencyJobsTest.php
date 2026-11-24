@@ -27,6 +27,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\CheckJobsFor;
+use Intakt\Tests\Core\Job\OutputFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -146,7 +147,7 @@ final class DependencyJobsTest extends TestCase
     public function testAnInstallTheJobRefusedSavesNothing(): void
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 78), new JobOutput(['install-result' => "refused\n", 'platform' => self::PLATFORM])));
+        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 78), OutputFiles::of(['install-result' => "refused\n", 'platform' => self::PLATFORM])));
 
         self::assertFalse($this->jobsWith($runner)->installed($this->inputs, $this->step, 'image'));
         self::assertDirectoryDoesNotExist($this->checks->snapshotsFolder().'/'.$this->inputs->key()->value);
@@ -155,7 +156,7 @@ final class DependencyJobsTest extends TestCase
     public function testAnInstallForAnotherPlatformSavesNothing(): void
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n", 'platform' => '8.4.1'])));
+        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['install-result' => "installed\n", 'platform' => '8.4.1'])));
 
         self::assertFalse($this->jobsWith($runner)->installed($this->inputs, $this->step, 'image'));
         self::assertDirectoryDoesNotExist($this->checks->snapshotsFolder().'/'.$this->inputs->key()->value);
@@ -164,7 +165,7 @@ final class DependencyJobsTest extends TestCase
     public function testAnInstallWithABadProbeSavesNothing(): void
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n", 'platform' => "bad probe\n"])));
+        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['install-result' => "installed\n", 'platform' => "bad probe\n"])));
 
         self::assertFalse($this->jobsWith($runner)->installed($this->inputs, $this->step, 'image'));
         self::assertDirectoryDoesNotExist($this->checks->snapshotsFolder().'/'.$this->inputs->key()->value);
@@ -230,7 +231,7 @@ final class DependencyJobsTest extends TestCase
 
     private function resultInstalled(): JobResult
     {
-        return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n", 'platform' => self::PLATFORM]));
+        return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['install-result' => "installed\n", 'platform' => self::PLATFORM]));
     }
 
     // A separate service on the same folders and lock folder, because a second orchestrator process shares only those.

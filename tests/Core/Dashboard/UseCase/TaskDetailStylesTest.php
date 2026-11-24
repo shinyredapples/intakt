@@ -125,6 +125,48 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere;/', $rules['.live-calls'] ?? '');
     }
 
+    // The mock puts Stop at the top beside the title, so the title column takes the rest of the row instead of pushing the actions under the review path.
+    public function testTheTaskActionsStandAtTheTopBesideATitleColumnThatTakesTheRestOfTheRow(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*align-items:\s*flex-start;\s*$/', $rules['.page-head:has(> .task-actions)'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*flex:\s*1 1 280px;\s*$/', $rules['.page-head:has(> .task-actions) > div:first-child'] ?? '');
+    }
+
+    // It must start at the top, because the browser's own top margin of the title put Stop about 25 px above the title text at 1440 wide.
+    public function testTheTitleBesideTheTaskActionsHasNoTopMarginSoStopSitsOnTheTitlesRow(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*margin-top:\s*0;\s*$/', $rules['.page-head:has(> .task-actions) h1'] ?? '');
+    }
+
+    // It must shrink, because at 390 wide a long change name moved to a line of its own and left its "/" alone at the end of the line before.
+    public function testThePagesOwnCrumbShrinksOnTheTrailsLineSoALongChangeNameWrapsThere(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*flex:\s*1 1 12ch;\s*$/', $rules['.crumbs li:last-child'] ?? '');
+        self::assertMatchesRegularExpression('/min-width:\s*0;.*overflow-wrap:\s*anywhere;/s', $rules['.crumbs li'] ?? '');
+    }
+
+    // It must stay whole, because at 390 wide the Full record's "estimated" label broke into "estimate" and "d" beside the cost.
+    public function testAFiguresKindLabelInTheHeadsFactsNeverBreaksInsideItsWord(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*white-space:\s*nowrap;\s*overflow-wrap:\s*normal;\s*$/', $rules['.page-head .meta .figure-kind'] ?? '');
+    }
+
+    // One text, because as a flex row the figure, its kind label and the price date each shrank to a narrow column of its own at 390 wide.
+    public function testTheCostInTheHeadsFactsFlowsAsOneTextInsteadOfAColumnPerPart(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*inline;\s*$/', $rules['.page-head .meta #review-summary-cost'] ?? '');
+    }
+
     // At 390 wide `anywhere` let the reviewer table shrink until "correctness" broke into three lines; `break-word` keeps words whole and the scroll box takes the width.
     public function testACellOfARoundTableKeepsItsWordsWholeAndTheTableScrolls(): void
     {
@@ -132,6 +174,45 @@ final class TaskDetailStylesTest extends TestCase
 
         self::assertMatchesRegularExpression('/^\s*overflow-wrap:\s*break-word;\s*$/', $rules['.round .ledger td'] ?? '');
         self::assertMatchesRegularExpression('/overflow-x:\s*auto;/', $rules['.table-scroll'] ?? '');
+    }
+
+    // At 390 wide the reviewers table measured 567 px in a 358 px box, so the Findings count and Stop sat past the screen's edge.
+    public function testOnAPhoneEachReviewerStacksSoItsFindingsAndStopFitTheScreen(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/display:\s*grid;\s*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+fit-content\(60%\);/', $rules['.round .ledger.reviewers tr'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*grid-row:\s*1;\s*grid-column:\s*2;\s*$/', $rules['.round .ledger.reviewers td:nth-child(3)'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*grid-column:\s*1 \/ -1;\s*$/', $rules['.round .ledger.reviewers td:nth-child(2), .round .ledger.reviewers td:nth-child(n+4)'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.round .ledger.reviewers .stop-reviewer .btn'] ?? '');
+    }
+
+    // Needed because a blocked reviewer's unbroken 100-character note widened an `auto` outcome track to 983 px at 390 wide and pushed the findings and Stop offscreen.
+    public function testOnAPhoneAReviewersLongNoteWrapsInsideAnOutcomeColumnThatCanShrink(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertDoesNotMatchRegularExpression('/grid-template-columns:[^;]*\bauto\b/', $rules['.round .ledger.reviewers tr'] ?? '');
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere;/', $rules['.round .ledger.reviewers td'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*flex-wrap:\s*wrap;\s*$/', $rules['.round .ledger.reviewers .reviewer-outcome'] ?? '');
+    }
+
+    // Needed because clipping the whole heading row hid the newest round's "counted" label and its source tooltip, which appear nowhere else on a phone.
+    public function testOnAPhoneTheFindingsHeadingWithItsCountedLabelStaysVisibleWhileTheOtherHeadingsAreClipped(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertDoesNotMatchRegularExpression('/clip-path/', $rules['.round .ledger.reviewers thead'] ?? '');
+        self::assertMatchesRegularExpression('/clip-path:\s*inset\(50%\);/', $rules['.round .ledger.reviewers th:not(.num), .round .ledger.reviewers th.num:not(:has(.figure-kind))'] ?? '');
+        self::assertMatchesRegularExpression('/display:\s*block;.*text-align:\s*left;/s', $rules['.round .ledger.reviewers th.num'] ?? '');
+        self::assertMatchesRegularExpression('/content:\s*"Findings: ";/', $rules['.round .ledger.reviewers td.num::before'] ?? '');
+    }
+
+    public function testFrom761WideTheReviewersStayATableWithItsHeadings(): void
+    {
+        $outside = implode("\n", array_keys($this->rulesOf($this->sheetOutside('max-width: 760px'))));
+
+        self::assertStringNotContainsString('.ledger.reviewers', $outside);
     }
 
     public function testAJudgedRoundsFindingsAreOneColumnOfCardsWhoseTextWrapsInsteadOfOverflowing(): void

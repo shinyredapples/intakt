@@ -1,0 +1,12 @@
+{# One reading of the admin API per load; a source that is down shows one "down" figure with its reason in place of its values, so the others still show theirs. #}
+<section class="infra" id="infrastructure" aria-labelledby="infrastructure-h">
+    <h2 id="infrastructure-h" class="sr-only">Infrastructure</h2>
+    <dl class="infra-figures">
+    {% for figure in row.figures %}
+        <div class="infra-figure {{ figure.state.value }}">
+            <dt>{{ figure.label }}</dt>
+            <dd>{{ figure.value }}{% if figure.downBecause is not null %} <span class="infra-reason">({{ figure.downBecause }})</span>{% endif %}</dd>
+        </div>
+    {% endfor %}
+    </dl>
+</section>

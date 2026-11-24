@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
 use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\GitCommand;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
@@ -123,7 +124,7 @@ final readonly class UpdateMirror
                 $attempts[] = $staging = $this->stagingPath($project);
 
                 // The work tree stays pinned to the mirrors folder, because a mirror clone takes none.
-                return $this->withoutAttributeSource($this->hardened->call(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrors->directory));
+                return $this->withoutAttributeSource($this->hardened->call($this->mirrors->directory, 'clone', '--mirror', '--quiet', '--', $remote, $staging));
             });
             $this->forgetRemote($staging);
             $published = $this->publish($project, $staging, $path);
@@ -146,9 +147,9 @@ final readonly class UpdateMirror
     private function withoutAttributeSource(GitCall $call): GitCall
     {
         // Because the clone runs in the mirrors folder, where HardenedGit names SHA-1's empty tree, and a "file://" remote hands that on to its upload-pack, which refuses it in a SHA-256 repository; a bare mirror clone checks out nothing and reads no attributes, and the attributes file and system settings stay off.
-        $command = array_values(array_filter($call->command, static fn (string $part): bool => !str_starts_with($part, '--attr-source=')));
+        $command = array_filter([...$call->command], static fn (string $part): bool => !str_starts_with($part, '--attr-source='));
 
-        return new GitCall($command, $call->directory, [...$call->environment, 'GIT_ATTR_SOURCE' => false]);
+        return new GitCall(new GitCommand(...$command), $call->directory, $call->environment->unsetting('GIT_ATTR_SOURCE'));
     }
 
     private function forgetRemote(string $staging): void
@@ -185,7 +186,7 @@ final readonly class UpdateMirror
     private function local(array $arguments, string $repository): Process
     {
         $call = $this->inMirror($arguments, $repository);
-        $process = new Process($call->command, $call->directory, $call->environment);
+        $process = new Process([...$call->command], $call->directory, [...$call->environment]);
         $process->run();
 
         return $process;
@@ -196,7 +197,7 @@ final readonly class UpdateMirror
      */
     private function inMirror(array $arguments, string $repository): GitCall
     {
-        return $this->hardened->callInBareRepository($arguments, $repository);
+        return $this->hardened->callInBareRepository($repository, ...$arguments);
     }
 
     /**

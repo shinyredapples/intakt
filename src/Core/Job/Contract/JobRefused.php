@@ -28,12 +28,9 @@ final class JobRefused extends InvalidArgumentException
         return new self(sprintf('A kept folder is an absolute host path; "%s" is not.', $hostPath));
     }
 
-    /**
-     * @param list<string> $volumes
-     */
-    public static function forImageVolumes(string $image, array $volumes): self
+    public static function forImageVolumes(string $image, ImageVolumes $volumes): self
     {
-        return new self(sprintf('The image "%s" declares the volumes %s, which a job could write outside %s and %s.', $image, implode(', ', $volumes), JobSpec::WORK_AREA, JobSpec::OUTPUT_DIRECTORY));
+        return new self(sprintf('The image "%s" declares the volumes %s, which a job could write outside %s and %s.', $image, implode(', ', [...$volumes]), JobSpec::WORK_AREA, JobSpec::OUTPUT_DIRECTORY));
     }
 
     public static function forEmptyAllowlist(): self
