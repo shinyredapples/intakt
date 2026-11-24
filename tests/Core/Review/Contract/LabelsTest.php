@@ -30,4 +30,9 @@ final class LabelsTest extends TestCase
     {
         self::assertFalse(new Labels()->contains('review:full'));
     }
+
+    public function testTheLabelsIterateInTheOrderTheyWereGiven(): void
+    {
+        self::assertSame(['model:light', 'bug'], [...new Labels('model:light', 'bug')]);
+    }
 }

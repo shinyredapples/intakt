@@ -20,14 +20,14 @@ final class CostTest extends TestCase
     {
         $sum = Cost::inUsd(0.25)->plus(Cost::inUsd(0.5));
 
-        self::assertSame([0.75, []], [$sum->usd, $sum->unpriced]);
+        self::assertSame([0.75, []], [$sum->usd, [...$sum->unpriced]]);
     }
 
     public function testAKnownCostPlusAnUnknownOneIsUnknownAndNotThePartialSum(): void
     {
         $sum = Cost::inUsd(0.25)->plus(Cost::unknown('local-small'));
 
-        self::assertSame([null, ['local-small']], [$sum->usd, $sum->unpriced]);
+        self::assertSame([null, ['local-small']], [$sum->usd, [...$sum->unpriced]]);
     }
 
     public function testAnUnknownCostPlusAKnownOneStaysUnknown(): void
@@ -41,7 +41,7 @@ final class CostTest extends TestCase
     {
         $sum = Cost::unknown('local-small')->plus(Cost::unknown('local-small'))->plus(Cost::unknown('gpt-5'));
 
-        self::assertSame(['local-small', 'gpt-5'], $sum->unpriced);
+        self::assertSame(['local-small', 'gpt-5'], [...$sum->unpriced]);
     }
 
     public function testAKnownCostReadsInFourDecimalsOfDollars(): void

@@ -53,14 +53,15 @@ final readonly class BuilderPrompt
      */
     private function decisionsOf(BuildBrief $brief): array
     {
-        if ([] === $brief->decisions) {
+        if ($brief->decisions->isEmpty()) {
             return [];
         }
 
+        $decisions = [...$brief->decisions];
         $numbered = array_map(
             static fn (int $index, string $decision): string => sprintf('D%d: %s', $index + 1, $decision),
-            array_keys($brief->decisions),
-            $brief->decisions,
+            array_keys($decisions),
+            $decisions,
         );
 
         return [new PromptPart("The maintainer's decisions on this task; apply each one:", $this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered)))];
