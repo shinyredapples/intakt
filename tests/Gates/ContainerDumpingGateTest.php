@@ -116,10 +116,7 @@ final class ContainerDumpingGateTest extends SandboxTestCase
     private function kernelSandbox(): Sandbox
     {
         $sandbox = $this->sandboxWith('kernel-with-own-services');
-        // Because the fixture boots a real kernel, it borrows this repository's installed Symfony instead of shipping its own.
-        $sandbox->write('vendor/autoload.php', '<?php return require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).";\n");
-        // Because the kernel writes config/reference.php while it warms up, the tree ignores it in git as this repository does.
-        $sandbox->startRepository();
+        $sandbox->useInstalledSymfony();
 
         return $sandbox;
     }

@@ -165,11 +165,12 @@ final class TestDurationsTest extends SandboxTestCase
 
     public function testARecordThatCanBeReadIsStillUsed(): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('tests/durations.json', '{"tests/LongTest.php": 12.5}');
-        chmod($sandbox->root.'/tests/durations.json', 0o400);
+        $cache = $this->emptySandbox()->root;
+        $durations = new TestDurations($cache);
+        $durations->write(['tests/LongTest.php' => 12.5, 'tests/ShortTest.php' => 1.0], $cache);
+        chmod($cache.'/tests/durations.json', 0o400);
 
-        self::assertSame(['tests/LongTest.php' => 12.5], new TestDurations($sandbox->root)->recorded($sandbox->root));
+        self::assertSame(['tests/LongTest.php' => 12.5, 'tests/ShortTest.php' => 1.0], $durations->recorded($cache));
     }
 
     public function testATestFileOutsideTheRootIsLeftOutOfTheRecordedDurations(): void

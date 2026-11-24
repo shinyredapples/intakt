@@ -98,11 +98,16 @@ final readonly class Sandbox
         $this->symlink('bin/console', dirname(__DIR__, 2).'/bin/console');
     }
 
-    // Because a rule fixture that names a service or a parameter must find it, the sandbox boots the kernel of the fixture `kernel-with-own-services`, which registers its own, instead of this repository's: a change to src/ or config/ services then cannot break the test. It borrows this repository's installed Symfony for its vendor folder.
+    // Because a rule fixture that names a service or a parameter must find it, the sandbox boots the kernel of the fixture `kernel-with-own-services`, which registers its own, instead of this repository's: a change to src/ or config/ services then cannot break the test. The kernel's own caller stays out, so the rule fixture's caller at the same path is the one analysed.
     public function bootFixtureKernel(): void
     {
-        $this->copyFixture(self::FIXTURES.'/kernel-with-own-services');
-        unlink($this->root.'/src/Lookup.php');
+        $this->copyFixture(self::FIXTURES.'/kernel-with-own-services', except: ['src/Lookup.php']);
+        $this->useInstalledSymfony();
+    }
+
+    // Because the fixture kernel is a real one, it borrows this repository's installed Symfony instead of shipping its own.
+    public function useInstalledSymfony(): void
+    {
         $this->write('vendor/autoload.php', '<?php return require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).";\n");
         // Because the kernel writes config/reference.php while it warms up, the tree ignores it in git as this repository does.
         $this->startRepository();
@@ -210,14 +215,20 @@ final readonly class Sandbox
         rmdir($this->root);
     }
 
-    private function copyFixture(string $source, string $folder = ''): void
+    /**
+     * @param list<string> $except
+     */
+    private function copyFixture(string $source, string $folder = '', array $except = []): void
     {
         $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS));
 
         foreach ($files as $file) {
             if ($file instanceof SplFileInfo) {
                 $relative = substr($file->getPathname(), strlen($source) + 1);
-                $this->write($folder.(preg_replace('/\.fixture$/', '', $relative) ?? $relative), (string) file_get_contents($file->getPathname()));
+                $target = preg_replace('/\.fixture$/', '', $relative) ?? $relative;
+                if (!in_array($target, $except, true)) {
+                    $this->write($folder.$target, (string) file_get_contents($file->getPathname()));
+                }
             }
         }
     }
