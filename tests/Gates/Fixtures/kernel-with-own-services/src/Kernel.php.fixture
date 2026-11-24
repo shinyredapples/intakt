@@ -25,7 +25,7 @@ final class Kernel extends BaseKernel
 
     protected function configureContainer(ContainerConfigurator $container): void
     {
-        $container->extension('framework', ['secret' => 'fixture', 'http_method_override' => false]);
+        $container->extension('framework', ['secret' => 'fixture', 'http_method_override' => false, 'test' => true]);
         $container->import($this->getProjectDir().'/config/services.yaml');
     }
 }
