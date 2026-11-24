@@ -946,6 +946,23 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testARedHeadIsRecordedWithItsHeadAndNoCiLogText(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        $redKeys = [];
+        foreach ($this->ledger->kinds() as $index => $kind) {
+            if (LedgerEventKind::HeadRed === $kind) {
+                $redKeys[] = array_keys($this->ledger->payloads()[$index]);
+            }
+        }
+
+        self::assertSame([['project', 'change', 'head', 'read_again_at']], $redKeys);
+    }
+
     public function testARedMovedHeadIsCheckedAgainForStaleVerdictsOnceItsCommitArrives(): void
     {
         $this->startRoundOnGreenHead();
