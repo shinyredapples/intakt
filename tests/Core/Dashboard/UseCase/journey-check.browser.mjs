@@ -258,6 +258,23 @@ test('a demo page that went to /elsewhere and from there to a review page before
     assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
 });
 
+test('a demo page that went to a review page and from there to /elsewhere before the press returned fails the first journey at step 3', async () => {
+    const pages = demoSite({ demo: '<script>location.assign(\'/reviews/r1\');</script>' });
+    pages['/elsewhere'] = pages['/reviews/r1'];
+    pages['/reviews/r1'] = '<!doctype html><html lang="en"><head><title>Review</title></head><body><script>location.assign(\'/elsewhere\');</script></body></html>';
+    // Forces the order: the press returns only once the page has reached /elsewhere, so the review page is the first address after /demo in the trail.
+    const pressAndSettle = { name: FIRST_RUN.steps[1].name, run: async (page) => {
+        await FIRST_RUN.steps[1].run(page);
+        await page.waitForURL(`${ORIGIN}/elsewhere`);
+    } };
+    const journey = { name: FIRST_RUN.name, steps: [FIRST_RUN.steps[0], pressAndSettle, ...FIRST_RUN.steps.slice(2)] };
+
+    const result = await runJourney(routedSite(pages), ORIGIN, journey, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
+});
+
 test('a demo page that stays and does not show its heading fails the first journey at step 3', async () => {
     const result = await runJourney(routedSite(demoSite({ demo: '<h1>Something else</h1>' })), ORIGIN, FIRST_RUN, scratch(), 1);
 

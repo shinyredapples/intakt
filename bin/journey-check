@@ -285,21 +285,21 @@ function seeRoleWhileAt(pathOnSite, role, name) {
         left.catch(() => {});
         await Promise.race([seen, left]);
       }
-      // A page that was gone before this step looked may have passed a wrong address on its way, so the press's trail is asked first.
-      const where = firstAddressAfter(TRAILS.get(page), expected) ?? departure ?? page.url();
-      if (!isAt(where, expected) && !isReviewPage(where, address)) {
-        throw new Error(`the page left ${pathOnSite} for ${originAndPath(where)}, not for a review page on ${new URL(address).origin}`);
+      // A page that was gone before this step looked may have passed a review page and moved on to a wrong one, so every address it has been at since the arrival must be a review page, not only the first.
+      const visited = [...addressesSince(TRAILS.get(page), expected), departure, page.url()].filter((where) => where !== undefined);
+      const wrong = visited.find((where) => !isAt(where, expected) && !isReviewPage(where, address));
+      if (wrong !== undefined) {
+        throw new Error(`the page left ${pathOnSite} for ${originAndPath(wrong)}, not for a review page on ${new URL(address).origin}`);
       }
     },
   };
 }
 
-function firstAddressAfter(trail, expected) {
+function addressesSince(trail, expected) {
   const visits = trail?.visits ?? [];
   const arrival = visits.findIndex((visit) => isAt(visit, expected));
-  if (arrival === -1) return undefined;
 
-  return visits.slice(arrival).find((visit) => !isAt(visit, expected));
+  return arrival === -1 ? [] : visits.slice(arrival);
 }
 
 // Only the review page shows the run's own verdict, so a page below it or on another install could pass the later steps by accident.
