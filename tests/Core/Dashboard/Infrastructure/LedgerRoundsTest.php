@@ -113,6 +113,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Verdict::class)]
 #[UsesClass(QuorumPolicy::class)]
 #[UsesClass(RoundEnding::class)]
+#[UsesClass(RoundCostList::class)]
 final class LedgerRoundsTest extends TestCase
 {
     private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
