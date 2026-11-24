@@ -27,7 +27,7 @@ final readonly class DoctrineOutageNotices
     #[AsEventListener]
     public function noticeOnce(UsageReadingsStayedAway $outage): void
     {
-        // Not waiting, because a worker that holds the lock is noticing this account's outage right now, and a start must not wait for it.
+        // Not waiting, because a worker that holds the lock is noticing this account's outage right now, and a start must not wait for it; the wait for the readings lock below is bounded by one short reading commit.
         $lock = $this->locks->createLock('budget-outage-notice-'.$outage->account->key());
         if (!$lock->acquire(false)) {
             return;
@@ -63,19 +63,30 @@ final readonly class DoctrineOutageNotices
         ]);
     }
 
-    // Waiting, because recording a reading is brief, and while this row is stored and ended no reading of the account can run its end before the row exists or commit after this look (#3293).
+    // Waiting, because recording a reading is brief, and while this row is stored and ended no reading of the account can run its end before the row exists or commit after this look (#3293); inside a caller's transaction the caller owns both sides on one connection, and its worker may hold the lock itself, so there is nothing to wait for.
     private function storeWhileNoReadingIsRecorded(UsageReadingsStayedAway $outage): void
     {
+        if ($this->entities->getConnection()->isTransactionActive()) {
+            $this->store($outage);
+
+            return;
+        }
+
         $lock = $this->locks->createLock(DoctrineMeasuredUse::READINGS_LOCK.$outage->account->key());
         $lock->acquire(true);
         try {
-            $notice = new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt);
-            $this->entities->persist($notice);
-            $this->entities->flush();
-            $this->endIfReadSince($notice);
+            $this->store($outage);
         } finally {
             $lock->release();
         }
+    }
+
+    private function store(UsageReadingsStayedAway $outage): void
+    {
+        $notice = new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt);
+        $this->entities->persist($notice);
+        $this->entities->flush();
+        $this->endIfReadSince($notice);
     }
 
     // A reading stored before this row found no row to end, so the earliest of them ends it here; one stored later finds the row itself.

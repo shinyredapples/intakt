@@ -583,6 +583,56 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
+    // Deliberate: the hooks above hide a writer's rows when the lock is free at a step, so these tests show the order the lock promises, not a two-connection race.
+    public function testAReadingKeepsTheLockFromItsFirstStatementThroughTheCommitWithoutAGap(): void
+    {
+        $store = new RecordingLockStore();
+        $locks = new LockFactory($store);
+        $reading = $this->connectionWith(new ForcedOrder(
+            static fn (string $sql): string => $sql,
+            static function () use ($store): void {
+                $store->events[] = 'commit';
+            },
+        ));
+
+        new DoctrineMeasuredUse(new EntityManager($reading, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $locks)->record($this->readingOf('main'));
+
+        self::assertSame(['save', 'commit', 'delete'], $store->events);
+    }
+
+    public function testAReadingRecordedInsideACallersTransactionKeepsTheLockUntilTheCallersCommit(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $connection = $this->entities->getConnection();
+
+        $connection->beginTransaction();
+        try {
+            $worker = new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $locks);
+            $worker->record($this->readingOf('main'));
+
+            self::assertTrue(self::readingsLockIsHeld($locks));
+        } finally {
+            $connection->rollBack();
+        }
+    }
+
+    public function testANoticeStoredInsideACallersTransactionDoesNotWaitForTheLockOfItsOwnProcess(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $held = $locks->createLock(DoctrineMeasuredUse::READINGS_LOCK.'claude_code.main');
+        $held->acquire();
+        $connection = $this->entities->getConnection();
+
+        $connection->beginTransaction();
+        try {
+            new DoctrineOutageNotices($this->entities, $locks, self::createStub(LoggerInterface::class))->noticeOnce($this->outageOf('main'));
+        } finally {
+            $connection->rollBack();
+        }
+
+        self::assertTrue($held->isAcquired());
+    }
+
     public function testARecordedReadingLeavesTheAccountsReadingsLockFree(): void
     {
         $locks = new LockFactory(new InMemoryStore());

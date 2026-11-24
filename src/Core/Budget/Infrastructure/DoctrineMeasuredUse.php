@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Infrastructure;
 
+use ArrayObject;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -20,14 +21,18 @@ use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
-// Readings are appended, never updated in place, so the later takenAt is the latest and the higher position breaks a tie within one second; the per-account lock is for the outage notices only.
+// Readings are appended, never updated in place, so the later takenAt is the latest and the higher position breaks a tie within one second; the per-account lock orders a reading against the outage notices of its account only.
 #[AsAlias(MeasuredUse::class)]
 final readonly class DoctrineMeasuredUse implements MeasuredUse
 {
     public const string READINGS_LOCK = 'budget-readings-';
+
+    /** @var ArrayObject<string, SharedLockInterface> */
+    private ArrayObject $held;
 
     public function __construct(
         private EntityManagerInterface $entities,
@@ -35,6 +40,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         private EventDispatcherInterface $events,
         private LockFactory $locks,
     ) {
+        $this->held = new ArrayObject();
     }
 
     #[Override]
@@ -82,18 +88,26 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         return $reading->window->refusalOfReset($resetsAt, $now);
     }
 
-    // Waiting and held across the commit, because on a read-committed engine a notice of this account stored meanwhile could miss this reading's end while its writer's look misses this uncommitted reading (#3293).
+    // Waiting and held across the commit, because on a read-committed engine a notice of this account stored meanwhile could miss this reading's end while its writer's look misses this uncommitted reading (#3293); inside a caller's transaction the commit is the caller's, so the lock stays held until this worker's next reading outside one, or its end.
     private function storeWhileNoNoticeIsWritten(WindowReading $reading, DateTimeImmutable $now): int
     {
-        $lock = $this->locks->createLock(self::READINGS_LOCK.$reading->account->key());
-        $lock->acquire(true);
+        $key = $reading->account->key();
+        $insideCallersTransaction = $this->entities->getConnection()->isTransactionActive();
+        $lock = $this->held[$key] ?? $this->locks->createLock(self::READINGS_LOCK.$key);
+        if (!$lock->isAcquired()) {
+            $lock->acquire(true);
+        }
+        $this->held[$key] = $lock;
         try {
             // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
             $previous = $this->latestReadingBefore($reading->account, $now);
 
             return $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
         } finally {
-            $lock->release();
+            if (!$insideCallersTransaction) {
+                $lock->release();
+                unset($this->held[$key]);
+            }
         }
     }
 
