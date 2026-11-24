@@ -105,7 +105,7 @@ final readonly class BenchResultFile
         return [
             'role' => $reviewer->role,
             'tier' => $reviewer->tier->value,
-            'models' => $reviewer->models,
+            'models' => [...$reviewer->models],
             'caught' => $verdict->caught,
             // A list of pairs, because an empty map would be written as a JSON list.
             'missed' => array_map(static fn (string $id, FailureCause $cause): array => ['id' => $id, 'cause' => $cause->value], array_keys($verdict->missed), $verdict->missed),

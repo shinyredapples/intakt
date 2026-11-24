@@ -6,12 +6,9 @@ namespace Intakt\Core\Build\Contract;
 
 final readonly class BuildBrief
 {
-    /**
-     * @param list<string> $decisions
-     */
     public function __construct(
         public string $task,
-        public array $decisions,
+        public Decisions $decisions,
         public ?Rework $rework,
     ) {
     }
