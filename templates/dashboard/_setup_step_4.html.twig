@@ -1,0 +1,24 @@
+{%- set project = first_run.project %}
+{%- set ok = '<svg class="i ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' %}
+{%- set info = '<svg class="i info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg>' %}
+{%- set broken = '<svg class="i broken-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.2v.2"/></svg>' %}
+<section class="step" id="step-project" data-s="4" data-state="{{ project.state.value }}" aria-labelledby="s4h">
+    <h1 id="s4h">Check the project</h1>
+    <p class="lead">Intakt reads the project file and what the boot check of each project's main branch recorded. It changes nothing.</p>
+    {%- if project.panels is empty %}
+    <p class="step-error" role="alert">{{ project.sentence }}</p>
+    {%- else %}
+    <p class="checked-count">{{ project.sentence }}</p>
+    <ul class="checks">
+        {%- for panel in project.panels %}
+        <li class="check" data-project="{{ panel.project }}" data-panel="{{ panel.configured ? 'ok' : 'broken' }}">{{ (panel.configured ? ok : broken)|raw }}<div><strong>{{ panel.project }}: review panel</strong><p class="muted">{{ panel.description }}</p></div></li>
+        {%- if panel.mainBootFailure is not null %}
+        <li class="check" data-project="{{ panel.project }}" data-boot="failed">{{ broken|raw }}<div><strong>{{ panel.project }}: main does not boot</strong><p class="muted">{{ panel.mainBootFailure }}</p></div></li>
+        {%- else %}
+        <li class="check" data-project="{{ panel.project }}" data-boot="no-failure">{{ info|raw }}<div><strong>{{ panel.project }}: no failed boot of main recorded</strong><p class="muted">The watcher boots main when it checks a trusted author's pull request of a watched project; a failed boot would show here.</p></div></li>
+        {%- endif %}
+        {%- endfor %}
+    </ul>
+    {%- endif %}
+    <div class="step-nav"><a class="btn quiet" href="{{ back }}">Back</a><a class="btn secondary" href="{{ path(route, {(query): step.value}) }}">Run again</a><span class="grow"></span><a class="btn primary" href="{{ continue }}">Continue</a></div>
+</section>

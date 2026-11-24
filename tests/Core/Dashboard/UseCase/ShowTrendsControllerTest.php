@@ -195,7 +195,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $action = $this->browser->request('GET', '/trends')->filter('main .empty .btn');
 
         self::assertSame(['Start the first review'], $action->each(static fn (Crawler $button): string => $button->text()));
-        self::assertSame('/setup#step-first-review', $action->attr('href'));
+        self::assertSame('/setup?step=5#step-first-review', $action->attr('href'));
     }
 
     public function testWithTheSampleChangeTheOneActionStartsTheFirstReviewAsTheSetupPageDoes(): void
