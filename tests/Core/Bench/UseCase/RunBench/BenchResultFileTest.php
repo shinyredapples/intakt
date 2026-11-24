@@ -45,6 +45,7 @@ use Symfony\Component\Finder\Finder;
 #[UsesClass(BenchReviewerResult::class)]
 #[UsesClass(RunVerdict::class)]
 #[UsesClass(RoundTokens::class)]
+#[UsesClass(ModelNames::class)]
 final class BenchResultFileTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/../../../../../fixtures/sample-repository';
@@ -118,6 +119,15 @@ final class BenchResultFileTest extends TestCase
         self::assertNull($written['harness_failure']);
         self::assertSame(['calls' => 2, 'prompt' => 500, 'completion' => 40, 'total' => 540], $written['tokens']);
         self::assertSame(3000, $written['milliseconds']);
+    }
+
+    public function testAReviewerKeepsItsModelNamesAsAListInTheOrderTheCallsStarted(): void
+    {
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(true, [], [], [], [], null), new RoundTokens(0, 0, 0, 0, 0, 0, 0), null, new ModelNames('model-b', 'model-a'));
+
+        $result = $this->written([new BenchReview('round-total', Decision::Approve, [$reviewer], [])]);
+
+        self::assertSame(['model-b', 'model-a'], $result['changes'][0]['runs'][0]['reviewers'][0]['models']);
     }
 
     public function testAReviewerWithoutAnEndHasNoDuration(): void

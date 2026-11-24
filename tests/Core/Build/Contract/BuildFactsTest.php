@@ -10,10 +10,13 @@ use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Labels;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
 #[CoversClass(BuildFacts::class)]
+#[UsesClass(Paths::class)]
+#[UsesClass(Labels::class)]
 final class BuildFactsTest extends TestCase
 {
     public function testAModelLabelNamesTheTier(): void
