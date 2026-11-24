@@ -120,6 +120,13 @@ final class WatchConfigurationTest extends TestCase
         self::assertSame(['intakt', 'build'], [$labels->of('alpha'), $labels->of('beta')]);
     }
 
+    public function testAProjectNamedWithDigitsGetsTheEligibilityLabelItsSectionNames(): void
+    {
+        $labels = WatchConfiguration::eligibilityLabelsOf(['123' => ['eligibility_label' => 'intakt']]);
+
+        self::assertSame('intakt', $labels->of('123'));
+    }
+
     public function testAProjectWithoutAWatchSectionGetsNoEligibilityLabel(): void
     {
         $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('alpha'));
