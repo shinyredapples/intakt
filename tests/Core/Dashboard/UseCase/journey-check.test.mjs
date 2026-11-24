@@ -193,8 +193,8 @@ test('the verdict wait does not end on a heading that only starts like a verdict
 test('the first journey is First run without a key with its five steps in order', () => {
     assert.deepEqual(JOURNEYS.map((journey) => [journey.name, journey.steps.map((step) => step.name)]), [['First run without a key', [
         'open /setup and see the start',
-        'open /demo and see the demo run',
         'press the button "Play the demo run"',
+        'reach /demo and see the demo run',
         'wait for the verdict of the demo run',
         'see the recorded finding on the review page',
     ]]]);

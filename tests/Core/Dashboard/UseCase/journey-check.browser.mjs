@@ -38,15 +38,17 @@ function routedBrowser() {
     };
 }
 
-// Stand-ins for /setup, /demo and the review page, with what the first journey looks for; the verdict and the finding arrive
-// a moment after the review page loads, as the demo run's live update brings them.
-function demoSite({ playLabel = 'Play the demo run', verdict = 'Checked, but the outcome was not recorded', finding = 'to <code>amount &gt; 100</code>.', delayMs = 500 } = {}) {
+// Stand-ins for /setup, /demo and the review page, with what the first journey looks for: the start's button leads to /demo,
+// which follows the run to its review a moment later, and the verdict and the finding arrive a moment after the review page
+// loads, as the demo run's live update brings them.
+function demoSite({ playLabel = 'Play the demo run', playTarget = '/demo?play=p1', verdict = 'Changes needed', finding = 'to <code>amount &gt; 100</code>.', delayMs = 500 } = {}) {
     const html = (title, body) => `<!doctype html><html lang="en"><head><title>${title}</title></head><body><main>${body}</main></body></html>`;
     const arrive = `<h2>${verdict}</h2><a href="/reviews/r1/record#f1"><span>The check changed from <code>amount &gt;= 100</code> ${finding}</span> <span>src/discount.js:3</span></a>`;
 
     return {
-        '/setup': html('Start', '<h1>See a real review</h1><p>1 minute · no key</p><button>Play the demo run</button>'),
-        '/demo': html('The demo run', `<h1>The demo run</h1><button onclick="location.assign('/reviews/r1')">${playLabel}</button>`),
+        '/setup': html('Start', `<h1>See a real review</h1><p>1 minute · no key</p><button onclick="location.assign('${playTarget}')">${playLabel}</button>`),
+        '/demo': html('The demo run', '<h1>The demo run</h1><script>setTimeout(() => location.assign(\'/reviews/r1\'), 300);</script>'),
+        '/elsewhere': html('The demo run', '<h1>The demo run</h1><script>setTimeout(() => location.assign(\'/reviews/r1\'), 300);</script>'),
         '/reviews/r1': html('Review', '<h1>Review of sample-change in sample</h1><section id="later"></section>'
             + `<script>setTimeout(() => { document.getElementById('later').innerHTML = ${JSON.stringify(arrive)}; }, ${delayMs});</script>`),
     };
@@ -139,15 +141,27 @@ test('the verdict wait outlasts a click, as the demo run plays for a while befor
     assert.equal(result.failure, null);
 });
 
-test('a renamed Play the demo run button fails the first journey at the step that presses it, with a screenshot', async () => {
+test('a renamed Play the demo run button on the start page fails the first journey at the step that presses it, with a screenshot', async () => {
     const folder = scratch();
 
     const result = await runJourney(routedSite(demoSite({ playLabel: 'Play the demo' })), ORIGIN, FIRST_RUN, folder, 1);
 
-    assert.equal(result.failure.step, 'press the button "Play the demo run"');
+    assert.deepEqual([result.failure.step, FIRST_RUN.steps[1].name], ['press the button "Play the demo run"', 'press the button "Play the demo run"']);
     assert.equal(result.failure.screenshot, join(folder, '01-first-run-without-a-key.png'));
     assert.ok(existsSync(result.failure.screenshot));
     assert.equal(exitCode([result]), 1);
+});
+
+test('a Play the demo run button that leads to another page than /demo fails the first journey at step 3', async () => {
+    const result = await runJourney(routedSite(demoSite({ playTarget: '/elsewhere' })), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.deepEqual([result.failure.step, FIRST_RUN.steps[2].name], ['reach /demo and see the demo run', 'reach /demo and see the demo run']);
+});
+
+test('a verdict other than the recorded Changes needed fails the first journey at step 4', async () => {
+    const result = await runJourney(routedSite(demoSite({ verdict: 'Approved', delayMs: 0 })), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.deepEqual([result.failure.step, FIRST_RUN.steps[3].name], ['wait for the verdict of the demo run', 'wait for the verdict of the demo run']);
 });
 
 test('a finding link reading to amount > 100.50. fails the first journey at step 5', async () => {
@@ -156,21 +170,22 @@ test('a finding link reading to amount > 100.50. fails the first journey at step
     assert.deepEqual([result.failure.step, FIRST_RUN.steps[4].name], ['see the recorded finding on the review page', 'see the recorded finding on the review page']);
 });
 
-test('a verdict heading reading Checked, but the outcome was not recorded ends the verdict wait within a click\'s wait', async () => {
+test('a verdict heading reading Checked, but the outcome was not recorded ends the verdict wait and fails step 4 after a click\'s wait', async () => {
     const started = performance.now();
 
-    const result = await runJourney(routedSite(demoSite({ delayMs: 0 })), ORIGIN, FIRST_RUN, scratch(), 1);
+    const result = await runJourney(routedSite(demoSite({ verdict: 'Checked, but the outcome was not recorded', delayMs: 0 })), ORIGIN, FIRST_RUN, scratch(), 1);
 
     const elapsed = performance.now() - started;
-    assert.equal(result.failure, null);
-    assert.ok(elapsed < STEP_TIMEOUT_MS && STEP_TIMEOUT_MS < VERDICT_TIMEOUT_MS, `the journey took ${Math.round(elapsed)} ms`);
+    assert.equal(result.failure.step, 'wait for the verdict of the demo run');
+    assert.match(result.failure.error, /Timeout 10000ms exceeded/);
+    assert.ok(elapsed < 2 * STEP_TIMEOUT_MS && 2 * STEP_TIMEOUT_MS < VERDICT_TIMEOUT_MS, `the journey took ${Math.round(elapsed)} ms`);
 });
 
-test('a demo page that answers 404 fails the first journey at its second step with the status', async () => {
+test('a demo page that is missing fails the first journey at step 3', async () => {
     const pages = demoSite();
     delete pages['/demo'];
 
     const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
 
-    assert.deepEqual([result.failure.step, result.failure.error], ['open /demo and see the demo run', 'HTTP 404 for /demo']);
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
 });

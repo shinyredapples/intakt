@@ -16,8 +16,10 @@ const STEP_TIMEOUT_MS = 10_000;
 // The recorded demo run plays for tens of seconds after the click, and a queue worker may start it late, so the verdict gets far longer than a click.
 const VERDICT_TIMEOUT_MS = 180_000;
 const USAGE = 'usage: bin/journey-check <address of a running dashboard>';
-// Every heading templates/dashboard/_verdict_card.html.twig can show, because the journey proves the run reached a verdict, not which one.
+// Every heading templates/dashboard/_verdict_card.html.twig can show, so any verdict ends the long wait and a wrong one fails within a click's wait.
 const OUTCOME = /^(Approved|Changes needed|Blocked: .+|Failed: .+|Checked, but the outcome was not recorded)$/;
+// The verdict fixtures/demo/sample-change-review.json records, as the verdict card names it.
+const RECORDED_VERDICT = 'Changes needed';
 // Finding F1 of fixtures/demo/sample-change-review.json as its row on the review page names it; the sentence's own period must follow, so "amount > 100.50" is not taken for it.
 const RECORDED_FINDING = /^The check changed from amount >= 100 to amount > 100\.(\s|$)/;
 const JOURNEYS = [
@@ -25,10 +27,10 @@ const JOURNEYS = [
     name: 'First run without a key',
     steps: [
       named('open /setup and see the start', open('/setup'), seeRole('heading', 'See a real review')),
-      // Nothing on /setup links to /demo, so the journey opens the demo page by its address.
-      named('open /demo and see the demo run', open('/demo'), seeRole('heading', 'The demo run')),
       press('button', 'Play the demo run'),
-      named('wait for the verdict of the demo run', seeRole('heading', OUTCOME, VERDICT_TIMEOUT_MS)),
+      // The demo page follows the run to its review only once the queue worker starts it, so its heading is still there when the press lands.
+      named('reach /demo and see the demo run', arrive('/demo'), seeRole('heading', 'The demo run')),
+      named('wait for the verdict of the demo run', seeRole('heading', OUTCOME, VERDICT_TIMEOUT_MS), seeRole('heading', RECORDED_VERDICT)),
       named('see the recorded finding on the review page', seeRole('link', RECORDED_FINDING)),
     ],
   },
@@ -145,6 +147,18 @@ function open(pathOnSite) {
   };
 }
 
+// A button that posts somewhere else would leave the journey on a wrong page that still shows what a later step looks for, so the page's own address is checked.
+function arrive(pathOnSite) {
+  return {
+    name: `arrive at ${pathOnSite}`,
+    run: (page, address) => {
+      const expected = new URL(address + pathOnSite).pathname;
+
+      return page.waitForURL((url) => url.pathname === expected);
+    },
+  };
+}
+
 function press(role, name) {
   return { name: `press the ${role} "${name}"`, run: (page) => page.getByRole(role, { name, exact: true }).click() };
 }
@@ -198,6 +212,7 @@ module.exports = {
   VERDICT_TIMEOUT_MS,
   OUTCOME,
   RECORDED_FINDING,
+  RECORDED_VERDICT,
   JOURNEYS,
   parseAddress,
   expectAnswer,
