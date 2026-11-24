@@ -57,7 +57,7 @@ final readonly class HistoryRow
 
     private static function expiryOf(?string $text): ?DateTimeImmutable
     {
-        $expires = null === $text ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $text);
+        $expires = null === $text ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $text, new DateTimeZone('UTC'));
 
         return false === $expires ? null : $expires->setTimezone(new DateTimeZone('UTC'));
     }
