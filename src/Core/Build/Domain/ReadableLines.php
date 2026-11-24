@@ -27,7 +27,7 @@ final readonly class ReadableLines
 
     private const string BLANK_LINE = '/^[ \t]*$/';
 
-    private const string LIST_CONTENT ='/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
+    private const string LIST_CONTENT = '/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
 
     private const string FENCE_OPENS = '/^(?<lead>[ \t]*(?<markers>(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*))(?<fence>`{3,}|~{3,})(?<info>.*)$/';
 
@@ -78,7 +78,7 @@ final readonly class ReadableLines
             $columns[] = $container;
             // A lone tag inside a paragraph stays text, because CommonMark lets no such HTML block interrupt one.
             [$kept[], $block] = $paragraph ? self::openedIn($line, $container) : self::openedOutsideAParagraphIn($line, $container);
-            $paragraph = null === $block && self::isParagraphText((string) array_last($kept)) && ($paragraph || !self::isIndentedCode($line, $container));
+            $paragraph = null === $block && self::isParagraphText(array_last($kept)) && ($paragraph || !self::isIndentedCode($line, $container));
         }
 
         return new self(self::withUnderlinedHeadingsMarked($kept, $columns), $columns, $block[3] ?? null);
