@@ -226,6 +226,14 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/display:\s*grid;\s*grid-template-columns:\s*minmax\(0, 1fr\)/', $rules['.ledger.history tr:not([hidden], [data-filtered-out])'] ?? '');
     }
 
+    public function testOnPhonesTheFiltersBarPadsItsBlockByTheFocusRingWidthPlusOffset(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/overflow-x:\s*auto/', $rules['.filters'] ?? '');
+        self::assertMatchesRegularExpression('/padding-block:\s*var\(--s4\)/', $rules['.filters'] ?? '');
+    }
+
     public function testNoPaddingMarginOrGapHoldsARawLengthOf4PxOrMore(): void
     {
         preg_match_all('/(?:padding|margin|gap)(?:-[a-z]+)?:\s*([^;}]+)/', (string) preg_replace('~/\*.*?\*/~s', '', $this->componentSheet()), $declarations);

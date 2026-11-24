@@ -312,7 +312,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .seg { display: flex; }
   .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
-  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  /* overflow-x: auto also clips vertically, so the block padding keeps the 2px focus ring and its 2px offset inside the box. */
+  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); }
   .filters .input { flex: none; min-width: 200px; height: 44px; }
   .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 44px; }
   /* The mock stacks a History row's cells on a phone. The headers are clipped like .sr-only rather than removed, so a screen reader still names a stacked cell, also one that reads only "None". A row the project filter or a chip hides keeps display: none, which the row rule would otherwise beat. */

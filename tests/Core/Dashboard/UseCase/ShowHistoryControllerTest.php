@@ -97,6 +97,26 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         self::assertSame('Intakt', $rows->first()->filter('.who')->text());
     }
 
+    public function testARowWithAnEmptyProjectGetsNoProjectsTopicAndNoDataProject(): void
+    {
+        $this->record(['actor' => 'owner', 'project' => '']);
+
+        $row = $this->browser->request('GET', '/history')->filter('.ledger tbody tr');
+
+        self::assertNull($row->attr('data-project'));
+        self::assertStringNotContainsString('projects', (string) $row->attr('data-topics'));
+    }
+
+    public function testARowWithAnEmptyActorIsFromIntaktWithTheUnnamedActorLabel(): void
+    {
+        $this->record(['actor' => '']);
+
+        $row = $this->browser->request('GET', '/history')->filter('.ledger tbody tr');
+
+        self::assertSame('intakt', $row->attr('data-source'));
+        self::assertSame('Intakt', $row->filter('.who')->text());
+    }
+
     public function testACooledDownAccountIsALimitAndAnAccountRowAndAProjectRowIsAProjectsRow(): void
     {
         $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountCooledDown, json_encode(['account' => 'sample', 'until' => '2026-12-01T10:00:00+00:00'], JSON_THROW_ON_ERROR)));

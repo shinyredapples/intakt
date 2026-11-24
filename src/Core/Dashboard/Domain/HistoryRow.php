@@ -34,14 +34,14 @@ final readonly class HistoryRow
         $fields = PayloadFields::of($recorded);
         $fingerprint = $fields->text('fingerprint');
         $isSecret = null !== $fingerprint;
-        $actor = $fields->text('actor');
+        $actor = self::filled($fields->text('actor'));
 
         return new self(
             $recorded->recordedAt->setTimezone(new DateTimeZone('UTC')),
             $recorded->event->kind->value,
             $actor ?? self::UNNAMED_ACTOR,
             null === $actor ? HistorySource::Intakt : HistorySource::Dashboard,
-            $fields->text('project'),
+            self::filled($fields->text('project')),
             $fields->text('round'),
             $isSecret ? null : $fields->text('before'),
             $isSecret ? null : $fields->text('after'),
@@ -80,6 +80,12 @@ final readonly class HistoryRow
     public function topics(): array
     {
         return HistoryTopic::of(LedgerEventKind::from($this->kind), $this->project);
+    }
+
+    // An empty name is no name, so the topic, the project filter and the Source column all read the same null.
+    private static function filled(?string $text): ?string
+    {
+        return '' === $text ? null : $text;
     }
 
     // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable. It throws on a NUL byte, which would take the whole page down for one row.
