@@ -7,7 +7,6 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\ShowTeam;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 
-// The install a roster test reads: build routing, the tiers each project maps, enabled accounts and their cooldowns.
 final readonly class GivenInstall
 {
     /**

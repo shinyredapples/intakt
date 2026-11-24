@@ -132,7 +132,6 @@ final class TeamRosterTest extends TestCase
         self::assertSame(['account', 'state', 'roles', 'name', 'providers', 'accounts', 'roles'], $fields);
     }
 
-    // A project that builds on the standard tier with OpenAI and has its strong tier on Anthropic.
     private function install(): GivenInstall
     {
         return new GivenInstall()->routing('alpha', Tier::Standard)->tier(Tier::Standard, Provider::OpenAi)->tier(Tier::Strong, Provider::Anthropic);
@@ -140,12 +139,12 @@ final class TeamRosterTest extends TestCase
 
     private function teamOf(GivenInstall $install): Team
     {
-        $enabled = $this->createStub(EnabledAccounts::class);
+        $enabled = self::createStub(EnabledAccounts::class);
         $enabled->method('of')->willReturnCallback(static fn (Provider $provider): array => array_map(static fn (string $name): Account => new Account($provider, $name), $install->accounts[$provider->value] ?? []));
-        $cooldowns = $this->createStub(AccountCooldowns::class);
+        $cooldowns = self::createStub(AccountCooldowns::class);
         $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->coolingDown, true));
         $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->rejected, true));
-        $tiers = $this->createStub(TierResolver::class);
+        $tiers = self::createStub(TierResolver::class);
         $tiers->method('projects')->willReturn(new ProjectNames(...$install->projects));
         $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => isset($install->tiers[$tier->value]) ? new ResolvedModel($install->tiers[$tier->value], 'model-'.$tier->value) : throw new TierNotMapped($project, $tier));
 

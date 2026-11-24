@@ -58,11 +58,11 @@ final class ShowTeamCommandTest extends TestCase
 
     private function execute(): CommandTester
     {
-        $enabled = $this->createStub(EnabledAccounts::class);
+        $enabled = self::createStub(EnabledAccounts::class);
         $enabled->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, [Provider::Anthropic, Provider::OpenAi, Provider::Codex], true) ? [new Account($provider, Account::DEFAULT)] : []);
-        $cooldowns = $this->createStub(AccountCooldowns::class);
+        $cooldowns = self::createStub(AccountCooldowns::class);
         $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => Provider::OpenAi === $account->provider);
-        $tiers = $this->createStub(TierResolver::class);
+        $tiers = self::createStub(TierResolver::class);
         $tiers->method('projects')->willReturn(new ProjectNames('alpha'));
         $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => match ($tier) {
             Tier::Strong => new ResolvedModel(Provider::Anthropic, 'model-l'),
