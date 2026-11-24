@@ -44,7 +44,29 @@ final class DoctorCommandTest extends TestCase
         self::assertStringNotContainsString('secret-token-value', $tester->getDisplay());
     }
 
-    private function check(string $name, CheckResult|RuntimeException $outcome): HealthCheck
+    public function testAFixTextWithALineBreakIsPrintedAsOneLine(): void
+    {
+        $tester = $this->execute($this->check('Forge', CheckResult::failed("does not match: example/repo\nextra\r\n.")));
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame("FAIL: Forge: does not match: example/repo extra  .\n", $tester->getDisplay());
+    }
+
+    public function testACheckNameWithAControlCharacterIsPrintedWithASpaceInItsPlace(): void
+    {
+        $tester = $this->execute($this->check("Hub\tname", CheckResult::passed()));
+
+        self::assertSame("pass: Hub name\n", $tester->getDisplay());
+    }
+
+    public function testAFixTextThatIsNotValidUtf8StillHasItsLineBreaksReplaced(): void
+    {
+        $tester = $this->execute($this->check('Forge', CheckResult::failed("bad \xFF\nbyte")));
+
+        self::assertSame("FAIL: Forge: bad \xFF byte\n", $tester->getDisplay());
+    }
+
+    private function check(string $name,CheckResult|RuntimeException $outcome): HealthCheck
     {
         return new readonly class($name, $outcome) implements HealthCheck {
             public function __construct(
