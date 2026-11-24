@@ -133,21 +133,31 @@ final readonly class RoundLedgerReading implements RoundCosts
     public function costsOf(string ...$roundIds): RoundCostList
     {
         $recorded = $this->usageRows();
-        $models = $this->modelsByCall($roundIds, $recorded);
+        $started = $this->startedByRound($roundIds, $recorded);
+        $models = [];
+
+        foreach ($started as $round => $calls) {
+            foreach ($calls as $call => $model) {
+                $models[$call][$round] = $model;
+            }
+        }
+
         $costs = array_fill_keys($roundIds, Cost::none());
-        $unended = $models;
+        $endedCalls = [];
 
         foreach ($recorded as $row) {
             $ended = $this->endingOf($row);
 
             if (null !== $ended) {
-                unset($unended[$ended->call]);
-                $costs = $this->withCall($costs, $models[$ended->call] ?? [], fn (?string $model): Cost => $this->costOfEnding($ended, $model));
+                $endedCalls[$ended->call] = true;
+                $this->addCall($costs, $models[$ended->call] ?? [], fn (?string $model): Cost => $this->costOfEnding($ended, $model));
             }
         }
 
-        foreach ($unended as $rounds) {
-            $costs = $this->withCall($costs, $rounds, $this->costOfUnended(...));
+        foreach ($started as $round => $calls) {
+            foreach (array_diff_key($calls, $endedCalls) as $model) {
+                $costs[$round] = $costs[$round]->plus($this->costOfUnended($model));
+            }
         }
 
         return new RoundCostList($costs);
@@ -186,10 +196,10 @@ final readonly class RoundLedgerReading implements RoundCosts
      * @param array<array-key, string> $roundIds
      * @param list<RecordedEvent>      $recorded
      *
-     * @return array<string, array<array-key, string|null>>
+     * @return array<array-key, array<array-key, string|null>>
      */
-    // By call id and then round, as startsFor() keys a round's calls, so a call id started in two rounds still counts in each.
-    private function modelsByCall(array $roundIds, array $recorded): array
+    // By round and then call id, as startsFor() keys a round's calls, so each round keeps its own start order and a call id started in two rounds still counts in each.
+    private function startedByRound(array $roundIds, array $recorded): array
     {
         $asked = array_flip($roundIds);
         $models = [];
@@ -198,7 +208,7 @@ final readonly class RoundLedgerReading implements RoundCosts
             $started = $this->payloads->of($row, UsageStarted::class);
 
             if ('started' === $started?->phase && null !== $started->round && array_key_exists($started->round, $asked)) {
-                $models[$started->call][$started->round] = $started->model;
+                $models[$started->round][$started->call] = $started->model;
             }
         }
 
@@ -329,17 +339,13 @@ final readonly class RoundLedgerReading implements RoundCosts
      * @param array<array-key, Cost>        $costs
      * @param array<array-key, string|null> $rounds
      * @param Closure(?string): Cost        $cost
-     *
-     * @return array<array-key, Cost>
      */
-    // Added to each round that started the call, with that round's model, because a call id started in two rounds counts in each.
-    private function withCall(array $costs, array $rounds, Closure $cost): array
+    // Added in place to each round that started the call, with that round's model, because a call id started in two rounds counts in each.
+    private function addCall(array &$costs, array $rounds, Closure $cost): void
     {
         foreach ($rounds as $round => $model) {
             $costs[$round] = $costs[$round]->plus($cost($model));
         }
-
-        return $costs;
     }
 
     // Priced as zero tokens, because a call still running or cut off before its ending row recorded none, yet a model without a price must still read as unknown.
