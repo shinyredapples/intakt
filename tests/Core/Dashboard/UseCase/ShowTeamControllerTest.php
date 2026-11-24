@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -320,7 +321,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
         $container->set(BuildRouting::class, $routing);
 
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn([] === $builds ? [] : ['alpha']);
+        $tiers->method('projects')->willReturn([] === $builds ? new ProjectNames() : new ProjectNames('alpha'));
         $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel($builds[$tier->value] ?? Provider::Anthropic, 'model-a'));
         $container->set(TierResolver::class, $tiers);
     }

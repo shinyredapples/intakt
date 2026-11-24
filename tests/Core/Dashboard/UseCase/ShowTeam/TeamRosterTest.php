@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\ShowTeam;
 
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ConfiguredBuildRouting::class)]
 #[UsesClass(ModelRouting::class)]
 #[UsesClass(Paths::class)]
+#[UsesClass(ProjectNames::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(TierChoice::class)]
 final class TeamRosterTest extends TestCase
@@ -35,7 +37,7 @@ final class TeamRosterTest extends TestCase
     public function testAProjectWithoutBuildRoutingAddsNoDeveloperProvider(): void
     {
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(['alpha', 'beta']);
+        $tiers->method('projects')->willReturn(new ProjectNames('alpha', 'beta'));
         $tiers->method('configured')->willReturn(new ResolvedModel(Provider::Codex, 'model-a'));
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturnCallback(static fn (string $project): TierChoice => 'alpha' === $project
@@ -53,7 +55,7 @@ final class TeamRosterTest extends TestCase
             'alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['config/**'], 'escalate_on' => []],
         ], new ModelRouting());
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(['alpha']);
+        $tiers->method('projects')->willReturn(new ProjectNames('alpha'));
         $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel(
             Tier::Strong === $tier ? Provider::Codex : Provider::Anthropic,
             'model-a',
@@ -68,8 +70,10 @@ final class TeamRosterTest extends TestCase
     {
         $reviewers = self::createStub(ReviewerRoles::class);
         $reviewers->method('servedBy')->willReturnCallback(static fn (Provider $provider): array => Provider::Anthropic === $provider ? ['correctness'] : []);
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(new ProjectNames());
 
-        $roles = new TeamRoster($reviewers, self::createStub(TierResolver::class), self::createStub(BuildRouting::class))->providersByRole();
+        $roles = new TeamRoster($reviewers, $tiers, self::createStub(BuildRouting::class))->providersByRole();
 
         self::assertSame(['correctness' => [Provider::Anthropic]], $roles);
     }
