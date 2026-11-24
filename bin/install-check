@@ -6,6 +6,7 @@ declare(strict_types=1);
 use Intakt\Tests\Journeys\Support\InstallCheck;
 use Intakt\Tests\Journeys\Support\InstallCheckCouldNotRun;
 use Intakt\Tests\Journeys\Support\InstallProcessRunner;
+use Intakt\Tests\Journeys\Support\InstallReport;
 use Intakt\Tests\Journeys\Support\InstallStatus;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Filesystem\Filesystem;
@@ -54,7 +55,7 @@ try {
     $files->remove($temporary);
 }
 
-if (null === $report) {
+if (!$report instanceof InstallReport) {
     exit(2);
 }
 
