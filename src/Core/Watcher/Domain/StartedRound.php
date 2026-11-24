@@ -53,7 +53,9 @@ final class StartedRound
     ) {
         $this->change = $started->id->value;
         $this->head = $started->head->hash;
-        $this->labels = [...$labels];
+        $kept = [...$labels];
+        // Null for none, as on the rounds the release before this column stores, so both read alike.
+        $this->labels = [] === $kept ? null : $kept;
     }
 
     public function project(): string

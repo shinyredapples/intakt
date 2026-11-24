@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Closure;
-use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -139,7 +138,7 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->mirror(RoundStatusLabel::WaitingOnYou);
 
         self::assertSame(['DELETE /repos/acme/widget/issues/1/labels/status%3Ain-review', 'POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}'], $this->writes);
-        self::assertEquals(new DateTimeImmutable(self::MOMENT)->modify('+500 milliseconds'), $this->clock->now());
+        self::assertSame('2026-11-25T10:00:00.500', $this->clock->now()->format('Y-m-d\TH:i:s.v'));
     }
 
     public function testAStatusWhoseLockStaysBusyForTheWholeWaitFailsWithoutAWrite(): void

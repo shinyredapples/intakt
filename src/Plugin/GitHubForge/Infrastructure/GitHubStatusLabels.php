@@ -30,7 +30,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
 {
     private const int PAGE_SIZE = 100;
     private const int MAX_PAGES = 10;
-    // Twenty tries half a second apart, about ten seconds, which covers a holder's event read and its few writes.
+    // About ten seconds in all, because a holder only reads the events and makes a few writes, so a longer hold means it is stuck.
     private const int WAIT_TRIES = 20;
     private const float WAIT_PAUSE_SECONDS = 0.5;
     private const string RESTORED = 'A person changed the status label on this change. Intakt sets it from the state of the review and put it back, so it always shows where the review stands.';
@@ -50,7 +50,9 @@ final readonly class GitHubStatusLabels implements StatusLabels
     // Waits a bounded while for a busy lock, because a new status that gave up would leave the old one standing, and a restoration aims at the status Intakt applied last.
     public function mirror(string $project, ChangeId $change, RoundStatusLabel $status): void
     {
-        if (!$this->whileHeld($project, $change, self::WAIT_TRIES, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...)))) {
+        $lock = $this->lockOf($project, $change);
+        $write = fn () => $this->write($project, $change, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...)));
+        if (!$this->whileHeld($lock, self::WAIT_TRIES, $write)) {
             throw new ForgeWriteFailed('Another write held the status label of this change for longer than the wait.');
         }
     }
@@ -58,7 +60,14 @@ final readonly class GitHubStatusLabels implements StatusLabels
     // Not waited for, because the busy holder reads the events after the person's change and leaves the label as Intakt set it.
     public function restore(string $project, ChangeId $change): void
     {
-        $this->whileHeld($project, $change, 1, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...)));
+        $lock = $this->lockOf($project, $change);
+        $this->whileHeld($lock, 1, fn () => $this->write($project, $change, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...))));
+    }
+
+    // Planned and written under one lock, because two writers that read the same events would both find the person's change last and both comment.
+    private function lockOf(string $project, ChangeId $change): LockInterface
+    {
+        return $this->locks->createLock(GitHubForgeServices::STATUS_LABEL_LOCK_PREFIX.hash('sha256', json_encode([$project, $change->value], JSON_THROW_ON_ERROR)));
     }
 
     private function isOwn(string $login): bool
@@ -70,7 +79,6 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
     }
 
-    // Planned and written under one lock, because two writers that read the same events would both find the person's change last and both comment; false when the lock stayed busy for every try.
     /**
      * @param Closure(list<LabelEvent>): ?StatusLabelPlan $plan
      *
@@ -78,31 +86,29 @@ final readonly class GitHubStatusLabels implements StatusLabels
      * @throws ForgeReadFailed
      * @throws ForgeWriteFailed
      */
-    private function whileHeld(string $project, ChangeId $change, int $tries, Closure $plan): bool
+    private function write(string $project, ChangeId $change, Closure $plan): void
     {
         $address = $this->addressOf($project, $change);
-        $lock = $this->locks->createLock(GitHubForgeServices::STATUS_LABEL_LOCK_PREFIX.hash('sha256', json_encode([$project, $change->value], JSON_THROW_ON_ERROR)));
-        if (!$this->acquired($lock, $tries)) {
-            return false;
-        }
-
-        try {
-            $this->apply($project, $address, $plan($this->eventsOf($address->issuePath())));
-        } finally {
-            $lock->release();
-        }
-
-        return true;
+        $this->apply($project, $address, $plan($this->eventsOf($address->issuePath())));
     }
 
-    // Tried without blocking and paced by the clock, so the wait has a bound and a lock store that cannot block still serves.
-    private function acquired(LockInterface $lock, int $tries): bool
+    // False when the lock stayed busy for every try; tried without blocking and paced by the clock, so the wait has a bound and a lock store that cannot block still serves.
+    /**
+     * @param Closure(): void $write
+     */
+    private function whileHeld(LockInterface $lock, int $tries, Closure $write): bool
     {
         for ($try = 1; !$lock->acquire(); ++$try) {
             if ($try >= $tries) {
                 return false;
             }
             $this->clock->sleep(self::WAIT_PAUSE_SECONDS);
+        }
+
+        try {
+            $write();
+        } finally {
+            $lock->release();
         }
 
         return true;
