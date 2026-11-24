@@ -23,11 +23,12 @@ final readonly class MarkdownLineKinds
      * @param list<string>     $contents
      * @param array<int, true> $tableRows
      *
-     * @return list<MarkdownLineKind>
+     * @return array{list<MarkdownLineKind>, array<int, true>}
      */
     public function of(array $depths, array $contents, array $tableRows): array
     {
         $kinds = [];
+        $itemHeadings = [];
         $lists = [];
 
         foreach ($contents as $index => $content) {
@@ -35,9 +36,13 @@ final readonly class MarkdownLineKinds
             $kind = isset($tableRows[$index]) ? MarkdownLineKind::Table : $this->kindOf($content, $previous, $lists);
             $lists = $this->continuesAParagraph($kind, $previous) ? $lists : $this->openLists($kind, $content, $lists);
             $kinds[] = MarkdownLineKind::CodeItem === $kind ? MarkdownLineKind::Code : $kind;
+
+            if (MarkdownLineKind::Heading === $kind && [] !== $lists) {
+                $itemHeadings[$index] = true;
+            }
         }
 
-        return $kinds;
+        return [$kinds, $itemHeadings];
     }
 
     /**

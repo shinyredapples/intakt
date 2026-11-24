@@ -63,49 +63,49 @@ final class MarkdownPageTest extends TestCase
     {
         $summary = $this->page('## Title', '', '### In short', '', 'One two three.', '', '## Next', 'More.')->summary();
 
-        self::assertEquals(new MarkdownSummary(3, true), $summary);
+        self::assertEquals(new MarkdownSummary(3, true, true), $summary);
     }
 
     public function testASummaryUnderALaterHeadingIsReadButDoesNotOpenThePage(): void
     {
         $summary = $this->page('## Title', '', 'Intro first.', '', '### In short', '', 'One two.')->summary();
 
-        self::assertEquals(new MarkdownSummary(2, false), $summary);
+        self::assertEquals(new MarkdownSummary(2, false, true), $summary);
     }
 
     public function testAFencedBlockBetweenTheTitleAndTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void
     {
         $page = new MarkdownPage('docs/page.md', ['# Title', '', '', '', '', '', '## In short', 'Summary.'], [2, 3, 4]);
 
-        self::assertEquals(new MarkdownSummary(1, false), $page->summary());
+        self::assertEquals(new MarkdownSummary(1, false, true), $page->summary());
     }
 
     public function testAFencedBlockAfterTheInShortSectionLeavesTheSummaryOpeningThePage(): void
     {
         $page = new MarkdownPage('docs/page.md', ['# Title', '', '## In short', 'Summary.', '', '', '', ''], [5, 6, 7]);
 
-        self::assertEquals(new MarkdownSummary(1, true), $page->summary());
+        self::assertEquals(new MarkdownSummary(1, true, true), $page->summary());
     }
 
     public function testAnIndentedCodeBlockBeforeTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void
     {
         $summary = $this->page('# Title', '', '    code', '', '## In short', 'Summary.')->summary();
 
-        self::assertEquals(new MarkdownSummary(1, false), $summary);
+        self::assertEquals(new MarkdownSummary(1, false, true), $summary);
     }
 
     public function testAnEmptyInShortSectionCountsNoWords(): void
     {
         $summary = $this->page('# Title', '### In short', '', '### Next', 'Text after.')->summary();
 
-        self::assertEquals(new MarkdownSummary(0, true), $summary);
+        self::assertEquals(new MarkdownSummary(0, true, false), $summary);
     }
 
     public function testAnOversizedSummaryCountsEveryWordUpToTheNextHeadingOfItsLevel(): void
     {
         $summary = $this->page('# Title', '### In short', $this->words(130), '#### Detail', $this->words(10), '### Next', $this->words(5))->summary();
 
-        self::assertEquals(new MarkdownSummary(141, true), $summary);
+        self::assertEquals(new MarkdownSummary(141, true, true), $summary);
     }
 
     public function testAPageWithoutAnInShortSectionHasNoSummary(): void
@@ -113,18 +113,61 @@ final class MarkdownPageTest extends TestCase
         self::assertNull($this->page('# Title', 'Prose.')->summary());
     }
 
-    public function testAQuotedInShortSectionIsRead(): void
+    public function testAQuotedInShortHeadingIsNotThePagesSummary(): void
     {
-        $summary = $this->page('# Title', '', '> ### In short', '> One two three.', '', '## Next', 'More.')->summary();
+        self::assertNull($this->page('# Title', '', '> ### In short', '> One two three.', '', '## Next', 'More.')->summary());
+    }
 
-        self::assertEquals(new MarkdownSummary(3, true), $summary);
+    public function testAnInShortHeadingInsideAListItemIsNotThePagesSummary(): void
+    {
+        self::assertNull($this->page('# Title', '', '- Item.', '', '  ## In short', '', '  One two.')->summary());
+    }
+
+    public function testAnInShortHeadingInsideIndentedCodeIsNotThePagesSummary(): void
+    {
+        self::assertNull($this->page('# Title', '', '    ## In short', '', 'One two.')->summary());
+    }
+
+    public function testAnInShortHeadingAfterAListAtTheMarginIsThePagesSummary(): void
+    {
+        $summary = $this->page('# Title', '', '- Item.', '', '## In short', '', 'One two.')->summary();
+
+        self::assertEquals(new MarkdownSummary(2, false, true), $summary);
+    }
+
+    public function testAnHtmlCommentOverSeveralLinesInTheSummaryCountsNoWords(): void
+    {
+        $summary = $this->page('# Title', '## In short', '<!--', 'hidden words here', '-->', 'One <!-- aside --> two.')->summary();
+
+        self::assertEquals(new MarkdownSummary(2, true, true), $summary);
+    }
+
+    public function testAnUnclosedHtmlCommentHidesTheRestOfTheSummary(): void
+    {
+        $summary = $this->page('# Title', '## In short', 'One two.', '<!-- hidden', 'words')->summary();
+
+        self::assertEquals(new MarkdownSummary(2, true, true), $summary);
+    }
+
+    public function testASummaryOfOnlyACommentAndASubheadingHoldsNoText(): void
+    {
+        $summary = $this->page('# Title', '## In short', '<!-- a note -->', '', '### Detail', '', '## Next', 'More.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, true, false), $summary);
+    }
+
+    public function testEachParagraphCarriesItsFirstLine(): void
+    {
+        $paragraphs = $this->page('# Title', '', 'First', 'paragraph.', '', '- Item.')->paragraphs();
+
+        self::assertSame([3, 6], array_map(static fn (MarkdownParagraph $paragraph): int => $paragraph->line, $paragraphs));
     }
 
     public function testAHeadingInsideAQuoteDoesNotEndTheInShortSection(): void
     {
         $summary = $this->page('## Title', '### In short', 'One two.', '', '> ### Aside', '> '.$this->words(130), '', '## Next', 'More.')->summary();
 
-        self::assertEquals(new MarkdownSummary(133, true), $summary);
+        self::assertEquals(new MarkdownSummary(133, true, true), $summary);
     }
 
     public function testProseThatStartsWithAPipeIsAParagraph(): void
@@ -236,21 +279,26 @@ final class MarkdownPageTest extends TestCase
     {
         $summary = $this->page('# Title', '## In short###', 'Tiny.', '## In short', $this->words(130))->summary();
 
-        self::assertEquals(new MarkdownSummary(130, false), $summary);
+        self::assertEquals(new MarkdownSummary(130, false, true), $summary);
     }
 
     public function testAClosingSequenceAfterASpaceStillMarksTheSummary(): void
     {
         $summary = $this->page('# Title', '## In short ##', 'One two.')->summary();
 
-        self::assertEquals(new MarkdownSummary(2, true), $summary);
+        self::assertEquals(new MarkdownSummary(2, true, true), $summary);
     }
 
-    public function testAQuotedSummaryHeadingAfterATabIsRead(): void
+    public function testAQuotedSummaryHeadingAfterATabIsNotThePagesSummary(): void
     {
-        $summary = $this->page('# Title', ">\t## In short", '> One two.', '## Next')->summary();
+        self::assertNull($this->page('# Title', ">\t## In short", '> One two.', '## Next')->summary());
+    }
 
-        self::assertEquals(new MarkdownSummary(2, true), $summary);
+    public function testAHeadingInsideAListItemDoesNotEndTheInShortSection(): void
+    {
+        $summary = $this->page('# Title', '## In short', '- One.', '', '  ## Aside', '', '  Two three.', '', '## Next', 'More.')->summary();
+
+        self::assertEquals(new MarkdownSummary(4, true, true), $summary);
     }
 
     public function testIndentedCodeInsideAListItemIsNotCounted(): void

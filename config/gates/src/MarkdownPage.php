@@ -17,6 +17,8 @@ final readonly class MarkdownPage
 
     private const string WORD = '/[\p{L}\p{N}]/u';
 
+    private const string HTML_COMMENT = '/<!--.*?(?:-->|\z)/s';
+
     /** @var list<int> */
     private array $depths;
 
@@ -25,6 +27,9 @@ final readonly class MarkdownPage
 
     /** @var array<int, MarkdownLineKind> */
     private array $kinds;
+
+    /** @var array<int, true> */
+    private array $itemHeadings;
 
     /**
      * @param list<string> $blankedLines
@@ -44,7 +49,7 @@ final readonly class MarkdownPage
 
         $this->depths = $depths;
         $this->contents = $contents;
-        $kinds = new MarkdownLineKinds(new MarkdownListIndents())->of($depths, $contents, $this->tableRows());
+        [$kinds, $this->itemHeadings] = new MarkdownLineKinds(new MarkdownListIndents())->of($depths, $contents, $this->tableRows());
 
         // A blanked fence still holds content, so a fenced block before "In short" means the summary does not open the page.
         $this->kinds = array_replace($kinds, array_intersect_key(array_fill_keys($fencedLines, MarkdownLineKind::Code), $kinds));
@@ -57,6 +62,7 @@ final readonly class MarkdownPage
     {
         $paragraphs = [];
         $lines = [];
+        $start = 0;
         $openDepth = 0;
 
         foreach ($this->kinds as $index => $kind) {
@@ -67,12 +73,13 @@ final readonly class MarkdownPage
                 continue;
             }
 
-            $paragraphs = $this->withParagraph($paragraphs, $lines);
+            $paragraphs = $this->withParagraph($paragraphs, $lines, $start);
             $lines = in_array($kind, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true) ? [$this->textOf($index)] : [];
+            $start = $index;
             $openDepth = $this->depths[$index];
         }
 
-        return $this->withParagraph($paragraphs, $lines);
+        return $this->withParagraph($paragraphs, $lines, $start);
     }
 
     public function words(): int
@@ -89,8 +96,8 @@ final readonly class MarkdownPage
     public function summary(): ?MarkdownSummary
     {
         foreach ($this->contents as $index => $content) {
-            if (MarkdownLineKind::Heading === $this->kinds[$index] && 1 === preg_match(self::SUMMARY_HEADING, $content)) {
-                return new MarkdownSummary($this->sectionWords($index), $this->opensPageAt($index));
+            if ($this->isOwnHeading($index) && 1 === preg_match(self::SUMMARY_HEADING, $content)) {
+                return $this->summaryUnder($index);
             }
         }
 
@@ -145,7 +152,7 @@ final readonly class MarkdownPage
      *
      * @return list<MarkdownParagraph>
      */
-    private function withParagraph(array $paragraphs, array $lines): array
+    private function withParagraph(array $paragraphs, array $lines, int $start): array
     {
         if ([] === $lines) {
             return $paragraphs;
@@ -153,7 +160,7 @@ final readonly class MarkdownPage
 
         $text = trim(preg_replace('/\s+/u', ' ', implode(' ', $lines)) ?? '');
 
-        return [...$paragraphs, new MarkdownParagraph($text, $this->wordsIn($text))];
+        return [...$paragraphs, new MarkdownParagraph($text, $this->wordsIn($text), $start + 1)];
     }
 
     private function textOf(int $index): string
@@ -168,21 +175,49 @@ final readonly class MarkdownPage
         return MarkdownLineKind::Code === $this->kinds[$index] ? 0 : $this->wordsIn($this->textOf($index));
     }
 
-    private function sectionWords(int $heading): int
+    private function isOwnHeading(int $index): bool
+    {
+        // A heading inside a quote or a list item belongs to that block, not to the page.
+        return MarkdownLineKind::Heading === $this->kinds[$index] && 0 === $this->depths[$index] && !isset($this->itemHeadings[$index]);
+    }
+
+    private function summaryUnder(int $heading): MarkdownSummary
+    {
+        $lines = $this->sectionLines($heading);
+        $text = array_filter($lines, fn (int $index): bool => MarkdownLineKind::Heading !== $this->kinds[$index], ARRAY_FILTER_USE_KEY);
+
+        return new MarkdownSummary($this->visibleWordsIn($lines), $this->opensPageAt($heading), $this->visibleWordsIn($text) > 0);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function sectionLines(int $heading): array
     {
         $level = $this->headingLevel($heading);
-        $words = 0;
+        $lines = [];
 
         foreach (array_slice($this->kinds, $heading + 1, preserve_keys: true) as $index => $kind) {
-            // Only a heading outside a quote ends the section, so an oversized summary cannot hide behind a quoted heading.
-            if (MarkdownLineKind::Heading === $kind && 0 === $this->depths[$index] && $this->headingLevel($index) <= $level) {
+            // Only the page's own heading ends the section, so an oversized summary cannot hide behind a quoted heading.
+            if ($this->isOwnHeading($index) && $this->headingLevel($index) <= $level) {
                 break;
             }
 
-            $words += $this->wordsOfLine($index);
+            if (MarkdownLineKind::Code !== $kind) {
+                $lines[$index] = $this->textOf($index);
+            }
         }
 
-        return $words;
+        return $lines;
+    }
+
+    /**
+     * @param array<int, string> $lines
+     */
+    private function visibleWordsIn(array $lines): int
+    {
+        // An HTML comment, also one over several lines or never closed, shows no text to a reader.
+        return $this->wordsIn(preg_replace(self::HTML_COMMENT, ' ', implode("\n", $lines)) ?? '');
     }
 
     private function opensPageAt(int $heading): bool
