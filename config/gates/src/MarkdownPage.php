@@ -17,7 +17,18 @@ final readonly class MarkdownPage
 
     private const string WORD = '/[\p{L}\p{N}]/u';
 
-    private const string HTML_COMMENT = '/<!--.*?(?:-->|\z)/s';
+    // A code span comes first so a "<!--" a reader sees in it opens no comment; an unclosed comment hides the rest only as a block at a line start.
+    private const string CODE_SPAN_OR_COMMENT = '/(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)|<!--(?s:.*?)-->|^ {0,3}<!--(?s:.*)/m';
+
+    private const string CODE_LINE = "\0";
+
+    private const string ITEM_MARKERS = '/^(?:[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
+
+    /** @var list<string> */
+    private array $lines;
+
+    /** @var list<int> */
+    private array $fencedLines;
 
     /** @var list<int> */
     private array $depths;
@@ -40,6 +51,8 @@ final readonly class MarkdownPage
         array $blankedLines,
         array $fencedLines = [],
     ) {
+        $this->lines = $blankedLines;
+        $this->fencedLines = $fencedLines;
         $depths = [];
         $contents = [];
 
@@ -88,6 +101,12 @@ final readonly class MarkdownPage
     }
 
     public function summary(): ?MarkdownSummary
+    {
+        // The section is read from the page as a reader sees it, so a heading or a line inside a comment neither ends nor opens anything.
+        return $this->visiblePage()->ownSummary();
+    }
+
+    private function ownSummary(): ?MarkdownSummary
     {
         foreach ($this->contents as $index => $content) {
             if ($this->isOwnHeading($index) && 1 === preg_match(self::SUMMARY_HEADING, $content)) {
@@ -183,9 +202,32 @@ final readonly class MarkdownPage
     private function summaryUnder(int $heading): MarkdownSummary
     {
         $lines = $this->sectionLines($heading);
-        $text = array_filter($lines, fn (int $index): bool => MarkdownLineKind::Heading !== $this->kinds[$index], ARRAY_FILTER_USE_KEY);
+        $text = array_filter($lines, fn (int $index): bool => !$this->holdsAHeading($index), ARRAY_FILTER_USE_KEY);
 
-        return new MarkdownSummary($this->visibleWordsIn($lines), $this->opensPageAt($heading), $this->visibleWordsIn($text) > 0);
+        return new MarkdownSummary($this->wordsIn(implode("\n", $lines)), $this->opensPageAt($heading), $this->wordsIn(implode("\n", $text)) > 0);
+    }
+
+    private function visiblePage(): self
+    {
+        // Code lines are set aside, so a "<!--" a reader sees in code hides nothing after it.
+        $masked = array_map(fn (int $index): string => MarkdownLineKind::Code === $this->kinds[$index] ? self::CODE_LINE : $this->lines[$index], array_keys($this->lines));
+        $shown = preg_replace_callback(self::CODE_SPAN_OR_COMMENT, static fn (array $match): string => '<!--' === substr(ltrim($match[0]), 0, 4) ? ' '.str_repeat("\n", substr_count($match[0], "\n")) : $match[0], implode("\n", $masked));
+
+        if (null === $shown) {
+            return $this;
+        }
+
+        $shownLines = explode("\n", $shown);
+        $kept = array_values(array_filter($this->fencedLines, static fn (int $index): bool => self::CODE_LINE === ($shownLines[$index] ?? null)));
+
+        return new self($this->path, array_map(fn (int $index): string => self::CODE_LINE === $shownLines[$index] ? $this->lines[$index] : $shownLines[$index], array_keys($this->lines)), $kept);
+    }
+
+    private function holdsAHeading(int $index): bool
+    {
+        // A heading after a list marker is still a heading to a reader, so "- ### Detail" is no summary text.
+        return MarkdownLineKind::Heading === $this->kinds[$index]
+            || (MarkdownLineKind::ListItem === $this->kinds[$index] && 1 === preg_match(MarkdownLineKinds::HEADING, preg_replace(self::ITEM_MARKERS, '', $this->contents[$index]) ?? ''));
     }
 
     /**
@@ -206,15 +248,6 @@ final readonly class MarkdownPage
         }
 
         return $lines;
-    }
-
-    /**
-     * @param array<int, string> $lines
-     */
-    private function visibleWordsIn(array $lines): int
-    {
-        // Because a reader never sees an HTML comment, also one over several lines or never closed, its words do not count.
-        return $this->wordsIn(preg_replace(self::HTML_COMMENT, ' ', implode("\n", $lines)) ?? '');
     }
 
     private function opensPageAt(int $heading): bool

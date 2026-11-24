@@ -11,7 +11,7 @@ final readonly class DocsGate implements Gate
 
     public function __construct(
         private MarkdownReader $reader,
-        private DocsLimits $limits = new DocsLimits(),
+        private DocsLimits $limits,
     ) {
     }
 

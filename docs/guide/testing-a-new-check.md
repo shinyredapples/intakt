@@ -45,3 +45,9 @@ A new rule often finds places in the existing code that break it. When fixing th
 A worked example is the rule that keeps provider hosts and model names out of code. When it was switched on, the places that still named a host went into `ratchet/provider-literals.neon`: one in `src/Core/Ai/Infrastructure/CodexTokenRefresh.php` (the token refresh of the Codex login), one in `src/Core/Build/UseCase/RunBuildJob/RunBuildJob.php` (the build job) and two in `src/Core/Review/Infrastructure/ReviewJob.php` (the review job). The first line of that file, `# Cleanup issue: #2328`, names the task that moves them. Each entry says which message, which file and how many times. Whoever moves one host deletes its entry in the same change; nobody can add an entry or raise a count, so the list only shrinks until it is empty and the file is deleted.
 
 A rule whose cleanup fits in one build gets no list: the rule and all the fixes land together.
+
+## The documentation check
+
+The `docs` check measures the documentation: a paragraph may hold at most 80 words, a page for users or a guide page at most 1,500 words, and a long technical page must open with a short "In short" section that a reader can see. Its list, `ratchet/docs.json`, holds the paragraphs and pages that were already too long when the check arrived.
+
+The list only shrinks, like the lists above. A listed paragraph is known by a short fingerprint of its text, so an edited or copied paragraph must meet the limit. When a paragraph or page gets short enough, its entry must go. Deleting or emptying the list fails the check. The [architecture](../architecture/quality-gates.md#the-docs-gate) has the details.

@@ -185,6 +185,35 @@ final class DocsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('docs'), $run->output());
     }
 
+    public function testAHeadingInsideACommentDoesNotEndAnOversizedInShort(): void
+    {
+        $run = $this->changeWith([self::ARCHITECTURE_PAGE => $this->summarizedPage("Overview.\n\n<!--\n## Note\n-->\n\n".$this->words(60)."\n\n".$this->words(60), 1600)])->runGate($this->gate());
+
+        self::assertStringContainsString('docs/architecture/big.md: the "In short" section has 121 words, the limit is 120', $run->findingsOf('docs'));
+    }
+
+    public function testACommentBetweenTheTitleAndTheInShortPasses(): void
+    {
+        $page = "# Big\n\n<!-- note -->\n\n## In short\n\nOverview.\n\n## Detail\n\n".$this->chapters(1600);
+        $run = $this->changeWith([self::ARCHITECTURE_PAGE => $page])->runGate($this->gate());
+
+        self::assertTrue($run->passed('docs'), $run->output());
+    }
+
+    public function testACommentOpenerInInlineCodeDoesNotHideAnOversizedInShort(): void
+    {
+        $run = $this->changeWith([self::ARCHITECTURE_PAGE => $this->summarizedPage('Blocks start with `<!--` and '.$this->words(200), 1600)])->runGate($this->gate());
+
+        self::assertStringContainsString('docs/architecture/big.md: the "In short" section has 204 words, the limit is 120', $run->findingsOf('docs'));
+    }
+
+    public function testAnInShortHoldingOnlyAHeadingAfterAListMarkerFails(): void
+    {
+        $run = $this->changeWith([self::ARCHITECTURE_PAGE => $this->summarizedPage('- ### Detail', 1600)])->runGate($this->gate());
+
+        self::assertStringContainsString('docs/architecture/big.md: the "In short" section holds no text a reader sees', $run->findingsOf('docs'));
+    }
+
     public function testAQuotedInShortDoesNotSatisfyTheSummaryRule(): void
     {
         $page = "# Big\n\n> ## In short\n>\n> ".$this->words(20)."\n\n## Detail\n\n".$this->chapters(1600);
@@ -460,7 +489,7 @@ final class DocsGateTest extends SandboxTestCase
 
     private function gate(): DocsGate
     {
-        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
+        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())), new DocsLimits());
     }
 
     private function pageOf(int $words): string

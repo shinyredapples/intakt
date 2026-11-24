@@ -156,6 +156,62 @@ final class MarkdownPageTest extends TestCase
         self::assertEquals(new MarkdownSummary(1, true, false), $summary);
     }
 
+    public function testAHeadingInsideAMultilineCommentDoesNotEndTheInShortSection(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', 'Overview.', '', '<!--', '## Note', '-->', '', $this->words(120), '', '## Next', 'More.')->summary();
+
+        self::assertEquals(new MarkdownSummary(121, true, true), $summary);
+    }
+
+    public function testACommentHoldingAHeadingLeavesTheSummaryTextBelowIt(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', '<!--', '## Note', '-->', '', 'Overview.', '', '## Next', 'More.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, true, true), $summary);
+    }
+
+    public function testACommentBetweenTheTitleAndTheInShortHeadingLeavesTheSummaryOpeningThePage(): void
+    {
+        $summary = $this->page('# Title', '', '<!-- note -->', '', '## In short', '', 'Overview.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, true, true), $summary);
+    }
+
+    public function testACommentOpenerInsideInlineCodeHidesNoWords(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', 'Blocks start with `<!--` and '.$this->words(200))->summary();
+
+        self::assertEquals(new MarkdownSummary(204, true, true), $summary);
+    }
+
+    public function testACommentOpenerInsideIndentedCodeHidesNoWords(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', 'One.', '', '    <!--', '', 'Two three.')->summary();
+
+        self::assertEquals(new MarkdownSummary(3, true, true), $summary);
+    }
+
+    public function testAnUnclosedCommentOpenerInsideAParagraphHidesNoWords(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', 'One <!-- two three')->summary();
+
+        self::assertEquals(new MarkdownSummary(3, true, true), $summary);
+    }
+
+    public function testAHeadingAfterAListMarkerIsNoSummaryText(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', '- ### Detail', '', '## Body', 'More.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, true, false), $summary);
+    }
+
+    public function testAListItemOfPlainTextIsSummaryText(): void
+    {
+        $summary = $this->page('# Title', '', '## In short', '', '- Detail', '', '## Body', 'More.')->summary();
+
+        self::assertEquals(new MarkdownSummary(1, true, true), $summary);
+    }
+
     public function testEachParagraphCarriesItsFirstLine(): void
     {
         $paragraphs = $this->page('# Title', '', 'First', 'paragraph.', '', '- Item.')->paragraphs();
