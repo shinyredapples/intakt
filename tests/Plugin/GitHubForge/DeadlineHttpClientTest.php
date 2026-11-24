@@ -21,7 +21,7 @@ final class DeadlineHttpClientTest extends TestCase
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $sent = [];
-        $client = new DeadlineHttpClient(self::recording($sent), $clock, $clock->now()->modify('+15 seconds'));
+        $client = new DeadlineHttpClient($this->recording($sent), $clock, $clock->now()->modify('+15 seconds'));
 
         $client->request('GET', 'https://api.github.com/', ['timeout' => 60, 'max_duration' => 0]);
 
@@ -33,7 +33,7 @@ final class DeadlineHttpClientTest extends TestCase
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $sent = [];
-        $client = new DeadlineHttpClient(self::recording($sent), $clock, $clock->now()->modify('+3 seconds'));
+        $client = new DeadlineHttpClient($this->recording($sent), $clock, $clock->now()->modify('+3 seconds'));
 
         $client->request('GET', 'https://api.github.com/');
 
@@ -66,7 +66,7 @@ final class DeadlineHttpClientTest extends TestCase
     /**
      * @param array<mixed> $sent
      */
-    private static function recording(array &$sent): MockHttpClient
+    private function recording(array &$sent): MockHttpClient
     {
         return new MockHttpClient(static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
             $sent = $options;

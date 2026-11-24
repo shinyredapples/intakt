@@ -203,9 +203,13 @@ final class ForgeCredentialCheckTest extends TestCase
 
     public function testTheForgeCredentialCheckPassesWhenItsLastPageArrivesWithLessThanASliceLeft(): void
     {
-        $this->expected = ExpectedInstallation::fromSettings(self::PERMISSIONS, implode(',', self::manyRepositories()));
+        $this->expected = ExpectedInstallation::fromSettings(self::PERMISSIONS, implode(',', $this->manyRepositories()));
 
-        $result = $this->check(self::paged(...), secondsPerRequest: 4, lastPageSeconds: 1)->run();
+        $result = $this->check(
+            $this->paged(...),
+            secondsPerRequest: 4,
+            lastPageSeconds: 1,
+        )->run();
 
         self::assertTrue($result->passed);
         self::assertSame(4, $this->requests);
@@ -214,9 +218,13 @@ final class ForgeCredentialCheckTest extends TestCase
 
     public function testTheForgeCredentialCheckStopsAtItsDeadlineWhenTheLastPageDoesNotArriveInTime(): void
     {
-        $this->expected = ExpectedInstallation::fromSettings(self::PERMISSIONS, implode(',', self::manyRepositories()));
+        $this->expected = ExpectedInstallation::fromSettings(self::PERMISSIONS, implode(',', $this->manyRepositories()));
 
-        $result = $this->check(self::paged(...), secondsPerRequest: 4, lastPageSeconds: 4)->run();
+        $result = $this->check(
+            $this->paged(...),
+            secondsPerRequest: 4,
+            lastPageSeconds: 4,
+        )->run();
 
         self::assertFalse($result->passed);
         self::assertSame(4, $this->requests);
@@ -246,12 +254,12 @@ final class ForgeCredentialCheckTest extends TestCase
     }
 
     // Two pages, so the last request starts with less than a full slice of the deadline left.
-    private static function paged(string $url): ResponseInterface
+    private function paged(string $url): ResponseInterface
     {
         if (!str_contains($url, '/installation/repositories')) {
             return self::healthy($url);
         }
-        $names = array_slice(self::manyRepositories(), str_contains($url, '&page=2') ? 100 : 0, 100);
+        $names = array_slice($this->manyRepositories(), str_contains($url, '&page=2') ? 100 : 0, 100);
 
         return new MockResponse(json_encode([
             'total_count' => 101,
@@ -262,7 +270,7 @@ final class ForgeCredentialCheckTest extends TestCase
     /**
      * @return list<string>
      */
-    private static function manyRepositories(): array
+    private function manyRepositories(): array
     {
         return array_map(static fn (int $n): string => 'acme/repo'.$n, range(1, 101));
     }
