@@ -8,7 +8,7 @@
         <h1>Projects</h1>
         <p class="lead">Every project that has started a review. Open one to see its reviews.</p>
     </div>
-    {# The board links the first-run page until a review has run, and a project is listed only once one has, so the link moves here then (#2067, D3). #}
+    {# The board links the setup wizard until a review has run, and a project is listed only once one has, so the link moves here then (#2067, D3). #}
     {% if projects is not empty %}
     <div class="actions">
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP')) }}">Set up Intakt</a>

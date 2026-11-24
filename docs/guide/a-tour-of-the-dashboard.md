@@ -13,7 +13,7 @@ Eleven pages are built. They show what Intakt has written down about its reviews
   1. **Repository:** paste your repository's address and press **Check the address**. Intakt says what is wrong (empty, not on GitHub, or not a repository address) or shows "GitHub, repository owner/name". It does not keep the address yet (planned): for now you set it in the project file.
   2. **GitHub App:** the button that creates Intakt's app on GitHub does nothing yet (planned); for now the app's details go in the configuration.
   3. **AI account:** which AI companies have a key, one field to paste a key while none is set (**Keep the key**, or **Skip**), and which models the first project uses.
-  4. **Check:** for each project, its reviewers (or why it has none) and whether its main branch failed to start the last time Intakt tried. **Check again** looks again.
+  4. **Check:** for each project, its reviewers (or why it has none) and whether its main branch failed to start the last time Intakt tried. **Run again** looks again.
   5. **Done:** titled **Ready to start**. On the demo, while the recorded review can play, **Play the demo run** is the one main button; otherwise one plain line says the install has no recorded review and what you can do instead. Below it, **Start the first review** reviews the sample change and takes you to its live review page; coming back later, **Open the review** takes you there again.
 
   The wizard shows no command to copy. You can do it all with the keyboard: Tab moves through the links, fields and buttons, and Enter follows a link or presses a button. Adding a project from the dashboard is planned too.

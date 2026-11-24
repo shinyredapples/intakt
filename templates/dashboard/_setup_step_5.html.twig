@@ -18,7 +18,15 @@
             {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
         </form>
         {%- endif %}
-        <p class="next">{{ demo.firstRunLine(first_run) }}</p>
+        {#- The line names the key's step in words, so the template turns those words into its link. -#}
+        {%- set line = demo.firstRunLine(first_run) %}
+        {%- set key_step = 'step 3, AI account' %}
+        {%- if key_step in line %}
+        {%- set parts = line|split(key_step, 2) %}
+        <p class="next">{{ parts[0] }}<a href="{{ path(route, {(query): constant('Intakt\\Core\\Dashboard\\Domain\\SetupStep::AiAccount').value}) }}">{{ key_step }}</a>{{ parts[1] }}</p>
+        {%- else %}
+        <p class="next">{{ line }}</p>
+        {%- endif %}
     </section>
 
     <ol class="fr-seq" aria-label="What you will see">

@@ -33,6 +33,7 @@ use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartAnswer;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartFirstReviewController;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\RequestedRound;
@@ -487,14 +488,16 @@ final class RunSetupControllerTest extends WebTestCase
 
     public function testAProjectWhoseMainFailedToBootShowsTheRedactedReason(): void
     {
-        $this->ledger->failMainBoot('sample', 'The harness exited with 1.');
+        // The page holds the key's value as test-value, so a reason that quotes it must lose it.
+        $this->ledger->failMainBoot('sample', 'The harness exited with 1: key test-value refused.');
 
         $page = $this->onStep('4')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         $boot = $page->filter('#step-project li[data-boot][data-project=sample]');
         self::assertSame('failed', $boot->attr('data-boot'));
         self::assertSame('sample: main does not boot', $boot->filter('strong')->text());
-        self::assertSame('The harness exited with 1.', $boot->filter('p')->text());
+        self::assertSame('The harness exited with 1: key '.Redaction::MARKER.' refused.', $boot->filter('p')->text());
+        self::assertStringNotContainsString('test-value', $page->filter('#step-project')->html());
     }
 
     public function testAProjectWithoutAFailedBootOfMainSaysNoneIsRecorded(): void
@@ -839,6 +842,8 @@ final class RunSetupControllerTest extends WebTestCase
         $page = $this->onStep('5')->setupPage(self::PROJECTS, []);
 
         self::assertSame('This install has no recorded review. Add a key in step 3, AI account, to run one live.', $page->filter('#see-review .next')->text());
+        self::assertSame('/setup?step=3', $page->filter('#see-review .next a')->attr('href'));
+        self::assertSame('step 3, AI account', $page->filter('#see-review .next a')->text());
     }
 
     public function testWithoutARecordingAndWithAKeyTheHeroPointsToTheFirstReviewAndNotToAKeyForm(): void
