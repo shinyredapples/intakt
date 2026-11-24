@@ -146,12 +146,10 @@ final readonly class TestMethodCollector implements Collector
         return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
     }
 
-    // checked up the hierarchy because an abstract test case may name a provider that only each subclass implements
+    // inherited tests count because an abstract test case may name a provider that only each subclass implements; an overridden one does not, since PHPUnit reads the attributes of the override
     private function isNamedProvider(string $name, ClassReflection $class): bool
     {
-        $declarers = [$class, ...$class->getParents()];
-
-        return array_any($declarers, fn (ClassReflection $declarer): bool => array_any($declarer->getNativeReflection()->getMethods(), fn (ReflectionMethod $method): bool => $this->runsAsTest($method) && $this->namesProvider($method, $name)));
+        return array_any($class->getNativeReflection()->getMethods(), fn (ReflectionMethod $method): bool => $this->runsAsTest($method) && $this->namesProvider($method, $name));
     }
 
     private function namesProvider(ReflectionMethod $method, string $name): bool

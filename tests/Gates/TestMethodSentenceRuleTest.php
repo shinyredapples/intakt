@@ -188,6 +188,22 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         );
     }
 
+    public function testAProviderOnlyAnOverriddenBaseTestNamesFailsStaticAnalysis(): void
+    {
+        self::assertSame('tests/OverridingTest.php:12 intakt.testMethodSentence Test method Intakt\Sample\OverridingTest::testRows() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-overridden-test'));
+    }
+
+    public function testEachShortTestMethodOnOneLineIsReported(): void
+    {
+        $finding = ' is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().';
+
+        self::assertSame(
+            'tests/SameLineTest.php:11 intakt.testMethodSentence Test method Intakt\Sample\SameLineTest::testOne()'.$finding."\n"
+            .'tests/SameLineTest.php:11 intakt.testMethodSentence Test method Intakt\Sample\SameLineTest::testTwo()'.$finding,
+            $this->ruleFindingsOf('test-method-same-line'),
+        );
+    }
+
     public function testAShortTestMethodOfAnAnonymousTestCasePassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-anonymous-class');
