@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Closure;
-use InvalidArgumentException;
 use Intakt\Gates\ProcessQueue;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
