@@ -8,6 +8,7 @@ use Intakt\Gates\GateResult;
 use Intakt\Gates\Mode;
 use Intakt\Gates\PhpunitReport;
 use Intakt\Gates\ProcessQueue;
+use Intakt\Gates\ProcessResult;
 use Intakt\Gates\TestDurations;
 use Intakt\Gates\TestJobs;
 use Intakt\Gates\TestPorts;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(TestJobs::class)]
 #[UsesClass(TestWorkerCount::class)]
 #[UsesClass(ProcessQueue::class)]
+#[UsesClass(ProcessResult::class)]
 #[UsesClass(TestWorker::class)]
 #[UsesClass(TestWorkers::class)]
 #[UsesClass(TestPorts::class)]
@@ -33,14 +35,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 final class TestsGateParallelTest extends SandboxTestCase
 {
     private const array TWO_WORKERS = [TestWorkerCount::VARIABLE => '2'];
-
-    private static ?CheckRun $badFilesRun = null;
-
-    public static function tearDownAfterClass(): void
-    {
-        self::$badFilesRun = null;
-        parent::tearDownAfterClass();
-    }
 
     public function testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile(): void
     {
@@ -165,11 +159,19 @@ final class TestsGateParallelTest extends SandboxTestCase
         self::assertStringContainsString('INTAKT_TEST_WORKERS names no number of test workers from 1 to 127', $run->findingsOf('tests'));
     }
 
-    // Because a two-worker run takes seconds, the five bad-file cases read one run over one sandbox; whichever of them runs first makes it, so each still runs alone under --filter.
+    // Because a two-worker run takes seconds, the five bad-file cases read one run over one sandbox; whichever of them runs first makes it and leaves its output in the folder the class owns (removed before and after the class), so each still runs alone under --filter.
     private function badFilesRun(): CheckRun
     {
-        if (self::$badFilesRun instanceof CheckRun) {
-            return self::$badFilesRun;
+        $record = Sandbox::ownedBy(self::class)->root.'/bad-files-run.json';
+        if (is_file($record)) {
+            $saved = json_decode((string) file_get_contents($record), true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($saved);
+            [$exitCode, $output, $errors] = [$saved['exitCode'] ?? null, $saved['output'] ?? null, $saved['errors'] ?? null];
+            self::assertIsInt($exitCode);
+            self::assertIsString($output);
+            self::assertIsString($errors);
+
+            return new CheckRun(new ProcessResult($exitCode, $output, $errors));
         }
 
         $sandbox = $this->sandboxWithPassingFiles(3);
@@ -179,7 +181,10 @@ final class TestsGateParallelTest extends SandboxTestCase
         $sandbox->write('tests/DeprecatingTest.php', $this->testFile('DeprecatingTest', 'trigger_error("the forced deprecation", E_USER_DEPRECATED); self::assertTrue(true);'));
         $sandbox->write('tests/CrashingTest.php', $this->testFile('CrashingTest', 'fwrite(STDERR, "the worker crashed\n"); exit(3);'));
 
-        return self::$badFilesRun = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+        $result = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests')->result();
+        file_put_contents($record, json_encode(['exitCode' => $result->exitCode, 'output' => $result->output, 'errors' => $result->errors], JSON_THROW_ON_ERROR));
+
+        return new CheckRun($result);
     }
 
     private function sandboxWithPassingFiles(int $count): Sandbox
