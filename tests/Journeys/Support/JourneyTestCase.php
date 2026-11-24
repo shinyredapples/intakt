@@ -190,7 +190,7 @@ abstract class JourneyTestCase extends TestCase
     // Asked of the reader's own refusal, so a journey reads the reason the board shows for the admin URL dashboardWith() sets.
     final protected function refusedAdminApiReason(): string
     {
-        return AdminApiNotOnLocalhost::becauseOfTheAddress('http', (string) parse_url(self::REFUSED_ADMIN_API, PHP_URL_HOST))->getMessage();
+        return AdminApiNotOnLocalhost::becauseOfTheAddress('http', parse_url(self::REFUSED_ADMIN_API, PHP_URL_HOST))->getMessage();
     }
 
     // On the shared queue, because the worker that runs the queued round is another console process than the tick that queued it.
