@@ -6,7 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 
-// The History filter chips beside the two sources, in the mock's order.
+// Declared in the order of docs/design/mocks/history.html, because the History page renders its chips in case order.
 enum HistoryTopic: string
 {
     case Limits = 'limits';

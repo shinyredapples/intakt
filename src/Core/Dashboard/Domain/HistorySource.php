@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// Who made a History row's change: a person names themself as the actor, anything Intakt does on its own names no one.
+// Read from the payload's actor, because a person who changes something on the dashboard names themself there and Intakt's own events name no one.
 enum HistorySource: string
 {
     case Dashboard = 'dashboard';
