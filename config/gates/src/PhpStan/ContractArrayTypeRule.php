@@ -12,6 +12,8 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\InClassNode;
 use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\ParameterReflection;
+use PHPStan\Reflection\ParametersAcceptor;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -68,24 +70,15 @@ final readonly class ContractArrayTypeRule implements Rule
     private function signatureFindings(ClassMethod $method, ClassReflection $class): array
     {
         $name = sprintf('Method %s::%s()', $class->getDisplayName(), $method->name->toString());
-        $line = $method->getStartLine();
-        // a promoted public property is reported once, as the property, not again as the constructor's parameter
+        // a promoted public property is skipped here because its property finding already reports the same type on the same line
         $promoted = $this->isConstructor($method) ? array_keys($this->promotedPublicNamesOf($method)) : [];
-        $findings = [];
+        $typed = [];
 
         foreach ($class->getNativeMethod($method->name->toString())->getVariants() as $variant) {
-            foreach ($variant->getParameters() as $parameter) {
-                if (!in_array($parameter->getName(), $promoted, true) && $this->isRefused($parameter->getType())) {
-                    $findings[] = $this->finding(sprintf('%s parameter $%s is typed %s', $name, $parameter->getName(), $this->described($parameter->getType())), $line);
-                }
-            }
-
-            if ($this->isRefused($variant->getReturnType())) {
-                $findings[] = $this->finding(sprintf('%s returns %s', $name, $this->described($variant->getReturnType())), $line);
-            }
+            $typed = [...$typed, ...$this->parameterTypes($variant, $name, $promoted), [$name.' returns', $variant->getReturnType()]];
         }
 
-        return $findings;
+        return $this->findingsOf($typed, $method->getStartLine());
     }
 
     private function isConstructor(ClassMethod $method): bool
@@ -112,6 +105,30 @@ final readonly class ContractArrayTypeRule implements Rule
         return $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '';
     }
 
+    /**
+     * @param list<string> $skipped
+     *
+     * @return list<array{string, Type}>
+     */
+    private function parameterTypes(ParametersAcceptor $variant, string $method, array $skipped): array
+    {
+        $kept = array_filter($variant->getParameters(), static fn (ParameterReflection $parameter): bool => !in_array($parameter->getName(), $skipped, true));
+
+        return array_values(array_map(static fn (ParameterReflection $parameter): array => [sprintf('%s parameter $%s is typed', $method, $parameter->getName()), $parameter->getType()], $kept));
+    }
+
+    /**
+     * @param list<array{string, Type}> $typed
+     *
+     * @return list<IdentifierRuleError>
+     */
+    private function findingsOf(array $typed, int $line): array
+    {
+        $refused = array_filter($typed, fn (array $labeled): bool => $this->isRefused($labeled[1]));
+
+        return array_values(array_map(fn (array $labeled): IdentifierRuleError => $this->finding($labeled[0].' '.$this->described($labeled[1]), $line), $refused));
+    }
+
     // a nullable or union type crosses the boundary in each of its members, so each member is judged on its own
     private function isRefused(Type $type): bool
     {
@@ -133,14 +150,14 @@ final readonly class ContractArrayTypeRule implements Rule
         return $keyedAllowed && $array->getIterableValueType()->isObject()->yes();
     }
 
-    private function finding(string $what, int $line): IdentifierRuleError
-    {
-        return RuleErrorBuilder::message($what.self::HOW_TO_COMPLY)->identifier('intakt.contractArrayType')->line($line)->build();
-    }
-
     private function described(Type $type): string
     {
         return $type->describe(VerbosityLevel::precise());
+    }
+
+    private function finding(string $what, int $line): IdentifierRuleError
+    {
+        return RuleErrorBuilder::message($what.self::HOW_TO_COMPLY)->identifier('intakt.contractArrayType')->line($line)->build();
     }
 
     /**
