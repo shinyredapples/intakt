@@ -37,6 +37,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
@@ -381,6 +382,10 @@ return static function (ContainerConfigurator $container): void {
         ->autowire()
         ->autoconfigure()
         ->arg('$codex', new Parameter(Provider::Codex->parameter()));
+    // Built from the watch sections here, because the Contract class takes typed labels and the parameter holds arrays.
+    $container->services()->set(EligibilityLabels::class)
+        ->factory(WatchConfiguration::eligibilityLabelsOf(...))
+        ->args([new Parameter(WatcherServices::PROJECTS)]);
     $container->services()->set(AiServices::PROVIDER_PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');
