@@ -33,6 +33,7 @@ export default class extends Controller {
     disconnect() {
         this.visit = null;
         clearInterval(this.ticker);
+        this.stopHoldingNewActions();
         this.settle();
     }
 
@@ -68,6 +69,7 @@ export default class extends Controller {
             this.countdown = RETRY_EVERY_S;
             this.ticker = setInterval(() => this.tick(), 1000);
             this.holdActions();
+            this.holdNewActions();
             this.freezeElapsedTimes();
         }
         this.dropped.add(source);
@@ -80,6 +82,7 @@ export default class extends Controller {
             return;
         }
         clearInterval(this.ticker);
+        this.stopHoldingNewActions();
         this.lineTarget.hidden = true;
         this.markerTarget.hidden = true;
         this.settle();
@@ -104,6 +107,17 @@ export default class extends Controller {
         note.textContent = CONNECTING;
 
         return note;
+    }
+
+    // A source that is open or back can stream in a new form while another is still down, so its button waits too; holdActions() skips every disabled one, so a pass never repeats itself.
+    holdNewActions() {
+        this.newActions = new MutationObserver(() => this.holdActions());
+        this.newActions.observe(this.element, { childList: true, subtree: true });
+    }
+
+    stopHoldingNewActions() {
+        this.newActions?.disconnect();
+        this.newActions = null;
     }
 
     releaseActions() {
