@@ -13,7 +13,6 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Review\Contract\AwaitedReviewer;
-use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SampleChange;
@@ -35,9 +34,9 @@ final class DemoProgress implements ReviewProgress
     private ?DateTimeImmutable $lastSaid = null;
 
     /**
-     * @var list<AwaitedReviewer>
+     * @var list<string>
      */
-    private array $awaited = [];
+    private array $blockedSeen = [];
 
     public function __construct(
         private readonly OutputInterface $output,
@@ -53,7 +52,6 @@ final class DemoProgress implements ReviewProgress
         }
 
         $this->stopWhenBlockedByAWait($progress);
-        $this->awaited = $progress->awaited;
 
         if ([] === $progress->awaited && !$progress->findingsToJudge) {
             return;
@@ -75,13 +73,16 @@ final class DemoProgress implements ReviewProgress
         }
     }
 
-    // Asked for each reviewer the last poll awaited and that is blocked now, because the worker may record a reviewer blocked by its cooling pins before the demo polls again, and the demo must still stop with the plain message then. A reviewer that delivered its verdict is never asked, because a tier cooling after its answer keeps nothing waiting; a blocked round without a wait ends as usual.
+    // Asked once for each reviewer, at the first poll that sees it blocked, the very first poll included, because the worker may record a reviewer blocked by its cooling pins before the demo polls, and the demo must still stop with the plain message then. A reviewer that delivered its verdict is never asked, because a tier cooling after its answer keeps nothing waiting; a blocked round without a wait ends as usual.
     private function stopWhenBlockedByAWait(RoundProgress $progress): void
     {
-        foreach ($this->awaited as $reviewer) {
-            if (FinishedState::Blocked === ($progress->finished[$reviewer->id] ?? null)) {
-                $this->modelOf($reviewer->role.' reviewer', $reviewer->tier);
+        foreach ($progress->blocked as $reviewer) {
+            if (in_array($reviewer->id, $this->blockedSeen, true)) {
+                continue;
             }
+
+            $this->blockedSeen[] = $reviewer->id;
+            $this->modelOf($reviewer->role.' reviewer', $reviewer->tier);
         }
     }
 

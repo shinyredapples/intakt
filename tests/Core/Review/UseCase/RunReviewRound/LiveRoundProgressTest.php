@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\AwaitedReviewer;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundOpened;
@@ -128,6 +129,19 @@ final class LiveRoundProgressTest extends KernelTestCase
     public function testAProgressThatDiffersOnlyInStartedReviewersIsNotTheSameProgress(): void
     {
         self::assertFalse(new RoundProgress(0, 2, false, [], 1)->isSameAs(new RoundProgress(0, 2, false, [], 0)));
+    }
+
+    public function testAProgressThatDiffersOnlyInTheFindingsToJudgeIsNotTheSameProgress(): void
+    {
+        self::assertFalse(new RoundProgress(2, 2, false)->isSameAs(new RoundProgress(2, 2, false)->withNothingToJudge()));
+    }
+
+    public function testAProgressIsTheSameOnlyWhenItAwaitsTheSameReviewers(): void
+    {
+        $awaiting = static fn (string $id): RoundProgress => new RoundProgress(1, 2, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, $id)]);
+
+        self::assertFalse($awaiting('one')->isSameAs($awaiting('other')));
+        self::assertTrue($awaiting('one')->isSameAs($awaiting('one')));
     }
 
     public function testTheRoundsFirstProgressIsPublishedAtItsStartBeforeAnyReviewerRuns(): void

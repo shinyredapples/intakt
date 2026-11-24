@@ -145,7 +145,16 @@ final class DemoProgressTest extends TestCase
         $progress = $this->progress($tiers);
         $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
 
-        $busy = $this->failureOf(static fn () => $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false)));
+        $busy = $this->failureOf(static fn () => $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')])));
+
+        self::assertInstanceOf(DemoProviderBusy::class, $busy);
+        self::assertStringStartsWith('The correctness reviewer cannot get an answer: openai_compatible is rate-limited for 60 s', $busy->getMessage());
+    }
+
+    // Forced order: the first poll already sees the reviewer blocked, so no earlier poll awaited it.
+    public function testAReviewerBlockedByACoolingPinBeforeTheFirstPollStopsTheDemo(): void
+    {
+        $busy = $this->failureOf(fn () => $this->progress($this->limited(new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60)))->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')])));
 
         self::assertInstanceOf(DemoProviderBusy::class, $busy);
         self::assertStringStartsWith('The correctness reviewer cannot get an answer: openai_compatible is rate-limited for 60 s', $busy->getMessage());
@@ -156,7 +165,7 @@ final class DemoProgressTest extends TestCase
         $progress = $this->progress($this->answering());
         $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
 
-        $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false));
+        $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
 
         self::assertSame(['Waiting on the correctness reviewer ('.self::KIMI.').'], $this->lines());
     }
@@ -189,7 +198,7 @@ final class DemoProgressTest extends TestCase
         $progress = $this->progress($tiers);
         $progress->reached($this->waitingOnBoth());
 
-        $progress->reached(new RoundProgress(2, 2, false, ['reviewer' => FinishedState::Blocked, 'security-reviewer' => FinishedState::Verdict], 2, [], false));
+        $progress->reached(new RoundProgress(2, 2, false, ['reviewer' => FinishedState::Blocked, 'security-reviewer' => FinishedState::Verdict], 2, [], false, [new AwaitedReviewer('correctness', Tier::Strong, 'reviewer')]));
 
         self::assertCount(1, $this->lines());
     }

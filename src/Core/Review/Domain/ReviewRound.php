@@ -222,10 +222,12 @@ final class ReviewRound implements HasPlace
                 continue;
             }
 
-            $awaited[] = new AwaitedReviewer($reviewer->roleName(), $reviewer->tier(), $id);
+            $awaited[] = $this->named($reviewer);
         }
 
-        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started, $awaited, $this->hasFindingsToJudge());
+        $blocked = array_filter($this->reviewers(), static fn (RoundReviewer $reviewer): bool => FinishedState::Blocked === ($finished[$reviewer->id()->toRfc4122()] ?? null));
+
+        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started, $awaited, $this->hasFindingsToJudge(), array_values(array_map($this->named(...), $blocked)));
     }
 
     public function state(): RoundState
@@ -241,6 +243,11 @@ final class ReviewRound implements HasPlace
     public function moveTo(string $place): void
     {
         $this->state = RoundState::from($place);
+    }
+
+    private function named(RoundReviewer $reviewer): AwaitedReviewer
+    {
+        return new AwaitedReviewer($reviewer->roleName(), $reviewer->tier(), $reviewer->id()->toRfc4122());
     }
 
     // Unknown (true) until the round completed and kept what the panel reported, because only then does the judge read them.
