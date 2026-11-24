@@ -308,7 +308,7 @@ final class ProcessRunner
         $process = $child->process;
 
         if (self::TIMED_OUT === $failure) {
-            $timedOut = $this->timedOut($child->program, $child->seconds);
+            $timedOut = TimeLimit::exceeded($child->program, $child->seconds);
 
             return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
         }
@@ -332,7 +332,7 @@ final class ProcessRunner
     private function resultOf(Process $process, ?int $failure, string $program): ProcessResult
     {
         if (self::TIMED_OUT === $failure) {
-            return $this->timedOut($program, (float) $process->getTimeout());
+            return TimeLimit::exceeded($program, (float) $process->getTimeout());
         }
 
         $exitCode = null === $failure ? $process->getExitCode() : null;
@@ -382,11 +382,6 @@ final class ProcessRunner
         }
 
         return $finished;
-    }
-
-    private function timedOut(string $program, float $seconds): ProcessResult
-    {
-        return TimeLimit::exceeded($program, $seconds);
     }
 
     /**
