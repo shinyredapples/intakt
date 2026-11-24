@@ -31,8 +31,8 @@ use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
-use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use Intakt\Tests\Support\FixedRoundCosts;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\ReplayMarkBus;
@@ -85,8 +85,7 @@ final class WhoIsWorkingOnSqliteTest extends KernelTestCase
         $clock->modify('+5 minutes');
         self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"r1-security","role":"security","tier":"standard"}'))->succeeded());
 
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+        $costs = new FixedRoundCosts(Cost::inUsd(0.5));
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
         $lanes = $pages->board()->whoIsWorking()->lanes();
