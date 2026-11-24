@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -29,17 +30,6 @@ final class InstallCheckTest extends TestCase
 
     /** @var list<array{arguments: list<string>, input: string}> */
     private array $github = [];
-
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-install-check-test-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
 
     public function testABrokenInstallCommandFailsAtTheStepThatNamesItAndTheAlarmGetsTheStepAndItsLogTail(): void
     {
@@ -91,7 +81,7 @@ final class InstallCheckTest extends TestCase
         $report = $this->check()->run('/some/repository');
 
         $keyed = array_values(array_filter($report->steps, static fn (InstallStepResult $step): bool => str_starts_with($step->name, 'keyed')));
-        self::assertSame(InstallStatus::Skipped, $keyed[0]->status);
+        self::assertSame(InstallStatus::Skipped, $this->stepStatus($keyed));
         self::assertSame([], array_filter($this->calls, static fn (string $call): bool => str_contains($call, 'intakt:demo')));
     }
 
@@ -115,8 +105,8 @@ final class InstallCheckTest extends TestCase
     {
         $report = $this->check()->run('/some/repository');
 
-        $step = array_values(array_filter($report->steps, static fn (InstallStepResult $step): bool => 'journey-check' === $step->name))[0];
-        self::assertSame(InstallStatus::Skipped, $step->status);
+        $step = array_values(array_filter($report->steps, static fn (InstallStepResult $step): bool => 'journey-check' === $step->name));
+        self::assertSame(InstallStatus::Skipped, $this->stepStatus($step));
         self::assertFalse($report->hasFailed());
     }
 
@@ -124,7 +114,7 @@ final class InstallCheckTest extends TestCase
     {
         $this->check(['docker compose up -d --wait' => [1, 'boom']])->run('/some/repository');
 
-        self::assertSame('docker compose down -v --remove-orphans', $this->calls[array_key_last($this->calls)]);
+        self::assertSame('docker compose down -v --remove-orphans', array_last($this->calls));
         self::assertDirectoryDoesNotExist($this->directory.'/clone');
     }
 
@@ -135,7 +125,7 @@ final class InstallCheckTest extends TestCase
         try {
             $this->check([], [], "```\nls\n```\n")->run('/some/repository');
         } finally {
-            self::assertSame('docker compose down -v --remove-orphans', $this->calls[array_key_last($this->calls)]);
+            self::assertSame('docker compose down -v --remove-orphans', array_last($this->calls));
             self::assertDirectoryDoesNotExist($this->directory.'/clone');
         }
     }
@@ -155,8 +145,27 @@ final class InstallCheckTest extends TestCase
         $this->check()->run('--upload-pack=x');
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-install-check-test-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
     /**
-     * @param array<string, array{0: int, 1: string}> $answers by a part of the command
+     * @param list<InstallStepResult> $steps
+     */
+    private function stepStatus(array $steps): InstallStatus
+    {
+        return (array_first($steps) ?? throw new LogicException('no such step'))->status;
+    }
+
+    /**
+     * @param array<string, array{0: int, 1: string}> $answers
      * @param array<string, string>                   $environment
      */
     private function check(array $answers = [], array $environment = [], string $readme = self::README): InstallCheck
@@ -191,7 +200,7 @@ final class InstallCheckTest extends TestCase
                 return json_encode([$open], JSON_THROW_ON_ERROR);
             }
 
-            $this->github[] = ['arguments' => $arguments, 'input' => $input];
+            $this->github[] = ['arguments' => array_map(static fn (mixed $argument): string => is_string($argument) ? $argument : '', array_values($arguments)), 'input' => $input];
 
             return 'create' === $arguments[1] ? 'https://github.com/example/repo/issues/7' : '';
         };

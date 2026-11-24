@@ -15,9 +15,10 @@ final readonly class InstallCheck
     private const int TAIL_LINES = 40;
     private const string REDACTED = '[redacted]';
 
+    // The runner takes a shell command and a folder and answers the exit code and the output, so a test needs no docker; only the key names of KEYS are read from the environment because nothing else may reach the steps.
     /**
-     * @param Closure(string, string): array{0: int, 1: string} $runner runs a shell command in a folder and answers its exit code and its output
-     * @param array<string, string>                              $environment only the two key names of KEYS are read from it
+     * @param Closure(string, string): array{0: int, 1: string} $runner
+     * @param array<string, string>                             $environment
      */
     public function __construct(
         private Closure $runner,
@@ -106,6 +107,20 @@ final readonly class InstallCheck
         return $results;
     }
 
+    private function step(string $name, string $command, string $directory): InstallStepResult
+    {
+        [$code, $output] = ($this->runner)($command, $directory);
+        $output = $this->redacted($output);
+        $this->files->dumpFile($this->logs.'/'.sprintf('%02d', count($this->found($this->logs.'/*.log')) + 1).'-'.$this->slug($name).'.log', $output);
+
+        return new InstallStepResult($name, 0 === $code ? InstallStatus::Passed : InstallStatus::Failed, $this->tail($output));
+    }
+
+    private function skipped(string $name, string $why): InstallStepResult
+    {
+        return new InstallStepResult($name, InstallStatus::Skipped, $why);
+    }
+
     private function keyedStep(bool $installed, string $clone): InstallStepResult
     {
         $name = 'keyed: review the sample with a provider key';
@@ -119,23 +134,9 @@ final readonly class InstallCheck
         };
     }
 
-    private function step(string $name, string $command, string $directory): InstallStepResult
-    {
-        [$code, $output] = ($this->runner)($command, $directory);
-        $output = $this->redacted($output);
-        $this->files->dumpFile($this->logs.'/'.sprintf('%02d', count(glob($this->logs.'/*.log') ?: []) + 1).'-'.$this->slug($name).'.log', $output);
-
-        return new InstallStepResult($name, 0 === $code ? InstallStatus::Passed : InstallStatus::Failed, $this->tail($output));
-    }
-
-    private function skipped(string $name, string $why): InstallStepResult
-    {
-        return new InstallStepResult($name, InstallStatus::Skipped, $why);
-    }
-
     private function keepScreenshots(string $clone): void
     {
-        foreach (glob($clone.'/var/ui-check/*.png') ?: [] as $picture) {
+        foreach ($this->found($clone.'/var/ui-check/*.png') as $picture) {
             $this->files->copy($picture, $this->logs.'/ui-'.basename($picture));
         }
     }
@@ -165,6 +166,16 @@ final readonly class InstallCheck
     private function tail(string $output): string
     {
         return implode("\n", array_slice(explode("\n", rtrim($this->redacted($output), "\n")), -self::TAIL_LINES));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function found(string $pattern): array
+    {
+        $paths = glob($pattern);
+
+        return false === $paths ? [] : $paths;
     }
 
     private function slug(string $name): string

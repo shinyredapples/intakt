@@ -7,7 +7,7 @@ namespace Intakt\Tests\Journeys\Support;
 use Symfony\Component\Lock\LockFactory;
 use Uri\Rfc3986\Uri;
 
-// One open task stands for each failing step, found by a marker made of the step's name; the next pass that finds the step green closes it.
+// One open task stands for each failing step because a marker made of the step's name finds it again; the next pass that finds the step green closes it.
 final readonly class InstallCheckAlarm
 {
     private const string LOCK = 'intakt-journey-alarm';
@@ -25,7 +25,7 @@ final readonly class InstallCheckAlarm
         $lock->acquire(true);
 
         try {
-            $lines = array_values(array_filter(array_map(fn (InstallStepResult $step): ?string => $this->settle($step, $link), $report->steps)));
+            $lines = array_values(array_filter(array_map(fn (InstallStepResult $step): ?string => $this->settle($step, $link), $report->steps), static fn (?string $line): bool => null !== $line));
 
             return [] === $lines ? 'no install step failed: nothing filed' : implode("\n", $lines);
         } finally {

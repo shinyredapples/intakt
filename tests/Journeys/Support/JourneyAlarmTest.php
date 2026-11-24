@@ -93,7 +93,7 @@ final class JourneyAlarmTest extends TestCase
     public function testAnInstallCheckReportFilesOneTaskForItsFailingStepAndAnUnreadableReportStopsWithTwo(): void
     {
         $report = $this->directory.'/report.json';
-        file_put_contents($report, (new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')]))->toJson());
+        file_put_contents($report, new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')])->toJson());
 
         $alarm = $this->alarm(['--install-check='.$report]);
 
