@@ -49,7 +49,7 @@ final class HeadMoveTest extends TestCase
         $move = $this->moveSinceReview();
 
         self::assertSame(HeadMoveKind::Unmoved, $move->kind);
-        self::assertSame([], $move->paths);
+        self::assertSame([], [...$move->paths]);
     }
 
     public function testANewCommitOnTopMovesTheHeadByCommitsWithTheirPaths(): void
@@ -59,7 +59,7 @@ final class HeadMoveTest extends TestCase
         $move = $this->moveSinceReview();
 
         self::assertSame(HeadMoveKind::Commits, $move->kind);
-        self::assertSame(['docs/feature.md'], $move->paths);
+        self::assertSame(['docs/feature.md'], [...$move->paths]);
     }
 
     public function testAMergeOfTheBaseThatGitMadeByItselfIsACleanMergeOfTheBase(): void
@@ -70,7 +70,7 @@ final class HeadMoveTest extends TestCase
 
         $move = $this->moveSinceReview();
         self::assertSame(HeadMoveKind::CleanMergeOfBase, $move->kind);
-        self::assertSame(['src/Main.php'], $move->paths);
+        self::assertSame(['src/Main.php'], [...$move->paths]);
     }
 
     public function testAMergeOfTheBaseRunsNoMergeDriverTheRepositoryNamesAsDefault(): void
@@ -141,7 +141,7 @@ final class HeadMoveTest extends TestCase
 
         $move = $this->moveSinceReview();
         self::assertSame(HeadMoveKind::Commits, $move->kind);
-        self::assertSame(['src/Feature.php', 'src/Main.php'], $move->paths);
+        self::assertSame(['src/Feature.php', 'src/Main.php'], [...$move->paths]);
     }
 
     public function testAHeadThatNoLongerContainsTheReviewedCommitWasRewritten(): void
@@ -153,7 +153,7 @@ final class HeadMoveTest extends TestCase
         $move = $this->forge()->headMoveSince(new CommitId($this->reviewed), $this->forge()->change(new ChangeId('rewritten')));
 
         self::assertSame(HeadMoveKind::Rewritten, $move->kind);
-        self::assertSame([], $move->paths);
+        self::assertSame([], [...$move->paths]);
     }
 
     public function testAReviewedCommitThatIsNotInTheRepositoryWasRewritten(): void

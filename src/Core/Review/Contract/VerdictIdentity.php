@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -54,7 +53,7 @@ final readonly class VerdictIdentity
             return VerdictStanding::stale($changed);
         }
 
-        return VerdictStanding::keptExceptFor($changed, new Paths(...$move->paths));
+        return VerdictStanding::keptExceptFor($changed, $move->paths);
     }
 
     /**
@@ -84,7 +83,7 @@ final readonly class VerdictIdentity
 
     private function touchesOnlyDocumentation(HeadMove $move): bool
     {
-        return array_all($move->paths, static fn (string $path): bool => str_starts_with($path, self::DOCUMENTATION));
+        return array_all([...$move->paths], static fn (string $path): bool => str_starts_with($path, self::DOCUMENTATION));
     }
 
     private function valueOf(IdentityField $field): string

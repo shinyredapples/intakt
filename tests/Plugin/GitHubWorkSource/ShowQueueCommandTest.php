@@ -311,7 +311,7 @@ final class ShowQueueCommandTest extends KernelTestCase
         $histories->method('of')->willReturnCallback(function (string $project, int $number): IssueHistory {
             $listed = $this->reads->lastListed[$number];
 
-            return new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+            return new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), [...$listed->labels]), $listed->body, $listed->labels);
         });
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturn(true);
