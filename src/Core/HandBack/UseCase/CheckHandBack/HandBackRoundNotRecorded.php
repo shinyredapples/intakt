@@ -14,4 +14,9 @@ final class HandBackRoundNotRecorded extends RuntimeException implements Reporta
     {
         return new self(sprintf('the hand-back\'s %s line was not recorded: %s', $kind, $failure));
     }
+
+    public static function unread(string $failure): self
+    {
+        return new self(sprintf('the hand-back round was not recorded, because the ledger could not be read: %s', $failure));
+    }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job;
 
+use Intakt\Core\Job\Contract\EgressHosts;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobLimits;
@@ -33,7 +35,7 @@ final class EgressProxyTest extends TestCase
 
     public function testTheProxyAllowsOnlyTlsTunnelsToTheAllowlistedHosts(): void
     {
-        $config = $this->configFor(JobEgress::to(['api.vendor.example', 'repo.packagist.org']));
+        $config = $this->configFor(JobEgress::to(new EgressHosts('api.vendor.example', 'repo.packagist.org')));
 
         self::assertContains('acl intakt_allowed dstdomain -n api.vendor.example repo.packagist.org', $config);
         self::assertSame(['http_access allow intakt_connect intakt_tls intakt_allowed', 'http_access deny all'], $this->linesStartingWith('http_access ', $config));
@@ -43,7 +45,7 @@ final class EgressProxyTest extends TestCase
 
     public function testTheProxyDeniesEverythingElseByDefault(): void
     {
-        $access = $this->linesStartingWith('http_access ', $this->configFor(JobEgress::to(['api.vendor.example'])));
+        $access = $this->linesStartingWith('http_access ', $this->configFor(JobEgress::to(new EgressHosts('api.vendor.example'))));
 
         self::assertSame('http_access deny all', array_last($access));
         self::assertCount(1, array_filter($access, static fn (string $line): bool => str_starts_with($line, 'http_access allow ')));
@@ -51,14 +53,14 @@ final class EgressProxyTest extends TestCase
 
     public function testTheProxyLogsEveryRequestItDoesNotAllowAndNoOther(): void
     {
-        $config = $this->configFor(JobEgress::to(['api.vendor.example']));
+        $config = $this->configFor(JobEgress::to(new EgressHosts('api.vendor.example')));
 
         self::assertSame(['access_log none intakt_connect intakt_tls intakt_allowed', 'access_log none localhost', 'access_log stdio:/dev/stdout logformat=squid'], $this->linesStartingWith('access_log ', $config));
     }
 
     public function testTheProxyIsHealthyOnlyOnceItAcceptsConnectionsOnItsPort(): void
     {
-        $definition = new EgressProxyDefinition('intakt-egress-proxy')->of($this->spec(JobEgress::to(['api.vendor.example'])), 'intakt-job-build-1');
+        $definition = new EgressProxyDefinition('intakt-egress-proxy')->of($this->spec(JobEgress::to(new EgressHosts('api.vendor.example'))), 'intakt-job-build-1');
 
         self::assertSame([
             'Test' => ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/3128'],
@@ -82,7 +84,7 @@ final class EgressProxyTest extends TestCase
 
     public function testTheProxyRunsReadOnlyWithoutCapabilitiesOnTheJobsNetworkAndTheBridge(): void
     {
-        $definition = new EgressProxyDefinition('intakt-egress-proxy')->of($this->spec(JobEgress::to(['api.vendor.example'])), 'intakt-job-build-1');
+        $definition = new EgressProxyDefinition('intakt-egress-proxy')->of($this->spec(JobEgress::to(new EgressHosts('api.vendor.example'))), 'intakt-job-build-1');
 
         self::assertSame(['intakt.job' => 'build-1'], $definition['Labels']);
         self::assertSame([
@@ -162,6 +164,6 @@ final class EgressProxyTest extends TestCase
 
     private function spec(JobEgress $egress): JobSpec
     {
-        return new JobSpec(new JobId('build-1'), 'sample:latest', ['true'], [], new JobLimits(512 * 1024 * 1024, 1.0, 60), $egress);
+        return new JobSpec(new JobId('build-1'), 'sample:latest', new JobCommand('true'), [], new JobLimits(512 * 1024 * 1024, 1.0, 60), $egress);
     }
 }

@@ -60,7 +60,7 @@ projects:
         # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
         # the task text is given to every round until the pull request text is read from the forge.
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
-        # `eligibility_label` (optional, not read yet) is the issue label that lets Intakt build a task; it must not be blank.
+        # `eligibility_label` (optional, `intakt` when left out, read by the work source that chooses the next task; the command that runs it comes with #1603) is the issue label that lets Intakt build a task; it must not be blank.
         watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha, eligibility_label: intakt }
         # Optional: the files and folders (everything below one counts) a change may only touch with an approval, from the repository's root;
         # .gitmodules and submodules always count. `php bin/console intakt:protected:list alpha <head>` lists what a head touches.

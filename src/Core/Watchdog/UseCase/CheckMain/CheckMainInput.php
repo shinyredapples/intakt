@@ -25,4 +25,13 @@ final class CheckMainInput
     /** @var list<string> */
     #[Option('An SSH public key the owner registered, "<type> <base64>" (repeatable)')]
     public array $ownerKey = [];
+
+    /** @var list<string> */
+    #[Option('An SSH public key of the peer loop whose merges are info events, "<type> <base64>" (repeatable)')]
+    public array $peerKey = [];
+
+    public function trustedKeys(): TrustedKeys
+    {
+        return new TrustedKeys($this->ownerKey, $this->peerKey);
+    }
 }

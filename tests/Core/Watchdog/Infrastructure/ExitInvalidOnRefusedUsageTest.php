@@ -12,9 +12,11 @@ use Intakt\Core\Watchdog\Infrastructure\ExitInvalidOnRefusedUsage;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
+use Intakt\Core\Watchdog\Infrastructure\TrustedSignatures;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
+use Intakt\Core\Watchdog\UseCase\CheckMain\TrustedKeys;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -40,8 +42,10 @@ use Symfony\Component\HttpKernel\Log\Logger;
 #[UsesClass(CheckMainCommand::class)]
 #[UsesClass(CheckMain::class)]
 #[UsesClass(CheckMainInput::class)]
+#[UsesClass(TrustedKeys::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(MainHistory::class)]
+#[UsesClass(TrustedSignatures::class)]
 #[UsesClass(OwnerKey::class)]
 #[UsesClass(OwnerKeyRefused::class)]
 #[UsesClass(WatchedMain::class)]
@@ -57,6 +61,7 @@ final class ExitInvalidOnRefusedUsageTest extends TestCase
         $head = str_repeat('a', 40);
         yield 'a recorded merge without its value' => [['repository' => '.', 'last-seen-head' => $head, '--recorded-merge' => null]];
         yield 'an owner key without its value' => [['repository' => '.', 'last-seen-head' => $head, '--owner-key' => null]];
+        yield 'a peer key without its value' => [['repository' => '.', 'last-seen-head' => $head, '--peer-key' => null]];
         yield 'a missing last seen head' => [['repository' => '.']];
         yield 'an unknown option' => [['repository' => '.', 'last-seen-head' => $head, '--merge' => $head]];
     }
@@ -118,6 +123,17 @@ final class ExitInvalidOnRefusedUsageTest extends TestCase
         $tester = $this->applicationTester($log);
 
         $exit = $tester->run(['command' => CheckMainCommand::NAME, 'repository' => '.', 'last-seen-head' => str_repeat('a', 40), '--owner-key' => ['private-looking-marker']]);
+
+        self::assertSame(Command::INVALID, $exit);
+        self::assertStringNotContainsString('private-looking-marker', $this->logged($log));
+    }
+
+    public function testAMalformedPeerKeyTheCheckRefusesIsNotLogged(): void
+    {
+        $log = $this->logStream();
+        $tester = $this->applicationTester($log);
+
+        $exit = $tester->run(['command' => CheckMainCommand::NAME, 'repository' => '.', 'last-seen-head' => str_repeat('a', 40), '--peer-key' => ['private-looking-marker']]);
 
         self::assertSame(Command::INVALID, $exit);
         self::assertStringNotContainsString('private-looking-marker', $this->logged($log));

@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Intakt\Core\HandBack\UseCase\CheckHandBack;
 
 use Closure;
+use Doctrine\DBAL\Exception;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
+use JsonException;
+use PDOException;
 use Symfony\Component\Lock\LockFactory;
 
 // The task's last hand-back line decides, so a failure right after a sent-back one is handed over, and an accepted or handed-over line starts the count again.
@@ -53,15 +57,25 @@ final readonly class HandBackRoutes
 
     /**
      * @param array{repository: string, branch: string} $task
+     *
+     * @throws HandBackRoundNotRecorded
      */
     private function lastOf(array $task): ?LedgerEventKind
     {
         $last = null;
 
-        foreach ($this->ledger->readInOrder() as $recorded) {
-            if (in_array($recorded->event->kind, self::ROUND, true) && $this->isOf($task, $recorded->event->payload)) {
-                $last = $recorded->event->kind;
+        try {
+            // The branch as append() stores it, quotes and escapes included, because a raw branch would not match the stored text; it only narrows the read, isOf() decides.
+            $mention = new Mentions(json_encode($task['branch'], JSON_THROW_ON_ERROR));
+
+            foreach ($this->ledger->readOfKindsMentioning($mention, ...self::ROUND) as $recorded) {
+                if ($this->isOf($task, $recorded->event->payload)) {
+                    $last = $recorded->event->kind;
+                }
             }
+        } catch (Exception|PDOException|JsonException $failure) {
+            // Stopped rather than routed, because a guessed count would send a second failure back again.
+            throw HandBackRoundNotRecorded::unread($failure->getMessage());
         }
 
         return $last;

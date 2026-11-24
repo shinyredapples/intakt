@@ -4,26 +4,31 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Contract;
 
-// Keyed by file name, where PHP turns a name of digits into an integer key, so names() gives every name back as text.
 final readonly class JobOutput
 {
-    /**
-     * @param array<array-key, string> $files
-     */
-    public function __construct(private array $files)
+    /** @var list<JobOutputFile> */
+    private array $files;
+
+    public function __construct(JobOutputFile ...$files)
     {
+        $byName = [];
+        foreach ($files as $file) {
+            $byName[$file->name] = $file;
+        }
+
+        $this->files = array_values($byName);
     }
 
     /**
-     * @return list<string>
+     * @return list<JobOutputFile>
      */
-    public function names(): array
+    public function files(): array
     {
-        return array_map(strval(...), array_keys($this->files));
+        return $this->files;
     }
 
     public function contents(string $name): ?string
     {
-        return $this->files[$name] ?? null;
+        return array_find($this->files, static fn (JobOutputFile $file): bool => $name === $file->name)?->contents;
     }
 }

@@ -10,25 +10,19 @@ final readonly class JobEgress
     // Lowercase labels and an alphabetic top level, so an IP literal, a wildcard, a leading dot or a space never passes.
     private const string HOST = '/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/D';
 
-    /**
-     * @param list<string> $hosts
-     */
-    private function __construct(public array $hosts)
+    private function __construct(public EgressHosts $hosts)
     {
     }
 
     // Meant for probe jobs and a check job whose gate names no registry, because they must get no network at all.
     public static function none(): self
     {
-        return new self([]);
+        return new self(new EgressHosts());
     }
 
-    /**
-     * @param list<string> $hosts
-     */
-    public static function to(array $hosts): self
+    public static function to(EgressHosts $hosts): self
     {
-        if ([] === $hosts) {
+        if ($hosts->isEmpty()) {
             throw JobRefused::forEmptyAllowlist();
         }
 
@@ -38,11 +32,11 @@ final readonly class JobEgress
             }
         }
 
-        return new self(array_values(array_unique($hosts)));
+        return new self(new EgressHosts(...array_unique([...$hosts])));
     }
 
     public function isNone(): bool
     {
-        return [] === $this->hosts;
+        return $this->hosts->isEmpty();
     }
 }

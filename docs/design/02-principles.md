@@ -5,7 +5,7 @@ Kept:
 - **Ledger.** An append-only event log (starts, reserves, ends, merges) from which budget, history and recovery are derived. The one exception is the compose demo's replay project: the rows a recording played into it can be removed with it, because they record no work done on this install.
 - **Code reviewers from different vendors**, with a substitute when one is out of budget and a later catch-up review.
 - **Kept commits.** A build that fails the pre-push check keeps its commits for the next cycle instead of starting over.
-- **Pre-push check in a clean place.** The Developer's own run of the checks is never trusted.
+- **Pre-push check in a clean place.** The Developer's own run of the checks is never trusted. The clean place may start from a dependency install Intakt's own process saved for the same lock files and platform, never from anything the Developer installed.
 - **Evidence by construction.** Races are proven with forced-order tests, not repeated runs.
 
 Changed:

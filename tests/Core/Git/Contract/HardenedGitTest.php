@@ -41,17 +41,17 @@ final class HardenedGitTest extends TestCase
 
     public function testTheCommandDisablesHooksFsmonitorExternalDiffAttributesSignaturesAndOutputEncodings(): void
     {
-        $command = new HardenedGit()->call(['status'], $this->repository->path)->command;
+        $command = new HardenedGit()->call($this->repository->path, 'status')->command;
 
         self::assertSame(
             ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', ...self::SETTINGS, 'status'],
-            $command,
+            [...$command],
         );
     }
 
     public function testTheMagicVariantKeepsTheHardeningButAllowsPathspecMagic(): void
     {
-        $command = new HardenedGit()->callWithPathspecMagic(['ls-files'], $this->repository->path)->command;
+        $command = [...new HardenedGit()->callWithPathspecMagic($this->repository->path, 'ls-files')->command];
 
         self::assertNotContains('--literal-pathspecs', $command);
         self::assertContains('--no-replace-objects', $command);
@@ -64,7 +64,7 @@ final class HardenedGitTest extends TestCase
     {
         $_ENV['GIT_ALLOW_PROTOCOL'] = 'ext';
 
-        $environment = new HardenedGit()->environment($this->repository->path);
+        $environment = [...new HardenedGit()->environment($this->repository->path)];
 
         self::assertSame('1', $environment['GIT_NO_LAZY_FETCH']);
         self::assertSame('', $environment['GIT_ALLOW_PROTOCOL']);
@@ -76,10 +76,10 @@ final class HardenedGitTest extends TestCase
         chdir(dirname($this->repository->path));
         $relative = basename($this->repository->path);
 
-        $call = new HardenedGit()->call(['status', '--short'], $relative);
+        $call = new HardenedGit()->call($relative, 'status', '--short');
 
         self::assertSame(realpath($this->repository->path), $call->directory);
-        self::assertSame($call->directory, $call->environment['GIT_WORK_TREE']);
+        self::assertSame($call->directory, [...$call->environment]['GIT_WORK_TREE']);
         self::assertSame(" M README.md\n", $this->runGit($call->command, $call->environment, $call->directory));
     }
 
@@ -97,7 +97,7 @@ final class HardenedGitTest extends TestCase
         self::assertFileExists($marker, 'the command must run without hardening, or this test proves nothing');
         unlink($marker);
 
-        $call = new HardenedGit()->call($read, $this->repository->path);
+        $call = new HardenedGit()->call($this->repository->path, ...$read);
         $hardened = $this->start($call->command, $call->environment, $call->directory);
         self::assertFileDoesNotExist($marker);
         self::assertFalse($hardened->isSuccessful(), 'a missing object must fail the call');
@@ -107,7 +107,7 @@ final class HardenedGitTest extends TestCase
     {
         $_ENV['GIT_DIR'] = '/elsewhere';
 
-        $environment = new HardenedGit()->environment($this->repository->path);
+        $environment = [...new HardenedGit()->environment($this->repository->path)];
 
         self::assertFalse($environment['GIT_DIR']);
         self::assertSame('1', $environment['GIT_CONFIG_NOSYSTEM']);
@@ -120,7 +120,7 @@ final class HardenedGitTest extends TestCase
         $_ENV['GIT_NO_REPLACE_OBJECTS'] = '1';
         $_ENV['GIT_ATTR_SOURCE'] = 'HEAD';
 
-        $environment = new HardenedGit()->environment($this->repository->path);
+        $environment = [...new HardenedGit()->environment($this->repository->path)];
 
         self::assertSame('1', $environment['GIT_NO_REPLACE_OBJECTS']);
         self::assertSame('4b825dc642cb6eb9a060e54bf8d69288fbee4904', $environment['GIT_ATTR_SOURCE']);
@@ -134,10 +134,10 @@ final class HardenedGitTest extends TestCase
         $this->repository->commitFile('README.md', "base\n");
         file_put_contents($this->repository->path.'/README.md', "changed\n");
 
-        $call = new HardenedGit()->call(['diff', '--name-only', 'HEAD'], $this->repository->path);
+        $call = new HardenedGit()->call($this->repository->path, 'diff', '--name-only', 'HEAD');
 
-        self::assertContains('--attr-source=6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', $call->command);
-        self::assertSame('6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', $call->environment['GIT_ATTR_SOURCE']);
+        self::assertContains('--attr-source=6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', [...$call->command]);
+        self::assertSame('6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', [...$call->environment]['GIT_ATTR_SOURCE']);
         self::assertSame("README.md\n", $this->runGit($call->command, $call->environment));
     }
 
@@ -145,7 +145,7 @@ final class HardenedGitTest extends TestCase
     {
         $_ENV['GIT_WORK_TREE'] = '/elsewhere';
 
-        $environment = new HardenedGit()->environment($this->repository->path);
+        $environment = [...new HardenedGit()->environment($this->repository->path)];
 
         self::assertSame($this->repository->path, $environment['GIT_WORK_TREE']);
         self::assertSame('/nonexistent', $environment['GIT_GRAFT_FILE']);
@@ -282,17 +282,18 @@ final class HardenedGitTest extends TestCase
         $_ENV['GIT_WORK_TREE'] = '/elsewhere';
         $_ENV['GIT_DIR'] = '/elsewhere';
 
-        $call = new HardenedGit()->callInBareRepository(['rev-parse', '--is-bare-repository'], $mirror);
+        $call = new HardenedGit()->callInBareRepository($mirror, 'rev-parse', '--is-bare-repository');
+        $environment = [...$call->environment];
 
         self::assertSame(
             ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--git-dir='.realpath($mirror), '--bare', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', ...self::SETTINGS, 'rev-parse', '--is-bare-repository'],
-            $call->command,
+            [...$call->command],
         );
         self::assertSame(realpath($mirror), $call->directory);
-        self::assertFalse($call->environment['GIT_WORK_TREE']);
-        self::assertFalse($call->environment['GIT_DIR']);
-        self::assertSame('', $call->environment['GIT_ALLOW_PROTOCOL']);
-        self::assertSame('/nonexistent', $call->environment['GIT_GRAFT_FILE']);
+        self::assertFalse($environment['GIT_WORK_TREE']);
+        self::assertFalse($environment['GIT_DIR']);
+        self::assertSame('', $environment['GIT_ALLOW_PROTOCOL']);
+        self::assertSame('/nonexistent', $environment['GIT_GRAFT_FILE']);
         self::assertSame("true\n", $this->runGit($call->command, $call->environment, $call->directory));
     }
 
@@ -302,9 +303,9 @@ final class HardenedGitTest extends TestCase
         $this->repository = new TemporaryRepository('sha256');
         $this->repository->commitFile('README.md', "base\n");
 
-        $call = new HardenedGit()->callInBareRepository(['log', '-1', '--format=%s'], $this->mirror());
+        $call = new HardenedGit()->callInBareRepository($this->mirror(), 'log', '-1', '--format=%s');
 
-        self::assertSame('6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', $call->environment['GIT_ATTR_SOURCE']);
+        self::assertSame('6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', [...$call->environment]['GIT_ATTR_SOURCE']);
         self::assertSame("Change README.md\n", $this->runGit($call->command, $call->environment, $call->directory));
     }
 
@@ -313,10 +314,10 @@ final class HardenedGitTest extends TestCase
         $mirror = $this->mirror();
         $this->runGit(['git', '--git-dir='.$mirror, 'config', 'core.worktree', $this->decoy()], []);
 
-        $call = new HardenedGit()->callInBareRepository(['rev-parse', '--is-bare-repository'], $mirror);
+        $call = new HardenedGit()->callInBareRepository($mirror, 'rev-parse', '--is-bare-repository');
         self::assertSame("true\n", $this->runGit($call->command, $call->environment, $call->directory));
 
-        $status = new HardenedGit()->callInBareRepository(['status', '--short'], $mirror);
+        $status = new HardenedGit()->callInBareRepository($mirror, 'status', '--short');
         $process = $this->start($status->command, $status->environment, $status->directory);
         self::assertFalse($process->isSuccessful(), 'a working-tree read must find no work tree');
         self::assertStringNotContainsString('planted.txt', $process->getOutput());
@@ -341,10 +342,10 @@ final class HardenedGitTest extends TestCase
         file_put_contents($this->repository->path.'/README.md', "changed\n");
         $gitDirectory = $this->repository->path.'/.git';
 
-        $log = new HardenedGit()->callInBareRepository(['log', '-1', '--format=%s'], $gitDirectory);
+        $log = new HardenedGit()->callInBareRepository($gitDirectory, 'log', '-1', '--format=%s');
         self::assertSame("Change README.md\n", $this->runGit($log->command, $log->environment, $log->directory));
 
-        $status = new HardenedGit()->callInBareRepository(['status', '--short'], $gitDirectory);
+        $status = new HardenedGit()->callInBareRepository($gitDirectory, 'status', '--short');
         self::assertFalse($this->start($status->command, $status->environment, $status->directory)->isSuccessful(), 'a working-tree read must find no work tree');
     }
 
@@ -377,10 +378,10 @@ final class HardenedGitTest extends TestCase
     {
         $missing = $this->repository->path.'/.git/missing.git';
 
-        $call = new HardenedGit()->callInBareRepository(['rev-parse', 'HEAD'], $missing);
+        $call = new HardenedGit()->callInBareRepository($missing, 'rev-parse', 'HEAD');
 
         self::assertSame($missing, $call->directory);
-        self::assertContains('--git-dir='.$missing, $call->command);
+        self::assertContains('--git-dir='.$missing, [...$call->command]);
     }
 
     protected function setUp(): void
@@ -404,7 +405,7 @@ final class HardenedGitTest extends TestCase
     private function bareRefusal(string $refusal, string $repository): string
     {
         try {
-            new HardenedGit()->callInBareRepository(['rev-parse', 'HEAD'], $repository);
+            new HardenedGit()->callInBareRepository($repository, 'rev-parse', 'HEAD');
         } catch (RuntimeException|RepositoryAttributesRefused $refused) {
             self::assertInstanceOf($refusal, $refused);
 
@@ -436,16 +437,16 @@ final class HardenedGitTest extends TestCase
      */
     private function runHardened(array $arguments): string
     {
-        $call = new HardenedGit()->call($arguments, $this->repository->path);
+        $call = new HardenedGit()->call($this->repository->path, ...$arguments);
 
         return $this->runGit($call->command, $call->environment);
     }
 
     /**
-     * @param list<string>                $command
-     * @param array<string, string|false> $environment
+     * @param iterable<int, string>          $command
+     * @param iterable<string, string|false> $environment
      */
-    private function runGit(array $command, array $environment, ?string $directory = null): string
+    private function runGit(iterable $command, iterable $environment, ?string $directory = null): string
     {
         $process = $this->start($command, $environment, $directory ?? $this->repository->path);
 
@@ -455,12 +456,12 @@ final class HardenedGitTest extends TestCase
     }
 
     /**
-     * @param list<string>                $command
-     * @param array<string, string|false> $environment
+     * @param iterable<int, string>          $command
+     * @param iterable<string, string|false> $environment
      */
-    private function start(array $command, array $environment, string $directory): Process
+    private function start(iterable $command, iterable $environment, string $directory): Process
     {
-        $process = new Process($command, $directory, $environment);
+        $process = new Process([...$command], $directory, [...$environment]);
         $process->run();
 
         return $process;

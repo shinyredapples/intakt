@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\MainConflicts;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Plugin\Forge\Contract\ChangeId;
@@ -185,7 +186,7 @@ final readonly class PushBranch implements BranchPush
     {
         $paths = $this->git->mergeTree($request->repository, $main, $request->accepted->head);
 
-        return null === $paths ? null : new MainConflicts($paths);
+        return null === $paths ? null : new MainConflicts(new Paths(...$paths));
     }
 
     private function openedChange(BranchPushRequest $request, string $head, string $main): ChangeId
