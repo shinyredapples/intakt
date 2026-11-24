@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -48,7 +49,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
     public function testAProjectConfiguredWithTiersGetsACardBeforeItsFirstReview(): void
     {
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(['idle-project']);
+        $tiers->method('projects')->willReturn(new ProjectNames('idle-project'));
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'model-a'));
         self::getContainer()->set(TierResolver::class, $tiers);
 
@@ -155,7 +156,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
     {
         $token = 'ghp_'.str_repeat('a1', 18);
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(['alpha']);
+        $tiers->method('projects')->willReturn(new ProjectNames('alpha'));
         $tiers->method('resolve')->willThrowException(new TierProviderDisabled('alpha', Tier::Strong, 'the key '.$token.' was revoked'));
         self::getContainer()->set(TierResolver::class, $tiers);
 

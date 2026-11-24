@@ -117,7 +117,7 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         $this->dispatcher()->dispatch(new WorkerMessageFailedEvent(new Envelope(new stdClass()), 'scheduler_default', new RuntimeException('forge down')));
 
         self::assertCount(1, $this->shellUpdates());
-        // Messenger's own listener logs the failed tick, which this test only stands in for.
+        // Expected because Messenger's own listener logs every failed message.
         self::assertLoggedError('critical', 'Error thrown while handling message stdClass. Removing from transport after 0 retries. Error: "forge down"');
     }
 
@@ -126,6 +126,18 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         $this->ledger->startRound('round-1', 'alpha');
 
         $this->dispatcher()->dispatch(new WatcherLineRecorded(LedgerEventKind::BootResultComputed));
+        $this->dispatcher()->dispatch(new WorkerMessageHandledEvent(new Envelope(new stdClass()), 'scheduler_default'));
+
+        self::assertSame([], $this->shellUpdates());
+    }
+
+    public function testALineNotedBeforeTheServicesWereResetPushesNoCards(): void
+    {
+        $updates = self::getContainer()->get(ProjectCardsWatcherUpdates::class);
+        self::assertInstanceOf(ProjectCardsWatcherUpdates::class, $updates);
+        $this->dispatcher()->dispatch(new WatcherLineRecorded(LedgerEventKind::RoundQueued));
+
+        $updates->reset();
         $this->dispatcher()->dispatch(new WorkerMessageHandledEvent(new Envelope(new stdClass()), 'scheduler_default'));
 
         self::assertSame([], $this->shellUpdates());
