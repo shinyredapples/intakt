@@ -146,25 +146,25 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
         $failure = $this->failureOf(fn () => $forge->postReview('widgets', $this->change(), new ReviewComment('Two reviewers approve.', new ReviewToken('round-7-token-0123456789'), new JobCredentials())));
 
         self::assertInstanceOf(ForgeWriteFailed::class, $failure);
-        self::assertNotEmpty(array_filter(self::causesOf($failure), static fn (Throwable $cause): bool => $cause instanceof ForgeCredentialsRefused));
-    }
-
-    /**
-     * @return list<Throwable>
-     */
-    private static function causesOf(Throwable $failure): array
-    {
-        $causes = [];
-        for ($cause = $failure->getPrevious(); null !== $cause; $cause = $cause->getPrevious()) {
-            $causes[] = $cause;
-        }
-
-        return $causes;
+        self::assertNotEmpty(array_filter($this->causesOf($failure), static fn (Throwable $cause): bool => $cause instanceof ForgeCredentialsRefused));
     }
 
     protected function setUp(): void
     {
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+    }
+
+    /**
+     * @return list<Throwable>
+     */
+    private function causesOf(Throwable $failure): array
+    {
+        $causes = [];
+        for ($cause = $failure->getPrevious(); $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            $causes[] = $cause;
+        }
+
+        return $causes;
     }
 
     /**
