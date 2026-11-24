@@ -52,7 +52,7 @@ final readonly class FirstRunSteps
 
     public function firstRun(): FirstRun
     {
-        $projects = $this->tiers->projects();
+        $projects = [...$this->tiers->projects()];
 
         return new FirstRun(
             $this->providers(array_first($projects)),

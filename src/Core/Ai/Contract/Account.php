@@ -33,23 +33,17 @@ final readonly class Account
         return 2 === count($parts) ? Provider::tryFrom($parts[0]) : null;
     }
 
-    /**
-     * @return list<string>
-     */
-    public function variables(): array
+    public function variables(): EnvironmentVariables
     {
         if (self::DEFAULT === $this->name) {
             return $this->provider->variables();
         }
 
-        return array_map(fn (string $variable): string => $variable.'_'.strtoupper($this->name), $this->provider->variables());
+        return new EnvironmentVariables(...array_map(fn (string $variable): string => $variable.'_'.strtoupper($this->name), [...$this->provider->variables()]));
     }
 
-    /**
-     * @param list<string> $missing
-     */
-    public function disabledMessage(array $missing): string
+    public function disabledMessage(EnvironmentVariables $missing): string
     {
-        return 'Account "'.$this->name.'" of provider "'.$this->provider->value.'" is disabled: set '.implode(' and ', $missing).' to enable it.';
+        return 'Account "'.$this->name.'" of provider "'.$this->provider->value.'" is disabled: set '.implode(' and ', [...$missing]).' to enable it.';
     }
 }

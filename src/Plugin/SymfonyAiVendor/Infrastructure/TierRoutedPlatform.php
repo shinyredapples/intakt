@@ -6,6 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\TierInvoker;
+use Intakt\Core\Ai\Contract\TierPart;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Override;
 use Symfony\AI\Platform\Model;
@@ -46,7 +47,8 @@ final class TierRoutedPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
-        $round = $this->tiers->invoke($this->answering, new TierRequest($input, $options + $this->options));
+        $request = is_array($input) ? $this->partsOf($input) : TierRequest::of($input);
+        $round = $this->tiers->invoke($this->answering, $request->withDefaults(...$options)->withDefaults(...$this->options));
         $this->rounds[] = $round;
 
         return $round;
@@ -56,5 +58,18 @@ final class TierRoutedPlatform implements PlatformInterface
     public function getModelCatalog(): ModelCatalogInterface
     {
         return $this->catalog ?? ($this->answering->provider->streams() ? new FallbackModelCatalog() : new UnstreamedModelCatalog());
+    }
+
+    /**
+     * @param array<mixed> $input
+     */
+    private function partsOf(array $input): TierRequest
+    {
+        $parts = [];
+        foreach ($input as $key => $value) {
+            $parts[] = new TierPart($key, $value);
+        }
+
+        return TierRequest::ofParts(...$parts);
     }
 }

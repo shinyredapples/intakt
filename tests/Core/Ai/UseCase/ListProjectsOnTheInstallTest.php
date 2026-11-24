@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Ai\UseCase;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\UseCase\ListProjects\ListedProject;
 use Intakt\Core\Ai\UseCase\ListProjects\ListProjectsTool;
@@ -54,7 +55,7 @@ final class ListProjectsOnTheInstallTest extends KernelTestCase
     private function configure(array $projects): void
     {
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('projects')->willReturn($projects);
+        $resolver->method('projects')->willReturn(new ProjectNames(...$projects));
         self::getContainer()->set(TierResolver::class, $resolver);
     }
 
