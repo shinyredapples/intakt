@@ -40,14 +40,6 @@ final readonly class RegressionEvidence
         return [] === $rest ? $section : $section."\n\n".implode("\n", $rest);
     }
 
-    // A block the text never closes is closed first, because otherwise it would hold every line Intakt adds after it; an HTML block's empty closer leaves the blank line that ends it.
-    private function closed(string $text): string
-    {
-        $closer = ReadableLines::of($text)->closer;
-
-        return null === $closer ? $text : $text."\n".$closer;
-    }
-
     // Only outside list items, because a heading inside one does not end the section.
     private function firstTopLevel(string $pattern, ReadableLines $read, int $from): ?int
     {
@@ -57,6 +49,14 @@ final readonly class RegressionEvidence
         );
 
         return is_int($found) ? $found : null;
+    }
+
+    // A block the text never closes is closed first, because otherwise it would hold every line Intakt adds after it; an HTML block's empty closer leaves the blank line that ends it.
+    private function closed(string $text): string
+    {
+        $closer = ReadableLines::of($text)->closer;
+
+        return null === $closer ? $text : $text."\n".$closer;
     }
 
     private function resultLines(): string

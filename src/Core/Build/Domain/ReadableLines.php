@@ -19,7 +19,7 @@ final readonly class ReadableLines
     // Raw text up to their end tag, because CommonMark shows a heading or a fence inside them as written.
     private const array RAW_HTML = ['pre', 'script', 'style', 'textarea'];
 
-    // Raw text up to the next blank line, the tags CommonMark names for that.
+    // Raw text up to the next blank line, because CommonMark ends the HTML blocks these tags open there.
     private const array HTML_BLOCKS = ['address', 'article', 'aside', 'base', 'basefont', 'blockquote', 'body', 'caption', 'center', 'col', 'colgroup', 'dd', 'details', 'dialog', 'dir', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'frame', 'frameset', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hr', 'html', 'iframe', 'legend', 'li', 'link', 'main', 'menu', 'menuitem', 'nav', 'noframes', 'ol', 'optgroup', 'option', 'p', 'param', 'search', 'section', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'title', 'tr', 'track', 'ul'];
 
     private const string LIST_CONTENT = '/^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$))+/';
@@ -157,8 +157,33 @@ final readonly class ReadableLines
             return self::withoutComments($line);
         }
 
-        // An end tag on the opening line ends the block with it.
+        // A raw block may end on its opening line, because CommonMark ends it on the line that holds its end tag.
         return ['', 1 === preg_match($html[0], $line) ? null : $html];
+    }
+
+    /**
+     * @return ?array{string, int, int, string}
+     */
+    private static function blockOpenedBy(string $line, int $container): ?array
+    {
+        if (1 === preg_match(self::EXTERNAL_OPENS, $line)) {
+            return [self::EXTERNAL_CLOSES, 0, PHP_INT_MAX, '<!-- /external -->'];
+        }
+
+        if (1 !== preg_match(self::FENCE_OPENS, $line, $found)) {
+            return null;
+        }
+
+        $column = self::widthOf($found['lead']);
+        $container = '' === $found['markers'] ? $container : $column;
+
+        // No fence four columns into its container, or when more backticks follow, because CommonMark reads those as indented code or an inline code span.
+        if ($column - $container > 3 || ('`' === $found['fence'][0] && str_contains($found['info'], '`'))) {
+            return null;
+        }
+
+        // A fence closes only with the same character at least as often, because CommonMark lets a longer fence hold a shorter one, and at most three columns into its container, because a deeper closer is the code's own text; its closer is indented to the container, because one further out would end the list item and open a fence of its own.
+        return [sprintf('/^[ \t]*%s{%d,}[ \t]*$/', preg_quote($found['fence'][0], '/'), strlen($found['fence'])), $container, 3, str_repeat(' ', $container).$found['fence']];
     }
 
     /**
@@ -193,9 +218,7 @@ final readonly class ReadableLines
             $heading = self::underlinedFrom($line, $start, $listItem);
 
             if (null !== $heading) {
-                $text = implode(' ', array_map(trim(...), array_slice($lines, $heading, $index - $heading)));
-                $marker = str_contains($line, '=') ? '#' : '##';
-                array_splice($lines, $heading, $index - $heading + 1, [$marker.' '.$text, ...array_fill(0, $index - $heading, '')]);
+                array_splice($lines, $heading, $index - $heading + 1, self::headingOf(array_slice($lines, $heading, $index - $heading + 1)));
                 $start = null;
 
                 continue;
@@ -214,29 +237,17 @@ final readonly class ReadableLines
         return null !== $start && $listItem < $start && 1 === preg_match(self::UNDERLINE, $line) ? $start : null;
     }
 
+    // The level stays, because `=` underlines a first-level and `-` a second-level heading, and only one of them may be the Evidence heading.
     /**
-     * @return ?array{string, int, int, string}
+     * @param list<string> $paragraph
+     *
+     * @return list<string>
      */
-    private static function blockOpenedBy(string $line, int $container): ?array
+    private static function headingOf(array $paragraph): array
     {
-        if (1 === preg_match(self::EXTERNAL_OPENS, $line)) {
-            return [self::EXTERNAL_CLOSES, 0, PHP_INT_MAX, '<!-- /external -->'];
-        }
+        $underline = (string) array_pop($paragraph);
 
-        if (1 !== preg_match(self::FENCE_OPENS, $line, $found)) {
-            return null;
-        }
-
-        $column = self::widthOf($found['lead']);
-        $container = '' === $found['markers'] ? $container : $column;
-
-        // No fence four columns into its container, or when more backticks follow, because CommonMark reads those as indented code or an inline code span.
-        if ($column - $container > 3 || ('`' === $found['fence'][0] && str_contains($found['info'], '`'))) {
-            return null;
-        }
-
-        // A fence closes only with the same character at least as often, because CommonMark lets a longer fence hold a shorter one, and at most three columns into its container, because a deeper closer is the code's own text; its closer is indented to the container, because one further out would end the list item and open a fence of its own.
-        return [sprintf('/^[ \t]*%s{%d,}[ \t]*$/', preg_quote($found['fence'][0], '/'), strlen($found['fence'])), $container, 3, str_repeat(' ', $container).$found['fence']];
+        return [(str_contains($underline, '=') ? '#' : '##').' '.implode(' ', array_map(trim(...), $paragraph)), ...array_fill(0, count($paragraph), '')];
     }
 
     private static function indentOf(string $line): int
