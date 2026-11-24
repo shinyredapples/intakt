@@ -83,6 +83,23 @@ final readonly class GitHubWorkSource implements WorkSource
         $this->store->failForGood($project, $number, $reason);
     }
 
+    // Nothing rather than reworks left out, because a task taken for a fresh build may have a pull request open, and the order depends on it.
+    /**
+     * @param list<QueuedIssue> $tasks
+     *
+     * @return array<int, int>|null
+     */
+    private function reworksOrNone(string $project, IntakePlan $plan, array $tasks): ?array
+    {
+        try {
+            return $this->pullRequests->reworksOf($project, $plan, $tasks);
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+            $this->logger->warning('The open pull requests of the tasks of project {project} could not be read, so nothing is picked or shown: {reason}', ['project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
+
+            return null;
+        }
+    }
+
     // The order is taken from the reworks read now, because a pull request found only by its branch is not in the plan's order.
     /**
      * @param array<int, int> $reworks
@@ -101,7 +118,7 @@ final readonly class GitHubWorkSource implements WorkSource
                 continue;
             }
 
-            $pick = $this->pickUnlessFailed($project, $issue, $plan, $reworks);
+            $pick = $this->pickUnlessFailed($project, $this->taskOf($issue, $reworks), $plan);
             if ($pick instanceof WorkPick) {
                 return $pick;
             }
@@ -176,43 +193,23 @@ final readonly class GitHubWorkSource implements WorkSource
     }
 
     // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see. The pull requests were read before the failures, so a failure recorded during that forge read is still seen.
-    /**
-     * @param array<int, int> $reworks
-     */
-    private function pickUnlessFailed(string $project, QueuedIssue $issue, IntakePlan $plan, array $reworks): ?WorkPick
+    private function pickUnlessFailed(string $project, Task $task, IntakePlan $plan): ?WorkPick
     {
         try {
-            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($this->taskOf($issue, $reworks));
+            return $this->isHeldByAFailure($project, $task->number, $plan) ? null : WorkPick::picked($task);
         } catch (ProjectHeldByAnotherWriter $held) {
-            $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
+            $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $task->number, 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
 
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
         }
     }
 
     // Read under the lock a failure is recorded with, so a task marked failed after the plan was made is never picked. Its waits are the ones the plan resolved, because a wait on a pull request stands for the tasks that pull request closes.
-    private function isHeldByAFailure(string $project, QueuedIssue $issue, IntakePlan $plan): bool
+    private function isHeldByAFailure(string $project, int $number, IntakePlan $plan): bool
     {
         $failures = $this->store->failuresUnderTheListingLock($project);
 
-        return isset($failures[$issue->number()]) || array_any($plan->dependsOn[$issue->number()] ?? [], static fn (int $target): bool => isset($failures[$target]));
-    }
-
-    // Nothing rather than reworks left out, because a task taken for a fresh build may have a pull request open, and the order depends on it.
-    /**
-     * @param list<QueuedIssue> $tasks
-     *
-     * @return array<int, int>|null
-     */
-    private function reworksOrNone(string $project, IntakePlan $plan, array $tasks): ?array
-    {
-        try {
-            return $this->pullRequests->reworksOf($project, $plan, $tasks);
-        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
-            $this->logger->warning('The open pull requests of the tasks of project {project} could not be read, so nothing is picked or shown: {reason}', ['project' => $project, 'reason' => $failure->getMessage(), 'exception' => $failure]);
-
-            return null;
-        }
+        return isset($failures[$number]) || array_any($plan->dependsOn[$number] ?? [], static fn (int $target): bool => isset($failures[$target]));
     }
 
     /**
