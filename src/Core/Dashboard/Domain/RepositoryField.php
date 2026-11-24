@@ -16,7 +16,7 @@ final readonly class RepositoryField
     public const string NOT_AN_ADDRESS = 'This is not a repository address: use https://github.com/owner/name or owner/name.';
 
     private const array GITHUB_HOSTS = ['github.com', 'www.github.com'];
-    // GitHub's own limits: an owner is 1 to 39 letters, digits or inner dashes; a name is up to 100 letters, digits, dots, dashes or underscores.
+    // GitHub's own naming limits, because a name GitHub would refuse should fail here and not at the first call to GitHub.
     private const string OWNER = '[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}';
     private const string NAME = '[A-Za-z0-9._-]{1,100}';
 

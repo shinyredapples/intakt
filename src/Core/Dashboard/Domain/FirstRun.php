@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// What the setup wizard's steps read from the install: the AI account step, the project check and the first review.
 final readonly class FirstRun
 {
     public function __construct(
