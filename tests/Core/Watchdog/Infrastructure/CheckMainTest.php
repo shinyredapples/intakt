@@ -99,7 +99,7 @@ final class CheckMainTest extends TestCase
         $base = $this->repository->commitEmpty('Main before the task');
         $head = $this->repository->commitFile($base, 'A file named like the base commit');
 
-        self::assertSame([$head], $this->history()->broughtInBy(new RecordedMerge($head, $base)));
+        self::assertEquals([new CommitName($head)], $this->history()->broughtInBy(new RecordedMerge($head, $base)));
     }
 
     public function testAnUnsignedCommitMainAlreadyHeldStaysUnsignedWhenTheRepositoryIsCutShallowAtTheBaseWhileTheCoverageIsRead(): void
