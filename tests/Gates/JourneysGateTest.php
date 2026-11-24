@@ -8,7 +8,9 @@ use Intakt\Gates\CheckCommand;
 use Intakt\Gates\JourneysGate;
 use Intakt\Gates\Options;
 use Intakt\Gates\ProcessRunner;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(JourneysGate::class)]
@@ -34,15 +36,8 @@ final class JourneysGateTest extends SandboxTestCase
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertTrue($run->failed('journeys'), $run->output());
         self::assertStringContainsString('BrokenJourneyTest.php: journey "broken" failed at step "read the second page": Failed asserting that two strings are identical.', $run->findingsOf('journeys'));
-        self::assertStringNotContainsString('CalmJourneyTest', $run->findingsOf('journeys'));
-    }
-
-    public function testAPhpUnitNoticeInAJourneyFailsTheGate(): void
-    {
-        $run = $this->sandboxWith('journeys-phpunit-notice')->check('--journeys');
-
-        self::assertSame(1, $run->exitCode(), $run->output());
         self::assertStringContainsString('NoticeJourneyTest.php', $run->findingsOf('journeys'));
+        self::assertStringNotContainsString('CalmJourneyTest', $run->findingsOf('journeys'));
     }
 
     public function testAChildAJourneyLeavesBehindDoesNotOutliveTheGate(): void
@@ -84,28 +79,28 @@ final class JourneysGateTest extends SandboxTestCase
         self::assertStringContainsString('no journey found', $run->findingsOf('journeys'));
     }
 
-    public function testJourneysDoNotRunTogetherWithOtherOptions(): void
+    /**
+     * @param list<string> $others
+     */
+    #[DataProvider('optionsThatJourneysRefuse')]
+    public function testJourneysDoNotRunTogetherWithOtherOptions(array $others): void
     {
-        $run = $this->emptySandbox()->check('--journeys', '--fast');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('--journeys runs alone');
 
-        self::assertSame(2, $run->exitCode());
-        self::assertStringContainsString('--journeys runs alone', $run->output());
+        Options::fromArguments(['--journeys', ...$others]);
     }
 
-    public function testJourneysDoNotRunAgainstABase(): void
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function optionsThatJourneysRefuse(): iterable
     {
-        $run = $this->emptySandbox()->check('--journeys', '--base=HEAD');
-
-        self::assertSame(2, $run->exitCode());
-        self::assertStringContainsString('--journeys runs alone', $run->output());
-    }
-
-    public function testJourneysDoNotRunOnATestMerge(): void
-    {
-        $run = $this->emptySandbox()->check('--journeys', '--test-merge=HEAD:HEAD');
-
-        self::assertSame(2, $run->exitCode());
-        self::assertStringContainsString('--journeys runs alone', $run->output());
+        yield 'fast' => [['--fast']];
+        yield 'base' => [['--base=HEAD']];
+        yield 'test merge' => [['--test-merge=HEAD:HEAD']];
+        yield 'only' => [['--only=tests']];
+        yield 'skip' => [['--skip=tests']];
     }
 
     public function testTheJourneysGateIsNotOneOfTheGatesAChangePasses(): void
