@@ -23,6 +23,7 @@ use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use Symfony\Bridge\Twig\Extension\RoutingExtension;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Routing\Generator\UrlGenerator;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\Route;
@@ -53,7 +54,7 @@ final class TourCaptionsOn
     {
         $payloads = new LedgerPayloads(StoredSerializerFactory::create());
 
-        return new LedgerReviewPages($ledger, new RoundPayloads($payloads), new RoundLedgerReading($ledger, $payloads, new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
+        return new LedgerReviewPages(new MockClock(),$ledger, new RoundPayloads($payloads), new RoundLedgerReading($ledger, $payloads, new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
     }
 
     // The shipped templates with the one route the caption links, so the stream is the text a page receives.

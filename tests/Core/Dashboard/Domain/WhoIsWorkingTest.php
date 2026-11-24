@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\ReviewCeiling;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
@@ -38,38 +39,38 @@ final class WhoIsWorkingTest extends TestCase
 {
     public function testAReviewerStillRunningIsALaneWithItsPlaceAndStart(): void
     {
-        $working = new WhoIsWorking([$this->review('feat/a', 2, [$this->running('r1-a')])]);
+        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 2, [$this->running('r1-a')])]);
 
         self::assertEquals([new Lane('r1-a', 'correctness', 'standard', 'alpha', 'feat/a', 2, $this->since(), 'r2feat/a')], $working->lanes());
     }
 
     public function testTheStatusLineSaysQuietWhileNobodyWorks(): void
     {
-        self::assertSame('Quiet · nobody working', new WhoIsWorking([])->statusLine());
+        self::assertSame('Quiet · nobody working', new WhoIsWorking($this->now(),[])->statusLine());
     }
 
     public function testTheStatusLineCountsABuildInFlightWhileNoReviewerWorks(): void
     {
-        self::assertSame('Running smoothly · 1 build running', new WhoIsWorking([], 1)->statusLine());
+        self::assertSame('Running smoothly · 1 build running', new WhoIsWorking($this->now(),[], 1)->statusLine());
     }
 
     public function testTheStatusLineCountsTheReviewersAndTheBuildsInFlight(): void
     {
-        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')])], 2);
+        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')])], 2);
 
         self::assertSame('Running smoothly · 1 reviewer working, 2 builds running', $working->statusLine());
     }
 
     public function testTheStatusLineCountsOneReviewerInTheSingular(): void
     {
-        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')])]);
+        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')])]);
 
         self::assertSame('Running smoothly · 1 reviewer working', $working->statusLine());
     }
 
     public function testTheStatusLineCountsTheRunningReviewersOfEveryReview(): void
     {
-        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')]), $this->review('feat/b', 2, [$this->running('r2-b')])]);
+        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')]), $this->review('feat/b', 2, [$this->running('r2-b')])]);
 
         self::assertSame('Running smoothly · 2 reviewers working', $working->statusLine());
     }
@@ -80,7 +81,7 @@ final class WhoIsWorkingTest extends TestCase
     #[DataProvider('finished')]
     public function testAReviewerThatIsNoLongerRunningIsNoLane(Closure $finish): void
     {
-        $working = new WhoIsWorking([$this->review('feat/a', 1, [$finish($this->running('r1-a'))])]);
+        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$finish($this->running('r1-a'))])]);
 
         self::assertSame(0, $working->working());
     }
@@ -98,7 +99,7 @@ final class WhoIsWorkingTest extends TestCase
 
     public function testNoReviewsMeansNobodyIsWorking(): void
     {
-        $working = new WhoIsWorking([]);
+        $working = new WhoIsWorking($this->now(),[]);
 
         self::assertSame([[], 0], [$working->lanes(), $working->working()]);
     }
@@ -107,7 +108,7 @@ final class WhoIsWorkingTest extends TestCase
     {
         $judged = $this->round('feat/a', 1, [$this->running('r1-a')])->judgedWith([], $this->since());
 
-        self::assertSame(0, new WhoIsWorking([new Review([$judged])])->working());
+        self::assertSame(0, new WhoIsWorking($this->now(),[new Review([$judged])])->working());
     }
 
     #[DataProvider('endings')]
@@ -115,7 +116,7 @@ final class WhoIsWorkingTest extends TestCase
     {
         $ended = $this->round('feat/a', 1, [$this->running('r1-a')])->endedAs(new RoundEnding($end, 'ended'));
 
-        self::assertSame(0, new WhoIsWorking([new Review([$ended])])->working());
+        self::assertSame(0, new WhoIsWorking($this->now(),[new Review([$ended])])->working());
     }
 
     /**
@@ -132,12 +133,12 @@ final class WhoIsWorkingTest extends TestCase
         $first = $this->round('feat/a', 1, [$this->running('r1-a')])->judgedWith([], $this->since());
         $second = $this->round('feat/a', 2, [$this->running('r2-a')]);
 
-        self::assertSame(['r2-a'], $this->reviewers(new WhoIsWorking([new Review([$first, $second])])));
+        self::assertSame(['r2-a'], $this->reviewers(new WhoIsWorking($this->now(),[new Review([$first, $second])])));
     }
 
     public function testLanesKeepTheOrderOfTheReviewsAndTheirReviewers(): void
     {
-        $working = new WhoIsWorking([
+        $working = new WhoIsWorking($this->now(),[
             $this->review('feat/a', 1, [$this->running('r1-a'), $this->running('r1-b')]),
             $this->review('feat/b', 1, [$this->running('r2-a')]),
         ]);
@@ -147,7 +148,28 @@ final class WhoIsWorkingTest extends TestCase
 
     public function testOnlyTheRunningOnesOfARoundAreLanes(): void
     {
-        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')->stopped(), $this->running('r1-b')])]);
+        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')->stopped(), $this->running('r1-b')])]);
+
+        self::assertSame(['r1-b'], $this->reviewers($working));
+    }
+
+    public function testAReviewerRunningOneSecondShortOfTheReviewCeilingIsStillALane(): void
+    {
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$this->runningFor('r1-a', ReviewCeiling::SECONDS - 1)])]);
+
+        self::assertSame(['r1-a'], $this->reviewers($working));
+    }
+
+    public function testAReviewerStillMarkedRunningAtTheReviewCeilingIsNoLane(): void
+    {
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$this->runningFor('r1-a', ReviewCeiling::SECONDS)])]);
+
+        self::assertSame([0, 'Quiet · nobody working'], [$working->working(), $working->statusLine()]);
+    }
+
+    public function testAReviewerPastTheReviewCeilingLeavesTheLiveReviewersOfTheRoundAsLanes(): void
+    {
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$this->runningFor('r1-a', ReviewCeiling::SECONDS + 1), $this->running('r1-b')])]);
 
         self::assertSame(['r1-b'], $this->reviewers($working));
     }
@@ -181,8 +203,18 @@ final class WhoIsWorkingTest extends TestCase
         return new Review([$this->round($change, $number, $outcomes)]);
     }
 
+    private function runningFor(string $id, int $seconds): ReviewerOutcome
+    {
+        return new ReviewerOutcome($id, 'correctness', 'standard', $this->now()->modify(sprintf('-%d seconds', $seconds)));
+    }
+
     private function since(): DateTimeImmutable
     {
         return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+    }
+
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-01T10:30:00+00:00');
     }
 }

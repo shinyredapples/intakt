@@ -87,7 +87,7 @@ final class WhoIsWorkingOnSqliteTest extends KernelTestCase
 
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        $pages = new LedgerReviewPages($clock,$ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
         $lanes = $pages->board()->whoIsWorking()->lanes();
 

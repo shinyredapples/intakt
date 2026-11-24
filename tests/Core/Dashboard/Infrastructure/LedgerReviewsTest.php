@@ -44,6 +44,7 @@ use Intakt\Tests\Support\UnpricedRoundCosts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Uid\Uuid;
@@ -316,7 +317,7 @@ final class LedgerReviewsTest extends TestCase
      */
     private function listWith(RoundCosts $costs, MessageBusInterface $queries, RoundEndings $endings): array
     {
-        $pages = new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
+        $pages = new LedgerReviewPages(new MockClock(),$this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
 
         return new LedgerReviews($pages)->newestFirst();
     }

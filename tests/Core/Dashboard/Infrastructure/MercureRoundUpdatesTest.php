@@ -44,6 +44,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\Exception\LockReleasingException;
@@ -808,7 +809,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private function pages(): LedgerReviewPages
     {
-        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        return new LedgerReviewPages(new MockClock(),$this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     /**
