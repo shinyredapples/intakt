@@ -459,10 +459,10 @@ final class RoundLedgerReadingTest extends KernelTestCase
     public function testPricingOneRoundBesideManyUnrelatedEndedCallsGrowsPeakMemoryNoMoreThanTwiceWhatReadingItsTokensDoes(): void
     {
         $ledger = new DashboardLedger();
-        $this->recordCallIn($ledger, 'target', self::ROUND, 1);
+        $this->recordCallIn($ledger, 'target', self::ROUND);
 
         for ($call = 0; $call < 2000; ++$call) {
-            $this->recordCallIn($ledger, 'unrelated-'.$call, 'history-'.$call, 5);
+            $this->recordCallIn($ledger, 'unrelated-'.$call, 'history-'.$call);
         }
 
         $reading = $this->reading($ledger);
@@ -698,9 +698,9 @@ final class RoundLedgerReadingTest extends KernelTestCase
     }
 
     // In a ledger of its own, because thousands of rows written to the database would make the memory test slow.
-    private function recordCallIn(Ledger $ledger, string $call, string $round, int $usages): void
+    private function recordCallIn(Ledger $ledger, string $call, string $round): void
     {
-        foreach ([['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => 'big'], ['call' => $call, 'phase' => 'settled', 'usages' => array_fill(0, $usages, $this->usage())]] as $payload) {
+        foreach ([['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => 'big'], ['call' => $call, 'phase' => 'settled', 'usages' => array_fill(0, 5, $this->usage())]] as $payload) {
             self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
         }
     }

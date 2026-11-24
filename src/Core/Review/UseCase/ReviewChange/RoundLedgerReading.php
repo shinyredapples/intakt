@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\UseCase\ReviewChange;
 
 use Closure;
 use DateTimeImmutable;
+use Generator;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -128,9 +129,7 @@ final readonly class RoundLedgerReading implements RoundCosts
         return $this->costsOf($roundId)->of($roundId);
     }
 
-    // One read of the usage rows for all the rounds, because a review page with several rounds read the ledger once more for each.
-    // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages, or without an ending row yet, is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
-    // Each ending is priced as it is decoded and one of an unasked round is dropped first, because the ledger holds the usage of every round and keeping it would grow with the ledger.
+    // One read of the usage rows for all the rounds, because a review page with several rounds read the ledger once more for each. Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages, or without an ending row yet, is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
     public function costsOf(string ...$roundIds): RoundCostList
     {
         $recorded = $this->usageRows();
@@ -139,13 +138,7 @@ final readonly class RoundLedgerReading implements RoundCosts
         $costs = array_fill_keys($roundIds, Cost::none());
         $endedCalls = [];
 
-        foreach ($recorded as $row) {
-            $ended = $this->endingOf($row);
-
-            if (null === $ended || !array_key_exists($ended->call, $models)) {
-                continue;
-            }
-
+        foreach ($this->endingsOf($recorded, $models) as $ended) {
             $endedCalls[$ended->call] = true;
             $this->addCall($costs, $models[$ended->call], fn (?string $model): Cost => $this->costOfEnding($ended, $model));
         }
@@ -238,15 +231,29 @@ final readonly class RoundLedgerReading implements RoundCosts
     {
         $usages = [];
 
+        foreach ($this->endingsOf($recorded, $calls) as $ended) {
+            $usages[$ended->call] = [...$usages[$ended->call] ?? [], ...$ended->usages];
+        }
+
+        return $usages;
+    }
+
+    /**
+     * @param list<RecordedEvent>     $recorded
+     * @param array<array-key, mixed> $calls
+     *
+     * @return Generator<int, UsageSettled|UsageUnsettled>
+     */
+    // One decoded ending at a time, and only of the given calls, because the ledger holds the usage of every round and keeping the rest would grow with the ledger.
+    private function endingsOf(array $recorded, array $calls): Generator
+    {
         foreach ($recorded as $row) {
             $ended = $this->endingOf($row);
 
             if (null !== $ended && array_key_exists($ended->call, $calls)) {
-                $usages[$ended->call] = [...$usages[$ended->call] ?? [], ...$ended->usages];
+                yield $ended;
             }
         }
-
-        return $usages;
     }
 
     /**
