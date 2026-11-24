@@ -10,6 +10,7 @@ use Intakt\Core\Platform\Contract\KeptTail;
 use Intakt\Core\Platform\Contract\ListedHeaders;
 use Intakt\Core\Platform\Contract\RedactedSpans;
 use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Core\Platform\Contract\SecretShape;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(HeldCredentialSpans::class)]
 #[CoversClass(HeaderSpans::class)]
 #[CoversClass(RedactedSpans::class)]
+#[CoversClass(SecretShape::class)]
 #[UsesClass(KeptTail::class)]
 #[UsesClass(ListedHeaders::class)]
 final class RedactionTest extends TestCase
