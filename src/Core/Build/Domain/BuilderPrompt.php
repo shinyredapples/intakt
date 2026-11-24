@@ -55,14 +55,6 @@ final readonly class BuilderPrompt
     /**
      * @return list<PromptPart>
      */
-    private function testFirstOf(TaskKind $kind): array
-    {
-        return TaskKind::Bug === $kind ? [new PromptPart(self::BUG_TEST_FIRST)] : [];
-    }
-
-    /**
-     * @return list<PromptPart>
-     */
     private function decisionsOf(BuildBrief $brief): array
     {
         if ($brief->decisions->isEmpty()) {
@@ -77,6 +69,14 @@ final readonly class BuilderPrompt
         );
 
         return [new PromptPart("The maintainer's decisions on this task; apply each one:", $this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered)))];
+    }
+
+    /**
+     * @return list<PromptPart>
+     */
+    private function testFirstOf(TaskKind $kind): array
+    {
+        return TaskKind::Bug === $kind ? [new PromptPart(self::BUG_TEST_FIRST)] : [];
     }
 
     /**
