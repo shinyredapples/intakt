@@ -93,7 +93,7 @@ final readonly class GitHubIssues
         $this->issueCommand(['close', (string) $number, '--comment', $comment], '');
     }
 
-    // A workflow's own token may not read its account, and such a token always files as the Actions bot.
+    // The Actions bot stands in when GitHub refuses a workflow's own token its account, because such a token always files as that bot.
     public function account(): string
     {
         try {

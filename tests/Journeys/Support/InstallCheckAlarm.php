@@ -54,6 +54,25 @@ final readonly class InstallCheckAlarm
         return self::MARKER.hash('sha256', $identity).' -->';
     }
 
+    private function body(InstallStepResult $step, string $marker, ?Uri $link): string
+    {
+        // The end of the log is where the failure shows, and a room of 50000 characters keeps the body under GitHub's limit.
+        $tail = mb_substr($step->tail, -50000);
+        $fence = str_repeat('`', max(3, $this->longestBacktickRun($tail) + 1));
+        $run = $link instanceof Uri ? "\nRun: ".$link->toString()."\n" : '';
+        $body = $marker."\nThe install check, which installs the README's way on a clean machine, failed at the step `".str_replace('`', "'", $step->name)."`.\n".$run
+            ."\nLast lines of its log:\n\n".$fence."\n".$tail."\n".$fence."\n";
+
+        return mb_substr($body, 0, JourneyAlarmTask::BODY_LIMIT - 1);
+    }
+
+    private function longestBacktickRun(string $text): int
+    {
+        preg_match_all('/`+/', $text, $runs);
+
+        return array_reduce($runs[0], static fn (int $longest, string $run): int => max($longest, strlen($run)), 0);
+    }
+
     // The body opens with the step's marker, so the marker is read from its first line.
     private function settle(GitHubIssues $owned, InstallStepResult $step, string $body): ?string
     {
@@ -88,25 +107,6 @@ final readonly class InstallCheckAlarm
         $owned->replaceBody($oldest, $body);
 
         return 'updated #'.$oldest.', closed #'.$created['number'].' as its duplicate';
-    }
-
-    private function body(InstallStepResult $step, string $marker, ?Uri $link): string
-    {
-        // The end of the log is where the failure shows, and a room of 50000 characters keeps the body under GitHub's limit.
-        $tail = mb_substr($step->tail, -50000);
-        $fence = str_repeat('`', max(3, $this->longestBacktickRun($tail) + 1));
-        $run = $link instanceof Uri ? "\nRun: ".$link->toString()."\n" : '';
-        $body = $marker."\nThe install check, which installs the README's way on a clean machine, failed at the step `".str_replace('`', "'", $step->name)."`.\n".$run
-            ."\nLast lines of its log:\n\n".$fence."\n".$tail."\n".$fence."\n";
-
-        return mb_substr($body, 0, JourneyAlarmTask::BODY_LIMIT - 1);
-    }
-
-    private function longestBacktickRun(string $text): int
-    {
-        preg_match_all('/`+/', $text, $runs);
-
-        return array_reduce($runs[0], static fn (int $longest, string $run): int => max($longest, strlen($run)), 0);
     }
 
     // A README that lost a command shifts or drops the places after it, so once every install command passes, a task for a step this run did not have is closed.
