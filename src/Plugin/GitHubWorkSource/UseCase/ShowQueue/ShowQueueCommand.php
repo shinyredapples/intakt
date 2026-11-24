@@ -41,7 +41,7 @@ final readonly class ShowQueueCommand
 
     private function printPickOrder(SymfonyStyle $io, string $project, WorkQueue $queue): void
     {
-        $io->writeln(sprintf('Pick order of project %s:', $project));
+        $this->printLine($io, sprintf('Pick order of project %s:', $project));
         if ([] === $queue->ready()) {
             $io->writeln('  no task is ready');
 
@@ -55,7 +55,7 @@ final readonly class ShowQueueCommand
 
     private function printHeldTasks(SymfonyStyle $io, string $project, WorkQueue $queue): void
     {
-        $io->writeln(sprintf('Held tasks of project %s:', $project));
+        $this->printLine($io, sprintf('Held tasks of project %s:', $project));
         if ([] === $queue->held()) {
             $io->writeln('  no task is held');
 
@@ -74,7 +74,7 @@ final readonly class ShowQueueCommand
         return null === $task->reworkOf ? $line : sprintf('%s (rework of #%d)', $line, $task->reworkOf);
     }
 
-    // Raw and without control characters, because a title or a quoted wait line is issue text anyone can write, and it must not restyle or rewrite the terminal.
+    // Raw and without control characters, because a title or a quoted wait line is issue text anyone can write, and it must not restyle or rewrite the terminal; the headings go raw too, so a project name is printed as configured.
     private function printLine(SymfonyStyle $io, string $line): void
     {
         $io->writeln($this->printable($line), OutputInterface::OUTPUT_RAW);

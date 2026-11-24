@@ -6,11 +6,36 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
+use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
+use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
+use Intakt\Plugin\GitHubWorkSource\Domain\TaskBranchName;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\GitHubWorkSource;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\PullRequestsOfTasks;
 use Intakt\Plugin\GitHubWorkSource\UseCase\ShowQueue\ShowQueueCommand;
+use Intakt\Plugin\WorkSource\Contract\HeldTask;
+use Intakt\Plugin\WorkSource\Contract\Task;
+use Intakt\Plugin\WorkSource\Contract\WorkQueue;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -18,6 +43,30 @@ use Symfony\Component\Filesystem\Filesystem;
 
 // The command as an install on SQLite runs it, with the project file read and the recorded issues in GitHub's shape served by the test environment, so the label a project names and the order printed are proven together.
 #[CoversClass(ShowQueueCommand::class)]
+#[UsesClass(GitHubWorkSource::class)]
+#[UsesClass(CompleteListing::class)]
+#[UsesClass(PullRequestsOfTasks::class)]
+#[UsesClass(IntakeStore::class)]
+#[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectNamesNoEligibilityLabel::class)]
+#[UsesClass(IntakeRules::class)]
+#[UsesClass(IntakePlan::class)]
+#[UsesClass(IntakeValidator::class)]
+#[UsesClass(HeldIssue::class)]
+#[UsesClass(IssueReferences::class)]
+#[UsesClass(ItemReading::class)]
+#[UsesClass(ListingRows::class)]
+#[UsesClass(Priority::class)]
+#[UsesClass(QueuedIssue::class)]
+#[UsesClass(StoredIssue::class)]
+#[UsesClass(SyncState::class)]
+#[UsesClass(TaskBranchName::class)]
+#[UsesClass(Vouching::class)]
+#[UsesClass(ListedIssue::class)]
+#[UsesClass(IssueHistory::class)]
+#[UsesClass(WorkQueue::class)]
+#[UsesClass(Task::class)]
+#[UsesClass(HeldTask::class)]
 final class ShowQueueOnTheContainerTest extends KernelTestCase
 {
     private const array VARIABLES = ['INTAKT_CONFIG', 'BUILD_RECORDING'];

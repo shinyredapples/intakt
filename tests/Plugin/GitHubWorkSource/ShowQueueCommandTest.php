@@ -229,6 +229,27 @@ final class ShowQueueCommandTest extends KernelTestCase
         self::assertStringContainsString("  #3 Held: a b c d e f g\n", $display);
     }
 
+    public function testBothHeadingsPrintTheProjectNameAsConfigured(): void
+    {
+        $source = self::createStub(WorkSource::class);
+        $source->method('queue')->willReturn(WorkQueue::listed([], []));
+
+        $display = $this->show('alpha<info>beta</info>', $source)->getDisplay();
+
+        self::assertStringContainsString("Pick order of project alpha<info>beta</info>:\n", $display);
+        self::assertStringContainsString("Held tasks of project alpha<info>beta</info>:\n", $display);
+    }
+
+    public function testTheShortListingErrorPrintsTheProjectNameAsConfigured(): void
+    {
+        $source = self::createStub(WorkSource::class);
+        $source->method('queue')->willReturn(WorkQueue::incomplete());
+
+        $error = $this->show('alpha<info>beta</info>', $source)->getErrorOutput();
+
+        self::assertStringContainsString('The listing of project alpha<info>beta</info> came back short', preg_replace('/\s+/', ' ', $error) ?? '');
+    }
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
