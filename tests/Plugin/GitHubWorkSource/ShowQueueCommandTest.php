@@ -22,6 +22,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskBranchName;
@@ -61,6 +62,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(ListingRows::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(QueuedIssue::class)]
+#[UsesClass(QueueOrder::class)]
 #[UsesClass(StoredIssue::class)]
 #[UsesClass(SyncState::class)]
 #[UsesClass(TaskBranchName::class)]
@@ -75,7 +77,7 @@ final class ShowQueueCommandTest extends KernelTestCase
     private BufferingLogger $logger;
     private string $eligibilityLabel = 'intakt';
 
-    public function testThePickOrderPutsTheUrgentTaskFirstThenTheReworkThenPriorityThenDueDate(): void
+    public function testThePickOrderPutsTheReworkFirstThenTheUrgentTaskThenPriorityThenDueDate(): void
     {
         $this->reads->lists([
             Issues::task(1, ['intakt', 'priority:low']),
@@ -92,8 +94,8 @@ final class ShowQueueCommandTest extends KernelTestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame(<<<'TEXT'
             Pick order of project alpha:
-              1. #5 Task 5
-              2. #6 Task 6 (rework of #20)
+              1. #6 Task 6 (rework of #20)
+              2. #5 Task 5
               3. #2 Task 2
               4. #3 Task 3
               5. #4 Task 4
