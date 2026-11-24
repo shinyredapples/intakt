@@ -75,7 +75,7 @@ return static function (ContainerConfigurator $container): void {
     // The framework's own fallback logger on stderr, because the app's logger is a service of the container being built, and a skipped kept key must not go unnoticed.
     $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, new Logger(LogLevel::WARNING), [$vault])->loadEnvVars();
 
-    $isSet = new ProviderKeySource($vault, $keptValues, $environmentValue)->isSet(...);
+    $keySource = new ProviderKeySource($vault, $keptValues, $environmentValue);
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
@@ -249,7 +249,7 @@ return static function (ContainerConfigurator $container): void {
 
         foreach ($configuration['accounts'][$provider->value] as $name) {
             $account = new Account($provider, $name);
-            $missing = new EnvironmentVariables(...array_filter([...$account->variables()], static fn (string $variable): bool => !$isSet($variable)));
+            $missing = $keySource->missing($account);
 
             if ($missing->isEmpty()) {
                 $enabled[$name] = $account;

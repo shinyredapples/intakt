@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -33,8 +35,13 @@ final class ProviderKeySourceTest extends TestCase
     {
         $source = $this->source(environment: static fn (string $name): ?string => 'OPENAI_COMPATIBLE_BASE_URL' === $name ? 'http://localhost:11434/v1' : null);
 
-        self::assertTrue($source->isSet('OPENAI_COMPATIBLE_BASE_URL'));
-        self::assertFalse($source->isSet('OPENAI_COMPATIBLE_API_KEY'));
+        $missing = $source->missing(new Account(Provider::OpenAiCompatible, Account::DEFAULT));
+
+        self::assertSame(['OPENAI_COMPATIBLE_API_KEY'], [...$missing]);
+        self::assertSame(
+            'Provider "openai_compatible" is disabled: set OPENAI_COMPATIBLE_API_KEY to enable it.',
+            Provider::OpenAiCompatible->disabledMessage($missing),
+        );
     }
 
     public function testAKeyInTheEnvironmentArrayWinsOverAnEmptyServerValue(): void

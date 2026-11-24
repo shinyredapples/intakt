@@ -27,7 +27,7 @@ Every reviewer and judge call carries the output limit of its tier (`max_output`
 
 When the container is built, a provider is included only if each of its variables has a value. This is decided at build time because an unset `%env()%` makes the service fail when it is first built. The key itself stays a `%env()%` reference, so no secret is written into the compiled container. The consequence is that a changed key needs a cache clear.
 
-**Where a value comes from.** `Intakt\Core\Ai\Infrastructure\ProviderKeySource` holds the rule and `config/packages/ai.php` only calls it (`environmentValue()`, `openVault()` and `isSet()`). A variable counts when it is non-empty in `$_ENV`, `$_SERVER` or the process environment, or has a non-empty value in the Symfony secrets vault, or, last, is the variable of the key kept from the browser (see "The provider key typed in the browser" below). These are the sources of Symfony's env processor, which falls back to its env var loaders (the vault's, then the kept key's) for an empty variable. The kept key does not count for a variable the vault lists when revealing that secret throws (see "What counts as missing" below): the vault's loader throws the same way at run time, before the kept key's loader is asked.
+**Where a value comes from.** `Intakt\Core\Ai\Infrastructure\ProviderKeySource` holds the rule and `config/packages/ai.php` only calls it (`environmentValue()`, `openVault()`, and `missing(Account)`, which lists the account's variables that `isSet()` finds without a value). The constructor's kept values are a `#[SensitiveParameter]`, so a trace never shows a kept key. A variable counts when it is non-empty in `$_ENV`, `$_SERVER` or the process environment, or has a non-empty value in the Symfony secrets vault, or, last, is the variable of the key kept from the browser (see "The provider key typed in the browser" below). These are the sources of Symfony's env processor, which falls back to its env var loaders (the vault's, then the kept key's) for an empty variable. The kept key does not count for a variable the vault lists when revealing that secret throws (see "What counts as missing" below): the vault's loader throws the same way at run time, before the kept key's loader is asked.
 
 **How the vault is read.**
 
@@ -63,7 +63,7 @@ Both exceptions are caught.
 **Tests.** The rule is unit-tested in `tests/Core/Ai/Infrastructure/ProviderKeySourceTest.php` without a kernel, one case each for:
 
 - an empty key (`testAnEmptyKeyCountsAsMissing`);
-- the OpenAI-compatible endpoint with its address set but its key missing (`testTheCompatibleEndpointNeedsBothItsAddressAndItsKey`);
+- the OpenAI-compatible endpoint with its address set but its key missing, where `missing()` names only the key and the disabled message says so (`testTheCompatibleEndpointNeedsBothItsAddressAndItsKey`);
 - a key in the environment array that wins over an empty server value (`testAKeyInTheEnvironmentArrayWinsOverAnEmptyServerValue`);
 - an empty key stored in a vault (`testAnEmptyKeyInTheSecretsVaultCountsAsMissing`);
 - a malformed `SYMFONY_DECRYPTION_SECRET` with a key in the environment (`testAMalformedDecryptionSecretLeavesAProviderWithItsKeyInTheEnvironmentEnabled`) and with a vault-only key, which is missing (`testAKeyStoredOnlyInTheVaultBehindAMalformedDecryptionSecretCountsAsMissing`);

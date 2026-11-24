@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use Closure;
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use RuntimeException;
+use SensitiveParameter;
 use SodiumException;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\Container;
@@ -23,6 +26,7 @@ final readonly class ProviderKeySource
      */
     public function __construct(
         private SodiumVault $vault,
+        #[SensitiveParameter]
         private array $keptValues,
         private Closure $environment,
     ) {
@@ -45,6 +49,12 @@ final readonly class ProviderKeySource
         $decryptionKey = new EnvVarProcessor(new Container())->getEnv('base64', 'SYMFONY_DECRYPTION_SECRET', static fn (): string => $secret);
 
         return new SodiumVault($directory, is_string($decryptionKey) ? $decryptionKey : null);
+    }
+
+    // An account is usable only with every one of its variables, so the compatible endpoint needs both its address and its key.
+    public function missing(Account $account): EnvironmentVariables
+    {
+        return new EnvironmentVariables(...array_filter([...$account->variables()], fn (string $variable): bool => !$this->isSet($variable)));
     }
 
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
