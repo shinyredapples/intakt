@@ -20,7 +20,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(InstallWalk::class)]
 #[UsesClass(ReadmeInstallBlock::class)]
 #[UsesClass(InstallProcessRunner::class)]
-#[UsesClass(GitHubIssues::class)]
+#[CoversClass(GitHubIssues::class)]
 #[UsesClass(JourneyAlarmTask::class)]
 final class InstallCheckTest extends TestCase
 {
@@ -175,7 +175,8 @@ final class InstallCheckTest extends TestCase
     {
         $this->account = new GitHubCallFailed('gh api user failed: gh: Bad credentials (HTTP 401)');
 
-        $this->expectExceptionMessage('Bad credentials');
+        $this->expectException(GitHubCallFailed::class);
+        $this->expectExceptionMessageMatches('/^gh api user failed: gh: Bad credentials \(HTTP 401\)$/');
 
         $this->issues()->account();
     }
@@ -184,7 +185,8 @@ final class InstallCheckTest extends TestCase
     {
         $this->account = "alarm\nsecond line";
 
-        $this->expectExceptionMessage('not an account login');
+        $this->expectException(GitHubCallFailed::class);
+        $this->expectExceptionMessageMatches('/^gh api user answered something that is not an account login$/');
 
         $this->issues()->account();
     }

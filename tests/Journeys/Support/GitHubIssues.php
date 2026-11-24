@@ -22,17 +22,21 @@ final readonly class GitHubIssues
     /**
      * @param (Closure(list<string>, string): string)|null $runner
      */
-    public function __construct(private string $repository, private ?Closure $runner = null)
+    public function __construct(private string $repository, private ?Closure $runner = null, private ?string $author = null)
     {
     }
 
-    // An author narrows the search to issues that account opened, because anyone can copy a marker into an issue of their own.
-    public function oldestOpenIssueHolding(string $marker, ?string $author = null): ?int
+    // Anyone can copy a marker into an issue of their own, so the copy this returns finds only the issues one account opened.
+    public function openedBy(string $account): self
+    {
+        return new self($this->repository, $this->runner, $account);
+    }
+
+    public function oldestOpenIssueHolding(string $marker): ?int
     {
         $marked = array_filter(
             $this->openIssues(),
-            static fn (array $issue): bool => (null === $author || $author === $issue['author'])
-                && in_array($marker, explode("\n", str_replace("\r", '', $issue['body'])), true),
+            static fn (array $issue): bool => in_array($marker, explode("\n", str_replace("\r", '', $issue['body'])), true),
         );
 
         return [] === $marked ? null : min(array_column($marked, 'number'));
@@ -42,14 +46,14 @@ final readonly class GitHubIssues
     /**
      * @return array<int, string>
      */
-    public function openIssuesOpeningWith(string $pattern, string $author): array
+    public function openIssuesOpeningWith(string $pattern): array
     {
         $marked = [];
 
         foreach ($this->openIssues() as $issue) {
             $first = explode("\n", str_replace("\r", '', $issue['body']), 2)[0];
 
-            if ($author === $issue['author'] && 1 === preg_match($pattern, $first)) {
+            if (1 === preg_match($pattern, $first)) {
                 $marked[$issue['number']] = $first;
             }
         }
@@ -112,7 +116,9 @@ final readonly class GitHubIssues
         $items = array_merge([], ...array_map($this->pageFrom(...), is_array($pages) && array_is_list($pages) ? $pages : throw $this->notAnIssueList()));
         $issues = array_filter($items, static fn (mixed $item): bool => !is_array($item) || !array_key_exists('pull_request', $item));
 
-        return array_values(array_map($this->issueFrom(...), $issues));
+        $author = $this->author;
+
+        return array_values(array_filter(array_map($this->issueFrom(...), $issues), static fn (array $issue): bool => null === $author || $author === $issue['author']));
     }
 
     /**
@@ -165,7 +171,7 @@ final readonly class GitHubIssues
             throw $this->notAnIssueList();
         }
 
-        // An issue without a readable author belongs to no account, so no author-bound search finds it.
+        // A missing author is kept as none rather than refused, because the journeys alarm reads every issue, and an issue with none is then no account's to change.
         $user = $issue['user'] ?? null;
         $author = is_array($user) && is_string($user['login'] ?? null) ? $user['login'] : null;
 
