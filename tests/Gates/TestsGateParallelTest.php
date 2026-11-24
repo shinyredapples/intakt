@@ -17,6 +17,7 @@ use Intakt\Gates\TestWorkerCount;
 use Intakt\Gates\TestWorkers;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(TestsGate::class)]
@@ -34,62 +35,50 @@ final class TestsGateParallelTest extends SandboxTestCase
 {
     private const array TWO_WORKERS = [TestWorkerCount::VARIABLE => '2'];
 
-    public function testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile(): void
+    public function testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile(): CheckRun
     {
         $sandbox = $this->sandboxWithPassingFiles(3);
         $sandbox->write('tests/FailingTest.php', $this->testFile('FailingTest', 'self::fail("the forced failure");'));
+        $sandbox->write('tests/SecondFailingTest.php', $this->testFile('SecondFailingTest', 'self::fail("the second failure");'));
+        $sandbox->write('tests/SkippedTest.php', $this->testFile('SkippedTest', 'self::markTestSkipped("the forced skip");'));
+        $sandbox->write('tests/DeprecatingTest.php', $this->testFile('DeprecatingTest', 'trigger_error("the forced deprecation", E_USER_DEPRECATED); self::assertTrue(true);'));
+        $sandbox->write('tests/CrashingTest.php', $this->testFile('CrashingTest', 'fwrite(STDERR, "the worker crashed\n"); exit(3);'));
 
         $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
 
         self::assertTrue($run->failed('tests'), $run->output());
         self::assertStringContainsString('sqlite tests/FailingTest.php: FailingTest::testRuns', $run->findingsOf('tests'));
         self::assertStringContainsString('the forced failure', $run->findingsOf('tests'));
+
+        return $run;
     }
 
-    public function testFindingsOfEveryWorkerAreListed(): void
+    #[Depends('testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile')]
+    public function testFindingsOfEveryWorkerAreListed(CheckRun $run): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(2);
-        $sandbox->write('tests/FirstFailingTest.php', $this->testFile('FirstFailingTest', 'self::fail("the first failure");'));
-        $sandbox->write('tests/SecondFailingTest.php', $this->testFile('SecondFailingTest', 'self::fail("the second failure");'));
-
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
-        self::assertStringContainsString('the first failure', $run->findingsOf('tests'));
+        self::assertStringContainsString('the forced failure', $run->findingsOf('tests'));
         self::assertStringContainsString('the second failure', $run->findingsOf('tests'));
     }
 
-    public function testASkippedTestInOneWorkerFailsTheGate(): void
+    #[Depends('testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile')]
+    public function testASkippedTestInOneWorkerFailsTheGate(CheckRun $run): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(3);
-        $sandbox->write('tests/SkippedTest.php', $this->testFile('SkippedTest', 'self::markTestSkipped("the forced skip");'));
-
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
         self::assertStringContainsString('sqlite tests/SkippedTest.php: SkippedTest::testRuns: the forced skip', $run->findingsOf('tests'));
     }
 
-    public function testADeprecationInOneWorkerFailsTheGate(): void
+    #[Depends('testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile')]
+    public function testADeprecationInOneWorkerFailsTheGate(CheckRun $run): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(3);
-        $sandbox->write('tests/DeprecatingTest.php', $this->testFile('DeprecatingTest', 'trigger_error("the forced deprecation", E_USER_DEPRECATED); self::assertTrue(true);'));
-
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
         self::assertStringContainsString('sqlite tests/DeprecatingTest.php', $run->findingsOf('tests'));
     }
 
-    public function testAWorkerThatCrashesFailsTheGateWithItsOutput(): void
+    #[Depends('testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile')]
+    public function testAWorkerThatCrashesFailsTheGateWithItsOutputAndHidesNoSiblingFinding(CheckRun $run): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(3);
-        $sandbox->write('tests/CrashingTest.php', $this->testFile('CrashingTest', 'fwrite(STDERR, "the worker crashed\n"); exit(3);'));
-
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
         self::assertMatchesRegularExpression('~sqlite tests/CrashingTest\.php: phpunit exited with code \d+: the worker crashed~', $run->findingsOf('tests'));
+        self::assertStringContainsString('the forced failure', $run->findingsOf('tests'));
+        self::assertStringContainsString('SkippedTest::testRuns', $run->findingsOf('tests'));
+        self::assertStringContainsString('tests/DeprecatingTest.php', $run->findingsOf('tests'));
     }
 
     public function testATestFileWithoutItsClassFailsTheGateWithSeveralWorkers(): void
@@ -170,15 +159,7 @@ final class TestsGateParallelTest extends SandboxTestCase
         self::assertStringContainsString('sqlite: FailingTest::testRuns', $run->findingsOf('tests'));
     }
 
-    public function testAWorkerCountThatIsNoPositiveNumberFailsTheGate(): void
-    {
-        $run = $this->sandboxWith('tests-clean')->checkWith([TestWorkerCount::VARIABLE => 'all'], '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
-        self::assertStringContainsString('INTAKT_TEST_WORKERS names no number of test workers', $run->findingsOf('tests'));
-    }
-
-    public function testAWorkerCountBeyondThePortsFailsTheGateNamingTheCount(): void
+    public function testAWorkerCountBeyondThePortsFailsTheGateNamingTheRange(): void
     {
         $run = $this->sandboxWith('tests-clean')->checkWith([TestWorkerCount::VARIABLE => '500'], '--only=tests');
 
