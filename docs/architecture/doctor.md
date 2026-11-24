@@ -1,6 +1,6 @@
 # Doctor
 
-`php bin/console intakt:doctor` (`Core/Doctor/UseCase/RunDoctor/DoctorCommand`) runs every health check and prints one line each: `pass: <name>` or `FAIL: <name>: <fix>`. It exits 0 only when every check passes. It is read-only: no write, no job start, no model call.
+`php bin/console intakt:doctor` (`Core/Doctor/UseCase/RunDoctor/DoctorCommand`) runs every health check and prints one line each: `pass: <name>` or `FAIL: <name>: <fix>`. Before printing, it replaces every control character (`\p{Cc}`: line breaks, tabs and the rest) in the name and the fix text with a space, because a fix text can quote what GitHub sent; the one-line rule lives there and nowhere else. It exits 0 only when every check passes. It is read-only: no write, no job start, no model call.
 
 ## The contract
 
@@ -17,6 +17,12 @@ A check that throws is printed as `The check could not run (<exception class>)` 
   - a `NullLogger`, so the read-back's warnings do not add a trace to the terminal;
   - `DeadlineHttpClient` over the plain `http_client` (no retries): each request gets `timeout` and `max_duration` of 5 seconds or of the time left before the 15-second deadline, whichever is shorter, and a request with no time left is refused with a `TransportException`, so the whole check ends within 15 seconds and a last page that still fits is read.
 
-  A `ReportableFailure` becomes a failure with fix text; its message holds a status or a class, never a key. An `InvalidArgumentException` from the lazily parsed `ExpectedInstallation` becomes a fixed failure that names `GITHUB_APP_PERMISSIONS` and `GITHUB_APP_REPOSITORIES` and leaves the exception's message out, because it can quote a setting's text with its line breaks. With `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` all empty (the demo) it passes without a read; with only `GITHUB_APP_ID` empty it fails and names the setting.
+  A `ReportableFailure` becomes a failure: its message, then the advice to check the App id, private key and installation id and that the host can reach `api.github.com`. The message holds a status, a class or the configuration differences, never a key. The failures it can give:
+  - an installation mismatch (`InstallationDoesNotMatchConfiguration`): `The GitHub App installation does not match the configuration: <differences>.`;
+  - a local key error (`InstallationTokenNotMinted`, wrapped by `InstallationNotReadBack`): `The installation cannot be read back: The GitHub App private key cannot be read or cannot sign.`;
+  - the other `InstallationTokenNotMinted` and `InstallationNotReadBack` failures: a refused status, a request that did not complete (with the transport class), or an answer in an unusable shape;
+  - the workers' rate-limit pause (`ForgeRateLimited`): `GitHub rate-limits this installation until <time>. Run the doctor again after that.`
+
+  An `InvalidArgumentException` from the lazily parsed `ExpectedInstallation` becomes a fixed failure that names `GITHUB_APP_PERMISSIONS` and `GITHUB_APP_REPOSITORIES` and leaves the exception's message out, because it can quote a setting's text with its line breaks. With `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` all empty (the demo) it passes without a read. With `GITHUB_APP_ID` empty while either `GITHUB_APP_INSTALLATION_ID` or `GITHUB_APP_PRIVATE_KEY` is still set, it fails and says to set `GITHUB_APP_ID` or clear all three.
 
 The checks for the web server answering and the workers running are not built yet.

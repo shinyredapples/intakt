@@ -31,7 +31,7 @@ A new project starts with the smallest team: the Tech lead, the Developer, the C
 
 ## When something does not work
 
-Run `docker exec intakt php bin/console intakt:doctor` first, even when the dashboard does not start. It checks the install without changing anything and prints one line per check: `pass:` or `FAIL:` with what to do next. It ends with a non-zero exit code when any check fails, so a script can use it. Today it checks the live-update service and the GitHub App credential ([what each means](../user/08-when-something-goes-wrong.md#the-doctor-says-fail)).
+Run `docker compose exec intakt php bin/console intakt:doctor` first, even when the dashboard does not start. It checks the install without changing anything and prints one line per check: `pass:` or `FAIL:` with what to do next. It ends with a non-zero exit code when any check fails, so a script can use it. Today it checks the live-update service and the GitHub App credential ([what each means](../user/08-when-something-goes-wrong.md#the-doctor-says-fail)).
 
 ## Adding Intakt to a project you already have
 
