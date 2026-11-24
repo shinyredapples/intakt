@@ -8,7 +8,7 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// One project at a glance: what it works on now, what it has used, whether its watcher is failing, and how many items wait on the owner.
+// A value of its own beside ProjectSummary, because the search and the project filter need only the name and the counts of rounds.
 #[Exclude]
 final readonly class ProjectCard
 {

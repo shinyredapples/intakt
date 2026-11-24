@@ -138,17 +138,6 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         return new Crawler($last->getData());
     }
 
-    /**
-     * @return list<Update>
-     */
-    private function shellUpdates(): array
-    {
-        return array_values(array_filter(
-            $this->published,
-            static fn (Update $update): bool => [DashboardTopics::SHELL] === $update->getTopics() && str_contains($update->getData(), 'target="project-cards"'),
-        ));
-    }
-
     // A term's tooltip id is random so that ids stay unique on a page, so two renders of one list differ only there.
     private function withoutTipIds(string $html): string
     {
@@ -161,5 +150,16 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertInstanceOf(RoundUpdates::class, $updates);
 
         return $updates;
+    }
+
+    /**
+     * @return list<Update>
+     */
+    private function shellUpdates(): array
+    {
+        return array_values(array_filter(
+            $this->published,
+            static fn (Update $update): bool => [DashboardTopics::SHELL] === $update->getTopics() && str_contains($update->getData(), 'target="project-cards"'),
+        ));
     }
 }

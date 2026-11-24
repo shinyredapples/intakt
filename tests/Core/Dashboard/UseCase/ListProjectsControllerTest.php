@@ -8,13 +8,11 @@ use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ListProjectsController::class)]
 #[CoversClass(ProjectCards::class)]
 #[CoversClass(ProjectCard::class)]
-#[UsesClass(\Intakt\Core\Dashboard\Infrastructure\LedgerReviews::class)]
 final class ListProjectsControllerTest extends DashboardPageTestCase
 {
     public function testTheProjectListShowsACardForEveryProjectThatStartedAReview(): void
@@ -157,7 +155,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         return $page->filter('.pblock')->each(static fn (Crawler $card): string => (string) $card->attr('data-project'));
     }
 
-    // Tokens, running, judged and failing, in the order the card lists them.
+    // Read by position, because the card lists tokens, running, judged and failing in that order.
     /**
      * @return list<string>
      */

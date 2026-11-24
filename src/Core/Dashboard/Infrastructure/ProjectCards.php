@@ -60,6 +60,14 @@ final readonly class ProjectCards
     }
 
     /**
+     * @return list<Review>
+     */
+    private function reviewsOf(Board $board): array
+    {
+        return array_merge(...array_map($board->cardsIn(...), BoardColumn::cases()));
+    }
+
+    /**
      * @param list<Review>      $reviews
      * @param list<FailingHead> $failing
      */
@@ -79,7 +87,7 @@ final readonly class ProjectCards
             [] === $failing ? null : $this->redactor->redact(array_first($failing)->fault->cause),
             array_reduce($reviews, static fn (TokenFigures $sum, Review $review): TokenFigures => $sum->plus($review->tokens()), TokenFigures::none()),
             array_reduce($reviews, static fn (Cost $sum, Review $review): Cost => $sum->plus($review->cost()), Cost::none()),
-            array_map(WorkingCard::ofReview(...), array_filter($running, static fn (Review $review): bool => BoardColumn::InReview === $review->column())),
+            array_map(WorkingCard::ofReview(...), array_values(array_filter($running, static fn (Review $review): bool => BoardColumn::InReview === $review->column()))),
             $this->recentOutcomes($reviews),
             $this->tierLines($name),
         );
@@ -116,14 +124,6 @@ final readonly class ProjectCards
 
             return new TierLine($tier->value, $resolved->provider->value, $resolved->model);
         }, Tier::cases());
-    }
-
-    /**
-     * @return list<Review>
-     */
-    private function reviewsOf(Board $board): array
-    {
-        return array_merge(...array_map($board->cardsIn(...), BoardColumn::cases()));
     }
 
     // Names are strings again here, because PHP turns a project name of digits into an integer key.
