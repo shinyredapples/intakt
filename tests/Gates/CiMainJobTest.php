@@ -42,7 +42,6 @@ final class CiMainJobTest extends TestCase
     {
         $skipped = "steps.passed.outputs.full == 'false'";
         $noComposer = "steps.composer-cache.outputs.cache-hit != 'true'";
-        // The image is built or loaded when either cache misses: to save it, or to run Composer in it.
         $eitherMisses = $skipped." && (steps.image-cache.outputs.cache-hit != 'true' || ".$noComposer.')';
         $conditions = [];
         foreach ($this->job('main')['steps'] ?? [] as $step) {
