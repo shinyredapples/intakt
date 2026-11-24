@@ -58,7 +58,9 @@ The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment 
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
-A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks)).
+
+When all four parts are there, the builder is told to write the regression test that fails today first, commit it on its own and only then fix the bug. Only the task itself may say that a bug cannot be reproduced by a test ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
 
 Intakt chooses tasks only from GitHub issues that carry the project's eligibility label: `intakt`, unless the project's `watch` section names another `eligibility_label`. An issue that carries only another loop's label is not a task for Intakt. `php bin/console intakt:queue:show <project>` prints the order Intakt would pick the tasks in (tasks with an open pull request, including one found only by its task branch, come before tasks not started yet, also urgent ones), then the held tasks with their reasons; no build starts from it yet ([details](../reference/user-manual.md#showing-the-queue-of-tasks)).
 
