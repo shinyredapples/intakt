@@ -14,6 +14,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(IntakeRules::class)]
 #[CoversClass(Priority::class)]
+#[CoversClass(QueueOrder::class)]
 #[CoversClass(QueuedIssue::class)]
 #[CoversClass(Vouching::class)]
 #[UsesClass(IntakePlan::class)]
@@ -200,6 +202,18 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([1 => 51], $plan->pullRequests);
     }
 
+    public function testEveryTrustedOpenPullRequestClosingATaskIsKeptLowestFirst(): void
+    {
+        $plan = $this->plan([
+            $this->row(Issues::task(1)),
+            $this->row(Issues::pullRequest(52, 'Fixes #1')),
+            $this->row(Issues::pullRequest(51, 'Fixes #1')),
+            $this->row(Issues::pullRequest(50, 'Fixes #1', 'mallory')),
+        ]);
+
+        self::assertSame([1 => [51, 52]], $plan->closingPullRequests);
+    }
+
     public function testAnEligibilityLabelATriageAccountAppliedMakesNoTask(): void
     {
         self::assertSame([], $this->readyOf([$this->row(Issues::task(1), $this->history('ana', ['intakt' => 'tom']))]));
@@ -239,12 +253,24 @@ final class IntakeRulesTest extends TestCase
         self::assertSame(Priority::Normal, Priority::of(['intakt', 'priority:unknown']));
     }
 
-    public function testAnUrgentTaskGoesBeforeATaskWhoseChangeIsOpen(): void
+    public function testATaskWhoseChangeIsOpenGoesBeforeAnUrgentTaskNotStartedYet(): void
     {
         $ready = $this->readyOf([
             $this->row(Issues::task(1, ['intakt', 'priority:high'])),
             $this->row(Issues::pullRequest(50, 'Closes #1')),
             $this->row(Issues::task(2, ['intakt', 'priority:urgent'])),
+        ]);
+
+        self::assertSame([1, 2], $ready);
+    }
+
+    public function testAnUrgentTaskWhoseChangeIsOpenGoesBeforeAnotherTaskWhoseChangeIsOpen(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:urgent'])),
+            $this->row(Issues::pullRequest(50, 'Closes #1')),
+            $this->row(Issues::pullRequest(51, 'Closes #2')),
         ]);
 
         self::assertSame([2, 1], $ready);

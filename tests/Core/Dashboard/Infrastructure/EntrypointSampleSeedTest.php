@@ -526,6 +526,63 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringNotContainsString('frankenphp run', $this->calls());
     }
 
+    #[DataProvider('adminListenersOffLoopback')]
+    public function testAnAdminListenerOffLoopbackStopsTheStartBeforeTheServer(string $listener): void
+    {
+        $this->startEntrypoint(['CADDY_ADMIN' => $listener]);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('CADDY_ADMIN must be a port on localhost, 127.0.0.1 or [::1]', (string) $this->entrypoint?->getErrorOutput());
+        self::assertSame('', $this->calls());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function adminListenersOffLoopback(): iterable
+    {
+        yield 'a bare port, which binds every interface' => [':2999'];
+        yield 'every interface' => ['0.0.0.0:2999'];
+        yield 'another host' => ['192.0.2.1:2999'];
+        yield 'a name that only starts like localhost' => ['localhost.example:2999'];
+        yield 'localhost without a port' => ['localhost'];
+        yield 'a second listener after the port' => ['localhost:2999 :3000'];
+    }
+
+    public function testARefusedAdminListenerStaysOutOfTheLogBecauseItMayHoldACredential(): void
+    {
+        $this->startEntrypoint(['CADDY_ADMIN' => 'http://user:example-canary@localhost:2999']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('CADDY_ADMIN must be a port on localhost, 127.0.0.1 or [::1] (for example localhost:2019)', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('example-canary', $this->entrypoint?->getErrorOutput().$this->entrypoint?->getOutput());
+    }
+
+    #[DataProvider('adminListenersOnLoopback')]
+    public function testAnAdminListenerOnLoopbackStartsTheServer(string $listener): void
+    {
+        $this->startEntrypoint(['CADDY_ADMIN' => $listener]);
+
+        $this->waitForTheServer();
+
+        self::assertStringContainsString('frankenphp run', $this->calls());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function adminListenersOnLoopback(): iterable
+    {
+        yield 'localhost' => ['localhost:2999'];
+        yield 'the IPv4 loopback address' => ['127.0.0.1:2999'];
+        yield 'the IPv6 loopback address' => ['[::1]:2999'];
+        yield 'an empty setting, which is the default listener' => [''];
+    }
+
     public function testAFailedSeedStopsTheEntrypointBeforeTheServerStarts(): void
     {
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SEED_STATUS' => '1']);

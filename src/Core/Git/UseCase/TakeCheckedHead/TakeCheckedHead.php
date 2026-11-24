@@ -31,21 +31,21 @@ final readonly class TakeCheckedHead
     public function take(string $project, BranchHead $head, string $directory): void
     {
         $this->fetch($directory, $this->mirrors->pathOf($project), '+'.$head->commit.':refs/heads/'.$head->branch);
-        $this->mustRun($this->hardened->call(['reset', '--hard', '--quiet'], $directory), $directory);
+        $this->mustRun($this->hardened->call($directory, 'reset', '--hard', '--quiet'), $directory);
     }
 
     private function fetch(string $directory, string $mirror, string $refspec): void
     {
         // --update-head-ok, because the task's branch is the one checked out and a fetch refuses to update that one without it.
-        $call = $this->hardened->call(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--update-head-ok', '--', $mirror, $refspec], $directory);
+        $call = $this->hardened->call($directory, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--update-head-ok', '--', $mirror, $refspec);
 
         // Because HardenedGit allows no transport, and git reads a local path as the "file" transport.
-        $this->mustRun(new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_ALLOW_PROTOCOL' => 'file']), $directory);
+        $this->mustRun(new GitCall($call->command, $call->directory, $call->environment->with(GIT_ALLOW_PROTOCOL: 'file')), $directory);
     }
 
     private function mustRun(GitCall $call, string $directory): void
     {
-        $process = new Process($call->command, $call->directory, $call->environment);
+        $process = new Process([...$call->command], $call->directory, [...$call->environment]);
         $process->run();
 
         if (!$process->isSuccessful()) {

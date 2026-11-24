@@ -58,6 +58,7 @@ use Intakt\Plugin\PhpGate\Contract\PhpGateSteps;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use Intakt\Tests\Core\HandBack\CheckJobsFor;
+use Intakt\Tests\Core\Job\OutputFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -152,8 +153,8 @@ final class RunCheckJobDependenciesTest extends TestCase
         self::assertSame(['composer.json' => self::MANIFEST, 'composer.lock' => self::LOCK], $this->lockFilesTheInstallSaw);
         $install = $this->ran[1];
         self::assertEquals([new JobInput($this->history->folder.'/dependency-installs/'.$this->key(self::LOCK)->value.'/lock', '/input/lock')], $install->inputs);
-        self::assertSame(['/input/lock', PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::LOCKED_INSTALL, 'composer.json', 'composer.lock'], array_slice($install->command, 4));
-        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], $install->egress->hosts);
+        self::assertSame(['/input/lock', PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::LOCKED_INSTALL, 'composer.json', 'composer.lock'], array_slice([...$install->command], 4));
+        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], [...$install->egress->hosts]);
         self::assertFileExists($this->checks->snapshotsFolder().'/'.$this->key(self::LOCK)->value.'/vendor/composer/installed.json');
         self::assertDirectoryDoesNotExist($this->history->folder.'/dependency-installs/'.$this->key(self::LOCK)->value);
     }
@@ -169,7 +170,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         self::assertEquals(new JobInput($this->checks->snapshotsFolder().'/'.$this->key(self::LOCK)->value, '/input/dependencies'), array_last($check->inputs));
         self::assertSame(
             ['task', '--dependencies', '/input/dependencies', self::PLATFORM, PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::INSTALL, PhpGateSteps::GENERATE, 'composer.json', $this->blobOf(self::MANIFEST), 'composer.lock', $this->blobOf(self::LOCK), '--', PhpGateSteps::INSTALL, PhpGateSteps::CHECK],
-            array_slice($check->command, 6),
+            array_slice([...$check->command], 6),
         );
     }
 
@@ -190,7 +191,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         self::assertSame(['probe', 'install', 'check'], $this->jobsThatRan());
         self::assertSame(
             ['task', '--dependencies', '/input/dependencies', self::PLATFORM, 'node --version', 'npm ci', 'npm rebuild', 'package-lock.json', $this->blobOf("{}\n"), '--', 'npm ci', 'npm test'],
-            array_slice($this->checkSpec()->command, 6),
+            array_slice([...$this->checkSpec()->command], 6),
         );
     }
 
@@ -206,7 +207,7 @@ final class RunCheckJobDependenciesTest extends TestCase
 
         self::assertSame(CheckVerdict::Passed, $outcome instanceof CheckJobOutcome ? $outcome->verdict : null);
         self::assertSame(['probe', 'check'], $this->jobsThatRan());
-        self::assertContains('--dependencies', $this->checkSpec()->command);
+        self::assertContains('--dependencies', [...$this->checkSpec()->command]);
     }
 
     public function testACheckAfterAChangedLockFileMissesTheSnapshotOfTheEarlierLockAndInstalls(): void
@@ -234,7 +235,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->whenTheCheckRuns();
 
         self::assertSame(['probe', 'install', 'check'], $this->jobsThatRan());
-        self::assertNotContains('--dependencies', $this->checkSpec()->command);
+        self::assertNotContains('--dependencies', [...$this->checkSpec()->command]);
         self::assertNull($this->checks->snapshots()->lease($this->key(self::LOCK)));
     }
 
@@ -246,7 +247,7 @@ final class RunCheckJobDependenciesTest extends TestCase
 
         $this->whenTheCheckRuns();
 
-        self::assertNotContains('--dependencies', $this->checkSpec()->command);
+        self::assertNotContains('--dependencies', [...$this->checkSpec()->command]);
         self::assertNull($this->checks->snapshots()->lease($this->key(self::LOCK)));
     }
 
@@ -259,7 +260,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $outcome = $this->whenTheCheckRuns();
 
         self::assertSame(CheckVerdict::Passed, $outcome instanceof CheckJobOutcome ? $outcome->verdict : null);
-        self::assertNotContains('--dependencies', $this->checkSpec()->command);
+        self::assertNotContains('--dependencies', [...$this->checkSpec()->command]);
         self::assertNull($this->checks->snapshots()->lease($this->key(self::LOCK)));
         self::assertDirectoryDoesNotExist($this->history->folder.'/dependency-installs/'.$this->key(self::LOCK)->value);
     }
@@ -299,7 +300,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->whenTheCheckRuns('make check');
 
         self::assertSame(['check'], $this->jobsThatRan());
-        self::assertSame(['task', '--', 'make check'], array_slice($this->checkSpec()->command, 6));
+        self::assertSame(['task', '--', 'make check'], array_slice([...$this->checkSpec()->command], 6));
     }
 
     public function testATreeWithoutALockFileRunsOnlyTheCheckJob(): void
@@ -419,7 +420,7 @@ final class RunCheckJobDependenciesTest extends TestCase
             throw JobRefused::alreadyRunning(new JobId('probe-head'));
         }
 
-        return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(null === $this->probedPlatform ? [] : ['platform' => $this->probedPlatform]));
+        return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(null === $this->probedPlatform ? [] : ['platform' => $this->probedPlatform]));
     }
 
     private function installed(JobSpec $spec): JobResult
@@ -441,13 +442,13 @@ final class RunCheckJobDependenciesTest extends TestCase
 
         return new JobResult(
             new JobEnd(JobCause::Exited, "installed\n" === $this->installResult ? 0 : 78),
-            new JobOutput(['install-result' => $this->installResult, 'platform' => $this->installPlatform]),
+            OutputFiles::of(['install-result' => $this->installResult, 'platform' => $this->installPlatform]),
         );
     }
 
     private function checked(JobSpec $spec): JobResult
     {
-        if (in_array('--dependencies', $spec->command, true)) {
+        if (in_array('--dependencies', [...$spec->command], true)) {
             $this->pinHeldDuringTheCheck = !$this->pinIsFree();
         }
 
@@ -455,7 +456,7 @@ final class RunCheckJobDependenciesTest extends TestCase
             throw DockerEngineFailed::noSocket('/var/run/docker.sock');
         }
 
-        return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"]));
+        return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['check-result' => "passed\n"]));
     }
 
     private function pinIsFree(): bool

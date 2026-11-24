@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Build\Domain;
 
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
@@ -123,7 +124,7 @@ final class FencedPlantsTest extends TestCase
     public function testThePlantsAreEveryTextOfNestedObjectsAndListsButNoEnumOrNumber(): void
     {
         $finding = new Finding('PLANT-2', Severity::P1, 'PLANT-3', 7, null, 'PLANT-4', FixableBy::Builder, false, null, null);
-        $brief = new BuildBrief('PLANT-1', ['PLANT-5'], new Rework([$finding], null, 'PLANT-6'));
+        $brief = new BuildBrief('PLANT-1', new Decisions('PLANT-5'), new Rework([$finding], null, 'PLANT-6'));
 
         $plants = FencedPlants::plantsIn($brief);
 
@@ -132,7 +133,7 @@ final class FencedPlantsTest extends TestCase
 
     private function brief(string $task): BuildBrief
     {
-        return new BuildBrief($task, [], null);
+        return new BuildBrief($task, new Decisions(), null);
     }
 
     private function refusalOf(BuildBrief $brief, string $prompt): string

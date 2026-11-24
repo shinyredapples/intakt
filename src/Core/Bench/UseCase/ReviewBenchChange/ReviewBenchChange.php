@@ -38,7 +38,7 @@ final readonly class ReviewBenchChange
     {
         $verdict = $this->classifier->classify($change->expectations, $change->files, $this->outcomeOf($reviewer));
 
-        return new BenchReviewerResult($reviewer->role, $reviewer->tier, $verdict, $reviewer->tokens, $reviewer->milliseconds, [...$reviewer->models]);
+        return new BenchReviewerResult($reviewer->role, $reviewer->tier, $verdict, $reviewer->tokens, $reviewer->milliseconds, $reviewer->models);
     }
 
     // A reviewer that failed or gave a failure verdict reviewed nothing, so its misses are the harness's and never the reviewer's.

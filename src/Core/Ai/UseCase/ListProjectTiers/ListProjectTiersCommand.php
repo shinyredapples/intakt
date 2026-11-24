@@ -21,7 +21,7 @@ final readonly class ListProjectTiersCommand
 
     public function __invoke(SymfonyStyle $io): int
     {
-        $projects = $this->resolver->projects();
+        $projects = [...$this->resolver->projects()];
 
         if ([] === $projects) {
             $io->warning('No projects are configured.');

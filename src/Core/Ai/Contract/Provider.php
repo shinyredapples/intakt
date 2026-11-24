@@ -12,18 +12,15 @@ enum Provider: string
     case ClaudeCode = 'claude_code';
     case Codex = 'codex';
 
-    /**
-     * @return list<string>
-     */
-    public function variables(): array
+    public function variables(): EnvironmentVariables
     {
         return match ($this) {
-            self::Anthropic => ['ANTHROPIC_API_KEY'],
-            self::OpenAi => ['OPENAI_API_KEY'],
-            self::OpenAiCompatible => ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'],
-            self::ClaudeCode => ['CLAUDE_CODE_OAUTH_TOKEN'],
+            self::Anthropic => new EnvironmentVariables('ANTHROPIC_API_KEY'),
+            self::OpenAi => new EnvironmentVariables('OPENAI_API_KEY'),
+            self::OpenAiCompatible => new EnvironmentVariables('OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'),
+            self::ClaudeCode => new EnvironmentVariables('CLAUDE_CODE_OAUTH_TOKEN'),
             // None, because Codex has no long-lived token: its credential is the login file Intakt keeps per account.
-            self::Codex => [],
+            self::Codex => new EnvironmentVariables(),
         };
     }
 
@@ -57,12 +54,9 @@ enum Provider: string
         return in_array($this, [self::Anthropic, self::ClaudeCode], true);
     }
 
-    /**
-     * @param list<string> $missing
-     */
-    public function disabledMessage(array $missing): string
+    public function disabledMessage(EnvironmentVariables $missing): string
     {
-        return 'Provider "'.$this->value.'" is disabled: set '.implode(' and ', $missing).' to enable it.';
+        return 'Provider "'.$this->value.'" is disabled: set '.implode(' and ', [...$missing]).' to enable it.';
     }
 
     public function platformId(Account $account): string

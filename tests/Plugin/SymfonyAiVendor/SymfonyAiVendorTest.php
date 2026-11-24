@@ -1365,7 +1365,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: $this->dispatcher);
         $tiers = self::createStub(TierInvoker::class);
         $tiers->method('answering')->willReturn(new ResolvedModel(Provider::OpenAiCompatible, $model));
-        $tiers->method('invoke')->willReturnCallback(static fn (ResolvedModel $answering, TierRequest $request): DeferredResult => $answer->invoke($answering->model, $request->input, $request->options));
+        $tiers->method('invoke')->willReturnCallback(static fn (ResolvedModel $answering, TierRequest $request): DeferredResult => $request->invokeOn($answer, $answering->model));
 
         return new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
     }

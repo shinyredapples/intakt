@@ -6,7 +6,9 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
+use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
@@ -84,8 +86,8 @@ final readonly class ReviewJob
     private function egressOf(Provider $provider): JobEgress
     {
         return match ($provider) {
-            Provider::ClaudeCode => JobEgress::to(['api.anthropic.com']),
-            Provider::Codex => JobEgress::to(['chatgpt.com']),
+            Provider::ClaudeCode => JobEgress::to(new EgressHosts('api.anthropic.com')),
+            Provider::Codex => JobEgress::to(new EgressHosts('chatgpt.com')),
             default => throw ReviewJobFailure::withoutCli($provider),
         };
     }
@@ -120,12 +122,9 @@ final readonly class ReviewJob
         return new JobId('review-'.substr(hash('sha256', $key), 0, 40));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function commandFor(ReviewJobRequest $request): array
+    private function commandFor(ReviewJobRequest $request): JobCommand
     {
-        return ['/bin/sh', '-c', $this->filesystem->readFile($this->reviewScript), 'intakt-review', self::CHECKOUT, $request->head, self::PROMPT, $request->model->provider->value, $request->model->model];
+        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->reviewScript), 'intakt-review', self::CHECKOUT, $request->head, self::PROMPT, $request->model->provider->value, $request->model->model);
     }
 
     private function ranJob(JobSpec $spec): ?JobResult

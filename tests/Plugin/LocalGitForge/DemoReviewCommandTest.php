@@ -259,7 +259,7 @@ final class DemoReviewCommandTest extends TestCase
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request, ReviewProgress $progress) use ($tiers): ChangeReview {
             try {
-                $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest('Review.'))->asText();
+                $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), TierRequest::of('Review.'))->asText();
             } catch (EveryAccountCoolingDown) {
             }
 
@@ -312,7 +312,7 @@ final class DemoReviewCommandTest extends TestCase
                 $progress->reached($this->waitingOnCorrectness());
 
                 try {
-                    $answer = $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest(new MessageBag(Message::ofUser('Review.'))))->asText();
+                    $answer = $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), TierRequest::of(new MessageBag(Message::ofUser('Review.'))))->asText();
                 } catch (EveryAccountCoolingDown) {
                 }
             }
@@ -338,7 +338,7 @@ final class DemoReviewCommandTest extends TestCase
         $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request, ReviewProgress $progress) use (&$checkout, $tiers): ChangeReview {
             $checkout = $request->checkoutRoot;
             try {
-                $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest('Review.'))->asText();
+                $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), TierRequest::of('Review.'))->asText();
             } catch (EveryAccountCoolingDown) {
             }
 

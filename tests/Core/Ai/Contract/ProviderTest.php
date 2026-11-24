@@ -44,7 +44,7 @@ final class ProviderTest extends TestCase
 
     public function testCodexNeedsNoVariableBecauseItsLoginIsAFile(): void
     {
-        self::assertSame([], Provider::Codex->variables());
+        self::assertTrue(Provider::Codex->variables()->isEmpty());
     }
 
     public function testTheDefaultAccountsPlatformIdCarriesNoAccountSuffix(): void

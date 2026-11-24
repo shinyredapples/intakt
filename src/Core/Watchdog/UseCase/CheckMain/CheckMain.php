@@ -13,7 +13,7 @@ use Intakt\Core\Watchdog\Domain\CommitClassifier;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Symfony\Component\Filesystem\Filesystem;
 
-// The history is built per call, because the repository and the owner's keys belong to the call and a worker must keep no state between calls.
+// The history is built per call, because the repository and the trusted keys belong to the call and a worker must keep no state between calls.
 final readonly class CheckMain
 {
     private const int READS = 3;
@@ -24,24 +24,18 @@ final readonly class CheckMain
     ) {
     }
 
-    /**
-     * @param list<string> $ownerKeys
-     */
-    public function classified(string $repository, WatchedMain $main, array $ownerKeys): Classification
+    public function classified(string $repository, WatchedMain $main, TrustedKeys $keys): Classification
     {
-        return new CommitClassifier($this->historyFor($repository, $main, $ownerKeys))->classify($main);
+        return new CommitClassifier($this->historyFor($repository, $main, $keys))->classify($main);
     }
 
-    /**
-     * @param list<string> $ownerKeys
-     */
-    public function checked(string $repository, WatchedMain $main, array $ownerKeys): CheckedMain
+    public function checked(string $repository, WatchedMain $main, TrustedKeys $keys): CheckedMain
     {
-        $live = $this->historyFor($repository, $main, $ownerKeys);
+        $live = $this->historyFor($repository, $main, $keys);
         $head = $live->head();
         // Classified at one pinned head and read again after, because a card must name the head its violations were found on; a main that keeps moving fails the read instead of passing.
         for ($read = 1;; ++$read) {
-            $pinned = new MainHistory($this->git, $repository, $ownerKeys, $this->filesystem, $head);
+            $pinned = new MainHistory($this->git, $repository, $keys->owner, $this->filesystem, $keys->peer, $head);
             $classification = new CommitClassifier($pinned)->classify($main);
             $now = $live->head();
             if ($now === $head) {
@@ -54,12 +48,9 @@ final readonly class CheckMain
         }
     }
 
-    /**
-     * @param list<string> $ownerKeys
-     */
-    private function historyFor(string $repository, WatchedMain $main, array $ownerKeys): MainHistory
+    private function historyFor(string $repository, WatchedMain $main, TrustedKeys $keys): MainHistory
     {
-        $history = new MainHistory($this->git, $repository, $ownerKeys, $this->filesystem);
+        $history = new MainHistory($this->git, $repository, $keys->owner, $this->filesystem, $keys->peer);
         $main->mustNameFullCommitsOfLength($history->commitNameLength());
 
         return $history;

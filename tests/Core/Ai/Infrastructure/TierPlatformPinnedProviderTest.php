@@ -216,8 +216,8 @@ final class TierPlatformPinnedProviderTest extends TestCase
         });
         $tiers = $this->tiers($this->router($router), [self::FALLBACK, self::SUBSTITUTE]);
 
-        $limited = $this->failureOf(fn (): object => $tiers->invoke($tiers->answering('demo', Tier::Strong), new TierRequest('Review.')));
-        $answer = $tiers->invoke($tiers->answering('demo', Tier::Strong), new TierRequest('Review.'))->asText();
+        $limited = $this->failureOf(fn (): object => $tiers->invoke($tiers->answering('demo', Tier::Strong), TierRequest::of('Review.')));
+        $answer = $tiers->invoke($tiers->answering('demo', Tier::Strong), TierRequest::of('Review.'))->asText();
 
         self::assertInstanceOf(EveryAccountCoolingDown::class, $limited);
         self::assertSame('reviewed by the fallback', $answer);

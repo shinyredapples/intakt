@@ -102,7 +102,7 @@ final class PushBranchTest extends TestCase
         $outcome = $this->scenario->push()->push($this->scenario->request());
 
         self::assertInstanceOf(MainConflicts::class, $outcome);
-        self::assertSame(['b.txt'], $outcome->paths);
+        self::assertSame(['b.txt'], [...$outcome->paths]);
         self::assertNull($this->scenario->remoteTip());
         self::assertSame([], $this->scenario->ledger->kinds());
         self::assertSame(0, $this->scenario->changes->calls);
@@ -117,7 +117,7 @@ final class PushBranchTest extends TestCase
         $outcome = $this->scenario->push()->push($this->scenario->request(null, $head));
 
         self::assertInstanceOf(MainConflicts::class, $outcome);
-        self::assertSame([$name], $outcome->paths);
+        self::assertSame([$name], [...$outcome->paths]);
     }
 
     /**
@@ -138,7 +138,7 @@ final class PushBranchTest extends TestCase
         $outcome = $this->scenario->push()->push($this->scenario->request());
 
         self::assertInstanceOf(MainConflicts::class, $outcome);
-        self::assertSame(['b.txt', 'c.txt'], $outcome->paths);
+        self::assertSame(['b.txt', 'c.txt'], [...$outcome->paths]);
     }
 
     public function testABranchThatDoesNotConflictWithAMovedMainIsPushed(): void

@@ -11,6 +11,9 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Contract\TaskKind;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
@@ -19,12 +22,14 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -159,8 +164,10 @@ final readonly class BuildTask
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
 
-            if ($result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion) {
-                return $this->park($run, $task, $result->question);
+            $question = $this->questionIn($result);
+
+            if ($question instanceof BuildQuestion) {
+                return $this->park($run, $task, $question);
             }
 
             $failure = $this->failureIn($result);
@@ -198,8 +205,14 @@ final readonly class BuildTask
     }
 
     // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failure's text.
-    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|string
+    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
     {
+        $incomplete = $this->incompleteBugQuestion($task);
+
+        if ($incomplete instanceof BuildQuestion) {
+            return $incomplete;
+        }
+
         try {
             $outcome = $this->builds->run($this->jobOf($request, $task));
         } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|InvalidArgumentException|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
@@ -211,7 +224,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function bundleIn(array $results): string
     {
@@ -220,7 +233,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function builtIn(array $results): BuildJobOutcome
     {
@@ -230,7 +243,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function textIn(array $results): string
     {
@@ -244,7 +257,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function push(BuildTaskRequest $request, array $results): ?string
     {
@@ -259,6 +272,11 @@ final readonly class BuildTask
         $changeText = $this->changeTextOf($text);
 
         return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
+    }
+
+    private function questionIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?BuildQuestion
+    {
+        return $result instanceof BuildJobOutcome ? $result->question : ($result instanceof BuildQuestion ? $result : null);
     }
 
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
@@ -276,7 +294,7 @@ final readonly class BuildTask
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
-    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
+    private function failureIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?string
     {
         return is_string($result) ? $result : null;
     }
@@ -289,11 +307,23 @@ final readonly class BuildTask
         return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $this->bodyOf($text));
     }
 
+    // Asked before the build job runs, because a bug without its four parts has no failing test to write first and the builder would guess it.
+    private function incompleteBugQuestion(ListedIssue $task): ?BuildQuestion
+    {
+        if (TaskKind::Bug !== TaskKind::fromLabels(new Labels(...$task->labels))) {
+            return null;
+        }
+
+        $missing = BugReport::fromBody($task->body)->missingParts();
+
+        return [] === $missing ? null : BuildQuestion::forMissingBugParts($missing);
+    }
+
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
     {
         // No paths and no setback, because a first build has no file forecast and no earlier round.
-        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($task->labels, []));
-        $brief = new BuildBrief($task->title."\n\n".$task->body, [], null);
+        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels(new Labels(...$task->labels), new Paths()));
+        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null);
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }

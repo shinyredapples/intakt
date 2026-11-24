@@ -466,9 +466,9 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private function git(string ...$arguments): string
     {
-        $call = new HardenedGit()->call(array_values($arguments), $this->repository());
+        $call = new HardenedGit()->call($this->repository(), ...$arguments);
 
-        return new Process($call->command, $call->directory, $call->environment)->mustRun()->getOutput();
+        return new Process([...$call->command], $call->directory, [...$call->environment])->mustRun()->getOutput();
     }
 
     private function repository(): string

@@ -18,8 +18,8 @@ final class DemoProviderBusy extends RuntimeException implements ReportableFailu
             $waitedOn,
             $provider->value,
             $seconds,
-            implode(', ', Provider::Anthropic->variables()),
-            implode(', ', Provider::OpenAi->variables()),
+            implode(', ', [...Provider::Anthropic->variables()]),
+            implode(', ', [...Provider::OpenAi->variables()]),
         ));
     }
 }

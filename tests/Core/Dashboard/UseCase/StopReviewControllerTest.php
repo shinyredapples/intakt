@@ -238,10 +238,24 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->assertNothingRequested();
     }
 
-    public function testAReviewerThatIsNotRunningRecordsNothing(): void
+    public function testAPressWhenNoReviewerOfTheRoundRunsRedirectsBackWithTheNoReviewerRunsFlash(): void
     {
         $this->runningReviewer();
         $this->ledger->answer('round-1', 'security', 0);
+
+        $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $this->token()]);
+
+        self::assertResponseRedirects('/reviews/round-1', 303);
+        $this->assertNothingRequested();
+        $this->browser->followRedirect();
+        self::assertSelectorTextContains('.flash-error', 'No reviewer runs in this round right now, so nothing was stopped.');
+    }
+
+    public function testAReviewerThatIsNotRunningWhileAnotherRunsRecordsNothing(): void
+    {
+        $this->runningReviewer();
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->startReviewer('round-1', 'style');
 
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $this->token()]);
 

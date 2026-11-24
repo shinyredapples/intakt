@@ -51,6 +51,15 @@ final readonly class Board
         return new WhoIsWorking($this->cards, count($this->tasksInFlight()));
     }
 
+    // From the cards in their order, so the Trends page lists the same rounds the board shows in review; the queued rounds come apart, because a round no worker started has no card yet.
+    /**
+     * @param list<QueuedRound> $queued
+     */
+    public function upNext(array $queued): UpNext
+    {
+        return new UpNext($this->cards, $queued);
+    }
+
     // From the same open rounds Working now shows, so the line never tells a different story than the cards below it.
     public function headline(): Headline
     {
