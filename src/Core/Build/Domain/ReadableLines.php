@@ -22,8 +22,8 @@ final readonly class ReadableLines
     private const string COMMENT_CLOSES = '/-->(?<rest>.*)$/';
 
     /**
-     * @param list<string> $lines one per line of the body, empty where the line is code, outside text or a comment
-     * @param ?string       $closer the line that closes the block the body ends in, or null when it ends in none
+     * @param list<string> $lines  one per line of the body, empty where the line is code, outside text or a comment
+     * @param ?string      $closer the line that closes the block the body ends in, or null when it ends in none
      */
     private function __construct(
         public array $lines,
