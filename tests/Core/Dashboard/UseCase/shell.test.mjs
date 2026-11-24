@@ -370,7 +370,15 @@ test('a kept page project goes back where the server put it, also before a share
     assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha', 'zeta-02', 'zeta-2']);
 });
 
-test('a kept page project that differs from a shared one only in case goes after it, in byte order as on the server', () => {
+test('a kept page project that differs from shared ones only in case goes after them, which keep the pushed order', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['zeta', 'Zeta', 'ZETA'], rows: ['ZETA'], pageProjects: ['ZETA'] }).open();
+
+    page.pushStream('projfilter', ['zeta', 'Zeta']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'zeta', 'Zeta', 'ZETA']);
+});
+
+test('a kept page project that differs from a shared one only in case goes after it, as on the server', () => {
     const page = new Browser('light', { address: 'http://localhost/history', projects: ['Zeta', 'zeta'], rows: ['zeta'], pageProjects: ['zeta'] }).open();
 
     page.pushStream('projfilter', ['Zeta']);

@@ -111,7 +111,7 @@
             return null;
         }
     };
-    // FilterProjects' order (PHP's strnatcasecmp on the UTF-8 bytes, then strcmp) ported step by step, because a merged list must match the server's and no browser comparison does: localeCompare calls 'zeta-2' and 'zeta-02' equal.
+    // FilterProjects' order (PHP's strnatcasecmp on the UTF-8 bytes) ported step by step, because a merged list must match the server's and no browser comparison does: localeCompare calls 'zeta-2' and 'zeta-02' equal.
     const utf8 = new TextEncoder();
     const isDigit = (byte) => byte >= 48 && byte <= 57;
     const isSpace = (byte) => byte === 32 || (byte >= 9 && byte <= 13);
@@ -176,15 +176,7 @@
             cb = b[j];
         }
     };
-    const bytewise = (a, b) => {
-        const differs = a.findIndex((byte, index) => byte !== b[index]);
-        return differs < 0 || differs >= b.length ? Math.sign(a.length - b.length) : Math.sign(a[differs] - b[differs]);
-    };
-    const nameOrder = (one, other) => {
-        const a = utf8.encode(one);
-        const b = utf8.encode(other);
-        return natural(a, b) || bytewise(a, b);
-    };
+    const nameOrder = (one, other) => natural(utf8.encode(one), utf8.encode(other));
     // Looks the select up when called, because a listener bound once calls it after a visit has replaced the body.
     const showProject = () => {
         const shownFilter = document.querySelector('#projfilter');
@@ -297,8 +289,13 @@
                 render(stream);
                 const lost = pageOptions.filter((kept) => ![...shownFilter.options].some((option) => option.value === kept.value));
                 if (lost.length > 0) {
+                    // The pushed list keeps its own order; each kept option goes after every name the order calls equal, as FilterProjects' stable sort puts it.
                     const [all, ...named] = [...shownFilter.options];
-                    shownFilter.replaceChildren(all, ...[...named, ...lost].sort((a, b) => nameOrder(a.value, b.value)));
+                    for (const kept of lost) {
+                        const after = named.findIndex((option) => nameOrder(option.value, kept.value) > 0);
+                        named.splice(after < 0 ? named.length : after, 0, kept);
+                    }
+                    shownFilter.replaceChildren(all, ...named);
                 }
                 shownFilter.value = [...shownFilter.options].some((option) => option.value === chosen) ? chosen : '';
                 showProject();

@@ -39,26 +39,37 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(LedgerEvent::class)]
 final class FilterProjectsTest extends TestCase
 {
-    public function testNamesThatDifferOnlyInCaseComeInByteOrderWhateverOrderTheLedgerNamesThem(): void
+    public function testAReviewedAndABuiltProjectThatDifferOnlyInCaseKeepTheOrderTheyWereListedIn(): void
     {
-        self::assertSame(
-            [['Zeta', 'zeta'], ['Zeta', 'zeta']],
-            [$this->projectsOf('zeta', 'Zeta')->names(), $this->projectsOf('Zeta', 'zeta')->names()],
-        );
+        self::assertSame(['zeta', 'Zeta'], $this->projectsOf(['zeta'], ['Zeta'])->names());
+    }
+
+    public function testAPageProjectThatDiffersFromASharedOneOnlyInCaseComesAfterIt(): void
+    {
+        self::assertSame(['zeta', 'Zeta'], $this->projectsOf(['zeta'])->namesWith(['Zeta']));
     }
 
     public function testAPageProjectWithALeadingZeroComesBeforeTheSameNumberWithout(): void
     {
-        self::assertSame(['alpha', 'zeta-02', 'zeta-2'], $this->projectsOf('zeta-2', 'alpha')->namesWith(['zeta-02']));
+        self::assertSame(['alpha', 'zeta-02', 'zeta-2'], $this->projectsOf(['zeta-2', 'alpha'])->namesWith(['zeta-02']));
     }
 
-    private function projectsOf(string ...$projects): FilterProjects
+    /**
+     * @param list<string> $reviewed
+     * @param list<string> $built
+     */
+    private function projectsOf(array $reviewed, array $built = []): FilterProjects
     {
         $events = [];
 
-        foreach (array_values($projects) as $index => $project) {
+        foreach ($reviewed as $index => $project) {
             $payload = json_encode(['round' => 'r'.($index + 1), 'project' => $project, 'reviewers' => 1], JSON_THROW_ON_ERROR);
             $events[] = new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewStarted, $payload), new DateTimeImmutable('2026-11-10T12:00:00+00:00'));
+        }
+
+        foreach ($built as $project) {
+            $payload = json_encode(['project' => $project, 'task' => '7', 'step' => 'task', 'outcome' => 'passed', 'failure' => null], JSON_THROW_ON_ERROR);
+            $events[] = new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload), new DateTimeImmutable('2026-11-10T12:00:00+00:00'));
         }
 
         $ledger = self::createStub(Ledger::class);
