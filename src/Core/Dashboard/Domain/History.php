@@ -8,7 +8,6 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 final readonly class History
 {
-    // Newest first.
     /**
      * @param list<HistoryRow> $rows
      */
