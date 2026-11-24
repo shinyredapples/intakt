@@ -70,6 +70,18 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         self::assertSame(['', 'alpha', 'Beta', 'gamma'], $crawler->filter('#projfilter option')->each(static fn ($option): string => (string) $option->attr('value')));
     }
 
+    public function testTheHistoryPageMarksOnlyTheProjectsOutsideTheSharedFilterAsItsOwn(): void
+    {
+        $round = Uuid::v7()->toRfc4122();
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, json_encode(['round' => $round, 'project' => 'Beta', 'reviewers' => 1, 'change' => 'sample', 'number' => 1, 'task' => 'sample'], JSON_THROW_ON_ERROR)));
+        $this->record(['actor' => 'owner', 'project' => 'Beta']);
+        $this->record(['actor' => 'owner', 'project' => 'alpha']);
+
+        $crawler = $this->browser->request('GET', '/history');
+
+        self::assertSame(['alpha'], $crawler->filter('#projfilter option[data-page-option]')->each(static fn ($option): string => (string) $option->attr('value')));
+    }
+
     public function testTheHistoryPageShowsASecretOnlyAsItsFingerprint(): void
     {
         $this->record(['actor' => 'owner', 'fingerprint' => 'ab12cd', 'before' => 'sk-old-secret', 'after' => 'sk-new-secret']);

@@ -28,11 +28,14 @@ final readonly class ShowHistoryController
     public function __invoke(Request $request, #[MapQueryParameter] ?string $project = null): Response
     {
         $history = History::of($this->ledger->readInOrder());
+        $names = $this->filter->namesWith($history->projects());
 
         return new Response($this->pages->render($request, 'dashboard/history.html.twig', [
             'history' => $history,
             'linked_project' => $project,
-            'project_names' => $this->filter->namesWith($history->projects()),
+            'project_names' => $names,
+            // The shared live filter update lists only the shared names, so the shell keeps these and their choice when it arrives.
+            'page_projects' => array_values(array_diff($names, $this->filter->names())),
         ]));
     }
 }

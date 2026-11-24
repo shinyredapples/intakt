@@ -57,8 +57,8 @@
     <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
     <button class="search-trigger" type="button" aria-haspopup="dialog" aria-controls="search" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
     <div class="grow"></div>
-    {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. The error page passes project_names, read where a failing ledger cannot take the shell down with it. #}
-    {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge((project_names ?? filter_projects())|map(name => {value: name, label: name}))}, with_context = false) }}
+    {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. The error page passes project_names, read where a failing ledger cannot take the shell down with it. A page that offers projects outside the shared list (History) names them in page_projects, compared strictly as the options are. #}
+    {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge((project_names ?? filter_projects())|map(name => {value: name, label: name, page: (page_projects ?? [])|filter(page_name => page_name is same as(name))|length > 0}))}, with_context = false) }}
     <button class="icon-btn theme-toggle" type="button" aria-label="Switch light or dark theme" data-theme-toggle>{{ include('dashboard/components/icon.html.twig', {name: 'moon', extra: 'moon'}, with_context = false) }}{{ include('dashboard/components/icon.html.twig', {name: 'sun', extra: 'sun'}, with_context = false) }}</button>
     {{ include('dashboard/components/offline.html.twig', {live: true}, with_context = false) }}
 </header>
@@ -218,7 +218,14 @@
             // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
             event.detail.render = (stream) => {
                 const chosen = shownFilter.value;
+                // The shared list lacks the projects a page offers for its own rows (History), so those are kept, in the server's natural, case-insensitive name order, or the push would take them and their choice away.
+                const pageOptions = [...shownFilter.options].filter((option) => 'pageOption' in option.dataset);
                 render(stream);
+                const lost = pageOptions.filter((kept) => ![...shownFilter.options].some((option) => option.value === kept.value));
+                if (lost.length > 0) {
+                    const [all, ...named] = [...shownFilter.options];
+                    shownFilter.replaceChildren(all, ...[...named, ...lost].sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true, sensitivity: 'base' })));
+                }
                 shownFilter.value = [...shownFilter.options].some((option) => option.value === chosen) ? chosen : '';
                 showProject();
             };
