@@ -26,6 +26,7 @@ use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
@@ -52,6 +53,7 @@ use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\Git\Domain\CommitObject;
@@ -82,6 +84,9 @@ use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\Contract\PullRequestTextTask;
 use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRun;
+use Intakt\Core\HandBack\Contract\RegressionRuns;
+use Intakt\Core\HandBack\Contract\RegressionTests;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\CodeSpans;
@@ -241,6 +246,10 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(HandBack::class)]
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(RefusedHandBack::class)]
+#[UsesClass(RegressionRuns::class)]
+#[UsesClass(RegressionRun::class)]
+#[UsesClass(RegressionEvidence::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(HandBackRefusal::class)]
 #[UsesClass(HandBackNotChecked::class)]
 #[UsesClass(JobCredentials::class)]
@@ -332,6 +341,8 @@ final class BuildTaskTest extends TestCase
 
     private ?LockFactory $textLocks = null;
 
+    private RegressionTests $regressionTests;
+
     public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
         $this->configuredRepository = 'acme/alpha';
@@ -399,6 +410,48 @@ final class BuildTaskTest extends TestCase
         (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
         self::assertSame(['feat: task 7', "The body.\n\nEvidence: tests pass."], [$this->changes->text?->title, $this->changes->text?->body]);
+    }
+
+    public function testABugHeadWhoseNewTestFailsOnTheBaseAndPassesOnTheHeadIsPushedWithBothResultsInItsEvidence(): void
+    {
+        $this->runner = $this->committingRunner(text: "fix: task 7\n\n## Summary\n\n- Fixed.\n\n## Evidence\n\n- E1: the test\n\n## Follow-ups\n\n- None.\n");
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+        $this->regressionTests = $regressionTests;
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [$this->bugTask()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Push, $outcome->last);
+        self::assertFalse($outcome->failed());
+        self::assertSame("## Summary\n\n- Fixed.\n\n## Evidence\n\n- E1: the test\n- Regression tests, run by Intakt: `tests/FooTest.php`\n- Regression result: failed on the base, passed on the head\n\n## Follow-ups\n\n- None.", $this->changes->text?->body);
+    }
+
+    public function testABugHeadWhoseNewTestAlsoPassesOnTheBaseEndsAtThePrePushCheckSentBackAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Passed, RegressionRun::Passed));
+        $this->regressionTests = $regressionTests;
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [$this->bugTask()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame(PrePushCheck::PASSES_ON_THE_BASE, $outcome->failure);
+        self::assertSame(PrePushCheck::PASSES_ON_THE_BASE, array_last($this->stepsIn($ledger))['failure']);
+        self::assertNull($this->remoteTip());
+        self::assertSame(0, $this->changes->opened);
+    }
+
+    public function testABugHeadWithoutANewTestEndsAtThePrePushCheckSentBackAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [$this->bugTask()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame(PrePushCheck::NO_TEST, $outcome->failure);
+        self::assertNull($this->remoteTip());
     }
 
     public function testAFirstPullRequestTextMissEndsAtThePrePushCheckSentBackWithTheMissingItemsAndKeepsTheCommitsUnpushed(): void
@@ -1272,6 +1325,7 @@ final class BuildTaskTest extends TestCase
     protected function setUp(): void
     {
         $this->locks = new LockFactory(new InMemoryStore());
+        $this->regressionTests = new NoRegressionTests();
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -1407,6 +1461,11 @@ final class BuildTaskTest extends TestCase
         return $runner;
     }
 
+    private function bugTask(): ListedIssue
+    {
+        return Issues::task(7, ['intakt', 'bug'], ['body' => "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d"]);
+    }
+
     private function taskWithEvidence(): ListedIssue
     {
         return Issues::task(7, with: ['body' => "Build it.\n\nEvidence:\n- E1. A red check.\n- E2. A green check.\n"]);
@@ -1465,7 +1524,7 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests, new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

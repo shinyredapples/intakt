@@ -14,6 +14,7 @@ use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRun;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 use Intakt\Core\HandBack\Contract\RegressionTests;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
@@ -36,10 +37,16 @@ final readonly class PrePushCheck
     ) {
     }
 
-    // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed.
-    public function failureOf(BuildTaskRequest $request, string $bundle, TaskKind $kind): ?string
+    public const string NO_TEST = 'the bug head adds or changes no test that reproduces the bug';
+
+    public const string PASSES_ON_THE_BASE = 'the regression test passes on the base too, so it proves nothing';
+
+    public const string NOT_RUN = 'the regression tests of the bug head could not run';
+
+    // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed; a bug head that passed gives its regression runs for the pull request's Evidence.
+    public function check(BuildTaskRequest $request, string $bundle, TaskKind $kind): RegressionRuns|string|null
     {
-        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack) ?? $this->reportedRegressionRuns($request, $handBack, $kind));
+        return $this->files->check($request, $bundle, fn (HandBack $handBack): RegressionRuns|string|null => $this->failureIn($request, $handBack) ?? $this->regressionVerdict($request, $handBack, $kind));
     }
 
     private function failureIn(BuildTaskRequest $request, HandBack $handBack): ?string
@@ -57,8 +64,8 @@ final readonly class PrePushCheck
         return $outcome instanceof RefusedHandBack ? $outcome->reason() : $this->failureOfJob($outcome);
     }
 
-    // Only reported for now, never part of the verdict, and only for a bug whose check passed, so a head that fails the check is not run twice more.
-    private function reportedRegressionRuns(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): null
+    // Only for a bug whose check passed, so a head that fails the check is not run twice more.
+    private function regressionVerdict(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): RegressionRuns|string|null
     {
         if (TaskKind::Bug !== $kind) {
             return null;
@@ -67,22 +74,33 @@ final readonly class PrePushCheck
         try {
             $runs = $this->regressionTests->run(new CheckJob($handBack, $request->image, null, new Paths()));
         } catch (ExceptionInterface|IOExceptionInterface|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
-            // The job's script that cannot be read too, because a run that only reports must never fail a check that passed.
+            // Fixed text and the failure only in the log, because a process's message names the whole command line.
             $this->logger->warning('The regression tests of a bug head could not run.', ['project' => $request->project, 'exception' => $failure]);
 
-            return null;
+            return self::NOT_RUN;
         }
 
-        if ($runs instanceof RegressionRuns) {
-            $this->logger->info('The regression tests of a bug head ran.', [
-                'project' => $request->project,
-                'tests' => [...$runs->tests],
-                'base' => $runs->base?->value,
-                'head' => $runs->head?->value,
-            ]);
-        }
+        return $runs instanceof RefusedHandBack ? $runs->reason() : $this->failureOfRuns($runs) ?? $runs;
+    }
 
-        return null;
+    // Built from the enum values only, never from the tests' output, because that output is what model-written code printed.
+    private function failureOfRuns(RegressionRuns $runs): ?string
+    {
+        return match (true) {
+            $runs->foundNoTest() => self::NO_TEST,
+            RegressionRun::Passed === $runs->base => self::PASSES_ON_THE_BASE,
+            RegressionRun::Failed === $runs->base && RegressionRun::Passed === $runs->head => null,
+            default => sprintf(
+                'the regression test must fail on the base and pass on the head, but it %s on the base and %s on the head',
+                $this->wordsOf($runs->base),
+                $this->wordsOf($runs->head),
+            ),
+        };
+    }
+
+    private function wordsOf(?RegressionRun $run): string
+    {
+        return $run?->value ?? 'gave no run';
     }
 
     private function stoppedBy(ExceptionInterface $stopped): string
