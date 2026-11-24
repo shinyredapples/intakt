@@ -16,7 +16,7 @@
         <ini name="display_errors" value="1" />
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
-        <!-- A kernel boot then skips the container's freshness check and the debug container, which made every kernel test file slower. -->
+        <!-- A kernel boot then skips the container's freshness check and the debug container, which made the measured kernel test files slower. -->
         <server name="APP_DEBUG" value="0" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
     </php>
