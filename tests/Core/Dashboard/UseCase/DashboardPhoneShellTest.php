@@ -184,6 +184,24 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertStringContainsString('display: flex', $rules['.topbar .brand-m'] ?? '');
     }
 
+    public function testOnPhonesHistoryShowsItsOwnProjectPickerThatADesktopLeavesToTheTopBar(): void
+    {
+        $sheet = $this->sheets('components')[0];
+
+        // Unindented, so the rule stands outside every media block.
+        self::assertMatchesRegularExpression('/^\.filters #history-project \{ display: none; \}$/m', $sheet);
+        self::assertStringContainsString('display: block', $this->phoneRulesOf($sheet)['.filters #history-project'] ?? '');
+        self::assertStringContainsString('height: 44px', $this->phoneRulesOf($sheet)['.filters #history-project'] ?? '');
+    }
+
+    public function testOnPhonesHistoryClipsItsColumnHeadersInsteadOfRemovingThemFromScreenReaders(): void
+    {
+        $headers = $this->phoneRules()['.ledger.history thead'] ?? '';
+
+        self::assertStringContainsString('clip-path: inset(50%)', $headers);
+        self::assertStringNotContainsString('display: none', $headers);
+    }
+
     public function testOnPhonesTheTopBarLeavesOutTheOfflineMarkerAndTheReconnectingLineWraps(): void
     {
         $rules = $this->phoneRules();

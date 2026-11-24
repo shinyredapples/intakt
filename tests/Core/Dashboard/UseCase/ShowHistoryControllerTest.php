@@ -163,6 +163,18 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         self::assertSame(['', 'alpha', 'Beta', 'gamma'], $crawler->filter('#projfilter option')->each(static fn ($option): string => (string) $option->attr('value')));
     }
 
+    public function testTheHistoryToolbarOffersItsOwnProjectPickerForAPhoneWhoseTopBarHasNone(): void
+    {
+        $this->record(['actor' => 'owner', 'project' => 'Alpha']);
+        $this->record(['actor' => 'owner', 'project' => 'Beta']);
+
+        $picker = $this->browser->request('GET', '/history?project=Beta')->filter('main [data-history-filter] select#history-project[name="project"]');
+
+        self::assertSame('Project', $picker->attr('aria-label'));
+        self::assertSame(['', 'Alpha', 'Beta'], $picker->filter('option')->each(static fn (Crawler $option): string => (string) $option->attr('value')));
+        self::assertSame(['Beta'], $picker->filter('option[selected]')->each(static fn (Crawler $option): string => (string) $option->attr('value')));
+    }
+
     public function testTheHistoryPageMarksOnlyTheProjectsOutsideTheSharedFilterAsItsOwn(): void
     {
         $round = Uuid::v7()->toRfc4122();

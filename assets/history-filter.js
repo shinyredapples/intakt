@@ -1,43 +1,70 @@
 const TOOLBAR = '[data-history-filter]';
+const PICKER = `${TOOLBAR} select`;
+const SHARED = '#projfilter';
 const OUT = 'data-filtered-out';
 
 // Not a Stimulus controller, because a History page the hub cannot reach loads no import map. Listens on the page once, so a History page a visit puts in later is covered too, and recounts after the shell's project filter ran, because both decide which rows show.
-export function filterHistory(page) {
+// The phone's top bar has no project filter and the shell shows every project there, so on a phone the toolbar's own picker narrows the rows; it hands its choice to the shared filter, which keeps it for the next page and for a wider screen.
+export function filterHistory(page, phone) {
     page.addEventListener('click', (event) => {
         const chip = event.target?.closest?.(`${TOOLBAR} .fchip`);
         if (chip) {
             press(chip);
-            narrow(page);
+            narrow(page, phone);
         }
     });
     page.addEventListener('input', (event) => {
-        if (event.target?.closest?.(TOOLBAR)) {
-            narrow(page);
+        // The picker's own input comes before its change, so it is left to the shared filter, which this run would otherwise read before it heard of the choice.
+        if (event.target?.closest?.(TOOLBAR) && !event.target.closest(PICKER)) {
+            narrow(page, phone);
         }
     });
-    page.addEventListener('intakt:project-shown', () => narrow(page));
+    page.addEventListener('change', (event) => {
+        const picker = event.target?.closest?.(PICKER);
+        const shared = page.querySelector(SHARED);
+        if (picker && shared) {
+            shared.value = picker.value;
+            shared.dispatchEvent(new Event('change'));
+        }
+    });
+    page.addEventListener('intakt:project-shown', () => narrow(page, phone));
+    // The shell's first run on a full load comes before this module, so its choice is read here once.
+    narrow(page, phone);
 }
 
 function press(chip) {
     chip.closest(TOOLBAR).querySelectorAll('.fchip').forEach((other) => other.setAttribute('aria-pressed', String(other === chip)));
 }
 
-function narrow(page) {
+function narrow(page, phone) {
     const toolbar = page.querySelector(TOOLBAR);
     if (!toolbar) {
         return;
     }
+    const project = pickedProject(page, toolbar, phone);
     const chosen = toolbar.querySelector('.fchip[aria-pressed="true"]')?.dataset.filter ?? '';
     const text = toolbar.querySelector('input').value.trim().toLowerCase();
     let shown = 0;
     page.querySelectorAll('.ledger tbody tr').forEach((row) => {
-        const matches = isChosen(row, chosen) && (text === '' || row.textContent.toLowerCase().includes(text));
+        const matches = isChosen(row, chosen) && (project === '' || row.dataset.project === project) && (text === '' || row.textContent.toLowerCase().includes(text));
         row.toggleAttribute(OUT, !matches);
         if (matches && !row.hidden) {
             shown++;
         }
     });
     page.querySelector('.history-none').hidden = shown > 0;
+}
+
+// Follows the shared filter, which a stored choice, a project link or a live update may have changed; a project the picker does not list yet reads as All projects, so it never hides rows under a name it cannot show.
+function pickedProject(page, toolbar, phone) {
+    const picker = toolbar.querySelector('select');
+    if (!picker) {
+        return '';
+    }
+    const shared = page.querySelector(SHARED)?.value ?? picker.value;
+    picker.value = [...picker.options].some((option) => option.value === shared) ? shared : '';
+
+    return phone.matches ? picker.value : '';
 }
 
 function isChosen(row, chosen) {

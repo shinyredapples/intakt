@@ -5,9 +5,9 @@ import { FakeElement, root } from './stimulus-controller.mjs';
 const { filterHistory } = await import(new URL('assets/history-filter.js', root));
 
 class FakeRow extends FakeElement {
-    constructor(text, source, topics) {
+    constructor(text, source, topics, project = undefined) {
         super(text);
-        this.dataset = { source, topics };
+        this.dataset = { source, topics, project };
     }
 
     toggleAttribute(name, force) {
@@ -32,8 +32,47 @@ class FakeChip extends FakeElement {
     }
 }
 
+// A select keeps only a value one of its options carries, as in a browser.
+class FakeSelect {
+    #value = '';
+
+    constructor(toolbar, values) {
+        this.toolbar = toolbar;
+        this.options = values.map((value) => ({ value }));
+    }
+
+    get value() {
+        return this.#value;
+    }
+
+    set value(value) {
+        this.#value = this.options.some((option) => option.value === value) ? value : '';
+    }
+
+    closest(selector) {
+        return { '[data-history-filter] select': this, '[data-history-filter]': this.toolbar }[selector] ?? null;
+    }
+}
+
+// The shell's project filter: a change it hears stores the choice and runs the shell's project filter, which tells the page.
+class FakeSharedFilter {
+    value = '';
+    changes = 0;
+
+    constructor(page) {
+        this.page = page;
+    }
+
+    dispatchEvent(event) {
+        assert.equal(event.type, 'change');
+        this.changes++;
+        this.page.listeners['intakt:project-shown']();
+    }
+}
+
 class FakeToolbar {
     chips = [];
+    picker = null;
     input = { value: '', closest: (selector) => (selector === '[data-history-filter]' ? this : null) };
 
     querySelectorAll(selector) {
@@ -45,6 +84,9 @@ class FakeToolbar {
     querySelector(selector) {
         if (selector === 'input') {
             return this.input;
+        }
+        if (selector === 'select') {
+            return this.picker;
         }
         assert.equal(selector, '.fchip[aria-pressed="true"]');
 
@@ -59,6 +101,7 @@ class FakePage {
         this.toolbar = toolbar;
         this.rows = rows;
         this.none = { hidden: true };
+        this.shared = null;
     }
 
     addEventListener(type, listener) {
@@ -66,7 +109,7 @@ class FakePage {
     }
 
     querySelector(selector) {
-        return { '[data-history-filter]': this.toolbar, '.history-none': this.none }[selector] ?? null;
+        return { '[data-history-filter]': this.toolbar, '.history-none': this.none, '#projfilter': this.shared }[selector] ?? null;
     }
 
     querySelectorAll(selector) {
@@ -82,12 +125,64 @@ function historyWithAnOwnerChangeAndAnAccountCoolDown() {
     const owner = new FakeRow('Owner asked owner alpha', 'dashboard', 'projects');
     const cooled = new FakeRow('Account cooled down Intakt', 'intakt', 'limits accounts');
     const page = new FakePage(toolbar, [owner, cooled]);
-    filterHistory(page);
+    filterHistory(page, { matches: false });
 
     return { page, toolbar, owner, cooled, chip: (filter) => toolbar.chips.find((chip) => chip.dataset.filter === filter) };
 }
 
+function historyOfAlphaAndBeta(phone, stored = '') {
+    const toolbar = new FakeToolbar();
+    toolbar.chips = [new FakeChip(toolbar, '', true)];
+    toolbar.picker = new FakeSelect(toolbar, ['', 'Alpha', 'Beta']);
+    const alpha = new FakeRow('Owner asked Alpha', 'dashboard', 'projects', 'Alpha');
+    const beta = new FakeRow('Owner asked Beta', 'dashboard', 'projects', 'Beta');
+    const intakt = new FakeRow('Account cooled down', 'intakt', 'limits accounts');
+    const page = new FakePage(toolbar, [alpha, beta, intakt]);
+    page.shared = new FakeSharedFilter(page);
+    page.shared.value = stored;
+    filterHistory(page, { matches: phone });
+
+    return { page, picker: toolbar.picker, alpha, beta, intakt };
+}
+
 const shown = (...rows) => rows.map((row) => !row.hasAttribute('data-filtered-out'));
+
+test('on a phone the toolbar picker shows only the chosen project and hands the choice to the shared filter', () => {
+    const { page, picker, alpha, beta, intakt } = historyOfAlphaAndBeta(true);
+
+    picker.value = 'Beta';
+    page.listeners.input({ target: picker });
+    page.listeners.change({ target: picker });
+
+    assert.equal(page.shared.value, 'Beta');
+    assert.equal(page.shared.changes, 1);
+    assert.deepEqual(shown(alpha, beta, intakt), [false, true, false]);
+});
+
+test('on a phone a project kept from an earlier page is shown in the picker and narrows the rows from the start', () => {
+    const { picker, alpha, beta } = historyOfAlphaAndBeta(true, 'Alpha');
+
+    assert.equal(picker.value, 'Alpha');
+    assert.deepEqual(shown(alpha, beta), [true, false]);
+});
+
+test('on a wider screen the picker leaves the project to the shell, which hides rows itself', () => {
+    const { page, alpha, beta, intakt } = historyOfAlphaAndBeta(false, 'Alpha');
+
+    page.listeners['intakt:project-shown']();
+
+    assert.deepEqual(shown(alpha, beta, intakt), [true, true, true]);
+});
+
+test('a project the picker does not list reads as All projects, so no row is hidden under it', () => {
+    const { page, picker, alpha, beta } = historyOfAlphaAndBeta(true);
+    page.shared.value = 'Gamma';
+
+    page.listeners['intakt:project-shown']();
+
+    assert.equal(picker.value, '');
+    assert.deepEqual(shown(alpha, beta), [true, true]);
+});
 
 test('a source chip shows only the rows of that source and is the only one pressed', () => {
     const { page, toolbar, owner, cooled, chip } = historyWithAnOwnerChangeAndAnAccountCoolDown();

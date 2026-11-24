@@ -13,12 +13,13 @@
 {% if history.rows is empty %}
 {{ include('dashboard/components/empty.html.twig', {title: 'No history yet', text: 'Nothing has been recorded yet.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
 {% else %}
-{# assets/history-filter.js narrows the rows by the pressed chip and the text; the empty value is Everything. #}
+{# assets/history-filter.js narrows the rows by the pressed chip and the text, and on a phone, whose top bar has no project filter, by the toolbar's own project picker; the empty value is Everything. #}
 <div class="filters" role="toolbar" aria-label="Filter history" data-history-filter>
     <button class="fchip" type="button" aria-pressed="true" data-filter="">Everything</button>
     {% for choice in enum_cases('Intakt\\Core\\Dashboard\\Domain\\HistorySource')|merge(enum_cases('Intakt\\Core\\Dashboard\\Domain\\HistoryTopic')) %}
     <button class="fchip" type="button" aria-pressed="false" data-filter="{{ choice.value }}">{{ choice.filterLabel }}</button>
     {% endfor %}
+    {{ include('dashboard/components/select.html.twig', {id: 'history-project', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge(project_names|map(name => {value: name, label: name}))}, with_context = false) }}
     <label class="sr-only" for="history-text">Filter by text</label>
     <input class="input" id="history-text" type="search" placeholder="Filter by text">
 </div>
