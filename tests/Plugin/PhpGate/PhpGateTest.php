@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\PhpGate;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Job\Contract\EgressHosts;
 use Intakt\Plugin\Gate\Contract\CheckSteps;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PhpGate::class)]
 #[UsesClass(DependencyStep::class)]
 #[UsesClass(CheckSteps::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(LockFiles::class)]
 #[UsesClass(EgressHosts::class)]
 final class PhpGateTest extends TestCase
@@ -33,6 +35,24 @@ final class PhpGateTest extends TestCase
     public function testAConfiguredCommandIsTheOnlyStep(): void
     {
         self::assertSame(['make check'], [...new PhpGate()->checkSteps('make check')]);
+    }
+
+    public function testThePhpGateRunsExactlyTheGivenTestPathsOneStepEach(): void
+    {
+        $steps = [...new PhpGate()->testSteps(new Paths('tests/FooTest.php', "tests/it's/BarTest.php"))];
+
+        self::assertSame(["vendor/bin/phpunit 'tests/FooTest.php'", "vendor/bin/phpunit 'tests/it'\\''s/BarTest.php'"], $steps);
+    }
+
+    public function testATestFileIsAPhpTestUnderTests(): void
+    {
+        $gate = new PhpGate();
+
+        self::assertTrue($gate->isTestFile('tests/Core/FooTest.php'));
+        self::assertFalse($gate->isTestFile('src/Core/FooTest.php'));
+        self::assertFalse($gate->isTestFile('tests/Core/Support.php'));
+        self::assertFalse($gate->isTestFile("tests/Foo\nTest.php"));
+        self::assertFalse($gate->isTestFile('tests/FooTest.php.txt'));
     }
 
     public function testTheDependenciesComeFromPackagistAndGitHubArchives(): void

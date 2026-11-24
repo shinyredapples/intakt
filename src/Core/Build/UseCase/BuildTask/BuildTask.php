@@ -157,7 +157,7 @@ final readonly class BuildTask
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
                 // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
-                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
+                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels))) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
                 BuildStep::Push => $this->push($request, $results),
             };
 

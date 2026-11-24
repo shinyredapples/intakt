@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\CheckJob;
@@ -13,9 +14,12 @@ use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRuns;
+use Intakt\Core\HandBack\Contract\RegressionTests;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobRefused;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
@@ -26,13 +30,15 @@ final readonly class PrePushCheck
     public function __construct(
         private CheckJobs $jobs,
         private HandBackFile $files,
+        private RegressionTests $regressionTests,
+        private LoggerInterface $logger,
     ) {
     }
 
     // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed.
-    public function failureOf(BuildTaskRequest $request, string $bundle): ?string
+    public function failureOf(BuildTaskRequest $request, string $bundle, TaskKind $kind): ?string
     {
-        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack));
+        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack) ?? $this->reportedRegressionRuns($request, $handBack, $kind));
     }
 
     private function failureIn(BuildTaskRequest $request, HandBack $handBack): ?string
@@ -48,6 +54,33 @@ final readonly class PrePushCheck
         }
 
         return $outcome instanceof RefusedHandBack ? $outcome->reason() : $this->failureOfJob($outcome);
+    }
+
+    // Only reported for now, never part of the verdict, and only for a bug whose check passed, so a head that fails the check is not run twice more.
+    private function reportedRegressionRuns(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): null
+    {
+        if (TaskKind::Bug !== $kind) {
+            return null;
+        }
+
+        try {
+            $runs = $this->regressionTests->run(new CheckJob($handBack, $request->image, null, new Paths()));
+        } catch (ExceptionInterface|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
+            $this->logger->warning('The regression tests of a bug head could not run.', ['project' => $request->project, 'exception' => $failure]);
+
+            return null;
+        }
+
+        if ($runs instanceof RegressionRuns) {
+            $this->logger->info('The regression tests of a bug head ran.', [
+                'project' => $request->project,
+                'tests' => [...$runs->tests],
+                'base' => $runs->base?->value,
+                'head' => $runs->head?->value,
+            ]);
+        }
+
+        return null;
     }
 
     private function stoppedBy(ExceptionInterface $stopped): string

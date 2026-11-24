@@ -12,6 +12,8 @@ final readonly class PhpGateSteps
 
     public const string CHECK = 'bin/check --fast';
 
+    public const string PHPUNIT = 'vendor/bin/phpunit';
+
     // A status Composer's own failures do not use, so that a caller reads it as "this head cannot reuse an install" and not as a failed check.
     public const int REFUSED = 78;
 

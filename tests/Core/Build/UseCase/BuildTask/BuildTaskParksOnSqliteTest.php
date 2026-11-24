@@ -71,6 +71,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -247,7 +248,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
     }
 
     private function question(): string
