@@ -35,9 +35,10 @@ final class InstanceWorkerModeTest extends InstanceTestCase
             }
         }
         foreach (glob("/proc/[0-9]*/cmdline") ?: [] as $file) {
-            if (!str_ends_with(explode("\0", (string) @file_get_contents($file))[0], "frankenphp")) { continue; }
+            $arguments = explode("\0", (string) @file_get_contents($file));
+            if (!str_ends_with($arguments[0], "frankenphp") || !str_starts_with($arguments[3] ?? "", $argv[1])) { continue; }
             foreach (explode("\0", (string) @file_get_contents(dirname($file)."/environ")) as $entry) {
-                if (str_starts_with($entry, "FRANKENPHP_ADMIN_URL=")) { echo "server ", $entry, "\n"; }
+                if (str_starts_with($entry, "FRANKENPHP_ADMIN_URL=")) { echo "server admin url: ", "FRANKENPHP_ADMIN_URL=".getenv("INTAKT_INSTANCE_ADMIN_URL") === $entry ? "own" : "other", "\n"; }
             }
         }
         echo "listeners: ", implode(",", array_unique($addresses)), "\n";
@@ -51,14 +52,14 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         exit(3);
         PHP_WRAP;
 
-        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp(), 'FRANKENPHP_ADMIN_URL' => 'http://localhost:2019'], [PHP_BINARY, '-r', $command]);
+        // Only the server this run launched is read, by its Caddyfile in this test's scratch folder, and only whether its value is the instance's own admin address is printed.
+        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp(), 'FRANKENPHP_ADMIN_URL' => 'http://localhost:2019'], [PHP_BINARY, '-r', $command, $this->scratch.'/tmp/']);
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame(0, $run['exit']);
         self::assertMatchesRegularExpression('#^Worker PHP Thread - '.preg_quote((string) realpath(self::ROOT), '#').'/public/index\.php served [1-9]\d*$#m', $run['output']);
         self::assertMatchesRegularExpression('/^listeners: 0100007F$/m', $run['output']);
-        self::assertMatchesRegularExpression('#^server FRANKENPHP_ADMIN_URL=http://127\.0\.0\.1:\d+$#m', $run['output']);
-        self::assertStringNotContainsString('localhost:2019', $run['output']);
+        self::assertSame(['server admin url: own'], preg_grep('/^server admin url: /', explode("\n", $run['output'])) |> array_values(...));
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
     }
@@ -80,6 +81,24 @@ final class InstanceWorkerModeTest extends InstanceTestCase
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame("HTTP/1.1 200 OK\nempty projects page\n", $run['output']);
+    }
+
+    public function testInWorkerModeTheBoardShowsTheThreadsAndTheQueueDepthOfTheInstancesOwnServer(): void
+    {
+        $dashboardPort = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env.test'))['DASHBOARD_PORT'] ?? null;
+        self::assertIsString($dashboardPort);
+        $request = <<<'PHP_WRAP'
+            $context = stream_context_create(["http" => ["header" => "Host: ".$argv[1], "ignore_errors" => true]]);
+            $body = (string) file_get_contents(getenv("INTAKT_INSTANCE_URL")."/", false, $context);
+            foreach (["Threads busy", "Queue depth"] as $label) { echo $label, ": ", str_contains($body, "<dt>".$label."</dt>") ? "shown" : "missing", "\n"; }
+            PHP_WRAP;
+        // Migrated first, because the board reads the ledger and bin/instance starts on an empty database.
+        $command = ['sh', '-c', '"$0" bin/console --no-interaction --quiet doctrine:migrations:migrate && "$0" -r "$1" "$2"', PHP_BINARY, $request, 'localhost:'.$dashboardPort];
+
+        $run = $this->runInstance(self::ROOT, $command, $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame("Threads busy: shown\nQueue depth: shown\n", $run['output']);
     }
 
     public function testInWorkerModeFrankenphpRunsThreePhpThreadsWhateverTheNumberOfCpus(): void

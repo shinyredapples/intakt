@@ -493,7 +493,7 @@ final class WorkerServer implements Server
         return $socket;
     }
 
-    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; num_threads is fixed because FrankenPHP's default of two threads per CPU makes the memory a boot needs grow with the host, and on a host with many CPUs under an address-space limit PHP then exits with a bare "Out of memory" before it serves; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from; the site names no host because a Caddy site address also matches the Host header and Caddy answers a request no site matches with an empty 200, so bind alone keeps it on loopback.
+    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; num_threads is fixed because FrankenPHP's default of two threads per CPU makes the memory a boot needs grow with the host, and on a host with many CPUs under an address-space limit PHP then exits with a bare "Out of memory" before it serves; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from; the site names no host because a Caddy site address also matches the Host header and Caddy answers a request no site matches with an empty 200, so bind alone keeps it on loopback; metrics is on because FrankenPHP adds its queue series to the admin API's /metrics only then, and the instance's board reads them there.
     private function caddyfile(): string
     {
         $public = $this->root.'/public';
@@ -501,6 +501,7 @@ final class WorkerServer implements Server
         return <<<CADDYFILE
             {
             	admin 127.0.0.1:{$this->adminPort}
+            	metrics
             	frankenphp {
             		num_threads 2
             		php_ini log_errors 1
