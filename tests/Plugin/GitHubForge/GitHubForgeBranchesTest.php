@@ -14,6 +14,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubBranchCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForgeBranches;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
@@ -36,6 +37,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(GitHubForgeBranches::class)]
+#[UsesClass(GitHubBranchCalls::class)]
 #[UsesClass(WatchedRepositories::class)]
 #[UsesClass(RepositoryAddress::class)]
 #[UsesClass(GitHubMoments::class)]
@@ -262,7 +264,7 @@ final class GitHubForgeBranchesTest extends TestCase
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
         $http = new MockHttpClient($this->answer(...), 'https://api.github.com');
 
-        return new GitHubForgeBranches(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), new NextLinks(), new SteeringIdentities(new TrustAnswers(new GitHubCalls($http, $readings, $tokens)), $jwt, 'intakt-app'));
+        return new GitHubForgeBranches(new GitHubBranchCalls(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new NextLinks()), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), new SteeringIdentities(new TrustAnswers(new GitHubCalls($http, $readings, $tokens)), $jwt, 'intakt-app'));
     }
 
     /**

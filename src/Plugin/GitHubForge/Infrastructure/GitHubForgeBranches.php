@@ -10,32 +10,19 @@ use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
 use Intakt\Plugin\Forge\Contract\ForgeBranches;
-use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
-use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
-use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
-use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
-use JsonException;
-use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 // Every answer is checked field by field, because a branch read wrongly could be deleted; a doubt fails the read and cleanup deletes nothing.
 final readonly class GitHubForgeBranches implements ForgeBranches
 {
-    private const int PAGE_SIZE = 100;
-    // A listing of more pages than this fails, because a weekly run must end.
-    private const int MAX_PAGES = 10;
-    private const int OK = 200;
     private const int NO_CONTENT = 204;
-    private const int UNAUTHORIZED = 401;
 
     public function __construct(
-        private GitHubCalls $calls,
-        private CheckedInstallationTokens $tokens,
+        private GitHubBranchCalls $calls,
         private WatchedRepositories $repositories,
         private GitHubMoments $moments,
-        private NextLinks $nextLinks,
         private SteeringIdentities $identities,
     ) {
     }
@@ -48,27 +35,15 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     public function branchesOf(string $project): array
     {
         $path = $this->repositories->addressOf($project)->path();
-        $default = $this->text($this->object($this->read($path, [])), 'default_branch');
-        $listed = [];
+        $default = $this->calls->text($this->calls->object($path), 'default_branch');
 
-        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
-            $branches = $this->list($this->read($path.'/branches', ['per_page' => self::PAGE_SIZE, 'page' => $page]));
-            foreach ($branches as $branch) {
-                $listed[] = $this->branchOf($branch, $default);
-            }
-
-            if (count($branches) < self::PAGE_SIZE) {
-                return $listed;
-            }
-        }
-
-        throw new ForgeReadFailed('GitHub lists more branches than this forge reads.');
+        return array_map(fn (mixed $branch): ForgeBranch => $this->branchOf($branch, $default), $this->calls->pages($path.'/branches', []));
     }
 
     public function changeOf(string $project, ForgeBranch $branch): ?BranchChange
     {
         $address = $this->repositories->addressOf($project);
-        $pulls = $this->pagesOf($address->path().'/pulls', ['state' => 'all', 'head' => $address->headOf($branch->name)]);
+        $pulls = $this->calls->pages($address->path().'/pulls', ['state' => 'all', 'head' => $address->headOf($branch->name)]);
         $ofHead = array_values(array_filter(array_map($this->changeOfPull(...), $pulls), static fn (array $pull): bool => $pull[0] === $branch->head->hash));
         $changes = array_column($ofHead, 1);
         $open = array_filter($changes, static fn (BranchChange $change): bool => BranchChangeState::Open === $change->state);
@@ -81,20 +56,21 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     {
         $path = $this->repositories->addressOf($project)->path();
         // GitHub's ref deletion takes no expected head, so the head is read right before it; the short window between the two is accepted because cleanup candidates have been idle for weeks.
-        $current = $this->headRightBeforeDeleting($path, $branch);
-        if ($current !== $branch->head->hash) {
+        if ($this->headRightBeforeDeleting($path, $branch) !== $branch->head->hash) {
             throw new ForgeWriteFailed(sprintf('The branch "%s" moved since it was listed, so it was not deleted.', $branch->name));
         }
 
-        $status = $this->write('DELETE', $path.'/git/refs/heads/'.$this->segments($branch->name), []);
-        $this->expect(self::NO_CONTENT, $status, 'deletion');
+        $status = $this->calls->delete($path.'/git/refs/heads/'.$this->segments($branch->name));
+        if (self::NO_CONTENT !== $status) {
+            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a branch deletion.', $status));
+        }
     }
 
     public function hasCommitByPerson(string $project, ForgeBranch $branch): bool
     {
         $path = $this->repositories->addressOf($project)->path();
-        $default = $this->text($this->object($this->read($path, [])), 'default_branch');
-        $commits = $this->pagesOf($path.'/compare/'.$this->segments($default).'...'.$branch->head->hash, [], 'commits');
+        $default = $this->calls->text($this->calls->object($path), 'default_branch');
+        $commits = $this->calls->pages($path.'/compare/'.$this->segments($default).'...'.$branch->head->hash, [], 'commits');
 
         return array_any($commits, fn (mixed $commit): bool => !$this->isIntakts($commit));
     }
@@ -102,7 +78,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     private function headRightBeforeDeleting(string $path, ForgeBranch $branch): string
     {
         try {
-            return $this->text($this->object($this->read($path.'/branches/'.$this->segments($branch->name), [])), 'commit', 'sha');
+            return $this->calls->text($this->calls->object($path.'/branches/'.$this->segments($branch->name)), 'commit', 'sha');
         } catch (ForgeReadFailed $unread) {
             throw new ForgeWriteFailed(sprintf('The head of the branch "%s" could not be read, so it was not deleted.', $branch->name), $unread->getCode(), $unread);
         }
@@ -124,114 +100,13 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         }
     }
 
-    /**
-     * Every page, because a pull request or commit on a later page may be the open or kept one.
-     *
-     * @param array<string, int|string> $query
-     *
-     * @return list<mixed>
-     */
-    private function pagesOf(string $path, array $query, ?string $key = null): array
-    {
-        $items = [];
-        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
-            $query = [...$query, 'per_page' => self::PAGE_SIZE, 'page' => $page];
-            $answer = $this->exchange($path, $query);
-            $items = [...$items, ...$this->itemsOf($answer['body'], $key)];
-            if (!$this->nextLinks->namesNext($answer['headers']['link'] ?? [], $path.'?'.http_build_query($query, '', '&'))) {
-                return $items;
-            }
-        }
-
-        throw new ForgeReadFailed('GitHub lists more pages than this forge reads.');
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function itemsOf(string $body, ?string $key): array
-    {
-        if (null === $key) {
-            return $this->list($body);
-        }
-
-        $items = $this->object($body)[$key] ?? null;
-
-        return is_array($items) && array_is_list($items) ? $items : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', $key));
-    }
-
-    /**
-     * @param array<string, int|string> $query
-     */
-    private function read(string $path, array $query): string
-    {
-        return $this->exchange($path, $query)['body'];
-    }
-
-    /**
-     * @param array<string, int|string> $query
-     *
-     * @return array{body: string, headers: array<string, list<string>>}
-     */
-    private function exchange(string $path, array $query): array
-    {
-        try {
-            $response = $this->calls->asInstallation('GET', $path, ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => ['Accept' => 'application/vnd.github+json']]);
-            $status = $response->getStatusCode();
-            $body = $response->getContent(false);
-            $headers = $response->getHeaders(false);
-        } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), $failure);
-        }
-
-        if (self::OK !== $status) {
-            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
-        }
-
-        return ['body' => $body, 'headers' => $headers];
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function object(string $body): array
-    {
-        $data = $this->decode($body);
-
-        return !array_is_list($data) || [] === $data ? $data : throw new ForgeReadFailed('GitHub answered a list where an object was expected.');
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function list(string $body): array
-    {
-        $data = $this->decode($body);
-
-        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        return array_is_list($data) && str_starts_with(ltrim($body), '[') ? $data : throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
-    }
-
     private function branchOf(mixed $branch, string $default): ForgeBranch
     {
         $data = is_array($branch) ? $branch : throw new ForgeReadFailed('GitHub listed a branch that is not an object.');
-        $name = $this->text($data, 'name');
+        $name = $this->calls->text($data, 'name');
         $protected = $data['protected'] ?? null;
 
-        return new ForgeBranch($name, $this->commitOf($this->text($data, 'commit', 'sha')), $name === $default, is_bool($protected) ? $protected : throw new ForgeReadFailed('GitHub listed a branch without "protected".'), ForgeBranch::isReleaseName($name));
+        return new ForgeBranch($name, $this->commitOf($this->calls->text($data, 'commit', 'sha')), $name === $default, is_bool($protected) ? $protected : throw new ForgeReadFailed('GitHub listed a branch without "protected".'), ForgeBranch::isReleaseName($name));
     }
 
     /**
@@ -240,7 +115,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     private function changeOfPull(mixed $pull): array
     {
         $data = is_array($pull) ? $pull : throw new ForgeReadFailed('GitHub listed a pull request that is not an object.');
-        $state = $this->text($data, 'state');
+        $state = $this->calls->text($data, 'state');
         $mergedAt = $data['merged_at'] ?? null;
         $closedAt = $data['closed_at'] ?? null;
 
@@ -251,7 +126,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
             default => throw new ForgeReadFailed(sprintf('GitHub listed a pull request in the state "%s" without the moment it closed.', $state)),
         };
 
-        return [$this->text($data, 'head', 'sha'), $change];
+        return [$this->calls->text($data, 'head', 'sha'), $change];
     }
 
     /**
@@ -263,7 +138,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     {
         $labels = $pull['labels'] ?? null;
 
-        return is_array($labels) ? array_values(array_map(fn (mixed $label): string => $this->text(is_array($label) ? $label : [], 'name'), $labels)) : throw new ForgeReadFailed('GitHub listed a pull request without "labels".');
+        return is_array($labels) ? array_values(array_map(fn (mixed $label): string => $this->calls->text(is_array($label) ? $label : [], 'name'), $labels)) : throw new ForgeReadFailed('GitHub listed a pull request without "labels".');
     }
 
     // Each part encoded, because a branch name holds slashes GitHub reads as part of the path.
@@ -272,60 +147,12 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         return implode('/', array_map(rawurlencode(...), explode('/', $branch)));
     }
 
-    /**
-     * @param array<string, string> $body
-     */
-    private function write(string $method, string $path, array $body): int
-    {
-        try {
-            $options = ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], ...([] === $body ? [] : ['json' => $body])];
-
-            return $this->calls->asInstallation($method, $path, $options)->getStatusCode();
-        } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), $failure);
-        } catch (ForgeReadFailed $noToken) {
-            throw new ForgeWriteFailed($noToken->getMessage(), $noToken->getCode(), $noToken);
-        }
-    }
-
-    private function expect(int $expected, int $status, string $write): void
-    {
-        if ($expected !== $status) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a branch %s.', $status, $write));
-        }
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function decode(string $body): array
-    {
-        try {
-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
-    }
-
     private function commitOf(string $sha): CommitId
     {
         try {
             return new CommitId($sha);
         } catch (CommitIdMalformed $malformed) {
             throw new ForgeReadFailed('GitHub listed a branch whose head is not a commit id.', $malformed->getCode(), $malformed);
-        }
-    }
-
-    private function bearer(): string
-    {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted $notMinted) {
-            throw new ForgeReadFailed('No GitHub installation token for a branch call.', $notMinted->getCode(), previous: $notMinted);
-        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeReadFailed('No GitHub call before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
     }
 }

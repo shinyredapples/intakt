@@ -23,7 +23,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
 {
     private const int TIMEOUT_SECONDS = 60;
     private const string HEADS = 'refs/heads/';
-    // The author email of Intakt's own commits in a local repository; any other author is a person.
+    // Only this email is Intakt, because any other author is someone whose work a delete would lose.
     public const string INTAKT_EMAIL = 'intakt@localhost';
 
     /**
