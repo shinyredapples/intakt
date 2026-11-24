@@ -38,6 +38,16 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         self::assertSame('low → high', $crawler->filter('.ledger tbody tr')->last()->filter('.change')->text());
     }
 
+    public function testAChangeShowsTheValueBeforeAndTheValueAfterAroundTheMocksArrow(): void
+    {
+        $this->record(['actor' => 'owner', 'before' => 'low', 'after' => 'high']);
+
+        $change = $this->browser->request('GET', '/history')->filter('.ledger td.change');
+
+        self::assertSame(['low', 'high'], $change->filter('b')->each(static fn (Crawler $value): string => $value->text()));
+        self::assertSame('→', $change->filter('.arrow')->text());
+    }
+
     public function testTheHistoryPageLinksToTrendsAsASubTabAndMarksLedgerAsCurrent(): void
     {
         $this->record(['actor' => 'owner']);
