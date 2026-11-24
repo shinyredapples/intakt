@@ -204,6 +204,17 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         );
     }
 
+    public function testTheSameShortNameInTwoClassesOnOneLineIsReportedForEach(): void
+    {
+        $finding = ' is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().';
+
+        self::assertSame(
+            'tests/FirstTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\FirstTest::testRun()'.$finding."\n"
+            .'tests/FirstTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\SecondTest::testRun()'.$finding,
+            $this->ruleFindingsOf('test-method-same-line-classes'),
+        );
+    }
+
     public function testAShortTestMethodOfAnAnonymousTestCasePassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-anonymous-class');
