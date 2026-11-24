@@ -37,6 +37,6 @@ final readonly class PullRequestTextCheck
 
         $missing = $result->outcome->missingItems;
 
-        return 'the pull request text is sent back to the builder: '.$result->outcome->verdict->reason().([] === $missing ? '' : '; missing: '.implode(', ', array_map(static fn (int $item): string => 'E'.$item, $missing)));
+        return 'the pull request text is sent back to the builder: '.$result->outcome->verdict->reason().($missing->isEmpty() ? '' : '; missing: '.$missing->references());
     }
 }

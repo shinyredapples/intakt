@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -49,6 +50,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(PullRequestsOfTasks::class)]
 #[UsesClass(IntakeStore::class)]
 #[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
 #[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(IntakeRules::class)]
 #[UsesClass(IntakePlan::class)]
