@@ -8,7 +8,7 @@ Everything Intakt knows lives in one place, so it is easy to back up, move or re
 flowchart TD
   vol[(The intakt data volume)] --> db[The database<br/>SQLite: tasks, queue, the record,<br/>budgets, your AI accounts, project memory]
   vol --> cfg[The config file<br/>projects, panels, routing]
-  vol --> keys[Its keys and secrets<br/>the GitHub App key, its signing key, the secrets vault's key;<br/>the vault: AI tokens, logins and API keys, encrypted;<br/>the AI key typed on the setup page, not encrypted, readable by Intakt only]
+  vol --> keys[Its keys and secrets<br/>the GitHub App key, its signing key, the secrets vault's key;<br/>the vault: AI tokens, logins and API keys, encrypted;<br/>the AI key typed in the setup wizard, not encrypted, readable by Intakt only]
   vol --> mirror[A copy of each repository<br/>rebuilt from GitHub if lost]
   vol --> cache[Caches<br/>job images, package downloads]
 ```
@@ -17,7 +17,7 @@ flowchart TD
 |---|---|---|
 | **The database** | every task's state, the record of every decision, budgets, the AI accounts and controls you set in the admin area, project memory | Intakt forgets its history and you add your accounts again; your code and pull requests on GitHub are untouched |
 | **The config file** | your settings: projects, panels, routing | you redo the setup wizard |
-| **Its keys and secrets** | the App's private key, the signing key and the key of the secrets vault; the vault itself with the AI tokens, logins and API keys you saved, encrypted; the AI key you typed on the setup page, in a file of its own that is not encrypted but that only Intakt's own user can read | you reconnect the App and paste new tokens or log in again in the admin area |
+| **Its keys and secrets** | the App's private key, the signing key and the key of the secrets vault; the vault itself with the AI tokens, logins and API keys you saved, encrypted; the AI key you typed in the setup wizard, in a file of its own that is not encrypted but that only Intakt's own user can read | you reconnect the App and paste new tokens or log in again in the admin area |
 | **The repository copies** | a mirror of each project | nothing: rebuilt from GitHub |
 | **Caches** | images and downloads | nothing: rebuilt, just slower once |
 

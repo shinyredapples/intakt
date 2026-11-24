@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\HandBack\UseCase\CheckPullRequestText;
 
 use Intakt\Core\HandBack\Contract\FailedPullRequestText;
+use Intakt\Core\HandBack\Contract\MissingEvidenceItems;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
@@ -42,6 +43,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(PullRequestTextTask::class)]
 #[UsesClass(PullRequestTextRule::class)]
 #[UsesClass(PullRequestTextOutcome::class)]
+#[UsesClass(MissingEvidenceItems::class)]
 #[UsesClass(PullRequestTextVerdict::class)]
 #[UsesClass(EvidenceItems::class)]
 #[UsesClass(MarkdownText::class)]
@@ -67,7 +69,7 @@ final class RoutePullRequestTextTest extends TestCase
 
         self::assertInstanceOf(FailedPullRequestText::class, $result);
         self::assertSame(PullRequestTextRoute::SentBack, $result->route);
-        self::assertSame([2], $result->outcome->missingItems);
+        self::assertSame([2], [...$result->outcome->missingItems]);
         self::assertSame([LedgerEventKind::PullRequestTextSentBack], $this->ledger->kinds());
         self::assertSame(['task' => $this->task()->key, 'repository' => __DIR__, 'branch' => 'task', 'verdict' => 'missing-evidence-reference', 'reason' => PullRequestTextVerdict::MissingEvidenceReference->reason(), 'missing' => [2], 'body_characters' => 22], $this->ledger->lastPayload());
     }
