@@ -14,15 +14,16 @@ final readonly class Redaction
 
     public const string MASK = "\0";
 
-    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`). Each shape is tried at every position inside a lookahead, so a match does not consume its text: `sk-...` or a web token's signature running on into `-eyJ...` would otherwise hide the token that starts inside it.
+    // Each shape is a start and the rest of it. A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`). A key block runs to its end line in possessive steps, since a lazy `.*?` takes one backtrack per byte and gives up on a long block with no end line.
     private const array SECRET_SHAPES = [
-        '-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)',
-        '(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})',
-        '(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}',
-        '(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}\b',
-        '(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}',
-        '(?<![A-Za-z0-9])eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+',
-        '\bBearer\s+[A-Za-z0-9._\\~+/=-]{8,}',
+        ['-----BEGIN [A-Z ]*PRIVATE KEY-----', '(?:[^-]++|-(?!----END [A-Z ]*PRIVATE KEY-----))*+(?:-----END [A-Z ]*PRIVATE KEY-----|\z)'],
+        ['(?<![A-Za-z0-9])gh[pousr]_', '[A-Za-z0-9]{20,}'],
+        ['(?<![A-Za-z0-9])github_pat_', '[A-Za-z0-9_]{20,}'],
+        ['(?<![A-Za-z0-9])sk-', '[A-Za-z0-9_-]{20,}'],
+        ['(?<![A-Za-z0-9])AKIA', '[0-9A-Z]{16}\b'],
+        ['(?<![A-Za-z0-9])xox[abprs]-', '[A-Za-z0-9-]{10,}'],
+        ['(?<![A-Za-z0-9])eyJ', '[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+'],
+        ['\bBearer', '\s+[A-Za-z0-9._\\~+/=-]{8,}'],
     ];
 
     // Headers, URLs and secret shapes are looked for both in the original text and with the held credentials masked: a held credential may spell a header name or a scheme, or end right before one and hide the word boundary its pattern needs. All parts are replaced at the end, so overlapping parts become one marker.
@@ -82,17 +83,52 @@ final readonly class Redaction
 
     private function addSecretShapes(string $text, RedactedSpans $spans): bool
     {
-        foreach (self::SECRET_SHAPES as $shapePattern) {
-            // The empty group at the end of the lookahead gives the offset where the shape ends: capturing the shape itself would copy every overlapping match, and memory would grow with the square of a run of joined tokens.
-            if (false === preg_match_all('~(?=(?:'.$shapePattern.')())~s', $text, $matches, PREG_OFFSET_CAPTURE)) {
+        foreach (self::SECRET_SHAPES as [$start, $rest]) {
+            if (!$this->addShape($text, '~'.$start.'~', '~(?:'.$start.$rest.')()~s', $spans)) {
                 return false;
-            }
-
-            foreach ($matches[0] as $i => [, $from]) {
-                $spans->add($from, $matches[1][$i][1]);
             }
         }
 
         return true;
+    }
+
+    // A match consumes its text, so a token that starts inside it (`sk-...` or a web token's signature running on into the next token) would be missed. The scan therefore resumes at the last start inside the match: that match extends the part when it ends further on, and otherwise the scan goes on after it. Starts are looked for only past the text already searched, so each character is read a bounded number of times and the time grows linearly.
+    private function addShape(string $text, string $startPattern, string $shapePattern, RedactedSpans $spans): bool
+    {
+        $offset = 0;
+        $searched = 0;
+        while (1 === ($found = preg_match($shapePattern, $text, $match, PREG_OFFSET_CAPTURE, $offset))) {
+            $from = $match[0][1];
+            $to = $match[1][1];
+            $spans->add($from, $to);
+
+            $lastStart = $this->lastStartBetween($text, $startPattern, max($from + 1, $searched), $to);
+            if (null === $lastStart) {
+                return false;
+            }
+            $searched = max($searched, $to);
+            $offset = -1 === $lastStart ? max($to, $from + 1) : $lastStart;
+        }
+
+        return 0 === $found;
+    }
+
+    // -1 when no start lies between the two offsets, null when the match failed.
+    private function lastStartBetween(string $text, string $startPattern, int $from, int $to): ?int
+    {
+        $last = -1;
+        while ($from < $to) {
+            $found = preg_match($startPattern, $text, $start, PREG_OFFSET_CAPTURE, $from);
+            if (false === $found) {
+                return null;
+            }
+            if (0 === $found || $start[0][1] >= $to) {
+                break;
+            }
+            $last = $start[0][1];
+            $from = $last + 1;
+        }
+
+        return $last;
     }
 }

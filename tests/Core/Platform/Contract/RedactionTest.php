@@ -82,6 +82,29 @@ final class RedactionTest extends TestCase
         self::assertLessThan(32 * 1024 * 1024, memory_get_peak_usage() - $before);
     }
 
+    public function testItRedactsAMegabyteOfApiKeysJoinedByHyphensInUnderASecond(): void
+    {
+        $text = 'prefix '.str_repeat('sk-'.str_repeat('A', 20).'-', 43_000).' suffix';
+        $start = hrtime(true);
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('prefix [redacted] suffix', $redacted);
+        self::assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+    }
+
+    public function testItRedactsAMegabyteOfPrivateKeyHeadersWithoutAnEndLineInUnderASecond(): void
+    {
+        $header = str_repeat('-', 5).'BEGIN RSA PRIVATE KEY'.str_repeat('-', 5)."\n";
+        $text = 'x '.str_repeat($header, 32_000);
+        $start = hrtime(true);
+
+        $redacted = new Redaction()->redact($text);
+
+        self::assertSame('x [redacted]', $redacted);
+        self::assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+    }
+
     public function testItLeavesAWordThatContainsATokenPrefixAfterALetter(): void
     {
         $word = 'xghp_'.str_repeat('a', 30);
