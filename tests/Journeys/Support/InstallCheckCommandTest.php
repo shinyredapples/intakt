@@ -80,6 +80,16 @@ final class InstallCheckCommandTest extends TestCase
         self::assertFileDoesNotExist($this->directory.'/leaked');
     }
 
+    public function testARepositoryThatCannotBeClonedExitsTwoAndLeavesNoTemporaryFolder(): void
+    {
+        $run = new Process([PHP_BINARY, self::CHECKOUT.'/bin/install-check', $this->directory.'/missing'], self::CHECKOUT, ['PATH' => $this->directory.':'.getenv('PATH'), 'TMPDIR' => $this->directory], null, 60);
+        $run->run();
+
+        self::assertSame(2, $run->getExitCode());
+        self::assertStringContainsString('the install check could not run: git clone failed', $run->getErrorOutput());
+        self::assertSame([], glob($this->directory.'/intakt-install-check-*'));
+    }
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-install-check-command-'.bin2hex(random_bytes(6));

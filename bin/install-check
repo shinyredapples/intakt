@@ -43,13 +43,19 @@ foreach (InstallCheck::KEYS as $name) {
     $keys[$name] = (string) getenv($name);
 }
 
+$report = null;
+
+// exit() skips a finally block, so the folder is removed before the could-not-run exit is taken.
 try {
     $report = new InstallCheck(new InstallProcessRunner(STEP_SECONDS)->__invoke(...), $temporary, $logs, $checkout, $keys)->run($arguments[0] ?? InstallCheck::REPOSITORY);
 } catch (InstallCheckCouldNotRun $stopped) {
     fwrite(STDERR, 'the install check could not run: '.$stopped->getMessage()."\n");
-    exit(2);
 } finally {
     $files->remove($temporary);
+}
+
+if (null === $report) {
+    exit(2);
 }
 
 $reportFile = $logs.'/report.json';
