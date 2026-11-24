@@ -180,7 +180,7 @@ async() {
 }
 
 scheduler_watcher() {
-    exec php bin/console messenger:consume scheduler_watcher scheduler_retention --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
+    exec php bin/console messenger:consume scheduler_watcher scheduler_retention scheduler_branch_cleanup --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
 }
 
 declare -A running=()

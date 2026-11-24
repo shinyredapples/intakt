@@ -16,6 +16,12 @@ doctrine:
             Doctrine\DBAL\Platforms\PostgreSQLPlatform: identity
         auto_mapping: false
         mappings:
+            BranchCleanup:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/BranchCleanup/Domain'
+                prefix: 'Intakt\Core\BranchCleanup\Domain'
+                alias: BranchCleanup
             Build:
                 type: attribute
                 is_bundle: false

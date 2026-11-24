@@ -26,6 +26,9 @@ final readonly class UpdateMirror
     // Because a mirror holds every ref of the remote, forced, as "clone --mirror" sets it up.
     private const string MIRROR_REFSPEC = '+refs/*:refs/*';
 
+    // Negative, because the pruning fetch would otherwise delete the archive refs of deleted branches, which the remote never holds.
+    private const string KEEP_ARCHIVE = '^refs/intakt/archive/*';
+
     private const string REMOTE_HEAD = '/^ref: (refs\/heads\/[^\t\n]+)\tHEAD$/m';
 
     // Both lengths, because a remote may hold SHA-1 or SHA-256 objects.
@@ -98,7 +101,7 @@ final readonly class UpdateMirror
         $heads = $this->network->run($this->inMirror(['ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
 
         // The remote is named on each call, so a mirror never depends on a remote setting; "--" ends the options, so a remote that starts with a dash is a repository, never an option. No FETCH_HEAD, because git writes the remote's address into it, and the mirror keeps no address.
-        $this->network->run($this->inMirror(['fetch', '--prune', '--quiet', '--no-write-fetch-head', '--', $remote, self::MIRROR_REFSPEC], $repository));
+        $this->network->run($this->inMirror(['fetch', '--prune', '--quiet', '--no-write-fetch-head', '--', $remote, self::MIRROR_REFSPEC, self::KEEP_ARCHIVE], $repository));
 
         if (1 === preg_match(self::REMOTE_HEAD, $heads, $match)) {
             $this->mustRun(['symbolic-ref', 'HEAD', $match[1]], $repository);
