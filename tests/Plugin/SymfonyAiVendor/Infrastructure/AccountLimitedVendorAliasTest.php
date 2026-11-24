@@ -24,20 +24,19 @@ final class AccountLimitedVendorAliasTest extends TestCase
 
     private mixed $sharedBuild;
 
+    private bool $sharedBuildExisted = false;
+
     private ?Kernel $kernel = null;
 
     public function testTheCallersBuildDirectoryStaysUntouched(): void
     {
-        $build = sys_get_temp_dir().'/intakt-vendor-alias-caller-'.bin2hex(random_bytes(6));
-        $_SERVER['APP_BUILD_DIR'] = $build;
-        $this->setUp();
+        $this->kernel = new Kernel('dev', true);
+        $this->kernel->boot();
 
-        try {
-            $this->testOutsideTheTestEnvironmentTheVendorContractIsTheAccountLimitedVendor();
-            self::assertDirectoryDoesNotExist($build);
-        } finally {
-            $this->tearDown();
-            new Filesystem()->remove($build);
+        self::assertSame($this->cache.'/dev', $this->kernel->getBuildDir());
+        self::assertFileExists($this->compiledWiringFile());
+        if (is_string($this->sharedBuild) && !$this->sharedBuildExisted) {
+            self::assertDirectoryDoesNotExist($this->sharedBuild);
         }
     }
 
@@ -53,6 +52,7 @@ final class AccountLimitedVendorAliasTest extends TestCase
     {
         $this->sharedCache = $_SERVER['APP_CACHE_DIR'] ?? null;
         $this->sharedBuild = $_SERVER['APP_BUILD_DIR'] ?? null;
+        $this->sharedBuildExisted = is_string($this->sharedBuild) && is_dir($this->sharedBuild);
         $this->cache = sys_get_temp_dir().'/intakt-vendor-alias-'.bin2hex(random_bytes(6));
         $_SERVER['APP_CACHE_DIR'] = $this->cache;
         $_SERVER['APP_BUILD_DIR'] = $this->cache;
@@ -75,11 +75,17 @@ final class AccountLimitedVendorAliasTest extends TestCase
     // Read from the serialized builder debug:container reads beside its dump, because the compiled container drops private aliases such as this one.
     private function compiledWiring(): ContainerBuilder
     {
-        $dump = $this->kernel?->getContainer()->getParameter('debug.container.dump');
-        self::assertIsString($dump);
-        $wiring = unserialize(new Filesystem()->readFile(substr_replace($dump, '.ser', -4)));
+        $wiring = unserialize(new Filesystem()->readFile($this->compiledWiringFile()));
         self::assertInstanceOf(ContainerBuilder::class, $wiring);
 
         return $wiring;
+    }
+
+    private function compiledWiringFile(): string
+    {
+        $dump = $this->kernel?->getContainer()->getParameter('debug.container.dump');
+        self::assertIsString($dump);
+
+        return substr_replace($dump, '.ser', -4);
     }
 }
