@@ -52,6 +52,10 @@ One thing to know about booting: Intakt can start a change in a scratch copy to 
 
 The helper-order check of `bin/check` does not recognize a call from a property hook, a `[$this, 'helper']` callable array or a `$this::helper()` call, so a private helper reached only that way is never reported ([the method-order rules](../reference/user-manual.md#when-bincheck-reports-the-order-of-methods)).
 
+A reviewer's role prompt must come from the owner's panel configuration or the sample project's fixed roles, so the `phpstan` gate of `bin/check` limits where the objects that carry it are built: `new ReviewerRole` only in `ConfiguredPanels` and `SampleProject`, `new RoundReviewer` only in `ReviewRound` (`intakt.reviewerRole`), and `new ReviewerConversation` only in `ReviewWithReviewerHandler` and `SymfonyAiVendor` (`intakt.reviewerConversation`). A class string typed with an interface or parent class of one of these objects, such as `class-string<HasPlace>`, counts as naming that object; one typed with several (`class-string<HasPlace&Countable>`) counts only when the object has every one of them. Code under `tests/` is not checked ([details](../reference/user-manual.md#when-the-phpstan-gate-reports-a-prompt-message-finding)).
+
+Code in a trait counts as outside, even when an allowed class uses the trait. In a trait that a class uses, `new self`, `new static` or `new $class` is judged in each class that uses it, and is refused when it may build one of these objects or its type names no class. In a trait no class uses, all three are refused, except a `new self` or `new static` inside an anonymous class in the trait, which builds that anonymous class. An anonymous class (`new class () {}`) builds none of these objects and passes.
+
 Looking for a setting, a command option or an exact rule? The [complete reference](../reference/user-manual.md) keeps every detail.
 
 The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig, JavaScript, shell and YAML lines a change adds.
@@ -62,7 +66,9 @@ A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([ex
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
-A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks)).
+
+When all four parts are there, the builder is told to write the regression test that fails today first, commit it on its own and only then fix the bug. Only the task itself may say that a bug cannot be reproduced by a test ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
 
 Intakt chooses tasks only from GitHub issues that carry the project's eligibility label: `intakt`, unless the project's `watch` section names another `eligibility_label`. An issue that carries only another loop's label is not a task for Intakt. `php bin/console intakt:queue:show <project>` prints the order Intakt would pick the tasks in (tasks with an open pull request, including one found only by its task branch, come before tasks not started yet, also urgent ones), then the held tasks with their reasons; no build starts from it yet ([details](../reference/user-manual.md#showing-the-queue-of-tasks)).
 
