@@ -1,7 +1,6 @@
-assets exit 1
-migrate exit 0
-create exit 0
-replay exit 0
+Head d85a28246; install: migrated, intakt:demo:create and intakt:demo:replay of fixtures/demo/sample-change-review.json, intakt:sample:seed config, placeholder (not real) keys for an Anthropic key and a Claude Code subscription, two budget_window_reading rows for the subscription (five-hour 42%, weekly 18.5%, read 12 minutes before the run).
+Command: bin/ui-check http://localhost:7780
+
 board light 1440: axe critical 0, serious 0, moderate 0, minor 0
 board light 1920: axe critical 0, serious 0, moderate 0, minor 0
 board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -9,17 +8,11 @@ board dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 board dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 board dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 components light 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/components
 components light 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/components
 components light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for http://localhost:7780/components
 components dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/components
 components dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/components
 components dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for http://localhost:7780/components
 projects light 1440: axe critical 0, serious 0, moderate 0, minor 0
 projects light 1920: axe critical 0, serious 0, moderate 0, minor 0
 projects light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -32,6 +25,12 @@ reviews light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor f
 reviews dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 reviews dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 reviews dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+search light 1440: axe critical 0, serious 0, moderate 0, minor 0
+search light 1920: axe critical 0, serious 0, moderate 0, minor 0
+search light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+search dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+search dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+search dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 setup light 1440: axe critical 0, serious 0, moderate 0, minor 0
 setup light 1920: axe critical 0, serious 0, moderate 0, minor 0
 setup light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -51,17 +50,11 @@ team dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 team dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 team dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 trends light 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/trends
 trends light 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/trends
 trends light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for http://localhost:7780/trends
 trends dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/trends
 trends dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:7780/trends
 trends dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for http://localhost:7780/trends
 waiting light 1440: axe critical 0, serious 0, moderate 0, minor 0
 waiting light 1920: axe critical 0, serious 0, moderate 0, minor 0
 waiting light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -74,6 +67,6 @@ review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor fi
 review dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 review dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-UI check: 60 runs, 0 serious or critical axe violations, 0 phone floor findings, 12 page errors.
+UI check: 66 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
 Screenshots in var/ui-check/
-ui-check exit 1
+ui-check exit 0
