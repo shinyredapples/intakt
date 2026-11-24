@@ -60,14 +60,24 @@ final readonly class LedgerAccountSpend
                 $models[$usage->call] = $usage->model;
             }
 
-            if (!($usage instanceof UsageSettled || $usage instanceof UsageUnsettled) || $row->recordedAt < $since) {
-                continue;
+            if (($usage instanceof UsageSettled || $usage instanceof UsageUnsettled) && $row->recordedAt >= $since) {
+                array_push($costs, ...$this->costsOfEnding($usage, $models[$usage->call] ?? null, $row->recordedAt));
             }
+        }
 
-            foreach ($usage->usages as $tokens) {
-                if (null !== $tokens->account) {
-                    $costs[] = [$tokens->account, $this->costOf($models[$usage->call] ?? $tokens->model, $tokens), $row->recordedAt];
-                }
+        return $costs;
+    }
+
+    /**
+     * @return list<array{string, Cost, DateTimeImmutable}>
+     */
+    private function costsOfEnding(UsageSettled|UsageUnsettled $ended, ?string $model, DateTimeImmutable $at): array
+    {
+        $costs = [];
+
+        foreach ($ended->usages as $usage) {
+            if (null !== $usage->account) {
+                $costs[] = [$usage->account, $this->costOf($model ?? $usage->model, $usage), $at];
             }
         }
 
