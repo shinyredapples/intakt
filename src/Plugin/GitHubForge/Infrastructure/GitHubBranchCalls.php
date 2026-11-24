@@ -113,15 +113,6 @@ final readonly class GitHubBranchCalls
         }
     }
 
-    // Raw pairs and not `parse_str`, because it keeps only the last of a repeated `page` and `page=1&page=2` would read as the following page.
-    private function namesPage(string $reference, int $page): bool
-    {
-        $query = parse_url($reference, PHP_URL_QUERY);
-        $pages = array_filter(explode('&', is_string($query) ? $query : ''), static fn (string $pair): bool => str_starts_with($pair, 'page='));
-
-        return ['page='.$page] === array_values($pages);
-    }
-
     /**
      * @return list<mixed>
      */
@@ -133,6 +124,15 @@ final readonly class GitHubBranchCalls
         }
 
         return $this->list(is_array($data) ? $data : [], $key);
+    }
+
+    // Raw pairs and not `parse_str`, because it keeps only the last of a repeated `page` and `page=1&page=2` would read as the following page.
+    private function namesPage(string $reference, int $page): bool
+    {
+        $query = parse_url($reference, PHP_URL_QUERY);
+        $pages = array_filter(explode('&', is_string($query) ? $query : ''), static fn (string $pair): bool => str_starts_with($pair, 'page='));
+
+        return ['page='.$page] === array_values($pages);
     }
 
     /**

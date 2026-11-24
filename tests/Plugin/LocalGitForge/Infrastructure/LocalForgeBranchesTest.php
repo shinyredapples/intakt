@@ -158,7 +158,8 @@ final class LocalForgeBranchesTest extends TestCase
             $this->forge()->deleteBranch('widgets', new ForgeBranch('intakt/7-old', new CommitId($this->head), false, false, false));
             self::fail('A branch checked out in a linked worktree was deleted.');
         } catch (ForgeWriteFailed) {
-            self::assertSame([], [...glob($this->repository->path.'/.git/HEAD.lock') ?: [], ...glob($this->repository->path.'/.git/worktrees/*/HEAD.lock') ?: []]);
+            self::assertFileDoesNotExist($this->repository->path.'/.git/HEAD.lock');
+            self::assertSame([], glob($this->repository->path.'/.git/worktrees/*/HEAD.lock'));
         }
     }
 

@@ -101,8 +101,9 @@ final readonly class LocalForgeBranches implements ForgeBranches
             throw new ForgeWriteFailed('The repository folder could not be read, so nothing was deleted.', $unread->getCode(), $unread);
         }
 
+        $linked = glob($common.'/worktrees/*/HEAD');
         $locks = [];
-        foreach ([$common.'/HEAD', ...(glob($common.'/worktrees/*/HEAD') ?: [])] as $head) {
+        foreach ([$common.'/HEAD', ...(false === $linked ? [] : $linked)] as $head) {
             try {
                 new SplFileObject($head.'.lock', 'x');
                 $locks[] = $head.'.lock';
