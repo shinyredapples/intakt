@@ -346,13 +346,13 @@
         },
         "docs/architecture/github-app-identity.md": {
             "19deb0fafa9ca180": 234,
-            "1f280f890ee0a6ca": 132,
             "6067f2c27ef09ef2": 800,
             "857e592636582ac6": 432,
             "8852ff491cd7bafe": 987,
             "c0adb1aebd862aaf": 850,
             "cbc040a83d5f56a1": 665,
-            "e375195cd25d3a59": 92
+            "e375195cd25d3a59": 92,
+            "e557ce73776696f6": 148
         },
         "docs/architecture/hand-back.md": {
             "4da830a2a829b399": 329,
@@ -385,6 +385,13 @@
             "031c0a6099f64d8b": 193,
             "831eb909fd52ce56": 104,
             "e0f5b2ba0554f910": 115
+        },
+        "docs/architecture/install-check.md": {
+            "2d462478efc69b1b": 87,
+            "6b83282fd6d21f06": 469,
+            "b56ad683413c9ed7": 222,
+            "c43fd0f8947cc5fd": 97,
+            "cbb2c874c4639c44": 104
         },
         "docs/architecture/instance-and-probes.md": {
             "2f411a0a76bcdc5b": 99,
@@ -442,13 +449,13 @@
         "docs/architecture/journeys.md": {
             "008c3faa89a59ab0": 170,
             "0453dec4bbffade0": 94,
+            "17c8788dbf7f6833": 632,
             "1d0654c4670889a0": 260,
             "26d2f9233b8298a8": 217,
             "291110261d47c30e": 366,
             "3d2c6efbe7ed54a1": 192,
             "53849410af43b3ae": 154,
             "652a3ce579064c2a": 102,
-            "6827e521bb17586b": 605,
             "6d0bfe32043fccd9": 727,
             "856919e079eb66b1": 487,
             "8716b9babdffc57a": 202,
@@ -569,8 +576,9 @@
         },
         "docs/architecture/prompt-assembly.md": {
             "505c20131e6aed9e": 158,
+            "731dcae751898b76": 122,
             "e5e65097c8f908d0": 135,
-            "f30cb2490530e266": 96
+            "f2201fe6784d447c": 574
         },
         "docs/architecture/protected-paths.md": {
             "100717a3e48351ea": 101,
@@ -679,10 +687,10 @@
             "381da463e3530645": 134,
             "48a27f7e9e4dd270": 310,
             "55a245eb1843f365": 426,
-            "680e0584730da08d": 308,
             "ad9b46b49aefe10d": 132,
             "bcc9d6947998e1f0": 470,
             "bdf3a0bce79da031": 635,
+            "c7d09f417a4373d5": 425,
             "cd93d23866fb0f43": 107,
             "e9fcf25f6a45bee8": 227
         },
@@ -694,10 +702,10 @@
         },
         "docs/architecture/round-cost.md": {
             "0a32f9dac3ef2e39": 81,
-            "609ac009601c7c3a": 104,
+            "72810d5f6f1aa063": 208,
             "9b5fceff6c789ea6": 302,
             "c2795f787ba80b58": 85,
-            "d163a32e7116d15f": 190,
+            "e545be899d637ecb": 125,
             "f8016d1d33a0c270": 115
         },
         "docs/architecture/sample-repository.md": {
@@ -748,17 +756,16 @@
             "f9da8ec51b958feb": 146
         },
         "docs/architecture/watchdog.md": {
-            "093ec5f6d4219f1e": 299,
+            "06866ac741693ff0": 159,
             "0c9d06f78b03811d": 184,
             "137989ce32433fbe": 242,
             "21850d6f5816d5ce": 674,
-            "2401e815591b0f45": 107,
-            "243af5777380b8be": 160,
             "25f625957abb1530": 311,
             "364a4ce35cf2731f": 87,
             "364c895d8354ac46": 92,
             "57a73499b0652b84": 402,
             "60f58da6070748f8": 118,
+            "76578fd8b4791b23": 111,
             "7a19587799dd8a2e": 138,
             "809cece04b20a1dc": 144,
             "8205faf755edc3c6": 115,
@@ -767,6 +774,7 @@
             "a3199b14e13552dd": 337,
             "a779e4bc242d495a": 556,
             "be426d7d67600754": 203,
+            "d3b43e0042a37e55": 303,
             "eaa0f5ac185ca8a6": 152,
             "f0a6d235b0695061": 145,
             "f60e3f5a099fd62d": 114
@@ -1197,7 +1205,6 @@
             "2d57f0c2a732e261": 101,
             "2e2e168390ee9579": 90,
             "2ec58b50610a6b28": 146,
-            "2eea34f9e0cad11b": 122,
             "2f3ea2a15b14451b": 284,
             "2f8b57e710f084b0": 252,
             "31f1afb4d3393c3f": 92,
@@ -1220,6 +1227,7 @@
             "755567a549b790d8": 111,
             "7dd05c83cc438245": 180,
             "873715a1f0596a66": 107,
+            "87ab6e5f28492e25": 232,
             "8aa8fe34d0c7676c": 139,
             "8ac7ce6db0439979": 117,
             "91cd0c276fba8cc8": 671,
@@ -1533,6 +1541,7 @@
         "docs/guide/your-data.md": {
             "3c91852ba3ccae79": 115,
             "487a064c4a33816c": 136,
+            "5eafdd35c99c09de": 88,
             "eba5e5a6cc1179b1": 85
         },
         "docs/hackathon.md": {
@@ -1706,6 +1715,7 @@
             "0cc8ce0045973b43": 195,
             "0cf37b325661c787": 167,
             "117d9c7fb608c3d0": 119,
+            "11be1713abb200cd": 144,
             "131984910a477a0c": 145,
             "13e6c1f2f1ca1aaf": 117,
             "15276c4c80f0cdf0": 103,
@@ -1714,6 +1724,7 @@
             "16db64af22de8ca5": 150,
             "17936b5be99efe96": 383,
             "19aa76121259e054": 337,
+            "19fe96be7719868e": 104,
             "1b048a92c91d0dfb": 149,
             "1b8dea77cee71433": 173,
             "1c0af5398c4f46e4": 292,
@@ -1789,7 +1800,6 @@
             "51c16df223a079fd": 451,
             "53d2237a608ed47b": 184,
             "54653d7897498e90": 81,
-            "54c67b52a6bc3be5": 705,
             "5677cc33e9325563": 130,
             "56ae371e61d3570a": 370,
             "57659527d6f731e9": 145,
@@ -1888,6 +1898,7 @@
             "aa0d5aef63450d97": 157,
             "aa790a8f56dfad30": 169,
             "aad6ed72c74233d1": 676,
+            "ab9e4e811efe465a": 801,
             "abc469ff5e136a29": 214,
             "adf2c6d173fe75f8": 86,
             "ae42fd8256d0d949": 276,
@@ -1920,6 +1931,7 @@
             "d0bc01a61c500db0": 106,
             "d22d801381a9ff59": 400,
             "d27b2a9e8ade23dd": 157,
+            "d4fc2d999cb79b36": 308,
             "d5996c31f46e117f": 303,
             "d8aa08227e731aca": 290,
             "d8eee25f5aeda14c": 122,
@@ -1980,14 +1992,20 @@
             "910666a4fc5f8702": 104,
             "9679b3fb36b2ea36": 133
         },
+        "docs/user/07-keys-providers-and-costs.md": {
+            "602cf84fa3dff0c4": 89
+        },
         "docs/user/08-when-something-goes-wrong.md": {
+            "4ce0e1aa19a97046": 152,
+            "525a6b2a2b6ef50d": 163,
             "671d8530f4580cfa": 83,
             "7611894d8201bb04": 83
         },
         "docs/user/README.md": {
             "001dc949b7820009": 104,
+            "58042bb451d462c1": 95,
+            "657f84f099fbb19e": 99,
             "e0fc5d37705d7441": 107,
-            "e666852b4b829758": 90,
             "ec450ea5f08af426": 86
         },
         "docs/video.md": {
@@ -2008,6 +2026,7 @@
         "docs/guide/the-journey-of-a-task.md": 5210,
         "docs/guide/why-isnt-anything-happening.md": 2767,
         "docs/guide/why-the-ai-cant-wreck-your-project.md": 4957,
-        "docs/guide/writing-a-good-task.md": 2345
+        "docs/guide/writing-a-good-task.md": 2345,
+        "docs/user/08-when-something-goes-wrong.md": 1850
     }
 }
