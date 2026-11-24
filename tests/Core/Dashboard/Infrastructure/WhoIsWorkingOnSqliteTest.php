@@ -31,7 +31,6 @@ use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
-use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Support\FixedRoundCosts;
 use Intakt\Tests\Support\FixedRoundEndings;
