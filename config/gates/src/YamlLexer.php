@@ -112,13 +112,6 @@ final class YamlLexer
         };
     }
 
-    private function afterScalar(int $end): int
-    {
-        $this->atScalarStart = false;
-
-        return $end;
-    }
-
     private function afterSingleQuoted(int $offset): int
     {
         while (false !== $end = strpos($this->source, "'", $offset)) {
@@ -130,6 +123,13 @@ final class YamlLexer
         }
 
         return $this->length;
+    }
+
+    private function afterScalar(int $end): int
+    {
+        $this->atScalarStart = false;
+
+        return $end;
     }
 
     private function afterDoubleQuoted(int $offset): int
