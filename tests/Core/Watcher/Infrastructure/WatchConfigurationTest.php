@@ -123,7 +123,7 @@ final class WatchConfigurationTest extends TestCase
     public function testAProjectNamedWithDigitsGetsTheEligibilityLabelItsSectionNames(): void
     {
         /** @var array<string, array{eligibility_label: string}> $projects */
-        $projects = array_combine(['123'], [['eligibility_label' => 'intakt']]);
+        $projects = json_decode('{"123": {"eligibility_label": "intakt"}}', true);
 
         $labels = WatchConfiguration::eligibilityLabelsOf($projects);
 
