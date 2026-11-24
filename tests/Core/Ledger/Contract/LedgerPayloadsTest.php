@@ -10,6 +10,9 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\PayloadDefaults;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\Severity;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -89,6 +92,30 @@ final class LedgerPayloadsTest extends TestCase
         self::assertNull($this->payloads()->entriesOf($this->row('{"starts":"none"}'), 'starts', NumberedStart::class));
     }
 
+    public function testASettledUsageRowWithATokenCountThatIsNotANumberIsSkipped(): void
+    {
+        self::assertNull($this->payloads()->of($this->row($this->settled('"many"')), UsageSettled::class));
+    }
+
+    public function testASettledUsageRowWithNumericTokenCountsIsRead(): void
+    {
+        $settled = $this->payloads()->of($this->row($this->settled('100')), UsageSettled::class);
+
+        self::assertSame(100, $settled?->usages[0]->prompt);
+    }
+
+    public function testAJudgeDoneRowWithAFindingOfAnUnknownSeverityIsSkipped(): void
+    {
+        self::assertNull($this->payloads()->of($this->row($this->judgeDone('P9')), JudgeDone::class));
+    }
+
+    public function testAJudgeDoneRowWithAFindingOfAKnownSeverityIsRead(): void
+    {
+        $done = $this->payloads()->of($this->row($this->judgeDone('P1')), JudgeDone::class);
+
+        self::assertSame(Severity::P1, $done?->findings[0]->severity);
+    }
+
     public function testAPositionalDefaultIsRefusedBecauseNoPayloadKeyCouldMatchIt(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -104,6 +131,16 @@ final class LedgerPayloadsTest extends TestCase
     private function payloads(): LedgerPayloads
     {
         return new LedgerPayloads(StoredSerializerFactory::create());
+    }
+
+    private function settled(string $prompt): string
+    {
+        return '{"call":"c1","phase":"settled","usages":[{"account":null,"model":"big","prompt":'.$prompt.',"completion":20,"thinking":null,"tool":null,"cached":null,"cache_creation":null,"cache_read":null,"total":120,"remaining":null,"remaining_minute":null,"remaining_month":null}]}';
+    }
+
+    private function judgeDone(string $severity): string
+    {
+        return '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[{"id":"F1","severity":"'.$severity.'","text":"Broken."}]}';
     }
 
     private function row(string $payload): RecordedEvent
