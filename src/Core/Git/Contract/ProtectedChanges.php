@@ -6,31 +6,25 @@ namespace Intakt\Core\Git\Contract;
 
 final readonly class ProtectedChanges
 {
-    /**
-     * @param list<string> $paths
-     */
     private function __construct(
-        public array $paths,
+        public Paths $paths,
         public ?string $unreadable,
     ) {
     }
 
-    /**
-     * @param list<string> $paths
-     */
-    public static function touching(array $paths): self
+    public static function touching(Paths $paths): self
     {
         return new self($paths, null);
     }
 
     public static function unreadable(string $reason): self
     {
-        return new self([], $reason);
+        return new self(new Paths(), $reason);
     }
 
     // A change the check could not read counts as protected, because what it could not see may be exactly the protected part.
     public function touchesProtectedPaths(): bool
     {
-        return null !== $this->unreadable || [] !== $this->paths;
+        return null !== $this->unreadable || !$this->paths->isEmpty();
     }
 }

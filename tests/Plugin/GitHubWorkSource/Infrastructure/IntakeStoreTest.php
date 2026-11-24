@@ -775,6 +775,52 @@ final class IntakeStoreTest extends KernelTestCase
         self::assertSame([], $this->store->failuresOf('alpha'));
     }
 
+    public function testForgettingAnItemDropsItsVouchingAndTheValidatorSoTheNextListingIsAFullOne(): void
+    {
+        $this->record('alpha', [$this->vouched(Issues::task(7)), $this->vouched(Issues::task(8))], 'W/"a"');
+
+        $this->store->forgetVouchingOf('alpha', 7);
+
+        self::assertSame([[7, false], [8, true]], array_map(static fn (StoredIssue $issue): array => [$issue->number(), $issue->isVouched()], $this->store->issuesOf('alpha')));
+        self::assertEquals(new SyncState(null, 2), $this->store->syncStateOf('alpha'));
+    }
+
+    public function testAListingReadBeforeAnItemWasForgottenCannotWriteItsVouchingBack(): void
+    {
+        $this->record('alpha', [$this->vouched(Issues::task(7))], 'W/"a"');
+        $readBefore = $this->store->syncStateOf('alpha');
+
+        $this->store->forgetVouchingOf('alpha', 7);
+
+        self::assertFalse($this->store->recordIfStill('alpha', $readBefore, new ListingRows([$this->vouched(Issues::task(7))], 'W/"a"')));
+        self::assertFalse(array_first($this->store->issuesOf('alpha'))?->isVouched());
+    }
+
+    public function testForgettingAnItemReadsTheSyncRowWithAWriteLock(): void
+    {
+        $this->onAServerPlatform(static function (IntakeStore $store, WriteLockOfAServer $statements): void {
+            $store->forgetVouchingOf('alpha', 7);
+
+            self::assertCount(1, $statements->writeLockedReadsOf('work_source_validator'));
+        });
+    }
+
+    public function testForgettingAnItemWhileAnotherWriterHoldsTheProjectIsNamedAsHeld(): void
+    {
+        $this->withAStoreAndAReaderOnOneFile('pdo_sqlite', static function (IntakeStore $store, Connection $own, Connection $other): void {
+            $other->executeStatement('BEGIN EXCLUSIVE');
+
+            try {
+                $store->forgetVouchingOf('alpha', 7);
+                self::fail('The forget was expected to be refused.');
+            } catch (ProjectHeldByAnotherWriter $held) {
+                self::assertSame('Another writer holds the intake rows of project "alpha" and has not committed them.', $held->getMessage());
+            } finally {
+                $other->executeStatement('ROLLBACK');
+            }
+        });
+    }
+
     public function testRecordingAFailureReadsTheSyncRowWithAWriteLock(): void
     {
         $this->onAServerPlatform(static function (IntakeStore $store, WriteLockOfAServer $statements): void {

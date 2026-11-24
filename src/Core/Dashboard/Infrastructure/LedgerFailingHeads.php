@@ -16,10 +16,10 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 // Payloads are read by field here, because the Watcher module writes its lines without payload classes, so the card needs nothing from it.
 final readonly class LedgerFailingHeads
 {
-    private const array FAILED = [LedgerEventKind::HeadFailed, LedgerEventKind::HeadHandedOver];
+    public const array FAILED = [LedgerEventKind::HeadFailed, LedgerEventKind::HeadHandedOver];
 
-    // A later line of the watcher on the same pull request means its head was read or started since, or its pull request closed, so the failure no longer holds it.
-    private const array SETTLED = [LedgerEventKind::HeadPending, LedgerEventKind::HeadRed, LedgerEventKind::RoundQueued, LedgerEventKind::HeadForgotten];
+    // WatcherLines::ALL split in two (a test holds the split to it). A later line of the watcher on the same pull request means its head was read or started since, or its pull request closed, so the failure no longer holds it.
+    public const array SETTLED = [LedgerEventKind::HeadPending, LedgerEventKind::HeadRed, LedgerEventKind::RoundQueued, LedgerEventKind::HeadForgotten];
 
     // A round or a closed pull request ends the item, while a pending or red read is recorded before the stale check, which may fail again and keeps the failure count.
     private const array ENDED = [LedgerEventKind::RoundQueued, LedgerEventKind::HeadForgotten];
@@ -49,7 +49,7 @@ final readonly class LedgerFailingHeads
         foreach ($events as $recorded) {
             $kind = $recorded->event->kind;
 
-            if (!in_array($kind, [...self::FAILED, ...self::SETTLED], true)) {
+            if (!in_array($kind, WatcherLines::ALL, true)) {
                 continue;
             }
 
@@ -104,7 +104,8 @@ final readonly class LedgerFailingHeads
         // The parser throws on a NUL byte instead of refusing it, so such a moment is malformed before it is parsed.
         $parsed = null === $moment || str_contains($moment, "\0") ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
-        return false === $parsed ? null : $parsed;
+        // The parser rolls an impossible calendar date over into the next month, so only a moment that formats back to the stored text counts.
+        return false === $parsed || $parsed->format(DATE_ATOM) !== $moment ? null : $parsed;
     }
 
     /**

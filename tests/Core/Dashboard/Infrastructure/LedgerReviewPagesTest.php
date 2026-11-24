@@ -269,6 +269,24 @@ final class LedgerReviewPagesTest extends TestCase
         self::assertSame('second-model', $this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'r1-correctness')?->model);
     }
 
+    public function testTheLatestStartAfterARetryWinsWithAStartOfAnotherRoundBetween(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startReviewerOn('r1', 'correctness', 'first-model');
+        $ledger->startReviewerOn('r10', 'correctness', 'unrelated-model');
+        $ledger->startReviewerOn('r1', 'correctness', 'latest-model');
+
+        self::assertSame('latest-model', $this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'r1-correctness')?->model);
+    }
+
+    public function testARoundIdThatIsAPrefixOfTheStoredRoundFindsNoStartedReviewer(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startReviewer('r1', 'correctness');
+
+        self::assertNull($this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r', 'r1-correctness'));
+    }
+
     public function testARowThatNamesTheReviewerButIsNoStartIsNotAStartedReviewer(): void
     {
         $ledger = new DashboardLedger();

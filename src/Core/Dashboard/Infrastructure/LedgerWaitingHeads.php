@@ -13,15 +13,6 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 // The latest watcher line of a pull request decides, as in LedgerFailingHeads, so a head read again after a failure waits again and a queued round or a closed pull request ends the wait.
 final readonly class LedgerWaitingHeads
 {
-    private const array WATCHER_LINES = [
-        LedgerEventKind::HeadPending,
-        LedgerEventKind::HeadRed,
-        LedgerEventKind::HeadFailed,
-        LedgerEventKind::HeadHandedOver,
-        LedgerEventKind::RoundQueued,
-        LedgerEventKind::HeadForgotten,
-    ];
-
     /**
      * @return list<array{project: string, change: string, decision: 'pending'|'red', read_again_at: ?string}>
      */
@@ -32,7 +23,7 @@ final readonly class LedgerWaitingHeads
         foreach ($events as $recorded) {
             $kind = $recorded->event->kind;
 
-            if (!in_array($kind, self::WATCHER_LINES, true)) {
+            if (!in_array($kind, WatcherLines::ALL, true)) {
                 continue;
             }
 
@@ -84,12 +75,13 @@ final readonly class LedgerWaitingHeads
         return $waiting;
     }
 
-    // Read and written again, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
+    // Parsed before it is passed on, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
     private function momentOf(?string $moment): ?string
     {
         // The parser throws on a NUL byte instead of refusing it, so such a moment is malformed before it is parsed.
         $parsed = null === $moment || str_contains($moment, "\0") ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
-        return false === $parsed ? null : $parsed->format(DATE_ATOM);
+        // The parser rolls an impossible calendar date over into the next month, so only a moment that formats back to the stored text counts.
+        return false === $parsed || $parsed->format(DATE_ATOM) !== $moment ? null : $moment;
     }
 }

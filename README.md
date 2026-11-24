@@ -53,7 +53,7 @@ How each was measured, the full tables and how to run the bench yourself: [docs/
 
 ## Found and fixed upstream
 
-Building Intakt led to 12 fixes (11 pull requests) merged upstream in Symfony, Symfony AI and Doctrine, with more open or reported. Every reproduction and its upstream status: [`upstream/`](upstream/README.md#found-and-fixed-upstream).
+Building Intakt led to 13 fixes (12 pull requests) merged upstream in Symfony, Symfony AI and Doctrine, with more open or reported. Every reproduction and its upstream status: [`upstream/`](upstream/README.md#found-and-fixed-upstream).
 
 ## The team
 

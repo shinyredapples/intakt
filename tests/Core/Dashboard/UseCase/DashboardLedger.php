@@ -341,9 +341,12 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::HeadRed, ['project' => $project, 'change' => $change, 'head' => $head, 'read_again_at' => null]);
     }
 
-    public function queueRoundOf(string $project, string $change, string $head): void
+    public function queueRoundOf(string $project, string $change, string $head): string
     {
-        $this->add(LedgerEventKind::RoundQueued, ['project' => $project, 'change' => $change, 'head' => $head, 'round' => Uuid::v7()->toRfc4122()]);
+        $round = Uuid::v7()->toRfc4122();
+        $this->add(LedgerEventKind::RoundQueued, ['project' => $project, 'change' => $change, 'head' => $head, 'round' => $round]);
+
+        return $round;
     }
 
     public function forgetHead(string $project, string $change, string $head): void
@@ -389,6 +392,13 @@ final class DashboardLedger implements Ledger
     public function failHeadWithoutCause(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
+    }
+
+    public function failHeadWithoutRetryAt(string $project, string $change): void
+    {
+        $failure = $this->headFailure($project, $change, 'a');
+        unset($failure['retry_at']);
+        $this->add(LedgerEventKind::HeadFailed, ['failures' => 1] + $failure);
     }
 
     public function passBuildStep(string $project, string $task, string $step): void

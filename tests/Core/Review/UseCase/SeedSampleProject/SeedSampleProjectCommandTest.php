@@ -106,7 +106,7 @@ final class SeedSampleProjectCommandTest extends TestCase
             'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra' => ['input' => 1.3, 'output' => 2.6],
             'moonshotai/Kimi-K3.1-Pro:deepinfra' => ['input' => 1.9, 'output' => 9.5],
         ], $this->writtenPrices());
-        self::assertSame('2026-11-18', $this->written()['budget']['price_date']);
+        self::assertSame('2026-11-13', $this->written()['budget']['price_date']);
     }
 
     public function testOneKeyPutsTheWholePanelOnThatProvider(): void
@@ -437,9 +437,9 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private function git(string ...$arguments): string
     {
-        $call = new HardenedGit()->call(array_values($arguments), $this->repository());
+        $call = new HardenedGit()->call($this->repository(), ...$arguments);
 
-        return new Process($call->command, $call->directory, $call->environment)->mustRun()->getOutput();
+        return new Process([...$call->command], $call->directory, [...$call->environment])->mustRun()->getOutput();
     }
 
     private function repository(): string

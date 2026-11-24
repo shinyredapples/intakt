@@ -18,6 +18,8 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
+use Intakt\Core\Review\Infrastructure\ClaudeCodeJobEvents;
+use Intakt\Core\Review\Infrastructure\ReportedUsage;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewJobFailure;
@@ -33,6 +35,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ReviewJobFailure::class)]
 #[UsesClass(ReviewJobRequest::class)]
 #[UsesClass(ReviewJobAnswer::class)]
+#[UsesClass(ClaudeCodeJobEvents::class)]
+#[UsesClass(ReportedUsage::class)]
 #[UsesClass(ReviewJobImages::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(JobSpec::class)]

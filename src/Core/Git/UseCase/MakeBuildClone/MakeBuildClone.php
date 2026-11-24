@@ -176,16 +176,16 @@ final readonly class MakeBuildClone
     private function initialize(string $directory, string $branch, string $format): void
     {
         // The git folder is named, because git refuses the pinned work tree without one; it is the work tree's own .git, so init records no core.worktree.
-        $this->mustRun($this->hardened->call(['--git-dir=.git', 'init', '--quiet', '--initial-branch='.$branch, '--object-format='.$format], $directory), $directory);
+        $this->mustRun($this->hardened->call($directory, '--git-dir=.git', 'init', '--quiet', '--initial-branch='.$branch, '--object-format='.$format), $directory);
     }
 
     private function fetch(string $directory, string $mirror, string $refspec): void
     {
         // Init and fetch instead of "clone", so the clone gets no remote, no remote-tracking refs and no tags; the task's branch is the one checked out, which a fetch only updates with --update-head-ok.
-        $call = $this->hardened->call(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--update-head-ok', '--', $mirror, $refspec], $directory);
+        $call = $this->hardened->call($directory, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--update-head-ok', '--', $mirror, $refspec);
 
         // Because HardenedGit allows no transport, and git reads a local path as the "file" transport.
-        $this->mustRun(new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_ALLOW_PROTOCOL' => 'file']), $directory);
+        $this->mustRun(new GitCall($call->command, $call->directory, $call->environment->with(GIT_ALLOW_PROTOCOL: 'file')), $directory);
     }
 
     private function mirrorHolds(string $mirror, string $ref): bool
@@ -195,7 +195,7 @@ final readonly class MakeBuildClone
 
     private function startAtMain(string $directory, string $task, string $main): void
     {
-        $this->mustRun($this->hardened->call(['update-ref', $task, $main], $directory), $directory);
+        $this->mustRun($this->hardened->call($directory, 'update-ref', $task, $main), $directory);
     }
 
     private function addSource(string $directory, string $mirror, ?string $source): void
@@ -207,7 +207,7 @@ final readonly class MakeBuildClone
 
     private function checkOut(string $directory): void
     {
-        $this->mustRun($this->hardened->call(['checkout', '--force', '--quiet'], $directory), $directory);
+        $this->mustRun($this->hardened->call($directory, 'checkout', '--force', '--quiet'), $directory);
     }
 
     /**
@@ -215,7 +215,7 @@ final readonly class MakeBuildClone
      */
     private function inMirror(string $mirror, array $arguments): GitCall
     {
-        return $this->hardened->callInBareRepository($arguments, $mirror);
+        return $this->hardened->callInBareRepository($mirror, ...$arguments);
     }
 
     private function mustRun(GitCall $call, string $directory): string
@@ -231,7 +231,7 @@ final readonly class MakeBuildClone
 
     private function run(GitCall $call): Process
     {
-        $process = new Process($call->command, $call->directory, $call->environment);
+        $process = new Process([...$call->command], $call->directory, [...$call->environment]);
         $process->run();
 
         return $process;
