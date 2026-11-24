@@ -13,9 +13,8 @@ final class ShellHereDocuments
     private const string DELIMITER_PARTS = '/\$\'((?:[^\'\\\\]++|\\\\.)*+)\'?|\'([^\']*+)\'?|"((?:[^"\\\\]++|\\\\.)*+)"?|\\\\(.?)|([^\'"\\\\$]++|\$)/s';
     private const string DOUBLE_QUOTED_ESCAPES = '/\\\\([$`"\\\\\n])/';
 
+    // Because each entry is where the documents of one open `$( )` start in the queue, the count is the number of open substitutions.
     /**
-     * Where the documents of each open `$( )` start in the queue, so its count is the number of open substitutions.
-     *
      * @var list<int>
      */
     private array $substitutions = [];
