@@ -378,14 +378,6 @@ final class JourneyAlarmTest extends TestCase
         new Filesystem()->remove($this->directory);
     }
 
-    private function failedInstallReport(): string
-    {
-        $report = $this->directory.'/report.json';
-        file_put_contents($report, new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')])->toJson());
-
-        return $report;
-    }
-
     private function fixture(): string
     {
         return JourneyRunTest::ONE_BROKEN;
@@ -431,6 +423,14 @@ final class JourneyAlarmTest extends TestCase
     private function openIssues(string $json): void
     {
         new Filesystem()->dumpFile($this->directory.'/issues.json', $json);
+    }
+
+    private function failedInstallReport(): string
+    {
+        $report = $this->directory.'/report.json';
+        file_put_contents($report, new InstallReport([new InstallStepResult('journey-check', InstallStatus::Failed, 'boom')])->toJson());
+
+        return $report;
     }
 
     /**

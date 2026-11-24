@@ -20,7 +20,7 @@ final readonly class InstallWalk
     private const string KEYED = 'keyed: review the sample with a provider key';
     private const string ENDED_IN = 'INTAKT_INSTALL_CHECK_ENDED_IN';
     private const string ENDED_IN_FILE = '.install-check-ended-in';
-    // The last folder inside the clone's home that a command ended in; teardown runs there, and Compose's lookup of its file in parent folders and the run's own COMPOSE_PROJECT_NAME find the containers from it.
+    // Keeps the last folder inside the clone's home that a command ended in, because teardown runs there and finds the containers through Compose's lookup of its file in parent folders and the run's own COMPOSE_PROJECT_NAME.
     private const string LAST_FOLDER_IN_HOME_FILE = '.install-check-last-folder-in-home';
     // Only what .env.local can hold unquoted, because a quote or a space would change the key the container reads.
     private const string KEY_SHAPE = '/\A[A-Za-z0-9._~+\/=-]+\z/';
