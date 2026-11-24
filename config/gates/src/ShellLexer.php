@@ -34,7 +34,7 @@ final class ShellLexer
     // Because a `#` starts a comment only at the start of a word, these are the characters a word starts after.
     private const string WORD_BREAKS = " \t\n;&|()<>";
     private const string DOUBLE_QUOTED_SPECIALS = '\\"$';
-    // Because `case` is a keyword only where a command starts, these are the characters a command starts after, and the ones that keep it starting.
+    // Because `case` is a keyword only where a command starts, these are the characters a command starts after (a function's `()` too), and the ones that keep it starting.
     private const string COMMAND_BREAKS = "\n;&|(";
     private const string COMMAND_PREFIX_CHARACTERS = " \t{!";
     private const array COMMAND_PREFIX_WORDS = ['then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time'];
@@ -318,8 +318,15 @@ final class ShellLexer
         return match (true) {
             in_array($frame, self::ARITHMETIC_FRAMES, true) => $this->afterOpening(self::ARITHMETIC_GROUP, $offset + 1),
             '(' === ($this->source[$offset + 1] ?? '') => $this->afterOpening(self::ARITHMETIC, $offset + 2),
+            $this->functionParenthesesAt($offset) => $offset + 2,
             default => $this->afterOpening(self::SUBSHELL, $offset + 1),
         };
+    }
+
+    // Because the `()` of a function definition holds nothing, the body after it starts a command, so a `case` right after `f() {` is a keyword; after `=` the `()` is an empty array and starts nothing.
+    private function functionParenthesesAt(int $offset): bool
+    {
+        return ')' === ($this->source[$offset + 1] ?? '') && (0 === $offset || '=' !== $this->source[$offset - 1]);
     }
 
     private function afterParenthesisClosing(int $offset, ?int $frame): int
