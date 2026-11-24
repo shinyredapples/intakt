@@ -161,7 +161,7 @@ final readonly class InstallWalk
             }
         }
 
-        // intakt:demo prints the MCP owner token in its connect line, and the log goes into an artifact and an issue.
+        // Because intakt:demo prints the MCP owner token in its connect line, and the log goes into an artifact and an issue.
         return (string) preg_replace('/(Bearer\s+)[^\s"\']+/', '$1'.self::REDACTED, $text);
     }
 
