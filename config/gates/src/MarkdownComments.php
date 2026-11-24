@@ -15,7 +15,7 @@ final readonly class MarkdownComments
      * @param list<string> $lines
      * @param list<int>    $codeLines
      *
-     * @return array{list<string>, list<int>} the lines with each comment blanked, line for line, and the code lines no comment covers
+     * @return array{list<string>, list<int>}
      */
     public function removedFrom(array $lines, array $codeLines): array
     {
