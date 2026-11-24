@@ -809,7 +809,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private function pages(): LedgerReviewPages
     {
-        return new LedgerReviewPages(new MockClock(),$this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        return new LedgerReviewPages(new MockClock(), $this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     /**

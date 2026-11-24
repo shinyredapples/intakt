@@ -714,7 +714,7 @@ final class StatusReadModelTest extends TestCase
         $lookup->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
         $endings = self::createStub(RoundEndings::class);
         $endings->method('lookup')->willReturn($lookup);
-        $pages = new LedgerReviewPages(new MockClock('2026-10-28T12:30:00+00:00'),$ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
+        $pages = new LedgerReviewPages(new MockClock('2026-10-28T12:30:00+00:00'), $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
         $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
 
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);

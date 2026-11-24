@@ -224,7 +224,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
-        return new LedgerReviewPages(new MockClock(),$ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        return new LedgerReviewPages(new MockClock(), $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     /**

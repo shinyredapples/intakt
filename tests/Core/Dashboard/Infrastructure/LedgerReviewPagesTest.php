@@ -322,6 +322,6 @@ final class LedgerReviewPagesTest extends TestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
-        return new LedgerReviewPages(new MockClock(),$ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays, $stored)));
+        return new LedgerReviewPages(new MockClock(), $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays, $stored)));
     }
 }

@@ -33,14 +33,14 @@ final class HeadlineTest extends TestCase
 {
     public function testAFreshInstallSaysNothingIsRunningYetAndAsksForTheFirstReview(): void
     {
-        $headline = new Headline(new WhoIsWorking($this->now(),[]), 0);
+        $headline = new Headline(new WhoIsWorking($this->now(), []), 0);
 
         self::assertSame('Nothing is running yet. Start the first review.', $headline->opening());
     }
 
     public function testOnlyAHeadlineWithoutCardsIsTheFirstDay(): void
     {
-        self::assertSame([true, false], [new Headline(new WhoIsWorking($this->now(),[]), 0)->isFirstDay(), new Headline(new WhoIsWorking($this->now(),[]), 1)->isFirstDay()]);
+        self::assertSame([true, false], [new Headline(new WhoIsWorking($this->now(), []), 0)->isFirstDay(), new Headline(new WhoIsWorking($this->now(), []), 1)->isFirstDay()]);
     }
 
     public function testOneRunningReviewNamesTheCodeReviewersAndItsChange(): void
@@ -54,7 +54,7 @@ final class HeadlineTest extends TestCase
     {
         $opened = new Review([new ReviewedRound(new RoundStart('r-opened', 'sample', 2), new RoundPlace('3', 1), new DateTimeImmutable('2026-11-01T10:00:00+00:00'), null)]);
 
-        $headline = new Headline(new WhoIsWorking($this->now(),[$opened]), 1);
+        $headline = new Headline(new WhoIsWorking($this->now(), [$opened]), 1);
 
         self::assertSame(['The Code reviewers are reviewing change 3 of sample.', 'r-opened'], [$headline->opening(), $headline->runningRound()]);
     }
@@ -105,38 +105,38 @@ final class HeadlineTest extends TestCase
 
     public function testWithNothingRunningTheShortOpeningIsTheOpening(): void
     {
-        self::assertSame(['Nothing is running.', 'Nothing is running yet. Start the first review.'], [new Headline(new WhoIsWorking($this->now(),[]), 1)->shortOpening(), new Headline(new WhoIsWorking($this->now(),[]), 0)->shortOpening()]);
+        self::assertSame(['Nothing is running.', 'Nothing is running yet. Start the first review.'], [new Headline(new WhoIsWorking($this->now(), []), 1)->shortOpening(), new Headline(new WhoIsWorking($this->now(), []), 0)->shortOpening()]);
     }
 
     public function testAFreshInstallOpensWithTheWholeLine(): void
     {
-        $headline = new Headline(new WhoIsWorking($this->now(),[]), 0);
+        $headline = new Headline(new WhoIsWorking($this->now(), []), 0);
 
         self::assertSame('Nothing is running yet. Start the first review.', $headline->opening());
     }
 
     public function testABoardWithReviewsButNoneRunningSaysNothingIsRunning(): void
     {
-        $headline = new Headline(new WhoIsWorking($this->now(),[]), 1);
+        $headline = new Headline(new WhoIsWorking($this->now(), []), 1);
 
         self::assertSame('Nothing is running.', $headline->opening());
     }
 
     public function testABuildInFlightWithNoReviewerRunningSaysABuildIsRunning(): void
     {
-        $headline = new Headline(new WhoIsWorking($this->now(),[]), 1, 1);
+        $headline = new Headline(new WhoIsWorking($this->now(), []), 1, 1);
 
         self::assertSame(['A build is running.', 'A build is running.'], [$headline->opening(), $headline->shortOpening()]);
     }
 
     public function testSeveralBuildsInFlightAreCounted(): void
     {
-        self::assertSame('3 builds are running.', new Headline(new WhoIsWorking($this->now(),[]), 3, 3)->opening());
+        self::assertSame('3 builds are running.', new Headline(new WhoIsWorking($this->now(), []), 3, 3)->opening());
     }
 
     public function testARunningReviewerIsNamedBeforeABuildInFlight(): void
     {
-        $headline = new Headline(new WhoIsWorking($this->now(),[$this->running('sample', '3')]), 2, 1);
+        $headline = new Headline(new WhoIsWorking($this->now(), [$this->running('sample', '3')]), 2, 1);
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample.', $headline->opening());
     }
@@ -215,7 +215,7 @@ final class HeadlineTest extends TestCase
 
     public function testABoardWithNothingRunningHasNoRunningRound(): void
     {
-        self::assertNull(new Headline(new WhoIsWorking($this->now(),[]), 1)->runningRound());
+        self::assertNull(new Headline(new WhoIsWorking($this->now(), []), 1)->runningRound());
     }
 
     public function testARoundFromBeforeTheLedgerNamedItsChangeIsStillTheRunningRound(): void
@@ -233,7 +233,7 @@ final class HeadlineTest extends TestCase
      */
     private function headline(array $running): Headline
     {
-        return new Headline(new WhoIsWorking($this->now(),$running), count($running));
+        return new Headline(new WhoIsWorking($this->now(), $running), count($running));
     }
 
     private function unnamed(string $round, string ...$roles): Review

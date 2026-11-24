@@ -39,38 +39,38 @@ final class WhoIsWorkingTest extends TestCase
 {
     public function testAReviewerStillRunningIsALaneWithItsPlaceAndStart(): void
     {
-        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 2, [$this->running('r1-a')])]);
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 2, [$this->running('r1-a')])]);
 
         self::assertEquals([new Lane('r1-a', 'correctness', 'standard', 'alpha', 'feat/a', 2, $this->since(), 'r2feat/a')], $working->lanes());
     }
 
     public function testTheStatusLineSaysQuietWhileNobodyWorks(): void
     {
-        self::assertSame('Quiet · nobody working', new WhoIsWorking($this->now(),[])->statusLine());
+        self::assertSame('Quiet · nobody working', new WhoIsWorking($this->now(), [])->statusLine());
     }
 
     public function testTheStatusLineCountsABuildInFlightWhileNoReviewerWorks(): void
     {
-        self::assertSame('Running smoothly · 1 build running', new WhoIsWorking($this->now(),[], 1)->statusLine());
+        self::assertSame('Running smoothly · 1 build running', new WhoIsWorking($this->now(), [], 1)->statusLine());
     }
 
     public function testTheStatusLineCountsTheReviewersAndTheBuildsInFlight(): void
     {
-        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')])], 2);
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$this->running('r1-a')])], 2);
 
         self::assertSame('Running smoothly · 1 reviewer working, 2 builds running', $working->statusLine());
     }
 
     public function testTheStatusLineCountsOneReviewerInTheSingular(): void
     {
-        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')])]);
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$this->running('r1-a')])]);
 
         self::assertSame('Running smoothly · 1 reviewer working', $working->statusLine());
     }
 
     public function testTheStatusLineCountsTheRunningReviewersOfEveryReview(): void
     {
-        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')]), $this->review('feat/b', 2, [$this->running('r2-b')])]);
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$this->running('r1-a')]), $this->review('feat/b', 2, [$this->running('r2-b')])]);
 
         self::assertSame('Running smoothly · 2 reviewers working', $working->statusLine());
     }
@@ -81,7 +81,7 @@ final class WhoIsWorkingTest extends TestCase
     #[DataProvider('finished')]
     public function testAReviewerThatIsNoLongerRunningIsNoLane(Closure $finish): void
     {
-        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$finish($this->running('r1-a'))])]);
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$finish($this->running('r1-a'))])]);
 
         self::assertSame(0, $working->working());
     }
@@ -99,7 +99,7 @@ final class WhoIsWorkingTest extends TestCase
 
     public function testNoReviewsMeansNobodyIsWorking(): void
     {
-        $working = new WhoIsWorking($this->now(),[]);
+        $working = new WhoIsWorking($this->now(), []);
 
         self::assertSame([[], 0], [$working->lanes(), $working->working()]);
     }
@@ -108,7 +108,7 @@ final class WhoIsWorkingTest extends TestCase
     {
         $judged = $this->round('feat/a', 1, [$this->running('r1-a')])->judgedWith([], $this->since());
 
-        self::assertSame(0, new WhoIsWorking($this->now(),[new Review([$judged])])->working());
+        self::assertSame(0, new WhoIsWorking($this->now(), [new Review([$judged])])->working());
     }
 
     #[DataProvider('endings')]
@@ -116,7 +116,7 @@ final class WhoIsWorkingTest extends TestCase
     {
         $ended = $this->round('feat/a', 1, [$this->running('r1-a')])->endedAs(new RoundEnding($end, 'ended'));
 
-        self::assertSame(0, new WhoIsWorking($this->now(),[new Review([$ended])])->working());
+        self::assertSame(0, new WhoIsWorking($this->now(), [new Review([$ended])])->working());
     }
 
     /**
@@ -133,12 +133,12 @@ final class WhoIsWorkingTest extends TestCase
         $first = $this->round('feat/a', 1, [$this->running('r1-a')])->judgedWith([], $this->since());
         $second = $this->round('feat/a', 2, [$this->running('r2-a')]);
 
-        self::assertSame(['r2-a'], $this->reviewers(new WhoIsWorking($this->now(),[new Review([$first, $second])])));
+        self::assertSame(['r2-a'], $this->reviewers(new WhoIsWorking($this->now(), [new Review([$first, $second])])));
     }
 
     public function testLanesKeepTheOrderOfTheReviewsAndTheirReviewers(): void
     {
-        $working = new WhoIsWorking($this->now(),[
+        $working = new WhoIsWorking($this->now(), [
             $this->review('feat/a', 1, [$this->running('r1-a'), $this->running('r1-b')]),
             $this->review('feat/b', 1, [$this->running('r2-a')]),
         ]);
@@ -148,7 +148,7 @@ final class WhoIsWorkingTest extends TestCase
 
     public function testOnlyTheRunningOnesOfARoundAreLanes(): void
     {
-        $working = new WhoIsWorking($this->now(),[$this->review('feat/a', 1, [$this->running('r1-a')->stopped(), $this->running('r1-b')])]);
+        $working = new WhoIsWorking($this->now(), [$this->review('feat/a', 1, [$this->running('r1-a')->stopped(), $this->running('r1-b')])]);
 
         self::assertSame(['r1-b'], $this->reviewers($working));
     }

@@ -40,7 +40,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
     {
         $running = $this->review('round-3', '3');
 
-        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(),[$running]), 1));
+        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(), [$running]), 1));
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change.', $line->text());
         self::assertCount(0, $line->filter('.count'));
@@ -49,7 +49,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testTheLeadLinksToTheReviewOfTheRunningRound(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(),[$this->review('round-3', '3'), $this->review('round-5', '5')]), 2));
+        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(), [$this->review('round-3', '3'), $this->review('round-5', '5')]), 2));
 
         $link = $line->filter('a');
 
@@ -59,19 +59,19 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testTheLeadLinkCarriesTheClassThatSizesItsTouchTarget(): void
     {
-        self::assertCount(1, $this->rendered(new Headline(new WhoIsWorking($this->now(),[$this->review('round-3', '3')]), 1))->filter('a.headline-run'));
+        self::assertCount(1, $this->rendered(new Headline(new WhoIsWorking($this->now(), [$this->review('round-3', '3')]), 1))->filter('a.headline-run'));
     }
 
     public function testTheLeadHasNoLinkWhenNothingIsRunning(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(),[]), 1));
+        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(), []), 1));
 
         self::assertCount(0, $line->filter('a'));
     }
 
     public function testARunningChangeIsNamedOnWideScreensAndCountedOnPhones(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(),[$this->review('round-3', '3'), $this->review('round-5', '5')]), 2));
+        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(), [$this->review('round-3', '3'), $this->review('round-5', '5')]), 2));
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of sample.', $line->filter('.headline-long')->text());
         self::assertSame('The Code reviewers are reviewing 2 changes.', $line->filter('.headline-short')->text());
@@ -79,7 +79,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testWithNothingRunningTheHeadlineHasOneOpening(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(),[]), 1));
+        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(), []), 1));
 
         self::assertSame('Nothing is running.', $line->text());
         self::assertCount(0, $line->filter('.headline-long, .headline-short'));
@@ -87,7 +87,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testAFreshInstallsHeadlineIsItsOpeningAlone(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(),[]), 0));
+        $line = $this->rendered(new Headline(new WhoIsWorking($this->now(), []), 0));
 
         self::assertSame('Nothing is running yet. Start the first review.', $line->text());
         self::assertCount(0, $line->filter('.count'));
@@ -95,7 +95,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testAFreshInstallsHeadlineLinksTheFirstRunPage(): void
     {
-        $link = $this->rendered(new Headline(new WhoIsWorking($this->now(),[]), 0))->filter('a');
+        $link = $this->rendered(new Headline(new WhoIsWorking($this->now(), []), 0))->filter('a');
 
         self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
         self::assertSame('Nothing is running yet. Start the first review.', $link->text());
@@ -103,7 +103,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testAFreshInstallsHeadlineLinkCarriesTheClassThatSizesItsTouchTarget(): void
     {
-        self::assertCount(1, $this->rendered(new Headline(new WhoIsWorking($this->now(),[]), 0))->filter('a.headline-setup'));
+        self::assertCount(1, $this->rendered(new Headline(new WhoIsWorking($this->now(), []), 0))->filter('a.headline-setup'));
     }
 
     private function review(string $round, string $change): Review

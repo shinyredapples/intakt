@@ -317,7 +317,7 @@ final class LedgerReviewsTest extends TestCase
      */
     private function listWith(RoundCosts $costs, MessageBusInterface $queries, RoundEndings $endings): array
     {
-        $pages = new LedgerReviewPages(new MockClock(),$this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
+        $pages = new LedgerReviewPages(new MockClock(), $this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
 
         return new LedgerReviews($pages)->newestFirst();
     }

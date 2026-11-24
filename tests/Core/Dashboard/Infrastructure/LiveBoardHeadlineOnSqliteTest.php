@@ -142,7 +142,7 @@ final class LiveBoardHeadlineOnSqliteTest extends KernelTestCase
         $lastPushed = self::getContainer()->get(DashboardServices::BOARD_HEADLINES);
         self::assertInstanceOf(CacheItemPoolInterface::class, $lastPushed);
         $lastPushed->clear();
-        $pages = new LedgerReviewPages(new MockClock('2026-10-28 12:05:00', 'UTC'),$this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        $pages = new LedgerReviewPages(new MockClock('2026-10-28 12:05:00', 'UTC'), $this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
         // Shaped like a JWT only, because the hub refuses any other shape before it posts.
         $updates = new MercureLiveUpdates(new Hub('http://localhost/.well-known/mercure', new StaticTokenProvider('publisher.token.unsigned'), httpClient: $this->hub), $this->log);
 

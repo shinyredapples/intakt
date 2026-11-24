@@ -54,7 +54,7 @@ final class TourCaptionsOn
     {
         $payloads = new LedgerPayloads(StoredSerializerFactory::create());
 
-        return new LedgerReviewPages(new MockClock(),$ledger, new RoundPayloads($payloads), new RoundLedgerReading($ledger, $payloads, new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
+        return new LedgerReviewPages(new MockClock(), $ledger, new RoundPayloads($payloads), new RoundLedgerReading($ledger, $payloads, new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
     }
 
     // The shipped templates with the one route the caption links, so the stream is the text a page receives.
