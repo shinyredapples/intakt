@@ -28,7 +28,7 @@ The team works with machinery that keeps its technical names:
 | Part | What it does |
 |---|---|
 | **The orchestrator** | Intakt itself: runs everything, picks the next task, starts the workers, keeps score, merges |
-| **The scheduler** | runs the timed jobs: today the regular look for pull requests to review; planned: deadlines, the weekly cleanup and the other recurring jobs |
+| **The scheduler** | runs the timed jobs: today the regular look for pull requests to review and the weekly cleanup of old branches; planned: deadlines and the other recurring jobs |
 | **The watchdog** (planned) | keeps watching main and raises the alarm if its history was ever rewritten |
 | **The checks** | your project's own tests and rules (`bin/check` in Intakt itself): they catch mistakes no one has to argue about |
 | **The dashboard** | the page where you see everything and act ([tour](a-tour-of-the-dashboard.md)) |

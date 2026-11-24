@@ -95,6 +95,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone, and the pull request text rule (Evidence references, body cap).
 - [The build lane's review cap and in-flight limit](lanes.md): when a new build may start.
 - [Bare mirror](mirror.md): the local copy of each project's repository.
+- [Branch cleanup](branch-cleanup.md): the weekly job that warns a week ahead, deletes old branches and keeps each deleted head as an archive ref.
 - [Build clone](build-clone.md): the fresh clone a build works in.
 - [Retried network git calls](network-git.md): how a failed network git call is tried again.
 - [Branch push](branch-push.md): signing, pushing and opening the pull request.
