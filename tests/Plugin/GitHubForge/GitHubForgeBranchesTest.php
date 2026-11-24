@@ -230,15 +230,15 @@ final class GitHubForgeBranchesTest extends TestCase
         }
     }
 
-    private function compare(int $page = 1): string
-    {
-        return self::REPOSITORY.'/compare/main...'.self::HEAD.'?per_page=100&page='.$page;
-    }
-
     public function testOnlyAProjectWithAGitHubRepositoryIsServed(): void
     {
         self::assertTrue($this->forge()->servesProject('alpha'));
         self::assertFalse($this->forge()->servesProject('beta'));
+    }
+
+    private function compare(int $page = 1): string
+    {
+        return self::REPOSITORY.'/compare/main...'.self::HEAD.'?per_page=100&page='.$page;
     }
 
     private function pulls(int $page = 1): string
