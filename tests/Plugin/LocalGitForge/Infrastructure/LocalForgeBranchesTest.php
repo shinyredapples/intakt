@@ -165,7 +165,7 @@ final class LocalForgeBranchesTest extends TestCase
     {
         $this->repository->checkoutNewBranch('intakt/8-new');
         $head = $this->repository->commitFile('c.txt', "three\n");
-        $this->git('-c', 'user.email='.LocalForgeBranches::INTAKT_EMAIL, 'commit', '--amend', '--no-edit', '--reset-author');
+        $this->git('-c', 'user.name=Intakt', '-c', 'user.email='.LocalForgeBranches::INTAKT_EMAIL, 'commit', '--amend', '--no-edit', '--reset-author');
         $this->repository->checkout('main');
         $amended = $this->git('rev-parse', 'refs/heads/intakt/8-new');
 
