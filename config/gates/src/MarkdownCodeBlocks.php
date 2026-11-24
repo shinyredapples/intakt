@@ -6,7 +6,7 @@ namespace Intakt\Gates;
 
 final readonly class MarkdownCodeBlocks
 {
-    // CommonMark: a line starting with "<!--" opens an HTML block up to the line holding "-->", and a fence inside it opens no code.
+    // Because CommonMark reads a line starting with "<!--" as an HTML block up to the line holding "-->", a fence inside it opens no code.
     private const string COMMENT_BLOCK = '/^ {0,3}<!--/';
 
     private const string COMMENT = '<!--';
@@ -79,13 +79,13 @@ final readonly class MarkdownCodeBlocks
         return [$lists, $fence, null === $fence ? $line : ''];
     }
 
-    private function opensAComment(string $content): bool
-    {
-        return 1 === preg_match(self::COMMENT_BLOCK, $content, $opener) && !str_contains(substr($content, strlen($opener[0])), '-->');
-    }
-
     private function startsAListItem(string $line): bool
     {
         return 1 === preg_match(MarkdownLineKinds::LIST_ITEM, $line) && 0 === preg_match(MarkdownLineKinds::THEMATIC_BREAK, $line);
+    }
+
+    private function opensAComment(string $content): bool
+    {
+        return 1 === preg_match(self::COMMENT_BLOCK, $content, $opener) && !str_contains(substr($content, strlen($opener[0])), '-->');
     }
 }
