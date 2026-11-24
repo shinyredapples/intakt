@@ -25,6 +25,8 @@ Optional `rules` add reviewers to a bigger change or to sensitive paths, for exa
 
 The setup page's second step shows the projects Intakt has read, with their reviewers.
 
+Reviewer conversations hold your code and diffs. Intakt deletes each one 30 days after its last message, unless its review round is still open. Change the number of days with `retention.conversation_days` in the project file, or set it to `forever` ([the reference](../reference/user-manual.md#how-long-conversations-are-kept)). On an install from a clone, the cleanup runs only while a scheduler worker runs: keep `php bin/console messenger:consume scheduler_retention` running beside the `async` worker.
+
 ![Step 2 of the setup page, "Add a project", marked Done: "1 project is configured", the project sample, and its reviewers: correctness on the strong tier and security on the standard tier, both on openai_compatible](../assets/guide/add-a-project.webp)
 
 ## Check the panel, then review

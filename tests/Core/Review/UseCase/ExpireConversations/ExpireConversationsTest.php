@@ -4,22 +4,29 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ExpireConversations;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManagerInterface;
+use DoctrineMigrations\Version20261029120000;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\StoredConversations;
 use Intakt\Core\Review\UseCase\ExpireConversations\ExpireConversations;
 use Intakt\Core\Review\UseCase\ExpireConversations\ExpireConversationsHandler;
 use Intakt\Core\Review\UseCase\ExpireConversations\RetentionSchedule;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
 #[CoversClass(ExpireConversationsHandler::class)]
@@ -29,63 +36,120 @@ use Symfony\Component\Config\Definition\Processor;
 #[UsesClass(ExpireConversations::class)]
 final class ExpireConversationsTest extends KernelTestCase
 {
-    private const int DAY = 86400;
-
     private RoundFixture $fixture;
     private Connection $connection;
 
     public function testAConversationOlderThanTheRetentionIsDeletedAndOneWithinItIsKept(): void
     {
-        $this->conversation('old', 31);
-        $this->conversation('recent', 29);
+        $this->conversation($this->idStartedDaysAgo(31), 31);
+        $recent = $this->conversation($this->idStartedDaysAgo(29), 29);
 
         $this->expire(30);
 
-        self::assertSame(['recent'], $this->kept());
+        self::assertSame([$recent], $this->kept());
     }
 
     public function testAConversationOfARoundThatIsStillOpenIsKeptWhateverItsAge(): void
     {
-        $round = $this->fixture->start(1);
-        $reviewer = $round->reviewers()[0];
-        $reviewer->recordStart($this->fixture->clock->now());
-        $this->entities()->flush();
-        $this->conversation($reviewer->conversationId()->toRfc4122(), 400);
-        $this->conversation('finished', 400);
+        $this->fixture->clock->modify('-400 days');
+        $open = $this->startedReviewer();
+        $this->fixture->clock->modify('+400 days');
+        $this->conversation($open, 400);
 
         $this->expire(30);
 
-        self::assertSame([$reviewer->conversationId()->toRfc4122()], $this->kept());
+        self::assertSame([$open], $this->kept());
     }
 
     public function testAConversationOfAJudgedRoundIsDeletedWhenOldEnough(): void
     {
-        $round = $this->fixture->start(1);
-        $reviewer = $round->reviewers()[0];
-        $reviewer->recordStart($this->fixture->clock->now());
-        $round->moveTo(RoundState::Judged->value);
-        $this->entities()->flush();
-        $this->conversation($reviewer->conversationId()->toRfc4122(), 40);
+        $this->fixture->clock->modify('-40 days');
+        $judged = $this->startedReviewer(RoundState::Judged);
+        $this->fixture->clock->modify('+40 days');
+        $this->conversation($judged, 40);
 
         $this->expire(30);
 
         self::assertSame([], $this->kept());
     }
 
+    // A failed judging moves no state, so the round stays complete for good and must count as finished.
+    public function testAConversationOfARoundWhoseJudgingFailedIsDeletedWhenOld(): void
+    {
+        $this->fixture->clock->modify('-400 days');
+        $round = $this->fixture->start(1);
+        $reviewer = $round->reviewers()[0];
+        $reviewer->recordStart($this->fixture->clock->now());
+        $round->moveTo(RoundState::Complete->value);
+        $this->entities()->flush();
+        $this->fixture->failedJudgingRecorder($this->commands(), new NullLogger())(new RecordFailedJudging($round->id()->toRfc4122()));
+        $this->fixture->clock->modify('+400 days');
+        $this->conversation($reviewer->conversationId()->toRfc4122(), 400);
+
+        $this->expire(30);
+
+        self::assertSame([], $this->kept());
+    }
+
+    public function testAConversationOfACompleteRoundWaitingForItsJudgingIsKept(): void
+    {
+        $this->fixture->clock->modify('-400 days');
+        $waiting = $this->startedReviewer(RoundState::Complete);
+        $this->fixture->clock->modify('+400 days');
+        $this->conversation($waiting, 400);
+
+        $this->expire(30);
+
+        self::assertSame([$waiting], $this->kept());
+    }
+
+    // A retry gives the reviewer a new conversation id, so the round no longer names the earlier one.
+    public function testAnEarlierAttemptOfAReviewerIsKeptWhileItsRoundIsOpen(): void
+    {
+        $this->fixture->clock->modify('-31 days');
+        $reviewer = $this->fixture->start(1)->reviewers()[0];
+        $reviewer->recordStart($this->fixture->clock->now());
+        $this->entities()->flush();
+        $earlier = $this->conversation($reviewer->conversationId()->toRfc4122(), 0);
+        $this->fixture->clock->modify('+31 days');
+        $reviewer->recordRestart();
+        $reviewer->recordStart($this->fixture->clock->now());
+        $this->entities()->flush();
+        $this->conversation($reviewer->conversationId()->toRfc4122(), 0);
+
+        $this->expire(30);
+
+        self::assertContains($earlier, $this->kept());
+    }
+
+    public function testAConversationStartedBeforeTheOldestOpenRoundIsDeletedWhenOld(): void
+    {
+        $before = $this->conversation($this->idStartedDaysAgo(50), 50);
+        $this->fixture->clock->modify('-40 days');
+        $open = $this->startedReviewer();
+        $this->fixture->clock->modify('+40 days');
+        $this->conversation($open, 40);
+
+        $this->expire(30);
+
+        self::assertSame([$open], $this->kept());
+        self::assertNotContains($before, $this->kept());
+    }
+
     public function testKeepingForeverDeletesNothing(): void
     {
-        $this->conversation('ancient', 5000);
+        $ancient = $this->conversation($this->idStartedDaysAgo(5000), 5000);
 
         $this->expire(null);
 
-        self::assertSame(['ancient'], $this->kept());
+        self::assertSame([$ancient], $this->kept());
     }
 
     public function testTheTaskNeverDeletesOrChangesALedgerEvent(): void
     {
         $this->connection->executeStatement("INSERT INTO ledger_event (id, kind, payload, recorded_at, subject) VALUES ('11111111-1111-4111-8111-111111111111', 'reviewer_stopped', '{}', '2020-01-01 00:00:00', NULL)");
         $before = $this->connection->fetchAllAssociative('SELECT * FROM ledger_event');
-        $this->conversation('old', 100);
+        $this->conversation($this->idStartedDaysAgo(100), 100);
 
         $this->expire(30);
 
@@ -94,10 +158,23 @@ final class ExpireConversationsTest extends KernelTestCase
         self::assertSame($before, $this->connection->fetchAllAssociative('SELECT * FROM ledger_event'));
     }
 
-    public function testTheScheduleRunsTheTaskEveryHour(): void
+    public function testTheScheduleRunsTheTaskEveryTenMinutes(): void
     {
-        self::assertSame('1 hour', RetentionSchedule::INTERVAL);
+        self::assertSame('10 minutes', RetentionSchedule::INTERVAL);
         self::assertCount(1, new RetentionSchedule()->getSchedule()->getRecurringMessages());
+    }
+
+    // Each start of the consumer starts the schedule afresh, so a first run due after the consumer's time limit would never come.
+    public function testTheFirstExpiryIsDueWellBeforeTheImageRecyclesTheSchedulerConsumer(): void
+    {
+        $entrypoint = (string) file_get_contents(self::getContainer()->getParameter('kernel.project_dir').'/docker/entrypoint.sh');
+        self::assertSame(1, preg_match('/messenger:consume scheduler_watcher scheduler_retention .*--time-limit=(\d+)/', $entrypoint, $match));
+        $start = new DateTimeImmutable('2026-11-24 10:20:20');
+
+        $firstDue = new RetentionSchedule()->getSchedule()->getRecurringMessages()[0]->getTrigger()->getNextRunDate($start);
+
+        self::assertNotNull($firstDue);
+        self::assertLessThanOrEqual(intdiv((int) $match[1], 2), $firstDue->getTimestamp() - $start->getTimestamp());
     }
 
     #[DataProvider('settings')]
@@ -140,26 +217,61 @@ final class ExpireConversationsTest extends KernelTestCase
         yield 'fraction' => [1.5];
     }
 
+    // From the migration, because the test schema is built from the ORM mapping and the message store's table has no entity.
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
         $this->connection = self::getContainer()->get('doctrine.dbal.default_connection');
-        $this->connection->executeStatement('CREATE TABLE reviewer_conversation (id VARCHAR(36) NOT NULL PRIMARY KEY, version VARCHAR(36) NOT NULL, messages CLOB NOT NULL, updated_at INTEGER NOT NULL)');
+        $migration = new Version20261029120000($this->connection, new NullLogger());
+        $migration->up(new Schema());
+
+        foreach ($migration->getSql() as $query) {
+            $this->connection->executeStatement($query->getStatement());
+        }
     }
 
-    private function conversation(string $id, int $daysOld): void
+    private function startedReviewer(?RoundState $state = null): string
     {
-        $this->connection->executeStatement('INSERT INTO reviewer_conversation (id, version, messages, updated_at) VALUES (?, ?, ?, ?)', [$id, 'v', '[]', $this->fixture->clock->now()->getTimestamp() - $daysOld * self::DAY - 60]);
+        $round = $this->fixture->start(1);
+        $reviewer = $round->reviewers()[0];
+        $reviewer->recordStart($this->fixture->clock->now());
+
+        if ($state instanceof RoundState) {
+            $round->moveTo($state->value);
+        }
+
+        $this->entities()->flush();
+
+        return $reviewer->conversationId()->toRfc4122();
+    }
+
+    private function idStartedDaysAgo(int $days): string
+    {
+        return new UuidV7(UuidV7::generate($this->fixture->clock->now()->modify(sprintf('-%d days', $days))))->toRfc4122();
+    }
+
+    private function conversation(string $id, int $daysOld): string
+    {
+        $this->connection->insert('reviewer_conversation', ['id' => $id, 'version' => 'v', 'messages' => '[]', 'updated_at' => $this->fixture->clock->now()->modify(sprintf('-%d days -1 minute', $daysOld))->getTimestamp()]);
+
+        return $id;
     }
 
     private function expire(?int $days): void
     {
-        new ExpireConversationsHandler(new StoredConversations($this->connection, $this->entities()), $this->fixture->clock, $days)();
+        $stored = new StoredConversations($this->connection, $this->entities(), $this->fixture->noFailedJudgings());
+
+        new ExpireConversationsHandler($stored, $this->fixture->clock, $days)();
     }
 
     private function entities(): EntityManagerInterface
     {
         return self::getContainer()->get('doctrine.orm.entity_manager');
+    }
+
+    private function commands(): MessageBusInterface
+    {
+        return self::getContainer()->get('command.bus');
     }
 
     /**

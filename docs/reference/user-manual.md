@@ -919,7 +919,7 @@ retention:
     conversation_days: 30
 ```
 
-`conversation_days` is a whole number of days from 1 (default 30) or `forever`, which deletes nothing. A task that runs every hour deletes each conversation whose last message is older than that. A conversation of a review round that is not judged yet is kept whatever its age. Only conversations are deleted: the ledger, which records what happened, is never touched. Builder conversations will follow the same setting once they are stored. A value that is not a whole number from 1 or `forever` stops the application at start with a message naming the key.
+`conversation_days` is a whole number of days from 1 (default 30) or `forever`, which deletes nothing. A task that runs every ten minutes deletes each conversation whose last message is older than that. A conversation of a review round that is still open (collecting verdicts, or complete and waiting for its judging) is kept whatever its age, and so is every conversation started after the oldest open round began, which covers an earlier attempt of a retried reviewer. A round whose judging failed for good counts as finished, so its conversations expire. The task runs in the scheduler worker: the container starts it, and on an install from a clone run `php bin/console messenger:consume scheduler_retention`. Only conversations are deleted: the ledger, which records what happened, is never touched. Builder conversations will follow the same setting once they are stored. A value that is not a whole number from 1 or `forever` stops the application at start with a message naming the key.
 
 ## Intakt's GitHub App
 
