@@ -48,6 +48,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[CoversClass(VerdictLocks::class)]
 #[CoversClass(GitHubForge::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(CommentBodies::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(PublishedVerdict::class)]

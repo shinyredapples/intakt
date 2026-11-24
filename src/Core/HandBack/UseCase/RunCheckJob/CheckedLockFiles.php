@@ -38,6 +38,7 @@ final readonly class CheckedLockFiles
             $files[$path] = new CheckedLockFile($blob, $this->git->exactOutput($repository, ['cat-file', 'blob', $blob]));
         }
 
+        // Never empty, because LockFiles refuses an empty list; the guard stays because the analyser cannot see that through the iterator.
         return [] === $files ? null : $files;
     }
 
