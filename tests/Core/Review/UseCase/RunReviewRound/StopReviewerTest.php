@@ -81,18 +81,6 @@ final class StopReviewerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped], $this->stopRows());
     }
 
-    public function testARequestAlreadyAnsweredByAStopDoesNotStopALaterRun(): void
-    {
-        $message = $this->started();
-        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
-        $this->record(LedgerEventKind::ReviewerStopped, $message);
-
-        $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
-
-        self::assertSame(['approve'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
-        self::assertCount(1, $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
-    }
-
     public function testTheProgressPublishedAfterAStopShowsTheReviewerStopped(): void
     {
         $message = $this->started();

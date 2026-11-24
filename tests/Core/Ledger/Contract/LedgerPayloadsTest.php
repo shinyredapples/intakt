@@ -50,6 +50,45 @@ final class LedgerPayloadsTest extends TestCase
         self::assertEquals(new NumberedStart(1, 'given'), $start);
     }
 
+    public function testARowThatIsNotJsonIsSkipped(): void
+    {
+        self::assertNull($this->payloads()->of($this->row('{"number":1,"change":"feat/1"'), NumberedStart::class));
+    }
+
+    public function testARowWithAValueItsEnumDoesNotKnowIsSkipped(): void
+    {
+        self::assertNull($this->payloads()->of($this->row('{"kind":"stale"}'), KindedStart::class));
+    }
+
+    public function testARowWithAValueItsEnumKnowsIsRead(): void
+    {
+        self::assertEquals(new KindedStart(StartKind::Fresh), $this->payloads()->of($this->row('{"kind":"fresh"}'), KindedStart::class));
+    }
+
+    public function testARowWithAValueOfTheWrongTypeIsSkipped(): void
+    {
+        self::assertNull($this->payloads()->of($this->row('{"number":"many","change":"feat/1"}'), NumberedStart::class));
+    }
+
+    public function testAnUnreadableEntryOfAListIsLeftOutAndTheOthersAreKept(): void
+    {
+        $starts = $this->payloads()->entriesOf($this->row('{"starts":[{"number":1,"change":"a"},{"number":"two","change":"b"},{"number":3,"change":"c"}]}'), 'starts', NumberedStart::class);
+
+        self::assertEquals([new NumberedStart(1, 'a'), new NumberedStart(3, 'c')], $starts);
+    }
+
+    public function testAnEntryWithANumberTooLargeToEncodeAgainIsLeftOut(): void
+    {
+        $starts = $this->payloads()->entriesOf($this->row('{"starts":[{"number":1e999,"change":"a"},{"number":2,"change":"b"}]}'), 'starts', NumberedStart::class);
+
+        self::assertEquals([new NumberedStart(2, 'b')], $starts);
+    }
+
+    public function testARowWithoutAListUnderTheKeyHasNoEntries(): void
+    {
+        self::assertNull($this->payloads()->entriesOf($this->row('{"starts":"none"}'), 'starts', NumberedStart::class));
+    }
+
     public function testAPositionalDefaultIsRefusedBecauseNoPayloadKeyCouldMatchIt(): void
     {
         $this->expectException(InvalidArgumentException::class);

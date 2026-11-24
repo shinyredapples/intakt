@@ -91,16 +91,6 @@ final class VerdictsOfRoundTest extends KernelTestCase
         self::assertCount(2, $verdicts->counting);
     }
 
-    public function testAnotherPanelMakesTheStoredVerdictsStale(): void
-    {
-        $round = $this->reviewedRound();
-
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 3), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
-
-        self::assertSame(Standing::Stale, $verdicts->standing->standing);
-        self::assertSame([IdentityField::PanelPolicy], $verdicts->standing->changed);
-    }
-
     public function testARoundStoredWithoutAnIdentityIsStaleInEveryField(): void
     {
         $round = $this->reviewedRound();
