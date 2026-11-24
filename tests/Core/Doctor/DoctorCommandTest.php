@@ -66,7 +66,7 @@ final class DoctorCommandTest extends TestCase
         self::assertSame("FAIL: Forge: bad \xFF byte\n", $tester->getDisplay());
     }
 
-    private function check(string $name,CheckResult|RuntimeException $outcome): HealthCheck
+    private function check(string $name, CheckResult|RuntimeException $outcome): HealthCheck
     {
         return new readonly class($name, $outcome) implements HealthCheck {
             public function __construct(
