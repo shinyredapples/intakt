@@ -5,14 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ledger\Contract;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\PayloadDefaults;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -25,6 +30,14 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(RecordedEvent::class)]
+#[UsesClass(UsageSettled::class)]
+#[UsesClass(UsageStarted::class)]
+#[UsesClass(Usage::class)]
+#[UsesClass(JudgeDone::class)]
+#[UsesClass(JudgeDoneFinding::class)]
+#[UsesClass(Severity::class)]
+#[UsesClass(ReviewerStopped::class)]
+#[UsesClass(Tier::class)]
 final class LedgerPayloadsTest extends TestCase
 {
     public function testAKeyTheRowLacksTakesItsDefault(): void
@@ -116,6 +129,26 @@ final class LedgerPayloadsTest extends TestCase
         self::assertSame(Severity::P1, $done?->findings[0]->severity);
     }
 
+    public function testAStartedUsageRowOfAnUnknownTierIsSkipped(): void
+    {
+        self::assertNull($this->payloads()->of($this->row($this->started('giant')), UsageStarted::class));
+    }
+
+    public function testAStartedUsageRowOfAKnownTierIsRead(): void
+    {
+        self::assertSame(Tier::Strong, $this->payloads()->of($this->row($this->started('strong')), UsageStarted::class)?->tier);
+    }
+
+    public function testAReviewerStoppedRowOfAnUnknownTierIsSkipped(): void
+    {
+        self::assertNull($this->payloads()->of($this->row($this->stopped('giant')), ReviewerStopped::class));
+    }
+
+    public function testAReviewerStoppedRowOfAKnownTierIsRead(): void
+    {
+        self::assertSame(Tier::Strong, $this->payloads()->of($this->row($this->stopped('strong')), ReviewerStopped::class)?->tier);
+    }
+
     public function testAPositionalDefaultIsRefusedBecauseNoPayloadKeyCouldMatchIt(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -136,6 +169,16 @@ final class LedgerPayloadsTest extends TestCase
     private function settled(string $prompt): string
     {
         return '{"call":"c1","phase":"settled","usages":[{"account":null,"model":"big","prompt":'.$prompt.',"completion":20,"thinking":null,"tool":null,"cached":null,"cache_creation":null,"cache_read":null,"total":120,"remaining":null,"remaining_minute":null,"remaining_month":null}]}';
+    }
+
+    private function started(string $tier): string
+    {
+        return '{"call":"c1","phase":"started","project":"intakt","tier":"'.$tier.'","round":"r1","model":"big"}';
+    }
+
+    private function stopped(string $tier): string
+    {
+        return '{"round":"r1","reviewer":"rev-1","role":"security","tier":"'.$tier.'"}';
     }
 
     private function judgeDone(string $severity): string
