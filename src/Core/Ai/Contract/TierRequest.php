@@ -21,7 +21,10 @@ final readonly class TierRequest
     ) {
     }
 
-    public static function of(string|object $input): self
+    /**
+     * @param array<mixed>|string|object $input kept whole, with its keys, as Symfony AI's own input forms are
+     */
+    public static function of(array|string|object $input): self
     {
         return new self($input, []);
     }

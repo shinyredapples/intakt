@@ -61,6 +61,21 @@ final class TierRoutedPlatformTest extends TestCase
         self::assertSame(['x' => 'call', 'y' => 'platform'], $received['options']);
     }
 
+    public function testAnArrayInputKeepsItsOriginalKeysAndOrder(): void
+    {
+        $input = ['prompt' => 'review', 4 => 'context'];
+        $result = MockPlatformFactory::createPlatform('ok')->invoke('model', 'review');
+        $inner = $this->createMock(PlatformInterface::class);
+        $inner->expects(self::once())->method('invoke')->with('big', $input, [])->willReturn($result);
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('invoke')->willReturnCallback(
+            static fn (ResolvedModel $model, TierRequest $request): DeferredResult => $request->invokeOn($inner, 'big'),
+        );
+        $platform = new TierRoutedPlatform($tiers, new ResolvedModel(Provider::Anthropic, 'big'));
+
+        $platform->invoke('big', $input);
+    }
+
     private function optionsSentBy(TierRequest $request): mixed
     {
         /** @var ArrayObject<string, mixed> $sent */
