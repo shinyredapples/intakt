@@ -26,12 +26,12 @@ final class ContainerUnknownGetIdRuleTest extends PhpStanRuleTestCase
      */
     public static function casesOfOneRun(): iterable
     {
-        return self::casesOfOnePhpstanRun([
+        return self::casesOfOnePhpstanRunOnTheFixtureKernel([
             'GettingEitherAKnownOrAMisspelledServiceIdFailsStaticAnalysis' => ['misspelled-get-service-id-in-union', 'src/Lookup.php:19 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container'],
             'GettingEitherOfTwoRegisteredServiceIdsPassesStaticAnalysis' => ['registered-get-service-ids-in-union'],
             'GettingEitherAKnownOrAMisspelledServiceIdNamedAfterTheInvalidBehaviorFailsStaticAnalysis' => ['misspelled-get-service-id-in-union-named-last', 'src/Lookup.php:19 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container'],
             'GettingEitherOfTwoRegisteredServiceIdsNamedAfterTheInvalidBehaviorPassesStaticAnalysis' => ['registered-get-service-ids-in-union-named-last'],
-            'GettingEitherAKnownOrAPrivateServiceIdFailsStaticAnalysis' => ['private-get-service-id-in-union', 'src/Lookup.php:20 symfonyContainer.privateService Service "Intakt\Core\Review\Infrastructure\ReviewerPrompt" is private'],
+            'GettingEitherAKnownOrAPrivateServiceIdFailsStaticAnalysis' => ['private-get-service-id-in-union', 'src/Lookup.php:19 symfonyContainer.privateService Service "fixture.signature" is private'],
             'GettingEitherAKnownOrAPrivateServiceIdFromTheTestContainerPassesStaticAnalysis' => ['test-container-get-private-service-id-in-union'],
         ]);
     }
