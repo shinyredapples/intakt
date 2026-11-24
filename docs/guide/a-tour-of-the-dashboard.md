@@ -107,8 +107,8 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 3. Read the answer. Every fact in it says which project it is about.
 4. If the answer means work, choose **Draft a task**: the [New task box](#starting-a-task-from-the-dashboard) opens with the text filled in, and you go on from there.
 
-- **It only reads.** The AI behind the panel can read a project's code, its history, the board, the plan, the CI results and the costs, and nothing else. It cannot change anything, and its answer is for you to read, never an order to Intakt. It sees a CI log only when that log comes from a run that could not reach any secret, and only after secrets are blanked out.
-- **One project at a time.** For a question about all projects, each project is read on its own, and no project's code is opened next to another's.
+- **It only reads.** The AI behind the panel can read a project's code, its history, the board, the plan, the CI results and the costs, and nothing else. It cannot change anything, and its answer is for you to read, never an order to Intakt. It sees a CI log only when that log comes from a run that could not reach any secret, and only after secrets are blanked out; a line that still looks like a secret is dropped from the log.
+- **One project at a time.** For a question about all projects, each project is read on its own, and no project's code is opened next to another's. A project whose share of the week is 0 is left out, and the answer names the projects it left out.
 - **It costs the project's share.** A question uses a little of its project's share of the week; a question about all projects is split between them. Your questions and answers stay in the panel, per project.
 - **Whoever can open the dashboard** can ask and can read every past answer, as with the New task box above, so keep the dashboard where only you can reach it.
 
