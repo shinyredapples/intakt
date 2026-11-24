@@ -14,4 +14,12 @@ interface StatusLabels
      * @throws ForgeWriteFailed
      */
     public function mirror(string $project, ChangeId $change, RoundStatusLabel $status): void;
+
+    // The status Intakt set last is put back when a person changed it since, because a change between two round steps would otherwise stand until the next step.
+    /**
+     * @throws ChangeNotFound
+     * @throws ForgeReadFailed
+     * @throws ForgeWriteFailed
+     */
+    public function restore(string $project, ChangeId $change): void;
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Closure;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -13,6 +14,7 @@ use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
 use Intakt\Plugin\GitHubForge\Domain\StatusLabelPlan;
 use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubLabelWrites;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
@@ -23,6 +25,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(GitHubStatusLabels::class)]
@@ -33,6 +37,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(RepositoryAddress::class)]
 #[UsesClass(TaskIssue::class)]
 #[UsesClass(GitHubIssueComments::class)]
+#[UsesClass(GitHubLabelWrites::class)]
 final class GitHubStatusLabelsTest extends TestCase
 {
     private const string PULL = RecordedTrust::PULL_BY_WRITER;
@@ -53,6 +58,15 @@ final class GitHubStatusLabelsTest extends TestCase
     private bool $refuseWrites = false;
 
     private ?MockHttpClient $identity = null;
+
+    private ?Closure $whileWriting = null;
+
+    private LockFactory $locks;
+
+    protected function setUp(): void
+    {
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
 
     public function testAQueuedRoundWritesTheInReviewLabel(): void
     {
@@ -93,6 +107,59 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->comments = [];
 
         $this->mirror(RoundStatusLabel::InReview);
+
+        self::assertSame([], $this->writes);
+        self::assertSame([], $this->comments);
+    }
+
+    public function testAWriterThatOverlapsARestorationIsRefusedSoThePersonsChangeGetsOneComment(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->labeled('status:waiting-on-you', RecordedTrust::WRITER);
+        $overlapping = null;
+        $this->whileWriting = function () use (&$overlapping): void {
+            $this->whileWriting = null;
+            try {
+                $this->mirror(RoundStatusLabel::InReview);
+            } catch (ForgeWriteFailed $refused) {
+                $overlapping = $refused;
+            }
+        };
+
+        $this->mirror(RoundStatusLabel::InReview);
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $overlapping);
+        self::assertCount(1, $this->comments);
+    }
+
+    public function testAStatusLabelAPersonRemovedAfterTheVerdictIsPutBackWithOneComment(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', self::OWN);
+        $this->labeled('status:waiting-on-you', self::OWN);
+        $this->unlabeled('status:waiting-on-you', RecordedTrust::WRITER);
+
+        $this->restore();
+
+        self::assertSame(['POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}'], $this->writes);
+        self::assertCount(1, $this->comments);
+    }
+
+    public function testARestoreWhileTheStatusIsAsIntaktSetItWritesAndCommentsNothing(): void
+    {
+        $this->labeled('status:waiting-on-you', self::OWN);
+
+        $this->restore();
+
+        self::assertSame([], $this->writes);
+        self::assertSame([], $this->comments);
+    }
+
+    public function testARestoreOnAChangeIntaktNeverLabeledWritesNothing(): void
+    {
+        $this->labeled('status:waiting-on-you', RecordedTrust::WRITER);
+
+        $this->restore();
 
         self::assertSame([], $this->writes);
         self::assertSame([], $this->comments);
@@ -140,6 +207,11 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->labelsOf()->mirror('alpha', new ChangeId(self::PULL), $status);
     }
 
+    private function restore(): void
+    {
+        $this->labelsOf()->restore('alpha', new ChangeId(self::PULL));
+    }
+
     private function labeled(string $label, string $actor): void
     {
         $this->events[] = ['event' => 'labeled', 'label' => ['name' => $label], 'actor' => ['login' => $actor], 'created_at' => self::MOMENT];
@@ -159,7 +231,7 @@ final class GitHubStatusLabelsTest extends TestCase
         $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]);
         $comments = new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345');
 
-        return new GitHubStatusLabels($wiring->calls, $wiring->tokens, $repositories, $wiring->identities, $comments);
+        return new GitHubStatusLabels($wiring->calls, $wiring->tokens, $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens), $this->locks);
     }
 
     /**
@@ -197,6 +269,9 @@ final class GitHubStatusLabelsTest extends TestCase
         }
 
         $this->writes[] = trim($method.' '.$path.' '.$body);
+        if ($this->whileWriting instanceof Closure) {
+            ($this->whileWriting)();
+        }
 
         return new MockResponse('[]', ['http_code' => 200]);
     }

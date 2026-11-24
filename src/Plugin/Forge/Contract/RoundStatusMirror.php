@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
+use Closure;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -18,15 +19,28 @@ final readonly class RoundStatusMirror
 
     public function show(string $project, ChangeId $change, RoundStatusLabel $status): void
     {
+        $this->tolerating($project, $change, static fn (StatusLabels $labels) => $labels->mirror($project, $change, $status));
+    }
+
+    public function restore(string $project, ChangeId $change): void
+    {
+        $this->tolerating($project, $change, static fn (StatusLabels $labels) => $labels->restore($project, $change));
+    }
+
+    /**
+     * @param Closure(StatusLabels): void $write
+     */
+    private function tolerating(string $project, ChangeId $change, Closure $write): void
+    {
         if (!$this->labels instanceof StatusLabels) {
             return;
         }
 
         try {
-            $this->labels->mirror($project, $change, $status);
-            // Boundary: logged and dropped, because the next round or verdict sets the label again and a retry of the round must not wait on a label.
+            $write($this->labels);
+            // Boundary: logged and dropped, because the next round step sets the label again and a retry of the round must not wait on a label.
         } catch (Throwable $failure) {
-            $this->logger->warning('The status label {status} of {change} of {project} was not set: {reason}', ['status' => $status->value, 'change' => $change->value, 'project' => $project, 'reason' => $failure->getMessage()]);
+            $this->logger->warning('The status label of {change} of {project} was not set: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $failure->getMessage()]);
         }
     }
 }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
-use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Plugin\Forge\Contract\ChangeLabels;
@@ -21,15 +20,16 @@ final readonly class RoundStarts
         private MessageBusInterface $commands,
         private StartedRounds $rounds,
         private WatcherLedger $ledger,
-        private ?ChangeLabels $labels = null,
-        private ?RoundStatusMirror $status = null,
+        private ChangeLabels $labels,
+        private RoundStatusMirror $status,
     ) {
     }
 
     // Queues the round before the ledger line, so a ledger that is down cannot cost a round; the stored round owes its line until the ledger takes it.
     public function startFor(WatchedProject $project, HeadDecision $decision): void
     {
-        $this->rounds->startOnce($project->name, $decision->change, fn (): QueuedRound => $this->queue($project, $decision->change));
+        $queued = $this->rounds->startOnce($project->name, $decision->change, fn (): QueuedRound => $this->queue($project, $decision->change));
+        $this->mirrorStatus($project, $decision->change, $queued);
         $this->recordQueued($project->name);
     }
 
@@ -43,15 +43,21 @@ final readonly class RoundStarts
 
     private function queue(WatchedProject $project, OpenChange $green): QueuedRound
     {
-        $labels = $this->labels?->steeringOf($project->name, $green) ?? new Labels();
+        $labels = $this->labels->steeringOf($project->name, $green);
         $queued = $this->commands->dispatch($project->startAt($green, $labels))->last(HandledStamp::class)?->getResult();
 
-        if (!$queued instanceof QueuedRound) {
-            throw new RuntimeException('The review start did not answer the queued round.');
+        return $queued instanceof QueuedRound ? $queued : throw new RuntimeException('The review start did not answer the queued round.');
+    }
+
+    // After the commit, so a round rolled back never shows as in review; a head whose round already runs is due again because the pull request changed, which a person's change of the status label does, so the status Intakt set last is put back.
+    private function mirrorStatus(WatchedProject $project, OpenChange $change, bool $queued): void
+    {
+        if ($queued) {
+            $this->status->show($project->name, $change->id, RoundStatusLabel::InReview);
+
+            return;
         }
 
-        $this->status?->show($project->name, $green->id, RoundStatusLabel::InReview);
-
-        return $queued;
+        $this->status->restore($project->name, $change->id);
     }
 }

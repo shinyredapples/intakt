@@ -16,6 +16,7 @@ use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -51,7 +52,9 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
@@ -223,7 +226,9 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $installWide = new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $clock), $clock, $logger);
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
-        $starts = new RoundStarts($commands, $rounds, $ledger);
+        $steering = self::createStub(ChangeLabels::class);
+        $steering->method('steeringOf')->willReturn(new Labels());
+        $starts = new RoundStarts($commands, $rounds, $ledger, $steering, new RoundStatusMirror($logger));
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $queries = new StandingQueryBus($recorded, $this->entities);
         // Main's boot line goes to a ledger of its own, because the test counts only the lines of the two heads.

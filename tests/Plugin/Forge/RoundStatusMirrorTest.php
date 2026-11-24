@@ -43,4 +43,22 @@ final class RoundStatusMirrorTest extends TestCase
 
         new RoundStatusMirror($logger, $labels)->show('alpha', new ChangeId('7'), RoundStatusLabel::InReview);
     }
+
+    public function testARestoreAsksTheForgeToPutBackTheStatusIntaktSetLast(): void
+    {
+        $labels = $this->createMock(StatusLabels::class);
+        $labels->expects(self::once())->method('restore')->with('alpha', new ChangeId('7'));
+
+        new RoundStatusMirror(self::createStub(LoggerInterface::class), $labels)->restore('alpha', new ChangeId('7'));
+    }
+
+    public function testAFailedRestoreIsLoggedAndTheRoundGoesOn(): void
+    {
+        $labels = self::createStub(StatusLabels::class);
+        $labels->method('restore')->willThrowException(new ForgeWriteFailed('busy'));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning');
+
+        new RoundStatusMirror($logger, $labels)->restore('alpha', new ChangeId('7'));
+    }
 }

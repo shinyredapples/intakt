@@ -48,9 +48,11 @@ final readonly class ConfiguredPanels implements Panels
             }
         }
 
+        $quorum = QuorumPolicy::from($panel['quorum']);
+
         return new Panel(
-            array_map(fn (array $reviewer): PanelReviewer => $this->reviewer($reviewer, $change->startTier()), $reviewers),
-            QuorumPolicy::from($panel['quorum']),
+            array_map(fn (array $reviewer): PanelReviewer => $this->reviewer($reviewer, $this->tierOf($reviewer, $change, $quorum)), $reviewers),
+            $quorum,
         );
     }
 
@@ -74,14 +76,30 @@ final readonly class ConfiguredPanels implements Panels
         return false;
     }
 
+    // A strong reviewer keeps its tier under a quorum that needs a strong vote, because that quorum is a safety rule and safety rules beat labels.
     /**
      * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
      */
-    private function reviewer(array $reviewer, ?Tier $labelled): PanelReviewer
+    private function tierOf(array $reviewer, ChangeDescription $change, QuorumPolicy $quorum): Tier
+    {
+        $configured = Tier::from($reviewer['tier']);
+        $labelled = $change->startTier();
+
+        if (!$labelled instanceof Tier || ($quorum->needsStrongVote() && Tier::Strong === $configured)) {
+            return $configured;
+        }
+
+        return $labelled;
+    }
+
+    /**
+     * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
+     */
+    private function reviewer(array $reviewer, Tier $tier): PanelReviewer
     {
         return new PanelReviewer(
             new ReviewerRole($reviewer['role'], $reviewer['prompt']),
-            new ReviewerModel($labelled ?? Tier::from($reviewer['tier']), Provider::from($reviewer['provider'])),
+            new ReviewerModel($tier, Provider::from($reviewer['provider'])),
             $reviewer['budget'],
         );
     }

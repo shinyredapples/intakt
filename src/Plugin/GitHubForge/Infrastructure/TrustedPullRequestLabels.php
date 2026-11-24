@@ -12,6 +12,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubForge\Domain\LabelFamilies;
+use Intakt\Plugin\GitHubForge\Domain\TrustedLabels;
 
 // A steering label counts only when an account with write access applied it and it is still on the pull request; a trust check that fails fails the read, so an unchecked label never steers.
 final readonly class TrustedPullRequestLabels
@@ -29,7 +30,7 @@ final readonly class TrustedPullRequestLabels
      * @throws ForgeRateLimited
      * @throws TrustNotChecked
      */
-    public function of(string $project, int $number, DateTimeImmutable $listedAt): Labels
+    public function of(string $project, int $number, DateTimeImmutable $listedAt): TrustedLabels
     {
         $history = $this->histories->of($project, $number, $listedAt);
         $address = $this->repositories->addressOf($project);
@@ -47,6 +48,9 @@ final readonly class TrustedPullRequestLabels
             }
         }
 
-        return new Labels(...array_map(static fn (LabelApplication $application): string => $application->label, $this->families->winners($steering)));
+        return new TrustedLabels(
+            new Labels(...array_map(static fn (LabelApplication $application): string => $application->label, $this->families->winners($steering))),
+            $this->families->losers($steering),
+        );
     }
 }

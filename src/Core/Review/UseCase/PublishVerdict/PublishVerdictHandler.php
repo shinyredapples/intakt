@@ -32,7 +32,7 @@ final readonly class PublishVerdictHandler
         private ForgeWrites $forge,
         private ChangePublications $publications,
         private LoggerInterface $logger,
-        private ?RoundStatusMirror $status = null,
+        private RoundStatusMirror $status,
     ) {
     }
 
@@ -100,7 +100,7 @@ final readonly class PublishVerdictHandler
 
         // Set after the verdict, because the round is then over and what is left is waiting on a person.
         if ($published) {
-            $this->status?->show($round->project(), $change, RoundStatusLabel::WaitingOnYou);
+            $this->status->show($round->project(), $change, RoundStatusLabel::WaitingOnYou);
         }
 
         return $published;

@@ -65,6 +65,22 @@ final class StatusLabelPlanTest extends TestCase
         self::assertFalse($plan->commentOnRestore);
     }
 
+    public function testARestoreAimsAtTheStatusIntaktAppliedLast(): void
+    {
+        $events = [new LabelEvent('status:in-review', 'intakt[bot]', true), new LabelEvent('status:waiting-on-you', 'intakt[bot]', true), new LabelEvent('status:waiting-on-you', 'alice', false)];
+
+        $plan = StatusLabelPlan::restoring($events, $this->own(...));
+
+        self::assertSame(RoundStatusLabel::WaitingOnYou, $plan?->wanted);
+        self::assertTrue($plan->add);
+        self::assertTrue($plan->commentOnRestore);
+    }
+
+    public function testARestoreOnAChangeIntaktNeverGaveAStatusPlansNothing(): void
+    {
+        self::assertNull(StatusLabelPlan::restoring([new LabelEvent('status:in-review', 'alice', true)], $this->own(...)));
+    }
+
     private function own(string $login): bool
     {
         return 'intakt[bot]' === $login;

@@ -16,6 +16,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Domain\LabelFamilies;
 use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
+use Intakt\Plugin\GitHubForge\Domain\TrustedLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringTrustCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\TrustedPullRequestLabels;
@@ -32,6 +33,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(WatchedRepositories::class)]
 #[UsesClass(RepositoryAddress::class)]
 #[UsesClass(SteeringTrust::class)]
+#[UsesClass(TrustedLabels::class)]
 #[UsesClass(SteeringTrustCheck::class)]
 #[UsesClass(ChangeDescription::class)]
 #[UsesClass(BuildFacts::class)]
@@ -86,11 +88,34 @@ final class TrustedPullRequestLabelsTest extends TestCase
         self::assertSame(Tier::Standard, BuildFacts::fromLabels($labels, new Paths())->labelledTier);
     }
 
+    public function testTheValueAppliedEarlierInAFamilyIsNamedForRemoval(): void
+    {
+        $trusted = $this->trustedOf([new LabelApplication('model:light', RecordedTrust::WRITER), new LabelApplication('review:full', RecordedTrust::WRITER), new LabelApplication('model:strong', RecordedTrust::WRITER)]);
+
+        self::assertSame(['model:light'], $trusted->outvoted);
+    }
+
+    public function testAnUntrustedValueInAFamilyIsNotNamedForRemoval(): void
+    {
+        $trusted = $this->trustedOf([new LabelApplication('model:light', RecordedTrust::TRIAGE), new LabelApplication('model:strong', RecordedTrust::WRITER)]);
+
+        self::assertSame([], $trusted->outvoted);
+    }
+
     /**
      * @param list<LabelApplication> $applied
      * @param ?list<string>          $current
      */
     private function labelsOf(array $applied, ?array $current = null): Labels
+    {
+        return $this->trustedOf($applied, $current)->steering;
+    }
+
+    /**
+     * @param list<LabelApplication> $applied
+     * @param ?list<string>          $current
+     */
+    private function trustedOf(array $applied, ?array $current = null): TrustedLabels
     {
         $names = $current ?? array_map(static fn (LabelApplication $application): string => $application->label, $applied);
         $histories = self::createStub(IssueHistories::class);

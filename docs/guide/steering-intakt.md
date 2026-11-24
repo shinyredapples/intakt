@@ -94,6 +94,6 @@ An approval always names one exact version. If the change itself is pushed again
 
 ## Labels on a reviewed pull request
 
-On GitHub, two labels steer a review. `review:full` asks for the full panel of reviewers, and `model:<tier>` (`strong`, `standard` or `light`) sets the tier the reviewers start on. Only labels a person with write access applied, and still on the pull request, count; when two values of one family (two `model:` labels, say) are present, the one applied last wins. If Intakt cannot read the labels, none counts and the review runs on the configured panel.
+On GitHub, two labels steer a review. `review:full` asks for the full panel of reviewers, and `model:<tier>` (`strong`, `standard` or `light`) sets the tier the reviewers start on. A panel that needs one strong reviewer keeps that reviewer strong. Only labels a person with write access applied, and still on the pull request, count. When two values of one family (two `model:` labels, say) are present, the one applied last wins, and Intakt removes the other with a comment. If Intakt cannot read the labels, none counts and the review runs on the configured panel.
 
-Intakt also keeps one `status:` label on the pull request in step with the review: `status:in-review` while a round runs and `status:waiting-on-you` once its verdict is published. If a person changes that label, Intakt puts it back and says so in one comment.
+Intakt also keeps one `status:` label on the pull request in step with the review: `status:in-review` while a round runs and `status:waiting-on-you` once its verdict is published. If a person changes that label, Intakt puts it back the next time it looks at the pull request (changing a label is enough to make it look, within about a minute) and says so in one comment.

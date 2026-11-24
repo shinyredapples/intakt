@@ -16,6 +16,7 @@ final readonly class StatusLabelPlan
      * @param list<string> $remove
      */
     private function __construct(
+        public RoundStatusLabel $wanted,
         public array $remove,
         public bool $add,
         public bool $commentOnRestore,
@@ -33,7 +34,19 @@ final readonly class StatusLabelPlan
         $changedByPerson = array_filter($last, static fn (LabelEvent $event): bool => !$isOwn($event->actor) && $event->applied !== ($event->label === $wanted->value));
         $present = isset($last[$wanted->value]) && $last[$wanted->value]->applied;
 
-        return new self($remove, !$present, [] !== $changedByPerson);
+        return new self($wanted, $remove, !$present, [] !== $changedByPerson);
+    }
+
+    // Toward the status Intakt applied last, because that is the round as Intakt last mirrored it; null when Intakt never set one, so there is nothing to put back.
+    /**
+     * @param list<LabelEvent>      $events
+     * @param Closure(string): bool $isOwn
+     */
+    public static function restoring(array $events, Closure $isOwn): ?self
+    {
+        $own = array_last(array_filter($events, static fn (LabelEvent $event): bool => $event->applied && RoundStatusLabel::tryFrom($event->label) instanceof RoundStatusLabel && $isOwn($event->actor)));
+
+        return $own instanceof LabelEvent ? self::of(RoundStatusLabel::from($own->label), $events, $isOwn) : null;
     }
 
     /**

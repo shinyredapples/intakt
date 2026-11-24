@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
+use Closure;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
 use Intakt\Plugin\Forge\Contract\StatusLabels;
+use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
@@ -18,6 +20,7 @@ use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
 use Intakt\Plugin\GitHubForge\Domain\StatusLabelPlan;
 use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use JsonException;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 // Read from the event list, because only it names who applied or removed a label, and a person's change is what gets restored.
@@ -33,10 +36,48 @@ final readonly class GitHubStatusLabels implements StatusLabels
         private WatchedRepositories $repositories,
         private SteeringIdentities $identities,
         private GitHubIssueComments $comments,
+        private GitHubLabelWrites $writes,
+        private LockFactory $locks,
     ) {
     }
 
     public function mirror(string $project, ChangeId $change, RoundStatusLabel $status): void
+    {
+        $this->whileHeld($project, $change, fn (array $events): StatusLabelPlan => StatusLabelPlan::of($status, $events, $this->isOwn(...)));
+    }
+
+    public function restore(string $project, ChangeId $change): void
+    {
+        $this->whileHeld($project, $change, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...)));
+    }
+
+    // Planned and written under one lock, because two writers that read the same events would both find the person's change last and both comment; not waited for, because the busy writer leaves the label to the one holding it.
+    /**
+     * @param Closure(list<LabelEvent>): ?StatusLabelPlan $plan
+     *
+     * @throws ChangeNotFound
+     * @throws ForgeReadFailed
+     * @throws ForgeWriteFailed
+     */
+    private function whileHeld(string $project, ChangeId $change, Closure $plan): void
+    {
+        $address = $this->addressOf($project, $change);
+        $lock = $this->locks->createLock(GitHubForgeServices::STATUS_LABEL_LOCK_PREFIX.hash('sha256', json_encode([$project, $change->value], JSON_THROW_ON_ERROR)));
+        if (!$lock->acquire()) {
+            throw new ForgeWriteFailed('Another write is setting the status label of this change.');
+        }
+
+        try {
+            $this->apply($project, $address, $plan($this->eventsOf($address->issuePath())));
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @throws ChangeNotFound
+     */
+    private function addressOf(string $project, ChangeId $change): PullRequestAddress
     {
         $address = PullRequestAddress::of($change);
         $configured = $this->repositories->addressOf($project);
@@ -44,18 +85,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
             throw ChangeNotFound::named($change);
         }
 
-        $path = $address->issuePath();
-        $plan = StatusLabelPlan::of($status, $this->eventsOf($path), $this->isOwn(...));
-
-        foreach ($plan->remove as $label) {
-            $this->write('DELETE', $path.'/labels/'.rawurlencode($label), []);
-        }
-        if ($plan->add) {
-            $this->write('POST', $path.'/labels', ['labels' => [$status->value]]);
-        }
-        if ($plan->commentOnRestore) {
-            $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
-        }
+        return $address;
     }
 
     /**
@@ -82,36 +112,32 @@ final readonly class GitHubStatusLabels implements StatusLabels
         throw new ForgeReadFailed('The change holds more events than this forge reads.');
     }
 
+    /**
+     * @throws ForgeWriteFailed
+     */
+    private function apply(string $project, PullRequestAddress $address, ?StatusLabelPlan $plan): void
+    {
+        if (!$plan instanceof StatusLabelPlan) {
+            return;
+        }
+
+        foreach ($plan->remove as $label) {
+            $this->writes->remove($address->issuePath(), $label);
+        }
+        if ($plan->add) {
+            $this->writes->add($address->issuePath(), $plan->wanted->value);
+        }
+        if ($plan->commentOnRestore) {
+            $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
+        }
+    }
+
     private function isOwn(string $login): bool
     {
         try {
             return $this->identities->isOwn($login);
         } catch (TrustNotChecked $unchecked) {
             throw new ForgeWriteFailed($unchecked->getMessage(), $unchecked->getCode(), previous: $unchecked);
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     *
-     * @throws ForgeWriteFailed
-     */
-    private function write(string $method, string $path, array $body): void
-    {
-        $options = ['auth_bearer' => $this->writeBearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
-        if ([] !== $body) {
-            $options['json'] = $body;
-        }
-
-        try {
-            $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
-        } catch (ExceptionInterface $failure) {
-            throw $this->unreachableForWrite($failure::class);
-        }
-
-        // Tolerated, because a label someone removed meanwhile is the state the removal asks for.
-        if (('DELETE' !== $method || 404 !== $status) && ($status < 200 || $status >= 300)) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));
         }
     }
 
@@ -182,23 +208,5 @@ final readonly class GitHubStatusLabels implements StatusLabels
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read of the events: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
-    }
-
-    /**
-     * @throws ForgeWriteFailed
-     */
-    private function writeBearer(): string
-    {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeWriteFailed('No GitHub write of a label: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
-        }
-    }
-
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachableForWrite(string $failure): ForgeWriteFailed
-    {
-        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 }

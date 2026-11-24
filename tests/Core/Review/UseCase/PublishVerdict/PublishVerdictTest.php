@@ -56,6 +56,8 @@ use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Tests\Core\Dashboard\UseCase\AppendRefusingLedger;
@@ -63,6 +65,7 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\DeferringJudge;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Tests\Plugin\GitHubForge\ScriptedGitHub;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -91,6 +94,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[CoversClass(PublishHandedOverChangeHandler::class)]
 #[UsesClass(PublishHandedOverChange::class)]
 #[UsesClass(ChangesHandedToIntakt::class)]
+#[UsesClass(RoundStatusMirror::class)]
+#[UsesClass(RoundStatusLabel::class)]
 #[UsesClass(WatcherLedger::class)]
 #[UsesClass(HandedOverChanges::class)]
 #[UsesClass(PayloadFields::class)]
@@ -121,6 +126,7 @@ final class PublishVerdictTest extends KernelTestCase
     private RoundFixture $fixture;
     private ScriptedGitHub $github;
     private LockFactory $locks;
+    private RecordingStatusLabels $statusLabels;
 
     private ProtectedChanges $protectedChanges;
 
@@ -135,6 +141,27 @@ final class PublishVerdictTest extends KernelTestCase
             [self::STATUS, ['state' => 'success', 'context' => 'intakt/review', 'description' => 'Intakt approves this head.']],
         ], $this->github->writes);
         self::assertSame([], $this->ownerAsks());
+    }
+
+    public function testAPublishedVerdictShowsTheWaitingOnYouStatusLabel(): void
+    {
+        $this->handOver('alpha', self::PULL);
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame(['mirror '.self::PULL.' status:waiting-on-you'], $this->statusLabels->writes);
+    }
+
+    public function testAVerdictTheForgeDidNotPublishShowsNoStatusLabel(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $roundId = $this->judgedRound(self::PULL, []);
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturn(false);
+
+        $this->handlerOver($forge, new ConfiguredProjectModes([]))(new PublishVerdict($roundId));
+
+        self::assertSame([], $this->statusLabels->writes);
     }
 
     public function testAPullRequestHandedToIntaktInAnotherLetterCaseIsPublishedToo(): void
@@ -900,6 +927,7 @@ final class PublishVerdictTest extends KernelTestCase
         $this->github = new ScriptedGitHub();
         $this->locks = new LockFactory(new InMemoryStore());
         $this->protectedChanges = ProtectedChanges::touching(new Paths());
+        $this->statusLabels = new RecordingStatusLabels();
     }
 
     // The application's command bus, so the publication the mark queues lands on the application's queue.
@@ -1018,7 +1046,7 @@ final class PublishVerdictTest extends KernelTestCase
         $handed = new HandedOverChanges($this->fixture->ledger());
         $asks = new OwnerAsks($handed, $this->protectedHeads(), $askLedger ?? $this->fixture->ledger());
 
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log);
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log, new RoundStatusMirror($this->fixture->log, $this->statusLabels));
     }
 
     private function protectedHeads(): ProtectedHeads
