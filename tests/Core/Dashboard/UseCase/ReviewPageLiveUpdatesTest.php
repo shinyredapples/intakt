@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Closure;
 use DateTimeImmutable;
 use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
@@ -1283,12 +1284,15 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([['File reads', '2'], ['Searches', '1'], ['Total', '3']], $this->pairsOf($updated->filter('#round-'.$id.'-summary-tools .ls-tools')));
     }
 
-    // One text node in one nowrap button, so neither the markup nor the button's own style can put "F" and "1" on two lines.
-    public function testAPageOpenedBeforeTheRoundStartsKeepsEachFindingIdOfTheLiveSummaryOnOneLineBesideALongText(): void
+    // One text node in one nowrap button, so neither the markup nor the button's own style can put "F" and "1" on two lines; review-finding-id.browser.mjs measures it in a narrow viewport.
+    public function testAFindingIdPushedToAPageOpenedWithAnEmptyLiveSummaryAppearsOnlyAfterThePushInOneNowrapButton(): void
     {
-        $long = new Finding('F1', Severity::P2, 'src/discount.js', 3, null, str_repeat('The discount is applied twice when the cart holds a voucher. ', 6), FixableBy::Builder, false, null, null);
-        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [$long], [], false));
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
+        self::assertCount(0, $page->filter('#round-'.$id.'-summary-findings .linkbtn'));
+        self::assertStringNotContainsString('F1', $page->filter('#round-'.$id.'-summary-findings')->text());
 
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
         $this->publishedUpdates()->summaryChanged($round);
 
         $updated = $this->replaced($page, $this->publishedStreams());
@@ -1298,6 +1302,46 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $sheet = (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
         self::assertMatchesRegularExpression('/\.ls-findings \.linkbtn \{[^}]*white-space: nowrap;/', $sheet);
         self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none;[^}]*white-space: nowrap;/', $sheet);
+    }
+
+    // review-finding-id.browser.mjs applies these files with the pinned Turbo, so they must stay what the page renders and pushes.
+    public function testTheBrowserChecksFindingsPartIsTheOneOfAPageWithAnEmptyLiveSummary(): void
+    {
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        [, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
+
+        self::assertSame($this->findingIdFixture('before.html'), $this->normalized(str_replace($id, 'ROUND', $page->filter('#round-'.$id.'-summary-findings')->outerHtml())));
+    }
+
+    public function testTheBrowserChecksStreamIsTheOnePushedForALongFinding(): void
+    {
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        [$round, $id] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
+
+        $this->publishedUpdates()->summaryChanged($round);
+
+        $findings = new Crawler($this->publishedStreams())->filter('turbo-stream[target="round-'.$id.'-summary-findings"]');
+        self::assertSame($this->findingIdFixture('streams.html'), $this->normalized(str_replace($id, 'ROUND', $findings->outerHtml())));
+    }
+
+    private function longFinding(): Finding
+    {
+        return new Finding('F1', Severity::P2, 'src/discount.js', 3, null, str_repeat('The discount is applied twice when the cart holds a voucher. ', 6), FixableBy::Builder, false, null, null);
+    }
+
+    // The template's indentation carries no layout, so the fixtures keep one space where it has a run of them.
+    private function normalized(string $html): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $html);
+    }
+
+    private function findingIdFixture(string $name): string
+    {
+        $contents = file_get_contents(__DIR__.'/review-finding-id/'.$name);
+        self::assertIsString($contents);
+
+        return rtrim($contents, "\n");
     }
 
     public function testAReadAnswerReachesTheReviewPageAsItsTypedAnswerAfterTheRetryMarkerAndNeverAsJson(): void
@@ -1553,11 +1597,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     /**
      * @return array{Uuid, string, Crawler}
      */
-    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary $summary): array
+    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary|Closure $summary): array
     {
         $this->browser->disableReboot();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn($summary);
+        $summaries->method('ofRound')->willReturnCallback($summary instanceof Closure ? $summary : static fn (): SessionSummary => $summary);
         self::getContainer()->set(SessionSummaries::class, $summaries);
         $this->givenTheHubRecordsWhatIsPublished();
         $round = Uuid::v7();
