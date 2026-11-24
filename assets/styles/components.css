@@ -612,6 +612,44 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .step .address { overflow-wrap: anywhere; }
 .choice h3 { margin: var(--s16) 0 var(--s8); font-size: var(--t15); }
 .step .command { margin: 0 0 var(--s16); padding: var(--s12); border-radius: var(--r-btn); background: var(--tint); font-family: var(--f-mono); font-size: var(--t13); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The setup wizard (mock setup.html): one step per page, the progress links above it, its errors in red under the field they name. */
+.wizard .steps { margin-bottom: calc(var(--s32) + var(--s8)); }
+.wizard .steps a { color: inherit; text-decoration: none; }
+.wizard .steps a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--r-btn); }
+.wizard .step-count { display: none; }
+.wizard .step { padding: 0; border-top: 0; }
+.wizard .step h1 { margin: 0 0 var(--s8); }
+.wizard .field { display: grid; gap: calc(var(--s4) + 2px); margin-bottom: calc(var(--s16) + var(--s4)); }
+.wizard .field label { font: 600 var(--t15)/1.3 var(--f-head); }
+.wizard .field .input { width: 100%; }
+.wizard .field .hint { color: var(--muted); font-size: var(--t13); }
+.wizard .field .field-error { margin-left: 0; }
+.wizard .step-error { color: var(--red); }
+.wizard .detected { display: flex; gap: calc(var(--s8) + 2px); align-items: center; margin: calc(var(--s16) + var(--s4)) 0; padding: var(--s12) calc(var(--s12) + 2px); border-radius: var(--r-card); background: var(--tint); }
+.wizard .detected p { margin: 0; overflow-wrap: anywhere; }
+.wizard .detected .i { color: var(--primary); }
+.wizard .not-wired { margin: var(--s16) 0 0; color: var(--muted); }
+.wizard .app-permissions { margin: var(--s12) 0 0; font-size: var(--t13); }
+.wizard .step-nav .grow { flex: 1; }
+.checks { margin: 0; padding: 0; list-style: none; }
+.checks li { display: flex; gap: var(--s12); align-items: flex-start; padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
+.checks li:first-child { border-top: 1px solid var(--hairline); }
+.checks li p { margin: var(--s4) 0 0; font-size: var(--t13); overflow-wrap: anywhere; }
+.checks .i.ok { color: var(--primary); }
+.checks .i.info { color: var(--muted); }
+.checks .i.broken-i { color: var(--red); }
+.checks + .step-nav { margin-top: var(--s16); border-top: 0; }
+.wizard .first-review { margin-top: var(--s24); }
+.wizard .first-review .next { margin: var(--s4) 0 0; color: var(--muted); font-size: var(--t13); }
+@media (max-width: 760px) {
+  /* The progress keeps only its bars, each a 44 px tall link, and the step count says where the reader is (DESIGN.md, Phone patterns). */
+  .wizard .steps { margin-bottom: var(--s8); }
+  .wizard .steps li { position: relative; gap: 0; }
+  .wizard .steps a { position: absolute; top: -20px; right: 0; left: 0; height: 44px; }
+  .wizard .steps a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .wizard .step-count { display: block; margin-bottom: var(--s24); font-size: var(--t15); }
+  .wizard .step-nav { flex-wrap: wrap; }
+}
 .comp-nav { display: flex; flex-wrap: wrap; gap: var(--s8); margin-bottom: var(--s24); }
 .comp-nav a { padding: var(--s4) var(--s12); border-radius: var(--r-chip); background: var(--tint); color: var(--ink); font-size: var(--t13); text-decoration: none; }
 .comp-sec { margin-bottom: var(--s48); }

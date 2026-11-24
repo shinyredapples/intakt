@@ -93,7 +93,7 @@
         {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
     </form>
     {% else %}
-    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}#step-first-review">Start the first review</a>
+    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP'), {step: constant('Intakt\\Core\\Dashboard\\Domain\\SetupStep::Ready').value}) }}#step-first-review">Start the first review</a>
     {% endif %}
 </div>
 {% else %}

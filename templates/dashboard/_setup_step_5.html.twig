@@ -1,0 +1,46 @@
+{%- set character = 'dashboard/components/character.html.twig' -%}
+{%- set demo_ready = demo is same as(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\DemoReadiness::Ready')) %}
+{%- set first_review = first_run.firstReview %}
+{#- With a recording ready, watching it is the one primary action: a visitor without a key needs only that button. -#}
+{%- set review_button = demo_ready ? 'secondary' : 'primary' %}
+<section class="step" id="step-ready" data-s="5" aria-labelledby="s5h">
+    <h1 id="s5h">Ready to start</h1>
+    <p class="lead">See a real review, then start the first review of your own.</p>
+
+    {#- The recorded review, one tap away. The octopus conducts here and nowhere else in the wizard. -#}
+    <section class="fr-hero" id="see-review" aria-labelledby="see-review-h">
+        {{ include(character, {character: first_review.mascot, size: 144}, with_context = false) }}
+        <h2 id="see-review-h">See a real review</h2>
+        {%- if demo_ready %}
+        <p class="fr-when">1 minute · no key</p>
+        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo">
+            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
+            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
+        </form>
+        {%- endif %}
+        <p class="next">{{ demo.firstRunLine(first_run) }}</p>
+    </section>
+
+    <ol class="fr-seq" aria-label="What you will see">
+        <li>{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 48}, with_context = false) }}<strong>Read</strong><span>Two AI labs</span></li>
+        <li>{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}<strong>Check</strong><span>The owl</span></li>
+        <li>{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Developer'), size: 48}, with_context = false) }}<strong>To fix</strong><span>Only what matters</span></li>
+    </ol>
+
+    <section class="first-review" id="step-first-review" data-state="{{ first_review.state.value }}" aria-labelledby="first-review-h">
+        <h2 id="first-review-h">First review</h2>
+        <p class="lead">{{ first_review.sentence }}</p>
+        {%- if first_review.round is not null %}
+        <a class="btn {{ review_button }}" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: first_review.round}) }}">Open the review</a>
+        {%- elseif first_review.sampleCanStart %}
+        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
+            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
+            {{ include('dashboard/components/button.html.twig', {kind: review_button, type: 'submit', label: 'Start the first review'}, with_context = false) }}
+            <p class="next">Two reviewers read the sample change; its live page opens.</p>
+        </form>
+        {%- endif %}
+    </section>
+
+    {#- No link to the board: a demo install without a review sends the board back here. -#}
+    <div class="step-nav"><a class="btn quiet" href="{{ back }}">Back</a></div>
+</section>

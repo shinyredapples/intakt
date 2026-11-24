@@ -9,8 +9,42 @@ use PHPUnit\Framework\TestCase;
 
 // The sheet is read as text, as BoardStylesTest does, because no page is needed to see a rule.
 #[CoversNothing]
-final class FirstRunStylesTest extends TestCase
+final class RunSetupStylesTest extends TestCase
 {
+    public function testOnAPhoneEachProgressMarkerIsALinkAtLeastTheTouchFloorHigh(): void
+    {
+        self::assertGreaterThanOrEqual(44, $this->pixels('/height:\s*(\d+)px;/', $this->rule('.wizard .steps a', $this->phoneBlock())));
+    }
+
+    public function testOnAPhoneTheProgressKeepsOnlyItsBarsAndTheMarkerWordsStayForScreenReaders(): void
+    {
+        $words = $this->rule('.wizard .steps a span', $this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/clip-path:\s*inset\(50%\);/', $words);
+        self::assertDoesNotMatchRegularExpression('/display:\s*none/', $words);
+    }
+
+    public function testOnAPhoneTheStepCountShowsAt15Px(): void
+    {
+        $count = $this->rule('.wizard .step-count', $this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/display:\s*block;/', $count);
+        self::assertMatchesRegularExpression('/font-size:\s*var\(--t15\);/', $count);
+        self::assertMatchesRegularExpression('/display:\s*none;/', $this->rule('.wizard .step-count', $this->desktopRules()));
+    }
+
+    // The wizard's small text uses the 13 px step, which a phone raises to 15 px, so no text there is under 15 px.
+    public function testOnAPhoneTheSmallTextStepIsRaisedTo15Px(): void
+    {
+        self::assertMatchesRegularExpression('/--t13:\s*15px;/', $this->file('assets/styles/tokens.css'));
+        self::assertDoesNotMatchRegularExpression('/font(-size)?:[^;]*\b1[0-4]px/', $this->wizardRules());
+    }
+
+    public function testOnAPhoneEveryButtonIsAtLeastTheTouchFloorHigh(): void
+    {
+        self::assertMatchesRegularExpression('/min-height:\s*44px;/', $this->rule('.btn, .btn.sm, .linkbtn, .toast button', $this->phoneBlock()));
+    }
+
     public function testOnAPhoneTheStepButtonRowSticksAboveTheTabBar(): void
     {
         $row = $this->rule('.step-nav', $this->phoneBlock());
@@ -156,9 +190,16 @@ final class FirstRunStylesTest extends TestCase
 
     private function pageLiftsTheContentCap(): bool
     {
-        $wide = str_contains($this->file('templates/dashboard/first_run.html.twig'), '{% block content_width %} wide{% endblock %}');
+        $wide = str_contains($this->file('templates/dashboard/setup.html.twig'), '{% block content_width %} wide{% endblock %}');
 
         return $wide && 1 === preg_match('/max-width:\s*none;/', $this->rule('.content.wide', $this->desktopRules()));
+    }
+
+    private function wizardRules(): string
+    {
+        preg_match_all('/[^{}]*\.(?:wizard|checks)[^{}]*\{[^{}]*\}/', $this->sheet().$this->demoSheet(), $rules);
+
+        return implode("\n", $rules[0]);
     }
 
     private function sheet(): string
