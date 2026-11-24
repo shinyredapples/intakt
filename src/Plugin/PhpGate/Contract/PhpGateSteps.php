@@ -162,7 +162,7 @@ final readonly class PhpGateSteps
     // Outside the clone, so the report never shows up in the tree under test.
     private const string REGRESSION_REPORT = '"${TMPDIR:-/work}/intakt-regression-junit.xml"';
 
-    // The outermost testsuite element holds the run's totals.
+    // The first testsuite element only, because the outermost one holds the totals of the whole run and a nested one only its own class.
     private const string REGRESSION_VERDICT = <<<'SH'
         '$report = new DOMDocument();
         $suite = is_file($argv[1]) && @$report->load($argv[1], LIBXML_NONET) ? $report->getElementsByTagName("testsuite")->item(0) : null;
