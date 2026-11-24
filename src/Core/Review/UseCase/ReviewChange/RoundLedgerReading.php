@@ -281,6 +281,20 @@ final readonly class RoundLedgerReading implements RoundCosts
         return new ModelNames(...array_values(array_unique($models)));
     }
 
+    // Tried as settled first, because an unsettled row also reads into UsageSettled and only its phase tells the two apart.
+    private function endingOf(RecordedEvent $row): UsageSettled|UsageUnsettled|null
+    {
+        $settled = $this->payloads->of($row, UsageSettled::class);
+
+        if ('settled' === $settled?->phase) {
+            return $settled;
+        }
+
+        $unsettled = $this->payloads->of($row, UsageUnsettled::class);
+
+        return 'unsettled' === $unsettled?->phase ? $unsettled : null;
+    }
+
     /**
      * @param array<string, string|null> $models
      */
@@ -306,19 +320,5 @@ final readonly class RoundLedgerReading implements RoundCosts
     private function figuresOf(array $usages): TokenFigures
     {
         return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
-    }
-
-    // Tried as settled first, because an unsettled row also reads into UsageSettled and only its phase tells the two apart.
-    private function endingOf(RecordedEvent $row): UsageSettled|UsageUnsettled|null
-    {
-        $settled = $this->payloads->of($row, UsageSettled::class);
-
-        if ('settled' === $settled?->phase) {
-            return $settled;
-        }
-
-        $unsettled = $this->payloads->of($row, UsageUnsettled::class);
-
-        return 'unsettled' === $unsettled?->phase ? $unsettled : null;
     }
 }
