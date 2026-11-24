@@ -24,7 +24,8 @@ final readonly class BugReport
 
     private const string EXTERNAL_CLOSES = '/^[ \t]*<!-- \/external -->[ \t]*$/';
 
-    private const string COMMENT = '/<!--.*?-->/';
+    // Inline code spans are matched too and kept, because a `<!--` between backticks is shown as written and opens no comment.
+    private const string COMMENT_OR_CODE = '/(?<code>(?<!`)(?<ticks>`+)(?!`).*?(?<!`)\k<ticks>(?!`))|<!--(?:.*?-->|(?<open>.*))/';
 
     // The text after the closing marker stays, because GitHub shows it.
     private const string COMMENT_CLOSES = '/-->(?<rest>.*)$/';
@@ -93,9 +94,9 @@ final readonly class BugReport
     }
 
     /**
-     * @param ?array{string, int} $block
+     * @param ?array{string, int, int} $block
      *
-     * @return ?array{string, int}
+     * @return ?array{string, int, int}
      */
     private static function stillOpen(string $line, ?array $block): ?array
     {
@@ -104,13 +105,13 @@ final readonly class BugReport
     }
 
     /**
-     * @param array{string, int} $block
+     * @param array{string, int, int} $block
      *
-     * @return array{string, ?array{string, int}}
+     * @return array{string, ?array{string, int, int}}
      */
     private static function closedIn(string $line, array $block): array
     {
-        if (1 !== preg_match($block[0], $line, $found)) {
+        if (1 !== preg_match($block[0], $line, $found) || self::indentOf($line) - $block[1] > $block[2]) {
             return ['', $block];
         }
 
@@ -118,14 +119,18 @@ final readonly class BugReport
     }
 
     /**
-     * @return array{string, ?array{string, int}}
+     * @return array{string, ?array{string, int, int}}
      */
     private static function withoutComments(string $line): array
     {
-        $line = (string) preg_replace(self::COMMENT, '', $line);
-        $opens = strpos($line, '<!--');
+        $opens = false;
+        $line = (string) preg_replace_callback(self::COMMENT_OR_CODE, static function (array $found) use (&$opens): string {
+            $opens = $opens || isset($found['open']);
 
-        return false === $opens ? [$line, null] : [substr($line, 0, $opens), [self::COMMENT_CLOSES, 0]];
+            return $found['code'] ?? '';
+        }, $line, flags: PREG_UNMATCHED_AS_NULL);
+
+        return [$line, $opens ? [self::COMMENT_CLOSES, 0, PHP_INT_MAX] : null];
     }
 
     /**
@@ -150,7 +155,7 @@ final readonly class BugReport
     }
 
     /**
-     * @return array{string, ?array{string, int}}
+     * @return array{string, ?array{string, int, int}}
      */
     private static function openedIn(string $line, int $container): array
     {
@@ -160,12 +165,12 @@ final readonly class BugReport
     }
 
     /**
-     * @return ?array{string, int}
+     * @return ?array{string, int, int}
      */
     private static function blockOpenedBy(string $line, int $container): ?array
     {
         if (1 === preg_match(self::EXTERNAL_OPENS, $line)) {
-            return [self::EXTERNAL_CLOSES, 0];
+            return [self::EXTERNAL_CLOSES, 0, PHP_INT_MAX];
         }
 
         if (1 !== preg_match(self::FENCE_OPENS, $line, $found)) {
@@ -180,8 +185,8 @@ final readonly class BugReport
             return null;
         }
 
-        // A fence closes only with the same character at least as often, because CommonMark lets a longer fence hold a shorter one.
-        return [sprintf('/^[ \t]*%s{%d,}[ \t]*$/', preg_quote($found['fence'][0], '/'), strlen($found['fence'])), $container];
+        // A fence closes only with the same character at least as often, because CommonMark lets a longer fence hold a shorter one, and at most three columns into its container, because a deeper closer is the code's own text.
+        return [sprintf('/^[ \t]*%s{%d,}[ \t]*$/', preg_quote($found['fence'][0], '/'), strlen($found['fence'])), $container, 3];
     }
 
     private static function indentOf(string $line): int

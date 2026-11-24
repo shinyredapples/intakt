@@ -53,7 +53,7 @@ Give a bug the `bug` label and describe it in four parts, each under its own hea
 - **Expected:** what should happen.
 - **Must keep working:** what the fix must not change.
 
-Start each part with a heading that is just its name (`## Today`) or with its name in bold (`**Today:** the page stays blank`). Parts written inside a code block or a comment do not count.
+Start each part with a heading that is just its name (`## Today`) or with its name in bold (`**Today:** the page stays blank`). Parts written inside a fenced code block (```` ``` ```` or `~~~`) or a comment do not count.
 
 If a part is missing or empty, Intakt builds nothing. It parks the task with a question that names the missing part; add it, or remove the `bug` label. For now the question is only stored: Intakt does not post it on the issue yet. A complete bug task goes on to the build. A bug no test can show (a vendor outage, a device only you have) keeps the usual evidence rules.
 

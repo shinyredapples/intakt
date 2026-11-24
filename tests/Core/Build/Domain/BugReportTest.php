@@ -104,6 +104,84 @@ final class BugReportTest extends TestCase
         self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function deepFenceClosers(): iterable
+    {
+        yield 'four spaces' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n```\nexample\n    ```\n**Must keep working:** the list"];
+        yield 'one tab' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n```\nexample\n\t```\n**Must keep working:** the list"];
+        yield 'four columns past a list item' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n- an example:\n\n  ```\n  example\n      ```\n  **Must keep working:** the list"];
+    }
+
+    #[DataProvider('deepFenceClosers')]
+    public function testAFenceCloserFourColumnsIntoItsContainerIsContentSoTheFenceStaysOpen(string $body): void
+    {
+        self::assertSame([BugPart::MustKeepWorking], BugReport::fromBody($body)->missingParts());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function shallowFenceClosers(): iterable
+    {
+        foreach ([0, 1, 2, 3] as $columns) {
+            $indent = str_repeat(' ', $columns);
+
+            yield $columns.' columns outside a list' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n```\nexample\n{$indent}```\n**Must keep working:** the list"];
+            yield $columns.' columns past a list item' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n- an example:\n\n  ```\n  example\n  {$indent}```\n  **Must keep working:** the list"];
+        }
+    }
+
+    #[DataProvider('shallowFenceClosers')]
+    public function testAFenceCloserAtMostThreeColumnsIntoItsContainerClosesTheFence(string $body): void
+    {
+        self::assertSame([], BugReport::fromBody($body)->missingParts());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function deepCommentClosers(): iterable
+    {
+        yield 'an external block' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n<!-- external -->\n**Must keep working:** a quote\n        <!-- /external -->\n**Must keep working:** the list"];
+        yield 'an HTML comment' => ["**When:** open\n**Today:** fails\n**Expected:** loads\n<!--\n**Must keep working:** a template\n        -->\n**Must keep working:** the list"];
+    }
+
+    #[DataProvider('deepCommentClosers')]
+    public function testAnExternalBlockOrACommentClosesAtAnyIndentation(string $body): void
+    {
+        self::assertSame([], BugReport::fromBody($body)->missingParts());
+    }
+
+    public function testACommentOpenerInsideInlineCodeOpensNoComment(): void
+    {
+        $report = BugReport::fromBody("**When:** enter `<!--`\n**Today:** fails\n**Expected:** loads\n**Must keep working:** the list");
+
+        self::assertSame([], $report->missingParts());
+    }
+
+    public function testACommentAfterInlineCodeIsStillRemoved(): void
+    {
+        $report = BugReport::fromBody("**When:** enter `x`\n**Today:** fails\n**Expected:** loads\n**Must keep working:** <!-- the list -->");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testAnUnderlinedHeadingInAListItemIsNotReadAsAPart(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n- Must keep working\n  =================\n  the list");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testAnIndentedCodeBlockIsReadLikeOtherText(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n\n    **Must keep working:** the list");
+
+        self::assertSame([], $report->missingParts());
+    }
+
     public function testALongParagraphIsReadWithoutRescanningItForEveryLine(): void
     {
         $body = "**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:**\n".str_repeat("x\n", 16000);
