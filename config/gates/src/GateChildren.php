@@ -16,7 +16,7 @@ final readonly class GateChildren
 
     private const int POLL_MICROSECONDS = 10000;
 
-    // Because no outside timing can put a stop between two starts of one launch round, a test needs to act right after each start.
+    // Because no outside timing can put a stop between two starts of one launch round, a test needs to act right after each start; `afterEachStart` is that test seam only, not an extension point, and bin/check never passes it.
     /**
      * @param list<string>                              $runningTheChangesCode
      * @param Closure(RunningChild|ProcessResult): void $afterEachStart
@@ -106,7 +106,7 @@ final readonly class GateChildren
         });
 
         while ([] !== $waiting || [] !== $running) {
-            $waiting = $this->launched($waiting, $running, $children);
+            $waiting = $this->launched($waiting, $running, $children, $forwarding);
             $ended = $this->ended($running);
             $running = array_diff_key($running, $ended);
             $results += $ended;
@@ -149,7 +149,7 @@ final readonly class GateChildren
         }
     }
 
-    // Because the stop handler reads the same set, each child joins it the moment it starts, not once the whole round has started.
+    // Because the stop handler reads the same set, each child joins it the moment it starts, not once the whole round has started, and a stop waits until it has joined.
     /**
      * @param list<string>                              $waiting
      * @param array<string, RunningChild|ProcessResult> $running
@@ -157,11 +157,13 @@ final readonly class GateChildren
      *
      * @return list<string>
      */
-    private function launched(array $waiting, array &$running, array $children): array
+    private function launched(array $waiting, array &$running, array $children, StopSignalForwarding $forwarding): array
     {
         while ([] !== $waiting && $this->mayStart($waiting, array_keys($running))) {
             $gate = array_shift($waiting);
-            $running[$gate] = $this->started($children[$gate]);
+            $forwarding->deferredAcross(function () use (&$running, $gate, $children): void {
+                $running[$gate] = $this->started($children[$gate]);
+            });
             ($this->afterEachStart)($running[$gate]);
         }
 

@@ -184,6 +184,29 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertFalse($this->runsOnAfterAWhile($pid));
     }
 
+    // Because only a stop raised inside the start itself lands after the child's session exists and before the child is registered, the launcher raises it there, once the child's launcher has written its pid.
+    public function testAStopThatArrivesWhileAChildIsStillBeingStartedAlsoStopsThatChild(): void
+    {
+        $home = $this->fakeGatesHome();
+        $home->write('stop-during-start.php', self::launchRoundStoppedDuringItsSecondStart());
+        $home->write('tools/setsid', self::setsidThatLingersForTheGate('dashes', (string) shell_exec('command -v setsid')));
+        chmod($home->root.'/tools/setsid', 0o700);
+        $marker = $home->root.'/dashes-launcher.pid';
+
+        new ProcessRunner()->run([PHP_BINARY, $home->root.'/stop-during-start.php', dirname(__DIR__, 2).'/vendor/autoload.php', $home->root.'/tools', $marker, $this->emptySandbox()->root], $home->root, ['PATH' => $home->root.'/tools:'.getenv('PATH'), 'GATE_LAUNCHER_PID' => $marker]);
+
+        $pid = (int) @file_get_contents($marker);
+
+        try {
+            self::assertNotSame(0, $pid, 'the second child wrote its process id');
+            self::assertFalse($this->runsOnAfterAWhile($pid));
+        } finally {
+            if (0 !== $pid && $this->runs($pid)) {
+                posix_kill(-$pid, 9);
+            }
+        }
+    }
+
     public function testAGateWhoseChildCrashesFailsWithTheChildsOutput(): void
     {
         $run = $this->checkWithFakeGates('--only=rector');
@@ -298,6 +321,48 @@ final class GateChildrenTest extends SandboxTestCase
             \$children = new GateChildren(__DIR__, \$root, GateSlots::chosen('2', 2, 1), [], new ProcessRunner(), \$stopOnceItRuns);
             \$children->reportsOf(['commits', 'dashes'], ['--root='.\$root], null);
             PHP;
+    }
+
+    // Because Symfony Process calls proc_open() unqualified, a function of its namespace sends the stop right after the second child's session exists; the limit only ends a hang.
+    private static function launchRoundStoppedDuringItsSecondStart(): string
+    {
+        return <<<'PHP'
+            <?php
+            namespace Symfony\Component\Process {
+                function proc_open($command, $descriptors, &$pipes, ...$arguments)
+                {
+                    $process = \proc_open($command, $descriptors, $pipes, ...$arguments);
+                    if (!in_array('dashes', (array) $command, true)) {
+                        return $process;
+                    }
+                    $until = hrtime(true) + 90_000_000_000;
+                    while ('' === (string) @file_get_contents($GLOBALS['argv'][3]) && hrtime(true) < $until) {
+                        usleep(10000);
+                    }
+                    posix_kill(posix_getpid(), SIGTERM);
+                    return $process;
+                }
+            }
+            namespace {
+                require $argv[1];
+                $children = new Intakt\Gates\GateChildren(dirname(__FILE__), $argv[2], Intakt\Gates\GateSlots::chosen('2', 2, 1), []);
+                $children->reportsOf(['commits', 'dashes'], ['--root='.$argv[4]], null);
+            }
+            PHP;
+    }
+
+    // Because the child's own launcher sits in the session it creates, it writes its pid there and lingers past the test's limit before it goes on, so only a stop that reaches it ends it in time.
+    private static function setsidThatLingersForTheGate(string $gate, string $setsid): string
+    {
+        $real = escapeshellarg(trim($setsid));
+
+        return "#!/bin/sh\n"
+            ."for argument; do\n"
+            ."    if [ \"\$argument\" = {$gate} ]; then\n"
+            ."        exec {$real} sh -c 'echo \$\$ > \"\$GATE_LAUNCHER_PID\"; sleep 120; exec \"\$@\"' sh \"\$@\"\n"
+            ."    fi\n"
+            ."done\n"
+            ."exec {$real} \"\$@\"\n";
     }
 
     /**
