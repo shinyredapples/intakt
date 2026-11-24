@@ -6,28 +6,14 @@
 <div class="page-head">
     <div>
         <h1>Projects</h1>
-        <p class="lead">Every project that has started a review. Open one to see its reviews.</p>
+        <p class="lead">Every project at a glance: what it works on now, what it has used, and what waits on you.</p>
     </div>
-    {# The board links the first-run page until a review has run, and a project is listed only once one has, so the link moves here then (#2067, D3). #}
+    {# The board links the first-run page until a review has run, and the link moves here once a project has a card (#2067, D3). #}
     {% if projects is not empty %}
     <div class="actions">
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Set up Intakt</a>
     </div>
     {% endif %}
 </div>
-{% if projects is empty %}
-{{ include('dashboard/components/empty.html.twig', {title: 'No projects yet', text: 'No project has started a review yet.', action: {href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')), label: 'Set up Intakt'}}, with_context = false) }}
-{% else %}
-<div class="list">
-    {% for project in projects %}
-    <div data-project="{{ project.name }}">
-        {{ include('dashboard/components/list_row.html.twig', {
-            title: project.name,
-            href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: project.name}),
-            explanation: project.rounds ~ (project.rounds == 1 ? ' review round, ' : ' review rounds, ') ~ project.judgedRounds ~ ' judged.',
-        }, with_context = false) }}
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
+{{ include('dashboard/_project_cards.html.twig', {projects: projects}, with_context = false) }}
 {% endblock %}
