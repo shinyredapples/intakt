@@ -312,6 +312,10 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .input, .select { height: 48px; }
   .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .filters .input { flex: none; min-width: 200px; height: 44px; }
+  /* The mock stacks a History row's cells on a phone. A row the project filter or a chip hides keeps display: none, which this rule would otherwise beat. */
+  .ledger.history thead { display: none; }
+  .ledger.history tr:not([hidden], [data-filtered-out]) { display: grid; grid-template-columns: minmax(0, 1fr); padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
+  .ledger.history td { padding: 2px 0; border: 0; }
   .stepper button { width: 48px; height: 46px; }
   .copy { flex-wrap: wrap; padding: calc(var(--s8) + 2px); }
   .copy code { flex: 1 1 100%; padding: var(--s4); white-space: normal; overflow-wrap: anywhere; }
