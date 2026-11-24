@@ -474,7 +474,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
     private function lastShellUpdate(): string
     {
-        $shell = array_filter($this->published, static fn (Update $update): bool => [DashboardTopics::SHELL] === $update->getTopics());
+        $shell = array_filter($this->published, static fn (Update $update): bool => [DashboardTopics::SHELL] === $update->getTopics() && !str_contains($update->getData(), 'target="project-cards"'));
         $last = array_last($shell);
         self::assertNotNull($last, 'Nothing was published on the shell topic.');
 
