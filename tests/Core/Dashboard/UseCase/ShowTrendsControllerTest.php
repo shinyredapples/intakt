@@ -61,6 +61,14 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
 
+    public function testTheTrendsPageLinksToHistoryAsASubTabAndMarksTrendsAsCurrent(): void
+    {
+        $crawler = $this->browser->request('GET', '/trends');
+
+        self::assertSame('Trends', $crawler->filter('.subtabs a[aria-current="page"]')->text());
+        self::assertSame('/history', $crawler->filter('.subtabs a:not([aria-current])')->attr('href'));
+    }
+
     public function testAFreshInstallShowsTheWaitingOctopusAndNoTiles(): void
     {
         $page = $this->browser->request('GET', '/trends');

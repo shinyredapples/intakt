@@ -28,9 +28,28 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/history');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(['maintainer', 'owner'], $crawler->filter('.review-row .who')->each(static fn ($who): string => $who->text()));
-        self::assertStringContainsString('Expires 2026-12-01 10:00:00 UTC', $crawler->filter('.review-row')->first()->text());
-        self::assertSame('low → high', $crawler->filter('.review-row')->last()->filter('.change')->text());
+        self::assertSame(['maintainer', 'owner'], $crawler->filter('.ledger .who')->each(static fn ($who): string => $who->text()));
+        self::assertSame('2026-12-01 10:00:00 UTC', $crawler->filter('.ledger tbody tr')->first()->filter('td')->last()->text());
+        self::assertSame('low → high', $crawler->filter('.ledger tbody tr')->last()->filter('.change')->text());
+    }
+
+    public function testTheHistoryPageLinksToTrendsAsASubTabAndMarksLedgerAsCurrent(): void
+    {
+        $this->record(['actor' => 'owner']);
+
+        $crawler = $this->browser->request('GET', '/history');
+
+        self::assertSame('Ledger', $crawler->filter('.subtabs a[aria-current="page"]')->text());
+        self::assertSame('/trends', $crawler->filter('.subtabs a:not([aria-current])')->attr('href'));
+    }
+
+    public function testAHistoryRowWithoutAChangeShowsNoArrow(): void
+    {
+        $this->record(['actor' => 'owner', 'before' => 'same', 'after' => 'same']);
+
+        $crawler = $this->browser->request('GET', '/history');
+
+        self::assertStringNotContainsString('→', $crawler->filter('.ledger tbody tr')->text());
     }
 
     public function testAProjectLinkKeepsEveryProjectsRowsSoTheFilterCanShowThemAgain(): void
@@ -40,7 +59,7 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/history?project=beta');
 
-        self::assertSame(['beta', 'alpha'], $crawler->filter('.review-row')->each(static fn ($row): string => (string) $row->attr('data-project')));
+        self::assertSame(['beta', 'alpha'], $crawler->filter('.ledger tbody tr')->each(static fn ($row): string => (string) $row->attr('data-project')));
     }
 
     public function testAProjectWithOnlyWatcherEventsCanBeChosenInTheHistoryFilter(): void
@@ -52,7 +71,7 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/history?project=beta');
 
         self::assertResponseIsSuccessful();
-        self::assertCount(1, $crawler->filter('li.review-row[data-project="beta"]'));
+        self::assertCount(1, $crawler->filter('.ledger tr[data-project="beta"]'));
         self::assertCount(1, $crawler->filter('#projfilter option[value="beta"][selected]'));
     }
 
@@ -97,7 +116,7 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/history');
 
         self::assertResponseIsSuccessful();
-        self::assertCount(0, $crawler->filter('.review-row'));
+        self::assertCount(0, $crawler->filter('.ledger tbody tr'));
         self::assertStringContainsString('No history yet', $crawler->text());
     }
 

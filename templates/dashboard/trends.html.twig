@@ -57,6 +57,7 @@
     </form>
     {% endif %}
 </div>
+{{ include('dashboard/_history_subtabs.html.twig', {current: 'trends'}, with_context = false) }}
 {% set cost = trends.costPerRound %}
 {% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
 {% set reviewer = enum('Intakt\\Core\\Dashboard\\Domain\\Character').CodeReviewer %}

@@ -23,6 +23,7 @@ const FAILING_IMPACTS = ['critical', 'serious'];
 const PAGES = [
   { name: 'board', path: '/' },
   { name: 'components', path: '/components' },
+  { name: 'history', path: '/history' },
   { name: 'projects', path: '/projects' },
   { name: 'reviews', path: '/reviews' },
   { name: 'search', path: '/reviews', search: true },
