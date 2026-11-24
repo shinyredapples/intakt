@@ -38,7 +38,7 @@ final class HotReloadClientTest extends DashboardPageTestCase
         $base = (string) file_get_contents(__DIR__.'/../../../../templates/dashboard/base.html.twig');
         self::assertSame(1, preg_match("~\\{% include 'dashboard/dev/hot_reload\\.html\\.twig'[^%]*%\\}~", $base, $include));
 
-        $rendered = new Environment(new ArrayLoader(['base' => $include[0]]))->render('base');
+        $rendered = new Environment(new ArrayLoader(['base' => $include[0] ?? '']))->render('base');
 
         self::assertSame('', $rendered);
     }
