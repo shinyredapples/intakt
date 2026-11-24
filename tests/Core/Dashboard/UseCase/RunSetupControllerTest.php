@@ -17,6 +17,8 @@ use Intakt\Core\Dashboard\Domain\FirstRun;
 use Intakt\Core\Dashboard\Domain\PanelOfProject;
 use Intakt\Core\Dashboard\Domain\ProjectStep;
 use Intakt\Core\Dashboard\Domain\ProviderStep;
+use Intakt\Core\Dashboard\Domain\RepositoryField;
+use Intakt\Core\Dashboard\Domain\SetupStep;
 use Intakt\Core\Dashboard\Domain\StepState;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
@@ -24,19 +26,23 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
-use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunController;
-use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunSteps;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
+use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
+use Intakt\Core\Dashboard\UseCase\RunSetup\SetupSteps;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartAnswer;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartFirstReviewController;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
@@ -45,6 +51,7 @@ use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LogLevel;
@@ -58,8 +65,10 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
-#[CoversClass(FirstRunController::class)]
-#[CoversClass(FirstRunSteps::class)]
+#[CoversClass(RunSetupController::class)]
+#[CoversClass(SetupSteps::class)]
+#[CoversClass(SetupStep::class)]
+#[CoversClass(RepositoryField::class)]
 #[CoversClass(FirstRun::class)]
 #[CoversClass(ProviderStep::class)]
 #[CoversClass(ProjectStep::class)]
@@ -88,7 +97,10 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(HuggingFaceDescriptor::class)]
 #[UsesClass(KeptProviderKeyUnreadable::class)]
 #[UsesClass(DashboardLedger::class)]
-final class FirstRunControllerTest extends WebTestCase
+#[UsesClass(FailingMains::class)]
+#[UsesClass(FailingMain::class)]
+#[UsesClass(HeldCredentialRedactor::class)]
+final class RunSetupControllerTest extends WebTestCase
 {
     // The container is built from these, so each one a test changes is cleared first and restored after.
     private const array VARIABLES = [
@@ -119,11 +131,13 @@ final class FirstRunControllerTest extends WebTestCase
     // Built from parts at run time by the test, so no key-shaped literal sits in the repository.
     private const string KEPT_BODY = 'qrstuvwx12345678';
 
-    private const string OWNER_TOKEN = 'owner-token-for-the-first-run-test';
+    private const string OWNER_TOKEN = 'owner-token-for-the-setup-test';
 
     private string $file = '';
 
     private string $keptDirectory = '';
+
+    private string $path = '/setup';
 
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
@@ -142,9 +156,179 @@ final class FirstRunControllerTest extends WebTestCase
         parent::tearDownAfterClass();
     }
 
+    public function testWithoutAStepTheWizardOpensOnStepOneOfFive(): void
+    {
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Step 1 of 5: Repository', $page->filter('.wizard .step-count')->text());
+        self::assertSame(['Connect your repository'], $page->filter('main h1')->each(static fn (Crawler $title): string => $title->text()));
+    }
+
+    public function testOnStepThreeTheEarlierStepsAreDoneAndTheCountNamesTheStep(): void
+    {
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Step 3 of 5: AI account', $page->filter('.wizard .step-count')->text());
+        self::assertSame(['done', 'done', 'current', 'upcoming', 'upcoming'], $page->filter('.wizard .steps li')->each(static fn (Crawler $marker): string => (string) $marker->attr('class')));
+        self::assertSame(['3'], $page->filter('.wizard .steps li[aria-current="step"]')->each(static fn (Crawler $marker): string => (string) $marker->attr('data-s')));
+    }
+
+    public function testEachProgressMarkerLinksItsStepWithItsNumberAndLabel(): void
+    {
+        $markers = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('.wizard .steps li a');
+
+        self::assertSame(['/setup?step=1', '/setup?step=2', '/setup?step=3', '/setup?step=4', '/setup?step=5'], $markers->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame(['1 Repository', '2 GitHub App', '3 AI account', '4 Check', '5 Done'], $markers->each(static fn (Crawler $link): string => $link->text()));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function stepsOutsideTheWizard(): iterable
+    {
+        yield 'zero' => ['0'];
+        yield 'one past the last' => ['6'];
+        yield 'negative' => ['-1'];
+        yield 'a word' => ['abc'];
+        yield 'a fraction' => ['2.5'];
+        yield 'empty' => [''];
+    }
+
+    #[DataProvider('stepsOutsideTheWizard')]
+    public function testAStepOutsideTheWizardOpensTheFirstStep(string $step): void
+    {
+        $page = $this->onStep($step)->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Step 1 of 5: Repository', $page->filter('.wizard .step-count')->text());
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function stepTitles(): iterable
+    {
+        yield 'repository' => ['1', 'Connect your repository'];
+        yield 'GitHub App' => ['2', "Create Intakt's GitHub App"];
+        yield 'AI account' => ['3', 'Add an AI account'];
+        yield 'check' => ['4', 'Check the project'];
+        yield 'ready' => ['5', 'Ready to start'];
+    }
+
+    #[DataProvider('stepTitles')]
+    public function testEachStepHasTheMocksTitleAsItsOneHeading(string $step, string $title): void
+    {
+        $page = $this->onStep($step)->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame([$title], $page->filter('main h1')->each(static fn (Crawler $heading): string => $heading->text()));
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function stepsAfterTheFirst(): iterable
+    {
+        yield 'GitHub App' => ['2', '/setup?step=1'];
+        yield 'AI account' => ['3', '/setup?step=2'];
+        yield 'check' => ['4', '/setup?step=3'];
+        yield 'ready' => ['5', '/setup?step=4'];
+    }
+
+    #[DataProvider('stepsAfterTheFirst')]
+    public function testEachStepButTheFirstHasABackLinkToTheStepBefore(string $step, string $before): void
+    {
+        $page = $this->onStep($step)->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame([$before], $page->filter('.step-nav a.btn.quiet')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+    }
+
+    public function testTheFirstStepHasNoBackLink(): void
+    {
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('.step-nav a.btn.quiet'));
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function stepsBeforeTheLast(): iterable
+    {
+        yield 'repository' => ['1', '/setup?step=2'];
+        yield 'GitHub App' => ['2', '/setup?step=3'];
+        yield 'check' => ['4', '/setup?step=5'];
+    }
+
+    #[DataProvider('stepsBeforeTheLast')]
+    public function testAStepWithoutAFormContinuesToTheStepAfterWithItsOnePrimaryButton(string $step, string $after): void
+    {
+        $page = $this->onStep($step)->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame([$after], $page->filter('main .btn.primary')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame(['Continue'], $page->filter('.step-nav .btn.primary')->each(static fn (Crawler $link): string => $link->text()));
+    }
+
+    public function testTheRepositoryStepOffersTheFieldWithItsHintAndNoErrorBeforeItIsChecked(): void
+    {
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        $form = $page->filter('#step-repository form.check-repository');
+        self::assertSame('get', $form->attr('method'));
+        self::assertSame('/setup', $form->attr('action'));
+        self::assertSame('1', $form->filter('input[type=hidden][name=step]')->attr('value'));
+        self::assertSame('Repository address', $form->filter('label[for=repo]')->text());
+        self::assertCount(1, $form->filter('input#repo.input[name=repository]'));
+        self::assertCount(0, $page->filter('.field-error, [aria-invalid], .detected'));
+    }
+
+    public function testAnEmptyRepositoryAddressShowsTheErrorAndStaysOnStepOne(): void
+    {
+        $page = $this->onStep('1&repository=')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Step 1 of 5: Repository', $page->filter('.wizard .step-count')->text());
+        self::assertSame(RepositoryField::EMPTY, $page->filter('#step-repository .field-error')->text());
+        self::assertSame('true', $page->filter('input#repo')->attr('aria-invalid'));
+        self::assertSame('repo-hint repo-error', $page->filter('input#repo')->attr('aria-describedby'));
+        self::assertCount(0, $page->filter('.detected'));
+    }
+
+    public function testARepositoryOnAnotherHostIsRefusedAndKeptInTheField(): void
+    {
+        $page = $this->onStep('1&repository=https%3A%2F%2Fgitlab.com%2Facme%2Ffield-notes')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame(RepositoryField::NOT_GITHUB, $page->filter('#step-repository .field-error')->text());
+        self::assertSame('https://gitlab.com/acme/field-notes', $page->filter('input#repo')->attr('value'));
+    }
+
+    public function testAGitHubAddressIsShownAsTheDetectedRepository(): void
+    {
+        $page = $this->onStep('1&repository=https%3A%2F%2Fgithub.com%2Facme%2Ffield-notes')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('GitHub, repository acme/field-notes', $page->filter('#step-repository .detected p')->text());
+        self::assertCount(0, $page->filter('.field-error, [aria-invalid]'));
+    }
+
+    public function testTheRepositoryStepSaysThatNothingKeepsTheAddressYet(): void
+    {
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertStringStartsWith('This step checks the address only; Intakt does not keep it yet.', $page->filter('#step-repository .not-wired')->text());
+    }
+
+    public function testATypedAddressWithMarkupIsEscaped(): void
+    {
+        $page = $this->onStep('1&repository=%3Cb%3Ebold%3C%2Fb%3E')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('main b'));
+        self::assertSame('<b>bold</b>', $page->filter('input#repo')->attr('value'));
+    }
+
+    public function testTheGitHubAppStepOffersNoWorkingButtonAndSaysWhatIntaktReadsInstead(): void
+    {
+        $page = $this->onStep('2')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        $button = $page->filter('#step-github-app button');
+        self::assertSame('Create the app on GitHub', $button->text());
+        self::assertNotNull($button->attr('disabled'));
+        self::assertSame('app-not-wired', $button->attr('aria-describedby'));
+        self::assertStringContainsString('GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID and GITHUB_APP_PRIVATE_KEY', $page->filter('#app-not-wired')->text());
+        self::assertCount(0, $page->filter('#step-github-app form'));
+    }
+
     public function testWithOneKeyTheProviderStepIsDoneAndNamesTheProviderThatHasIt(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('done', $page->filter('#step-providers')->attr('data-state'));
         self::assertSame('anthropic has a key.', $page->filter('#step-providers .lead')->text());
@@ -152,7 +336,7 @@ final class FirstRunControllerTest extends WebTestCase
 
     public function testWithOneKeyEveryOtherProviderIsNamedWithTheVariableToSet(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame([
             'Provider "openai" is disabled: set OPENAI_API_KEY to enable it.',
@@ -163,7 +347,7 @@ final class FirstRunControllerTest extends WebTestCase
 
     public function testEachTierOfTheFirstProjectShowsItsModelOrWhyItHasNone(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('The tiers of the project sample:', $page->filter('#step-providers .tiers-of')->text());
         self::assertSame([
@@ -175,7 +359,7 @@ final class FirstRunControllerTest extends WebTestCase
 
     public function testWithNoKeyTheProviderStepIsMissingAndEveryProviderNamesItsVariable(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, []);
 
         self::assertSame('missing', $page->filter('#step-providers')->attr('data-state'));
         self::assertSame('No provider has a key yet: paste one below, or set the variable named below for a provider you use.', $page->filter('#step-providers .lead')->text());
@@ -185,7 +369,7 @@ final class FirstRunControllerTest extends WebTestCase
 
     public function testWithNoKeyTheProviderStepOffersOneKeyFieldWithTheFormToken(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, []);
 
         $form = $page->filter('#step-providers form.keep-provider-key');
         self::assertSame('/setup/provider-key', $form->attr('action'));
@@ -196,33 +380,45 @@ final class FirstRunControllerTest extends WebTestCase
 
     public function testWithNoKeyTheKeyFieldIsDrawnAsADashboardInput(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, []);
 
         self::assertCount(1, $page->filter('#step-providers form.keep-provider-key input#provider-key.input'));
     }
 
+    public function testWithNoKeyTheStepsPrimaryButtonSubmitsTheKeyFormAndSkipLeadsOn(): void
+    {
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, []);
+
+        $button = $page->filter('.step-nav .btn.primary');
+        self::assertSame(['Keep the key'], $button->each(static fn (Crawler $primary): string => $primary->text()));
+        self::assertSame('submit', $button->attr('type'));
+        self::assertSame('keep-provider-key', $button->attr('form'));
+        self::assertSame('/setup?step=4', $page->filter('.step-nav a.btn.secondary')->attr('href'));
+    }
+
     public function testTheKeyFieldIsLabelledWithTheCatalogsProviders(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, []);
 
         self::assertSame('A key or token for Anthropic, OpenAI or Hugging Face', $page->filter('#step-providers label[for=provider-key]')->text());
     }
 
     public function testWithAKeyedProviderTheProviderStepOffersNoKeyField(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertCount(0, $page->filter('#step-providers form'));
+        self::assertSame('/setup?step=4', $page->filter('.step-nav a.btn.primary')->attr('href'));
     }
 
     public function testAKeptKeyShowsItsProviderAndAtMostItsLastFourCharactersAndNoField(): void
     {
         $directory = $this->keptKeyDirectory();
         // Kept after the container is built, as the page keeps it in a running install, because a container built with the kept key turns its provider on.
-        $this->firstRunPage(self::PROJECTS, [], $directory);
+        $this->onStep('3')->setupPage(self::PROJECTS, [], $directory);
         new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
 
-        $page = $this->browser()->request('GET', '/setup');
+        $page = $this->browser()->request('GET', '/setup?step=3');
 
         self::assertSame('done', $page->filter('#step-providers')->attr('data-state'));
         self::assertSame('The huggingface key ending in '.substr(self::KEPT_BODY, -4).' is kept. Restart Intakt to use it.', $page->filter('#step-providers .lead')->text());
@@ -235,56 +431,116 @@ final class FirstRunControllerTest extends WebTestCase
         $directory = $this->keptKeyDirectory();
         new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
 
-        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, [], $directory);
 
         self::assertSame('openai_compatible has a key.', $page->filter('#step-providers .lead')->text());
     }
 
-    public function testAnUnreadableKeptKeyIsNamedInsteadOfOfferingTheField(): void
+    public function testAnUnreadableKeptKeyIsShownAsTheStepsErrorInsteadOfOfferingTheField(): void
     {
         $directory = $this->keptKeyDirectory();
         new Filesystem()->dumpFile($directory.'/provider-key.json', 'not json');
 
-        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, [], $directory);
 
-        self::assertStringStartsWith('The key kept in the browser cannot be read', $page->filter('#step-providers .lead')->text());
+        $lead = $page->filter('#step-providers .lead.step-error[role=alert]');
+        self::assertStringStartsWith('The key kept in the browser cannot be read', $lead->text());
         self::assertCount(0, $page->filter('#step-providers form'));
+    }
+
+    public function testAReadableKeyIsNoError(): void
+    {
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('#step-providers .step-error, #step-providers [role=alert]'));
     }
 
     public function testWithNoKeyNoTierOfTheFirstProjectHasAModel(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, []);
 
         self::assertSame(['-', '-', '-'], $page->filter('#step-providers .tiers tbody td:nth-child(2)')->each(static fn (Crawler $cell): string => $cell->text()));
     }
 
-    public function testTheProjectStepListsEachProjectWithTheReviewersOfItsPanel(): void
+    public function testTheCheckStepListsEachProjectWithTheReviewersOfItsPanel(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('4')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('done', $page->filter('#step-project')->attr('data-state'));
-        self::assertSame('2 projects are configured.', $page->filter('#step-project .lead')->text());
-        self::assertSame(['sample', 'beta'], $page->filter('#step-project .list .t')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame('2 projects are configured.', $page->filter('#step-project .checked-count')->text());
+        self::assertSame(['sample: review panel', 'beta: review panel'], $page->filter('#step-project li[data-panel] strong')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame('ok', $page->filter('#step-project li[data-panel]')->first()->attr('data-panel'));
         self::assertSame(
             'Reviewers: correctness (strong tier on anthropic), security (standard tier on anthropic).',
-            $page->filter('#step-project .list .d')->first()->text(),
+            $page->filter('#step-project li[data-panel] p')->first()->text(),
         );
     }
 
-    public function testAProjectWithoutAPanelSaysSoInsteadOfItsReviewers(): void
+    public function testAProjectWithoutAPanelIsShownAsABrokenCheckWithTheReason(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('4')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
-        self::assertSame('Project "beta" has no review panel configured.', $page->filter('#step-project .list .d')->last()->text());
+        $beta = $page->filter('#step-project li[data-panel][data-project=beta]');
+        self::assertSame('broken', $beta->attr('data-panel'));
+        self::assertCount(1, $beta->filter('svg.broken-i'));
+        self::assertSame('Project "beta" has no review panel configured.', $beta->filter('p')->text());
     }
 
-    public function testWithNoProjectTheProjectStepIsMissingAndTheProviderStepListsNoTiers(): void
+    public function testAProjectWhoseMainFailedToBootShowsTheRedactedReason(): void
     {
-        $page = $this->firstRunPage("projects: {}\n", ['ANTHROPIC_API_KEY']);
+        // The page holds the key's value as test-value, so a reason that quotes it must lose it.
+        $this->ledger->failMainBoot('sample', 'The harness exited with 1: key test-value refused.');
+
+        $page = $this->onStep('4')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        $boot = $page->filter('#step-project li[data-boot][data-project=sample]');
+        self::assertSame('failed', $boot->attr('data-boot'));
+        self::assertSame('sample: main does not boot', $boot->filter('strong')->text());
+        self::assertSame('The harness exited with 1: key '.Redaction::MARKER.' refused.', $boot->filter('p')->text());
+        self::assertStringNotContainsString('test-value', $page->filter('#step-project')->html());
+    }
+
+    public function testAProjectWithoutAFailedBootOfMainSaysNoneIsRecorded(): void
+    {
+        $this->ledger->failMainBoot('sample', 'The harness exited with 1.');
+
+        $page = $this->onStep('4')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        $boot = $page->filter('#step-project li[data-boot][data-project=beta]');
+        self::assertSame('no-failure', $boot->attr('data-boot'));
+        self::assertSame('beta: no failed boot of main recorded', $boot->filter('strong')->text());
+    }
+
+    public function testAMainThatBootedAgainIsNoLongerShownAsFailing(): void
+    {
+        $this->ledger->failMainBoot('sample', 'The harness exited with 1.');
+        $this->ledger->bootMain('sample');
+
+        $page = $this->onStep('4')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame(['no-failure', 'no-failure'], $page->filter('#step-project li[data-boot]')->each(static fn (Crawler $line): string => (string) $line->attr('data-boot')));
+    }
+
+    public function testTheCheckStepReadsAgainFromItsOwnLink(): void
+    {
+        $page = $this->onStep('4')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('/setup?step=4', $page->filter('.step-nav a.btn.secondary')->attr('href'));
+    }
+
+    public function testWithNoProjectTheCheckStepShowsTheMissingProjectAsItsError(): void
+    {
+        $page = $this->onStep('4')->setupPage("projects: {}\n", ['ANTHROPIC_API_KEY']);
 
         self::assertSame('missing', $page->filter('#step-project')->attr('data-state'));
-        self::assertSame('No project is configured yet: add one to the project file that INTAKT_CONFIG names.', $page->filter('#step-project .lead')->text());
-        self::assertCount(0, $page->filter('#step-project .list'));
+        self::assertSame('No project is configured yet: add one to the project file that INTAKT_CONFIG names.', $page->filter('#step-project .step-error[role=alert]')->text());
+        self::assertCount(0, $page->filter('#step-project .checks'));
+    }
+
+    public function testWithNoProjectTheAiAccountStepListsNoTiers(): void
+    {
+        $page = $this->onStep('3')->setupPage("projects: {}\n", ['ANTHROPIC_API_KEY']);
+
         self::assertCount(0, $page->filter('#step-providers .tiers'));
     }
 
@@ -293,7 +549,7 @@ final class FirstRunControllerTest extends WebTestCase
         $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
         $html = (string) $this->browser()->getResponse()->getContent();
 
         self::assertCount(0, $page->filter('#step-agent, main pre, main code'));
@@ -302,120 +558,18 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertStringNotContainsString(self::OWNER_TOKEN, $html);
     }
 
-    public function testThePageShowsThreeStepCardsToAnOwnProject(): void
-    {
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
-
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertSame(['1. Add a key here Done', '2. Add a project Done', '3. First review Missing'], $page->filter('.own-steps > li h3')->each(static fn (Crawler $title): string => $title->text()));
-        self::assertSame(['done', 'done', 'missing'], $page->filter('.own-steps > li')->each(static fn (Crawler $card): string => (string) $card->attr('data-state')));
-    }
-
-    public function testTheFirstStepThatIsNotDoneIsTheCurrentStep(): void
-    {
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
-
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertSame(['step-first-review'], $page->filter('.own-steps > li[aria-current="step"]')->each(static fn (Crawler $card): string => (string) $card->attr('id')));
-        self::assertSame(['step-first-review'], $page->filter('.own-steps > li.current')->each(static fn (Crawler $card): string => (string) $card->attr('id')));
-    }
-
-    public function testWithNoKeyTheProviderStepIsTheCurrentStep(): void
-    {
-        $page = $this->firstRunPage(self::PROJECTS, []);
-
-        self::assertSame(['step-providers'], $page->filter('.own-steps > li[aria-current="step"]')->each(static fn (Crawler $card): string => (string) $card->attr('id')));
-    }
-
-    public function testTheCurrentCardAloneShowsTheCharacterOfItsRoleInBothThemes(): void
-    {
-        $page = $this->firstRunPage(self::PROJECTS, []);
-
-        self::assertCount(2, $page->filter('.own-steps .step-role img.character'));
-        self::assertCount(1, $page->filter('#step-providers .step-role img.character-light[src*="roles/maintainer-light-96"]'));
-        self::assertCount(1, $page->filter('#step-providers .step-role img.character-dark[src*="roles/maintainer-dark-96"]'));
-    }
-
-    public function testTheFirstReviewCardWhenCurrentShowsTheCodeReviewer(): void
-    {
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
-
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertSame(Character::CodeReviewer, self::getContainer()->get(FirstRunSteps::class)->firstRun()->currentCharacter());
-        self::assertCount(2, $page->filter('#step-first-review .step-role img.character'));
-        self::assertCount(2, $page->filter('.own-steps .step-role img.character'));
-    }
-
-    public function testWithNoCurrentCardNoRoleCharacterIsShown(): void
-    {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertNull(self::getContainer()->get(FirstRunSteps::class)->firstRun()->currentCharacter());
-        self::assertCount(0, $page->filter('.own-steps .step-role'));
-    }
-
-    public function testTheCurrentStepIsChosenFromTheThreeShownStepsAndSkipsOneThatIsNotNeeded(): void
-    {
-        $page = $this->firstRunPage(self::PROJECTS, []);
-        $firstRun = self::getContainer()->get(FirstRunSteps::class)->firstRun();
-
-        self::assertSame([StepState::Missing, StepState::Done, StepState::NotNeeded], $firstRun->states());
-        self::assertSame(0, $firstRun->current());
-        self::assertSame(['step-providers'], $page->filter('.own-steps > li.current')->each(static fn (Crawler $card): string => (string) $card->attr('id')));
-    }
-
-    public function testWhenTheShownStepsAreDoneOrNotNeededNoCardIsCurrentWithoutAnOwnerToken(): void
-    {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertSame(['done', 'done', 'not-needed'], $page->filter('.own-steps > li')->each(static fn (Crawler $card): string => (string) $card->attr('data-state')));
-        self::assertNull(self::getContainer()->get(FirstRunSteps::class)->firstRun()->current());
-        self::assertCount(0, $page->filter('.own-steps > li[aria-current]'));
-    }
-
-    public function testWhenEveryStepIsDoneNoCardIsCurrent(): void
-    {
-        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
-
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertCount(0, $page->filter('.own-steps > li[aria-current]'));
-        self::assertCount(0, $page->filter('.own-steps > li.current'));
-    }
-
-    public function testTheFirstReviewButtonSitsInTheStepButtonRow(): void
-    {
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
-
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertCount(1, $page->filter('#step-first-review .step-nav .btn.primary'));
-    }
-
-    public function testTheReviewLinkSitsInTheStepButtonRow(): void
-    {
-        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
-
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertCount(1, $page->filter('#step-first-review .step-nav a.btn.primary'));
-    }
-
     public function testTheColumnSitsInTheContentAreaWithoutItsWidthCap(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
-        self::assertCount(1, $page->filter('main.content.wide > .setup'));
+        self::assertCount(1, $page->filter('main.content.wide > .setup.wizard'));
     }
 
-    public function testWithTheSampleProjectAndNoReviewTheFirstReviewStepIsMissingAndOffersTheStart(): void
+    public function testWithTheSampleProjectAndNoReviewTheFirstReviewIsMissingAndOffersTheStart(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('missing', $page->filter('#step-first-review')->attr('data-state'));
         self::assertSame('No review has run yet: start the review of the change sample-change of the sample project.', $page->filter('#step-first-review .lead')->text());
@@ -427,18 +581,18 @@ final class FirstRunControllerTest extends WebTestCase
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame(['Start the first review'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
         self::assertSame('submit', $page->filter('form.start-first-review .btn.primary')->attr('type'));
     }
 
-    public function testAfterAReviewRanTheFirstReviewStepIsDoneAndLinksToItsReviewPage(): void
+    public function testAfterAReviewRanTheFirstReviewIsDoneAndLinksToItsReviewPage(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('done', $page->filter('#step-first-review')->attr('data-state'));
         self::assertSame('/reviews/round-1', $page->filter('#step-first-review a.btn.primary')->attr('href'));
@@ -450,14 +604,14 @@ final class FirstRunControllerTest extends WebTestCase
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame(['Open the review'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
     }
 
-    public function testTheSetupPageShowsTheMascotBesideItsTitleAsADecorativeImageInBothThemes(): void
+    public function testTheReadyStepShowsTheMascotAsADecorativeImageInBothThemes(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
         $images = $page->filter('.fr-hero img.character');
 
         self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
@@ -465,21 +619,28 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame(1, preg_match('~octopus-conducting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
     }
 
-    public function testTheSetupPageShowsOneOctopusAt144Px(): void
+    public function testTheReadyStepShowsOneOctopusAt144Px(): void
     {
-        $images = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('img[src*="octopus-"]');
+        $images = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('img[src*="octopus-"]');
 
         self::assertSame([['144', '144'], ['144', '144']], $images->each(static fn (Crawler $image): array => [$image->attr('width'), $image->attr('height')]));
     }
 
-    public function testAfterAnApprovedFirstReviewTheSetupPageShowsTheBowingOctopus(): void
+    public function testNoOtherStepShowsTheOctopus(): void
+    {
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, []);
+
+        self::assertCount(0, $page->filter('img[src*="octopus-"]'));
+    }
+
+    public function testAfterAnApprovedFirstReviewTheReadyStepShowsTheBowingOctopus(): void
     {
         $this->ledger->startRoundOfQuorum(SampleChange::CHANGE, 'round-1', 'all');
         $this->ledger->answer('round-1', 'correctness', 0);
         $this->ledger->answer('round-1', 'security', 0);
         $this->ledger->judgeRound('round-1');
 
-        $sources = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('.fr-hero img.character')->each(static fn (Crawler $image): ?string => $image->attr('src'));
+        $sources = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('.fr-hero img.character')->each(static fn (Crawler $image): ?string => $image->attr('src'));
 
         self::assertSame(1, preg_match('~octopus-bowing-light~', $sources[0] ?? ''));
         self::assertSame(1, preg_match('~octopus-bowing-dark~', $sources[1] ?? ''));
@@ -489,7 +650,7 @@ final class FirstRunControllerTest extends WebTestCase
     {
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('The first review, of the change sample-change of the alpha project, is in progress.', $page->filter('#step-first-review .lead')->text());
     }
@@ -499,7 +660,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
         $this->now = '2026-10-30T12:00:00+00:00';
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('The first review, of the change sample-change of the alpha project, ended without a call of the judge.', $page->filter('#step-first-review .lead')->text());
     }
@@ -511,7 +672,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->ledger->answer('round-1', 'security', 0);
         $this->ledger->judgeRound('round-1');
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('The first review, of the change sample-change of the alpha project, is judged with the outcome approve.', $page->filter('#step-first-review .lead')->text());
     }
@@ -521,25 +682,25 @@ final class FirstRunControllerTest extends WebTestCase
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('The first review, of the change sample-change of the alpha project, is judged; its outcome was not recorded.', $page->filter('#step-first-review .lead')->text());
     }
 
-    public function testTheStepLinksToTheLatestRoundOfTheFirstReviewInTheLedger(): void
+    public function testTheReadyStepLinksToTheLatestRoundOfTheFirstReviewInTheLedger(): void
     {
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-2', 2);
         $this->ledger->startRoundOf('feat/other', 'round-3', 1);
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('/reviews/round-2', $page->filter('#step-first-review a.btn.primary')->attr('href'));
     }
 
-    public function testWithoutASampleRepositoryAndNoReviewTheStepIsNotNeededAndThePageHasNoPrimaryButton(): void
+    public function testWithoutASampleRepositoryAndNoReviewTheFirstReviewIsNotNeededAndTheStepHasNoPrimaryButton(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('not-needed', $page->filter('#step-first-review')->attr('data-state'));
         self::assertSame(
@@ -550,11 +711,11 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(0, $page->filter('form.start-first-review'));
     }
 
-    public function testWithoutTheSampleProjectTheStepIsNotNeeded(): void
+    public function testWithoutTheSampleProjectTheFirstReviewIsNotNeeded(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
 
-        $page = $this->firstRunPage(<<<'YAML'
+        $page = $this->onStep('5')->setupPage(<<<'YAML'
             projects:
                 beta:
                     tiers:
@@ -594,7 +755,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame(['Started round 1.'], $session->getFlashBag()->peek('toast'));
     }
 
-    public function testAStartWhoseHandlerNamesNoRoundComesBackToTheFirstRunPage(): void
+    public function testAStartWhoseHandlerNamesNoRoundComesBackToTheReadyStep(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $commands = $this->commandBus();
@@ -603,7 +764,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
-        self::assertResponseRedirects('/setup');
+        self::assertResponseRedirects('/setup?step=5');
         $this->browser()->followRedirect();
         self::assertSelectorTextSame('.toast', 'Started round 1.');
     }
@@ -618,7 +779,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
-        self::assertResponseRedirects('/setup');
+        self::assertResponseRedirects('/setup?step=5');
         $this->browser()->followRedirect();
         self::assertSelectorTextContains('.flash-error', 'Round 1 was asked for');
         self::assertStringNotContainsString('Stack trace', (string) $this->browser()->getResponse()->getContent());
@@ -628,7 +789,7 @@ final class FirstRunControllerTest extends WebTestCase
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $this->commandBus()->expects(self::never())->method('dispatch');
-        $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => 'wrong']);
 
@@ -651,23 +812,14 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
     }
 
-    public function testThePageOpensWithTheRecordedReview(): void
+    public function testTheReadyStepShowsTheRecordedReviewBeforeTheFirstReview(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
 
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, []);
 
-        self::assertSame('See a real review', $page->filter('#see-review h1')->text());
-        self::assertCount(1, $page->filter('main h1'));
-    }
-
-    public function testTheRecordedReviewComesBeforeTheSteps(): void
-    {
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
-
-        $page = $this->firstRunPage(self::PROJECTS, []);
-
-        self::assertSame(['see-review', 'step-providers'], array_slice($page->filter('.setup #see-review, .setup .own-steps > li')->each(static fn (Crawler $part): string => (string) $part->attr('id')), 0, 2));
+        self::assertSame('See a real review', $page->filter('#see-review h2')->text());
+        self::assertSame(['see-review', 'step-first-review'], $page->filter('#step-ready #see-review, #step-ready #step-first-review')->each(static fn (Crawler $part): string => (string) $part->attr('id')));
     }
 
     public function testWithoutARecordingTheHeroSaysSoInPlainWordsAndOffersNoButton(): void
@@ -675,50 +827,49 @@ final class FirstRunControllerTest extends WebTestCase
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
 
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, []);
 
-        self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::getContainer()->get(FirstRunSteps::class)->firstRun()), $page->filter('#see-review .next')->text());
+        self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::getContainer()->get(SetupSteps::class)->firstRun()), $page->filter('#see-review .next')->text());
         self::assertCount(0, $page->filter('form.play-demo'));
         self::assertCount(0, $page->filter('#see-review .fr-when'));
     }
 
-    public function testWithoutARecordingOrAKeyTheKeyFormIsShownBelowTheHero(): void
+    public function testWithoutARecordingOrAKeyTheHeroPointsToTheAiAccountStep(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
 
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, []);
 
-        self::assertCount(1, $page->filter('#step-providers form.keep-provider-key'));
-        self::assertStringContainsString('Add a key below', $page->filter('#see-review .next')->text());
+        self::assertSame('This install has no recorded review. Add a key in step 3, AI account, to run one live.', $page->filter('#see-review .next')->text());
+        self::assertSame('/setup?step=3', $page->filter('#see-review .next a')->attr('href'));
+        self::assertSame('step 3, AI account', $page->filter('#see-review .next a')->text());
     }
 
-    public function testWithoutARecordingAndWithAKeyTheHeroPointsToTheCardsAndNotToAKeyForm(): void
+    public function testWithoutARecordingAndWithAKeyTheHeroPointsToTheFirstReviewAndNotToAKeyForm(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
-        self::assertCount(0, $page->filter('form.keep-provider-key'));
-        self::assertStringNotContainsString('Add a key below', $page->filter('#see-review .next')->text());
-        self::assertSame('This install has no recorded review. A live review can be started or opened from the cards below.', $page->filter('#see-review .next')->text());
+        self::assertSame('This install has no recorded review. A live review can be started or opened below.', $page->filter('#see-review .next')->text());
         self::assertCount(1, $page->filter('#step-first-review form.start-first-review'));
     }
 
-    public function testWithAKeyButNoSampleToStartTheHeroPromisesNoStartFromTheCards(): void
+    public function testWithAKeyButNoSampleToStartTheHeroPromisesNoStart(): void
     {
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
-        self::assertCount(0, $page->filter('form.keep-provider-key, form.start-first-review, #step-first-review a.btn'));
-        self::assertSame('This install has no recorded review, and no card below can start a live one yet.', $page->filter('#see-review .next')->text());
+        self::assertCount(0, $page->filter('form.start-first-review, #step-first-review a.btn'));
+        self::assertSame('This install has no recorded review, and nothing below can start a live one yet.', $page->filter('#see-review .next')->text());
     }
 
-    public function testThePageNamesNoCommandWhenTheSampleCannotStart(): void
+    public function testTheReadyStepNamesNoCommandWhenTheSampleCannotStart(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, []);
 
         self::assertSame('not-needed', $page->filter('#step-first-review')->attr('data-state'));
         self::assertDoesNotMatchRegularExpression('/intakt:|bin\/console|docker /', $page->filter('main')->text());
@@ -730,7 +881,7 @@ final class FirstRunControllerTest extends WebTestCase
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
         $_SERVER['INTAKT_DEMO_RECORDING'] = $this->file;
 
-        $page = $this->firstRunPage(self::PROJECTS, []);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, []);
 
         self::assertSame('1 minute · no key', $page->filter('#see-review .fr-when')->text());
         self::assertSame('Two AI labs read a change, then the owl decides what to fix.', $page->filter('#see-review .next')->text());
@@ -744,7 +895,7 @@ final class FirstRunControllerTest extends WebTestCase
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
         $_SERVER['INTAKT_DEMO_RECORDING'] = $this->file;
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('Start the first review', $page->filter('form.start-first-review .btn.secondary')->text());
     }
@@ -757,22 +908,15 @@ final class FirstRunControllerTest extends WebTestCase
 
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
 
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame('Open the review', $page->filter('a.btn.secondary')->text());
         self::assertSame(['Play the demo run'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
     }
 
-    public function testTheTitleIsTheOnePrimaryMessage(): void
+    public function testTheReadyStepDrawsWhatTheReviewShowsWithACharacterAndAShortLabelEach(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
-
-        self::assertSame(['See a real review'], $page->filter('main h1')->each(static fn (Crawler $title): string => $title->text()));
-    }
-
-    public function testThePageDrawsWhatTheReviewShowsWithACharacterAndAShortLabelEach(): void
-    {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame(['Read', 'Check', 'To fix'], $page->filter('.fr-seq li strong')->each(static fn (Crawler $label): string => $label->text()));
         self::assertSame([2, 2, 2], $page->filter('.fr-seq li')->each(static fn (Crawler $step): int => $step->filter('img.character[alt=""]')->count()));
@@ -780,9 +924,9 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(2, $page->filter('.fr-seq li')->eq(2)->filter('img[src*="roles/developer-"][srcset]'));
     }
 
-    public function testThePageHasNoDisclosure(): void
+    public function testTheAiAccountStepHasNoDisclosure(): void
     {
-        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $page = $this->onStep('3')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertCount(0, $page->filter('main details'));
         self::assertCount(1, $page->filter('#step-providers .tiers'));
@@ -790,7 +934,7 @@ final class FirstRunControllerTest extends WebTestCase
 
     public function testAProjectNameWithMarkupIsEscaped(): void
     {
-        $page = $this->firstRunPage(<<<'YAML'
+        $page = $this->onStep('4')->setupPage(<<<'YAML'
             projects:
                 '<b>bold</b>':
                     tiers:
@@ -798,7 +942,7 @@ final class FirstRunControllerTest extends WebTestCase
             YAML, ['ANTHROPIC_API_KEY']);
 
         self::assertCount(0, $page->filter('main b'));
-        self::assertSame('<b>bold</b>', $page->filter('#step-project .list .t')->text());
+        self::assertSame('<b>bold</b>: review panel', $page->filter('#step-project li[data-panel] strong')->text());
     }
 
     protected function setUp(): void
@@ -810,7 +954,7 @@ final class FirstRunControllerTest extends WebTestCase
             $this->unsetVariable($name);
         }
 
-        $this->file = sys_get_temp_dir().'/intakt-first-run-'.bin2hex(random_bytes(4)).'.yaml';
+        $this->file = sys_get_temp_dir().'/intakt-setup-'.bin2hex(random_bytes(4)).'.yaml';
         $_SERVER['INTAKT_CONFIG'] = $this->file;
         $_SERVER['MCP_OWNER_ACCESS'] = 'mcp_tool_write';
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = '';
@@ -840,10 +984,18 @@ final class FirstRunControllerTest extends WebTestCase
         new Filesystem()->remove([$this->file, $this->keptDirectory]);
     }
 
+    // The rest of the query is written raw, so a test can also send a step that is no number or a repository field.
+    private function onStep(string $query): self
+    {
+        $this->path = '/setup?step='.$query;
+
+        return $this;
+    }
+
     /**
      * @param list<string> $keys
      */
-    private function firstRunPage(string $projects, array $keys, string $keptKeyDirectory = ''): Crawler
+    private function setupPage(string $projects, array $keys, string $keptKeyDirectory = ''): Crawler
     {
         $_SERVER['INTAKT_PROVIDER_KEY_DIR'] = '' === $keptKeyDirectory ? sys_get_temp_dir().'/intakt-no-kept-key' : $keptKeyDirectory;
         file_put_contents($this->file, $projects);
@@ -866,7 +1018,7 @@ final class FirstRunControllerTest extends WebTestCase
         if ($this->commands instanceof MessageBusInterface) {
             self::getContainer()->set('command.bus', $this->commands);
         }
-        $page = $browser->request('GET', '/setup');
+        $page = $browser->request('GET', $this->path);
         self::assertResponseIsSuccessful();
 
         return $page;
@@ -881,10 +1033,10 @@ final class FirstRunControllerTest extends WebTestCase
         return $commands;
     }
 
-    // Read from the page's form, because the token belongs to the browser's session.
+    // Read from the Ready step's form, because the token belongs to the browser's session.
     private function tokenFromThePage(): string
     {
-        return $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('form.start-first-review input[name=_token]')->attr('value') ?? '';
+        return $this->onStep('5')->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('form.start-first-review input[name=_token]')->attr('value') ?? '';
     }
 
     private static function compiledContainers(): CompiledContainers
@@ -894,7 +1046,7 @@ final class FirstRunControllerTest extends WebTestCase
 
     private function keptKeyDirectory(): string
     {
-        $this->keptDirectory = sys_get_temp_dir().'/'.uniqid('first-run-kept-', true);
+        $this->keptDirectory = sys_get_temp_dir().'/'.uniqid('setup-kept-', true);
 
         return $this->keptDirectory;
     }

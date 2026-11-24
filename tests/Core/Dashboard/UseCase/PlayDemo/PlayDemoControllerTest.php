@@ -411,9 +411,9 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/no-such-page""', NotFoundHttpException::class));
     }
 
-    public function testTheFirstRunPageOffersPlayTheDemoRunAsItsOnePrimaryButton(): void
+    public function testTheSetupWizardsReadyStepOffersPlayTheDemoRunAsItsOnePrimaryButton(): void
     {
-        $page = $this->browser->request('GET', '/setup');
+        $page = $this->browser->request('GET', '/setup?step=5');
 
         self::assertResponseIsSuccessful();
         self::assertSame('/demo', $page->filter('form.play-demo')->attr('action'));
@@ -421,26 +421,26 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertNotSame('', $page->filter('form.play-demo input[name=_token]')->attr('value'));
     }
 
-    public function testTheFirstRunPageSaysPlayNeedsNoKeyAndWhatItShows(): void
+    public function testTheSetupWizardsReadyStepSaysPlayNeedsNoKeyAndWhatItShows(): void
     {
-        $page = $this->browser->request('GET', '/setup');
+        $page = $this->browser->request('GET', '/setup?step=5');
 
         self::assertSame('1 minute · no key', $page->filter('#see-review .fr-when')->text());
         self::assertSame('Two AI labs read a change, then the owl decides what to fix.', $page->filter('#see-review .next')->text());
     }
 
-    public function testTheFirstRunPageOffersNoDemoRunOnceItIsInTheLedger(): void
+    public function testTheSetupWizardsReadyStepOffersNoDemoRunOnceItIsInTheLedger(): void
     {
         $this->demoRunAt(1);
 
-        $page = $this->browser->request('GET', '/setup');
+        $page = $this->browser->request('GET', '/setup?step=5');
 
         self::assertCount(0, $page->filter('form.play-demo'));
     }
 
-    public function testTheFirstRunPagesDemoButtonQueuesTheRun(): void
+    public function testTheReadyStepsDemoButtonQueuesTheRun(): void
     {
-        $token = $this->browser->request('GET', '/setup')->filter('form.play-demo input[name=_token]')->attr('value') ?? '';
+        $token = $this->browser->request('GET', '/setup?step=5')->filter('form.play-demo input[name=_token]')->attr('value') ?? '';
 
         $this->browser->request('POST', '/demo', ['_token' => $token]);
 

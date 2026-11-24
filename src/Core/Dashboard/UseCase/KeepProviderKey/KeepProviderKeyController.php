@@ -12,7 +12,9 @@ use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Domain\SetupStep;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
+use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
 use SensitiveParameter;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -44,7 +46,7 @@ final readonly class KeepProviderKeyController
         $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so no key was kept.');
         $this->press->flash($request, $this->refusalWhileConfigured() ?? $this->kept($request->request->getString(self::FIELD)));
 
-        return new RedirectResponse($this->urls->generate(DashboardRoutes::FIRST_RUN), Response::HTTP_SEE_OTHER);
+        return new RedirectResponse($this->urls->generate(DashboardRoutes::RUN_SETUP, [RunSetupController::STEP => SetupStep::AiAccount->value]), Response::HTTP_SEE_OTHER);
     }
 
     /**
