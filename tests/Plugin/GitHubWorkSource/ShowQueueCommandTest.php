@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
@@ -52,6 +53,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(PullRequestsOfTasks::class)]
 #[UsesClass(IntakeStore::class)]
 #[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
 #[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(IntakeRules::class)]
 #[UsesClass(IntakePlan::class)]
@@ -316,7 +318,7 @@ final class ShowQueueCommandTest extends KernelTestCase
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturn(true);
         $references = new IssueReferences();
-        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(['alpha' => ['eligibility_label' => $this->eligibilityLabel]]), $references, $this->logger);
+        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), $references, $this->logger);
 
         return new GitHubWorkSource($listing, $histories, $accounts, $references, $this->store, new PullRequestsOfTasks(new RecordedPullRequestBranches($this->reads), $histories, $accounts, $references), $this->logger);
     }
