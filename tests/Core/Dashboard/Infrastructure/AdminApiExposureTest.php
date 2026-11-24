@@ -18,8 +18,9 @@ final class AdminApiExposureTest extends TestCase
 
     public function testTheCaddyfileBindsTheAdminApiToLocalhostByDefault(): void
     {
-        self::assertSame(1, preg_match('/^\s*admin\s+\{\$CADDY_ADMIN:([^}\s]+)\}\s*$/m', $this->file('Caddyfile'), $match));
-        self::assertSame('localhost:2019', $match[1]);
+        preg_match('/^\s*admin\s+\{\$CADDY_ADMIN:([^}\s]+)\}\s*$/m', $this->file('Caddyfile'), $match);
+
+        self::assertSame('localhost:2019', $match[1] ?? null);
     }
 
     public function testTheCaddyfileDeclaresTheAdminApiOnce(): void
@@ -54,7 +55,9 @@ final class AdminApiExposureTest extends TestCase
 
     public function testTheAppReadsTheAdminApiOnLoopback(): void
     {
-        $url = new Uri(new Dotenv()->parse($this->file('.env'))['FRANKENPHP_ADMIN_URL'] ?? '');
+        $value = new Dotenv()->parse($this->file('.env'))['FRANKENPHP_ADMIN_URL'] ?? null;
+        self::assertIsString($value);
+        $url = new Uri($value);
 
         self::assertSame('http', $url->getScheme());
         self::assertContains($url->getHost(), self::LOOPBACK_HOSTS);

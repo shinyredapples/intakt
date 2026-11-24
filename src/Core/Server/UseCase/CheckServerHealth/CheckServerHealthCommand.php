@@ -54,7 +54,7 @@ final readonly class CheckServerHealthCommand
             $this->threadsProblem($reading->threads),
             $reading->metrics instanceof EndpointDown ? 'server metrics down ('.$reading->metrics->reason.')' : null,
             $this->hubProblem($reading->hub),
-        ]));
+        ], is_string(...)));
     }
 
     private function threadsProblem(WorkerThreads|EndpointDown $threads): ?string
