@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\CommitName;
+use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\RecordedMerge;
@@ -77,6 +78,7 @@ final readonly class MainHistory implements CommitHistory
      * @throws MainNotRead
      * @throws RuntimeException
      * @throws MainHistoryRewritten
+     * @throws CommitNameNotFull
      */
     public function firstParentsSince(string $commit): array
     {
@@ -157,6 +159,7 @@ final readonly class MainHistory implements CommitHistory
      *
      * @throws MainNotRead
      * @throws RuntimeException
+     * @throws CommitNameNotFull
      */
     public function broughtInBy(RecordedMerge $merge): array
     {

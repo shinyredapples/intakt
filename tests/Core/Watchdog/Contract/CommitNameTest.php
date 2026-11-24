@@ -19,6 +19,11 @@ final class CommitNameTest extends TestCase
         self::assertSame(str_repeat('a', 40), new CommitName(str_repeat('a', 40))->name);
     }
 
+    public function testASha256CommitNameIsKept(): void
+    {
+        self::assertSame(str_repeat('b', 64), new CommitName(str_repeat('b', 64))->name);
+    }
+
     public function testACommitNameThatIsNotAFullHashIsRefusedWhenConstructed(): void
     {
         $this->expectException(CommitNameNotFull::class);
