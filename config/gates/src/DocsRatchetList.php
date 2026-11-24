@@ -12,7 +12,7 @@ final readonly class DocsRatchetList
     public const string PATH = 'ratchet/docs.json';
     public const string SHAPE = '{"paragraphs": {"<page>.md": {"<16 hex key>": <words>}}, "pages": {"<page>.md": <words>}}';
 
-    private const string KEY = '/^[0-9a-f]{16}$/';
+    private const string KEY = '/\A[0-9a-f]{16}\z/';
     private const array SECTIONS = ['pages', 'paragraphs'];
     private const int DEPTH = 4;
 

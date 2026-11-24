@@ -197,6 +197,17 @@ final class DocsGateTest extends SandboxTestCase
         self::assertStringStartsWith('ratchet/docs.json: malformed', $findings[0]);
     }
 
+    public function testAParagraphKeyWithATrailingNewlineMakesTheListMalformed(): void
+    {
+        $sandbox = $this->listedTree();
+        $sandbox->write('ratchet/docs.json', '{"paragraphs": {"README.md": {"0123456789abcdef\n": 81}}, "pages": {}}');
+
+        $findings = $sandbox->gateResult($this->gate())->findings;
+
+        self::assertCount(1, $findings);
+        self::assertStringStartsWith('ratchet/docs.json: malformed', $findings[0]);
+    }
+
     #[DataProvider('malformedLists')]
     public function testAMalformedListFailsWithAFindingNotAnError(string $list): void
     {
