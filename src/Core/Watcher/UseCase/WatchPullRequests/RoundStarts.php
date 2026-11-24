@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use RuntimeException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
@@ -17,6 +21,8 @@ final readonly class RoundStarts
         private MessageBusInterface $commands,
         private StartedRounds $rounds,
         private WatcherLedger $ledger,
+        private ?ChangeLabels $labels = null,
+        private ?RoundStatusMirror $status = null,
     ) {
     }
 
@@ -37,8 +43,15 @@ final readonly class RoundStarts
 
     private function queue(WatchedProject $project, OpenChange $green): QueuedRound
     {
-        $queued = $this->commands->dispatch($project->startAt($green))->last(HandledStamp::class)?->getResult();
+        $labels = $this->labels?->steeringOf($project->name, $green) ?? new Labels();
+        $queued = $this->commands->dispatch($project->startAt($green, $labels))->last(HandledStamp::class)?->getResult();
 
-        return $queued instanceof QueuedRound ? $queued : throw new RuntimeException('The review start did not answer the queued round.');
+        if (!$queued instanceof QueuedRound) {
+            throw new RuntimeException('The review start did not answer the queued round.');
+        }
+
+        $this->status?->show($project->name, $green->id, RoundStatusLabel::InReview);
+
+        return $queued;
     }
 }

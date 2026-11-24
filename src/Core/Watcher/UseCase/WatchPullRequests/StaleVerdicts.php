@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Review\Contract\HeadIdentity;
 use Intakt\Core\Review\Contract\IdentityAtHead;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
@@ -13,6 +14,7 @@ use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\StartedRound;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use LogicException;
@@ -30,6 +32,7 @@ final readonly class StaleVerdicts
         private MessageBusInterface $commands,
         private StartedRounds $rounds,
         private WatcherLedger $ledger,
+        private ?ChangeLabels $labels = null,
     ) {
     }
 
@@ -77,7 +80,7 @@ final readonly class StaleVerdicts
 
     private function check(WatchedProject $project, OpenChange $open, StartedRound $round): void
     {
-        $current = $this->ask(new IdentityAtHead($project->startAt($open), new CommitId($round->head())), HeadIdentity::class);
+        $current = $this->ask(new IdentityAtHead($project->startAt($open, $this->labels?->steeringOf($project->name, $open) ?? new Labels()), new CommitId($round->head())), HeadIdentity::class);
         $verdicts = $this->ask(new VerdictsOfRound($round->roundId(), $current->identity, $current->move), RoundVerdicts::class);
 
         if (Standing::Stale === $verdicts->standing->standing) {

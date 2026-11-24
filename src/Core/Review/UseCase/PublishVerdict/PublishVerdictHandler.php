@@ -14,6 +14,8 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Psr\Log\LoggerInterface;
 
@@ -30,6 +32,7 @@ final readonly class PublishVerdictHandler
         private ForgeWrites $forge,
         private ChangePublications $publications,
         private LoggerInterface $logger,
+        private ?RoundStatusMirror $status = null,
     ) {
     }
 
@@ -92,6 +95,14 @@ final readonly class PublishVerdictHandler
 
     private function publish(ReviewRound $round, PublishedVerdict $verdict): bool
     {
-        return $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $verdict);
+        $change = new ChangeId($round->change());
+        $published = $this->forge->publishVerdict($round->project(), $change, $verdict);
+
+        // Set after the verdict, because the round is then over and what is left is waiting on a person.
+        if ($published) {
+            $this->status?->show($round->project(), $change, RoundStatusLabel::WaitingOnYou);
+        }
+
+        return $published;
     }
 }

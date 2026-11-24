@@ -116,7 +116,7 @@ final readonly class LocalChangeReview
 
     private function panelFor(ReviewChangeInput $input, Change $change): Panel
     {
-        return $this->panels->panelForChange($input->project, $this->describe($change));
+        return $this->panels->panelForChange($input->project, $this->describe($change, $input->labels));
     }
 
     private function identityOf(ReviewChangeInput $input, Change $change, Panel $panel): VerdictIdentity
@@ -132,10 +132,10 @@ final readonly class LocalChangeReview
         return false === $resolved ? throw RepositoryNotFound::at($repository) : $resolved;
     }
 
-    private function describe(Change $change): ChangeDescription
+    private function describe(Change $change, Labels $labels): ChangeDescription
     {
         $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
 
-        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), new Labels());
+        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), $labels);
     }
 }

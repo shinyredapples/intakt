@@ -49,7 +49,7 @@ final readonly class ConfiguredPanels implements Panels
         }
 
         return new Panel(
-            array_map($this->reviewer(...), $reviewers),
+            array_map(fn (array $reviewer): PanelReviewer => $this->reviewer($reviewer, $change->startTier()), $reviewers),
             QuorumPolicy::from($panel['quorum']),
         );
     }
@@ -77,11 +77,11 @@ final readonly class ConfiguredPanels implements Panels
     /**
      * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
      */
-    private function reviewer(array $reviewer): PanelReviewer
+    private function reviewer(array $reviewer, ?Tier $labelled): PanelReviewer
     {
         return new PanelReviewer(
             new ReviewerRole($reviewer['role'], $reviewer['prompt']),
-            new ReviewerModel(Tier::from($reviewer['tier']), Provider::from($reviewer['provider'])),
+            new ReviewerModel($labelled ?? Tier::from($reviewer['tier']), Provider::from($reviewer['provider'])),
             $reviewer['budget'],
         );
     }

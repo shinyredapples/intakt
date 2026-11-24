@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\StartReview;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
@@ -37,6 +38,14 @@ final class ReviewChangeInput
     #[Option('The branch the change is measured against')]
     public string $base = 'main';
 
+    // Set only by a round the watcher starts, so the console has no option for it.
+    public Labels $labels;
+
+    public function __construct()
+    {
+        $this->labels = new Labels();
+    }
+
     public static function startedBy(StartReview $command): self
     {
         $input = new self();
@@ -46,6 +55,7 @@ final class ReviewChangeInput
         $input->round = $command->round->number;
         $input->repository = $command->source->repository;
         $input->base = $command->source->base;
+        $input->labels = $command->labels;
 
         return $input;
     }
