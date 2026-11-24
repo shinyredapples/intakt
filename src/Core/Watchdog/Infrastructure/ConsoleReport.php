@@ -28,6 +28,11 @@ final readonly class ConsoleReport
         return sprintf('notice %s: commit %s %s, pushed without the gate', self::printable($project), $commit, SignatureStatus::OwnerSigned->value);
     }
 
+    public static function peerMergeLine(string $commit): string
+    {
+        return sprintf('info: peer merge %s %s', $commit, SignatureStatus::PeerSigned->value);
+    }
+
     public static function cardLine(OwnerCard $card): string
     {
         $raised = $card->raisedAt->format(DateTimeInterface::ATOM);

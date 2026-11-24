@@ -133,6 +133,15 @@ final readonly class ReviewedRound
         return ReviewOutcome::ofQuorum($this);
     }
 
+    // Only the reviewers with a recorded start, because one blocked before it started never ran in this round.
+    /**
+     * @return list<ReviewerOutcome>
+     */
+    public function startedOutcomes(): array
+    {
+        return [...array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => true === $outcome->started)];
+    }
+
     // Verdicts only, because failed and blocked reviewers give no opinion.
     public function agreement(): string
     {

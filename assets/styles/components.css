@@ -551,7 +551,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* The review list: each row is one link of at least 44 px at every width (WCAG 2.2 asks for 24), and the round id sits outside it, so a click selects the whole id for copying instead of opening the round. */
 .review-rows { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hairline); }
 .review-row { border-bottom: 1px solid var(--hairline); }
-.review-link { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); min-height: 44px; padding: var(--s8) var(--s4) var(--s4); color: inherit; text-decoration: none; }
+.review-link, .review-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); min-height: 44px; padding: var(--s8) var(--s4) var(--s4); color: inherit; text-decoration: none; }
 .review-link:hover .review-title { text-decoration: underline; }
 .review-title { flex: 1 1 16rem; font: 600 var(--t15)/1.3 var(--f-head); overflow-wrap: anywhere; }
 .review-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); color: var(--muted); font-size: var(--t13); }
@@ -737,6 +737,13 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .status-line .grow { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .status-line > .i:first-child { color: var(--primary); }
 .status-line .go { transform: rotate(-90deg); }
+/* Infrastructure row: muted like the status line, so only a down source or an unhealthy hub draws the eye; it wraps, so a long reason never widens the page. */
+.infra-figures { display: flex; flex-wrap: wrap; gap: var(--s8) var(--s24); margin: var(--s24) 0 0; padding: 0 var(--s16); color: var(--muted); }
+.infra-figure { display: flex; gap: var(--s8); min-width: 0; }
+.infra-figure dt::after { content: ":"; }
+.infra-figure dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.infra-figure.down dd, .infra-figure.unhealthy dd { color: var(--red); }
+.infra-reason { color: var(--muted); }
 /* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
@@ -886,6 +893,8 @@ a.lane:hover { background: var(--tint-2); }
 .multiples.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .multiple { margin: 0; min-width: 0; }
 .multiple .sub-h { margin: 0 0 var(--s4); font: 600 var(--t15)/1.3 var(--f-head); }
+/* Trends Up next: DESIGN.md list rows, the board's review rows, under one small heading per group (D6 of issue 2864). */
+.up-next h3 { margin: var(--s16) 0 var(--s4); color: var(--muted); font: 600 var(--t13)/1.3 var(--f-body); }
 .chart-svg { display: block; overflow: visible; width: 100%; max-width: 360px; height: auto; }
 .c-grid { stroke: var(--hairline); stroke-width: 1; }
 .c-base { stroke: var(--muted); stroke-width: 1; opacity: .6; }
