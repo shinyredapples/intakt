@@ -118,6 +118,43 @@ final class InstallCheckTest extends TestCase
         self::assertSame(['issue', 'close', '7', '--comment', 'The install check passes and no longer has this step.', '--repo', 'example/repo'], $this->github[0]['arguments']);
     }
 
+    public function testAPassingRunClosesNoIssueThatOnlyQuotesAMarker(): void
+    {
+        $owned = '<!-- intakt:install-check:'.hash('sha256', 'install: #2').' -->';
+        $open = [
+            ['number' => 7, 'body' => $owned."\nfiled by the alarm"],
+            ['number' => 8, 'body' => "Unrelated issue showing an example marker:\n<!-- intakt:install-check:<hash> -->"],
+            ['number' => 9, 'body' => "Quoting a real one:\n".$owned],
+            ['number' => 10, 'body' => '<!-- intakt:install-check:<hash> -->'],
+        ];
+
+        $answer = $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Passed, '')]), $open);
+
+        self::assertSame('closed #7 (a step this run no longer has)', $answer);
+    }
+
+    public function testTeardownStopsTheContainersWhereComposeRanAfterALaterLineLeftTheClone(): void
+    {
+        $home = $this->directory.'/home';
+        new Filesystem()->mkdir($home);
+        $downIn = [];
+        $runner = static function (string $command, string $directory, array $environment) use (&$downIn): array {
+            if (str_starts_with($command, 'docker ')) {
+                $downIn[] = $directory;
+
+                return is_file($directory.'/compose.yaml') ? [0, ''] : [1, 'no compose file'];
+            }
+
+            return new InstallProcessRunner(10)($command, $directory, $environment);
+        };
+        $walk = new InstallWalk($runner, [], $this->directory.'/logs', $this->directory.'/checkout', [], new Filesystem());
+
+        $report = $walk->through($home, ['mkdir -p intakt && touch intakt/compose.yaml && cd intakt', 'docker compose up -d --wait', 'cd .. && false']);
+
+        self::assertSame('passed', $this->statuses($report)['teardown: stop the containers and remove their volume']);
+        self::assertSame($home.'/intakt', array_last($downIn));
+    }
+
     public function testAStepMissingFromAFailedInstallKeepsItsIssueOpen(): void
     {
         $this->alarm(new InstallReport([new InstallStepResult('install: one', InstallStatus::Passed, ''), new InstallStepResult('install: two', InstallStatus::Failed, 'boom')]));

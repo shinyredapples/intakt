@@ -117,7 +117,7 @@ final readonly class InstallCheckAlarm
     {
         $lines = [];
 
-        foreach ($this->issues->openIssuesMarkedWith(self::MARKER) as $number => $marker) {
+        foreach ($this->issues->openIssuesOpeningWith('/\A'.preg_quote(self::MARKER, '/').'[0-9a-f]{64} -->\z/') as $number => $marker) {
             if (!in_array($marker, $markers, true)) {
                 $this->issues->close($number, 'The install check passes and no longer has this step.');
                 $lines[] = 'closed #'.$number.' (a step this run no longer has)';

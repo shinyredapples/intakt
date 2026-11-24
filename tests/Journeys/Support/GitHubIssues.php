@@ -33,19 +33,19 @@ final readonly class GitHubIssues
         return [] === $marked ? null : min(array_column($marked, 'number'));
     }
 
-    // Keyed by issue number, the value is the issue's first line that starts with the prefix, so a caller can tell which marker an open issue carries.
+    // Only a body whose whole first line matches counts, because the alarm writes its marker there, and an issue that quotes a marker further down, or an example of one, is not the alarm's to close.
     /**
      * @return array<int, string>
      */
-    public function openIssuesMarkedWith(string $prefix): array
+    public function openIssuesOpeningWith(string $pattern): array
     {
         $marked = [];
 
         foreach ($this->openIssues() as $issue) {
-            $line = array_find(explode("\n", str_replace("\r", '', $issue['body'])), static fn (string $line): bool => str_starts_with($line, $prefix));
+            $first = explode("\n", str_replace("\r", '', $issue['body']), 2)[0];
 
-            if (null !== $line) {
-                $marked[$issue['number']] = $line;
+            if (1 === preg_match($pattern, $first)) {
+                $marked[$issue['number']] = $first;
             }
         }
 

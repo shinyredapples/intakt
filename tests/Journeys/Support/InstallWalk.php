@@ -20,6 +20,7 @@ final readonly class InstallWalk
     private const string KEYED = 'keyed: review the sample with a provider key';
     private const string ENDED_IN = 'INTAKT_INSTALL_CHECK_ENDED_IN';
     private const string ENDED_IN_FILE = '.install-check-ended-in';
+    private const string COMPOSE_IN_FILE = '.install-check-compose-in';
     // Only what .env.local can hold unquoted, because a quote or a space would change the key the container reads.
     private const string KEY_SHAPE = '/\A[A-Za-z0-9._~+\/=-]+\z/';
 
@@ -102,7 +103,15 @@ final readonly class InstallWalk
         $directory = $this->cloneIn($home);
         $script = $command."\n".'intakt_status=$?; pwd > "$'.self::ENDED_IN.'"; exit "$intakt_status"';
 
-        return $this->recorded('install: '.$command, ($this->runner)($script, $directory, [...$this->environment, self::ENDED_IN => $home.'/'.self::ENDED_IN_FILE]), [0]);
+        $result = $this->recorded('install: '.$command, ($this->runner)($script, $directory, [...$this->environment, self::ENDED_IN => $home.'/'.self::ENDED_IN_FILE]), [0]);
+        $ended = $this->cloneIn($home);
+
+        // A later line that returns to home must not move teardown away from where Compose started, so the last folder inside home is kept apart.
+        if ($ended !== $home) {
+            $this->files->dumpFile($home.'/'.self::COMPOSE_IN_FILE, (string) realpath($ended));
+        }
+
+        return $result;
     }
 
     private function skipped(string $name, string $why): InstallStepResult
@@ -137,10 +146,10 @@ final readonly class InstallWalk
     }
 
     // Only a folder inside home counts, so a README line that ends elsewhere, or none that ran, leaves the commands in home.
-    private function cloneIn(string $home): string
+    private function cloneIn(string $home, string $file = self::ENDED_IN_FILE): string
     {
         $root = realpath($home);
-        $ended = realpath(trim((string) @file_get_contents($home.'/'.self::ENDED_IN_FILE)));
+        $ended = realpath(trim((string) @file_get_contents($home.'/'.$file)));
 
         if (false === $root || false === $ended || $ended === $root || !str_starts_with($ended, $root.'/') || !is_dir($ended)) {
             return $home;
@@ -206,7 +215,7 @@ final readonly class InstallWalk
 
     private function tearDown(string $home): InstallStepResult
     {
-        $clone = $this->cloneIn($home);
+        $clone = $this->cloneIn($home, self::COMPOSE_IN_FILE);
 
         return $clone === $home ? $this->skipped(self::TEARDOWN, 'no clone was made') : $this->step(self::TEARDOWN, 'docker compose down -v --remove-orphans', $clone);
     }
