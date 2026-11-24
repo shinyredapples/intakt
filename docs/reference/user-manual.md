@@ -997,7 +997,7 @@ Between the two, three small pictures show what a review does: the reviewer (Rea
 
 Once a review has run, `/` opens the board on a computer and Waiting on you on a phone, or the newest review when every card is Done, nothing is running and nothing waits on you (the board is then at `/?board=1`, which the Now entry of the menu opens), and the Projects page's **Set up Intakt** button leads to the first-run page. Connecting a repository, creating the GitHub App and adding an account in the browser are not on the page yet: they are done in configuration today (`config/intakt.yaml` or the file `INTAKT_CONFIG` names, `.env.local`, and [Intakt's GitHub App](#intakts-github-app)).
 
-Once the server answers its health check and the dashboard answers, every start ends its log with one line, `intakt: the dashboard is ready at http://localhost:7781`; with `docker compose up -d --wait` the same moment is when the command returns. The start no longer prints the review command. Print it, and the line that connects an MCP client, when you want them, in the repository folder:
+Once the server's metrics endpoint and the dashboard answer, every start ends its log with one line, `intakt: the dashboard is ready at http://localhost:7781`. `docker compose up -d --wait` returns when the container's health check passes (`intakt:server:health` reports healthy, the dashboard answers and the sample is seeded), which can be a little after that line. The start no longer prints the review command. Print it, and the line that connects an MCP client, when you want them, in the repository folder:
 
 ```
 docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository

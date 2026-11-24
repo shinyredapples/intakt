@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
@@ -47,12 +48,32 @@ final class HealthcheckScriptTest extends TestCase
         self::assertStringContainsString('admin=http://localhost:2999 bin/console', (string) file_get_contents($this->directory.'/calls'));
     }
 
-    public function testWithoutAMovedAdminApiTheServerHealthCommandReadsTheAppsOwnAdminUrl(): void
+    public function testWithoutAMovedAdminApiTheServerHealthCommandReadsTheDefaultListener(): void
     {
         $process = $this->check([]);
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString('admin= bin/console', (string) file_get_contents($this->directory.'/calls'));
+        self::assertStringContainsString('admin=http://localhost:2019 bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    #[DataProvider('listenersBesideAStaleAdminUrl')]
+    public function testTheHealthCheckIgnoresAStaleAdminUrlForEveryListener(false|string $listener, string $expected): void
+    {
+        $process = $this->check(['CADDY_ADMIN' => $listener, 'FRANKENPHP_ADMIN_URL' => 'http://localhost:3000']);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('admin=http://'.$expected.' bin/console', (string) file_get_contents($this->directory.'/calls'));
+    }
+
+    /**
+     * @return iterable<string, array{false|string, string}>
+     */
+    public static function listenersBesideAStaleAdminUrl(): iterable
+    {
+        yield 'an explicit host' => ['localhost:2999', 'localhost:2999'];
+        yield 'a bare port' => [':2999', 'localhost:2999'];
+        yield 'the default listener' => [false, 'localhost:2019'];
+        yield 'an empty listener setting' => ['', 'localhost:2019'];
     }
 
     public function testTheHealthCheckFailsWhileTheDashboardDoesNotAnswer(): void

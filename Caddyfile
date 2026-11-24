@@ -1,5 +1,5 @@
 {
-	# On localhost only, because intakt:server:status reads it (FRANKENPHP_ADMIN_URL) and it can change the whole server; CADDY_ADMIN moves it, so the hub tests do not take the port of a running install.
+	# On localhost only, because intakt:server:status reads it (FRANKENPHP_ADMIN_URL) and it can change the whole server; CADDY_ADMIN moves it, so the hub tests do not take the port of a running install. Caddy binds a bare port such as :2019 on every interface, so docker/entrypoint.sh refuses any value that is not a port on a loopback host.
 	admin {$CADDY_ADMIN:localhost:2019}
 	# FrankenPHP adds its series (frankenphp_queue_depth, frankenphp_worker_restarts) to the admin API's /metrics only with Caddy's metrics on, so the health check and the board need it.
 	metrics
