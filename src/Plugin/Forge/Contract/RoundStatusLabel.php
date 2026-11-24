@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
-// The two states a reviewed change shows on a forge with labels; the others of the status family belong to tasks, not to a change under review.
+// Only these two, because the other status values describe a task and a change under review is never one of them.
 enum RoundStatusLabel: string
 {
     case InReview = 'status:in-review';

@@ -6,16 +6,16 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 
-// One value per family: the label applied last wins, as docs/design/05-architecture/04-labels.md says. `review:` takes several values, and a label without a colon is no family.
+// The last applied wins, because the design gives a family one value (docs/design/05-architecture/04-labels.md), except `review:`, which takes several.
 final readonly class LabelFamilies
 {
     private const string SEPARATOR = ':';
     private const array MANY_VALUES = ['review'];
 
     /**
-     * @param list<LabelApplication> $applied earliest first
+     * @param list<LabelApplication> $applied
      *
-     * @return list<LabelApplication> in the order they were applied
+     * @return list<LabelApplication>
      */
     public function winners(array $applied): array
     {
@@ -35,9 +35,9 @@ final readonly class LabelFamilies
     }
 
     /**
-     * @param list<LabelApplication> $applied earliest first
+     * @param list<LabelApplication> $applied
      *
-     * @return list<string> the labels to remove, because a later one of their family replaced them
+     * @return list<string>
      */
     public function losers(array $applied): array
     {

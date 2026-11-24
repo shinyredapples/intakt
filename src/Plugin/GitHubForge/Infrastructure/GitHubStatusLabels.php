@@ -58,15 +58,6 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
     }
 
-    private function isOwn(string $login): bool
-    {
-        try {
-            return $this->identities->isOwn($login);
-        } catch (TrustNotChecked $unchecked) {
-            throw new ForgeWriteFailed($unchecked->getMessage(), $unchecked->getCode(), previous: $unchecked);
-        }
-    }
-
     /**
      * @return list<LabelEvent>
      *
@@ -91,27 +82,37 @@ final readonly class GitHubStatusLabels implements StatusLabels
         throw new ForgeReadFailed('The change holds more events than this forge reads.');
     }
 
-    /**
-     * @param array<mixed> $event
-     *
-     * @throws ForgeReadFailed
-     */
-    private function labelEvent(array $event): ?LabelEvent
+    private function isOwn(string $login): bool
     {
-        $kind = $event['event'] ?? null;
-        if ('labeled' !== $kind && 'unlabeled' !== $kind) {
-            return null;
+        try {
+            return $this->identities->isOwn($login);
+        } catch (TrustNotChecked $unchecked) {
+            throw new ForgeWriteFailed($unchecked->getMessage(), $unchecked->getCode(), previous: $unchecked);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     *
+     * @throws ForgeWriteFailed
+     */
+    private function write(string $method, string $path, array $body): void
+    {
+        $options = ['auth_bearer' => $this->writeBearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
+        if ([] !== $body) {
+            $options['json'] = $body;
         }
 
-        $label = $event['label'] ?? null;
-        $actor = $event['actor'] ?? null;
-        $name = is_array($label) ? ($label['name'] ?? null) : null;
-        $login = is_array($actor) ? ($actor['login'] ?? null) : null;
-        if (!is_string($name) || '' === $name || !is_string($login) || '' === $login) {
-            throw new ForgeReadFailed('GitHub listed a label event without its label or actor.');
+        try {
+            $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
+        } catch (ExceptionInterface $failure) {
+            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class));
         }
 
-        return new LabelEvent($name, $login, 'labeled' === $kind);
+        // Tolerated, because a label someone removed meanwhile is the state the removal asks for.
+        if (('DELETE' !== $method || 404 !== $status) && ($status < 200 || $status >= 300)) {
+            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));
+        }
     }
 
     /**
@@ -149,27 +150,26 @@ final readonly class GitHubStatusLabels implements StatusLabels
     }
 
     /**
-     * @param array<string, mixed> $body
+     * @param array<mixed> $event
      *
-     * @throws ForgeWriteFailed
+     * @throws ForgeReadFailed
      */
-    private function write(string $method, string $path, array $body): void
+    private function labelEvent(array $event): ?LabelEvent
     {
-        $options = ['auth_bearer' => $this->writeBearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
-        if ([] !== $body) {
-            $options['json'] = $body;
+        $kind = $event['event'] ?? null;
+        if ('labeled' !== $kind && 'unlabeled' !== $kind) {
+            return null;
         }
 
-        try {
-            $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
-        } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class), $failure->getCode(), $failure);
+        $label = $event['label'] ?? null;
+        $actor = $event['actor'] ?? null;
+        $name = is_array($label) ? ($label['name'] ?? null) : null;
+        $login = is_array($actor) ? ($actor['login'] ?? null) : null;
+        if (!is_string($name) || '' === $name || !is_string($login) || '' === $login) {
+            throw new ForgeReadFailed('GitHub listed a label event without its label or actor.');
         }
 
-        // A label already gone is what a removal wants.
-        if (('DELETE' !== $method || 404 !== $status) && ($status < 200 || $status >= 300)) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));
-        }
+        return new LabelEvent($name, $login, 'labeled' === $kind);
     }
 
     /**

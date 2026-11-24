@@ -7,7 +7,7 @@ namespace Intakt\Plugin\Forge\Contract;
 // Apart from Forge and ForgeWrites, because only a forge with labels has a status to mirror.
 interface StatusLabels
 {
-    // Leaves exactly one status label on the change. A status label a person put there is replaced and the change gets one comment about it.
+    // A person's status label is replaced and said so once, because the status mirrors the round and a hand-set label would mislead the list.
     /**
      * @throws ChangeNotFound
      * @throws ForgeReadFailed

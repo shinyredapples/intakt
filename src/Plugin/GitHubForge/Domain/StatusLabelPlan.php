@@ -6,8 +6,10 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 
 use Closure;
 use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// What to write so exactly one status label stands. The comment is owed only while a person's change is still on the change, so a second pass finds Intakt's own label last and stays silent.
+// The comment is owed only while a person's change is the last event of a status label, so a second pass finds Intakt's own event last and stays silent.
+#[Exclude]
 final readonly class StatusLabelPlan
 {
     /**
@@ -21,10 +23,25 @@ final readonly class StatusLabelPlan
     }
 
     /**
-     * @param list<LabelEvent>      $events earliest first
-     * @param Closure(string): bool $isOwn  whether an account is Intakt's own identity
+     * @param list<LabelEvent>      $events
+     * @param Closure(string): bool $isOwn
      */
     public static function of(RoundStatusLabel $wanted, array $events, Closure $isOwn): self
+    {
+        $last = self::lastEventOfEachStatus($events);
+        $remove = array_keys(array_filter($last, static fn (LabelEvent $event): bool => $event->applied && $event->label !== $wanted->value));
+        $changedByPerson = array_filter($last, static fn (LabelEvent $event): bool => !$isOwn($event->actor) && $event->applied !== ($event->label === $wanted->value));
+        $present = isset($last[$wanted->value]) && $last[$wanted->value]->applied;
+
+        return new self($remove, !$present, [] !== $changedByPerson);
+    }
+
+    /**
+     * @param list<LabelEvent> $events
+     *
+     * @return array<string, LabelEvent>
+     */
+    private static function lastEventOfEachStatus(array $events): array
     {
         $last = [];
         foreach ($events as $event) {
@@ -33,21 +50,6 @@ final readonly class StatusLabelPlan
             }
         }
 
-        $remove = [];
-        $byPerson = false;
-        foreach ($last as $label => $event) {
-            $personsChange = !$isOwn($event->actor);
-            if ($event->applied && $label !== $wanted->value) {
-                $remove[] = $label;
-                $byPerson = $byPerson || $personsChange;
-            }
-            if (!$event->applied && $label === $wanted->value && $personsChange) {
-                $byPerson = true;
-            }
-        }
-
-        $present = isset($last[$wanted->value]) && $last[$wanted->value]->applied;
-
-        return new self($remove, !$present, $byPerson);
+        return $last;
     }
 }

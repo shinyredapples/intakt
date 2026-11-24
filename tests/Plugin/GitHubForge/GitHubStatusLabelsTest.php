@@ -17,6 +17,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -48,6 +49,10 @@ final class GitHubStatusLabelsTest extends TestCase
     private array $comments = [];
 
     private int $eventsStatus = 200;
+
+    private bool $refuseWrites = false;
+
+    private ?MockHttpClient $identity = null;
 
     public function testAQueuedRoundWritesTheInReviewLabel(): void
     {
@@ -125,7 +130,9 @@ final class GitHubStatusLabelsTest extends TestCase
     {
         $this->expectException(ForgeWriteFailed::class);
 
-        $this->labelsOf(refuseWrites: true)->mirror('alpha', new ChangeId(self::PULL), RoundStatusLabel::InReview);
+        $this->refuseWrites = true;
+
+        $this->labelsOf()->mirror('alpha', new ChangeId(self::PULL), RoundStatusLabel::InReview);
     }
 
     private function mirror(RoundStatusLabel $status): void
@@ -143,11 +150,11 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->events[] = ['event' => 'unlabeled', 'label' => ['name' => $label], 'actor' => ['login' => $actor], 'created_at' => self::MOMENT];
     }
 
-    private function labelsOf(bool $refuseWrites = false): GitHubStatusLabels
+    private function labelsOf(): GitHubStatusLabels
     {
         $trust = new RecordedTrust();
-        $identity = $trust->client();
-        $http = new MockHttpClient(fn (string $method, string $url, array $options): ResponseInterface => $this->answer($identity, $refuseWrites, $method, $url, $options), 'https://api.github.com');
+        $this->identity = $trust->client();
+        $http = new MockHttpClient($this->answer(...), 'https://api.github.com');
         $wiring = TrustChecks::wiring($http);
         $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]);
         $comments = new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345');
@@ -158,25 +165,25 @@ final class GitHubStatusLabelsTest extends TestCase
     /**
      * @param array<mixed> $options
      */
-    private function answer(MockHttpClient $identity, bool $refuseWrites, string $method, string $url, array $options): ResponseInterface
+    private function answer(string $method, string $url, array $options): ResponseInterface
     {
         $path = (string) parse_url($url, PHP_URL_PATH);
         if (str_ends_with($path, '/issues/1/events')) {
             return new MockResponse(json_encode(200 === $this->eventsStatus ? $this->events : ['message' => 'no'], JSON_THROW_ON_ERROR), ['http_code' => $this->eventsStatus]);
         }
         if (str_contains($path, '/issues/1/')) {
-            return $this->write($refuseWrites, $method, $path, $options);
+            return $this->write($method, $path, $options);
         }
 
-        return $identity->request($method, $url, $options);
+        return ($this->identity ?? throw new LogicException('No identity client.'))->request($method, $url, $options);
     }
 
     /**
      * @param array<mixed> $options
      */
-    private function write(bool $refuseWrites, string $method, string $path, array $options): ResponseInterface
+    private function write(string $method, string $path, array $options): ResponseInterface
     {
-        if ($refuseWrites) {
+        if ($this->refuseWrites) {
             return new MockResponse('{"message":"Refused"}', ['http_code' => 403]);
         }
 

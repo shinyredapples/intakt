@@ -44,6 +44,9 @@ final class LabelFamiliesTest extends TestCase
         self::assertSame([], new LabelFamilies()->losers($applied));
     }
 
+    /**
+     * @return list<LabelApplication>
+     */
     private function applied(string ...$labels): array
     {
         return array_map(static fn (string $label): LabelApplication => new LabelApplication($label, RecordedTrust::WRITER), array_values($labels));
