@@ -790,16 +790,6 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         return new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(12.0, null));
     }
 
-    private function connectionWith(DriverMiddleware ...$middlewares): Connection
-    {
-        return DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares($middlewares));
-    }
-
-    private function outageOf(string $account): UsageReadingsStayedAway
-    {
-        return new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
-    }
-
     // Free only when no writer of the account's readings or notices holds it, because a probe that gets it gives it back at once.
     private static function readingsLockIsHeld(LockFactory $locks): bool
     {
@@ -812,13 +802,23 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         return false;
     }
 
-    // The writer's look at the readings then runs as before the reading committed, when it could not see it yet.
+    private function connectionWith(DriverMiddleware ...$middlewares): Connection
+    {
+        return DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares($middlewares));
+    }
+
+    private function outageOf(string $account): UsageReadingsStayedAway
+    {
+        return new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+    }
+
+    // Matching no reading, because a look that ran before the reading committed could not see it yet.
     private static function beforeTheReading(string $sql): string
     {
         return str_starts_with($sql, 'SELECT') && str_contains($sql, ' FROM budget_window_reading ') ? str_replace(' WHERE ', ' WHERE 1 = 0 AND ', $sql) : $sql;
     }
 
-    // The reading's own end then runs as before the notice row existed, when it matched no row.
+    // Matching no notice, because an end that ran before the notice row existed found no row.
     private static function beforeTheNotice(string $sql): string
     {
         return str_replace(' WHERE ', ' WHERE 1 = 0 AND (', $sql).')';
