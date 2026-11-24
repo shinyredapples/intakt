@@ -113,6 +113,10 @@
           "symfony/*": {
             "constraint": "8.2.0-BETA2",
             "reason": "Owner decision 2026-11-13: one-time exception for v8.2.0-BETA2 (released 2026-11-13 17:29 UTC), removed once that release is older than the cooldown"
+          },
+          "twig/twig": {
+            "constraint": "3.31.1",
+            "reason": "Owner decision 2026-11-24: one-time exception for v3.31.1 (released 2026-11-24 12:48 UTC), the lowest release that clears the sandbox and autoescaping advisories published that day; removed once that release is older than the cooldown"
           }
         }
       }
