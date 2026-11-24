@@ -55,6 +55,18 @@ Trends mostly looks back. For the present moment, open **Now** in the menu. The 
 
 When nobody works, the page says so: "No reviewer is working right now: reviewers appear here while they review a change".
 
+## Projects: every project at a glance
+
+Now shows what is moving. To see how each project is doing, open **Projects** in the menu. Every project you configured, and every project that has had a review, gets one card.
+
+1. Read the word under the name: **Running** while one of its reviews runs, **Quiet** when none does, **Failing** when the watcher keeps failing to start a review of one of its pull requests, followed by the reason.
+2. Check the middle of the card: what the project has used so far (cost and tokens) and how many of its reviews are running, judged or failing.
+3. On the right, see which changes are being reviewed now and how the last three decided ones ended. Click one to open its review.
+4. An orange count means some of its reviews wait on you. Click it to open **Waiting on you**. A pull request handed over to the Maintainer waits on the Maintainer, so it is not counted there.
+5. Click the project's name to see all of its reviews. A long name is cut short on the card; point at it to read it whole.
+
+The cards update by themselves when a reviewer starts, when a round changes and when the watcher records a pull request's state. If the live connection is down, reload the page to see the latest.
+
 ## Status for scripts
 
 Your own scripts can ask the same question. The dashboard serves one JSON document at `/status`, for example <http://localhost:7781/status> on the demo. Inside the container, `php bin/console intakt:status --format=json` prints it too.
