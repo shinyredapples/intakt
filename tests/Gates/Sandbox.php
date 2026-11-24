@@ -98,6 +98,16 @@ final readonly class Sandbox
         $this->symlink('bin/console', dirname(__DIR__, 2).'/bin/console');
     }
 
+    // Because a rule fixture that names a service or a parameter must find it, the sandbox boots the kernel of the fixture `kernel-with-own-services`, which registers its own, instead of this repository's: a change to src/ or config/ services then cannot break the test. It borrows this repository's installed Symfony for its vendor folder.
+    public function bootFixtureKernel(): void
+    {
+        $this->copyFixture(self::FIXTURES.'/kernel-with-own-services');
+        unlink($this->root.'/src/Lookup.php');
+        $this->write('vendor/autoload.php', '<?php return require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).";\n");
+        // Because the kernel writes config/reference.php while it warms up, the tree ignores it in git as this repository does.
+        $this->startRepository();
+    }
+
     public function git(string ...$arguments): ProcessResult
     {
         // Without fsync, because a sandbox is a scratch repository that nothing reads after a crash, and side by side workers otherwise wait on each other's disk flushes.

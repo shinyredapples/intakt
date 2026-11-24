@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+final readonly class Letter
+{
+    public function __construct(private Signature $signature)
+    {
+    }
+
+    public function signature(): Signature
+    {
+        return $this->signature;
+    }
+}

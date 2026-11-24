@@ -31,9 +31,30 @@ trait UsesSandboxes
      */
     final protected static function casesOfOnePhpstanRun(array $fixtureAndFindingsOfEachCase, string $parent = ''): iterable
     {
+        return self::casesOfOneRunWith($fixtureAndFindingsOfEachCase, $parent, static fn (Sandbox $sandbox) => $sandbox->borrowKernel());
+    }
+
+    /**
+     * @param array<string, non-empty-list<string>> $fixtureAndFindingsOfEachCase
+     *
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    final protected static function casesOfOnePhpstanRunOnTheFixtureKernel(array $fixtureAndFindingsOfEachCase, string $parent = ''): iterable
+    {
+        return self::casesOfOneRunWith($fixtureAndFindingsOfEachCase, $parent, static fn (Sandbox $sandbox) => $sandbox->bootFixtureKernel());
+    }
+
+    /**
+     * @param array<string, non-empty-list<string>> $fixtureAndFindingsOfEachCase
+     * @param \Closure(Sandbox): void              $bootKernel
+     *
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    private static function casesOfOneRunWith(array $fixtureAndFindingsOfEachCase, string $parent, \Closure $bootKernel): iterable
+    {
         // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder (under a parent such as src/ when the rule judges only that folder, or its cases would pass unjudged), and a case still runs alone under --filter
         $sandbox = Sandbox::withFixturesInFoldersUnder($parent, ...array_unique(array_column($fixtureAndFindingsOfEachCase, 0)));
-        $sandbox->borrowKernel();
+        $bootKernel($sandbox);
 
         try {
             $run = $sandbox->check('--only=phpstan');

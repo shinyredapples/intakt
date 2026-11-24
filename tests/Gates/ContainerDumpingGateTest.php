@@ -19,7 +19,7 @@ final class ContainerDumpingGateTest extends SandboxTestCase
      */
     public static function casesOfOneRun(): iterable
     {
-        return self::casesOfOnePhpstanRun([
+        return self::casesOfOnePhpstanRunOnTheFixtureKernel([
             'AMisspelledServiceIdFailsStaticAnalysis' => ['misspelled-service-id', 'src/Lookup.php:17 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container.'],
             'ARegisteredServiceIdPassesStaticAnalysis' => ['registered-service-id'],
         ]);
@@ -62,7 +62,7 @@ final class ContainerDumpingGateTest extends SandboxTestCase
     public function testARegisteredServiceIdPassesStaticAnalysisWhenTheCallerNamesAnotherBuildDirectory(): void
     {
         $sandbox = $this->sandboxWith('registered-service-id');
-        $sandbox->borrowKernel();
+        $sandbox->bootFixtureKernel();
 
         $run = $sandbox->checkWith(['APP_BUILD_DIR' => $this->emptySandbox()->root], '--only=phpstan');
 
