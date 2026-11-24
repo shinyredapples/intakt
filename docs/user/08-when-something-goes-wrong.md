@@ -115,15 +115,15 @@ More cases, and the exact wording of every reason, are in the [complete referenc
 
 ## Trying the install the way a stranger does
 
-`bin/install-check` clones the project into a temporary folder and runs the README's install commands there, then plays the demo run in a browser, checks every dashboard page and, when you have set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, runs one review with that key. It never uses your own checkout.
+`bin/install-check` runs, in a temporary folder, every command of the README's install block as written, including its `git clone` (pointed at the repository you name). Then it plays the demo run in a browser, checks every dashboard page, walks the journeys when the clone has `bin/journey-check` and, when you have set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, runs one review with that key (it writes the key to the clone's `.env.local` and starts the container again, as the README's key path does). It never uses your own checkout, and the README's commands never see your keys or a GitHub token.
 
 ```
 bin/install-check                     # the GitHub repository's default branch
-bin/install-check /path/to/a/clone    # a local repository, for trying a change
+bin/install-check .                   # the repository you are in, for trying a change
 ```
 
-It prints one line per step (`passed`, `failed` or `skipped`) and, under a failed step, the last lines of its log. It exits 0 when every step passed, 1 when a step failed and 2 when it could not run (no `docker compose`, a clone that fails, a README without the install block). It needs Docker, Node.js 22 and Playwright, and port 7781 free. The logs, the screenshots and `report.json` are kept in `var/install-check/<date>-<time>/`. The containers are stopped and the clone is removed at the end, also when a step failed.
+It prints one line per step (`passed`, `failed` or `skipped`) and, under a failed step, the last lines of its log, with keys and the MCP owner token shown as `[redacted]`. It exits 0 when every step passed, 1 when a step failed (also a step that ran longer than 30 minutes, or containers that would not stop) and 2 when it could not run (no `docker compose`, a clone that fails, a README without the install block) or could not report. It needs Docker, Node.js 22 and Playwright, and port 7781 free. The logs, the screenshots and `report.json` are kept in `var/install-check/<date>-<time>-<6 hex digits>/`. The containers are stopped and the clone is removed at the end, also when a step failed. Each run has its own Docker Compose project, so it never stops or removes another install's containers.
 
-A failed step is reported as one urgent task per step: `GITHUB_REPOSITORY=owner/name bin/journey-alarm --install-check=var/install-check/<folder>/report.json` files it, or updates the task that is already open, and closes it when the step passes again. A daily scheduled run is added by a later change.
+When `GITHUB_REPOSITORY=owner/name` and `GH_TOKEN` are set, the check reports itself through `bin/journey-alarm`: one urgent task per failing step, updated while the step keeps failing and closed when it passes again. An install command is known by its place in the README block, so fixing a broken command closes its task; adding or removing a command above it leaves that task open, to close by hand. Without `GITHUB_REPOSITORY` it only prints. A daily scheduled run is added by a later change.
 
 Next: [Running it for a team](09-running-it-for-a-team.md)

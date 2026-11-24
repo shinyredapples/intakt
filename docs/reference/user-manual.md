@@ -246,6 +246,11 @@ It skips parsing the output, so a cut-off or empty output files or updates the s
 That task is titled `fix(journeys): the journeys run timed out on main` and says the run timed out instead of listing journeys.
 Without `--timed-out`, the command behaves as described above.
 
+`bin/journey-alarm --install-check=<report.json> [--run=<https link>]` reads the `report.json` of `bin/install-check` instead of journeys output; `bin/install-check` runs it itself when `GITHUB_REPOSITORY` is set ([Trying the install the way a stranger does](../user/08-when-something-goes-wrong.md#trying-the-install-the-way-a-stranger-does)).
+It takes no other file and no `--timed-out`: with either, or a report file it cannot read, it exits 2; a report that is not a list of named steps with `passed`, `failed` or `skipped` exits 1, as does a failing `gh` call.
+Each failing step gets its own urgent task, titled `fix(install): install check step "<step>" fails`, with the step and the last 40 lines of its log; a later failure of the same step rewrites that task, and a run where the step passes closes it, while a skipped step changes nothing.
+An install command is known by its place in the README's install block, so fixing a broken command closes its task.
+
 Intakt's CI runs the journeys on every push to main, and on a pull request that changes more than `docs/`, `tests/` or `upstream/` or touches the journeys' test code (`tests/Journeys`, `tests/Support`, `tests/Core/Watcher/RecordedPullRequests.php`), as the `journeys` job of the `ci` workflow (`.github/workflows/ci.yml`). It also runs them on main every night and whenever someone starts the `journeys` workflow (`.github/workflows/journeys.yml`) by hand ("Run workflow", or `gh workflow run journeys.yml`). The two differ in what a failure does. When the `journeys` job of `ci.yml` fails, that pull request's or push's CI run fails, and no task is filed. Only a red nightly or hand-started `journeys.yml` run files one urgent task, or updates the one already open while the journeys stay red ([Running Intakt's CI on your own runner](self-hosted-ci.md)). The nightly run and its alarm stay for now; they are removed once the `journeys` job of `ci.yml` has been green on main for a week.
 
 ## Regenerating the journey page
