@@ -162,7 +162,7 @@ final class JourneyContainerTest extends JourneyTestCase
     {
         $this->kernel?->shutdown();
 
-        if (null !== $this->kernel) {
+        if ($this->kernel instanceof Kernel) {
             $this->forgetTheRecording($this->kernel);
         }
     }
