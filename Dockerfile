@@ -67,7 +67,7 @@ USER intakt
 # No VOLUME: this is also Intakt's own job image, and the job runner refuses an image that declares one. Mount /app/var/data when running it.
 EXPOSE 7781
 
-# The admin API answers on localhost only; its metrics endpoint stops answering when the server is stuck, so Docker marks the container unhealthy. The script also asks the dashboard and, in the demo, waits for the seed.
+# The admin API answers on localhost only, so the check runs inside the container: intakt:server:health fails on an unhealthy hub, no ready worker thread or an admin endpoint that does not answer, so Docker marks the container unhealthy. The script also asks the dashboard and, in the demo, waits for the seed.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD ["intakt-healthcheck"]
 
