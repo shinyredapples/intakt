@@ -97,7 +97,7 @@ final readonly class DocsGate implements Gate
             $findings[] = $this->limits->limitsPage($path) ? $this->pageFinding($path, $page->words(), $list->pageCeiling($path)) : '';
         }
 
-        return array_values(array_filter($findings));
+        return array_values(array_filter($findings, static fn (string $finding): bool => '' !== $finding));
     }
 
     /**

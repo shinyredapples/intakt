@@ -27,7 +27,7 @@ final readonly class UnneededDocsEntries
             $findings[] = $this->pageFinding($path, $ceiling, $pages[$path] ?? null);
         }
 
-        return array_map(static fn (string $finding): string => DocsRatchetList::PATH.': '.$finding, array_values(array_filter($findings)));
+        return array_map(static fn (string $finding): string => DocsRatchetList::PATH.': '.$finding, array_values(array_filter($findings, static fn (string $finding): bool => '' !== $finding)));
     }
 
     /**
@@ -53,7 +53,7 @@ final readonly class UnneededDocsEntries
             $findings[] = $this->paragraphFinding('paragraph '.$key.' of '.$path, $ceiling, $words[(string) $key] ?? null);
         }
 
-        return array_values(array_filter($findings));
+        return array_values(array_filter($findings, static fn (string $finding): bool => '' !== $finding));
     }
 
     private function pageFinding(string $path, int $ceiling, ?MarkdownPage $page): string

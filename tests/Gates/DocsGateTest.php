@@ -346,11 +346,6 @@ final class DocsGateTest extends SandboxTestCase
         self::assertSame(['no base branch found, pass --base=<ref>'], $sandbox->gateResult($this->gate(), 'missing')->findings);
     }
 
-    private function gate(): DocsGate
-    {
-        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
-    }
-
     /**
      * @param array<string, int> $pages
      */
@@ -360,6 +355,11 @@ final class DocsGateTest extends SandboxTestCase
         $this->writeListedTree($sandbox, $pages);
 
         return $sandbox;
+    }
+
+    private function gate(): DocsGate
+    {
+        return new DocsGate(new MarkdownReader(new MarkdownCodeBlocks(new FencedCodeBlocks(), new MarkdownListIndents())));
     }
 
     /**
