@@ -65,9 +65,7 @@ final class DevelopmentCaddyfileTest extends TestCase
         }
 
         // Braces are balanced by the same change, so the lines that open and close the route block are left out of both sides.
-        $withoutBlocks = static fn (array $lines): array => array_values(array_filter($lines, static fn (string $line): bool => !in_array($line, ['route {', '}'], true)));
-
-        self::assertSame($withoutBlocks($shipped), $withoutBlocks($kept));
+        self::assertSame($this->withoutBlocks($shipped), $this->withoutBlocks($kept));
     }
 
     public function testTheShippedCaddyfileDeclaresNoWatchSoTheImageRunsAsItIsBuilt(): void
@@ -115,6 +113,16 @@ final class DevelopmentCaddyfileTest extends TestCase
         $lines = array_map(trim(...), explode("\n", (string) file_get_contents($path)));
 
         return array_values(array_filter($lines, static fn (string $line): bool => !str_starts_with($line, '#')));
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function withoutBlocks(array $lines): array
+    {
+        return array_values(array_diff($lines, ['route {', '}']));
     }
 
     /**
