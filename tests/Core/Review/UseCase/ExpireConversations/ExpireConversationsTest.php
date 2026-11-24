@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\UseCase\ExpireConversations;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Schema\Schema;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use DoctrineMigrations\Version20261029120000;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\UuidV7;
 
@@ -209,7 +211,11 @@ final class ExpireConversationsTest extends KernelTestCase
 
     public function testTheTaskNeverDeletesOrChangesALedgerEvent(): void
     {
-        $this->connection->executeStatement("INSERT INTO ledger_event (id, kind, payload, recorded_at, subject) VALUES ('11111111-1111-4111-8111-111111111111', 'reviewer_stopped', '{}', '2020-01-01 00:00:00', NULL)");
+        $this->connection->insert(
+            'ledger_event',
+            ['id' => new UuidV7(), 'kind' => 'reviewer_stopped', 'payload' => '{}', 'recorded_at' => new DateTimeImmutable('2020-01-01 00:00:00'), 'subject' => null],
+            ['id' => UuidType::NAME, 'recorded_at' => Types::DATETIME_IMMUTABLE],
+        );
         $before = $this->connection->fetchAllAssociative('SELECT * FROM ledger_event');
         $this->conversation($this->idStartedDaysAgo(100), 100);
 
