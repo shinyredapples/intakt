@@ -67,7 +67,7 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
         ));
     }
 
-    // The wizard splits the first-run page: the key form is on the AI account step and the review on the Ready step.
+    // On two steps, because the setup wizard keeps the key form on its AI account step and the recorded review on its Ready step.
     private function findTheKeyFormButNoStartButton(KernelBrowser $dashboard): void
     {
         self::assertCount(1, $dashboard->request('GET', '/setup?step=3')->filter('form.keep-provider-key'));
