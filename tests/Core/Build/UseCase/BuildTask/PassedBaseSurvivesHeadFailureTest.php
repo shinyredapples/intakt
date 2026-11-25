@@ -149,7 +149,7 @@ final class PassedBaseSurvivesHeadFailureTest extends TestCase
 
             self::assertSame(
                 'the new test of a bug also passes on the base, so it proves nothing',
-                $check->failureOf($request, $bundle, TaskKind::Bug),
+                $check->resultOf($request, $bundle, TaskKind::Bug)->failure,
             );
         } finally {
             $history->remove();
