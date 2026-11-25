@@ -10,7 +10,7 @@ Your team saw the Trends page and wants Intakt on its own repository, with its o
 
 The demo's sample project was set up for you. Your own project lives in the project file: the file `INTAKT_CONFIG` names, or `config/intakt.yaml` when that variable is not set. Under `docker compose`, `INTAKT_CONFIG` names `/app/var/data/intakt.yaml` on the data volume, so editing `config/intakt.yaml` in your clone changes nothing there.
 
-The dashboard's **Add a project** (on the Projects page, or "add" in the search) walks through the same steps: it checks the repository address, shows which watched projects fail to boot, and checks a weekly share and an issue label. It keeps nothing yet, so the project file below is still where a project is added.
+The dashboard's **Add a project** (on the Projects page, or "add" in the search) walks through the same steps, with the mouse or the keyboard alone: it checks the repository address, shows which watched projects fail to boot, and checks a weekly share and an issue label. It keeps nothing yet, so the project file below is still where a project is added.
 
 This chapter's commands run on an install started from a clone with PHP, not in the demo container: the container sees only its data volume, never a repository on your machine, and Intakt must be able to read the repository it reviews.
 
