@@ -13,6 +13,9 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class InfrastructureCheck
 {
+    /**
+     * @phpstan-param T|EndpointDown $source
+     */
     private function __construct(
         private WorkerThreads|ServerMetrics|HubHealth|EndpointDown $source,
         public ?string $problem,
@@ -57,9 +60,8 @@ final readonly class InfrastructureCheck
         return null === $this->problem;
     }
 
+    // Callers get the reading or the down reason from here, because deciding which they have is part of the check and must have no second copy (decision D1 of #3826).
     /**
-     * A caller shows what the check read, or why its source could not be read, without telling the two apart itself.
-     *
      * @template R
      *
      * @param Closure(T): R      $read
