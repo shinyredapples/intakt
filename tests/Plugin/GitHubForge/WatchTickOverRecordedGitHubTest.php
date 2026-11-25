@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -16,6 +17,7 @@ use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -59,13 +61,19 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
 use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
+use Intakt\Plugin\Forge\Contract\StatusLabels;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCiRuns;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubLabelWrites;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusLabels;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubWatchReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -100,7 +108,37 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private EntityManagerInterface $entities;
 
+    private const string GREEN_PULL = 'https://github.com/acme/widgets/pull/8';
+
     private string $firstHeadRuns = 'runs_in_progress.json';
+
+    private Labels $steeringLabels;
+
+    private ?StatusLabels $statusLabels = null;
+
+    private bool $published = false;
+
+    // E1 of #25: the steering labels a person with write access applied stay, and the one status label follows the stored round from queueing to publication.
+    public function testAPullRequestKeepsItsSteeringLabelsAndShowsOneStatusLabelBeforeARoundAfterQueueingAndAfterPublication(): void
+    {
+        $pull = new RecordedPullRequestLabels('/repos/acme/widgets/issues/8', RecordedTrust::OWN_IDENTITY);
+        $pull->applied('review:full', RecordedTrust::WRITER);
+        $pull->applied('model:strong', RecordedTrust::WRITER);
+        $before = $pull->labels;
+        $commands = new RecordingCommandBus();
+        $this->steeringLabels = new Labels('review:full', 'model:strong');
+        $this->statusLabels = $this->statusLabelsOver($pull, $commands);
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+        $queued = $pull->labels;
+        $this->published = true;
+        new RoundStatusMirror(new NullLogger(), $this->statusLabels)->reconcile('alpha', new ChangeId(self::GREEN_PULL));
+
+        self::assertSame(
+            [['review:full', 'model:strong'], ['review:full', 'model:strong'], ['review:full', 'model:strong', 'status:in-review'], ['review:full', 'model:strong', 'status:waiting-on-you'], []],
+            [$before, [...$commands->started[0]->start->labels], $queued, $pull->labels, $pull->comments],
+        );
+    }
 
     public function testATickOverTwoRecordedPullRequestsRecordsOnePendingHeadAndQueuesOneRound(): void
     {
@@ -198,8 +236,38 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
+        $this->steeringLabels = new Labels();
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+    }
+
+    // The stored round stands in for Review's: in review once the watcher queued it, waiting on you once its verdict is published, because the recording bus queues no real round.
+    private function statusLabelsOver(RecordedPullRequestLabels $pull, RecordingCommandBus $commands): GitHubStatusLabels
+    {
+        $identity = new RecordedTrust()->client();
+        $http = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => $pull->answers((string) parse_url($url, PHP_URL_PATH))
+            ? $pull->answer($method, (string) parse_url($url, PHP_URL_PATH), is_string($options['body'] ?? null) ? $options['body'] : '')
+            : $identity->request($method, $url, $options), 'https://api.github.com');
+        $wiring = TrustChecks::wiring($http);
+        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
+        $round = new class(fn (): ?RoundStatusLabel => match (true) {
+            [] === $commands->started => null,
+            $this->published => RoundStatusLabel::WaitingOnYou,
+            default => RoundStatusLabel::InReview,
+        }) implements LatestRoundStatus {
+            public function __construct(private readonly Closure $now)
+            {
+            }
+
+            public function of(string $project, string $change): ?RoundStatusLabel
+            {
+                $status = ($this->now)();
+
+                return $status instanceof RoundStatusLabel ? $status : null;
+            }
+        };
+
+        return new GitHubStatusLabels($round, new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), new GitHubLabelWrites($wiring->calls, $wiring->tokens), new LockFactory(new InMemoryStore()), new NullLogger());
     }
 
     private function pushOf(string $branch, string $head): BranchPushRequest
@@ -227,8 +295,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
         $steering = self::createStub(ChangeLabels::class);
-        $steering->method('steeringOf')->willReturn(new Labels());
-        $starts = new RoundStarts($commands, $rounds, $ledger, $steering, new RoundStatusMirror($logger));
+        $steering->method('steeringOf')->willReturn($this->steeringLabels);
+        $starts = new RoundStarts($commands, $rounds, $ledger, $steering, new RoundStatusMirror($logger, $this->statusLabels));
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $queries = new StandingQueryBus($recorded, $this->entities);
         // Main's boot line goes to a ledger of its own, because the test counts only the lines of the two heads.
