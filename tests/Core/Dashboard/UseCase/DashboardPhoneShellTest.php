@@ -191,7 +191,7 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         // Unindented, so the rule stands outside every media block.
         self::assertMatchesRegularExpression('/^\.filters #history-project \{ display: none; \}$/m', $sheet);
         self::assertStringContainsString('display: block', $this->phoneRulesOf($sheet)['.filters #history-project'] ?? '');
-        self::assertStringContainsString('height: 44px', $this->phoneRulesOf($sheet)['.filters #history-project'] ?? '');
+        self::assertStringContainsString('height: 48px', $this->phoneRulesOf($sheet)['.filters #history-project'] ?? '');
     }
 
     public function testOnPhonesHistoryClipsItsColumnHeadersInsteadOfRemovingThemFromScreenReaders(): void

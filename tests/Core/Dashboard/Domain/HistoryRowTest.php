@@ -100,6 +100,14 @@ final class HistoryRowTest extends TestCase
         self::assertSame('Owner asked', $unnamed->label());
     }
 
+    public function testAStopRequestFromTheDashboardCountsAsFromTheDashboardWithoutAnActor(): void
+    {
+        $stop = HistoryRow::of(new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewerStopRequested, '{"round":"round-1","reviewer":"reviewer-1"}'), new DateTimeImmutable('2026-11-25T10:00:00+00:00')));
+
+        self::assertSame(HistorySource::Dashboard, $stop->source);
+        self::assertSame(HistorySource::Intakt, HistoryRow::of($this->recorded(['round' => 'round-1']))->source);
+    }
+
     public function testAnEmptyActorOnASecretChangeIsIntaktAndTheValuesStayHidden(): void
     {
         $row = HistoryRow::of($this->recorded(['actor' => '', 'project' => '', 'fingerprint' => 'abc', 'before' => 'previous', 'after' => 'next']));

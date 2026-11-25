@@ -78,7 +78,7 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
     {
         $this->record(['actor' => 'owner']);
 
-        $toolbar = $this->browser->request('GET', '/history')->filter('.filters[role="toolbar"][data-history-filter]');
+        $toolbar = $this->browser->request('GET', '/history')->filter('.filters[role="group"][data-history-filter]');
 
         self::assertSame(['Everything', 'From the dashboard', 'By Intakt', 'Limits', 'Projects', 'Accounts'], $toolbar->filter('button.fchip')->each(static fn (Crawler $chip): string => $chip->text()));
         self::assertSame(['true', 'false', 'false', 'false', 'false', 'false'], $toolbar->filter('button.fchip')->each(static fn (Crawler $chip): string => (string) $chip->attr('aria-pressed')));

@@ -315,8 +315,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .input, .select { height: 48px; }
   /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page. */
   .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); }
-  .filters .input { flex: none; min-width: 200px; height: 44px; }
-  .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 44px; }
+  .filters .input { flex: none; min-width: 200px; height: 48px; }
+  .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 48px; }
   /* The mock stacks a History row's cells on a phone. The headers are clipped like .sr-only rather than removed, so a screen reader still names a stacked cell, also one that reads only "None". A row the project filter or a chip hides keeps display: none, which the row rule would otherwise beat. */
   .ledger.history thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .ledger.history tr:not([hidden], [data-filtered-out]) { display: grid; grid-template-columns: minmax(0, 1fr); padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }

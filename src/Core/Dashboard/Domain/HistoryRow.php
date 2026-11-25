@@ -43,7 +43,7 @@ final readonly class HistoryRow
             $recorded->recordedAt->setTimezone(new DateTimeZone('UTC')),
             $recorded->event->kind->value,
             $actor ?? self::UNNAMED_ACTOR,
-            null === $actor ? HistorySource::Intakt : HistorySource::Dashboard,
+            self::sourceOf($actor, $recorded->event->kind),
             self::filled($fields->text('project')),
             $fields->text('round'),
             $isSecret ? null : $fields->text('before'),
@@ -65,6 +65,12 @@ final readonly class HistoryRow
         }
 
         return clone ($this, ['project' => $projectOfRound[$this->round]]);
+    }
+
+    // Only the dashboard's Stop button writes a reviewer stop request, and that row names no actor, so its kind alone says where it came from.
+    private static function sourceOf(?string $actor, LedgerEventKind $kind): HistorySource
+    {
+        return null !== $actor || LedgerEventKind::ReviewerStopRequested === $kind ? HistorySource::Dashboard : HistorySource::Intakt;
     }
 
     // The arrow is for a literal change, so it needs two values that differ.
