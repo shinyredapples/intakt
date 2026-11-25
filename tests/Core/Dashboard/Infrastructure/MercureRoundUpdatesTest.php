@@ -753,6 +753,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
         // Registered because the judged stream links the Now box's findings to the Full record by its route.
         $twig->addFunction(new TwigFunction('path', static fn (string $route, array $parameters = []): string => $route.'?'.http_build_query($parameters)));
+        // Registered because the judged stream links each finding to fix to its own page.
+        $twig->addFunction(new TwigFunction('finding_path', static fn (string $round, string $finding): string => 'finding?'.http_build_query(['round' => $round, 'finding' => $finding])));
         // Registered because a judged finding's text shows its backtick spans as code.
         $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
         $twig->addFunction(new TwigFunction('finding_title_spans', new FindingSpans()->ofATitle(...)));
