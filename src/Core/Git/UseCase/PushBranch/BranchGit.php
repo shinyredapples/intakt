@@ -198,7 +198,7 @@ final readonly class BranchGit
      */
     private function withCredential(#[SensitiveParameter] array $environment, ?RemoteCredential $credential): array
     {
-        if (null === $credential) {
+        if (!$credential instanceof RemoteCredential) {
             return $environment;
         }
 

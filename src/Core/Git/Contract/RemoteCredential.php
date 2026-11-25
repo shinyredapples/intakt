@@ -23,6 +23,6 @@ final readonly class RemoteCredential
     // Basic authentication in the form git's http.extraHeader sends, because a header reaches neither git's command line nor the remote's address.
     public function authorizationHeader(): string
     {
-        return 'Authorization: Basic '.base64_encode($this->user.':'.(string) $this->password->getValue());
+        return 'Authorization: Basic '.base64_encode($this->user.':'.$this->password->getValue());
     }
 }
