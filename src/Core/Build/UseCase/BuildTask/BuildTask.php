@@ -15,6 +15,7 @@ use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
@@ -24,6 +25,7 @@ use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRuns;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -156,8 +158,7 @@ final readonly class BuildTask
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
-                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
-                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels))) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
+                BuildStep::PrePushCheck => $this->prePushCheck($request, $task, $results),
                 BuildStep::Push => $this->push($request, $results),
             };
 
@@ -224,7 +225,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function bundleIn(array $results): string
     {
@@ -233,7 +234,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function builtIn(array $results): BuildJobOutcome
     {
@@ -242,8 +243,25 @@ final readonly class BuildTask
         return $built instanceof BuildJobOutcome ? $built : throw new LogicException('the checks and the push run only after a build job that built');
     }
 
+    // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back. The regression runs of a passed check are the step's result, for the push.
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
+     */
+    private function prePushCheck(BuildTaskRequest $request, ListedIssue $task, array $results): RegressionRuns|string|null
+    {
+        $failure = $this->updateMirror($request);
+
+        if (null !== $failure) {
+            return $failure;
+        }
+
+        $checked = $this->prePushChecks->resultOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels)));
+
+        return $checked->failure ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))) ?? $checked->runs;
+    }
+
+    /**
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function textIn(array $results): string
     {
@@ -257,7 +275,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function push(BuildTaskRequest $request, array $results): ?string
     {
@@ -269,12 +287,13 @@ final readonly class BuildTask
             throw new LogicException('the push runs only after an accepted hand-back');
         }
 
-        $changeText = $this->changeTextOf($text);
+        $runs = $results[BuildStep::PrePushCheck->value] ?? null;
+        $changeText = $this->changeTextOf($text, $runs instanceof RegressionRuns ? $runs : null);
 
         return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
     }
 
-    private function questionIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?BuildQuestion
+    private function questionIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null $result): ?BuildQuestion
     {
         return $result instanceof BuildJobOutcome ? $result->question : ($result instanceof BuildQuestion ? $result : null);
     }
@@ -294,17 +313,18 @@ final readonly class BuildTask
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
-    private function failureIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?string
+    private function failureIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null $result): ?string
     {
         return is_string($result) ? $result : null;
     }
 
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
-    private function changeTextOf(string $text): ChangeText|string
+    private function changeTextOf(string $text, ?RegressionRuns $runs): ChangeText|string
     {
         $title = explode("\n", $text, 2)[0];
+        $body = $this->bodyOf($text);
 
-        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $this->bodyOf($text));
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $runs instanceof RegressionRuns ? new RegressionEvidence($runs)->addedTo($body) : $body);
     }
 
     // Asked before the build job runs, because a bug without its four parts has no failing test to write first and the builder would guess it.

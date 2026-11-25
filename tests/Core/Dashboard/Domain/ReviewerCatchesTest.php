@@ -64,6 +64,13 @@ final class ReviewerCatchesTest extends TestCase
         self::assertSame(['security' => [0, 0, 1]], $this->alone(ReviewerCatches::of([$round])));
     }
 
+    public function testARoundWithAReporterWhoseRowRecordedNoSeveritiesIsLeftOut(): void
+    {
+        $round = $this->judged([$this->act('F1', 'P1')], ['security' => ['F1'], 'correctness' => []])->withSeveritiesByReviewer(['r-1-security' => ['F1' => 'P1']]);
+
+        self::assertNull(ReviewerCatches::of([$round]));
+    }
+
     public function testRolesAddUpOverRounds(): void
     {
         $first = $this->judged([$this->act('F1', 'P1')], ['security' => ['F1']]);

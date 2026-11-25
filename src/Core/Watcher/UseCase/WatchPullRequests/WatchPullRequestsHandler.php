@@ -8,6 +8,7 @@ use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Watcher\Contract\ListingInProgress;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Throwable;
 
 #[AsCommandHandler]
 final readonly class WatchPullRequestsHandler
@@ -16,17 +17,24 @@ final readonly class WatchPullRequestsHandler
         private WatchedProjects $projects,
         private ChangedHeads $changed,
         private LookAtHeads $heads,
+        private StatusMirrors $statuses,
     ) {
     }
 
     /**
      * @throws ForgeReadFailed
      * @throws WatcherEventNotRecorded
+     * @throws Throwable
      */
     public function __invoke(WatchPullRequests $tick): void
     {
         $project = $this->projects->named($tick->project);
 
+        $this->statuses->reconcileAfter($project, fn () => $this->lookAtHeads($project));
+    }
+
+    private function lookAtHeads(WatchedProject $project): void
+    {
         try {
             $this->changed->enqueue($project->name);
         } catch (ListingInProgress) {
