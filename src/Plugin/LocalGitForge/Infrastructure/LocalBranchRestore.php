@@ -18,7 +18,7 @@ use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 use Throwable;
 
-// Apart from LocalForgeBranches, because a restore shares none of the checks its reads and deletes make.
+// Apart from LocalForgeBranches, because a restore shares none of the checks its reads and deletes make, and itself never deletes.
 final readonly class LocalBranchRestore
 {
     private const int TIMEOUT_SECONDS = 60;
@@ -37,7 +37,7 @@ final readonly class LocalBranchRestore
         $name = $restore->name;
         $common = $this->commonDirectory($name);
         $this->refuseExisting($name);
-        $before = $this->branchRefs($name, 'before the push');
+        $before = $this->refs($name, 'before the push');
 
         $this->settle($restore, $before, $this->failureOfPush($restore, $common));
     }
@@ -63,13 +63,13 @@ final readonly class LocalBranchRestore
         }
     }
 
-    // Every ref under refs/heads/ with its commit and, for a symbolic one, its target, so the refs that exist before the push are known by name and never removed after it.
+    // Every ref of every namespace with its object and, for a symbolic one, its target, because a push through a branch another writer made symbolic can write a ref anywhere, a tag included, and the refusal has to name it.
     /**
      * @return array<string, array{string, string}>
      */
-    private function branchRefs(string $name, string $moment): array
+    private function refs(string $name, string $moment): array
     {
-        $process = $this->git($name, ['for-each-ref', '--format=%(refname) %(objectname) %(symref)', 'refs/heads/']);
+        $process = $this->git($name, ['for-each-ref', '--format=%(refname) %(objectname) %(symref)', 'refs/']);
 
         if (!$process->isSuccessful()) {
             throw $this->notRestored($name, sprintf('git for-each-ref failed %s: %s', $moment, trim($process->getErrorOutput())));
@@ -97,7 +97,7 @@ final readonly class LocalBranchRestore
         return null;
     }
 
-    // A symbolic branch another writer makes after the check is not listed to the push, whose empty lease then lets the remote create the branch it names. That ref is removed only when git push reported the new branch and it is the one new ref, because only then is it proven to be the push's own; in every other case nothing is removed and the new refs are named.
+    // A restore only when git push reported the new branch (no failure) and the branch is then a plain ref at the archived head that was missing before; everything else is refused. Nothing is ever deleted or moved, because no listing proves which writer made a ref, and a left-over ref can be removed by hand while a deleted branch of someone else is lost.
     /**
      * @param array<string, array{string, string}> $before
      */
@@ -105,46 +105,23 @@ final readonly class LocalBranchRestore
     {
         $name = $restore->name;
 
-        // A push refused before git push ran wrote nothing, so no ref is looked for and none removed.
+        // A push refused before git push ran wrote nothing, so there is no ref to name.
         if (RemoteWrite::None === $failed?->write) {
             throw $this->notRestored($name, $failed->getMessage(), $failed);
         }
 
-        $made = $this->refsMadeSince($restore, $before);
+        $head = $restore->head->hash;
         $ref = 'refs/heads/'.$name;
-        $elsewhere = array_values(array_diff($made, [$ref]));
+        $after = $this->refs($name, 'after the push, so a ref the push wrote may be left');
 
-        if (in_array($ref, $made, true) && !$failed instanceof BranchNotPushed) {
+        if (!$failed instanceof BranchNotPushed && !array_key_exists($ref, $before) && [$head, ''] === ($after[$ref] ?? null)) {
             return;
         }
 
-        if ([] === $elsewhere || in_array($ref, $made, true)) {
-            throw $this->notRestored($name, $failed?->getMessage() ?? 'it is no branch at the archived head after the push, so another writer changed it during the restore.', $failed);
-        }
+        $reason = $failed?->getMessage() ?? sprintf('%s is no plain branch at the archived head after the push, so another writer changed it during the restore', $ref);
+        $left = array_keys(array_filter($after, static fn (array $state, string $made): bool => $head === $state[0] && !array_key_exists($made, $before), ARRAY_FILTER_USE_BOTH));
 
-        $target = $elsewhere[0];
-
-        if (RemoteWrite::Unknown === $failed?->write || [$target] !== $elsewhere) {
-            throw $this->notRestored($name, sprintf('another writer changed it during the restore, the push may have written one of %s, and nothing was removed, because none is proven to be the push\'s own.', implode(', ', $elsewhere)), $failed);
-        }
-
-        $undo = $this->git($name, ['update-ref', '--no-deref', '-d', $target, $restore->head->hash]);
-
-        throw $this->notRestored($name, $undo->isSuccessful() ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target) : sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())), $failed);
-    }
-
-    // Only refs that are not symbolic, hold the archived head and were missing before the push, because the push's empty lease can create a ref and never move one, so a ref that was there before is not the push's and is never removed.
-    /**
-     * @param array<string, array{string, string}> $before
-     *
-     * @return list<string>
-     */
-    private function refsMadeSince(BranchRestore $restore, array $before): array
-    {
-        $head = $restore->head->hash;
-        $after = $this->branchRefs($restore->name, 'after the push, so a branch the push wrote through a symbolic branch may be left');
-
-        return array_keys(array_filter($after, static fn (array $state, string $ref): bool => [$head, ''] === $state && !array_key_exists($ref, $before), ARRAY_FILTER_USE_BOTH));
+        throw $this->notRestored($name, sprintf('%s. %s', $reason, [] === $left ? 'Nothing was removed, and no ref new since the push began holds the archived head.' : sprintf('Nothing was removed; the refs new since the push began that hold the archived head are %s.', implode(', ', $left))), $failed);
     }
 
     /**

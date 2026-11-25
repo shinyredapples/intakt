@@ -107,7 +107,7 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
         }
     }
 
-    // Every failure from here on says whether the remote may hold a new ref, because a remote can follow a symbolic branch and write another ref than the one pushed to, which only the forge can find and remove.
+    // Every failure from here on says whether the remote may hold a new ref, because a remote can follow a symbolic branch and write another ref than the one pushed to, which only the forge can find and name.
     private function create(BranchGit $git, ArchivedHead $head, #[SensitiveParameter] string $remote): void
     {
         $branch = $head->head->branch;
