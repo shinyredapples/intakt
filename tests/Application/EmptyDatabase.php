@@ -51,6 +51,7 @@ final class EmptyDatabase
         }
 
         // A migration test leaves the append-only triggers of the ledger behind; a schema the tool creates has none, so they go to make this reset equal to one.
+        // Temp-schema objects are left alone because they end with the connection that created them.
         foreach (self::names($connection, 'trigger') as $trigger) {
             $connection->executeStatement(sprintf('DROP TRIGGER %s', $platform->quoteSingleIdentifier($trigger)));
         }
