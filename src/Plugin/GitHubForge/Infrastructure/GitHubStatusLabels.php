@@ -56,36 +56,24 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
     }
 
-    // The comment follows the first write that changed the labels, so the latest event is Intakt's own and a retry posts no second one.
+    // The comment follows the first write that changed the labels and comes before any further write, so a later write that fails still leaves the one comment and a retry posts none.
     private function rewrite(StatusReconciliation $reconciliation, PullRequestAddress $address, ?TaskIssue $owed): void
     {
-        $removed = $this->removed($address, $reconciliation->remove);
-        // Before the add when a removal changed the labels, so an add that fails still leaves the one comment.
-        if ($removed) {
-            $this->restored($owed);
+        $pending = $owed;
+        foreach ($reconciliation->remove as $label) {
+            // A removal that found the label gone changed nothing, so it owes no comment yet.
+            if ($this->writes->remove($address->issuePath(), $label) && $pending instanceof TaskIssue) {
+                $this->restored($pending);
+                $pending = null;
+            }
         }
         if (!$reconciliation->add instanceof RoundStatusLabel) {
             return;
         }
 
         $this->writes->add($address->issuePath(), $reconciliation->add->value);
-        // A removal that found the label gone changed nothing, so the add is the first write and a failed add posts nothing.
-        if (!$removed) {
-            $this->restored($owed);
-        }
-    }
-
-    /**
-     * @param list<string> $labels
-     */
-    private function removed(PullRequestAddress $address, array $labels): bool
-    {
-        $removed = false;
-        foreach ($labels as $label) {
-            $removed = $this->writes->remove($address->issuePath(), $label) || $removed;
-        }
-
-        return $removed;
+        // The add is the first write that changed anything when no removal did, so a failed add posts nothing.
+        $this->restored($pending);
     }
 
     // A post that fails is not retried, because the next pass finds Intakt's own write as the latest event: the comment is lost, never doubled, and the labels are still repaired.

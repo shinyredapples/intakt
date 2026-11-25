@@ -87,6 +87,10 @@ final class GitHubStatusLabelsTest extends TestCase
 
     private bool $refuseAdds = false;
 
+    private int $failingDelete = 0;
+
+    private int $deletes = 0;
+
     private bool $refuseComments = false;
 
     private ?string $unlabeledByDelete = null;
@@ -293,6 +297,23 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->reconcile();
 
         self::assertSame([['status:waiting-on-you'], 1], [$this->statusesNow(), count($this->comments)]);
+    }
+
+    public function testAFailedSecondRemovalStillLeavesTheOneCommentOfTheFirstAndTheRetryPostsNone(): void
+    {
+        $this->round = RoundStatusLabel::WaitingOnYou;
+        $this->labeled('status:in-review', self::PERSON);
+        $this->labeled('status:queued', self::PERSON);
+        $this->failingDelete = 2;
+        try {
+            $this->matching();
+        } catch (ForgeWriteFailed) {
+        }
+        $commentsAfterTheFailedPass = count($this->comments);
+
+        $this->matching();
+
+        self::assertSame([1, ['status:waiting-on-you'], 1], [$commentsAfterTheFailedPass, $this->statusesNow(), count($this->comments)]);
     }
 
     public function testAnAddThatFailsWithoutARemovalPostsNoCommentAndTheRetryAddsWithOneComment(): void
@@ -564,6 +585,9 @@ final class GitHubStatusLabelsTest extends TestCase
         }
 
         if ('POST' === $method && $this->refuseAdds) {
+            return new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]);
+        }
+        if ('DELETE' === $method && ++$this->deletes === $this->failingDelete) {
             return new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]);
         }
         if ('DELETE' === $method && null !== $this->unlabeledByDelete) {
