@@ -22,11 +22,11 @@ flowchart LR
   score --> report
 ```
 
-Each bench change is a pair: the **base**, the sample project before the change, and the **change** itself, the edit a pull request would bring. The review panel reads the change exactly as it would read a real pull request. The judge only sorts what the reviewers found; the score comes from comparing each reviewer's own findings with the planted mistakes, so every reviewer is measured on its own.
+Each bench change is a pair: the **base**, the sample project before the change, and the **change** itself, the edit a pull request would bring. The Code reviewers read the change exactly as it would read a real pull request. The judge only sorts what the reviewers found; the score comes from comparing each reviewer's own findings with the planted mistakes, so every reviewer is measured on its own.
 
 ## Both commands call your paid models
 
-Each review of a bench change is a real review by your project's review panel: every reviewer reads the change once, and the judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
+Each review of a bench change is a real review by your project's Code reviewers: every reviewer reads the change once, and their judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
 
 ## Two commands
 
@@ -43,7 +43,7 @@ Each review of a bench change is a real review by your project's review panel: e
 flowchart TD
   s[You start intakt:bench] --> c[Take the next bench change]
   c --> f[Make a fresh copy of its code]
-  f --> r[The review panel reviews it:<br/>paid model calls]
+  f --> r[The Code reviewers review it:<br/>paid model calls]
   r --> k[Compare the findings with<br/>the planted mistakes]
   k --> d[Delete the copy]
   d -- more changes or repeats --> c

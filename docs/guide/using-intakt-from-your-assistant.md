@@ -21,13 +21,13 @@ flowchart LR
 | start a review | reviews a branch end to end and reports progress while it waits (built; a pull request is planned) | yes |
 | review status | where a review stands (built) | no, read only |
 | read verdicts | each reviewer's verdict and findings (built) | no, read only |
-| read the act list | what the builder must fix, after the judge step (built) | no, read only |
+| read the act list | what the Developer must fix, after the judge step (built) | no, read only |
 | list projects | the projects this install runs (built) | no, read only |
 
 **The review skill.** Instead of telling your assistant the details of a review, install the `intakt-review` skill (a small file in the `skills/intakt-review` folder; copy the folder into your assistant's skills folder) and say "intakt review". The assistant finds the branch, the base and the task itself, starts a review, fixes only what the list of things to fix names, and reviews again. For the demo it uses the sample's branch and task, and makes its fixes inside the demo's container, where the sample lives. It stops when the reviewers approve, when only minor findings remain, or after three rounds (five when a finding is about security or lost data). Running out of rounds is not an approval, and the short report at the end says so.
 
 When a review ends, its answer says how it ended, in one of three ways:
-- **judged:** the reviewers and the judge finished, and the decision (approve, changes or blocked) is their result. In a project stored as a replay (a recording played back for the demo), the decision is always blocked, with the reason that a replay never counts as a verdict.
+- **judged:** the reviewers and their judge finished, and the decision (approve, changes or blocked) is their result. In a project stored as a replay (a recording played back for the demo), the decision is always blocked, with the reason that a replay never counts as a verdict.
 - **judging failed:** the reviewers reported, but the judge could not finish. The decision is blocked, with the reason that the judging failed.
 - **no outcome in time:** the round did not end within its time limit, for example because no review worker was running. The decision is blocked, with the reason "no outcome in time". Start the worker (`messenger:consume async`) and review again.
 

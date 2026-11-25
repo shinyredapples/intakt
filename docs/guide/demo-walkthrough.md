@@ -5,7 +5,7 @@ A guided first run: start Intakt with a sample project, watch it review a change
 ## What you need
 
 - Docker (or Podman).
-- One AI provider key, or a Hugging Face token instead (with only the permission "Make calls to Inference Providers"); two keys from different companies show the full two-company review panel. The reviews' calls are billed to whoever owns the key or the token. Without either, you can still watch a recorded review: see [Playing back a recorded review](#playing-back-a-recorded-review).
+- One AI provider key, or a Hugging Face token instead (with only the permission "Make calls to Inference Providers"); two keys from different companies show the full two-company team of Code reviewers. The reviews' calls are billed to whoever owns the key or the token. Without either, you can still watch a recorded review: see [Playing back a recorded review](#playing-back-a-recorded-review).
 - About five minutes.
 
 ## The path
