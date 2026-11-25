@@ -61,6 +61,35 @@ final readonly class ReadableLines
         return $this->blockAt($line, $number, $state);
     }
 
+    // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
+    private function closes(string $line, string $fence): bool
+    {
+        return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
+    }
+
+    /**
+     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     *
+     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     */
+    private function htmlAfter(string $line, array $state): array
+    {
+        $ends = self::BLANK === $state['html'] ? '' === trim($line) : 1 === preg_match($state['html'] ?? '', $line);
+
+        return $this->withParagraph($state, null, $ends ? null : $state['html']);
+    }
+
+    /**
+     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     * @param ?array{int, string}                                                  $paragraph
+     *
+     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     */
+    private function withParagraph(array $state, ?array $paragraph, ?string $html = null): array
+    {
+        return ['fence' => $state['fence'], 'html' => $html, 'paragraph' => $paragraph];
+    }
+
     /**
      * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
      *
@@ -91,7 +120,7 @@ final readonly class ReadableLines
             return [$this->withParagraph($state, null), null];
         }
 
-        $end = $this->htmlEnd($line, null !== $paragraph);
+        $end = $this->htmlEnd($line, $paragraph);
 
         if (null !== $end) {
             return [$this->htmlAfter($line, $this->withParagraph($state, null, $end)), null];
@@ -102,31 +131,38 @@ final readonly class ReadableLines
         return [$this->withParagraph($state, null === $paragraph ? [$number, $text] : [$paragraph[0], $paragraph[1].' '.$text]), null];
     }
 
-    /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
-     * @param ?array{int, string}                                                  $paragraph
-     *
-     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
-     */
-    private function withParagraph(array $state, ?array $paragraph, ?string $html = null): array
+    private function opening(string $line): ?string
     {
-        return ['fence' => $state['fence'], 'html' => $html, 'paragraph' => $paragraph];
+        if (1 !== preg_match('/^ {0,3}(`{3,}|~{3,})(.*)$/', $line, $match)) {
+            return null;
+        }
+
+        // A backtick fence's info string holds no backtick, because such a line is an inline code span.
+        return '`' === $match[1][0] && str_contains($match[2], '`') ? null : $match[1];
     }
 
     /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
-     *
-     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     * @return ?array{int, string}
      */
-    private function htmlAfter(string $line, array $state): array
+    private function headingOf(string $line): ?array
     {
-        $ends = self::BLANK === $state['html'] ? '' === trim($line) : 1 === preg_match($state['html'] ?? '', $line);
+        return 1 === preg_match('/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? [strlen($heading[1]), $heading[2] ?? ''] : null;
+    }
 
-        return $this->withParagraph($state, null, $ends ? null : $state['html']);
+    private function underlineLevel(string $line): ?int
+    {
+        if (1 === preg_match('/^ {0,3}=+[ \t]*$/', $line)) {
+            return 1;
+        }
+
+        return 1 === preg_match('/^ {0,3}-+[ \t]*$/', $line) ? 2 : null;
     }
 
     // Kinds 6 and 7 end at a blank line, which is not part of the block, so the pattern for them is the marker word.
-    private function htmlEnd(string $line, bool $inParagraph): ?string
+    /**
+     * @param ?array{int, string} $paragraph
+     */
+    private function htmlEnd(string $line, ?array $paragraph): ?string
     {
         $kinds = [
             '#^ {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)#i' => '#</(?:pre|script|style|textarea)>#i',
@@ -144,39 +180,6 @@ final readonly class ReadableLines
         }
 
         // A lone tag cannot interrupt a paragraph, because it is then inline HTML of that paragraph.
-        return !$inParagraph && 1 === preg_match('#^ {0,3}(?:<[A-Za-z][A-Za-z0-9-]*(?:'.self::ATTRIBUTE.')*\s*/?>|</[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*$#', $line) ? self::BLANK : null;
-    }
-
-    private function underlineLevel(string $line): ?int
-    {
-        if (1 === preg_match('/^ {0,3}=+[ \t]*$/', $line)) {
-            return 1;
-        }
-
-        return 1 === preg_match('/^ {0,3}-+[ \t]*$/', $line) ? 2 : null;
-    }
-
-    private function opening(string $line): ?string
-    {
-        if (1 !== preg_match('/^ {0,3}(`{3,}|~{3,})(.*)$/', $line, $match)) {
-            return null;
-        }
-
-        // A backtick fence's info string holds no backtick, because such a line is an inline code span.
-        return '`' === $match[1][0] && str_contains($match[2], '`') ? null : $match[1];
-    }
-
-    // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
-    private function closes(string $line, string $fence): bool
-    {
-        return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
-    }
-
-    /**
-     * @return ?array{int, string}
-     */
-    private function headingOf(string $line): ?array
-    {
-        return 1 === preg_match('/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? [strlen($heading[1]), $heading[2] ?? ''] : null;
+        return null === $paragraph && 1 === preg_match('#^ {0,3}(?:<[A-Za-z][A-Za-z0-9-]*(?:'.self::ATTRIBUTE.')*\s*/?>|</[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*$#', $line) ? self::BLANK : null;
     }
 }
