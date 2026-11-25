@@ -49,7 +49,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
             return new BranchChange($deciding['state'], ...$labels);
         }
 
-        // Else the branch's newest commits came after its last pull request closed, so no pull request holds them: they are read as a branch without one, whose commits a person can claim; only a `keep` on an older pull request still keeps it.
+        // Else no pull request is open and none is at the branch's head, so none holds its head: it is read as a branch without one, whose commits a person can claim; only a `keep` on an older pull request still keeps it.
         return in_array(self::KEEP, $labels, true) ? new BranchChange(BranchChangeState::ClosedUnmerged, ...$labels) : null;
     }
 

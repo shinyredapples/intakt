@@ -7,7 +7,9 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
@@ -542,6 +544,30 @@ final class GitHubForgeBranchesTest extends TestCase
         }
     }
 
+    public function testARateLimitedReadBeforeTheDeletionFailsAsRateLimitedAndDeletesNothing(): void
+    {
+        $this->defaultBranchIs('main');
+        $this->answers['GET '.self::REPOSITORY.'/branches/intakt/7-old'] = 'limited';
+
+        try {
+            $this->forge()->delete($this->branch());
+            self::fail('A deletion whose final read was rate limited passed.');
+        } catch (ForgeRateLimited) {
+            self::assertNotContains('DELETE '.self::REPOSITORY.'/git/refs/heads/intakt/7-old', $this->requests);
+        }
+    }
+
+    public function testARateLimitedDeletionFailsAsRateLimited(): void
+    {
+        $this->defaultBranchIs('main');
+        $this->answers['GET '.self::REPOSITORY.'/branches/intakt/7-old'] = $this->current('intakt/7-old', self::HEAD, 'false');
+        $this->answers['DELETE '.self::REPOSITORY.'/git/refs/heads/intakt/7-old'] = 'limited';
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->forge()->delete($this->branch());
+    }
+
     private function defaultBranchIs(string $name): void
     {
         $this->answers['GET '.self::REPOSITORY] = sprintf('{"default_branch":"%s"}', $name);
@@ -621,6 +647,11 @@ final class GitHubForgeBranchesTest extends TestCase
         $headers = isset($this->links[$method.' '.$url]) ? ['Link: '.$this->links[$method.' '.$url]] : [];
         if ('unreachable' === $answer) {
             return new MockResponse('', ['error' => 'The host could not be reached.']);
+        }
+
+        // A 403 with an empty budget, because a 429 with Retry-After would make the retrying client wait.
+        if ('limited' === $answer) {
+            return new MockResponse('', ['http_code' => 403, 'response_headers' => ['x-ratelimit-remaining: 0', 'x-ratelimit-reset: '.new DateTimeImmutable('2026-11-25 11:00:00 UTC')->getTimestamp()]]);
         }
 
         return 1 === preg_match('/^\d{3}$/', $answer) ? new MockResponse('', ['http_code' => (int) $answer]) : new MockResponse($answer, ['response_headers' => $headers]);
