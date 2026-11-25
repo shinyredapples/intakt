@@ -1,6 +1,6 @@
 ## Branch cleanup
 
-Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far the forge side exists (the `ForgeBranches` contract, its local implementation and its GitHub implementation) and the cleanup rules, a pure rule chain that decides on facts it is given. No command, job or rule calls the forge yet, and nothing in the container builds either implementation; the archive refs and restore, and the weekly run that applies the verdicts, come in later parts of #24.
+Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far the forge side exists (the `ForgeBranches` contract, its local implementation and its GitHub implementation), the cleanup rules (a pure rule chain that decides on facts it is given) and the archive of deleted branch heads. No command, job or rule calls the forge or the archive yet, and nothing in the container builds a forge implementation; pushing an archived commit back and restore, and the weekly run that applies the verdicts, come in later parts of #24.
 
 ### In short
 
@@ -25,6 +25,8 @@ In order:
 A due branch is `warn` until the week's warning has passed. `BranchWarning` names the branch, the head it warned about and the moment; `allowsDeletionAt(branch, head, now)` is true only when the branch and the head are the same (sibling branches often share a head, so one branch's warning never counts for another) and a full 7 x 24 hours have passed since the warning, never rounded to whole days. A moved head needs a new warning. The 30 and 60 days are counted from the moment given (`P30D`, `P60D`).
 
 The project file takes two keys per project, read by `BranchCleanupConfiguration` and `CleanupPolicies` into the `intakt.branch_cleanup.projects` parameter: `clean_other_branches` (boolean, default false) and `keep_branches` (a list of branch names, default empty). Each may also be spelled with hyphens (`clean-other-branches`, `keep-branches`, as the design writes it); `config/packages/ai.php` takes both spellings out of the project before the AI projects tree sees it. A project that sets neither key gets the defaults from `CleanupPolicies::of()`.
+
+The archive keeps every deleted branch head in a bare repository of its own on the data volume ([Archive](#archive)), and a delete archives first.
 
 ### The contract
 
@@ -98,6 +100,25 @@ A branch whose `isDeletable()` is false is refused before any call. Then the for
 
 **Accepted window.** GitHub's REST ref deletion takes no expected head. GraphQL's `updateRefs` mutation names the expected old commit, but it is not used, because this change could not prove it against an installation's permissions. So a push that lands between the final read and the delete is deleted with the branch. That window is short and accepted, because cleanup candidates have been idle for weeks (owner decision of 2026-11-24 on #24).
 
+### Archive
+
+`Core/Git/Contract/BranchArchive` keeps a branch head; `UseCase/ArchiveBranch/MirrorBranchArchive` implements it. Each project has a bare repository at `var/data/branch-archive/<project>.git` (container parameter `intakt.git.branch_archive_directory`, `GitServices::BRANCH_ARCHIVE_DIRECTORY`), under `var/data` because that is where the image keeps its volume. It is not in `var/mirrors/`: the mirror is a cache that is cloned again when lost, so archive refs there would vanish at a container replacement. The project name follows the mirror's folder rule (`Domain/Mirrors`), so a name that would leave the directory is refused.
+
+`archive(MirroredHead)` takes the project, the branch and its head commit, under the lock `git-branch-archive-<project>`:
+
+1. Creates the bare repository when it is missing, in the mirror's object format.
+2. Copies the commit and its objects from the mirror with a local fetch by id (`git fetch --no-tags --no-write-fetch-head -- <mirror> <commit>`, the `file` protocol allowed for this call only). The archive has no remote and writes no ref from the fetch.
+3. Writes `refs/intakt/archive/<UTC moment>/<branch>` (moment as `YYYYMMDDTHHMMSSZ`, from `ClockInterface`, counted up on a clash as below) with `update-ref <ref> <commit> ''`, which creates the ref only: an existing archive ref is never moved.
+4. Reads the ref back and returns an `ArchivedBranch`.
+
+Before the write, the id must name a commit in the archive (`<id>^{commit}`), so a tree or blob is refused and no ref is left. When the name is taken by another commit (two heads of one branch in the same second), the moment gets a count: `<moment>-2/<branch>`, `-3`, and so on; the same commit again keeps its ref.
+
+Any failure (no mirror, a commit the mirror lacks, an id that is not a commit, a mirror `HardenedGit` refuses because of its `info/attributes`, a git error) is a `BranchNotArchived`.
+
+The archive belongs to Intakt alone: it is never cloned or fetched from a remote and never pushed, so a remote ref shaped like `refs/intakt/archive/*` is never an archive. `DeleteBranchAfterArchive` is the delete path: it archives, and only after that returns does it call `ForgeBranches::delete()`; when archiving fails, the forge is not called.
+
 ### Tests
+
+The archive tests are in `tests/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchiveTest.php`, against temporary repositories.
 
 The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` `tests/Plugin/Forge/Contract/ForgeBranchTest.php`, and for the rules `tests/Core/BranchCleanup/Domain/BranchRulesTest.php`, `BranchWarningTest.php`, `tests/Core/BranchCleanup/Infrastructure/BranchCleanupConfigurationTest.php` and `CleanupPoliciesTest.php`, and for the project-file wiring `tests/Application/ProjectTiersTest.php`.

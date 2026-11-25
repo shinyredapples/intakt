@@ -41,6 +41,15 @@ final class ReviewTest extends TestCase
         self::assertSame($running, $review->activeRound());
     }
 
+    public function testOnlyAJudgedRoundOfTheReviewIsFoundByItsId(): void
+    {
+        $judged = $this->judged('round-1', 1);
+
+        $review = new Review([$judged, $this->round('round-2', 2)]);
+
+        self::assertSame([$judged, null, null], [$review->judgedRound('round-1'), $review->judgedRound('round-2'), $review->judgedRound('round-9')]);
+    }
+
     public function testAReviewWhoseRoundsAreAllReplaysIsAReplayThroughout(): void
     {
         $review = new Review([$this->round('round-1', 1)->markedAs(ReplayMark::Replay), $this->round('round-2', 2)->markedAs(ReplayMark::Replay)]);

@@ -1,0 +1,49 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}{{ finding.id }} of {{ review.change ?: reviewed.round }} - Intakt{% endblock %}
+
+{% set rail_section = 'projects' %}
+
+{% block body %}
+<link rel="stylesheet" href="{{ asset('styles/review.css') }}">
+{% set review_link = path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: reviewed.round}) %}
+{{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
+    {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
+    {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
+    {label: review.change ?: 'round ' ~ reviewed.round, href: review_link},
+    {label: finding.id},
+]}, with_context = false) }}
+{% set urgency = finding.urgency %}
+{% set reporters = reviewed.reportersOf(finding) %}
+<div class="page-head finding-head">
+    <div>
+        <p class="kicker">{{ urgency is null ? 'Severity not recorded' : urgency.words }}{% if reporters is not null and reporters is not empty %} · {{ reporters|length == 1 ? 'one reviewer' : reporters|length ~ ' reviewers' }}{% endif %}</p>
+        <h1>{% if finding.headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(finding.headline)}, with_context = false) }}{% endif %}</h1>
+        <p class="finding-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
+    </div>
+</div>
+{# The whole text, as on the Full record's card, and only when it goes on after the headline, so nothing the reviewer wrote is lost. #}
+{% if finding.goesOnAfterItsHeadline %}
+<section class="finding-section" aria-labelledby="finding-why">
+    <h2 id="finding-why">Why</h2>
+    <p class="card finding-words">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: ''}, with_context = false) }}</p>
+</section>
+{% endif %}
+<section class="finding-section" aria-labelledby="finding-who">
+    <h2 id="finding-who">Who found it</h2>
+    {% if reporters is null %}
+    <p class="muted">Not recorded: this pass was checked before Intakt kept who reported what.</p>
+    {% else %}
+    <ul class="finding-reporters">
+        {% for reporter in reporters %}
+        {% set given = reviewed.severitiesReportedOf(reporter.id, finding) %}
+        <li class="card">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 48}, with_context = false) }}<span><span class="who-name">{{ reporter.modelAndLab }}</span><span class="muted"> · {{ reporter.role }}{% if given is not empty %} · reported as {{ given|join(' and ') }}{% endif %}</span></span></li>
+        {% else %}
+        <li class="muted">No reviewer's report names this finding.</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    <div class="card finding-judge">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}<span><span class="who-name">Judge</span><span class="muted"> · {{ finding.callInWords }}{% if finding.merged is not empty %}{% set report_count = reviewed.reportCountOf(finding) %} · kept once for {{ report_count is null ? finding.ids|length ~ ' ids' : report_count ~ ' reports' }} ({{ finding.merged|join(', ') }} {{ finding.merged|length == 1 ? 'was' : 'were' }} the same){% endif %}</span></span></div>
+</section>
+<p class="finding-back"><a href="{{ review_link }}">Back to the review</a></p>
+{% endblock %}
