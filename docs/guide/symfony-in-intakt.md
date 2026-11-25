@@ -111,8 +111,8 @@ stateDiagram-v2
   [*] --> Waiting
   Waiting --> Reviewing: checks are green
   Reviewing --> Changes: a reviewer leaves something to fix
-  Changes --> Waiting: the builder pushes a fix
-  Reviewing --> Approved: the panel approves
+  Changes --> Waiting: the Developer pushes a fix
+  Reviewing --> Approved: the Code reviewers approve
   Approved --> [*]
 ```
 
