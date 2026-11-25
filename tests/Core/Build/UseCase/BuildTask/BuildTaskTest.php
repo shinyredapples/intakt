@@ -77,6 +77,7 @@ use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
+use Intakt\Core\HandBack\Contract\MissingEvidenceItems;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\Contract\PullRequestTextTask;
@@ -185,6 +186,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(PullRequestTextTask::class)]
 #[UsesClass(FailedPullRequestText::class)]
 #[UsesClass(PullRequestTextOutcome::class)]
+#[UsesClass(MissingEvidenceItems::class)]
 #[UsesClass(PullRequestTextRoute::class)]
 #[UsesClass(PullRequestTextVerdict::class)]
 #[UsesClass(PullRequestTextRule::class)]

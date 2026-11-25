@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Infrastructure\PublishedBench;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -31,6 +32,7 @@ final readonly class ShowTrendsController
         private SampleChangeSource $sample,
         private LivePageRendering $pages,
         private PublishedBench $bench,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -45,7 +47,7 @@ final readonly class ShowTrendsController
 
         return new Response($this->pages->render($request, 'dashboard/trends.html.twig', [
             'trends' => $trends,
-            'up_next' => new Board($reviews)->upNext($this->queued->in($events)),
+            'up_next' => new Board($this->clock->now(), $reviews)->upNext($this->queued->in($events)),
             'bench' => $this->bench->headline(),
             'sample_can_start' => $this->sample->source() instanceof ChangeSource,
         ]));

@@ -28,6 +28,7 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Lock\LockFactory;
@@ -186,6 +187,6 @@ final class ReviewerStopsTest extends TestCase
 
     private function stopsWith(Ledger $ledger, LockFactory $locks, RoundEndings $endings): ReviewerStops
     {
-        return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks(new ReplayMarkBus())), $ledger, new RoundLock($locks, new RequestStack([new Request()])));
+        return new ReviewerStops(new LedgerReviewPages(new MockClock(), $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks(new ReplayMarkBus())), $ledger, new RoundLock($locks, new RequestStack([new Request()])));
     }
 }

@@ -8,13 +8,12 @@ namespace Intakt\Core\Review\Contract;
 final readonly class ReviewerFindingsRecorded
 {
     /**
-     * @param list<string>               $findings
-     * @param array<string, string>|null $severities
+     * @param array<string, Severity>|null $severities
      */
     public function __construct(
         public string $round,
         public string $reviewer,
-        public array $findings,
+        public FindingIds $findings,
         // The severity this reviewer gave each of its ids, because two reviewers who repeat one tracked finding may rate it apart; null on a row written before it was recorded, so a count leaves that round out instead of guessing.
         public ?array $severities = null,
     ) {

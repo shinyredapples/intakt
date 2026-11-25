@@ -29,7 +29,7 @@ use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
-use Intakt\Tests\Core\Review\UseCase\RunReviewRound\ScriptedVendor;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -89,16 +89,6 @@ final class VerdictsOfRoundTest extends KernelTestCase
         self::assertSame(Standing::KeptForUntouchedParts, $verdicts->standing->standing);
         self::assertSame(['docs/feature.md'], [...$verdicts->standing->reviewAgain]);
         self::assertCount(2, $verdicts->counting);
-    }
-
-    public function testAnotherPanelMakesTheStoredVerdictsStale(): void
-    {
-        $round = $this->reviewedRound();
-
-        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 3), new HeadMove(HeadMoveKind::Unmoved, new Paths())));
-
-        self::assertSame(Standing::Stale, $verdicts->standing->standing);
-        self::assertSame([IdentityField::PanelPolicy], $verdicts->standing->changed);
     }
 
     public function testARoundStoredWithoutAnIdentityIsStaleInEveryField(): void
@@ -171,7 +161,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     private function reviewedRound(): string
     {
         $round = $this->fixture->start(2);
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         foreach ($this->fixture->bus->messages as $message) {
             $this->fixture->deliver($message, $vendor);

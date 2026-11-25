@@ -13,6 +13,12 @@ services:
         factory: ['Intakt\Tests\Support\Log\RecordingLoggerFactory', 'create']
         arguments: ['@.inner']
 
+    # Lets a test add a listener for its own kernel's lifetime: with APP_DEBUG=0 the framework's dispatcher is compiled, and adding to it is deprecated.
+    intakt.test.scoped_event_dispatcher:
+        class: Symfony\Component\EventDispatcher\ScopedEventDispatcher
+        decorates: event_dispatcher
+        arguments: ['@.inner']
+
     # Set by a reviewer test once its scripted run is done; declared synthetic so the container, and static analysis, know the id it is set under.
     test.reviewer_agent.ai_data_collector:
         class: Symfony\AI\AiBundle\Profiler\DataCollector

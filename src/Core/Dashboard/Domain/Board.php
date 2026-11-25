@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use DateTimeImmutable;
+
 final readonly class Board
 {
     // Twelve, because DESIGN.md's crowded column shows 12 cards before "Show n more".
@@ -12,15 +14,19 @@ final readonly class Board
     /** @var list<Review> */
     private array $cards;
 
+    // Built once from the time the board was read, because the live board compares serialized boards and a kept time would make every push differ.
+    private WhoIsWorking $working;
+
     // The build's tasks come apart from the cards, because a task has no card until the build lane lands, yet it ends the first day (#1792, D5) and keeps its project awake while in flight (docs/design/05-architecture/08-merge.md, Adaptive intervals).
     /**
      * @param list<Review>    $reviews
      * @param list<BuildTask> $tasks
      */
-    public function __construct(array $reviews, private array $tasks = [])
+    public function __construct(DateTimeImmutable $now, array $reviews, private array $tasks = [])
     {
         usort($reviews, static fn (Review $one, Review $other): int => $other->latest()->startedAt <=> $one->latest()->startedAt);
         $this->cards = $reviews;
+        $this->working = new WhoIsWorking($now, $this->cards, count($this->tasksInFlight()));
     }
 
     public function hasNoReview(): bool
@@ -48,7 +54,7 @@ final readonly class Board
     // From the cards in their order, so the newest review's reviewers come first, with the builds in flight the headline counts.
     public function whoIsWorking(): WhoIsWorking
     {
-        return new WhoIsWorking($this->cards, count($this->tasksInFlight()));
+        return $this->working;
     }
 
     // From the cards in their order, so the Trends page lists the same rounds the board shows in review; the queued rounds come apart, because a round no worker started has no card yet.
