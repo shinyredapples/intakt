@@ -43,7 +43,7 @@
         {% endfor %}
     </ul>
     {% endif %}
-    <div class="card finding-judge">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}<span><span class="who-name">Judge</span><span class="muted"> · {{ finding.callInWords }}{% if finding.merged is not empty %} · kept once for {{ finding.ids|length }} reports ({{ finding.merged|join(', ') }} {{ finding.merged|length == 1 ? 'was' : 'were' }} the same){% endif %}</span></span></div>
+    <div class="card finding-judge">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}<span><span class="who-name">Judge</span><span class="muted"> · {{ finding.callInWords }}{% if finding.merged is not empty %}{% set report_count = reviewed.reportCountOf(finding) %} · kept once for {{ report_count is null ? finding.ids|length ~ ' ids' : report_count ~ ' reports' }} ({{ finding.merged|join(', ') }} {{ finding.merged|length == 1 ? 'was' : 'were' }} the same){% endif %}</span></span></div>
 </section>
 <p class="finding-back"><a href="{{ review_link }}">Back to the review</a></p>
 {% endblock %}

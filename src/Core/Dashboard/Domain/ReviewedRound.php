@@ -147,6 +147,12 @@ final readonly class ReviewedRound
         return array_values(array_unique(array_filter($given, static fn (?string $severity): bool => null !== $severity)));
     }
 
+    // One report per reviewer and per id of the finding that reviewer reported, because the judge's card counts reports, not ids; null for a round completed before the ledger recorded who reported what, so the page never claims a count it does not know.
+    public function reportCountOf(RoundFinding $finding): ?int
+    {
+        return $this->reportCountIn($this, $finding);
+    }
+
     public function reviewOutcome(): ?ReviewOutcome
     {
         return ReviewOutcome::of($this);
@@ -353,5 +359,17 @@ final readonly class ReviewedRound
     private function severityIn(self $round, string $reviewer, string $id): ?string
     {
         return $round->severitiesByReviewer[$reviewer][$id] ?? null;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->findingsByReviewer`.
+    private function reportCountIn(self $round, RoundFinding $finding): ?int
+    {
+        $reports = $round->findingsByReviewer;
+
+        if (null === $reports) {
+            return null;
+        }
+
+        return array_sum(array_map(static fn (array $reported): int => count(array_intersect($finding->ids(), array_unique($reported))), $reports));
     }
 }

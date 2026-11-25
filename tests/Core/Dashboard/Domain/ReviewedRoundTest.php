@@ -36,6 +36,18 @@ final class ReviewedRoundTest extends TestCase
         self::assertSame(['P2', 'P1', null, null], [$round->severityReportedBy('r-1', 'F1'), $round->severityReportedBy('r-2', 'F1'), $round->severityReportedBy('r-1', 'F2'), $round->severityReportedBy('r-3', 'F1')]);
     }
 
+    public function testTheReportCountAddsOnePerReviewerAndPerIdOfTheFindingThatReviewerReported(): void
+    {
+        $round = $this->round()->withFindingsByReviewer(['r-1' => ['F1', 'F3'], 'r-2' => ['F1', 'F6'], 'r-3' => []]);
+
+        self::assertSame(3, $round->reportCountOf(new RoundFinding('F1', 'P1', 'Text.', merged: ['F6'])));
+    }
+
+    public function testTheReportCountIsUnknownWhenWhoReportedWhatIsNotRecorded(): void
+    {
+        self::assertNull($this->round()->reportCountOf(new RoundFinding('F1', 'P1', 'Text.', merged: ['F6'])));
+    }
+
     public function testEveryFindingCountsAsRecordedUntilTheRoundIsMarkedOtherwise(): void
     {
         self::assertTrue($this->round()->everyFindingRecorded);

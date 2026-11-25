@@ -75,6 +75,29 @@ final class ShowFindingControllerTest extends DashboardPageTestCase
         self::assertStringEndsWith('reported as P3 and P2', $crawler->filter('.finding-reporters li')->last()->text());
     }
 
+    public function testTheJudgesCardCountsOneReportPerReviewerAndId(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->reportRatedFindings('round-1', 'correctness', ['F1' => 'P1']);
+        $this->ledger->reportRatedFindings('round-1', 'security', ['F1' => 'P3', 'F6' => 'P2']);
+        $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F6');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertStringEndsWith('reported as P3 and P2', $crawler->filter('.finding-reporters li')->last()->text());
+        self::assertStringContainsString('kept once for 3 reports (F6 was the same)', $crawler->filter('.finding-judge')->text());
+    }
+
+    public function testTheJudgesCardCountsIdsWhenWhoReportedWhatIsNotRecorded(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertStringContainsString('kept once for 2 ids (F2 was the same)', $crawler->filter('.finding-judge')->text());
+    }
+
     public function testAFindingIdWithASlashOpensFromItsRow(): void
     {
         $this->givenAChangesRound();
@@ -113,6 +136,34 @@ final class ShowFindingControllerTest extends DashboardPageTestCase
         $this->givenAFindingToFix();
 
         $this->browser->request('GET', '/reviews/round-1/findings/F9');
+
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testAFindingOfAnUnknownRoundIsNotFound(): void
+    {
+        $this->givenAFindingToFix();
+
+        $this->browser->request('GET', '/reviews/round-9/findings/F1');
+
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testAnIdMergedIntoAnotherFindingIsNotFound(): void
+    {
+        $this->givenTwoReportsJudgedAsOneEntry(['F2' => 'P2']);
+
+        $this->browser->request('GET', '/reviews/round-1/findings/F2');
+
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testAnIdTheQuoteCheckDroppedIsNotFound(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'The total is off by one.', 'none of its quoted code fragments is in the change');
+
+        $this->browser->request('GET', '/reviews/round-1/findings/F1');
 
         self::assertResponseStatusCodeSame(404);
     }
