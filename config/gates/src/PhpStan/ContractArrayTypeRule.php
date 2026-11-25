@@ -58,12 +58,26 @@ final readonly class ContractArrayTypeRule implements Rule
         $promoted = $this->promotedPublicNamesOf($class);
         $findings = [];
 
+        $constructor = $class->getNativeReflection()->getConstructor();
+        $promotedHere = $constructor instanceof ReflectionMethod ? $this->promotedParametersOf($constructor) : [];
+
         foreach ($this->exposedMethodsOf($class) as $method) {
-            $skipped = $this->isConstructor($method) ? $promoted : [];
+            $skipped = $this->isConstructor($method) ? $promotedHere : [];
             $findings = [...$findings, ...$this->findingsOf($this->signatureTypes($method, $class, $skipped), $this->lineOf($method, $declaration))];
         }
 
-        return [...$findings, ...$this->promotedInputFindings($class, $declaration), ...$this->propertyFindings($promoted, $class, $declaration)];
+        return [...$findings, ...$this->promotedInputFindings($class, $declaration, $promoted), ...$this->propertyFindings($promoted, $class, $declaration)];
+    }
+
+    // only a parameter the constructor itself promotes is typed like a property; one that shares its name with a property a parent promotes is an ordinary parameter
+    /**
+     * @return list<string>
+     */
+    private function promotedParametersOf(ReflectionMethod $constructor): array
+    {
+        $promoted = array_filter($constructor->getParameters(), static fn (ReflectionParameter $parameter): bool => $parameter->isPromoted());
+
+        return array_values(array_map(static fn (ReflectionParameter $parameter): string => $parameter->getName(), $promoted));
     }
 
     private function isContract(string $file): bool
@@ -129,7 +143,7 @@ final readonly class ContractArrayTypeRule implements Rule
         return $typed;
     }
 
-    // PHPStan types a promoted parameter like its property, so the property finding reports it on the same line; a differing @param is judged in promotedInputFindings()
+    // PHPStan types a promoted parameter like its property, so a parameter the constructor promotes is judged by its @param in promotedInputFindings() instead
     /**
      * @param list<string> $promoted
      *
@@ -193,11 +207,13 @@ final readonly class ContractArrayTypeRule implements Rule
         return RuleErrorBuilder::message($what.self::HOW_TO_COMPLY)->identifier('intakt.contractArrayType')->line($line)->build();
     }
 
-    // callers of a public constructor pass a promoted parameter in its @param shape, whatever the property keeps (@var) and whatever its visibility; a private constructor is reached only through the class's own typed factories
+    // callers of a public constructor pass a promoted parameter in its @param shape, whatever the property keeps (@var) and whatever its visibility, so the property's type neither adds nor clears a finding; a private constructor is reached only through the class's own typed factories
     /**
+     * @param list<string> $promoted
+     *
      * @return list<IdentifierRuleError>
      */
-    private function promotedInputFindings(ClassReflection $class, ClassLike $declaration): array
+    private function promotedInputFindings(ClassReflection $class, ClassLike $declaration, array $promoted): array
     {
         $constructor = $class->getNativeReflection()->getConstructor();
 
@@ -205,10 +221,15 @@ final readonly class ContractArrayTypeRule implements Rule
             return [];
         }
 
+        $tags = $this->paramTagsOf($constructor);
+        $typed = $this->parameterTypesByName($class, $constructor->getName());
         $findings = [];
 
-        foreach ($this->promotedParamTagsOf($constructor) as $name => $input) {
-            if (!$input->equals($class->getNativeProperty($name)->getReadableType()) && $this->isRefused($input)) {
+        foreach ($this->promotedParametersOf($constructor) as $name) {
+            $input = $tags[$name] ?? $typed[$name];
+            $reportedAsProperty = in_array($name, $promoted, true) && $input->equals($class->getNativeProperty($name)->getReadableType());
+
+            if (!$reportedAsProperty && $this->isRefused($input)) {
                 $findings[] = $this->finding(sprintf('Method %s::%s() parameter $%s is typed %s', $class->getDisplayName(), $constructor->getName(), $name, $this->described($input)), $this->lineOf($constructor->getName(), $declaration));
             }
         }
@@ -216,11 +237,28 @@ final readonly class ContractArrayTypeRule implements Rule
         return $findings;
     }
 
+    // without its own @param, PHPStan types a promoted parameter like its property
+    /**
+     * @return array<string, Type>
+     */
+    private function parameterTypesByName(ClassReflection $class, string $method): array
+    {
+        $typed = [];
+
+        foreach ($class->getNativeMethod($method)->getVariants() as $variant) {
+            foreach ($variant->getParameters() as $parameter) {
+                $typed[$parameter->getName()] = $parameter->getType();
+            }
+        }
+
+        return $typed;
+    }
+
     // the PHPDoc is resolved under the constructor's declared name, since PHP accepts it in any case
     /**
      * @return array<string, Type>
      */
-    private function promotedParamTagsOf(ReflectionMethod $constructor): array
+    private function paramTagsOf(ReflectionMethod $constructor): array
     {
         if (!is_string($comment = $constructor->getDocComment()) || !is_string($file = $constructor->getFileName())) {
             return [];
@@ -229,9 +267,8 @@ final readonly class ContractArrayTypeRule implements Rule
         $declaring = $constructor->getBetterReflection()->getDeclaringClass();
         $trait = $declaring->isTrait() ? $declaring->getName() : null;
         $tags = $this->typeMapper->getResolvedPhpDoc($file, $constructor->getDeclaringClass()->getName(), $trait, $constructor->getName(), $comment)->getParamTags();
-        $promoted = array_map(static fn (ReflectionParameter $parameter): string => $parameter->getName(), array_filter($constructor->getParameters(), static fn (ReflectionParameter $parameter): bool => $parameter->isPromoted()));
 
-        return array_map(static fn (ParamTag $tag): Type => $tag->getType(), array_intersect_key($tags, array_flip($promoted)));
+        return array_map(static fn (ParamTag $tag): Type => $tag->getType(), $tags);
     }
 
     /**
