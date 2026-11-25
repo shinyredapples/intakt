@@ -213,7 +213,8 @@ final class LocalForgeBranchesTest extends TestCase
         $head = $this->repository->commitFile('src/New.php', "<?php\n");
         $this->repository->checkout('main');
         $listed = $this->branch('intakt/feature');
-        $madeAgain = sprintf("  *' update-ref --no-deref '*) %s; exec %s \"\$@\" ;;\n", $this->inTheRepository(['update-ref', 'refs/heads/intakt/feature', $main]), $this->realGit());
+        $git = $this->realGit();
+        $madeAgain = sprintf("  *' update-ref --no-deref '*) %s; exec %s \"\$@\" ;;\n", $this->inTheRepository(['update-ref', 'refs/heads/intakt/feature', $main]), $git);
 
         try {
             $this->withGit($madeAgain.$this->aWorktreeAddAfterTheFirstListingAndNoSecondListing(), function () use ($listed): void {
