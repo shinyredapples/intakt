@@ -4,7 +4,7 @@
 
 `bin/install-check [<repository address or path>]` installs the project the way a stranger does, from the README on a clean clone, and reports the first thing that breaks. Hundreds of tests had passed while a fresh install could not save its API key; only a real install found it.
 
-`.github/workflows/install-check.yml` runs it daily and on manual dispatch: its read-only `install-check` job runs `bin/install-check <server>/<repository>.git` without `GITHUB_REPOSITORY` and keeps `var/install-check/` as the artifact `install-check`, also after a failure; the `alarm` job, the only one with `issues: write`, runs `bin/journey-alarm --run=<run link> --install-check=<report.json>`. `keyed` runs only in `shinyredapples/intakt` with a Claude or GPT secret.
+`.github/workflows/install-check.yml` runs it daily and on manual dispatch: its read-only `install-check` job runs `bin/install-check <server>/<repository>.git` without `GITHUB_REPOSITORY` and keeps `var/install-check/` as the artifact `install-check`, also after a failure; the `alarm` job, the only one with `issues: write`, runs `bin/journey-alarm --run=<run link> --install-check=<report.json>`. The step "Run the install check with the keys" runs only in `shinyredapples/intakt`; a key is tried only when the repository secret `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` is set. One run at a time (concurrency group `install-check`, never cancelled).
 
 ## How it works
 
