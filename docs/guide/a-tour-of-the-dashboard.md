@@ -180,7 +180,7 @@ flowchart TD
 ```
 
 - **Nobody needs to act:** progress, recoveries ("the reviewer works again"), counts and the list of what Intakt approved by itself. These are on the board and in the status, and never notify. A short GitHub outage is one of these too (planned): that project waits a few minutes and goes on by itself, the other projects keep going, and it does not need you; only GitHub staying unreachable for about half an hour halts that project and notifies you, with the last error.
-- **The maintainer agent can act:** a stuck task, a broken check, a label in the wrong place, a conflict with main. It gets the item first; you hear about it only if it can't settle it, as a decision with its options and recommendation.
+- **The Maintainer can act:** a stuck task, a broken check, a label in the wrong place, a conflict with main. It gets the item first; you hear about it only if it can't settle it, as a decision with its options and recommendation.
 - **Only you can act:** an approval, a question only you can answer, an expired login, a halt only you may clear. You get one notification and a card, at the same moment (planned; today an outage only shows on the Waiting on you page).
 - **Once each:** a notification is sent once per item and change, not again every few minutes. The card stays until the reason is gone, then clears without you dismissing it.
 - **Nothing is lost (planned):** every notice is recorded with whether it was delivered. If your phone can't be reached, the card says so and the fallback notifier is tried.

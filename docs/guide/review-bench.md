@@ -15,7 +15,7 @@ A reviewer that failed for a reason that has nothing to do with it (the AI compa
 ```mermaid
 flowchart LR
   base[The base: the sample project as it was] --> change[A bench change on top,<br/>with its planted mistakes, or none]
-  change --> panel[The review panel:<br/>each reviewer reads the change on its own]
+  change --> panel[The Code reviewers:<br/>each reviewer reads the change on its own]
   panel --> judge[When they found something, the judge<br/>merges it into one list of what to fix]
   panel --> score[Intakt compares each reviewer's findings<br/>with the list of planted mistakes]
   judge --> report[The figures: caught, missed,<br/>false alarms, tokens and time]
@@ -55,7 +55,7 @@ flowchart TD
 
 1. Start Intakt's workers, as for any review: `php bin/console messenger:consume async` (the container already runs them).
 2. Pick a change: each folder under `fixtures/sample-repository/bench/` is one, for example `free-shipping`.
-3. Run `php bin/console intakt:bench:review free-shipping --project=<project>`, with the project whose review panel you want to measure.
+3. Run `php bin/console intakt:bench:review free-shipping --project=<project>`, with the project whose Code reviewers you want to measure.
 4. Read what it prints for each reviewer: the planted mistakes it caught and missed, its false alarms, its tokens and time, and then the judge's list of what to fix.
 
 ## A miss or a harness failure?

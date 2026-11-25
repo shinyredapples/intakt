@@ -20,7 +20,7 @@ flowchart LR
 |---|---|
 | the project's eligibility label (`intakt` by default) | Intakt may build this task |
 | `idea` | for discussion only: Intakt never builds or plans it, even if the eligibility label is also set |
-| `priority:urgent`, `high`, `normal`, `low` | its place in the queue; no label means `normal`. An urgent task may start even when the builders are paused for review |
+| `priority:urgent`, `high`, `normal`, `low` | its place in the queue; no label means `normal`. An urgent task may start even when the Developers are paused for review |
 | `class:core`, `feature`, `tooling`, `process` | what kind of work it is; Intakt proposes one when it is missing |
 | `model:strong`, `standard`, `light` | the AI model it starts on; Intakt can still move it up if it struggles |
 | `plan:required`, `plan:skip` | the Tech lead writes a plan for your approval first, or skips it |
