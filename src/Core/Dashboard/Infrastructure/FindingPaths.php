@@ -25,7 +25,7 @@ final readonly class FindingPaths
         ]);
     }
 
-    // The router has already decoded the path once; this undoes the extra encoding.
+    // Decoded once more, because the router decodes the path only once and of() encoded the id twice.
     public function findingIn(string $segment): string
     {
         return rawurldecode($segment);
