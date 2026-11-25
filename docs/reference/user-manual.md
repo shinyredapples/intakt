@@ -268,6 +268,7 @@ That task is titled `fix(journeys): the journeys run timed out on main` and says
 Without `--timed-out`, the command behaves as described above.
 
 `bin/journey-alarm --install-check=<report.json> [--run=<https link>]` reads the `report.json` of `bin/install-check` instead of journeys output; `bin/install-check` runs it itself when `GITHUB_REPOSITORY` is set ([Trying the install the way a stranger does](../user/08-when-something-goes-wrong.md#trying-the-install-the-way-a-stranger-does)).
+The daily `install-check` workflow instead runs it from its separate `alarm` job, on the report in the run's artifact `install-check`, which holds the logs and screenshots.
 It takes no other file and no `--timed-out`: with either, or a report file it cannot read, it exits 2; a report that is not a list of named steps with `passed`, `failed` or `skipped` exits 1, as does a failing `gh` call.
 Each failing step gets its own urgent task, titled `fix(install): install check step "<step>" fails`, with the step and the last 40 lines of its log; a later failure of the same step rewrites that task, and a run where the step passes closes it, while a skipped step changes nothing.
 An install command is known by its place in the README's install block, so fixing a broken command closes its task.
