@@ -320,7 +320,7 @@ final class BudgetReserveTest extends TestCase
     private function reserve(string $installationId = '678', int $percent = FreshReadings::RESERVE_PERCENT, ?CacheItemPoolInterface $pool = null): BudgetReserve
     {
         $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
-        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, new RecordedInstallation('installation-secret')->client(), new NullLogger()), $installationId, $this->clock);
+        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, new RecordedInstallation($this->clock, 'installation-secret')->client(), new NullLogger()), $installationId, $this->clock);
 
         return new BudgetReserve($pool ?? $this->pool, $this->readings, $tokens, $this->clock, $this->locks, $percent);
     }

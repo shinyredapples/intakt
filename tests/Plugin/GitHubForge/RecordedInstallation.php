@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
@@ -14,6 +15,7 @@ final class RecordedInstallation
     public array $requested = [];
 
     public function __construct(
+        private readonly ClockInterface $readerClock,
         private readonly string $token = 'minted-value',
     ) {
     }
@@ -27,7 +29,7 @@ final class RecordedInstallation
     {
         $this->requested[] = $url;
         if (str_ends_with($url, '/access_tokens')) {
-            return new MockResponse(json_encode(['token' => $this->token, 'expires_at' => RecordedTokenExpiry::anHourFromNow()], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+            return new MockResponse(json_encode(['token' => $this->token, 'expires_at' => RecordedTokenExpiry::anHourAfter($this->readerClock)], JSON_THROW_ON_ERROR), ['http_code' => 201]);
         }
 
         $fixture = str_contains($url, '/installation/repositories') ? 'installation_repositories.json' : 'installation.json';

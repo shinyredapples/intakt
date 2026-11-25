@@ -415,10 +415,10 @@ final class GitHubForgeTest extends TestCase
 
     public function testItTurnsAnUnmintableTokenIntoAForgeReadFailure(): void
     {
-        // On the wall clock, because the recorded expiry is an hour after it.
-        $clock = new MockClock();
+        $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
-        $identity = new RecordedInstallation(self::MINTED)->client();
+        // GitHub's clock stays at the start, so every mint answers with the expiry of the first token.
+        $identity = new RecordedInstallation(new MockClock($clock->now()), self::MINTED)->client();
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
         $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, FreshReadings::at($clock), $tokens)), $expected, new NullLogger()), $tokens);
@@ -631,7 +631,7 @@ final class GitHubForgeTest extends TestCase
     private function forgeOver(HttpClientInterface $http): GitHubForge
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $identity = new RecordedInstallation(self::MINTED)->client();
+        $identity = new RecordedInstallation($clock, self::MINTED)->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');

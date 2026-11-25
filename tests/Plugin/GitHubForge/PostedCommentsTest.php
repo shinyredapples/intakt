@@ -162,7 +162,7 @@ final class PostedCommentsTest extends TestCase
     private function comments(callable|MockResponse $answer): PostedComments
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt((string) self::APP_ID, AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');

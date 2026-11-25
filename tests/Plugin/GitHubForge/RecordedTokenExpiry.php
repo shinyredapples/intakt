@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use DateTimeZone;
-use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\Clock\ClockInterface;
 
-// An hour after the wall clock, so a recorded token is valid both for the readers on a fixed test clock, all set before the test runs, and for the container, whose clock is the wall clock.
+// From the clock of the code that reads the token, so the recorded token is fresh for that reader whatever the wall clock shows.
 final class RecordedTokenExpiry
 {
-    public static function anHourFromNow(): string
+    public static function anHourAfter(ClockInterface $readerClock): string
     {
-        return new NativeClock()->now()->modify('+1 hour')->setTimezone(new DateTimeZone('UTC'))->format(DATE_ATOM);
+        return $readerClock->now()->modify('+1 hour')->setTimezone(new DateTimeZone('UTC'))->format(DATE_ATOM);
     }
 }

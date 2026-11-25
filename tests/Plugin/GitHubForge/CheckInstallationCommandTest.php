@@ -59,7 +59,7 @@ final class CheckInstallationCommandTest extends TestCase
     private function execute(string $permissions): CommandTester
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $http = new RecordedInstallation()->client();
+        $http = new RecordedInstallation($clock)->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($http, FreshReadings::at($clock), $tokens)), ExpectedInstallation::fromSettings($permissions, 'acme/widget,acme/gadget'), new NullLogger());
