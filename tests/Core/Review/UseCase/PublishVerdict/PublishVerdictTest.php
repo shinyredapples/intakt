@@ -77,8 +77,8 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use RuntimeException;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
@@ -1175,11 +1175,6 @@ final class PublishVerdictTest extends KernelTestCase
         return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->mirror(), $this->fixture->log);
     }
 
-    private function mirror(): RoundStatusMirror
-    {
-        return new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), $this->locks, new NullLogger(), $this->labels);
-    }
-
     private function protectedHeads(): ProtectedHeads
     {
         $heads = self::createStub(ProtectedHeads::class);
@@ -1287,6 +1282,11 @@ final class PublishVerdictTest extends KernelTestCase
         $sent = array_map(static fn (Envelope $envelope): object => $envelope->getMessage(), $queue->getSent());
 
         return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishVerdict && $roundId === $message->roundId));
+    }
+
+    private function mirror(): RoundStatusMirror
+    {
+        return new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), $this->locks, new NullLogger(), $this->labels);
     }
 
     private function recognizer(): ChangesHandedToIntakt
