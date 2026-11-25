@@ -94,19 +94,6 @@ final readonly class TeamRoster
         return Provider::ClaudeCode === $provider ? BuildRuntime::Runs : BuildRuntime::CannotRun;
     }
 
-    // The change asks for a full review, because the panel then lists every reviewer a rule can add.
-    /**
-     * @return list<PanelReviewer>
-     */
-    private function reviewersOf(string $project): array
-    {
-        try {
-            return $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels(ChangeDescription::FULL_REVIEW_LABEL)))->reviewers;
-        } catch (PanelConfigurationFailure) {
-            return [];
-        }
-    }
-
     /**
      * @param array<string, list<TeamRole>> $roles
      *
@@ -121,6 +108,19 @@ final readonly class TeamRoster
         }
 
         return $roles;
+    }
+
+    // The change asks for a full review, because the panel then lists every reviewer a rule can add.
+    /**
+     * @return list<PanelReviewer>
+     */
+    private function reviewersOf(string $project): array
+    {
+        try {
+            return $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels(ChangeDescription::FULL_REVIEW_LABEL)))->reviewers;
+        } catch (PanelConfigurationFailure) {
+            return [];
+        }
     }
 
     // A missing key first, because such an account never runs; then rejected, because a rejected key also cools down and only the owner can bring it back.
