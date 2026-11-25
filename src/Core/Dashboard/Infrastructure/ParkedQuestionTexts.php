@@ -17,16 +17,17 @@ final readonly class ParkedQuestionTexts
     ) {
     }
 
+    // Null too for a question another run parked, because overlapping runs share the task's one row and a reader shows one run.
     /**
      * @return array{text: string, choices: list<string>, recommendation: string, parked_at: string}|null
      */
-    public function of(string $project, string $task): ?array
+    public function of(string $project, string $task, ?string $run): ?array
     {
         // Only the number the build writes, so a task the ledger names in another form never reaches the database.
-        $number = filter_var($task, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-        $question = false === $number ? null : $this->questions->of($project, $number);
+        $number = (int) $task;
+        $question = $number >= 1 && (string) $number === $task ? $this->questions->of($project, $number) : null;
 
-        return $question instanceof ParkedQuestion ? $this->textsOf($question) : null;
+        return $question instanceof ParkedQuestion && $question->run === $run ? $this->textsOf($question) : null;
     }
 
     /**

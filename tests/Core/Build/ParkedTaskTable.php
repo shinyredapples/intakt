@@ -18,7 +18,7 @@ final readonly class ParkedTaskTable
     {
         $types = new Configuration()->setTypeProvider(new TypeRegistry(['utc_datetime_immutable' => UtcDateTimeImmutableType::class]));
         $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true], $types);
-        $connection->executeStatement(sprintf('CREATE TABLE %s (project VARCHAR(255) NOT NULL, task INTEGER NOT NULL, question CLOB NOT NULL, choices CLOB NOT NULL, recommendation CLOB NOT NULL, parked_at DATETIME NOT NULL, PRIMARY KEY (project, task))', ParkedTaskRecord::TABLE));
+        $connection->executeStatement(sprintf('CREATE TABLE %s (project VARCHAR(255) NOT NULL, task INTEGER NOT NULL, question CLOB NOT NULL, choices CLOB NOT NULL, recommendation CLOB NOT NULL, parked_at DATETIME NOT NULL, run VARCHAR(36) DEFAULT NULL, PRIMARY KEY (project, task))', ParkedTaskRecord::TABLE));
 
         return $connection;
     }

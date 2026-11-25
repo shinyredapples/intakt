@@ -17,6 +17,7 @@ final readonly class ParkedQuestion
         public array $choices,
         public string $recommendation,
         public DateTimeImmutable $parkedAt,
+        public string $run,
     ) {
     }
 }

@@ -104,7 +104,7 @@ final readonly class ProjectStatuses
     }
 
     /**
-     * @param list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}> $steps
+     * @param list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}> $steps
      *
      * @return array<string, list<array<string, mixed>>>
      */
@@ -119,8 +119,8 @@ final readonly class ProjectStatuses
                 'outcome' => $step['outcome'],
                 'failure' => null === $step['failure'] ? null : $this->redactor->redact($step['failure']),
                 'ended_at' => $step['ended_at'],
-                // Read only for a task whose latest step asked, because a later build job that built clears the row and every other task has none.
-                'question' => BuildStepOutcome::Asked->value === $step['outcome'] ? $this->questions->of($step['project'], $step['task']) : null,
+                // Only the question of the run whose step is reported, because the task's row can hold the question of another run that overlapped it.
+                'question' => BuildStepOutcome::Asked->value === $step['outcome'] ? $this->questions->of($step['project'], $step['task'], $step['run']) : null,
             ];
         }
 

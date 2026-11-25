@@ -412,8 +412,8 @@ final class BuildTaskTest extends TestCase
     {
         $this->runner = $this->committingRunner();
         $this->parkedRows = ParkedTaskTable::inMemory();
-        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 7, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'))->row(), ParkedTaskRecord::rowTypes());
-        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 8, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'))->row(), ParkedTaskRecord::rowTypes());
+        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 7, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'), null)->row(), ParkedTaskRecord::rowTypes());
+        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 8, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'), null)->row(), ParkedTaskRecord::rowTypes());
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
 

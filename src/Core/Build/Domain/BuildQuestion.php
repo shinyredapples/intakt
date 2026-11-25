@@ -51,20 +51,20 @@ final readonly class BuildQuestion
         }
 
         $data = self::decoded($text);
-        $question = self::textOf($data['question'] ?? null);
 
-        if ('' === $question) {
-            throw QuestionRefused::emptyQuestion();
+        return self::accepted($data['question'] ?? null, $data['choices'] ?? null, $data['recommendation'] ?? null);
+    }
+
+    // Null for texts the rule would refuse or trim, because only an accepted question is ever stored and it is stored trimmed.
+    public static function fromStored(mixed $question, mixed $choices, mixed $recommendation): ?self
+    {
+        try {
+            $accepted = self::accepted($question, $choices, $recommendation);
+        } catch (QuestionRefused) {
+            return null;
         }
 
-        $choices = self::choicesOf($data['choices'] ?? null);
-        $recommendation = self::textOf($data['recommendation'] ?? null);
-
-        if (!in_array($recommendation, $choices, true)) {
-            throw QuestionRefused::recommendationNotAChoice();
-        }
-
-        return new self($question, $choices, $recommendation);
+        return [$question, $choices, $recommendation] === [$accepted->question, $accepted->choices, $accepted->recommendation] ? $accepted : null;
     }
 
     /**
@@ -90,6 +90,27 @@ final readonly class BuildQuestion
             static fn (array $string): string => str_starts_with($string[0], '"\u0000') && str_ends_with($string[0], ':') ? '"\u0001'.substr($string[0], 7) : $string[0],
             $text,
         ) ?? $text;
+    }
+
+    /**
+     * @throws QuestionRefused
+     */
+    private static function accepted(mixed $givenQuestion, mixed $givenChoices, mixed $givenRecommendation): self
+    {
+        $question = self::textOf($givenQuestion);
+
+        if ('' === $question) {
+            throw QuestionRefused::emptyQuestion();
+        }
+
+        $choices = self::choicesOf($givenChoices);
+        $recommendation = self::textOf($givenRecommendation);
+
+        if (!in_array($recommendation, $choices, true)) {
+            throw QuestionRefused::recommendationNotAChoice();
+        }
+
+        return new self($question, $choices, $recommendation);
     }
 
     private static function textOf(mixed $value): string

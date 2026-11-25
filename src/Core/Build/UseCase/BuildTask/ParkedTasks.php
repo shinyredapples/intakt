@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\BuildTask;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\ParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
@@ -15,6 +16,8 @@ use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use PDO;
 use PDOException;
 use Symfony\Component\Clock\ClockInterface;
@@ -40,7 +43,7 @@ final readonly class ParkedTasks
             throw TaskNotParked::for($run->project, $run->task);
         }
 
-        $record = new ParkedTaskRecord($run->project, $run->task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')));
+        $record = new ParkedTaskRecord($run->project, $run->task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')), $run->id);
 
         if ($this->storedWithItsAskedStep($record, $run)) {
             return;
@@ -53,26 +56,35 @@ final readonly class ParkedTasks
         throw TaskNotParked::for($run->project, $run->task);
     }
 
-    // A task that is not parked has no row, so clearing it is no failure.
+    // A task that is not parked has no row, so clearing it is no failure; a question of a run that started later stays, because the older run's build does not answer it.
     /**
      * @throws ParkedTaskNotCleared
      */
-    public function clear(string $project, int $task): void
+    public function clear(BuildRun $run): void
     {
         try {
-            $this->connection->delete(ParkedTaskRecord::TABLE, ['project' => $project, 'task' => $task], ['task' => 'integer']);
+            $stored = $this->storedRowOf($run);
+
+            if (null !== $stored && !$this->startedLater($stored['run'], $run)) {
+                $this->deleteSeen($stored);
+            }
         } catch (Exception) {
-            throw ParkedTaskNotCleared::for($project, $task);
+            throw ParkedTaskNotCleared::for($run->project, $run->task);
         }
     }
 
     private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run): bool
     {
         try {
+            // Read before the transaction, because SQLite refuses a transaction that read first and then writes while another one writes.
+            $stored = $this->storedRowOf($run);
+            $keepStored = null !== $stored && $this->startedLater($stored['run'], $run);
+
             $this->connection->beginTransaction();
-            // Replaced, because a task asked again before anyone cleared its row keeps one row with the newer question.
-            $this->connection->delete(ParkedTaskRecord::TABLE, $record->keyRow());
-            $this->connection->insert(ParkedTaskRecord::TABLE, $record->row(), ParkedTaskRecord::rowTypes());
+
+            if (!$keepStored) {
+                $this->replace($stored, $record);
+            }
 
             if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))) {
                 return false;
@@ -88,6 +100,66 @@ final readonly class ParkedTasks
         }
 
         return true;
+    }
+
+    /**
+     * @return array{project: string, task: int, run: ?string}|null
+     */
+    private function storedRowOf(BuildRun $run): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            sprintf('SELECT run FROM %s WHERE project = ? AND task = ?', ParkedTaskRecord::TABLE),
+            [$run->project, $run->task],
+            [ParameterType::STRING, ParameterType::INTEGER],
+        );
+
+        if (false === $row) {
+            return null;
+        }
+
+        return ['project' => $run->project, 'task' => $run->task, 'run' => is_string($row['run']) ? $row['run'] : null];
+    }
+
+    // By the order of their first rows in the ledger, which the task step's start lock keeps, as the task page decides it; a run without a row there counts as earlier, because it would never be shown.
+    private function startedLater(?string $storedRun, BuildRun $run): bool
+    {
+        if (null === $storedRun || $storedRun === $run->id) {
+            return false;
+        }
+
+        $started = [];
+
+        foreach ($this->ledger->readOfKindsMentioning(new Mentions($storedRun, $run->id), LedgerEventKind::BuildStepEnded) as $recorded) {
+            $payload = PayloadFields::of($recorded);
+
+            if ($run->project === $payload->text('project') && (string) $run->task === $payload->text('task')) {
+                $started[$payload->text('run') ?? ''] = true;
+            }
+        }
+
+        return [$run->id, $storedRun] === array_keys(array_intersect_key($started, [$run->id => true, $storedRun => true]));
+    }
+
+    // Only the row as it was read, because a run that started later may have replaced it since; a parking then fails on the primary key and is refused.
+    /**
+     * @param array{project: string, task: int, run: ?string} $stored
+     */
+    private function deleteSeen(array $stored): void
+    {
+        $this->connection->delete(ParkedTaskRecord::TABLE, $stored, ['task' => 'integer']);
+    }
+
+    // Replaced, because a task asked again before anyone cleared its row keeps one row with the newer question.
+    /**
+     * @param array{project: string, task: int, run: ?string}|null $stored
+     */
+    private function replace(?array $stored, ParkedTaskRecord $record): void
+    {
+        if (null !== $stored) {
+            $this->deleteSeen($stored);
+        }
+
+        $this->connection->insert(ParkedTaskRecord::TABLE, $record->row(), ParkedTaskRecord::rowTypes());
     }
 
     private function appended(LedgerEvent $event): bool

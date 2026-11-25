@@ -16,11 +16,11 @@ use Symfony\Component\Uid\Uuid;
 final readonly class LedgerBuildSteps
 {
     /**
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
      */
     public function in(RecordedEvents $events): array
     {
-        /** @var array<string, array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $latest */
+        /** @var array<string, array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>> $latest */
         $latest = [];
 
         foreach ($events as $recorded) {
@@ -43,7 +43,7 @@ final readonly class LedgerBuildSteps
     }
 
     /**
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
      */
     public function latestRunOf(RecordedEvents $events, string $project, string $task): array
     {
@@ -51,7 +51,7 @@ final readonly class LedgerBuildSteps
     }
 
     /**
-     * @return list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}>
+     * @return list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}}>
      */
     private function rowsOf(RecordedEvents $events, string $project, string $task): array
     {
@@ -70,7 +70,7 @@ final readonly class LedgerBuildSteps
 
     // A row of the task with its run and step; without its step for a malformed row of a named run or a malformed task row of an unnamed run, because that row is left out but still marks where its run began.
     /**
-     * @return array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}|null
+     * @return array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}}|null
      */
     private function rowOf(RecordedEvent $recorded, string $project, string $task): ?array
     {
@@ -117,7 +117,7 @@ final readonly class LedgerBuildSteps
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
     /**
-     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}|null
+     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}|null
      */
     private function stepOf(RecordedEvent $recorded): ?array
     {
@@ -140,7 +140,7 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        return ['project' => $project, 'task' => $task, 'step' => $step->value, 'outcome' => $outcome->value, 'failure' => $failure, 'ended_at' => $recorded->recordedAt->format(DATE_ATOM)];
+        return ['project' => $project, 'task' => $task, 'step' => $step->value, 'outcome' => $outcome->value, 'failure' => $failure, 'ended_at' => $recorded->recordedAt->format(DATE_ATOM), 'run' => $this->namedRunOf($recorded)];
     }
 
     // Only a failed step has a failure text, and only the build job asks, so any other pairing is no row the build writes.
@@ -153,10 +153,18 @@ final readonly class LedgerBuildSteps
         return BuildStepOutcome::Asked !== $outcome || BuildStep::BuildJob === $step;
     }
 
+    // Null also for a run that is no UUID, because the lane keeps such a row and no parked question can belong to it.
+    private function namedRunOf(RecordedEvent $recorded): ?string
+    {
+        $run = $this->runOf($recorded);
+
+        return false === $run ? null : $run;
+    }
+
     /**
-     * @param array<array-key, array<array-key, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $latest
+     * @param array<array-key, array<array-key, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>> $latest
      *
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
      */
     private function newestFirst(array $latest): array
     {

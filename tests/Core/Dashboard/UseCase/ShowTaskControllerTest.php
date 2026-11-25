@@ -12,7 +12,9 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\ParkedQuestionTexts;
 use Intakt\Core\Dashboard\UseCase\ShowTask\ShowTaskController;
 use Intakt\Core\Ledger\Contract\PayloadFields;
+use Intakt\Core\Platform\Contract\Redactor;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
 use Symfony\Component\DomCrawler\Crawler;
@@ -364,7 +366,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
     public function testATaskParkedAtTheBuildJobShowsItsQuestionChoicesAndRecommendation(): void
     {
-        $this->parkWith(new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00')));
+        $this->parkWith(new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'), self::NAMED_RUN));
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
@@ -380,7 +382,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
     public function testACredentialAndMarkupInTheParkedQuestionAreRedactedAndShownAsText(): void
     {
         $token = 'ghp_'.str_repeat('c3', 18);
-        $this->parkWith(new ParkedQuestion('<b>Use</b> '.$token.'?', ['<i>yes</i>', 'no'], 'no', new DateTimeImmutable('2026-11-20 10:00:00')));
+        $this->parkWith(new ParkedQuestion('<b>Use</b> '.$token.'?', ['<i>yes</i>', 'no'], 'no', new DateTimeImmutable('2026-11-20 10:00:00'), self::NAMED_RUN));
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
@@ -437,6 +439,40 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger holds no build step of this task."', NotFoundHttpException::class));
     }
 
+    public function testAQuestionAnotherRunParkedIsNotShownOnTheTimelineOfTheRunThePageShows(): void
+    {
+        $this->parkWith(new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'), self::OLDER_RUN));
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Parked at build_job: the build asked a question.', $page->filter('#task-where')->text());
+        self::assertCount(0, $page->filter('#parked-question'));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function tasksNotNamedByTheirPlainNumber(): iterable
+    {
+        yield 'a leading space' => [' 42'];
+        yield 'a trailing space' => ['42 '];
+        yield 'a plus sign' => ['+42'];
+        yield 'a leading zero' => ['042'];
+        yield 'a minus sign' => ['-42'];
+        yield 'zero' => ['0'];
+        yield 'a number past the integer range' => ['99999999999999999999'];
+        yield 'no number' => ['sample'];
+    }
+
+    #[DataProvider('tasksNotNamedByTheirPlainNumber')]
+    public function testATaskNotNamedByItsPlainNumberNeverReachesTheStoredQuestions(string $task): void
+    {
+        $questions = $this->createMock(ParkedQuestions::class);
+        $questions->expects($this->never())->method('of');
+
+        self::assertNull(new ParkedQuestionTexts($questions, self::createStub(Redactor::class))->of('alpha', $task, self::NAMED_RUN));
+    }
+
     /**
      * @return list<string>
      */
@@ -455,8 +491,11 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $questions = self::createStub(ParkedQuestions::class);
         $questions->method('of')->willReturnCallback(static fn (string $project, int $task): ?ParkedQuestion => 'alpha' === $project && 42 === $task ? $question : null);
         self::getContainer()->set(ParkedQuestions::class, $questions);
-        $this->passStepsBeforeTheBuildJob();
-        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+        foreach (['task', 'mirror', 'clone'] as $step) {
+            $this->stepOfRun(self::NAMED_RUN, $step);
+        }
+
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => self::NAMED_RUN, 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
     }
 
     private function passStepsBeforeTheBuildJob(): void

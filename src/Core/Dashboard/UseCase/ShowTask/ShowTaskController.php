@@ -49,9 +49,9 @@ final readonly class ShowTaskController
 
     // Redacted because a step's failure quotes a git or forge error, which can carry a credential, as the status report does.
     /**
-     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string} $step
+     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string} $step
      *
-     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}
+     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}
      */
     private function redacted(array $step): array
     {
@@ -72,14 +72,16 @@ final readonly class ShowTaskController
         return array_slice($cases, false === $last ? count($cases) : $last + 1);
     }
 
-    // Only for a run that ended asking, because a later build job that built clears the row, so an older question never shows beside a newer run.
+    // Only for a run that ended asking, and only its own question, because the task's row can hold the question of another run that overlapped it.
     /**
-     * @param non-empty-list<array{outcome: string}> $steps
+     * @param non-empty-list<array{outcome: string, run: ?string}> $steps
      *
      * @return array{text: string, choices: list<string>, recommendation: string, parked_at: string}|null
      */
     private function parkedQuestionOf(array $steps, string $project, string $task): ?array
     {
-        return BuildStepOutcome::Asked->value === array_last($steps)['outcome'] ? $this->questions->of($project, $task) : null;
+        $last = array_last($steps);
+
+        return BuildStepOutcome::Asked->value === $last['outcome'] ? $this->questions->of($project, $task, $last['run']) : null;
     }
 }

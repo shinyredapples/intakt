@@ -154,7 +154,7 @@ final readonly class BuildTask
             $result = match ($step) {
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
-                BuildStep::BuildJob => $this->runBuildJob($request, $task),
+                BuildStep::BuildJob => $this->runBuildJob($request, $run, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
                 // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
                 BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels))) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
@@ -205,7 +205,7 @@ final readonly class BuildTask
     }
 
     // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failure's text.
-    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
+    private function runBuildJob(BuildTaskRequest $request, BuildRun $run, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
     {
         $incomplete = $this->incompleteBugQuestion($task);
 
@@ -228,7 +228,7 @@ final readonly class BuildTask
             return $outcome->verdict->reason();
         }
 
-        return $this->unpark($request) ?? $outcome;
+        return $this->unpark($run) ?? $outcome;
     }
 
     /**
@@ -338,10 +338,10 @@ final readonly class BuildTask
     }
 
     // Cleared once a later build job built, because the question an earlier one asked no longer says where the task stands.
-    private function unpark(BuildTaskRequest $request): ?string
+    private function unpark(BuildRun $run): ?string
     {
         try {
-            $this->parkedTasks->clear($request->project, $request->issue);
+            $this->parkedTasks->clear($run);
         } catch (ParkedTaskNotCleared $notCleared) {
             return $notCleared->getMessage();
         }

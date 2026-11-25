@@ -178,7 +178,7 @@ final class LedgerBuildStepsTest extends TestCase
     /**
      * @param list<array<string, mixed>> $rows
      *
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
      */
     private function latestRunOf(array $rows): array
     {

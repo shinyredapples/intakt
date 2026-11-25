@@ -10,7 +10,9 @@ use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Types\ConversionException;
 use Intakt\Core\Build\Contract\ParkedQuestion;
 use Intakt\Core\Build\Contract\ParkedQuestions;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Symfony\Component\Uid\Uuid;
 
 // Read on the connection, as the parking writes the row, so the row is read as stored and never through an entity another holder changed.
 final readonly class StoredParkedQuestions implements ParkedQuestions
@@ -23,7 +25,7 @@ final readonly class StoredParkedQuestions implements ParkedQuestions
     public function of(string $project, int $task): ?ParkedQuestion
     {
         $row = $this->connection->fetchAssociative(
-            sprintf('SELECT question, choices, recommendation, parked_at FROM %s WHERE project = ? AND task = ?', ParkedTaskRecord::TABLE),
+            sprintf('SELECT question, choices, recommendation, parked_at, run FROM %s WHERE project = ? AND task = ?', ParkedTaskRecord::TABLE),
             [$project, $task],
             [ParameterType::STRING, ParameterType::INTEGER],
         );
@@ -36,32 +38,31 @@ final readonly class StoredParkedQuestions implements ParkedQuestions
      */
     private function questionIn(array $row): ?ParkedQuestion
     {
+        $run = $row['run'] ?? null;
+
+        // A row parked before rows named their run has none, so no reader can say which run it belongs to.
+        if (!is_string($run) || !Uuid::isValid($run)) {
+            return null;
+        }
+
         try {
-            $question = $this->converted($row['question'] ?? null, 'json');
-            $choices = $this->converted($row['choices'] ?? null, 'json');
-            $recommendation = $this->converted($row['recommendation'] ?? null, 'json');
-            $parkedAt = $this->converted($row['parked_at'] ?? null, 'utc_datetime_immutable');
+            $parkedAt = $this->connection->convertToPHPValue($row['parked_at'] ?? null, 'utc_datetime_immutable');
         } catch (ConversionException) {
             return null;
         }
 
-        if (!is_string($question) || !is_string($recommendation) || !$parkedAt instanceof DateTimeImmutable || !$this->isListOfTexts($choices)) {
+        $question = BuildQuestion::fromStored($this->decoded($row['question'] ?? null), $this->decoded($row['choices'] ?? null), $this->decoded($row['recommendation'] ?? null));
+
+        if (!$question instanceof BuildQuestion || !$parkedAt instanceof DateTimeImmutable) {
             return null;
         }
 
-        return new ParkedQuestion($question, $choices, $recommendation, $parkedAt);
+        return new ParkedQuestion($question->question, $question->choices, $question->recommendation, $parkedAt, $run);
     }
 
-    private function converted(mixed $value, string $type): mixed
+    // Decoded to objects and not with the connection's json type, because an associative decoding turns {"0":"a"} into a list and so an object into choices.
+    private function decoded(mixed $text): mixed
     {
-        return $this->connection->convertToPHPValue($value, $type);
-    }
-
-    /**
-     * @phpstan-assert-if-true non-empty-list<string> $choices
-     */
-    private function isListOfTexts(mixed $choices): bool
-    {
-        return is_array($choices) && [] !== $choices && array_is_list($choices) && array_all($choices, static fn (mixed $choice): bool => is_string($choice));
+        return is_string($text) ? json_decode($text, false, 8) : null;
     }
 }

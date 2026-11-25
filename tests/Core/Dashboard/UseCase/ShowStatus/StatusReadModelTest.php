@@ -98,6 +98,8 @@ final class StatusReadModelTest extends TestCase
 {
     private const string SCHEMA = __DIR__.'/../../../../../docs/user/status.schema.json';
 
+    private const string PARKING_RUN = '3c9a7b52-1e4d-4f6a-8b2c-5d7e9f0a1b3c';
+
     private DashboardLedger $ledger;
 
     private ?Ledger $readFrom = null;
@@ -148,9 +150,9 @@ final class StatusReadModelTest extends TestCase
 
     public function testATaskParkedAtTheBuildJobShowsTheAskedStepWithItsQuestionAndValidatesAgainstTheSchema(): void
     {
-        $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'));
+        $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'), self::PARKING_RUN);
         $this->ledger->passBuildStep('alpha', '12', 'task');
-        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'run' => self::PARKING_RUN, 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
@@ -160,7 +162,7 @@ final class StatusReadModelTest extends TestCase
 
     public function testAnAskedStepWhoseQuestionIsNoLongerStoredShowsNoQuestion(): void
     {
-        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'run' => self::PARKING_RUN, 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
@@ -170,17 +172,25 @@ final class StatusReadModelTest extends TestCase
 
     public function testATaskBuiltAgainAfterItWasParkedShowsNoQuestion(): void
     {
-        $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'));
-        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+        $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'), self::PARKING_RUN);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'run' => self::PARKING_RUN, 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
         $this->ledger->passBuildStep('alpha', '12', 'task');
 
         self::assertSame([['task', 'passed', null]], array_map(static fn (array $task): array => [$task['step'], $task['outcome'], $task['question']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
     }
 
+    public function testAQuestionAnotherRunParkedIsNotReportedForTheRunWhoseStepIsShown(): void
+    {
+        $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'), self::PARKING_RUN);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'run' => 'f1d0e2c4-5b6a-4c8d-9e0f-000000000002', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+
+        self::assertSame([['asked', null]], array_map(static fn (array $task): array => [$task['outcome'], $task['question']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
+    }
+
     public function testTheTextsOfAParkedQuestionAreRedactedBeforeTheyAreReported(): void
     {
-        $this->parked = new ParkedQuestion('Use token-abc?', ['token-abc', 'no'], 'token-abc', new DateTimeImmutable('2026-11-20 10:00:00'));
-        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+        $this->parked = new ParkedQuestion('Use token-abc?', ['token-abc', 'no'], 'token-abc', new DateTimeImmutable('2026-11-20 10:00:00'), self::PARKING_RUN);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'run' => self::PARKING_RUN, 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
 
         $json = $this->readModel(redacting: 'token-abc')->json();
 
