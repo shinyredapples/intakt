@@ -15,7 +15,7 @@ The role name `technical_writer` is refused for a reviewer of the panel or of a 
 
 ### What it is given
 
-`ReviewWithReviewerHandler` cuts the diff to the docs pages (`Infrastructure\DocsPartOfDiff`, which keeps a file section when any path in its header is a page) and starts a `ReviewerConversation` in the `Docs` lane. `ReviewerPrompt` then uses `TECHNICAL_WRITER_INSTRUCTIONS` through `PromptAssembly::systemWithRole()`, fences the task and the docs part like any reviewer input and adds no project memory notes. The tools are the reviewers' read-only toolbox at the head; none writes. Retries keep the lane.
+`ReviewWithReviewerHandler` cuts the diff to the docs pages (`Infrastructure\DocsPartOfDiff`, which keeps a file section when any path in its header is a page) and starts a `ReviewerConversation` in the `Docs` lane. `ReviewerPrompt` then uses `TECHNICAL_WRITER_INSTRUCTIONS` through `PromptAssembly::systemWithRole()`, fences the task, the docs part and the open findings on docs pages (`openFor()`; `OpenFindingIds` refuses an answer naming any other id) like any reviewer input and adds no project memory notes. The tools are the reviewers' read-only toolbox at the head; none writes. Retries keep the lane.
 
 ### How its vote counts
 
