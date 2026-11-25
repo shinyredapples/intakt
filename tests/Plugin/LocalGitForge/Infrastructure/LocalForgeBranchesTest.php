@@ -430,19 +430,6 @@ final class LocalForgeBranchesTest extends TestCase
     }
 
     /**
-     * @return list<string>
-     */
-    private function names(): array
-    {
-        return array_map(static fn (ForgeBranch $branch): string => $branch->name, $this->branches()->branches());
-    }
-
-    private function worktree(): string
-    {
-        return $this->repository->path.'-worktree';
-    }
-
-    /**
      * @param list<string>     $injected
      * @param callable(): void $action
      */
@@ -475,5 +462,18 @@ final class LocalForgeBranchesTest extends TestCase
         putenv('PATH='.$path);
         $_SERVER['PATH'] = $path;
         $_ENV['PATH'] = $path;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function names(): array
+    {
+        return array_map(static fn (ForgeBranch $branch): string => $branch->name, $this->branches()->branches());
+    }
+
+    private function worktree(): string
+    {
+        return $this->repository->path.'-worktree';
     }
 }

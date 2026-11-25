@@ -78,6 +78,16 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
     }
 
+    // Only a files repository, because both the listing check and the delete's HEAD locks read the ref files.
+    private function commonDirectory(): string
+    {
+        if ('files' !== trim($this->read(['rev-parse', '--show-ref-format']))) {
+            throw new ForgeReadFailed('the repository does not keep its refs in files, so its branches cannot be read completely nor deleted safely.');
+        }
+
+        return rtrim($this->read(['rev-parse', '--path-format=absolute', '--git-common-dir']), "\n");
+    }
+
     /**
      * @param list<string> $arguments
      */
@@ -143,21 +153,11 @@ final readonly class LocalForgeBranches implements ForgeBranches
         $listed = array_map(static fn (ForgeBranch $branch): string => $branch->name, $branches);
         foreach (Finder::create()->files()->ignoreDotFiles(false)->ignoreVCS(false)->in($directory) as $file) {
             $name = str_replace(DIRECTORY_SEPARATOR, '/', $file->getRelativePathname());
-            // A .lock file is git holding a branch while it writes it, and git allows no branch name that ends in .lock.
+            // A .lock file is skipped, because it is git holding a branch while it writes it, and git allows no branch name that ends in .lock.
             if (!str_ends_with($name, '.lock') && !in_array($name, $listed, true)) {
                 throw new ForgeReadFailed(sprintf('git for-each-ref left out the branch "%s", which dangles or cannot be read.', $name));
             }
         }
-    }
-
-    // The refs live in files, which both the listing check and the delete's HEAD locks rely on.
-    private function commonDirectory(): string
-    {
-        if ('files' !== trim($this->read(['rev-parse', '--show-ref-format']))) {
-            throw new ForgeReadFailed('the repository does not keep its refs in files, so its branches cannot be read completely nor deleted safely.');
-        }
-
-        return rtrim($this->read(['rev-parse', '--path-format=absolute', '--git-common-dir']), "\n");
     }
 
     // The exact branch, because a revision such as refs/heads/<base> falls back to a tag of that name when the branch is missing; and the whole history, because a shallow boundary hides commits and ancestry.
@@ -263,14 +263,6 @@ final readonly class LocalForgeBranches implements ForgeBranches
         return $locks;
     }
 
-    /**
-     * @param list<string> $locks
-     */
-    private function unlock(array $locks): void
-    {
-        new Filesystem()->remove($locks);
-    }
-
     private function isSymbolic(string $reference): bool
     {
         $process = $this->git(['symbolic-ref', '--quiet', $reference]);
@@ -301,6 +293,14 @@ final readonly class LocalForgeBranches implements ForgeBranches
             self::NOT_SYMBOLIC => $branches,
             default => throw new ForgeReadFailed(sprintf('git symbolic-ref failed: %s', trim($head->getErrorOutput()))),
         };
+    }
+
+    /**
+     * @param list<string> $locks
+     */
+    private function unlock(array $locks): void
+    {
+        new Filesystem()->remove($locks);
     }
 
     private function commitFrom(string $hash): CommitId
