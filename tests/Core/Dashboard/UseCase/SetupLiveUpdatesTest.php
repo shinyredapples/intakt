@@ -181,9 +181,11 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
     {
         $controller = file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
         self::assertIsString($controller);
-        self::assertSame(1, preg_match("/^const ACTIONS = '(.+)';$/m", $controller, $actions));
+        preg_match("/^const ACTIONS = '(.+)';$/m", $controller, $actions);
+        $selector = $actions[1] ?? null;
+        self::assertIsString($selector, 'The connection controller names no ACTIONS selector.');
 
-        return $actions[1];
+        return $selector;
     }
 
     // Assembled here from the container's page reading and Twig, because the container inlines its hub, so a recording one cannot be set there.
