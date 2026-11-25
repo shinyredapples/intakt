@@ -55,10 +55,9 @@ final readonly class RoundFinding
             return null;
         }
 
-        // Code spans are found on the whole text before any cut, as FindingText finds them (a run of backticks closed by a run of the same length, across lines too), so a line break or a mark inside one never ends the headline; an unclosed backtick is a plain character.
-        preg_match_all('/(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)/s', $text, $spans, PREG_OFFSET_CAPTURE);
+        // Code spans are found on the whole text before any cut, so a line break or a mark inside one never ends the headline.
         $at = 0;
-        foreach ([...$spans[0], ['', strlen($text)]] as [$span, $start]) {
+        foreach ([...self::codeSpansOf($text), [strlen($text), '', '']] as [$start, $span]) {
             // A sentence ends at a mark followed by white space or the end, so a dot in a name (src/A.php, 1.5) never ends it. Searched gap by gap instead of in one pattern over the line, which runs out of PCRE's stack on a long first sentence.
             if (1 === preg_match('/\R|[.!?](?=[\s\p{Z}]|$)/u', $text, $end, PREG_OFFSET_CAPTURE, $at) && $end[0][1] < $start) {
                 $cut = $end[0][1] + (str_contains('.!?', $end[0][0]) ? 1 : 0);
@@ -78,9 +77,7 @@ final readonly class RoundFinding
     public function quotedCode(): array
     {
         // The reviewer's own code spans, found as the headline finds them, and not the quote check's counted list, which leaves out a quote it cannot check (a lone `0`) that the reviewer still gave.
-        preg_match_all('/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/s', $this->text ?? '', $spans);
-
-        return $spans[2];
+        return array_column(self::codeSpansOf($this->text ?? ''), 2);
     }
 
     public function goesOnAfterItsHeadline(): bool
@@ -112,6 +109,45 @@ final readonly class RoundFinding
     public function calledBy(JudgeCall $call): self
     {
         return clone ($this, ['call' => $call]);
+    }
+
+    /**
+     * Spans as FindingText finds them: a run of backticks closed by the next run of the same length, across lines too; an unclosed run is plain text. Scanned with string functions instead of a lazy pattern, which runs out of PCRE's backtracking limit on a long span and then finds no span at all.
+     *
+     * @return list<array{int, string, string}> the offset, the whole span and the code inside it
+     */
+    private static function codeSpansOf(string $text): array
+    {
+        $spans = [];
+        $at = 0;
+        while (false !== $open = strpos($text, '`', $at)) {
+            $fence = strspn($text, '`', $open);
+            $close = self::closingRunOf($text, $fence, $open + $fence);
+            if (null === $close) {
+                $at = $open + $fence;
+
+                continue;
+            }
+
+            $spans[] = [$open, substr($text, $open, $close + $fence - $open), substr($text, $open + $fence, $close - $open - $fence)];
+            $at = $close + $fence;
+        }
+
+        return $spans;
+    }
+
+    private static function closingRunOf(string $text, int $fence, int $from): ?int
+    {
+        while (false !== $close = strpos($text, '`', $from)) {
+            $run = strspn($text, '`', $close);
+            if ($run === $fence) {
+                return $close;
+            }
+
+            $from = $close + $run;
+        }
+
+        return null;
     }
 
     // Null for a text that is missing, blank or not valid UTF-8, because the Unicode-aware pattern fails on invalid UTF-8 and the card then says the text is not recorded.
