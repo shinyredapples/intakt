@@ -202,6 +202,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .filters #history-project { display: none; }
 /* Its own mark, not hidden, because the project filter owns a row's hidden and either may hide it. */
 .ledger tr[data-filtered-out] { display: none; }
+.history-none:empty { margin: 0; }
 
 /* Toasts */
 .toast {

@@ -6,16 +6,20 @@ namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\HistoryRow;
+use Intakt\Core\Dashboard\Domain\HistorySource;
+use Intakt\Core\Dashboard\Domain\HistoryTopic;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(HistoryRow::class)]
+#[UsesClass(HistoryTopic::class)]
 #[UsesClass(PayloadFields::class)]
 final class HistoryRowTest extends TestCase
 {
@@ -100,6 +104,24 @@ final class HistoryRowTest extends TestCase
         $row = HistoryRow::of($this->recorded(['actor' => '   ', 'project' => " \t"]));
 
         self::assertSame(['Intakt', null], [$row->who, $row->project]);
+    }
+
+    #[TestWith(["\f"])]
+    #[TestWith(["\u{00A0}"])]
+    #[TestWith(["\u{2003}\u{3000}\n"])]
+    public function testAnActorOrProjectOfOnlyUnicodeWhitespaceReadsAsUnset(string $blank): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => $blank, 'project' => $blank]));
+
+        self::assertSame(['Intakt', HistorySource::Intakt, null], [$row->who, $row->source, $row->project]);
+        self::assertNotContains(HistoryTopic::Projects, $row->topics());
+    }
+
+    public function testANameWithANoBreakSpaceInsideItIsKeptAsWritten(): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => "owner\u{00A0}one", 'project' => "alpha\u{00A0}beta"]));
+
+        self::assertSame(["owner\u{00A0}one", "alpha\u{00A0}beta"], [$row->who, $row->project]);
     }
 
     /**

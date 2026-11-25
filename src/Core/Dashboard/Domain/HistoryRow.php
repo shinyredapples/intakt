@@ -86,10 +86,10 @@ final readonly class HistoryRow
         return HistoryTopic::of(LedgerEventKind::from($this->kind), $this->project);
     }
 
-    // An empty or blank name is no name, so the topic, the project filter and the Source column all read the same null.
+    // A name that is empty or only Unicode whitespace is no name, which trim() would miss for a form feed or a no-break space, so the topic, the project filter and the Source column all read the same null.
     private static function filled(?string $text): ?string
     {
-        return null === $text || '' === trim($text) ? null : $text;
+        return null === $text || 1 === preg_match('/^[\s\p{Z}]*\z/u', $text) ? null : $text;
     }
 
     // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable. It throws on a NUL byte, which would take the whole page down for one row.

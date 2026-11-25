@@ -55,7 +55,12 @@ function narrow(page, phone) {
             shown++;
         }
     });
-    page.querySelector('.history-none').hidden = shown > 0;
+    // The status region stays on the page and only its text changes, so a screen reader hears it; the same text is not set again, or every key typed would repeat it.
+    const status = page.querySelector('.history-none');
+    const message = shown > 0 ? '' : status.dataset.none;
+    if (status.textContent !== message) {
+        status.textContent = message;
+    }
 }
 
 // Follows the shared filter, which a stored choice, a project link or a live update may have changed; a project the picker does not list yet reads as All projects, so it never hides rows under a name it cannot show.

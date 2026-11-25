@@ -95,13 +95,31 @@ class FakeToolbar {
     }
 }
 
+class FakeStatus {
+    #text = '';
+    writes = 0;
+
+    constructor(none) {
+        this.dataset = { none };
+    }
+
+    get textContent() {
+        return this.#text;
+    }
+
+    set textContent(text) {
+        this.#text = text;
+        this.writes++;
+    }
+}
+
 class FakePage {
     listeners = {};
 
     constructor(toolbar, rows) {
         this.toolbar = toolbar;
         this.rows = rows;
-        this.none = { hidden: true };
+        this.none = new FakeStatus('No entries match.');
         this.shared = null;
     }
 
@@ -244,12 +262,26 @@ test('the empty line shows when no row matches and goes when one does', () => {
     const { page, toolbar } = historyWithAnOwnerChangeAndAnAccountCoolDown();
     toolbar.input.value = 'nothing like this';
     page.listeners.input({ target: toolbar.input });
-    assert.equal(page.none.hidden, false);
+    assert.equal(page.none.textContent, 'No entries match.');
 
     toolbar.input.value = '';
     page.listeners.input({ target: toolbar.input });
 
-    assert.equal(page.none.hidden, true);
+    assert.equal(page.none.textContent, '');
+});
+
+test('the status region stays on the page and takes the no-match text once while nothing matches', () => {
+    const { page, toolbar } = historyWithAnOwnerChangeAndAnAccountCoolDown();
+    const status = page.none;
+
+    for (const text of ['nothing', 'nothing like', 'nothing like this']) {
+        toolbar.input.value = text;
+        page.listeners.input({ target: toolbar.input });
+    }
+
+    assert.equal(page.none, status);
+    assert.equal(status.hidden, undefined);
+    assert.deepEqual([status.textContent, status.writes], ['No entries match.', 1]);
 });
 
 test('a row the project filter hid counts as not shown, so the empty line appears', () => {
@@ -258,7 +290,7 @@ test('a row the project filter hid counts as not shown, so the empty line appear
 
     page.listeners.click({ target: chip('intakt') });
 
-    assert.equal(page.none.hidden, false);
+    assert.equal(page.none.textContent, 'No entries match.');
     assert.equal(owner.hidden, false);
 });
 
@@ -269,7 +301,7 @@ test('the project filter running again recounts the shown rows', () => {
 
     page.listeners['intakt:project-shown']();
 
-    assert.equal(page.none.hidden, false);
+    assert.equal(page.none.textContent, 'No entries match.');
 });
 
 test('a click or a typed key outside the toolbar changes nothing, and a page without History is left alone', () => {
@@ -282,5 +314,5 @@ test('a click or a typed key outside the toolbar changes nothing, and a page wit
     page.listeners['intakt:project-shown']();
 
     assert.deepEqual(shown(owner, cooled), [true, true]);
-    assert.equal(page.none.hidden, true);
+    assert.equal(page.none.textContent, '');
 });

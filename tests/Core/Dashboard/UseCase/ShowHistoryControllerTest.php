@@ -134,7 +134,9 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/history');
 
-        self::assertSame('No entries match. Clear the filter to see everything.', $crawler->filter('p.history-none[hidden]')->text());
+        $status = $crawler->filter('p.history-none[role="status"]:not([hidden])');
+        self::assertSame('', $status->text());
+        self::assertSame('No entries match. Clear the filter to see everything.', $status->attr('data-none'));
     }
 
     public function testAHistoryRowWithoutAChangeShowsNoArrow(): void
