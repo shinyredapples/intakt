@@ -31,7 +31,7 @@ final readonly class MarkdownTextLines
         return match (true) {
             '' === trim($content), null !== $this->fences->fenceAfter($content, null) => MarkdownLineKind::Blank,
             $this->startsABlock($content) => MarkdownLineKind::Break,
-            // A quoted marker belongs to a list in the quote, which the lines outside it do not continue.
+            // A quoted marker opens a list in the quote, so the lines outside the quote do not continue it.
             $content !== $outdented && $this->indents->startsItem($content, $previous, []) => MarkdownLineKind::Break,
             default => MarkdownLineKind::Prose,
         };

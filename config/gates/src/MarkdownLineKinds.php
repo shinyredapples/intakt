@@ -52,7 +52,7 @@ final readonly class MarkdownLineKinds
             return MarkdownLineKind::Blank;
         }
 
-        // A line at another quote depth starts fresh, except that one after quoted prose may lazily continue that paragraph.
+        // Because CommonMark lets a line right after quoted prose lazily continue it, only other changes of quote depth start fresh.
         $continues = $depths[$before] === $depths[$index] || ($depths[$index] < $depths[$before] && MarkdownLineKind::Prose === $kinds[$before]);
 
         return $continues ? $kinds[$before] : MarkdownLineKind::Blank;
