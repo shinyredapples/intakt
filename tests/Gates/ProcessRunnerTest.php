@@ -8,12 +8,15 @@ use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\TimeLimit;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ProcessRunner::class)]
 #[UsesClass(ProcessGroup::class)]
+#[UsesClass(TimeLimit::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGitCall::class)]
 final class ProcessRunnerTest extends TestCase
@@ -87,6 +90,59 @@ final class ProcessRunnerTest extends TestCase
         self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
         self::assertSame('', $result->output);
         self::assertSame('php timed out after 1 seconds', $result->errors);
+    }
+
+    public function testACommandPastAFractionalTimeIsStoppedAndNamesItsLimit(): void
+    {
+        $started = (hrtime(true) / 1_000_000_000);
+
+        $result = new ProcessRunner()->runWithin(['php', '-r', 'echo "partial"; sleep(30);'], sys_get_temp_dir(), 0.3);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
+        self::assertSame('php timed out after 0.3 seconds', $result->errors);
+        self::assertLessThan(10, (hrtime(true) / 1_000_000_000) - $started);
+    }
+
+    public function testAConcurrentRunWithAFractionalTimeStopsTheCommandPastItAndNamesTheLimit(): void
+    {
+        $results = new ProcessRunner()->runConcurrently([
+            'slow' => [['php', '-r', 'sleep(30);'], []],
+            'quick' => [['php', '-r', 'echo "done";'], []],
+        ], sys_get_temp_dir(), 0.5);
+
+        self::assertSame('php timed out after 0.5 seconds', $results['slow']->errors);
+        self::assertSame('done', $results['quick']->output);
+    }
+
+    public function testALimitShorterThanTheStartItselfTimesOutAndNamesTheLimit(): void
+    {
+        // A microsecond is always shorter than starting a process, so the limit has passed when the start ends.
+        $result = new ProcessRunner()->runWithin(['php', '-r', 'echo "ran";'], sys_get_temp_dir(), 1.0E-6);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
+        self::assertSame('php timed out after 1.0E-6 seconds', $result->errors);
+    }
+
+    public function testAConcurrentRunWithALimitShorterThanTheStartItselfTimesOutAndNamesTheLimit(): void
+    {
+        $results = new ProcessRunner()->runConcurrently(['command' => [['php', '-r', 'echo "ran";'], []]], sys_get_temp_dir(), 1.0E-6);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['command']->exitCode);
+        self::assertSame('php timed out after 1.0E-6 seconds', $results['command']->errors);
+    }
+
+    public function testALimitThatIsNotFiniteInNanosecondsIsRefusedBeforeTheCommandRuns(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessRunner()->runWithin(['php', '-r', 'echo "ran";'], sys_get_temp_dir(), PHP_FLOAT_MAX);
+    }
+
+    public function testAConcurrentRunWithALimitThatIsNotFiniteInNanosecondsIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessRunner()->runConcurrently(['command' => [['php', '-r', 'echo "ran";'], []]], sys_get_temp_dir(), PHP_FLOAT_MAX);
     }
 
     public function testACommandPastTheOverallTimeoutOfAConcurrentRunFailsAloneWhileTheOthersKeepTheirResult(): void

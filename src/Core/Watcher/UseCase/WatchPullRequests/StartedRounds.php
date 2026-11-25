@@ -196,7 +196,7 @@ final readonly class StartedRounds
         }
 
         $this->replaceStaleRound($project, $change);
-        $this->entities->persist(new StartedRound($project, $change, $queued->roundId));
+        $this->entities->persist(new StartedRound($project, $change, $queued->roundId, $queued->labels));
         $this->entities->flush();
     }
 

@@ -148,7 +148,7 @@ final class ChoosePanelCommandTest extends TestCase
             'quorum' => 'all',
             'reviewers' => [$this->reviewer('correctness')],
             'rules' => [['paths' => [$glob], 'reviewers' => [$this->reviewer('security')]]],
-        ]]);
+        ]], []);
         $application = new Application();
         $application->addCommand(new ChoosePanelCommand($panels));
 

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
@@ -452,8 +451,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
     }
 
     private function listAccounts(string $line): void
@@ -477,8 +475,10 @@ final class ProjectTiersTest extends KernelTestCase
         // Nothing injects the loader yet, so the compiled container drops it; the parameter is what the config feeds it.
         /** @var array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $parameter */
         $parameter = $this->bootedContainer()->getParameter(ReviewServices::PANELS);
+        /** @var array<string, array{tiers: array<string, array{provider: string}>}> $projects */
+        $projects = $this->bootedContainer()->getParameter(AiServices::PROJECTS);
 
-        return new ConfiguredPanels($parameter);
+        return new ConfiguredPanels($parameter, $projects);
     }
 
     /**

@@ -113,7 +113,8 @@ final readonly class PanelConfiguration implements ConfigurationInterface
      */
     private function refuseUnreachableQuorum(string $project, array $panel): void
     {
-        $panels = new ConfiguredPanels([$project => $panel]);
+        // No tier mapping, because only `review:full` is asked and that label moves no reviewer to another tier.
+        $panels = new ConfiguredPanels([$project => $panel], []);
 
         try {
             // Rules only add reviewers, so a quorum that holds for the core panel and for the panel with every rule holds for any change.

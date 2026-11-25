@@ -9,7 +9,6 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
@@ -144,8 +143,7 @@ final readonly class RoundFixture
         $this->ledger = new DoctrineLedger($registry, $this->clock);
         $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
 
-        EmptyDatabase::in($container);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn($container);
     }
 
     public function start(int $reviewers): ReviewRound
