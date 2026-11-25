@@ -500,7 +500,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAnUnchangedPullRequestWhoseReconcileFailedIsReconciledAgainOnTheNextPass(): void
     {
         $this->statusLabels->readsToFail = 1;
-        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tickFailingWith('The labels of 7 could not be read.');
         $failed = $this->statusLabels->on('7');
 
         $this->tick();
@@ -550,6 +551,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $logged = array_find($this->logger->logged, static fn (array $line): bool => 'The status label of {change} of {project} was not reconciled: {reason}' === $line[0]);
         self::assertSame([['status:in-review'], '7', 'alpha'], [$this->statusLabels->on('8'), $logged[1]['change'] ?? null, $logged[1]['project'] ?? null]);
+    }
+
+    public function testWhenTheLabelsReadOfTheFirstOfTwoOpenPullRequestsFailsTheSecondStillGetsItsLabelAndTheTickReportsTheFailure(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->statusLabels->readsToFail = 1;
+
+        $this->tickFailingWith('The labels of 7 could not be read.');
+
+        self::assertSame([[], ['status:in-review']], [$this->statusLabels->on('7'), $this->statusLabels->on('8')]);
     }
 
     public function testATickWhoseHeadStepAndStatusPassBothFailReportsTheHeadFailure(): void
@@ -1752,6 +1763,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
             return $exception instanceof RuntimeException && 'the hold cannot be written' === $exception->getMessage();
         });
+    }
+
+    private function tickFailingWith(string $reason): void
+    {
+        try {
+            $this->tick();
+            self::fail('The failed status reconcile was swallowed.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame($reason, $failure->getMessage());
+        }
     }
 
     private function tickExpectingFailure(): void

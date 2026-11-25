@@ -74,7 +74,7 @@ final readonly class StatusMirrors
     {
         try {
             if ($this->rounds->hasRoundOf($project, $change)) {
-                $this->mirror->reconcile($project, $change->id);
+                $this->mirror->reconcileOrThrow($project, $change->id);
             }
 
             return null;

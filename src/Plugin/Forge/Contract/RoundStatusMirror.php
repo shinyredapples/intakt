@@ -28,6 +28,20 @@ final readonly class RoundStatusMirror
     // The one step every caller runs, and none passes a status: it comes from the stored round, so a late or repeated call cannot leave an older one.
     public function reconcile(string $project, ChangeId $change): void
     {
+        try {
+            $this->reconcileOrThrow($project, $change);
+            // Boundary: logged and dropped, because the next pass reconciles the label again and a retry of the round must not wait on a label.
+        } catch (Throwable $failure) {
+            $this->logger->warning('The status label of {change} of {project} was not reconciled: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $failure->getMessage()]);
+        }
+    }
+
+    // For the watcher's status pass, which goes on with the other pull requests and then reports the failure in its tick; a busy lock is no failure, because its holder writes.
+    /**
+     * @throws Throwable
+     */
+    public function reconcileOrThrow(string $project, ChangeId $change): void
+    {
         if (!$this->labels instanceof StatusLabels) {
             return;
         }
@@ -39,9 +53,6 @@ final readonly class RoundStatusMirror
 
         try {
             $this->labels->match($project, $change, $this->wantedOf($project, $change));
-            // Boundary: logged and dropped, because the next pass reconciles the label again and a retry of the round must not wait on a label.
-        } catch (Throwable $failure) {
-            $this->logger->warning('The status label of {change} of {project} was not reconciled: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $failure->getMessage()]);
         } finally {
             $this->release($lock, $project, $change);
         }

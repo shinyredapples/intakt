@@ -170,6 +170,35 @@ final class RoundStatusMirrorTest extends TestCase
         self::assertLoggedError('warning', 'The status label of octo/app#7 of alpha was not reconciled: GitHub answered 503 to the events read.');
     }
 
+    public function testAReconcileThatMustReportItsFailureRethrowsAFailedReadOfTheLabelsAndReleasesTheLock(): void
+    {
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $forge->failOnceReading(RecordingStatusLabels::LABELS);
+        $mirror = $this->mirror(ReviewStatus::WaitingOnYou, $forge);
+
+        try {
+            $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+            self::fail('The failed read was swallowed.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame('GitHub answered 503 to the labels read.', $failure->getMessage());
+        }
+        $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+
+        self::assertSame(['status:waiting-on-you'], $forge->labels);
+    }
+
+    public function testAReconcileThatMustReportItsFailureSkipsABusyLockWithoutAFailure(): void
+    {
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $mirror = $this->mirror(ReviewStatus::WaitingOnYou, $forge);
+        $forge->whileReading(static fn () => $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE)));
+
+        $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+
+        self::assertSame(['[status:in-review] -> [status:waiting-on-you]'], $forge->passes);
+        self::assertLoggedError('info', 'The status label of octo/app#7 of alpha was left to the writer holding its lock.');
+    }
+
     public function testAForgeWithoutLabelsIsLeftAlone(): void
     {
         $rounds = $this->createMock(LatestRoundStatus::class);
