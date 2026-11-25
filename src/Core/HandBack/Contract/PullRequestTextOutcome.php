@@ -6,13 +6,10 @@ namespace Intakt\Core\HandBack\Contract;
 
 final readonly class PullRequestTextOutcome
 {
-    /**
-     * @param list<positive-int> $missingItems
-     */
     public function __construct(
         public PullRequestTextVerdict $verdict,
         public int $evidenceItems,
-        public array $missingItems,
+        public MissingEvidenceItems $missingItems,
         public int $bodyCharacters,
     ) {
     }

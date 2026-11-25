@@ -16,11 +16,11 @@ A live review calls AI models, so Intakt needs one key. Any one of these works:
 
 The calls are billed to whoever owns the key. With one key, both reviewers come from that company. With a Hugging Face token, both go through Hugging Face but run on models from two different AI labs. Chapter 7 says more about mixing providers.
 
-## Add the key on the setup page
+## Add the key in the setup wizard
 
-1. Open <http://localhost:7781/setup> and scroll to **Use your own project**.
-2. In **1. Add a key here**, paste the key and press **Keep the key**.
-3. Intakt asks the provider one tiny question with the key. Only a key the provider accepts is kept.
+1. Open <http://localhost:7781/setup?step=3>, step 3 of the setup wizard, **Add an AI account**.
+2. Paste the key and press **Keep the key**.
+3. Intakt asks the provider one tiny question with the key. Only a key the provider accepts is kept, and the step says what happened.
 4. Restart Intakt so it uses the key:
 
    ```
@@ -33,8 +33,9 @@ The page never shows the key again, only its provider and at most its last four 
 
 ## Start the review
 
-1. On the same page, press **Start the first review** in step 3.
-2. The live review page opens.
+1. Go to step 5, **Ready to start** (<http://localhost:7781/setup?step=5>).
+2. Under **First review**, press **Start the first review**.
+3. The live review page opens.
 
 Prefer the terminal? `docker compose exec intakt php bin/console intakt:demo` runs the same review and prints the outcome, the list of things to fix and the address of the review in the dashboard.
 
