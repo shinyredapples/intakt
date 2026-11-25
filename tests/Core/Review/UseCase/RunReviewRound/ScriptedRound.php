@@ -158,7 +158,7 @@ final class ScriptedRound
         $usage = new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create());
         $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $limit, $this->fixture->clock, $this->container->get(ReviewServerAccesses::class));
 
-        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+        return new AccountLimitedVendor($vendor, $resolver, $tiers);
     }
 
     // Failing when read, because an HTTP provider reports its 429 then, after the next reviewer's call has gone out.

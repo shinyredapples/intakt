@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
+use Generator;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
@@ -32,6 +33,7 @@ use Stringable;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
@@ -111,6 +113,22 @@ final class TierPlatformPinnedProviderTest extends TestCase
 
         self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
         self::assertSame(120, $out->secondsUntilAnAccountIsFree);
+    }
+
+    // A limit raised by the stream itself reaches the caller untyped, so the vendor's wait comes from here (AccountLimitedVendor).
+    public function testAPinnedLimitReadFromAStreamIsReportedAsTheModelsWaitWhileTheAccountReadsFree(): void
+    {
+        $router = $this->router(MockPlatformFactory::createPlatform(static fn (): StreamResult => new StreamResult((static function (): Generator {
+            yield from [];
+
+            throw new RateLimitExceededException(120);
+        })())));
+        $answer = $router->invoke(self::PINNED, 'Review.');
+
+        $this->failureOf(static fn (): array => iterator_to_array($answer->asStream()));
+
+        self::assertSame(0, $this->accounts->secondsUntilAnAccountIsFree(self::ROUTER));
+        self::assertSame(120, $this->tiers($router, [])->secondsUntilFree(new ResolvedModel(self::ROUTER, self::PINNED)));
     }
 
     public function testATierWhosePinnedModelIsFreeKeepsItsOwnModel(): void

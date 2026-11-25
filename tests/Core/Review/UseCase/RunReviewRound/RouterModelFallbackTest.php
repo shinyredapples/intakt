@@ -203,7 +203,7 @@ final class RouterModelFallbackTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, $servers);
 
-        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+        return new AccountLimitedVendor($vendor, $resolver, $tiers);
     }
 
     // The pinned router provider is rate-limited upstream and the fallback answers, as on 2026-11-18 (issue #2790).

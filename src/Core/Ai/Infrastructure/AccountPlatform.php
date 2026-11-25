@@ -218,7 +218,7 @@ final readonly class AccountPlatform implements PlatformInterface
         return null;
     }
 
-    // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); false when the model pins nothing or the window could not be saved, logged instead of thrown, because the provider's 429 must still reach the caller.
+    // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); false when the model pins nothing or the window could not be saved, logged instead of thrown, because the provider's 429 must still reach the caller. At least a second, because a reset of zero would save no window and the pin would be called again at once.
     private function coolDownPinned(?int $retryAfter): bool
     {
         if (!$this->pinned instanceof PinnedProvider) {
@@ -226,7 +226,7 @@ final readonly class AccountPlatform implements PlatformInterface
         }
 
         try {
-            $this->pinnedCooldowns->coolDown($this->pinned, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET);
+            $this->pinnedCooldowns->coolDown($this->pinned, max(1, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET));
         } catch (PinnedProviderCooldownNotSaved $notSaved) {
             $this->logger->warning('The cooldown of pinned provider {pinned} could not be saved.', ['pinned' => $this->pinned->key(), 'exception' => $notSaved]);
 

@@ -514,7 +514,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testAServerErrorMidStreamReachesTheRoundAsTheBlockedVerdictThroughTheAccountLimitedVendor(): void
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
-        $vendor = new AccountLimitedVendor($this->vendor($this->toolRoundThen($this->brokenMidText(new ServerException(503)))), $resolver, new NoCooldowns());
+        $vendor = new AccountLimitedVendor($this->vendor($this->toolRoundThen($this->brokenMidText(new ServerException(503)))), $resolver, self::createStub(TierInvoker::class));
 
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 

@@ -10,7 +10,7 @@ use RuntimeException;
 final class EveryAccountCoolingDown extends RuntimeException
 {
     public function __construct(
-        public readonly Provider $provider,
+        Provider $provider,
         public readonly int $secondsUntilAnAccountIsFree,
     ) {
         parent::__construct(sprintf('Every account of provider "%s" is cooling down.', $provider->value));

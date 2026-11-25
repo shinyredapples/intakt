@@ -72,6 +72,15 @@ final readonly class TierPlatform implements TierInvoker
         throw new EveryProviderOut($out);
     }
 
+    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform) in one read, so a pin that outlasts its account window still keeps the model out, and a window that ends while the platform is built is not kept by an earlier provider-wide read; the account windows alone decide for a platform that cannot tell.
+    #[Override]
+    public function secondsUntilFree(ResolvedModel $model): int
+    {
+        $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
+
+        return $platform instanceof AccountFailoverPlatform ? $platform->modelWaits()->secondsUntilFree($model->model) : $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
+    }
+
     // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.
     #[Override]
     #[NoDiscard('the answer is only in the result')]
@@ -147,14 +156,6 @@ final readonly class TierPlatform implements TierInvoker
         $wait = $this->secondsUntilFree($model);
 
         return 0 < $wait ? ProviderOutage::coolingDown($provider, $wait) : null;
-    }
-
-    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform) in one read, so a pin that outlasts its account window still keeps the model out, and a window that ends while the platform is built is not kept by an earlier provider-wide read; the account windows alone decide for a platform that cannot tell.
-    private function secondsUntilFree(ResolvedModel $model): int
-    {
-        $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
-
-        return $platform instanceof AccountFailoverPlatform ? $platform->modelWaits()->secondsUntilFree($model->model) : $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
     }
 
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void

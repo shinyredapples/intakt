@@ -104,6 +104,24 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame(60, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
     }
 
+    public function testA429WithAResetOfZeroCoolsThePinForASecondAndTheNextCallSendsNothing(): void
+    {
+        $requests = 0;
+        $router = $this->answering(static function () use (&$requests): never {
+            ++$requests;
+
+            throw new RateLimitExceededException(0);
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $router], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins);
+
+        $limited = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+        $whileCooling = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $limited);
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $whileCooling);
+        self::assertSame([1, 1], [$limited->secondsUntilAnAccountIsFree, $requests]);
+    }
+
     public function testA429ReadFromTheAnswerCoolsThePinToo(): void
     {
         $answer = $this->accounts(new FailingWhenRead(new RateLimitExceededException(90)), $this->answering('second'))->invoke(self::PINNED, 'Review.');

@@ -278,7 +278,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', new ReviewTools('read_file')));
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $this->limit, $this->fixture->clock, $servers);
 
-        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+        return new AccountLimitedVendor($vendor, $resolver, $tiers);
     }
 
     // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.
