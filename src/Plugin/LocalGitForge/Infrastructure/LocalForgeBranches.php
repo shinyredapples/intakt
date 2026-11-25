@@ -27,6 +27,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     private const int NOT_AN_ANCESTOR = 1;
     private const int NOT_SYMBOLIC = 1;
     private const int MISSING = 2;
+    private const int REFERENCE_INVALID = 1;
     private const string BEING_ADDED = 'locked initializing';
     private const string LISTING_FORMAT = '%(refname)%00%(objectname)%00%(objecttype)%00%(symref)';
 
@@ -128,6 +129,22 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
 
         return $process;
+    }
+
+    // A rebase or bisect state file is read as text, so a damaged name that git would never write (such as "refs/heads/topic..old") matches no listed branch and would let the branch it holds be deleted; git's own rules tell it apart.
+    private function validReference(string $reference): string
+    {
+        $format = $this->git(['check-ref-format', $reference]);
+
+        if (self::REFERENCE_INVALID === $format->getExitCode()) {
+            throw new ForgeReadFailed(sprintf('a rebase or a bisect holds "%s", which is no valid branch name, so which branch it holds cannot be told.', $reference));
+        }
+
+        if (!$format->isSuccessful()) {
+            throw new ForgeReadFailed(sprintf('git check-ref-format failed: %s', trim($format->getErrorOutput())));
+        }
+
+        return $reference;
     }
 
     private function branchFrom(string $line): ForgeBranch
@@ -266,7 +283,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
             array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'branch ')),
         ));
 
-        $branches = [...$branches, ...$this->rebases->branchesHeldIn($common)];
+        $branches = [...$branches, ...array_map($this->validReference(...), $this->rebases->branchesHeldIn($common))];
         $head = $this->git(['symbolic-ref', '--quiet', 'HEAD'], $common);
 
         return match ($head->getExitCode()) {
