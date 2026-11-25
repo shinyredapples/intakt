@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
 use Intakt\Plugin\Forge\Contract\CommitId;
@@ -32,13 +34,17 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     public function changeOf(ForgeBranch $branch): ?BranchChange
     {
         $pulls = array_map($this->pullOf(...), $this->calls->listing($this->repository->path().'/pulls', ['state' => 'all', 'head' => $this->repository->headOf($branch->name), 'sort' => 'created', 'direction' => 'desc']));
-        // An open pull request always counts, and a closed one only for the branch's head, because a pull request closed before later commits says nothing about them.
-        $deciding = array_find($pulls, static fn (array $pull): bool => BranchChangeState::Open === $pull['state'])
-            ?? array_find($pulls, static fn (array $pull): bool => $pull['head'] === $branch->head->hash);
+        if ([] === $pulls) {
+            return null;
+        }
+
         // The labels of every pull request of the branch, because a `keep` on an older one still asks to keep it.
         $labels = array_values(array_unique(array_merge([], ...array_column($pulls, 'labels'))));
+        // An open pull request always decides, and a closed one at the branch's head next; else the branch's commits came after its last pull request closed, so none of them was merged.
+        $deciding = array_find($pulls, static fn (array $pull): bool => BranchChangeState::Open === $pull['state'])
+            ?? array_find($pulls, static fn (array $pull): bool => $pull['head'] === $branch->head->hash);
 
-        return null === $deciding ? null : new BranchChange($deciding['state'], ...$labels);
+        return new BranchChange($deciding['state'] ?? BranchChangeState::ClosedUnmerged, ...$labels);
     }
 
     public function hasCommitByAPerson(ForgeBranch $branch, string $intaktIdentity): bool
@@ -50,6 +56,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         // Compared with the default branch's commit and not its name, because a default branch that advanced between two pages would shift commits onto a page already read.
         $base = $this->headOf($this->calls->object($this->repository->path().'/branches/'.$this->segments($this->defaultBranch())));
         $commits = $this->calls->comparison($this->repository->path().'/compare/'.$base->hash.'...'.$branch->head->hash);
+        $this->refuseRepeatedCommits($commits);
         $intakt = mb_strtolower(trim($intaktIdentity));
 
         return array_any($commits, fn (mixed $commit): bool => array_any($this->emailsOf($commit), static fn (string $email): bool => mb_strtolower($email) !== $intakt));
@@ -98,8 +105,9 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         $mergedAt = $data['merged_at'];
         $changeState = match (true) {
             'open' === $state => BranchChangeState::Open,
-            'closed' === $state && is_string($mergedAt) => BranchChangeState::Merged,
             'closed' === $state && null === $mergedAt => BranchChangeState::ClosedUnmerged,
+            'closed' === $state && $this->isMoment($mergedAt) => BranchChangeState::Merged,
+            'closed' === $state => throw new ForgeReadFailed('GitHub listed a closed pull request whose "merged_at" is neither null nor a moment.'),
             default => throw new ForgeReadFailed(sprintf('GitHub listed a pull request in the state "%s" this forge cannot read.', $state)),
         };
 
@@ -157,6 +165,30 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         $head = $this->headOf($current);
         if ($head->hash !== $branch->head->hash) {
             throw new ForgeReadFailed(sprintf('it moved to %s since it was listed at %s', $head->hash, $branch->head->hash));
+        }
+    }
+
+    // Only the form GitHub writes, read back unchanged, because any other string (an empty one too) would make a closed pull request pass for merged, which cleanup deletes first.
+    private function isMoment(mixed $value): bool
+    {
+        if (!is_string($value)) {
+            return false;
+        }
+
+        $moment = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s\Z', $value, new DateTimeZone('UTC'));
+
+        return false !== $moment && $moment->format('Y-m-d\TH:i:s\Z') === $value;
+    }
+
+    // Each commit by its id, because a commit listed twice would make up the comparison's total while another commit stays unread.
+    /**
+     * @param list<mixed> $commits
+     */
+    private function refuseRepeatedCommits(array $commits): void
+    {
+        $ids = array_map(fn (mixed $commit): string => $this->commitOf($this->calls->text(is_array($commit) ? $commit : [], 'sha'))->hash, $commits);
+        if (count(array_unique($ids)) !== count($ids)) {
+            throw new ForgeReadFailed('GitHub answered a comparison that lists a commit more than once.');
         }
     }
 

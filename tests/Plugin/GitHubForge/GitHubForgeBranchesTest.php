@@ -30,6 +30,8 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
+use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 // Recorded GitHub answers keyed by method and URL (a body, or three digits for an HTTP status), with every request kept, because a test must see which pages were read and that no delete was sent.
@@ -42,6 +44,12 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(BranchChange::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(NextLinks::class)]
+#[UsesClass(AppJwt::class)]
+#[UsesClass(InstallationTokens::class)]
+#[UsesClass(InstallationTokenMinter::class)]
+#[UsesClass(InstallationReadBack::class)]
+#[UsesClass(InstallationReader::class)]
+#[UsesClass(ExpectedInstallation::class)]
 final class GitHubForgeBranchesTest extends TestCase
 {
     private const string HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -166,11 +174,41 @@ final class GitHubForgeBranchesTest extends TestCase
         self::assertEquals(new BranchChange(BranchChangeState::Merged, 'keep'), $this->forge()->changeOf($this->branch()));
     }
 
-    public function testAPullRequestClosedBeforeTheBranchsHeadIsNoChangeOfIt(): void
+    public function testABranchThatMovedPastItsMergedPullRequestIsClosedUnmerged(): void
     {
         $this->answers['GET '.$this->pulls(1)] = $this->pull('merged', self::OLDER);
 
-        self::assertNull($this->forge()->changeOf($this->branch()));
+        self::assertEquals(new BranchChange(BranchChangeState::ClosedUnmerged), $this->forge()->changeOf($this->branch()));
+    }
+
+    public function testAKeepLabelOnAClosedPullRequestOfAnOlderHeadOnTheSecondPageIsCarried(): void
+    {
+        $this->answers['GET '.$this->pulls(1)] = '[]';
+        $this->links['GET '.$this->pulls(1)] = '<'.self::REPOSITORY.'/pulls?page=2>; rel="next"';
+        $this->answers['GET '.$this->pulls(2)] = $this->pull('closed', self::OLDER, 'keep');
+
+        self::assertEquals(new BranchChange(BranchChangeState::ClosedUnmerged, 'keep'), $this->forge()->changeOf($this->branch()));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function mergeMomentsThatAreNone(): iterable
+    {
+        yield 'empty' => ['""'];
+        yield 'not a moment' => ['"yesterday"'];
+        yield 'an impossible date' => ['"2026-13-40T10:00:00Z"'];
+        yield 'a number' => ['1'];
+    }
+
+    #[DataProvider('mergeMomentsThatAreNone')]
+    public function testAClosedPullRequestWhoseMergeMomentIsNoMomentFailsInsteadOfMeaningMerged(string $mergedAt): void
+    {
+        $this->answers['GET '.$this->pulls(1)] = sprintf('[{"state":"closed","merged_at":%s,"labels":[],"head":{"sha":"%s"}}]', $mergedAt, self::HEAD);
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub listed a closed pull request whose "merged_at" is neither null nor a moment.'));
+
+        $this->forge()->changeOf($this->branch());
     }
 
     public function testABranchWithoutAPullRequestOnAnyPageHasNone(): void
@@ -270,7 +308,7 @@ final class GitHubForgeBranchesTest extends TestCase
     public function testABranchOfOnlyIntaktsCommitsHasNoneByAPersonWhateverTheLetterCase(): void
     {
         $this->defaultBranchAt(self::BASE);
-        $this->answers['GET '.$this->compare(1)] = $this->comparison(2, $this->commit(self::INTAKT, self::INTAKT), $this->commit('Intakt@Example.com', self::INTAKT));
+        $this->answers['GET '.$this->compare(1)] = $this->comparison(2, $this->commit(self::INTAKT, self::INTAKT), $this->commit('Intakt@Example.com', self::INTAKT, self::OLDER));
 
         self::assertFalse($this->forge()->hasCommitByAPerson($this->branch(), self::INTAKT));
     }
@@ -280,7 +318,7 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->defaultBranchAt(self::BASE);
         $this->answers['GET '.$this->compare(1)] = $this->comparison(2, $this->commit(self::INTAKT, self::INTAKT));
         $this->links['GET '.$this->compare(1)] = '<'.self::REPOSITORY.'/compare?page=2>; rel="next"';
-        $this->answers['GET '.$this->compare(2)] = $this->comparison(2, $this->commit('alice@example.com', self::INTAKT));
+        $this->answers['GET '.$this->compare(2)] = $this->comparison(2, $this->commit('alice@example.com', self::INTAKT, self::OLDER));
 
         self::assertTrue($this->forge()->hasCommitByAPerson($this->branch(), self::INTAKT));
     }
@@ -291,6 +329,28 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->answers['GET '.$this->compare(1)] = $this->comparison(300, $this->commit(self::INTAKT, self::INTAKT));
 
         $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a comparison whose commits do not add up to its total.'));
+
+        $this->forge()->hasCommitByAPerson($this->branch(), self::INTAKT);
+    }
+
+    public function testAComparisonThatRepeatsACommitToMakeUpItsTotalFailsInsteadOfMeaningNoPerson(): void
+    {
+        $this->defaultBranchAt(self::BASE);
+        $this->answers['GET '.$this->compare(1)] = $this->comparison(2, $this->commit(self::INTAKT, self::INTAKT));
+        $this->links['GET '.$this->compare(1)] = '<'.self::REPOSITORY.'/compare?page=2>; rel="next"';
+        $this->answers['GET '.$this->compare(2)] = $this->comparison(2, $this->commit(self::INTAKT, self::INTAKT));
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a comparison that lists a commit more than once.'));
+
+        $this->forge()->hasCommitByAPerson($this->branch(), self::INTAKT);
+    }
+
+    public function testACommitWithoutItsIdFailsTheRead(): void
+    {
+        $this->defaultBranchAt(self::BASE);
+        $this->answers['GET '.$this->compare(1)] = sprintf('{"total_commits":1,"commits":[{"commit":{"author":{"email":"%1$s"},"committer":{"email":"%1$s"}}}]}', self::INTAKT);
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without "sha".'));
 
         $this->forge()->hasCommitByAPerson($this->branch(), self::INTAKT);
     }
@@ -441,6 +501,31 @@ final class GitHubForgeBranchesTest extends TestCase
         }
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function deletionsThatFailedOnTheWay(): iterable
+    {
+        yield 'dropped connection' => ['unreachable'];
+        yield 'server error' => ['500'];
+        yield 'busy' => ['503'];
+    }
+
+    #[DataProvider('deletionsThatFailedOnTheWay')]
+    public function testADeletionThatFailedOnTheWayIsNotSentAgainWithoutReadingTheHead(string $answer): void
+    {
+        $this->defaultBranchIs('main');
+        $this->answers['GET '.self::REPOSITORY.'/branches/intakt/7-old'] = $this->current('intakt/7-old', self::HEAD, 'false');
+        $this->answers['DELETE '.self::REPOSITORY.'/git/refs/heads/intakt/7-old'] = $answer;
+
+        try {
+            $this->forge()->delete($this->branch());
+            self::fail('A deletion that failed on the way passed.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame(['GET '.self::REPOSITORY, 'GET '.self::REPOSITORY.'/branches/intakt/7-old', 'DELETE '.self::REPOSITORY.'/git/refs/heads/intakt/7-old'], $this->requests);
+        }
+    }
+
     private function defaultBranchIs(string $name): void
     {
         $this->answers['GET '.self::REPOSITORY] = sprintf('{"default_branch":"%s"}', $name);
@@ -460,7 +545,8 @@ final class GitHubForgeBranchesTest extends TestCase
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
-        $http = new MockHttpClient($this->answer(...), 'https://api.github.com');
+        // Retrying as the scoped client is in the container, so a call that must not be retried shows it.
+        $http = new RetryableHttpClient(new MockHttpClient($this->answer(...), 'https://api.github.com'), new GenericRetryStrategy(delayMs: 0), 2);
 
         return new GitHubForgeBranches(new RepositoryAddress('acme', 'widgets'), new GitHubBranchCalls(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new NextLinks()));
     }
@@ -494,9 +580,9 @@ final class GitHubForgeBranchesTest extends TestCase
         return self::REPOSITORY.'/compare/'.self::BASE.'...'.self::HEAD.'?per_page=100&page='.$page;
     }
 
-    private function commit(string $author, string $committer): string
+    private function commit(string $author, string $committer, string $sha = self::HEAD): string
     {
-        return sprintf('{"commit":{"author":{"email":"%s"},"committer":{"email":"%s"}}}', $author, $committer);
+        return sprintf('{"sha":"%s","commit":{"author":{"email":"%s"},"committer":{"email":"%s"}}}', $sha, $author, $committer);
     }
 
     private function comparison(int $total, string ...$commits): string

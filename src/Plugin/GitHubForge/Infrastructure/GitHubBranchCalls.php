@@ -95,8 +95,9 @@ final readonly class GitHubBranchCalls
      */
     public function delete(string $path): void
     {
+        // Never retried by the client, because a retry would delete without reading the head again, after the branch may have moved.
         try {
-            $status = $this->calls->asInstallation('DELETE', $path, ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json']])->getStatusCode();
+            $status = $this->calls->asInstallation('DELETE', $path, ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0])->getStatusCode();
         } catch (ExceptionInterface $failure) {
             throw $this->unsent($failure::class);
         } catch (ForgeReadFailed $noToken) {
