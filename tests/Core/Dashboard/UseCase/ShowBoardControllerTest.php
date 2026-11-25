@@ -110,6 +110,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     private array $readings = [];
 
     private ?ForgeConnectionVerdict $forge = null;
+
     public function testTheRootAddressShowsTheBoard(): void
     {
         $page = $this->browser->request('GET', '/');
