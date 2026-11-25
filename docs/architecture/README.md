@@ -67,6 +67,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Live updates](live-updates.md): how a running review reaches the open page without a reload.
 - [Status read model](status.md): the status JSON per project.
 - [Server status](server-status.md): reading the web server's own state from inside the container.
+- [Doctor](doctor.md): `intakt:doctor`, the infrastructure health checks from the terminal, one line per check with what to do.
 
 ### Models and budget
 
@@ -117,6 +118,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [The demo with docker compose](demo-with-docker-compose.md): the one-command demo.
 - [The demo recording](demo-recording.md): recording a real review and playing it back in the demo.
 - [Container image](container-image.md): the image and its smoke test.
+- [Development setup](development-setup.md): the compose override that watches files and reloads the workers.
 - [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
 - [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
 - [Persistence](persistence.md): the supported databases.

@@ -649,6 +649,9 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .wizard .not-wired { margin: var(--s16) 0 0; color: var(--muted); }
 .wizard .app-permissions { margin: var(--s12) 0 0; font-size: var(--t13); }
 .wizard .step-nav .grow { flex: 1; }
+/* The Add project flow (mock add-project.html): short values keep a short field, and only the failed part of a check is red (DESIGN.md, Errors). */
+.wizard .field .input.narrow { max-width: 240px; }
+.add-project .checks li[data-boot="failed"] strong { color: var(--red); }
 .checks { margin: 0; padding: 0; list-style: none; }
 .checks li { display: flex; gap: var(--s12); align-items: flex-start; padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
 .checks li:first-child { border-top: 1px solid var(--hairline); }
@@ -667,6 +670,17 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .wizard .steps a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .wizard .step-count { display: block; margin-bottom: var(--s24); font-size: var(--t15); }
   .wizard .step-nav { flex-wrap: wrap; }
+}
+/* The Add project flow shows its step count at every width, under the progress (mock add-project.html, .flow .step-count), and its weekly share is a slider with its percent beside it. */
+.add-project .step-count { display: block; margin: calc(-1 * var(--s24)) 0 var(--s24); }
+.share-row { display: flex; align-items: center; gap: var(--s16); max-width: 420px; }
+.share-row input[type="range"] { flex: 1; height: 24px; accent-color: var(--deep); }
+.share-row output { min-width: 48px; font-weight: 600; }
+@media (max-width: 760px) {
+  /* The progress links reach 20 px above their bars, so this margin alone keeps the bars 20 px under the breadcrumb (it collapses with the breadcrumb's smaller bottom margin) and no link covers the Projects link. */
+  .add-project .steps { margin-top: calc(var(--s16) + var(--s4)); }
+  .add-project .step-count { margin: 0 0 calc(var(--s16) + var(--s4)); }
+  .share-row input[type="range"] { height: 44px; }
 }
 .comp-nav { display: flex; flex-wrap: wrap; gap: var(--s8); margin-bottom: var(--s24); }
 .comp-nav a { padding: var(--s4) var(--s12); border-radius: var(--r-chip); background: var(--tint); color: var(--ink); font-size: var(--t13); text-decoration: none; }

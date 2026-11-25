@@ -6,11 +6,11 @@ namespace Intakt\Tests\Core\Budget\UseCase\ReplayDay;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
+use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
@@ -20,6 +20,7 @@ use Intakt\Core\Budget\UseCase\ReplayDay\RolledBackReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptHoldsNoStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
+use Intakt\Core\Watchdog\Contract\Halts;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\ConsoleDisplay;
 use Intakt\Tests\Support\KernelTestCase;
@@ -27,6 +28,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -34,6 +36,8 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\BlockingStoreInterface;
+use Symfony\Component\Lock\LockFactory;
 
 // Through the kernel and the Doctrine stores, because the evidence of the guard is this command on a running install.
 #[Group('persistence')]
@@ -48,6 +52,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ScriptHoldsNoStep::class)]
 #[UsesClass(BudgetGuard::class)]
 #[UsesClass(CeilingStartGuard::class)]
+#[UsesClass(AccountReadingLock::class)]
 #[UsesClass(DoctrineHolds::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
 #[UsesClass(DoctrineOutageNotices::class)]
@@ -185,12 +190,31 @@ final class ReplayDayCommandTest extends KernelTestCase
         new ReplayDayCommand($replay, $files)($io, 'day.txt');
     }
 
+    // The replay holds the database's write lock until it rolls back, so waiting for an account lock another worker's reading holds while it waits for the database would block both.
+    public function testTheReplayNeverWaitsForTheSharedAccountLockWhileItHoldsTheDatabaseWriteLock(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $waits = 0;
+        $store = self::createStub(BlockingStoreInterface::class);
+        $store->method('waitAndSave')->willReturnCallback(static function () use (&$waits): void {
+            ++$waits;
+        });
+        $replay = new RolledBackReplay($entities, new LockFactory($store), ['five-hour' => 90.0, 'weekly' => 90.0], self::createStub(Halts::class));
+
+        $replay->replay([
+            ScriptedStep::parse('2026-11-02T08:00 read claude_code.probe five-hour 12 2026-11-02T13:00'),
+            ScriptedStep::parse('2026-11-02T12:00 start claude_code.probe 0'),
+        ], new NullLogger(), static function (string $line): void {});
+
+        self::assertSame(0, $waits);
+    }
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $kernel = self::$kernel;
         self::assertNotNull($kernel);
         $this->command = new CommandTester(new Application($kernel)->find('intakt:budget:replay'));

@@ -35,6 +35,11 @@ enum QuorumPolicy: string
         },
     ];
 
+    public function needsStrongVote(): bool
+    {
+        return self::OneStrongPlusOne === $this;
+    }
+
     /**
      * @param list<PanelVerdict> $panel
      */

@@ -13,7 +13,7 @@ final readonly class RunningChild
         public ProcessGroup $group,
         public float $deadline,
         public string $program,
-        public int $seconds,
+        public int|float $seconds,
     ) {
     }
 }
