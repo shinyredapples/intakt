@@ -23,13 +23,16 @@ const FAILING_IMPACTS = ['critical', 'serious'];
 const PAGES = [
   { name: 'board', path: '/' },
   { name: 'components', path: '/components' },
+  { name: 'demo', path: '/demo' },
+  { name: 'history', path: '/history' },
   { name: 'projects', path: '/projects' },
   { name: 'reviews', path: '/reviews' },
-  { name: 'search', path: '/reviews', search: true },
+  { name: 'search', path: '/reviews', search: 'Team' },
   { name: 'setup', path: '/setup' },
   ...[2, 3, 4, 5].map((step) => ({ name: `setup-${step}`, path: `/setup?step=${step}` })),
   ...[1, 2, 3, 4, 5].map((step) => ({ name: `add-project-${step}`, path: `/projects/new?step=${step}` })),
   { name: 'status', path: '/lanes' },
+  { name: 'team', path: '/team' },
   { name: 'trends', path: '/trends' },
   { name: 'waiting', path: '/waiting' },
 ];
@@ -86,7 +89,7 @@ async function check(browser, address, job, axe) {
   try {
     await open(page, address + job.path, errors);
     await expectTheme(page, job.theme, errors);
-    if (job.search) await openSearch(page);
+    if (job.search) await openSearch(page, job.search);
     await page.addScriptTag({ path: axe });
     const violations = await page.evaluate(runAxe);
     const floors = job.width === PHONE_WIDTH ? await page.evaluate(measureFloors, FLOORS) : [];
@@ -110,9 +113,12 @@ async function expectTheme(page, theme, errors) {
   if (shown !== theme) errors.push(`the page shows the ${shown} theme instead of ${theme}`);
 }
 
-async function openSearch(page) {
+// The overlay is checked with a page's name typed, so the Pages group it answers with is checked too.
+async function openSearch(page, query) {
   await page.keyboard.press('Control+k');
   await page.waitForSelector('#search:not([hidden]) #search-results > *');
+  await page.keyboard.type(query);
+  await page.waitForFunction((label) => [...document.querySelectorAll('#search-results .res .lbl')].some((row) => row.textContent.trim() === label), query);
 }
 
 async function runAxe() {
