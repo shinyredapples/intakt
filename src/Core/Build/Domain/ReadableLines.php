@@ -19,10 +19,11 @@ final readonly class ReadableLines
         '/\]\]>/' => ']]>',
     ];
 
+    // The closing text of a block left open is returned because the caller must add its lines outside that block, so they render.
     /**
      * @param list<string> $lines
      *
-     * @return array{0: array<int, array{int, string}>, 1: ?string} the headings and the text that closes a fence or HTML block left open
+     * @return array{0: array<int, array{int, string}>, 1: ?string}
      */
     public function scanned(array $lines): array
     {
@@ -88,6 +89,12 @@ final readonly class ReadableLines
         return $this->withParagraph($state, null, $ends ? null : $state['html']);
     }
 
+    // Only spaces and tabs make a line blank in CommonMark, so trim() would also take a vertical tab.
+    private function blank(string $line): bool
+    {
+        return 1 === preg_match('/^[ \t]*$/', $line);
+    }
+
     /**
      * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
      * @param ?array{int, string}                                                  $paragraph
@@ -97,6 +104,22 @@ final readonly class ReadableLines
     private function withParagraph(array $state, ?array $paragraph, ?string $html = null): array
     {
         return ['fence' => $state['fence'], 'html' => $html, 'paragraph' => $paragraph];
+    }
+
+    /**
+     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     *
+     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     */
+    private function continued(array $state, string $line): array
+    {
+        $paragraph = $state['paragraph'];
+
+        if (null === $paragraph) {
+            return $state;
+        }
+
+        return $this->withParagraph($state, [$paragraph[0], $paragraph[1].' '.trim($line)]);
     }
 
     /**
@@ -138,28 +161,6 @@ final readonly class ReadableLines
         $text = trim($line);
 
         return [$this->withParagraph($state, null === $paragraph ? [$number, $text] : [$paragraph[0], $paragraph[1].' '.$text]), null];
-    }
-
-    // Only spaces and tabs make a line blank in CommonMark, so trim() would also take a vertical tab.
-    private function blank(string $line): bool
-    {
-        return 1 === preg_match('/^[ \t]*$/', $line);
-    }
-
-    /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
-     *
-     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
-     */
-    private function continued(array $state, string $line): array
-    {
-        $paragraph = $state['paragraph'];
-
-        if (null === $paragraph) {
-            return $state;
-        }
-
-        return $this->withParagraph($state, [$paragraph[0], $paragraph[1].' '.trim($line)]);
     }
 
     private function opening(string $line): ?string
