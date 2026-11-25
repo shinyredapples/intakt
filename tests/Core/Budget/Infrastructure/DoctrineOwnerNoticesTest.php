@@ -588,7 +588,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
-    // On a read-committed engine the notice writer could store its notice and look for a reading between the reading's update and its commit, see no recovery, and leave the notice without an end; the writer starts inside that window and is refused the shared lock, then runs after the commit and gives the notice the reading's moment.
+    // The writer starts between the reading's update and its commit, because on a read-committed engine it would otherwise see no recovery and leave the notice without an end; it is refused the shared lock there, then runs after the commit and gives the notice the reading's moment.
     public function testTheOnlyRecoveryReadingHoldsTheAccountsLockUntilItCommitsAndThenGivesTheNoticeItsMomentAsTheEnd(): void
     {
         $shared = new AccountReadingLock(new LockFactory(new RefusingToWaitStore(new InMemoryStore())));
