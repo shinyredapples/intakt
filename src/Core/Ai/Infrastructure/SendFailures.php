@@ -91,7 +91,7 @@ final class SendFailures
         $this->limitedSeconds[$account->key()] = $seconds;
     }
 
-    // Null when no account of the call recorded a limit's wait.
+    // Null instead of zero when no account of the call recorded a limit's wait, because a wait of zero would read as a free account.
     public function shortestLimitedWait(): ?int
     {
         return [] === $this->limitedSeconds ? null : min($this->limitedSeconds);
