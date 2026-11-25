@@ -37,7 +37,7 @@ final class CiMainJobTest extends SandboxTestCase
     {
         $step = $this->step('main', 'passed');
 
-        self::assertStringContainsString('tree=$(timeout "$LOOKUP_TIMEOUT_SECONDS" git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree")', $step['run'] ?? '');
+        self::assertStringContainsString('tree=$(timeout -k 2 "$LOOKUP_TIMEOUT_SECONDS" git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout -k 2 "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree")', $step['run'] ?? '');
     }
 
     public function testAFailedLookupWarnsAndRunsEveryJob(): void
@@ -59,6 +59,22 @@ final class CiMainJobTest extends SandboxTestCase
     public function testAStalledGitIsStoppedAndRunsEveryJobToo(): void
     {
         [$exit, $printed, $written] = $this->decide('echo 1', '1', 'exec sleep 30');
+
+        self::assertSame([0, "full=true\n"], [$exit, $written]);
+        self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);
+    }
+
+    public function testAStalledGitThatIgnoresTheStopSignalIsKilledAndRunsEveryJob(): void
+    {
+        [$exit, $printed, $written] = $this->decide('echo 1', '1', "trap '' TERM; exec sleep 30");
+
+        self::assertSame([0, "full=true\n"], [$exit, $written]);
+        self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);
+    }
+
+    public function testAnApiLookupThatIgnoresTheStopSignalIsKilledAndRunsEveryJob(): void
+    {
+        [$exit, $printed, $written] = $this->decide("trap '' TERM; exec sleep 30", '1');
 
         self::assertSame([0, "full=true\n"], [$exit, $written]);
         self::assertStringContainsString('::warning::The lookup of a passed pull request run', $printed);

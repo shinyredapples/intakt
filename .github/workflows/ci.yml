@@ -41,7 +41,7 @@ jobs:
         with:
           persist-credentials: false
       # A failed lookup (an API call or git), or one LOOKUP_TIMEOUT_SECONDS stops before the job's own limit, never reads as
-      # "passed": it warns and runs every job.
+      # "passed": it warns and runs every job. -k kills one that ignores the stop signal.
       - name: Decide whether the commit passed as the head of a pull request into main
         id: passed
         env:
@@ -49,7 +49,7 @@ jobs:
           LOOKUP_TIMEOUT_SECONDS: 300
         run: |
           set -eu
-          if ! { tree=$(timeout "$LOOKUP_TIMEOUT_SECONDS" git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree"); }; then
+          if ! { tree=$(timeout -k 2 "$LOOKUP_TIMEOUT_SECONDS" git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout -k 2 "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree"); }; then
             echo "::warning::The lookup of a passed pull request run for $GITHUB_SHA failed or took over $LOOKUP_TIMEOUT_SECONDS seconds, so every job runs."
             passed=unknown
           fi
