@@ -32,7 +32,7 @@ final readonly class StatusMirrors
     {
         try {
             $headStep();
-            // Boundary: the status pass still runs and the head step's failure is rethrown unchanged.
+            // Boundary: the status pass still runs, because no label should wait on the heads, and the head step's failure is rethrown unchanged.
         } catch (Throwable $failure) {
             $this->reconcileBeside($project, $failure);
 
@@ -46,7 +46,7 @@ final readonly class StatusMirrors
     {
         try {
             $this->reconcileEveryOpenWithRound($project);
-            // Boundary: logged next to the head step's failure, which the tick reports.
+            // Boundary: only logged, because the head step's failure is the one the tick reports.
         } catch (Throwable $failure) {
             $this->logger->error('The status pass of {project} failed after its head step failed: {reason}', ['project' => $project->name, 'reason' => $failure->getMessage(), 'head_failure' => $headFailure->getMessage(), 'exception' => $failure]);
         }

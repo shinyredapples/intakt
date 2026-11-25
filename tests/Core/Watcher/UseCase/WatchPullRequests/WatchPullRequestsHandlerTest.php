@@ -204,7 +204,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private ?ChangeAuthorship $authorship = null;
     private RecordedStatusLabels $statusLabels;
     private LatestRoundStatus $latest;
-    private ?ReviewStatus $roundStatus = ReviewStatus::InReview;
+    private ReviewStatus $roundStatus = ReviewStatus::InReview;
     /** @var list<string> */
     private array $unreadableRounds = [];
 
@@ -478,7 +478,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['review:full'], [...$this->queries->identitiesAsked[0]->round->start->labels]);
     }
 
-    // Evidence E1 of #3944: the labels of the pull request before the round and after the pass of the tick that queued it.
+    // Evidence E1 of #3944 over the recorded listing, because a build has no forge access and the owner checks the live pull request after merge.
     public function testThePullRequestWhoseRoundATickQueuesCarriesTheInReviewLabelAfterThatTick(): void
     {
         $before = $this->statusLabels->on('7');
@@ -518,7 +518,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([['status:waiting-on-you'], 2, 1], [$this->statusLabels->on('7'), $this->statusLabels->writes, $this->listing->conditionalAnswers]);
     }
 
-    // The round state comes from Review's own store, so a judged round is in review until its publication is recorded.
+    // Over Review's own store, because only it knows whether the publication of a judged round ran.
     public function testAJudgedRoundWhosePublicationHasNotRunStaysInReviewUntilTheNextPassAfterItsPublication(): void
     {
         $fixture = new RoundFixture(self::getContainer());
@@ -1634,7 +1634,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->steering = new Labels();
         $this->statusLabels = new RecordedStatusLabels();
         $latest = self::createStub(LatestRoundStatus::class);
-        $latest->method('of')->willReturnCallback(fn (): ?ReviewStatus => $this->roundStatus);
+        $latest->method('of')->willReturnCallback(fn (): ReviewStatus => $this->roundStatus);
         $this->latest = $latest;
         $this->handler = $this->handler();
     }
@@ -1651,21 +1651,6 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         }
 
         return $roundId;
-    }
-
-    // Each lookup goes to the stored rounds except one of a change the test made unreadable, so a single pull request's lookup can fail.
-    private function roundLookups(): EntityManagerInterface
-    {
-        $repository = self::createStub(EntityRepository::class);
-        $repository->method('count')->willReturnCallback(function (array $criteria): int {
-            $change = $criteria['change'] ?? null;
-
-            return is_string($change) && in_array($change, $this->unreadableRounds, true) ? throw new RuntimeException('The rounds of '.$change.' cannot be read.') : $this->entities->getRepository(StartedRound::class)->count($criteria);
-        });
-        $lookups = self::createStub(EntityManagerInterface::class);
-        $lookups->method('getRepository')->willReturn($repository);
-
-        return $lookups;
     }
 
     private function moveFromGreenToNextGreenAndBack(): void
@@ -1823,6 +1808,21 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $statuses = new StatusMirrors($find, new StartedRounds($this->roundLookups(), $pending, new DiscardedRounds($this->commands, $logger)), new RoundStatusMirror($this->latest, new LockFactory(new InMemoryStore()), $logger, $this->statusLabels), $logger);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
+    }
+
+    // Each lookup goes to the stored rounds except one of a change the test made unreadable, because the decisions need one pull request's lookup to fail alone.
+    private function roundLookups(): EntityManagerInterface
+    {
+        $repository = self::createStub(EntityRepository::class);
+        $repository->method('count')->willReturnCallback(function (array $criteria): int {
+            $change = $criteria['change'] ?? null;
+
+            return is_string($change) && in_array($change, $this->unreadableRounds, true) ? throw new RuntimeException('The rounds of '.$change.' cannot be read.') : $this->entities->getRepository(StartedRound::class)->count(['project' => $criteria['project'] ?? null, 'change' => $change]);
+        });
+        $lookups = self::createStub(EntityManagerInterface::class);
+        $lookups->method('getRepository')->willReturn($repository);
+
+        return $lookups;
     }
 
     private function panel(): Panel
