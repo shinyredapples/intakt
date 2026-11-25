@@ -26,6 +26,7 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\JudgingFailed;
+use Intakt\Core\Review\Contract\P1Keys;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
@@ -100,8 +101,8 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded(
             $reported->reviewer->round()->id()->toRfc4122(),
             $reported->reviewer->id()->toRfc4122(),
-            $reported->findings,
-            $reported->severities,
+            new FindingIds(...$reported->findings),
+            array_map(Severity::from(...), $reported->severities),
         ));
     }
 
@@ -198,16 +199,13 @@ final readonly class RoundLedger
     }
 
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
-    /**
-     * @return array<string, ?string>
-     */
-    private function p1KeysOf(ReviewRound $round, JudgedFindings $judged): array
+    private function p1KeysOf(ReviewRound $round, JudgedFindings $judged): P1Keys
     {
-        $keys = [];
+        $keys = new P1Keys();
 
         foreach ($judged->findings as $finding) {
             if (Severity::P1 === $finding->severity) {
-                $keys[$finding->id] = $this->keys->of($finding, $round->checkoutRoot())?->value;
+                $keys = $keys->with($finding->id, $this->keys->of($finding, $round->checkoutRoot())?->value);
             }
         }
 

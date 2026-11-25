@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Domain;
 
+use Intakt\Core\HandBack\Contract\MissingEvidenceItems;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use NoDiscard;
@@ -20,12 +21,12 @@ final readonly class PullRequestTextRule
         $characters = mb_strlen($body, 'UTF-8');
 
         if ($characters > self::MAX_BODY_CHARACTERS) {
-            return new PullRequestTextOutcome(PullRequestTextVerdict::BodyOverCap, 0, [], $characters);
+            return new PullRequestTextOutcome(PullRequestTextVerdict::BodyOverCap, 0, new MissingEvidenceItems(), $characters);
         }
 
         $items = EvidenceItems::countIn($task);
-        $missing = self::missingReferences($items, MarkdownText::visible($body));
-        $verdict = [] === $missing ? PullRequestTextVerdict::Passed : PullRequestTextVerdict::MissingEvidenceReference;
+        $missing = new MissingEvidenceItems(...self::missingReferences($items, MarkdownText::visible($body)));
+        $verdict = $missing->isEmpty() ? PullRequestTextVerdict::Passed : PullRequestTextVerdict::MissingEvidenceReference;
 
         return new PullRequestTextOutcome($verdict, $items, $missing, $characters);
     }

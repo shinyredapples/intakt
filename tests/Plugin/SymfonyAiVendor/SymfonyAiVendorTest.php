@@ -1162,6 +1162,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     public function testTheServicesResetterForgetsTheListenersAReviewCalled(): void
     {
+        $this->bootTheDebugKernel();
         self::assertInstanceOf(TraceableEventDispatcher::class, $this->dispatcher);
         // A review calls the listeners the container declares, because the compiled dispatcher takes no listener at runtime since Symfony 8.2.
         $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()))->review('alpha', Tier::Strong, $this->request());
@@ -1188,6 +1189,15 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $this->platformKernel->shutdown();
         parent::tearDown();
+    }
+
+    // Because the suite runs without debug, and only a debug kernel traces the listeners it called.
+    private function bootTheDebugKernel(): void
+    {
+        $this->platformKernel->shutdown();
+        $this->platformKernel = self::createKernel(['debug' => true]);
+        $this->platformKernel->boot();
+        $this->dispatcher = ScriptedReviewer::in($this->platformKernel->getContainer())->dispatcher;
     }
 
     private function vendorAnswering(string $output): SymfonyAiVendor

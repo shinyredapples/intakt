@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -517,8 +516,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $registry);
         $entities = $registry->getManager();
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
         $this->authorship = self::createStub(ChangeAuthorship::class);
         $this->logger = new RecordingLogger();

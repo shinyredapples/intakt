@@ -30,7 +30,7 @@ final class AdminApiExposureTest extends TestCase
 
     public function testNeitherTheImageNorComposeNorTheEnvFilesMoveTheAdminApi(): void
     {
-        foreach (['Dockerfile', 'compose.yaml', '.env', '.env.dist', 'docker/entrypoint.sh'] as $file) {
+        foreach (['Dockerfile', 'compose.yaml', '.env', '.env.dist', 'docker/entrypoint.sh', 'compose.dev.yaml'] as $file) {
             // A read of the variable (${CADDY_ADMIN:-...}) is fine, so only a name not opened by a brace counts as setting it.
             self::assertSame(0, preg_match('/(?<![{\w])CADDY_ADMIN\s*[=:]/', $this->file($file)), $file.' sets CADDY_ADMIN');
         }
@@ -51,6 +51,14 @@ final class AdminApiExposureTest extends TestCase
         $published = array_merge(...array_values(array_map(static fn (array $service): array => $service['ports'] ?? [], $compose['services'])));
 
         self::assertSame(['127.0.0.1:7781:7781'], $published);
+    }
+
+    public function testTheDevelopmentOverrideAddsNoPublishedPort(): void
+    {
+        /** @var array{services: array<string, array<string, mixed>>} $override */
+        $override = Yaml::parse($this->file('compose.dev.yaml'));
+
+        self::assertArrayNotHasKey('ports', $override['services']['intakt']);
     }
 
     public function testTheAppReadsTheAdminApiOnLoopback(): void

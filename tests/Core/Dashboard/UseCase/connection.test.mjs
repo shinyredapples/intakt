@@ -70,6 +70,36 @@ class FakeButton extends FakeElement {
     }
 }
 
+// As a browser's MutationObserver: the test calls appear() where the browser would report a render into the page.
+let observers = [];
+
+class FakeMutationObserver {
+    watching = false;
+
+    constructor(callback) {
+        this.callback = callback;
+        observers.push(this);
+    }
+
+    observe(target, options) {
+        this.target = target;
+        this.options = options;
+        this.watching = true;
+    }
+
+    disconnect() {
+        this.watching = false;
+    }
+}
+
+// As a Turbo stream render that adds a POST form anywhere inside the shell.
+function appear(shell, actions, action) {
+    actions.push(action);
+    observers
+        .filter((observer) => observer.watching && observer.target === shell.element && observer.options.childList && observer.options.subtree)
+        .forEach((observer) => observer.callback([]));
+}
+
 function hiddenElapsedTime() {
     const at = new FakeElement();
     at.hidden = true;
@@ -80,6 +110,7 @@ function hiddenElapsedTime() {
 async function connectedShell(t, sources = [new FakeStreamSource()], page = {}) {
     t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: DROPPED_AT });
     notes = [];
+    observers = [];
 
     return shellOn(sources, page);
 }
@@ -89,6 +120,7 @@ async function shellOn(sources, { actions = [], elapsed = [], address = 'http://
     globalThis.EventSource = FakeEventSource;
     globalThis.customElements = { whenDefined: async () => undefined };
     globalThis.document = { createElement: () => new FakeNote() };
+    globalThis.MutationObserver = FakeMutationObserver;
     const shell = new ConnectionController();
     const found = { 'turbo-mercure-stream-source': () => sources, 'form[method="post"] button[type="submit"]': () => actions, '[data-connection-note]': () => notes };
     shell.element = { baseURI: address, querySelectorAll: (selector) => found[selector]() };
@@ -337,6 +369,69 @@ test('Try now leaves a try still under way to finish', async (t) => {
     assert.equal(source.es, slow);
 });
 
+test('a try still pending after three countdowns is replaced by a new try', async (t) => {
+    const { source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const hung = source.es;
+
+    t.mock.timers.tick(15000);
+
+    assert.notEqual(source.es, hung);
+    assert.equal(hung.readyState, FakeEventSource.CLOSED);
+});
+
+test('a try pending for less than three countdowns is still left to finish', async (t) => {
+    const { source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+
+    t.mock.timers.tick(14999);
+
+    assert.equal(source.es, slow);
+});
+
+test('Try now does not replace a pending try sooner than the countdowns would', async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+
+    shell.tryNow(new FakeClick());
+    shell.tryNow(new FakeClick());
+    shell.tryNow(new FakeClick());
+    shell.tryNow(new FakeClick());
+
+    assert.equal(source.es, slow);
+});
+
+test('Try now keeps a try that has been pending for 14 seconds', async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+    t.mock.timers.tick(14000);
+
+    shell.tryNow(new FakeClick());
+
+    assert.equal(source.es, slow);
+});
+
+test('Try now replaces a try pending for three countdowns',async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const hung = source.es;
+    t.mock.timers.tick(12000);
+    shell.tryNow(new FakeClick());
+    t.mock.timers.tick(3000);
+
+    shell.tryNow(new FakeClick());
+
+    assert.notEqual(source.es, hung);
+});
+
 test('a shell that leaves the page before Turbo is ready watches nothing', async (t) => {
     t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: DROPPED_AT });
     notes = [];
@@ -457,6 +552,64 @@ test('the actions stay disabled while another live connection of the page is sti
     source.es.emit('open');
 
     assert.equal(action.disabled, true);
+});
+
+test('an action that appears while another live connection is still down is held until every connection is back', async (t) => {
+    const actions = [];
+    const other = new FakeStreamSource();
+    const { shell, source } = await connectedShell(t, [new FakeStreamSource(), other], { actions });
+    source.es.emit('error');
+    other.es.emit('error');
+    t.mock.timers.tick(5000);
+    source.es.emit('open');
+    const rendered = new FakeButton();
+
+    appear(shell, actions, rendered);
+    assert.equal(rendered.disabled, true);
+    assert.equal(rendered.note.textContent, 'Connecting to live updates…');
+    other.es.emit('open');
+
+    assert.equal(rendered.disabled, false);
+    assert.deepEqual(notes, []);
+});
+
+test('an action that appears disabled while offline gets no connecting line and stays disabled when the connection is back', async (t) => {
+    const actions = [];
+    const { shell, source } = await connectedShell(t, undefined, { actions });
+    source.es.emit('error');
+    const unavailable = new FakeButton(true);
+
+    appear(shell, actions, unavailable);
+    t.mock.timers.tick(5000);
+    source.es.emit('open');
+
+    assert.equal(unavailable.note, undefined);
+    assert.equal(unavailable.disabled, true);
+});
+
+test('an action that appears after the connection is back is not held', async (t) => {
+    const actions = [];
+    const { shell, source } = await connectedShell(t, undefined, { actions });
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    source.es.emit('open');
+    const rendered = new FakeButton();
+
+    appear(shell, actions, rendered);
+
+    assert.equal(rendered.disabled, false);
+});
+
+test('an action that appears after the shell left the page while offline is not held', async (t) => {
+    const actions = [];
+    const { shell, source } = await connectedShell(t, undefined, { actions });
+    source.es.emit('error');
+    shell.disconnect();
+    const rendered = new FakeButton();
+
+    appear(shell, actions, rendered);
+
+    assert.equal(rendered.disabled, false);
 });
 
 test('a shell that leaves the page while offline enables the actions it disabled', async (t) => {

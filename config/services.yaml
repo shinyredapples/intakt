@@ -47,6 +47,7 @@ services:
             # Defined in config/packages/ai.php beside the parameters they read, because the scan runs later and would replace those definitions.
             - '../src/Core/Budget/Domain/CeilingStartGuard.php'
             - '../src/Core/Ai/UseCase/ProbeCodexLogin/ProbeCodexLoginCommand.php'
+            - '../src/Core/Watcher/Contract/EligibilityLabels.php'
 
     # Wired here, because a Domain class carries no container attributes; its ceiling guard is wired in config/packages/ai.php.
     Intakt\Core\Budget\Contract\StartGuard: '@Intakt\Core\Budget\Domain\BudgetGuard'
@@ -176,6 +177,8 @@ when@test:
         - { resource: '../tests/Core/Ai/services.yaml', ignore_errors: not_found }
         # The eligibility labels under a public test name, and the recorded reads intakt:queue:show makes after the listing, so a test and an install without GitHub prove the label and the queue the container hands out.
         - { resource: '../tests/Plugin/GitHubWorkSource/services.yaml', ignore_errors: not_found }
+        # The team roster under a public test name, so a test proves the accounts and states it reads from the config file before a page uses it.
+        - { resource: '../tests/Core/Dashboard/services.yaml', ignore_errors: not_found }
     services:
         # The development definition above, through its anchor, so an opted-in test profile keeps messenger also with APP_DEBUG=0.
         data_collector.messenger: *messenger_data_collector

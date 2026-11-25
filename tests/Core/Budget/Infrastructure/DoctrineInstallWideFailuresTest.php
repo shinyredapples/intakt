@@ -13,7 +13,6 @@ use Doctrine\DBAL\Exception\TableNotFoundException;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
-use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Domain\FullDisk;
@@ -225,8 +224,7 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->clock = new MockClock('2026-11-06 08:00:00 UTC');
         $this->holds = new DoctrineHolds($entities, $this->clock);
         $this->failures = $this->worker($entities);

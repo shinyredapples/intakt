@@ -21,10 +21,12 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEndings;
+use Symfony\Component\Clock\ClockInterface;
 
 final readonly class LedgerReviewPages
 {
     public function __construct(
+        private ClockInterface $clock,
         private Ledger $ledger,
         private RoundPayloads $payloads,
         private RoundCosts $costs,
@@ -105,7 +107,7 @@ final readonly class LedgerReviewPages
 
     public function boardOf(RecordedEvents $events): Board
     {
-        return new Board($this->reviewsOf($events), $this->tasks($events));
+        return new Board($this->clock->now(), $this->reviewsOf($events), $this->tasks($events));
     }
 
     private function latestStartIn(RecordedEvents $starts, string $round, string $reviewer): ?ReviewerOutcome
