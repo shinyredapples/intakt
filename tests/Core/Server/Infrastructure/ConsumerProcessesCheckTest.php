@@ -91,7 +91,9 @@ final class ConsumerProcessesCheckTest extends TestCase
     public function testEveryCommandLineUnreadableFailsAsCannotRun(): void
     {
         $this->root = FakeProcessRoot::healthy();
-        foreach (glob($this->root->path.'/[0-9]*/cmdline') ?: [] as $file) {
+        $files = glob($this->root->path.'/[0-9]*/cmdline');
+        self::assertNotFalse($files);
+        foreach ($files as $file) {
             chmod($file, 0o000);
         }
 

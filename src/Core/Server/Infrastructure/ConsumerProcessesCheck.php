@@ -44,22 +44,17 @@ final readonly class ConsumerProcessesCheck
         if (false === $files || [] === $files) {
             return null;
         }
-        $lines = [];
-        $read = 0;
-        foreach ($files as $file) {
-            // Quiet, because a process may end between the listing and the read.
-            $line = @file_get_contents($file);
-            if (!is_string($line)) {
-                continue;
-            }
-            ++$read;
-            if ('' !== $line) {
-                $lines[] = explode("\0", rtrim($line, "\0"));
-            }
+        // Quiet, because a process may end between the listing and the read.
+        $read = array_filter(array_map(static fn (string $file): string|false => @file_get_contents($file), $files), is_string(...));
+        if ([] === $read) {
+            // Not that the workers are gone, because a list whose every command line is hidden says nothing about them.
+            return null;
         }
 
-        // Not a single readable command line means the list is hidden from the doctor, not that the workers are gone.
-        return 0 === $read ? null : $lines;
+        return array_values(array_map(
+            static fn (string $line): array => explode("\0", rtrim($line, "\0")),
+            array_filter($read, static fn (string $line): bool => '' !== $line),
+        ));
     }
 
     /**

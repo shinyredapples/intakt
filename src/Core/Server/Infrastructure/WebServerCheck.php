@@ -48,6 +48,14 @@ final readonly class WebServerCheck
             : DoctorCheckVerdict::failed('web server answered '.self::PATH.' with status '.$status, self::ERROR_FIX);
     }
 
+    private function port(string $value): ?int
+    {
+        // Digits only, because the integer filter also takes a sign or surrounding blanks no port carries.
+        $port = 1 === preg_match('/^[0-9]{1,5}$/', $value) ? (int) $value : 0;
+
+        return $port >= 1 && $port <= 65535 ? $port : null;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -55,13 +63,5 @@ final readonly class WebServerCheck
     {
         // Named so, because DashboardHost refuses any other name; past no proxy, because a proxy would ask its own localhost.
         return [...self::OPTIONS, 'headers' => ['Host' => 'localhost:'.$dashboardPort], 'no_proxy' => '*'];
-    }
-
-    private function port(string $value): ?int
-    {
-        // Digits only, because the integer filter also takes a sign or surrounding blanks no port carries.
-        $port = 1 === preg_match('/^[0-9]{1,5}$/', $value) ? (int) $value : 0;
-
-        return $port >= 1 && $port <= 65535 ? $port : null;
     }
 }
