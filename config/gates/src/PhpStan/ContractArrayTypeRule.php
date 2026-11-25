@@ -53,15 +53,16 @@ final readonly class ContractArrayTypeRule implements Rule
 
         $class = $node->getClassReflection();
         $declaration = $node->getOriginalNode();
-        $constructor = array_find($declaration->getMethods(), $this->isConstructor(...));
+        $constructor = $declaration->getMethod('__construct');
         $promoted = $constructor instanceof ClassMethod ? $this->promotedPublicNamesOf($constructor) : [];
         $findings = [];
 
         foreach ($this->exposedMethodsOf($class) as $method) {
-            $findings = [...$findings, ...$this->signatureFindings($method, $class, $this->lineOf($method, $declaration), $this->isConstructorName($method) ? array_keys($promoted) : [])];
+            $skipped = $this->isConstructor($method) ? array_keys($promoted) : [];
+            $findings = [...$findings, ...$this->findingsOf($this->signatureTypes($method, $class, $skipped), $this->lineOf($method, $declaration))];
         }
 
-        $inputs = $constructor instanceof ClassMethod ? $this->promotedInputFindings($constructor, $promoted, $class, $scope->getFile()) : [];
+        $inputs = $constructor instanceof ClassMethod ? $this->promotedInputFindings($constructor, $promoted, $class) : [];
 
         return [...$findings, ...$inputs, ...$this->propertyFindings($promoted, $class)];
     }
@@ -69,16 +70,6 @@ final readonly class ContractArrayTypeRule implements Rule
     private function isContract(string $file): bool
     {
         return str_starts_with($file, $this->root.'/') && 1 === preg_match(self::CONTRACT_FOLDER, substr($file, strlen($this->root) + 1));
-    }
-
-    private function isConstructor(ClassMethod $method): bool
-    {
-        return $this->isConstructorName($method->name->toString());
-    }
-
-    private function isConstructorName(string $method): bool
-    {
-        return '__construct' === strtolower($method);
     }
 
     /**
@@ -117,20 +108,17 @@ final readonly class ContractArrayTypeRule implements Rule
         return array_any($class->getInterfaces(), static fn (ClassReflection $interface): bool => $interface->isBuiltin() && $interface->hasNativeMethod($method));
     }
 
-    // a method a trait brings has no line in this file, so it is reported where the class starts
-    private function lineOf(string $method, ClassLike $declaration): int
+    private function isConstructor(string $method): bool
     {
-        $declared = $declaration->getMethod($method);
-
-        return $declared instanceof ClassMethod ? $declared->getStartLine() : $declaration->getStartLine();
+        return '__construct' === strtolower($method);
     }
 
     /**
      * @param list<string> $promoted
      *
-     * @return list<IdentifierRuleError>
+     * @return list<array{string, Type}>
      */
-    private function signatureFindings(string $method, ClassReflection $class, int $line, array $promoted): array
+    private function signatureTypes(string $method, ClassReflection $class, array $promoted): array
     {
         $name = sprintf('Method %s::%s()', $class->getDisplayName(), $method);
         $typed = [];
@@ -139,7 +127,7 @@ final readonly class ContractArrayTypeRule implements Rule
             $typed = [...$typed, ...$this->parameterTypes($variant, $name, $promoted), [$name.' returns', $variant->getReturnType()]];
         }
 
-        return $this->findingsOf($typed, $line);
+        return $typed;
     }
 
     // PHPStan types a promoted parameter like its property, so the property finding reports it on the same line; a differing @param is judged in promotedInputFindings()
@@ -153,6 +141,14 @@ final readonly class ContractArrayTypeRule implements Rule
         $kept = array_filter($variant->getParameters(), static fn (ParameterReflection $parameter): bool => !in_array($parameter->getName(), $promoted, true));
 
         return array_values(array_map(static fn (ParameterReflection $parameter): array => [sprintf('%s parameter $%s is typed', $method, $parameter->getName()), $parameter->getType()], $kept));
+    }
+
+    // a method a trait brings has no line in this file, so it is reported where the class starts
+    private function lineOf(string $method, ClassLike $declaration): int
+    {
+        $declared = $declaration->getMethod($method);
+
+        return $declared instanceof ClassMethod ? $declared->getStartLine() : $declaration->getStartLine();
     }
 
     /**
@@ -204,11 +200,12 @@ final readonly class ContractArrayTypeRule implements Rule
      *
      * @return list<IdentifierRuleError>
      */
-    private function promotedInputFindings(ClassMethod $constructor, array $promoted, ClassReflection $class, string $file): array
+    private function promotedInputFindings(ClassMethod $constructor, array $promoted, ClassReflection $class): array
     {
         $comment = $constructor->getDocComment();
+        $file = $class->getFileName();
 
-        if (!$comment instanceof Doc) {
+        if (!$comment instanceof Doc || null === $file) {
             return [];
         }
 
