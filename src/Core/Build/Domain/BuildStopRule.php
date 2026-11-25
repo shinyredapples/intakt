@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Domain;
 
+use DateTimeZone;
 use NoDiscard;
 use Psr\Clock\ClockInterface;
 
@@ -56,7 +57,8 @@ final readonly class BuildStopRule
 
     private function isIdlePastTheLimit(BuildWatch $watch): bool
     {
-        $deadline = $watch->lastProgressAt->modify(sprintf('+%d seconds', $watch->limits->idleSeconds));
+        // UTC, because adding seconds in a zone's local time can gain an hour when daylight saving time ends.
+        $deadline = $watch->lastProgressAt->setTimezone(new DateTimeZone('UTC'))->modify(sprintf('+%d seconds', $watch->limits->idleSeconds));
 
         return $this->clock->now() >= $deadline;
     }

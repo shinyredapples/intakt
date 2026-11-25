@@ -9,9 +9,12 @@ use Intakt\Core\Build\Domain\BuildProgress;
 use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\BuildWatch;
+use DateTimeImmutable;
+use DateTimeZone;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 
 #[CoversClass(BuildStopRule::class)]
@@ -182,6 +185,26 @@ final class BuildStopRuleTest extends TestCase
         ));
 
         self::assertSame(BuildStopCause::NoProgress, $this->rule->stopCause($watch));
+    }
+
+    public function testOneElapsedSecondAtTheEndOfDaylightSavingTimeCountsAsOneSecond(): void
+    {
+        $zone = new DateTimeZone('America/New_York');
+        $clock = new class implements ClockInterface {
+            public DateTimeImmutable $instant;
+
+            public function now(): DateTimeImmutable
+            {
+                return $this->instant;
+            }
+        };
+        $clock->instant = new DateTimeImmutable('2026-11-01T05:59:59Z')->setTimezone($zone);
+        $rule = new BuildStopRule($clock);
+        $watch = $rule->startWatching(new BuildLimits(10, 1, 100, 200), new BuildProgress(10, 10, 'same', [], false));
+
+        $clock->instant = new DateTimeImmutable('2026-11-01T06:00:00Z')->setTimezone($zone);
+
+        self::assertSame(BuildStopCause::NoProgress, $rule->stopCause($watch));
     }
 
     public function testABuildThatCrossesItsAllowanceLongAfterItsLastProgressStopsWithNoProgress(): void
