@@ -47,12 +47,16 @@ final readonly class CommandWait
     private const int NANOSECONDS = 1_000_000_000;
     private const int POLL_NANOSECONDS = 50_000_000;
 
+    private bool $signals;
+
     public function __construct(public int|float $seconds)
     {
         // Because a limit such as 1e300 is finite in seconds but infinite in nanoseconds, which would turn the deadline off.
         if (!is_finite($seconds * self::NANOSECONDS)) {
             throw new InvalidArgumentException('the command time limit must be a finite number of nanoseconds, not '.$seconds.' seconds');
         }
+
+        $this->signals = function_exists('pcntl_sigprocmask') && function_exists('pcntl_sigtimedwait');
     }
 
     /**
@@ -61,19 +65,17 @@ final readonly class CommandWait
     public function exitBefore($process): ?int
     {
         $deadline = hrtime(true) + $this->seconds * self::NANOSECONDS;
-        $signals = function_exists('pcntl_sigprocmask') && function_exists('pcntl_sigtimedwait');
-        $previous = [];
 
         // Blocked only once the command runs, so it does not inherit the mask; an exit before the block is found by the first status read.
-        if ($signals) {
-            pcntl_sigprocmask(SIG_BLOCK, [SIGCHLD], $previous);
+        if ($this->signals) {
+            pcntl_sigprocmask(SIG_BLOCK, [SIGCHLD]);
         }
 
         try {
-            return $this->exitCodeBefore($process, $deadline, $signals);
+            return $this->exitCodeBefore($process, $deadline);
         } finally {
-            if ($signals) {
-                pcntl_sigprocmask(SIG_SETMASK, $previous);
+            if ($this->signals) {
+                pcntl_sigprocmask(SIG_UNBLOCK, [SIGCHLD]);
             }
         }
     }
@@ -81,28 +83,29 @@ final readonly class CommandWait
     /**
      * @param resource $process
      */
-    private function exitCodeBefore($process, float $deadline, bool $signals): ?int
+    private function exitCodeBefore($process, float $deadline): ?int
     {
-        while (true) {
-            // The status is read before the clock, because a status read after the deadline cannot tell when the command ended, so such an exit fails closed.
+        // The status is read before the clock, because a status read after the deadline cannot tell when the command ended, so such an exit fails closed.
+        $state = proc_get_status($process);
+        $now = hrtime(true);
+
+        while ($state['running'] && $now < $deadline) {
+            $this->pause((int) min($this->longestPause(), $deadline - $now));
             $state = proc_get_status($process);
             $now = hrtime(true);
-
-            if (!$state['running']) {
-                return $now < $deadline ? $state['exitcode'] : null;
-            }
-
-            if ($now >= $deadline) {
-                return null;
-            }
-
-            $this->pause((int) min($signals ? self::NANOSECONDS : self::POLL_NANOSECONDS, $deadline - $now), $signals);
         }
+
+        return !$state['running'] && $now < $deadline ? $state['exitcode'] : null;
     }
 
-    private function pause(int $nanoseconds, bool $signals): void
+    private function longestPause(): int
     {
-        if (!$signals) {
+        return $this->signals ? self::NANOSECONDS : self::POLL_NANOSECONDS;
+    }
+
+    private function pause(int $nanoseconds): void
+    {
+        if (!$this->signals) {
             usleep(max(1, intdiv($nanoseconds, 1_000)));
 
             return;

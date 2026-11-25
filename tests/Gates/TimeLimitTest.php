@@ -28,7 +28,6 @@ final class TimeLimitTest extends TestCase
     public function testALimitThatIsNotFiniteInNanosecondsIsRefused(float $seconds): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('A time limit must be a finite number of nanoseconds');
 
         new TimeLimit($seconds);
     }

@@ -182,7 +182,7 @@ final class InstanceTest extends InstanceTestCase
 
     public function testACommandThatEndsDuringTheLastWaitBeforeAFractionalLimitIsNotKilled(): void
     {
-        // The only wait is the last one: the command ends inside it, well before the 0.2 second limit, and its end wakes the wait.
+        // Ends well inside the 0.2 second limit, because a loaded runner may start the command late and only its end may wake the wait.
         $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'sleep 0.05; exit 3'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
 
         self::assertSame(3, $run['exit']);
