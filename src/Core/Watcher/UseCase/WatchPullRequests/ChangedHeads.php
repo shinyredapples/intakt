@@ -9,6 +9,7 @@ use Doctrine\DBAL\Connection;
 use Intakt\Core\Watcher\Contract\ListingInProgress;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 
 final readonly class ChangedHeads
@@ -26,6 +27,7 @@ final readonly class ChangedHeads
     /**
      * @throws ListingInProgress
      * @throws ForgeRateLimited
+     * @throws ForgeReadFailed
      */
     public function enqueue(string $project): void
     {
