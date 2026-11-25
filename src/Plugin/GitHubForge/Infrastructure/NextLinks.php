@@ -66,12 +66,7 @@ final readonly class NextLinks
             throw $this->unreadable();
         }
 
-        $types = preg_split('/\s+/', strtolower(null === $rel ? '' : $this->valueOf($rel)));
-        $relations = array_values(array_filter(false === $types ? [] : $types, static fn (string $relation): bool => '' !== $relation));
-        // A `rel` naming no relation type (`rel=""`) fails too, because RFC 8288 requires at least one.
-        if (null !== $rel && [] === $relations) {
-            throw $this->unreadable();
-        }
+        $relations = null === $rel ? [] : $this->typesOf($rel);
 
         // An anchored `next` that is not provably this page fails, because RFC 8288 section 3.2 gives it to another resource, and dropping it could end the listing early.
         if (in_array('next', $relations, true) && array_any($anchors, fn (array $anchor): bool => !$this->namesThisRequest($this->valueOf($anchor), $target))) {
@@ -79,6 +74,21 @@ final readonly class NextLinks
         }
 
         return $relations;
+    }
+
+    // A `rel` naming no relation type (`rel=""`) fails, because RFC 8288 requires at least one and taking it as none could end the listing early.
+    /**
+     * @param array<int, ?string> $rel
+     *
+     * @return non-empty-list<string>
+     *
+     * @throws ForgeReadFailed
+     */
+    private function typesOf(array $rel): array
+    {
+        $types = preg_split('/\s+/', strtolower($this->valueOf($rel)), -1, PREG_SPLIT_NO_EMPTY);
+
+        return false === $types || [] === $types ? throw $this->unreadable() : $types;
     }
 
     /**
