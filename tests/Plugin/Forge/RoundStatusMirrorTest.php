@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\Forge;
 
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Plugin\Forge\Contract\ChangeId;
@@ -20,9 +21,11 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(RoundStatusMirror::class)]
+#[UsesClass(ChangeAddress::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(RoundStatusLabel::class)]
@@ -88,6 +91,46 @@ final class RoundStatusMirrorTest extends TestCase
         $mirror->reconcile('alpha', new ChangeId(self::CHANGE));
 
         self::assertCount(2, $forge->passes);
+    }
+
+    public function testAWriterThatNamesThePullRequestByAnotherAddressIsHeldByTheSameLock(): void
+    {
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $mirror = $this->mirror(ReviewStatus::WaitingOnYou, $forge);
+        $forge->whileReading(static fn () => $mirror->reconcile('alpha', new ChangeId('https://github.com/Octo/App/pull/7/?tab=files')));
+
+        $mirror->reconcile('alpha', new ChangeId('https://github.com/octo/app/pull/7'));
+
+        self::assertSame(['[status:in-review] -> [status:waiting-on-you]'], $forge->passes);
+        self::assertLoggedError('info', 'The status label of https://github.com/Octo/App/pull/7/?tab=files of alpha was left to the writer holding its lock.');
+    }
+
+    public function testALockStoreThatFailsWritesNothingAndIsLogged(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('Lock storage is unavailable.'));
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $rounds = self::createStub(LatestRoundStatus::class);
+        $rounds->method('of')->willReturn(ReviewStatus::WaitingOnYou);
+
+        new RoundStatusMirror($rounds, new LockFactory($store), $this->logger(), $forge)->reconcile('alpha', new ChangeId(self::CHANGE));
+
+        self::assertSame([[], ['status:in-review']], [$forge->passes, $forge->labels]);
+        self::assertLoggedError('warning', 'The status label of octo/app#7 of alpha was not reconciled, its lock failed: Lock storage is unavailable.');
+    }
+
+    public function testALockReleaseThatFailsKeepsTheWriteAndIsLogged(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new RuntimeException('Lock storage is unavailable.'));
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $rounds = self::createStub(LatestRoundStatus::class);
+        $rounds->method('of')->willReturn(ReviewStatus::WaitingOnYou);
+
+        new RoundStatusMirror($rounds, new LockFactory($store), $this->logger(), $forge)->reconcile('alpha', new ChangeId(self::CHANGE));
+
+        self::assertSame(['status:waiting-on-you'], $forge->labels);
+        self::assertLoggedError('warning', 'The status label lock of octo/app#7 of alpha was not released: Lock storage is unavailable.');
     }
 
     public function testAFailedReadOfTheRoundStateWritesNothingAndIsLogged(): void

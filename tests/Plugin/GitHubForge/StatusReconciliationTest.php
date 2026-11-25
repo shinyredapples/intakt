@@ -66,6 +66,13 @@ final class StatusReconciliationTest extends TestCase
         self::assertTrue(StatusReconciliation::toward(RoundStatusLabel::WaitingOnYou, [])->owesComment($events, $this->isOwn()));
     }
 
+    public function testUndoingAPersonsRemovalOfTheRoundsStatusOwesACommentThoughAStaleStatusStays(): void
+    {
+        $events = [new LabelEvent('status:waiting-on-you', self::OWN, true), new LabelEvent('status:waiting-on-you', self::PERSON, false)];
+
+        self::assertTrue(StatusReconciliation::toward(RoundStatusLabel::WaitingOnYou, ['status:in-review'])->owesComment($events, $this->isOwn()));
+    }
+
     public function testFollowingTheRoundAfterIntaktsOwnWriteOwesNoComment(): void
     {
         $events = [new LabelEvent('status:in-review', self::OWN, true)];
