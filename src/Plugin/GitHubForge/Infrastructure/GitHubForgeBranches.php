@@ -18,6 +18,8 @@ use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 // Every answer is checked field by field, because a branch read wrongly could be deleted; a doubt fails the read and cleanup deletes nothing.
 final readonly class GitHubForgeBranches implements ForgeBranches
 {
+    private const string KEEP = 'keep';
+
     public function __construct(
         private RepositoryAddress $repository,
         private GitHubBranchCalls $calls,
@@ -40,11 +42,15 @@ final readonly class GitHubForgeBranches implements ForgeBranches
 
         // The labels of every pull request of the branch, because a `keep` on an older one still asks to keep it.
         $labels = array_values(array_unique(array_merge([], ...array_column($pulls, 'labels'))));
-        // An open pull request always decides, and a closed one at the branch's head next; else the branch's commits came after its last pull request closed, so none of them was merged.
+        // An open pull request always decides, and a closed one at the branch's head next.
         $deciding = array_find($pulls, static fn (array $pull): bool => BranchChangeState::Open === $pull['state'])
             ?? array_find($pulls, static fn (array $pull): bool => $pull['head'] === $branch->head->hash);
+        if (null !== $deciding) {
+            return new BranchChange($deciding['state'], ...$labels);
+        }
 
-        return new BranchChange($deciding['state'] ?? BranchChangeState::ClosedUnmerged, ...$labels);
+        // Else the branch's newest commits came after its last pull request closed, so no pull request holds them: they are read as a branch without one, whose commits a person can claim; only a `keep` on an older pull request still keeps it.
+        return in_array(self::KEEP, $labels, true) ? new BranchChange(BranchChangeState::ClosedUnmerged, ...$labels) : null;
     }
 
     public function hasCommitByAPerson(ForgeBranch $branch, string $intaktIdentity): bool
@@ -183,7 +189,8 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     // Only the form GitHub writes, read back unchanged, because any other string (an empty one too) would make a closed pull request pass for merged, which cleanup deletes first.
     private function isMoment(mixed $value): bool
     {
-        if (!is_string($value)) {
+        // The shape first, because the date parser throws on a NUL byte instead of refusing the string.
+        if (!is_string($value) || 1 !== preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/D', $value)) {
             return false;
         }
 

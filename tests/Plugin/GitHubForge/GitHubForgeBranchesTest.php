@@ -174,11 +174,25 @@ final class GitHubForgeBranchesTest extends TestCase
         self::assertEquals(new BranchChange(BranchChangeState::Merged, 'keep'), $this->forge()->changeOf($this->branch()));
     }
 
-    public function testABranchThatMovedPastItsMergedPullRequestIsClosedUnmerged(): void
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function pullRequestsOfAnOlderHead(): iterable
     {
-        $this->answers['GET '.$this->pulls(1)] = $this->pull('merged', self::OLDER);
+        yield 'merged' => ['merged', []];
+        yield 'closed unmerged' => ['closed', []];
+        yield 'merged with another label' => ['merged', ['bug']];
+    }
 
-        self::assertEquals(new BranchChange(BranchChangeState::ClosedUnmerged), $this->forge()->changeOf($this->branch()));
+    /**
+     * @param list<string> $labels
+     */
+    #[DataProvider('pullRequestsOfAnOlderHead')]
+    public function testABranchThatMovedPastItsLastPullRequestHasNoneSoAPersonsNewCommitCanClaimIt(string $state, array $labels): void
+    {
+        $this->answers['GET '.$this->pulls(1)] = $this->pull($state, self::OLDER, ...$labels);
+
+        self::assertNull($this->forge()->changeOf($this->branch()));
     }
 
     public function testAKeepLabelOnAClosedPullRequestOfAnOlderHeadOnTheSecondPageIsCarried(): void
@@ -198,6 +212,8 @@ final class GitHubForgeBranchesTest extends TestCase
         yield 'empty' => ['""'];
         yield 'not a moment' => ['"yesterday"'];
         yield 'an impossible date' => ['"2026-13-40T10:00:00Z"'];
+        yield 'a day the month lacks' => ['"2026-02-30T10:00:00Z"'];
+        yield 'a moment followed by a NUL byte' => ['"2026-11-24T10:00:00Z\u0000"'];
         yield 'a number' => ['1'];
     }
 
