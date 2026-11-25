@@ -266,15 +266,16 @@ final class ProcessRunner
 
     private function startHeld(Process $process, InputStream $release): ProcessGroup|int
     {
-        $failure = $this->startAll([$process])[0] ?? null;
-        $leader = null === $failure ? $process->getPid() : null;
+        // Because a process that failed to start or timed out in its start is not running, it has no pid.
+        $failures = $this->startAll([$process]);
+        $leader = $process->getPid();
         $release->write("\n");
         $release->close();
 
         if (null === $leader) {
             $process->stop(0);
 
-            return $failure ?? self::CANNOT_RUN;
+            return $failures[0] ?? self::CANNOT_RUN;
         }
 
         return new ProcessGroup($leader);
