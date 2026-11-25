@@ -10,7 +10,6 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\PendingHead;
@@ -327,8 +326,7 @@ final class StartedRoundsTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->commands = new RecordingCommandBus();
         $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
         $this->logger = new RecordingLogger();
