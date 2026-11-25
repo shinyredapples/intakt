@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\BuildTask;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Contract\BuildStep;
@@ -25,6 +26,9 @@ use Symfony\Component\Clock\ClockInterface;
 // The row, the asked step and the task_parked event share one transaction, because a task shown as asked must have its question stored, and a stored question must have its step.
 final readonly class ParkedTasks
 {
+    // A few, because each conflict means another run of the same task wrote in between, and more runs than this do not meet in one parking.
+    private const int ATTEMPTS = 3;
+
     public function __construct(
         private Connection $connection,
         private Ledger $ledger,
@@ -76,28 +80,59 @@ final readonly class ParkedTasks
     private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run): bool
     {
         try {
-            // Read before the transaction, because SQLite refuses a transaction that read first and then writes while another one writes.
-            $stored = $this->storedRowOf($run);
-            $keepStored = null !== $stored && $this->startedLater($stored['run'], $run);
-
-            $this->connection->beginTransaction();
-
-            if (!$keepStored) {
-                $this->replace($stored, $record);
+            for ($attempt = 1; $attempt <= self::ATTEMPTS; ++$attempt) {
+                if ($this->startedWithTheRow($record, $run)) {
+                    return $this->endedWithTheEvents($run);
+                }
             }
-
-            if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))) {
-                return false;
-            }
-
-            if (!$this->appended(new LedgerEvent(LedgerEventKind::TaskParked, $run->parkedPayload()))) {
-                return false;
-            }
-
-            $this->connection->commit();
         } catch (Exception) {
             return false;
         }
+
+        return false;
+    }
+
+    // False when another run wrote the row after it was read: the order is then decided again against that run's row, because the question of the run that started later must win.
+    /**
+     * @throws Exception
+     */
+    private function startedWithTheRow(ParkedTaskRecord $record, BuildRun $run): bool
+    {
+        // Read before the transaction, because SQLite refuses a transaction that read first and then writes while another one writes.
+        $stored = $this->storedRowOf($run);
+        $keepStored = null !== $stored && $this->startedLater($stored['run'], $run);
+
+        $this->connection->beginTransaction();
+
+        if ($keepStored) {
+            return true;
+        }
+
+        try {
+            $this->replace($stored, $record);
+        } catch (UniqueConstraintViolationException) {
+            $this->connection->rollBack();
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function endedWithTheEvents(BuildRun $run): bool
+    {
+        if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))) {
+            return false;
+        }
+
+        if (!$this->appended(new LedgerEvent(LedgerEventKind::TaskParked, $run->parkedPayload()))) {
+            return false;
+        }
+
+        $this->connection->commit();
 
         return true;
     }
@@ -140,7 +175,7 @@ final readonly class ParkedTasks
         return [$run->id, $storedRun] === array_keys(array_intersect_key($started, [$run->id => true, $storedRun => true]));
     }
 
-    // Only the row as it was read, because a run that started later may have replaced it since; a parking then fails on the primary key and is refused.
+    // Only the row as it was read, because another run may have replaced it since; a parking then meets that row's primary key and decides again.
     /**
      * @param array{project: string, task: int, run: ?string} $stored
      */

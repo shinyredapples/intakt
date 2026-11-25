@@ -41,6 +41,30 @@ final class LedgerBuildStepsTest extends TestCase
         self::assertSame('fetch refused', $steps[1]['failure']);
     }
 
+    public function testTheLaneShowsTheNewerRunsStepThoughTheOlderRunWritesLast(): void
+    {
+        $steps = $this->in([
+            ['run' => self::OLDER, 'step' => 'task'],
+            ['run' => self::NEWER, 'step' => 'task'],
+            ['run' => self::NEWER, 'step' => 'build_job', 'outcome' => 'asked'],
+            ['run' => self::OLDER, 'step' => 'build_job', 'outcome' => 'asked'],
+        ]);
+
+        self::assertSame([['build_job', self::NEWER]], array_map(static fn (array $step): array => [$step['step'], $step['run']], $steps));
+    }
+
+    public function testAStepAnOlderRunWritesLastDoesNotMoveItsTaskToTheFrontOfTheLane(): void
+    {
+        $steps = $this->in([
+            ['run' => self::OLDER, 'step' => 'task'],
+            ['run' => self::NEWER, 'step' => 'task'],
+            ['task' => '43', 'step' => 'task'],
+            ['run' => self::OLDER, 'step' => 'mirror'],
+        ]);
+
+        self::assertSame(['43', '42'], array_column($steps, 'task'));
+    }
+
     public function testAMalformedFirstRowOfANamedRunStillFixesWhereThatRunStarts(): void
     {
         $steps = $this->latestRunOf([
@@ -183,6 +207,16 @@ final class LedgerBuildStepsTest extends TestCase
     private function latestRunOf(array $rows): array
     {
         return new LedgerBuildSteps()->latestRunOf(new RecordedEvents(array_map($this->row(...), $rows)), 'sample', '42');
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
+     */
+    private function in(array $rows): array
+    {
+        return new LedgerBuildSteps()->in(new RecordedEvents(array_map($this->row(...), $rows)));
     }
 
     /**

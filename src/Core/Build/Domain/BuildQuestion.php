@@ -55,12 +55,17 @@ final readonly class BuildQuestion
         return self::accepted($data['question'] ?? null, $data['choices'] ?? null, $data['recommendation'] ?? null);
     }
 
-    // Null for texts the rule would refuse or trim, because only an accepted question is ever stored and it is stored trimmed.
+    // Null for texts the rule would refuse or trim, or that no accepted hand-back could hold, because only an accepted question is ever stored and it is stored trimmed.
     public static function fromStored(mixed $question, mixed $choices, mixed $recommendation): ?self
     {
         try {
             $accepted = self::accepted($question, $choices, $recommendation);
         } catch (QuestionRefused) {
+            return null;
+        }
+
+        // The texts together, because all of them came out of one hand-back and decoding JSON never makes a text longer.
+        if (strlen($accepted->question.implode('', $accepted->choices).$accepted->recommendation) > self::MAX_BYTES) {
             return null;
         }
 

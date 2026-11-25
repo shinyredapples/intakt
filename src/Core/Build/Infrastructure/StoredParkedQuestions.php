@@ -13,6 +13,7 @@ use Intakt\Core\Build\Contract\ParkedQuestions;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Symfony\Component\Uid\Uuid;
+use ValueError;
 
 // Read on the connection, as the parking writes the row, so the row is read as stored and never through an entity another holder changed.
 final readonly class StoredParkedQuestions implements ParkedQuestions
@@ -47,7 +48,8 @@ final readonly class StoredParkedQuestions implements ParkedQuestions
 
         try {
             $parkedAt = $this->connection->convertToPHPValue($row['parked_at'] ?? null, 'utc_datetime_immutable');
-        } catch (ConversionException) {
+        } catch (ConversionException|ValueError) {
+            // ValueError too, because PHP's date parser throws it for a text with a NUL character.
             return null;
         }
 

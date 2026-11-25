@@ -70,6 +70,11 @@ final class StoredParkedQuestionsTest extends TestCase
         yield 'a choice that is no text' => [['choices' => '["a",1]']];
         yield 'a recommendation that is no text' => [['recommendation' => 'null']];
         yield 'a time that is no time' => [['parked_at' => 'yesterday-ish']];
+        yield 'a time with a NUL character' => [['parked_at' => "2026-11-20 10:00:00\0"]];
+        yield 'a question longer than a hand-back' => [['question' => self::textOf(8193)]];
+        yield 'a choice longer than a hand-back' => [['choices' => '["a",'.self::textOf(8193).']']];
+        yield 'a recommendation longer than a hand-back' => [['choices' => '['.self::textOf(8193).']', 'recommendation' => self::textOf(8193)]];
+        yield 'texts that are together longer than a hand-back' => [['question' => self::textOf(4000), 'choices' => '["a",'.self::textOf(4192).']']];
     }
 
     /**
@@ -87,6 +92,11 @@ final class StoredParkedQuestionsTest extends TestCase
     protected function setUp(): void
     {
         $this->connection = ParkedTaskTable::inMemory();
+    }
+
+    private static function textOf(int $bytes): string
+    {
+        return '"'.str_repeat('x', $bytes).'"';
     }
 
     private function park(string $project, int $task, string $question): void

@@ -22,7 +22,9 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\PayloadFields;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Tests\Support\KernelTestCase;
@@ -57,6 +59,8 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     private const string OLDER_RUN = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000002';
 
     private const string NEWER_RUN = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000001';
+
+    private const string FIRST_RUN = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000003';
 
     private string $root = '';
 
@@ -147,6 +151,46 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
 
         self::assertSame([['Which name?', self::NEWER_RUN]], $this->parkedQuestionsWithRuns());
+    }
+
+    public function testANewerRunKeepsItsQuestionWhenAnOlderOneParksBetweenItsReadAndItsWrite(): void
+    {
+        $first = new BuildRun('sample', 42, self::FIRST_RUN);
+        $this->appendTaskStep($first);
+        $this->startBothRuns();
+        $parked = $this->parkedTasks();
+        $parked->park($first, BuildQuestion::fromHandedBack(self::QUESTION));
+
+        $this->parkedTasksWhoseOrderLookupFirst(fn () => $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION)))
+            ->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
+
+        self::assertSame([['Which name?', self::NEWER_RUN]], $this->parkedQuestionsWithRuns());
+        self::assertFalse($this->connection()->isTransactionActive());
+        self::assertSame(
+            [
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'","step":"build_job","outcome":"asked","failure":null}'],
+                ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'"}'],
+            ],
+            array_slice($this->ledgerRows(), -2),
+        );
+    }
+
+    public function testARunWhoseRowAnotherOneReplacesAtEveryAttemptIsNotParked(): void
+    {
+        $this->startBothRuns();
+        $this->parkedTasks()->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION));
+        $before = $this->ledgerRows();
+        $lookups = 0;
+        $replaced = $this->parkedTasksWhoseOrderLookupFirst(function () use (&$lookups): void {
+            $this->connection()->executeStatement('UPDATE build_parked_task SET run = ?', [sprintf('f1d0e2c4-5b6a-4c8d-9e0f-00000000010%d', ++$lookups)]);
+        });
+
+        $failure = $this->failureOfParking($replaced);
+
+        self::assertSame([self::NOT_PARKED, 3], [$failure, $lookups]);
+        self::assertSame([['Keep the old flag?', 'f1d0e2c4-5b6a-4c8d-9e0f-000000000103']], $this->parkedQuestionsWithRuns());
+        self::assertFalse($this->connection()->isTransactionActive());
+        self::assertSame($before, $this->ledgerRows());
     }
 
     public function testAnOlderRunThatBuiltAfterANewerOneParkedKeepsTheNewerQuestion(): void
@@ -347,6 +391,20 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
 
         return $this->failureOfParking($this->parkedTasks());
+    }
+
+    // The other run's write is forced into the lookup of the order, because that lookup stands between the parking's read of the row and its own write.
+    private function parkedTasksWhoseOrderLookupFirst(callable $interleaved): ParkedTasks
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback($this->ledger()->append(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback(function (Mentions $runs, LedgerEventKind ...$kinds) use ($interleaved): RecordedEvents {
+            $interleaved();
+
+            return $this->ledger()->readOfKindsMentioning($runs, ...$kinds);
+        });
+
+        return new ParkedTasks($this->connection(), $ledger, $this->registry(), $this->clock());
     }
 
     private function startBothRuns(): void

@@ -179,6 +179,18 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([['task', 'passed', null]], array_map(static fn (array $task): array => [$task['step'], $task['outcome'], $task['question']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
     }
 
+    public function testAnOlderRunThatAsksAfterANewerOneParkedLeavesTheNewerRunsQuestionInTheStatus(): void
+    {
+        $this->parked = new ParkedQuestion('Newer question?', ['a', 'b'], 'a', new DateTimeImmutable('2026-11-20 10:00:00'), self::PARKING_RUN);
+        $older = 'f1d0e2c4-5b6a-4c8d-9e0f-000000000002';
+
+        foreach ([[$older, 'task', 'passed'], [self::PARKING_RUN, 'task', 'passed'], [self::PARKING_RUN, 'build_job', 'asked'], [$older, 'build_job', 'asked']] as [$run, $step, $outcome]) {
+            $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'run' => $run, 'step' => $step, 'outcome' => $outcome, 'failure' => null]);
+        }
+
+        self::assertSame([['task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00', 'question' => ['text' => 'Newer question?', 'choices' => ['a', 'b'], 'recommendation' => 'a', 'parked_at' => '2026-11-20T10:00:00+00:00']]], $this->projectOf($this->read(), 'alpha')['lanes']['build']);
+    }
+
     public function testAQuestionAnotherRunParkedIsNotReportedForTheRunWhoseStepIsShown(): void
     {
         $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'), self::PARKING_RUN);
