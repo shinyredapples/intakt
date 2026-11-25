@@ -11,10 +11,12 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
 use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
+use Intakt\Plugin\GitHubForge\Domain\StatusLabelIntent;
 use Intakt\Plugin\GitHubForge\Domain\StatusLabelPlan;
 use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubLabelWrites;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusEvents;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
@@ -31,6 +33,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(GitHubStatusLabels::class)]
+#[CoversClass(GitHubStatusEvents::class)]
+#[UsesClass(StatusLabelIntent::class)]
 #[UsesClass(StatusLabelPlan::class)]
 #[UsesClass(LabelEvent::class)]
 #[UsesClass(PullRequestAddress::class)]
@@ -434,7 +438,7 @@ final class GitHubStatusLabelsTest extends TestCase
         $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]);
         $comments = new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345');
 
-        return new GitHubStatusLabels($wiring->calls, $wiring->tokens, $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens), $this->locks, $this->clock);
+        return new GitHubStatusLabels(new GitHubStatusEvents($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens), $this->locks, $this->clock);
     }
 
     /**
