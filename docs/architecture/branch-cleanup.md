@@ -1,10 +1,12 @@
 ## Branch cleanup
 
-Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far only the forge side exists: the `ForgeBranches` contract, its local implementation and its GitHub implementation. No command, job or rule calls it yet, and nothing in the container builds either implementation; the archive refs and restore, the cleanup rules and the weekly run come in later parts of #24.
+Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far the forge side exists (the `ForgeBranches` contract, its local implementation and its GitHub implementation) and the archive of deleted branch heads. No command, job or rule calls either yet, and nothing in the container builds a forge implementation; pushing an archived commit back and restore, the cleanup rules and the weekly run come in later parts of #24.
 
 ### In short
 
 `ForgeBranches` lists a repository's branches, reads each branch's pull request, tells whether a person committed to it, and deletes it only at the head it was listed with. A read that fails throws, so a failure never reads as "no pull request" or "no commit by a person". The local forge runs git and deletes with `update-ref` at the expected head while holding every worktree's locks. The GitHub forge reads every page of the REST answers and checks each field; GitHub's delete takes no expected head, so it reads the branch right before deleting and refuses one that moved, accepting the short window between the two.
+
+The archive keeps every deleted branch head in a bare repository of its own on the data volume ([Archive](#archive)), and a delete archives first.
 
 ### The contract
 
@@ -78,6 +80,24 @@ A branch whose `isDeletable()` is false is refused before any call. Then the for
 
 **Accepted window.** GitHub's REST ref deletion takes no expected head. GraphQL's `updateRefs` mutation names the expected old commit, but it is not used, because this change could not prove it against an installation's permissions. So a push that lands between the final read and the delete is deleted with the branch. That window is short and accepted, because cleanup candidates have been idle for weeks (owner decision of 2026-11-24 on #24).
 
+### Archive
+
+`Core/Git/Contract/BranchArchive` keeps a branch head; `UseCase/ArchiveBranch/MirrorBranchArchive` implements it. Each project has a bare repository at `var/data/branch-archive/<project>.git` (container parameter `intakt.git.branch_archive_directory`, `GitServices::BRANCH_ARCHIVE_DIRECTORY`), under `var/data` because that is where the image keeps its volume. It is not in `var/mirrors/`: the mirror is a cache that is cloned again when lost, so archive refs there would vanish at a container replacement. The project name follows the mirror's folder rule (`Domain/Mirrors`), so a name that would leave the directory is refused.
+
+`archive(MirroredHead)` takes the project, the branch and its head commit, under the lock `git-branch-archive-<project>`:
+
+1. Creates the bare repository when it is missing, in the mirror's object format.
+2. Copies the commit and its objects from the mirror with a local fetch by id (`git fetch --no-tags --no-write-fetch-head -- <mirror> <commit>`, the `file` protocol allowed for this call only). The archive has no remote and writes no ref from the fetch.
+3. Writes `refs/intakt/archive/<UTC moment>/<branch>` (moment as `YYYYMMDDTHHMMSSZ`, from `ClockInterface`) with `update-ref <ref> <commit> ''`, which creates the ref only: an existing archive ref is never moved.
+4. Reads the ref back and returns an `ArchivedBranch`.
+
+Any failure (no mirror, a commit the mirror lacks, a ref that exists, a git error) is a `BranchNotArchived`.
+
+The archive belongs to Intakt alone: it is never cloned or fetched from a remote and never pushed, so a remote ref shaped like `refs/intakt/archive/*` is never an archive. `DeleteBranchAfterArchive` is the delete path: it archives, and only after that returns does it call `ForgeBranches::delete()`; when archiving fails, the forge is not called.
+
 ### Tests
+
+The archive tests are in `tests/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchiveTest.php`, against temporary repositories.
+
 
 The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` and `tests/Plugin/Forge/Contract/ForgeBranchTest.php`.
