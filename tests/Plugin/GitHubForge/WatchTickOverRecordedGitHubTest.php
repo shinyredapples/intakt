@@ -297,25 +297,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         return new GitHubChangeLabels(new TrustedPullRequestLabels($pull, $wiring->check, $repositories), $outvoted, new NullLogger());
     }
 
-    // The real status adapter over the recorded #7 and #8, with Intakt's own identity from the answers recorded for `acme/widget`.
-    private function statusLabels(): GitHubStatusLabels
-    {
-        $identity = new RecordedTrust(TrustChecks::clock())->client();
-        $pulls = [$this->status, new RecordedStatusOfPullRequest('/repos/acme/widgets/issues/7', RecordedTrust::OWN_IDENTITY)];
-        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($pulls, $identity): ResponseInterface {
-            $path = (string) parse_url($url, PHP_URL_PATH);
-            $pull = array_find($pulls, static fn (RecordedStatusOfPullRequest $pull): bool => $pull->answers($path));
-
-            return $pull instanceof RecordedStatusOfPullRequest
-                ? $pull->answer($method, $path, is_string($options['body'] ?? null) ? $options['body'] : '')
-                : $identity->request($method, str_replace('/repos/acme/widgets/', '/repos/acme/widget/', $url), $options);
-        }, 'https://api.github.com');
-        $wiring = TrustChecks::wiring($http);
-        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
-
-        return new GitHubStatusLabels(new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), new GitHubLabelWrites($wiring->calls, $wiring->tokens));
-    }
-
     private function pushOf(string $branch, string $head): BranchPushRequest
     {
         return new BranchPushRequest('alpha', 'repo', 'origin', $branch, new AcceptedHandBack(null, str_repeat($head, 40), 0), new ChangeText('Title', 'E1'));
@@ -396,6 +377,25 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     private function panel(): Panel
     {
         return new Panel([new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10)], QuorumPolicy::All);
+    }
+
+    // Both #7 and #8 are recorded, because a tick that queues #7's round reconciles its labels too; Intakt's own identity comes from the answers recorded for `acme/widget`, because the listing's fixtures name `acme/widgets`.
+    private function statusLabels(): GitHubStatusLabels
+    {
+        $identity = new RecordedTrust(TrustChecks::clock())->client();
+        $pulls = [$this->status, new RecordedStatusOfPullRequest('/repos/acme/widgets/issues/7', RecordedTrust::OWN_IDENTITY)];
+        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($pulls, $identity): ResponseInterface {
+            $path = (string) parse_url($url, PHP_URL_PATH);
+            $pull = array_find($pulls, static fn (RecordedStatusOfPullRequest $pull): bool => $pull->answers($path));
+
+            return $pull instanceof RecordedStatusOfPullRequest
+                ? $pull->answer($method, $path, is_string($options['body'] ?? null) ? $options['body'] : '')
+                : $identity->request($method, str_replace('/repos/acme/widgets/', '/repos/acme/widget/', $url), $options);
+        }, 'https://api.github.com');
+        $wiring = TrustChecks::wiring($http);
+        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
+
+        return new GitHubStatusLabels(new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), new GitHubLabelWrites($wiring->calls, $wiring->tokens));
     }
 
     private function fixture(string $name): string

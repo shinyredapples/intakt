@@ -52,6 +52,14 @@ final class RecordedStatusOfPullRequest
         };
     }
 
+    /**
+     * @param list<array<mixed>> $entries
+     */
+    private function listing(array $entries): MockResponse
+    {
+        return new MockResponse(json_encode($entries, JSON_THROW_ON_ERROR));
+    }
+
     private function eventsRead(): MockResponse
     {
         if ($this->eventReadsToFail > 0) {
@@ -61,14 +69,6 @@ final class RecordedStatusOfPullRequest
         }
 
         return $this->listing($this->events);
-    }
-
-    /**
-     * @param list<array<mixed>> $entries
-     */
-    private function listing(array $entries): MockResponse
-    {
-        return new MockResponse(json_encode($entries, JSON_THROW_ON_ERROR));
     }
 
     private function removal(string $label): MockResponse
@@ -83,15 +83,6 @@ final class RecordedStatusOfPullRequest
         return new MockResponse('[]');
     }
 
-    private function addition(string $body): MockResponse
-    {
-        foreach ((array) ((array) json_decode($body, true, flags: JSON_THROW_ON_ERROR))['labels'] as $label) {
-            $this->applied(is_string($label) ? $label : '', $this->own);
-        }
-
-        return new MockResponse('[]');
-    }
-
     private function comment(string $body): MockResponse
     {
         $payload = (array) json_decode($body, true, flags: JSON_THROW_ON_ERROR);
@@ -99,5 +90,14 @@ final class RecordedStatusOfPullRequest
         $stored = [...$payload, 'user' => ['login' => $this->own, 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => 12345]];
 
         return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
+    }
+
+    private function addition(string $body): MockResponse
+    {
+        foreach ((array) ((array) json_decode($body, true, flags: JSON_THROW_ON_ERROR))['labels'] as $label) {
+            $this->applied(is_string($label) ? $label : '', $this->own);
+        }
+
+        return new MockResponse('[]');
     }
 }
