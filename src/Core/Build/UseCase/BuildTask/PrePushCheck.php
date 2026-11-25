@@ -38,9 +38,18 @@ final readonly class PrePushCheck
     }
 
     // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed.
-    public function failureOf(BuildTaskRequest $request, string $bundle, TaskKind $kind): ?string
+    public function resultOf(BuildTaskRequest $request, string $bundle, TaskKind $kind): PrePushResult
     {
-        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack) ?? $this->regressionFailure($request, $handBack, $kind));
+        $result = $this->files->check($request, $bundle, fn (HandBack $handBack): PrePushResult => $this->resultIn($request, $handBack, $kind));
+
+        return $result instanceof PrePushResult ? $result : new PrePushResult($result, null);
+    }
+
+    private function resultIn(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): PrePushResult
+    {
+        $failure = $this->failureIn($request, $handBack);
+
+        return null === $failure ? $this->regressionResult($request, $handBack, $kind) : new PrePushResult($failure, null);
     }
 
     private function failureIn(BuildTaskRequest $request, HandBack $handBack): ?string
@@ -59,10 +68,10 @@ final readonly class PrePushCheck
     }
 
     // Only a bug whose check passed, so a head that fails the check is not run twice more; only a missing test or a test that passes on the base fails, because the other results are not proof either way.
-    private function regressionFailure(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): ?string
+    private function regressionResult(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): PrePushResult
     {
         if (TaskKind::Bug !== $kind) {
-            return null;
+            return new PrePushResult(null, null);
         }
 
         try {
@@ -71,7 +80,7 @@ final readonly class PrePushCheck
             // The job's script that cannot be read too: a run that could not happen proves nothing either way, so the verdict stays as the check job gave it.
             $this->logger->warning('The regression tests of a bug head could not run.', ['project' => $request->project, 'exception' => $failure]);
 
-            return null;
+            return new PrePushResult(null, null);
         }
 
         if ($runs instanceof RegressionRuns) {
@@ -82,10 +91,12 @@ final readonly class PrePushCheck
                 'head' => $runs->head?->value,
             ]);
 
-            return $this->unprovenBy($runs);
+            $failure = $this->unprovenBy($runs);
+
+            return new PrePushResult($failure, null === $failure ? $runs : null);
         }
 
-        return null;
+        return new PrePushResult(null, null);
     }
 
     private function unprovenBy(RegressionRuns $runs): ?string
