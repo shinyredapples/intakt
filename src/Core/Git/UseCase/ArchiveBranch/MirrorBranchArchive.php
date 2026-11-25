@@ -81,35 +81,6 @@ final readonly class MirrorBranchArchive implements BranchArchive
         return new ArchivedBranch($ref, $head->head, $moment);
     }
 
-    private function mustBeCommit(string $commit, string $archive): void
-    {
-        $this->mustRun(['rev-parse', '--verify', '--quiet', $commit.'^{commit}'], $archive);
-    }
-
-    /**
-     * Two heads of one branch archived in the same second would meet at one name, so the later one counts up.
-     */
-    private function freeRef(DateTimeImmutable $moment, BranchHead $head, string $archive): string
-    {
-        $base = self::REF_PREFIX.$moment->format('Ymd\THis\Z');
-
-        for ($count = 1;; ++$count) {
-            $ref = ($count === 1 ? $base : $base.'-'.$count).'/'.$head->branch;
-            $held = $this->heldBy($ref, $archive);
-
-            if (null === $held || $held === $head->commit) {
-                return $ref;
-            }
-        }
-    }
-
-    private function heldBy(string $ref, string $archive): ?string
-    {
-        $process = $this->start($this->hardened->callInBareRepository($archive, 'rev-parse', '--verify', '--quiet', $ref));
-
-        return $process->isSuccessful() ? trim($process->getOutput()) : null;
-    }
-
     private function createArchiveLike(string $mirror, string $archive): void
     {
         if (is_file($archive.'/HEAD') && is_dir($archive.'/objects') && is_dir($archive.'/refs')) {
@@ -132,6 +103,33 @@ final readonly class MirrorBranchArchive implements BranchArchive
         $call = $this->hardened->callInBareRepository($archive, 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--', $mirror, $commit);
         // HardenedGit allows no protocol, so the fetch names the one it needs: the mirror is a folder of this install.
         $this->run(new GitCall($call->command, $call->directory, $call->environment->with(GIT_ALLOW_PROTOCOL: 'file')));
+    }
+
+    private function mustBeCommit(string $commit, string $archive): void
+    {
+        $this->mustRun(['rev-parse', '--verify', '--quiet', $commit.'^{commit}'], $archive);
+    }
+
+    // Two heads of one branch archived in the same second would meet at one name, so the later one counts up.
+    private function freeRef(DateTimeImmutable $moment, BranchHead $head, string $archive): string
+    {
+        $base = self::REF_PREFIX.$moment->format('Ymd\THis\Z');
+
+        for ($count = 1;; ++$count) {
+            $ref = (1 === $count ? $base : $base.'-'.$count).'/'.$head->branch;
+            $held = $this->heldBy($ref, $archive);
+
+            if (null === $held || $held === $head->commit) {
+                return $ref;
+            }
+        }
+    }
+
+    private function heldBy(string $ref, string $archive): ?string
+    {
+        $process = $this->start($this->hardened->callInBareRepository($archive, 'rev-parse', '--verify', '--quiet', $ref));
+
+        return $process->isSuccessful() ? trim($process->getOutput()) : null;
     }
 
     /**
