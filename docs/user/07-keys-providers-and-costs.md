@@ -63,6 +63,16 @@ The tokens table splits the prompt's cache tokens. **Cache read** and **Cache wr
 
 The page then shows a figure, an **estimated** label and the price date. A model without a price makes the cost read "unknown, no price for" that model, never a partial sum. This holds for a call that has not recorded its end yet (still running, or cut off) too: if its model has no price, the round's cost is unknown; if the model has a price, such a call adds nothing. The demo brings its own list prices, dated 2026-11-13, the earliest day any of them was read.
 
+## Limits for a long build
+
+A build that keeps making progress is worth its tokens, so spend alone will not end one. Four limits will decide when a build without progress stops. Intakt does not watch a running build yet, so today they only have to be valid.
+
+1. Open `config/services.yaml`.
+2. Under `parameters:`, set any of `intakt.build.allowance_tokens`, `intakt.build.idle_seconds`, `intakt.build.ceiling_tokens` and `intakt.build.task_total_tokens`: whole numbers of at least 1, the ceiling not below the allowance.
+3. Run `php bin/console cache:clear`.
+
+A stopped build will keep its commits. The [complete reference](../reference/user-manual.md#running-a-build) has the defaults.
+
 ## Running on a subscription
 
 A reviewer, or the owl, can run on a Claude subscription through the `claude` command-line tool. Create the token with `claude setup-token` and store it as `CLAUDE_CODE_OAUTH_TOKEN`. A Codex subscription works for reviewers too.

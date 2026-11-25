@@ -1,10 +1,10 @@
 # When a build over its allowance stops
 
-Progress, not spend, ends a build: one over its allowance keeps going while it makes progress, until the runaway ceiling or the per-task total applies ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. Nothing calls it yet: the build job wires it in with T60 (#1737), together with the ledger record of the cause, the configured limits and the pages.
+Progress, not spend, ends a build: one over its allowance keeps going while it makes progress, until the runaway ceiling or the per-task total applies ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. The build job holds the configured limits and hands back a stopped job's commits ([below](#the-build-job)); nothing watches a running build yet, so no job is stopped: watching it and ending its session is #3965, the ledger record of the cause is part 2 of #3964.
 
 ## The classes
 
-- `BuildLimits`: the allowance in tokens, the idle limit in seconds, the runaway ceiling in tokens and the per-task total in tokens across continuations. Constructor arguments only, no configuration yet. Every limit must be at least 1, and a ceiling below the allowance is refused with `InvalidArgumentException`.
+- `BuildLimits`: the allowance in tokens, the idle limit in seconds, the runaway ceiling in tokens and the per-task total in tokens across continuations. Every limit must be at least 1, and a ceiling below the allowance is refused with `InvalidArgumentException`.
 - `BuildProgress`: what the caller saw at one moment: tokens used by this build, tokens used by the task across its continuations, a content fingerprint, the failing tests (failure output by test name) and whether a check is running.
 - `BuildWatch`: the readonly state the caller keeps between looks: the limits, the latest `BuildProgress` and when progress was last seen. `BuildStopRule` is a shared service and keeps no state of one build.
 - `BuildStopRule`: `startWatching()` begins a watch, `observe()` returns the next watch for a new `BuildProgress`, and `stopCause()` returns a `BuildStopCause`, or null to let the build go on. Time comes only from the injected `ClockInterface`.
@@ -30,3 +30,10 @@ Each of these resets the idle time:
 The ceiling and the per-task total stop a build whatever its progress, also while a check runs. A build under its allowance is never stopped for lack of progress.
 
 Tests: `tests/Core/Build/Domain/BuildStopRuleTest.php` moves a `MockClock` between looks to force each case; `tests/Core/Build/Domain/BuildLimitsTest.php` covers the refused limits.
+
+## The build job
+
+- **Limits from configuration.** Four parameters in `config/services.yaml`, named in `BuildServices`: `intakt.build.allowance_tokens` (2,000,000), `intakt.build.idle_seconds` (900), `intakt.build.ceiling_tokens` (6,000,000, three times the allowance) and `intakt.build.task_total_tokens` (12,000,000, two full builds up to the ceiling). The defaults are the builder's choice until sizing sets an allowance per task (T60, #342). `RunBuildJob` gets them with `#[Autowire(param: ...)]`, refuses a value that is not an integer as given (a YAML `true` would otherwise reach `BuildLimits` as 1) and builds `RunBuildJob::$limits`, so a wrong value is an `InvalidArgumentException` when the container builds the job, before any job starts. The per-task total is meant for the tokens of every continuation of the task, read from the ledger by the watch that fills `BuildProgress::$taskTokensUsed` (#3965).
+- **The cause on the outcome.** `BuildJobOutcomes::of()` maps the job's result to a `BuildJobOutcome` and puts the given `BuildStopCause` on it (`BuildJobOutcome::$stopCause`, null for a job without a stop). The cause never comes from the job's output, which the builder writes. The verdict stays what the output shows: a stopped job that bundled its commits and its pull request text is `Built`, so `BuildTask` sends it through the [hand-back check](build-job.md) exactly like a session cut at its allowance. `RunBuildJob` passes null until #3965 watches the job.
+
+Tests: `tests/Core/Build/UseCase/RunBuildJob/BuildJobOutcomesTest.php` takes each cause from `BuildStopRule` on a `MockClock` and shows the bundle and text handed back; `BuildLimitsConfigTest` and `RefusedBuildLimitsConfigTest` boot the container with the shipped and a refused setting; `RunBuildJobTest` covers each refused limit.
