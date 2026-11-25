@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Closure;
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -19,8 +20,13 @@ use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
+use Intakt\Plugin\WorkSource\Contract\Holder;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
+use Intakt\Plugin\WorkSource\Contract\OpenTask;
+use Intakt\Plugin\WorkSource\Contract\OpenWork;
 use Intakt\Plugin\WorkSource\Contract\Task;
+use Intakt\Plugin\WorkSource\Contract\TaskPriority;
+use Intakt\Plugin\WorkSource\Contract\Wait;
 use Intakt\Plugin\WorkSource\Contract\WorkerState;
 use Intakt\Plugin\WorkSource\Contract\WorkPick;
 use Intakt\Plugin\WorkSource\Contract\WorkQueue;
@@ -80,6 +86,19 @@ final readonly class GitHubWorkSource implements WorkSource
             array_map(fn (QueuedIssue $issue): Task => $this->taskOf($issue, $reworks), QueueOrder::of($plan->ready, $reworks)),
             array_map(fn (HeldIssue $held): HeldTask => new HeldTask($this->taskOf($held->issue, $reworks), $held->reason), $plan->held),
         );
+    }
+
+    // Taken from the plan, because its tasks are the eligible ones written and last edited by an account with write access, so each wait line in their text is trusted. Milestones without an open item are not in the stored rows, so none is reported empty.
+    public function openWork(string $project): ?OpenWork
+    {
+        $plan = $this->listing->planOf($project);
+        if (!$plan instanceof IntakePlan) {
+            return null;
+        }
+
+        $issues = [...$plan->ready, ...array_map(static fn (HeldIssue $held): QueuedIssue => $held->issue, $plan->held)];
+
+        return new OpenWork(array_map($this->openTaskOf(...), $issues), []);
     }
 
     public function failedForGood(string $project, int $number, string $reason): void
@@ -233,5 +252,23 @@ final readonly class GitHubWorkSource implements WorkSource
     private function taskOf(QueuedIssue $issue, array $reworks): Task
     {
         return new Task($issue->number(), $issue->title(), $reworks[$issue->number()] ?? null);
+    }
+    // The holder comes from status labels an account with write access applied last, because Intakt's mirror of a row is what says who it waits on.
+    private function openTaskOf(QueuedIssue $issue): OpenTask
+    {
+        $holder = match (true) {
+            $issue->hasVouchedLabel(WorkLabels::STATUS_WAITING_ON_YOU) => Holder::Person,
+            $issue->hasVouchedLabel(WorkLabels::STATUS_PARKED) => Holder::Session,
+            default => Holder::Nothing,
+        };
+
+        return new OpenTask(
+            $issue->number(),
+            $issue->title(),
+            TaskPriority::from($issue->priority()->value),
+            $issue->milestoneDue(),
+            $holder,
+            array_map(static fn (int $target): Wait => new Wait($target, $issue->isTrusted()), $issue->waitsFor()),
+        );
     }
 }

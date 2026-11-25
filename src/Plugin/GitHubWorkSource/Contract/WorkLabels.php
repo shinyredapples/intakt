@@ -10,4 +10,6 @@ final readonly class WorkLabels
     public const string IDEA = 'idea';
     public const string ELIGIBILITY = 'intakt';
     public const string PRIORITY_PREFIX = 'priority:';
+    public const string STATUS_WAITING_ON_YOU = 'status:waiting-on-you';
+    public const string STATUS_PARKED = 'status:parked';
 }

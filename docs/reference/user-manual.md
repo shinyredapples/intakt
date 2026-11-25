@@ -621,6 +621,16 @@ To see the order in which Intakt would pick a project's tasks from its GitHub is
 
 When the list of open issues comes back incomplete, or the project has no `watch` section, the command prints no order and exits with an error; the log holds the reason as a warning.
 
+### Showing the flow report
+
+Run `php bin/console intakt:maintainer:flow-report <project>` to print the plain-code figures of the Maintainer's weekly flow review, from the stored issue rows and with no model. It prints three lists under the heading `Flow report of project <project>:`.
+
+1. `Hand-overs by what they hold`: every open task whose `status:waiting-on-you` label (a person) or `status:parked` label (a session) was applied by an account with write access, with the number of open tasks behind it, counted through `Waits for` lines of eligible tasks (written and last edited by an account with write access); most-held first, then the lower number.
+2. `Overdue milestones with open work`: the open tasks per milestone due date that has passed (UTC). Milestones are shown by due date, because the stored rows keep no title.
+3. `Priority mix of the open tasks`: the count and share per priority. When more than a third of the open tasks are urgent (more than the threshold of one third, fixed in the command until the owner's config holds a value), a line says it is a finding for the session. No label is changed.
+
+When the list of open issues comes back incomplete, nothing is printed and the command exits with an error. Part lines in umbrella comments and milestones with no open task are not read yet: the stored rows hold neither, so no milestone is reported as one to close until they do.
+
 ## Looking inside the development install with Mate
 
 On a development install (`composer install` with the dev packages), `vendor/bin/mate` answers questions about the running app from its own container and environment files instead of from reading the code. It is not part of a production install: `composer install --no-dev` leaves it out.
