@@ -6,7 +6,7 @@ For owners who run Intakt. Each feature gets a page here, written in the same ch
 
 Intakt runs on PHP 8.5.12 or later and Symfony 8.2, which is a beta until 8.2.0 is released: an install holds Symfony 8.2.0-BETA2, locked before it was 3 days old by the owner's one-time exception ([The release cooldown for dependencies](#the-release-cooldown-for-dependencies)).
 
-The [README](../../README.md) opens with a picture of the whole team: the octopus conducts, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order. It follows your light or dark color scheme and is decoration only.
+The [README](../../README.md) opens with a picture of the whole team: the octopus conducts, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer, Maintainer and Technical writer, in that order. It follows your light or dark color scheme and is decoration only.
 
 The path from a clone to a first verdict, in order:
 
