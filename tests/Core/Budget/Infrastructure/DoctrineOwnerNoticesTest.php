@@ -46,6 +46,8 @@ use Stringable;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\BlockingStoreInterface;
+use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
@@ -626,6 +628,44 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $this->accountLock)->record($this->readingOf('main'));
 
         self::assertTrue($otherFree);
+    }
+
+    // One process cannot show a writer blocked on the other's commit, so the order is shown in two parts: the reading holds the lock between its update and commit (above), and the notice writer waits for that same lock before its last look (here).
+    public function testTheNoticeWriterWaitsForTheAccountsLockBeforeItsLastLook(): void
+    {
+        $waited = [];
+        $store = self::createStub(BlockingStoreInterface::class);
+        $store->method('waitAndSave')->willReturnCallback(static function (Key $key) use (&$waited): void {
+            $waited[] = (string) $key;
+        });
+        $notices = new DoctrineOutageNotices($this->entities, $this->locks, self::createStub(LoggerInterface::class), new AccountReadingLock(new LockFactory($store)));
+
+        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        self::assertSame(['budget-account-reading-'.new Account(Provider::ClaudeCode, 'main')->key()], $waited);
+    }
+
+    public function testAReadingInsideACallersTransactionKeepsTheAccountsLockUntilThatTransactionEnds(): void
+    {
+        $account = new Account(Provider::ClaudeCode, 'main');
+        $connection = $this->entities->getConnection();
+        $connection->beginTransaction();
+        new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $this->accountLock)->record($this->readingOf('main'));
+
+        $heldBeforeTheCommit = !$this->accountLock->of($account)->acquire(false);
+        $connection->rollBack();
+        $this->accountLock->around($account, static fn (): null => null);
+
+        self::assertTrue($heldBeforeTheCommit);
+        self::assertTrue($this->accountLock->of($account)->acquire(false));
+    }
+
+    public function testAReadingWhoseEndFailsGivesTheAccountsLockBack(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->recordWhileTheEndFails($this->measuredUseWhoseFirstEndFails(new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher()));
+
+        self::assertTrue($this->accountLock->of(new Account(Provider::ClaudeCode, 'main'))->acquire(false));
     }
 
     // The end saved in the transaction is committed before the second update runs, so its failure keeps that end, still announces it, and reaches the caller.

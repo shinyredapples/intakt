@@ -44,14 +44,7 @@ final readonly class DoctrineOutageNotices
     // Waiting, because a reading holds the lock only while it commits; the last look then runs either before the reading's update, which ends the notice, or after its commit, which the look sees.
     private function noticeWhileNoReadingIsCommitting(UsageReadingsStayedAway $outage): void
     {
-        $reading = $this->accountLock->of($outage->account);
-        $reading->acquire(true);
-
-        try {
-            $this->noticeUnlessNoticed($outage);
-        } finally {
-            $reading->release();
-        }
+        $this->accountLock->around($outage->account, fn () => $this->noticeUnlessNoticed($outage));
     }
 
     // The warning goes before the row, because a warning that failed must be tried again, and a crash between the two costs at most a repeated warning.

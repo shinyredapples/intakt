@@ -21,6 +21,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 // Rolled back, so a replay shows what the guard would decide without leaving a reading, a hold or a notice on the install.
 final readonly class RolledBackReplay
@@ -64,7 +65,8 @@ final readonly class RolledBackReplay
     private function dayReplayOn(MockClock $clock, LoggerInterface $logger): DayReplay
     {
         $events = new EventDispatcher();
-        $accountLock = new AccountReadingLock($this->locks);
+        // Its own store, because the replay holds the database's write lock until it rolls back and must not wait on another worker's account lock, which that worker's reading would in turn wait on; nothing a replay writes is shared.
+        $accountLock = new AccountReadingLock(new LockFactory(new InMemoryStore()));
         $measured = new DoctrineMeasuredUse($this->entities, $clock, $events, $accountLock);
         $holds = new DoctrineHolds($this->entities, $clock);
         $events->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger, $accountLock)->noticeOnce(...));

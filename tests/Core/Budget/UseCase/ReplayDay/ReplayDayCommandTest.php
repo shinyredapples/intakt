@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Budget\UseCase\ReplayDay;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
+use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
@@ -20,10 +22,12 @@ use Intakt\Core\Budget\UseCase\ReplayDay\RolledBackReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptHoldsNoStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
+use Intakt\Core\Watchdog\Contract\Halts;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\ConsoleDisplay;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
+use Psr\Log\NullLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -34,6 +38,8 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\BlockingStoreInterface;
+use Symfony\Component\Lock\LockFactory;
 
 // Through the kernel and the Doctrine stores, because the evidence of the guard is this command on a running install.
 #[Group('persistence')]
@@ -48,6 +54,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ScriptHoldsNoStep::class)]
 #[UsesClass(BudgetGuard::class)]
 #[UsesClass(CeilingStartGuard::class)]
+#[UsesClass(AccountReadingLock::class)]
 #[UsesClass(DoctrineHolds::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
 #[UsesClass(DoctrineOutageNotices::class)]
@@ -183,6 +190,29 @@ final class ReplayDayCommandTest extends KernelTestCase
         $this->expectExceptionObject(new InvalidArgumentException('a bug in reading'));
 
         new ReplayDayCommand($replay, $files)($io, 'day.txt');
+    }
+
+    // The replay holds the database's write lock until it rolls back, so waiting for an account lock another worker's reading holds while it waits for the database would block both.
+    public function testTheReplayNeverWaitsForTheSharedAccountLockWhileItHoldsTheDatabaseWriteLock(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $other = DriverManager::getConnection($entities->getConnection()->getParams());
+        $other->executeStatement('PRAGMA busy_timeout = 0');
+        $waits = 0;
+        $store = self::createStub(BlockingStoreInterface::class);
+        $store->method('waitAndSave')->willReturnCallback(static function () use ($other, &$waits): void {
+            ++$waits;
+            $other->executeStatement('UPDATE budget_window_reading SET used_percent = used_percent');
+        });
+        $replay = new RolledBackReplay($entities, new LockFactory($store), ['five-hour' => 90.0, 'weekly' => 90.0], self::createStub(Halts::class));
+
+        $replay->replay([
+            ScriptedStep::parse('2026-11-02T08:00 read claude_code.probe five-hour 12 2026-11-02T13:00'),
+            ScriptedStep::parse('2026-11-02T12:00 start claude_code.probe 0'),
+        ], new NullLogger(), static function (string $line): void {});
+
+        self::assertSame(0, $waits);
     }
 
     protected function setUp(): void
