@@ -7,7 +7,6 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
-use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
 use Intakt\Plugin\Forge\Contract\StatusLabels;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Closure;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\ReviewStatus;
-use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
