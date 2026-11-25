@@ -79,7 +79,7 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 **CI** (continuous integration) is the project's full check run again on the pushed version, on a machine the builder does not control. For Intakt's own repository it runs on every pull request from the same repository and on every push to main, except a push whose commit already passed as a pull request into main with exactly the same files. Such a push still shows a green run in which only the `main` job ran. Today that is GitHub running the project's checks on its own machines.
 
-Before pushing, Intakt runs the project's check itself (`bin/check --fast` for a PHP project, the quick version). CI repeats that check in full after the push and can add jobs of its own. For Intakt's own repository it also runs:
+Before pushing, Intakt runs the project's check itself (`bin/check --fast` for a PHP project, the quick version). CI repeats that check in full after the push, except a push to main whose version already passed as a pull request into main with exactly the same files, and can add jobs of its own. For Intakt's own repository it also runs:
 - the journeys, which walk through a first install and the live review page;
 - the database tests on MySQL, MariaDB and PostgreSQL (the check before the push uses SQLite only), when a pull request touches the database layer, its migrations, the dependencies, the persistence tests or their setup, or the CI files;
 - building the app image, with a smoke test and a check that it starts on an empty volume, unless a pull request changes only files under `docs/`, `tests/` or `upstream/`;

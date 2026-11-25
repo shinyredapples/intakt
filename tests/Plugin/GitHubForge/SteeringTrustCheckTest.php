@@ -138,7 +138,7 @@ final class SteeringTrustCheckTest extends TestCase
 
     public function testIntaktsOwnIdentityDoesNotSteerWhenTheTokenExchangeFails(): void
     {
-        $this->github = new RecordedTrust(401);
+        $this->github = new RecordedTrust($this->clock, 401);
 
         $this->expectException(TrustNotChecked::class);
 
@@ -147,7 +147,7 @@ final class SteeringTrustCheckTest extends TestCase
 
     public function testTheMaintainersIdentityDoesNotSteerWhenTheTokenExchangeFails(): void
     {
-        $this->github = new RecordedTrust(401);
+        $this->github = new RecordedTrust($this->clock, 401);
 
         try {
             (void) $this->check(RecordedTrust::MAINTAINER);
@@ -215,7 +215,7 @@ final class SteeringTrustCheckTest extends TestCase
 
     public function testAFailedTokenExchangeFailsTheCheckAndTriesNoOtherCredential(): void
     {
-        $this->github = new RecordedTrust(401);
+        $this->github = new RecordedTrust($this->clock, 401);
 
         try {
             (void) $this->check(RecordedTrust::WRITER);
@@ -229,7 +229,7 @@ final class SteeringTrustCheckTest extends TestCase
 
     public function testThePrivateKeyNeverAppearsInTheFailureOrTheLogs(): void
     {
-        $this->github = new RecordedTrust(401);
+        $this->github = new RecordedTrust($this->clock, 401);
 
         try {
             (void) $this->check(RecordedTrust::WRITER);
@@ -303,10 +303,10 @@ final class SteeringTrustCheckTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->github = new RecordedTrust();
         $this->logger = new RecordingLogger();
         $this->key = AppKey::generate();
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->github = new RecordedTrust($this->clock);
         $this->readings = FreshReadings::at($this->clock);
     }
 

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -228,14 +227,13 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
     }
 
     // The real read of the labels over the recorded pull request, so the permission answer and the family rule decide what reaches the round; the permissions are the ones recorded for `acme/widget`, because the listing's fixtures name `acme/widgets`.
     private function changeLabelsOver(RecordedPullRequestLabels $pull): GitHubChangeLabels
     {
-        $identity = new RecordedTrust()->client();
+        $identity = new RecordedTrust(TrustChecks::clock())->client();
         $http = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => $pull->answers((string) parse_url($url, PHP_URL_PATH))
             ? $pull->answer($method, (string) parse_url($url, PHP_URL_PATH), is_string($options['body'] ?? null) ? $options['body'] : '')
             : $identity->request($method, str_replace('/repos/acme/widgets/', '/repos/acme/widget/', $url), $options), 'https://api.github.com');
@@ -299,7 +297,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     private function reads(MockClock $clock): GitHubWatchReads
     {
         $http = new MockHttpClient(fn (string $method, string $url): ResponseInterface => $this->answer($url), 'https://api.github.com');
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');

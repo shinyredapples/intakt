@@ -131,7 +131,7 @@ final class CiMainJobTest extends SandboxTestCase
             $job = $this->job($name);
 
             self::assertSame('main', $job['needs'] ?? null, $name);
-            self::assertSame("\${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && ".self::GUARD.' }}', $job['if'] ?? null, $name);
+            self::assertSame("\${{ !cancelled() && needs.main.outputs.full != 'false' && ".self::GUARD.' }}', $job['if'] ?? null, $name);
         }
     }
 

@@ -29,7 +29,7 @@ The calls are billed to whoever owns the key. With one key, both reviewers come 
 
 The page never shows the key again, only its provider and at most its last four characters. If you prefer a file, copy `.env.dist` to `.env.local` and put the key there instead.
 
-![The setup page's third step, "3. First review", marked Missing, with the meerkat, the line "No review has run yet: start the review of the change sample-change of the sample project", a Start the first review button and the note "Two reviewers read the sample change; its live page opens"; above it the tiers of the sample project on openai_compatible and step 2, Add a project, marked Done](../assets/guide/first-review-button.webp)
+![The "First review" part of the setup wizard's last step: the line "No review has run yet: start the review of the change sample-change of the sample project", a Start the first review button and the note "Two reviewers read the sample change; its live page opens"](../assets/guide/first-review-button.webp)
 
 ## Start the review
 

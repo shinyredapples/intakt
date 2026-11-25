@@ -19,7 +19,7 @@ use Symfony\Component\Yaml\Yaml;
 final class AppImageWorkflowTest extends TestCase
 {
     private const string WORKFLOWS = __DIR__.'/../../.github/workflows';
-    private const string FORK_GUARD = "\${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}";
+    private const string FORK_GUARD = "\${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}";
     private const string BUILD = 'docker build --tag intakt:ci .';
     private const string DECIDE = 'upgrade';
 

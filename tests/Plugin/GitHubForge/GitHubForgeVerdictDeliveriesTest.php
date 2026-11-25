@@ -225,7 +225,7 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
     private function forge(Closure $answer): GitHubForge
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
