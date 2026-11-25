@@ -37,6 +37,12 @@ final readonly class ProcessGroup
         return $group;
     }
 
+    // Because Symfony's Process gives no PID for a process that is not running, such as one that failed to start, there is then no launcher to name.
+    public static function ofLauncherIfRunning(?int $id): ?self
+    {
+        return null === $id ? null : self::ofLauncher($id);
+    }
+
     // Because a stop without these functions or without /proc could not reach a launcher before its session, the process that would start one refuses to.
     public static function whatTheStopLacks(): ?string
     {

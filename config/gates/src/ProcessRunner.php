@@ -269,9 +269,8 @@ final class ProcessRunner
     {
         // Because a process that failed to start or timed out in its start is not running, it has no pid.
         $failures = $this->startAll([$process]);
-        $leader = [] === $failures ? $process->getPid() : null;
         // Because a launcher whose start time cannot be read is killed at once, it is named while still held, before it runs anything.
-        $group = null === $leader ? null : ProcessGroup::ofLauncher($leader);
+        $group = ProcessGroup::ofLauncherIfRunning($process->getPid());
         $release->write("\n");
         $release->close();
 
