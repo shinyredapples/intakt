@@ -40,6 +40,10 @@ final readonly class ProcessGroup
     // Because a stop without these functions or without /proc could not reach a launcher before its session, the process that would start one refuses to.
     public static function whatTheStopLacks(): ?string
     {
+        if (!function_exists('posix_getpid')) {
+            return 'the PHP posix extension is missing';
+        }
+
         foreach (self::FUNCTIONS as $functions) {
             foreach ($functions as $function) {
                 if (!function_exists($function)) {

@@ -235,10 +235,6 @@ final class ProcessRunner
 
     private function refusal(string $program, int $seconds): ?ProcessResult
     {
-        if (!function_exists('posix_getpid')) {
-            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': the PHP posix extension is missing');
-        }
-
         $lacking = ProcessGroup::whatTheStopLacks();
 
         if (null !== $lacking) {
