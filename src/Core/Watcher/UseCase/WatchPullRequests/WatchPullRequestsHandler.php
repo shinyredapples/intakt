@@ -35,6 +35,11 @@ final readonly class WatchPullRequestsHandler
             return;
         } catch (ForgeRateLimited) {
             // Not ended here, because the CI reads of the queued heads are essential and the forge answers them from its reserve; one the forge's own pause refuses makes its head wait for the reset in HeadBackOff.
+        } catch (ForgeReadFailed $failed) {
+            // Reconciled before the failure is reported, because the stored listing still names the open pull requests, and a label a failed read left wrong waits for no listing.
+            $this->mirrors->reconcileEveryOpenWithRound($project->name);
+
+            throw $failed;
         }
 
         $this->heads->lookAtDue($project);

@@ -21,6 +21,10 @@ use Intakt\Core\Review\UseCase\RunReviewRound\MirrorQueuedRoundHandler;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ForgeWrites;
+use Intakt\Plugin\Forge\Contract\HeadStatus;
+use Intakt\Plugin\Forge\Contract\PublishedVerdict;
+use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -84,6 +88,25 @@ final class StatusLabelsOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(['The status label of {change} of {project} was left to the writer holding its lock.'], array_column($this->fixture->log->cleanLogs(), 1));
     }
 
+    // The forge refuses the review text and takes the error status, so only the fallback's write can put the label back.
+    public function testAnErrorStatusPublishedInsteadOfAReviewTextHoldingASecretPutsTheInReviewLabelBack(): void
+    {
+        $roundId = $this->queuedRound();
+        $this->judge();
+        $this->pull->labels = [];
+        $statuses = [];
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturnCallback(static function (string $project, ChangeId $change, PublishedVerdict $verdict) use (&$statuses): bool {
+            $statuses[] = $verdict->status;
+
+            return HeadStatus::Error === $verdict->status ? true : throw ReviewTextHoldsSecret::afterRedaction();
+        });
+
+        $this->publicationHandler($forge)(new PublishVerdict($roundId));
+
+        self::assertSame([[HeadStatus::Error], ['status:in-review']], [array_slice($statuses, 1), $this->pull->labels]);
+    }
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
@@ -134,14 +157,14 @@ final class StatusLabelsOverRecordedGitHubTest extends KernelTestCase
         return new MirrorQueuedRoundHandler($this->fixture->transactions(), $this->mirror());
     }
 
-    private function publicationHandler(): PublishVerdictHandler
+    private function publicationHandler(?ForgeWrites $forge = null): PublishVerdictHandler
     {
         $handed = new HandedOverChanges($this->fixture->ledger());
         $protected = self::createStub(ProtectedHeads::class);
         $protected->method('of')->willReturn(ProtectedChanges::touching(new Paths()));
         $verdicts = new VerdictForTheLoop(new StoredVerdicts(self::getContainer()->get('serializer.stored')), $this->fixture->findingStore(), new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([])), new ChangeDecision());
 
-        return new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $handed, $verdicts, new OwnerAsks($handed, $protected, $this->fixture->ledger()), new ScriptedGitHub()->forge(), new ChangePublications(new LockFactory(new InMemoryStore())), $this->fixture->log, $this->mirror());
+        return new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $handed, $verdicts, new OwnerAsks($handed, $protected, $this->fixture->ledger()), $forge ?? new ScriptedGitHub()->forge(), new ChangePublications(new LockFactory(new InMemoryStore())), $this->fixture->log, $this->mirror());
     }
 
     // One lock store for every writer, because the workers of one install share theirs and a writer on its own store would never find the lock held.

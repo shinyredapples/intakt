@@ -59,6 +59,7 @@ use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
@@ -121,6 +122,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private bool $listingUnchanged = false;
 
+    private bool $listingFails = false;
+
     // Evidence E1 of #3878 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
     public function testAPullRequestsTrustedSteeringLabelsReachTheQueuedRoundWithTheValueAppliedLast(): void
     {
@@ -156,6 +159,25 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $handler(new WatchPullRequests('alpha'));
 
         self::assertSame([[], ['status:in-review']], [$afterTheFailedPass, $this->statusLabels->labels]);
+    }
+
+    // The second listing fails, so only the listing stored by the first pass still names the pull request whose label the first reconcile could not read.
+    public function testAPassWhoseListingFailsStillReconcilesThePullRequestsOfTheStoredListing(): void
+    {
+        $this->fixture->startFor(self::GREEN_PULL, $this->fixture->bus, 1);
+        $this->statusLabels->labelReadStatus = 503;
+        $handler = $this->handler(new RecordingCommandBus());
+        $handler(new WatchPullRequests('alpha'));
+        $this->statusLabels->labelReadStatus = 200;
+        $this->listingFails = true;
+
+        try {
+            $handler(new WatchPullRequests('alpha'));
+            self::fail('The failed listing was not reported.');
+        } catch (ForgeReadFailed) {
+        }
+
+        self::assertSame(['status:in-review'], $this->statusLabels->labels);
     }
 
     // The fixture queues its round at another head than the listing names, so only a round at any head brings the pull request into the pass.
@@ -360,6 +382,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     private function answer(string $url): MockResponse
     {
         return match (true) {
+            str_contains($url, '/pulls') && $this->listingFails => new MockResponse('', ['http_code' => 503]),
             str_contains($url, '/pulls') && $this->listingUnchanged => new MockResponse('', ['http_code' => 304]),
             str_contains($url, '/pulls') => new MockResponse($this->fixture('pulls_open.json'), ['response_headers' => ['ETag' => 'W/"recorded"']]),
             str_contains($url, 'head_sha='.self::GREEN) => new MockResponse($this->fixture('runs_green_head_2.json')),
