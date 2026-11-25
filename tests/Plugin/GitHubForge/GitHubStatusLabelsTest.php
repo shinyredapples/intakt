@@ -587,14 +587,9 @@ final class GitHubStatusLabelsTest extends TestCase
         if ('POST' === $method && $this->refuseAdds) {
             return new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]);
         }
-        if ('DELETE' === $method && ++$this->deletes === $this->failingDelete) {
-            return new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]);
-        }
-        if ('DELETE' === $method && null !== $this->unlabeledByDelete) {
-            $this->unlabeled($this->unlabeledByDelete, self::PERSON);
-            $this->unlabeledByDelete = null;
-
-            return new MockResponse('{"message":"Label does not exist"}', ['http_code' => 404]);
+        $refused = 'DELETE' === $method ? $this->refusedDelete() : null;
+        if ($refused instanceof ResponseInterface) {
+            return $refused;
         }
 
         $this->writes[] = trim($method.' '.$path.' '.$body);
@@ -617,6 +612,21 @@ final class GitHubStatusLabelsTest extends TestCase
         $stored = [...$payload, 'user' => ['login' => self::OWN, 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => 12345]];
 
         return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
+    }
+
+    private function refusedDelete(): ?ResponseInterface
+    {
+        if (++$this->deletes === $this->failingDelete) {
+            return new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]);
+        }
+        if (null === $this->unlabeledByDelete) {
+            return null;
+        }
+
+        $this->unlabeled($this->unlabeledByDelete, self::PERSON);
+        $this->unlabeledByDelete = null;
+
+        return new MockResponse('{"message":"Label does not exist"}', ['http_code' => 404]);
     }
 
     // As GitHub does, so a later read sees the label and its event under Intakt's own identity.
