@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ModelNames;
+use Intakt\Core\Review\Contract\RoundCost;
 use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
@@ -47,6 +48,7 @@ use WeakReference;
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(LedgerPayloads::class)]
 #[CoversClass(RoundCostList::class)]
+#[CoversClass(RoundCost::class)]
 #[UsesClass(RoundTokens::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]

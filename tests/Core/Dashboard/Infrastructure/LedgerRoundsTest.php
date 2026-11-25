@@ -45,6 +45,7 @@ use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\RoundCost;
 use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
@@ -114,6 +115,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(QuorumPolicy::class)]
 #[UsesClass(RoundEnding::class)]
 #[UsesClass(RoundCostList::class)]
+#[UsesClass(RoundCost::class)]
 final class LedgerRoundsTest extends TestCase
 {
     private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
@@ -823,7 +825,7 @@ final class LedgerRoundsTest extends TestCase
     {
         $costs = $this->createMock(RoundCosts::class);
         $costs->expects($this->never())->method('costOf');
-        $costs->expects($this->once())->method('costsOf')->with('r1', 'r2')->willReturn(new RoundCostList(['r1' => Cost::inUsd(0.5), 'r2' => Cost::inUsd(0.25)]));
+        $costs->expects($this->once())->method('costsOf')->with('r1', 'r2')->willReturn(new RoundCostList([new RoundCost('r1', Cost::inUsd(0.5)), new RoundCost('r2', Cost::inUsd(0.25))]));
         $this->costs = $costs;
 
         $review = $this->reviewOf(
