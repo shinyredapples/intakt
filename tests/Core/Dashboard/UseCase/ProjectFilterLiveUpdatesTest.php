@@ -55,7 +55,7 @@ final class ProjectFilterLiveUpdatesTest extends DashboardPageTestCase
 
         $tester->execute(['bus' => 'command.bus']);
 
-        self::assertMatchesRegularExpression('#'.preg_quote(RoundOpened::class, '#').'\s+handled by '.preg_quote(PublishProjectFilter::class, '#').'\b#', $tester->getDisplay());
+        self::assertMatchesRegularExpression('#'.preg_quote(RoundOpened::class, '#').'\s+(?:handled by \S+ \([^)]*\)\s+)*handled by '.preg_quote(PublishProjectFilter::class, '#').'\b#', $tester->getDisplay());
     }
 
     public function testThePublishedFilterIsAPrivateUpdateOnTheShellTopic(): void

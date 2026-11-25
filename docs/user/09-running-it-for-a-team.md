@@ -31,7 +31,7 @@ Reviewer conversations hold your code and diffs. Intakt keeps each one for 30 da
 
 The number of days is `retention.conversation_days` in Intakt's installation-wide config file, `config/intakt.yaml` (or the file `INTAKT_CONFIG` names; see `config/intakt.example.yaml`). It applies to every project; set it to `forever` to keep them all ([the reference](../reference/user-manual.md#how-long-conversations-are-kept)). On an install from a clone, the cleanup runs only while a scheduler worker runs: keep `php bin/console messenger:consume scheduler_retention` running beside the `async` worker.
 
-![Step 2 of the setup page, "Add a project", marked Done: "1 project is configured", the project sample, and its reviewers: correctness on the strong tier and security on the standard tier, both on openai_compatible](../assets/guide/add-a-project.webp)
+![Step 4 of the setup wizard, "Check the project": "1 project is configured", then "sample: review panel" with its reviewers, correctness on the strong tier and security on the standard tier, both on anthropic, and "sample: no failed boot of main recorded"; below, the Back, Run again and Continue buttons](../assets/guide/add-a-project.webp)
 
 ## Check the panel, then review
 
