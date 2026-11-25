@@ -143,16 +143,16 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([], $this->ownerAsks());
     }
 
-    public function testAPublishedVerdictShowsTheWaitingOnYouStatusLabel(): void
+    public function testAPublishedVerdictReconcilesTheStatusLabel(): void
     {
         $this->handOver('alpha', self::PULL);
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
-        self::assertSame(['mirror '.self::PULL.' status:waiting-on-you'], $this->statusLabels->writes);
+        self::assertSame(['reconcile '.self::PULL], $this->statusLabels->writes);
     }
 
-    public function testAVerdictTheForgeDidNotPublishShowsNoStatusLabel(): void
+    public function testAVerdictTheForgeDidNotPublishReconcilesNoStatusLabel(): void
     {
         $this->handOver('alpha', self::PULL);
         $roundId = $this->judgedRound(self::PULL, []);

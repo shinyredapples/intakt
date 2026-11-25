@@ -455,24 +455,24 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['review:full', 'model:strong'], [...$this->commands->started[0]->start->labels]);
     }
 
-    public function testAQueuedRoundShowsTheInReviewStatusLabel(): void
+    public function testAQueuedRoundReconcilesTheStatusLabel(): void
     {
         $this->startRoundOnGreenHead();
 
-        self::assertSame(['mirror 7 status:in-review'], $this->statusLabels->writes);
+        self::assertSame(['reconcile 7'], $this->statusLabels->writes);
     }
 
-    public function testAStartedHeadSeenAgainPutsBackTheStatusLabelIntaktSetLast(): void
+    public function testAStartedHeadSeenAgainReconcilesTheStatusLabelAgain(): void
     {
         $this->startRoundOnGreenHead();
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:30:00Z'));
 
         $this->tick();
 
-        self::assertSame(['mirror 7 status:in-review', 'restore 7'], $this->statusLabels->writes);
+        self::assertSame(['reconcile 7', 'reconcile 7'], $this->statusLabels->writes);
     }
 
-    public function testAStartedHeadWhoseCiTurnedRedPutsBackTheStatusLabelIntaktSetLast(): void
+    public function testAStartedHeadWhoseCiTurnedRedReconcilesTheStatusLabelAgain(): void
     {
         $this->startRoundOnGreenHead();
         $this->checks = new RecordedChecks([str_repeat(self::GREEN, 40) => 'red']);
@@ -481,10 +481,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame(['mirror 7 status:in-review', 'restore 7'], $this->statusLabels->writes);
+        self::assertSame(['reconcile 7', 'reconcile 7'], $this->statusLabels->writes);
     }
 
-    public function testAStartedHeadWhoseCiTurnedPendingPutsBackTheStatusLabelIntaktSetLast(): void
+    public function testAStartedHeadWhoseCiTurnedPendingReconcilesTheStatusLabelAgain(): void
     {
         $this->startRoundOnGreenHead();
         $this->checks = new RecordedChecks([str_repeat(self::GREEN, 40) => 'pending']);
@@ -493,10 +493,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame(['mirror 7 status:in-review', 'restore 7'], $this->statusLabels->writes);
+        self::assertSame(['reconcile 7', 'reconcile 7'], $this->statusLabels->writes);
     }
 
-    public function testAPendingHeadPushedAfterARoundPutsBackTheStatusLabelOfThePullRequest(): void
+    public function testAPendingHeadPushedAfterARoundReconcilesTheStatusLabelOfThePullRequest(): void
     {
         $this->startRoundOnGreenHead();
         $this->checks = new RecordedChecks([str_repeat(self::GREEN, 40) => 'green', str_repeat(self::PENDING, 40) => 'pending']);
@@ -508,10 +508,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame(['restore 7'], $this->statusLabels->writes);
+        self::assertSame(['reconcile 7'], $this->statusLabels->writes);
     }
 
-    public function testARedHeadWithoutARoundPutsBackNoStatusLabel(): void
+    public function testARedHeadWithoutARoundReconcilesNoStatusLabel(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T09:00:00Z'));
 
@@ -520,7 +520,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([], $this->statusLabels->writes);
     }
 
-    public function testAFailedStartShowsNoStatusLabel(): void
+    public function testAFailedStartReconcilesNoStatusLabel(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
         $this->commands->whileStarting = $this->failAlways();

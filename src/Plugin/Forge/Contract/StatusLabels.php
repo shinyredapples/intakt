@@ -7,19 +7,11 @@ namespace Intakt\Plugin\Forge\Contract;
 // Apart from Forge and ForgeWrites, because only a forge with labels has a status to mirror.
 interface StatusLabels
 {
-    // A person's status label is replaced and said so once, because the status mirrors the round and a hand-set label would mislead the list.
+    // One step for every caller, because the status comes from the stored round and never from the caller, so a late or repeated call cannot leave an older status; a person's change it undoes is said so once.
     /**
      * @throws ChangeNotFound
      * @throws ForgeReadFailed
      * @throws ForgeWriteFailed
      */
-    public function mirror(string $project, ChangeId $change, RoundStatusLabel $status): void;
-
-    // The status Intakt set last is put back when a person changed it since, because a change between two round steps would otherwise stand until the next step.
-    /**
-     * @throws ChangeNotFound
-     * @throws ForgeReadFailed
-     * @throws ForgeWriteFailed
-     */
-    public function restore(string $project, ChangeId $change): void;
+    public function reconcile(string $project, ChangeId $change): void;
 }

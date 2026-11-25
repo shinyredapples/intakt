@@ -141,6 +141,21 @@ final readonly class ReviewRounds
             ?? $this->judgedUnderAnOldSpelling($project, $change, $head);
     }
 
+    // Read as an array, because a worker that loaded the round earlier keeps its old state in the identity map, and the state asked for is the stored one. Canonical only, because the status label it serves came after migration Version20261122100000, so every round that sets one is stored canonically.
+    public function latestStateOf(string $project, string $change): ?RoundState
+    {
+        /** @var list<array{state: RoundState|string}> $rows */
+        $rows = $this->entities->createQuery(sprintf('SELECT r.state FROM %s r WHERE r.subject.project = :project AND r.change.change = :change ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', ChangeAddress::canonical($change))
+            ->setMaxResults(1)
+            ->getArrayResult();
+
+        $state = array_first($rows)['state'] ?? null;
+
+        return is_string($state) ? RoundState::from($state) : $state;
+    }
+
     // Newest first: the canonical sequence by number, then the rounds migration Version20261122100000 left under another spelling, which predate it and among which the highest number decides, as judgedUnderAnOldSpelling() orders them. Matched by the canonical form, because the caller may name the change as the forge lists it.
     /**
      * @return list<ReviewRound>

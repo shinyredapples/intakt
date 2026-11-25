@@ -13,8 +13,8 @@ use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
-// Only the events of status labels, because a status plan reads nothing else and other labels changing must not look like a change of the status.
-final readonly class GitHubStatusEvents
+// The labels on a change and only the events of status labels, because the status reconciliation reads nothing else.
+final readonly class GitHubStatusReads
 {
     private const int PAGE_SIZE = 100;
     private const int MAX_PAGES = 10;
@@ -23,6 +23,28 @@ final readonly class GitHubStatusEvents
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
     ) {
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws ForgeReadFailed
+     */
+    public function labelsOn(PullRequestAddress $address): array
+    {
+        $labels = [];
+        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
+            $listed = $this->page($address->issuePath().'/labels', $page);
+            foreach ($listed as $label) {
+                $name = $label['name'] ?? null;
+                $labels[] = is_string($name) && '' !== $name ? $name : throw new ForgeReadFailed('GitHub listed a label without its name.');
+            }
+            if (count($listed) < self::PAGE_SIZE) {
+                return $labels;
+            }
+        }
+
+        throw new ForgeReadFailed('The change holds more labels than this forge reads.');
     }
 
     /**
@@ -62,25 +84,26 @@ final readonly class GitHubStatusEvents
             $response = $this->calls->asInstallation('GET', $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
+            // Not chained to the client's exception, because its trace holds the request options with the bearer token.
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), $failure);
+            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of the events.', $status));
+            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of %s.', $status, $path));
         }
 
         try {
-            $events = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+            $entries = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub listed the events as something other than JSON.', $invalid->getCode(), previous: $invalid);
+            throw new ForgeReadFailed(sprintf('GitHub listed %s as something other than JSON.', $path), $invalid->getCode(), previous: $invalid);
         }
 
-        if (!is_array($events) || !array_is_list($events)) {
-            throw new ForgeReadFailed('GitHub answered an event listing that is not a list.');
+        if (!is_array($entries) || !array_is_list($entries)) {
+            throw new ForgeReadFailed(sprintf('GitHub answered a listing of %s that is not a list.', $path));
         }
 
-        return array_map(static fn (mixed $event): array => is_array($event) ? $event : throw new ForgeReadFailed('GitHub listed an event that is not an object.'), $events);
+        return array_map(static fn (mixed $entry): array => is_array($entry) ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path)), $entries);
     }
 
     /**
@@ -91,7 +114,7 @@ final readonly class GitHubStatusEvents
         try {
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeReadFailed('No GitHub read of the events: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+            throw new ForgeReadFailed('No GitHub read of the status labels: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
     }
 
