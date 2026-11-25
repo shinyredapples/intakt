@@ -88,6 +88,20 @@ final class InfrastructureRowTest extends TestCase
         ], $this->shown($row));
     }
 
+    public function testAForgeCheckThatPassesShowsTheForgeConnectedAfterTheServerFigures(): void
+    {
+        $row = InfrastructureRow::refused('not read')->withForge(null);
+
+        self::assertSame(['Forge', 'connected', 'fine', null], array_last($this->shown($row)));
+    }
+
+    public function testAForgeCheckThatFailsShowsTheForgeDownWithItsProblem(): void
+    {
+        $row = InfrastructureRow::refused('not read')->withForge('GITHUB_APP_INSTALLATION_ID is empty');
+
+        self::assertSame(['Forge', 'down', 'down', 'GITHUB_APP_INSTALLATION_ID is empty'], array_last($this->shown($row)));
+    }
+
     private function unchanged(string $reason): string
     {
         return $reason;

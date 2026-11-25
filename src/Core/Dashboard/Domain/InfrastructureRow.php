@@ -17,6 +17,7 @@ final readonly class InfrastructureRow
     private const string THREADS = 'Worker threads';
     private const string METRICS = 'Server metrics';
     private const string HUB = 'Hub';
+    private const string FORGE = 'Forge';
 
     /**
      * @param list<InfrastructureFigure> $figures
@@ -57,6 +58,15 @@ final readonly class InfrastructureRow
             InfrastructureFigure::down(self::THREADS, $reason),
             InfrastructureFigure::down(self::METRICS, $reason),
             InfrastructureFigure::down(self::HUB, $reason),
+        ]);
+    }
+
+    // Last, because it is the one figure judged by a call to the forge rather than by the admin API reading.
+    public function withForge(?string $problem): self
+    {
+        return new self([
+            ...$this->figures,
+            null === $problem ? new InfrastructureFigure(self::FORGE, 'connected') : InfrastructureFigure::down(self::FORGE, $problem),
         ]);
     }
 }

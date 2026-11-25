@@ -49,6 +49,8 @@ use Intakt\Core\Server\Infrastructure\AdminApiServerStatus;
 use Intakt\Core\Server\Infrastructure\PrometheusSamples;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 use Intakt\Tests\Core\Server\RecordedAdminApi;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -92,6 +94,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(WorkerThreads::class)]
 #[UsesClass(ServerMetrics::class)]
 #[UsesClass(EndpointDown::class)]
+#[UsesClass(ForgeConnectionVerdict::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     /**
@@ -103,6 +106,8 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
      * @var list<list<OutageNotice>|RuntimeException>
      */
     private array $readings = [];
+
+    private ?ForgeConnectionVerdict $forge = null;
 
     public function testTheRootAddressShowsTheBoard(): void
     {
@@ -1115,7 +1120,17 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
             ['Queue depth', '0'],
             ['Worker restarts', '2'],
             ['Hub', 'healthy'],
+            ['Forge', 'connected'],
         ], $this->infrastructureIn($page));
+    }
+
+    public function testTheBoardShowsTheForgeDownWithTheProblemTheForgeCheckGives(): void
+    {
+        $this->forge = ForgeConnectionVerdict::failed('GITHUB_APP_ID is not a number', 'set GITHUB_APP_ID');
+
+        $forge = $this->browser->request('GET', '/')->filter('#infrastructure .infra-figure.down');
+
+        self::assertSame(['Forge', 'down (GITHUB_APP_ID is not a number)'], [$forge->filter('dt')->text(), $forge->filter('dd')->text()]);
     }
 
     public function testTheBoardShowsTheInfrastructureRowAsDownWhenTheAdminApiIsUnreachable(): void
@@ -1183,6 +1198,10 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
             return $reading instanceof RuntimeException ? throw $reading : $reading;
         });
         self::getContainer()->set(OwnerNotices::class, $stub);
+        // Stubbed, because the board runs the forge check on every load and no test may reach GitHub.
+        $forge = self::createStub(ForgeConnection::class);
+        $forge->method('run')->willReturnCallback(fn (): ForgeConnectionVerdict => $this->forge ?? ForgeConnectionVerdict::passed());
+        self::getContainer()->set(ForgeConnection::class, $forge);
     }
 
     private function column(Crawler $page, string $name): Crawler

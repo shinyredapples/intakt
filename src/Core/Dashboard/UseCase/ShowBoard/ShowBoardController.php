@@ -22,6 +22,7 @@ use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
 use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -45,6 +46,7 @@ final readonly class ShowBoardController
         private WaitingCount $waiting,
         private ClockInterface $clock,
         private ServerStatus $server,
+        private ForgeConnection $forge,
     ) {
     }
 
@@ -128,8 +130,16 @@ final readonly class ShowBoardController
         return new FailingMain($main->project, $main->main, $main->toolFingerprint, $this->redactor->redact($main->reason));
     }
 
-    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
+    // The forge figure comes from the check the doctor runs, so the board and the doctor cannot judge the forge apart (decision D1 of #3826).
     private function infrastructureRow(): InfrastructureRow
+    {
+        $problem = $this->forge->run()->problem;
+
+        return $this->serverRow()->withForge(null === $problem ? null : $this->redactor->redact($problem));
+    }
+
+    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
+    private function serverRow(): InfrastructureRow
     {
         try {
             $reading = $this->server->read();
