@@ -42,6 +42,77 @@ final readonly class InstanceStatus
     }
 }
 
+final readonly class CommandWait
+{
+    private const int NANOSECONDS = 1_000_000_000;
+    private const int POLL_NANOSECONDS = 50_000_000;
+
+    public function __construct(public int|float $seconds)
+    {
+        // Because a limit such as 1e300 is finite in seconds but infinite in nanoseconds, which would turn the deadline off.
+        if (!is_finite($seconds * self::NANOSECONDS)) {
+            throw new InvalidArgumentException('the command time limit must be a finite number of nanoseconds, not '.$seconds.' seconds');
+        }
+    }
+
+    /**
+     * @param resource $process
+     */
+    public function exitBefore($process): ?int
+    {
+        $deadline = hrtime(true) + $this->seconds * self::NANOSECONDS;
+        $signals = function_exists('pcntl_sigprocmask') && function_exists('pcntl_sigtimedwait');
+        $previous = [];
+
+        // Blocked only once the command runs, so it does not inherit the mask; an exit before the block is found by the first status read.
+        if ($signals) {
+            pcntl_sigprocmask(SIG_BLOCK, [SIGCHLD], $previous);
+        }
+
+        try {
+            return $this->exitCodeBefore($process, $deadline, $signals);
+        } finally {
+            if ($signals) {
+                pcntl_sigprocmask(SIG_SETMASK, $previous);
+            }
+        }
+    }
+
+    /**
+     * @param resource $process
+     */
+    private function exitCodeBefore($process, float $deadline, bool $signals): ?int
+    {
+        while (true) {
+            // The status is read before the clock, because a status read after the deadline cannot tell when the command ended, so such an exit fails closed.
+            $state = proc_get_status($process);
+            $now = hrtime(true);
+
+            if (!$state['running']) {
+                return $now < $deadline ? $state['exitcode'] : null;
+            }
+
+            if ($now >= $deadline) {
+                return null;
+            }
+
+            $this->pause((int) min($signals ? self::NANOSECONDS : self::POLL_NANOSECONDS, $deadline - $now), $signals);
+        }
+    }
+
+    private function pause(int $nanoseconds, bool $signals): void
+    {
+        if (!$signals) {
+            usleep(max(1, intdiv($nanoseconds, 1_000)));
+
+            return;
+        }
+
+        // The command's end wakes the wait at once, so a command that ends in the last wait before the limit is not killed.
+        pcntl_sigtimedwait([SIGCHLD], $info, intdiv($nanoseconds, self::NANOSECONDS), $nanoseconds % self::NANOSECONDS);
+    }
+}
+
 final class Instance
 {
     private const array INHERITED_VARIABLES = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR'];
@@ -70,7 +141,7 @@ final class Instance
         private readonly string $root,
         private readonly Server $web,
         private readonly array $command,
-        private readonly int $commandSeconds,
+        private readonly int|float $commandSeconds,
         private readonly DirectoryRemoval $directoryRemoval,
     ) {
     }
@@ -107,13 +178,14 @@ final class Instance
             return InstanceStatus::failed('vendor/autoload_runtime.php is missing, run composer install');
         }
 
+        $wait = new CommandWait($this->commandSeconds);
         $this->scratch = $this->createScratch();
         $this->start();
 
         $status = $this->awaitAnswer();
 
         if ($status->ready && [] !== $this->command) {
-            $this->commandExit = $this->runCommand();
+            $this->commandExit = $this->runCommand($wait);
         }
 
         return $status;
@@ -176,7 +248,7 @@ final class Instance
         return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
     }
 
-    private function runCommand(): int
+    private function runCommand(CommandWait $wait): int
     {
         // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
         $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
@@ -189,7 +261,7 @@ final class Instance
             throw new RuntimeException('cannot start the command');
         }
 
-        return $this->awaitExit($process);
+        return $this->awaitExit($process, $wait);
     }
 
     /**
@@ -273,25 +345,19 @@ final class Instance
     /**
      * @param resource $process
      */
-    private function awaitExit($process): int
+    private function awaitExit($process, CommandWait $wait): int
     {
-        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
+        $exitCode = $wait->exitBefore($process);
 
-        while (hrtime(true) < $deadline) {
-            $state = proc_get_status($process);
+        if (null !== $exitCode) {
+            proc_close($process);
 
-            if (!$state['running']) {
-                proc_close($process);
-
-                return $state['exitcode'];
-            }
-
-            usleep(50_000);
+            return $exitCode;
         }
 
         proc_terminate($process, 9);
         proc_close($process);
-        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
+        fwrite(STDERR, 'the command ran longer than '.$wait->seconds." seconds and was killed\n");
 
         return self::COMMAND_TIMED_OUT;
     }
@@ -632,7 +698,7 @@ $argv ??= [];
 $command = array_slice($argv, 1);
 $command = '--' === array_first($command) ? array_slice($command, 1) : [];
 // Needed so a test can prove the cap without waiting for the full minute.
-$commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
+$commandSeconds = (float) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
 $root = dirname(__DIR__);
 // The image ships frankenphp, so there the instance runs the app the way the image serves it.

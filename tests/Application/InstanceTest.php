@@ -172,6 +172,48 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
+    public function testACommandThatOverrunsAFractionalLimitIsKilledWithExitCode124AndTheLimitNamed(): void
+    {
+        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
+
+        self::assertSame(124, $run['exit']);
+        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $run['errors']);
+    }
+
+    public function testACommandThatEndsDuringTheLastWaitBeforeAFractionalLimitIsNotKilled(): void
+    {
+        // The only wait is the last one: the command ends inside it, well before the 0.2 second limit, and its end wakes the wait.
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'sleep 0.05; exit 3'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
+
+        self::assertSame(3, $run['exit']);
+        self::assertStringNotContainsString('was killed', $run['errors']);
+    }
+
+    public function testWithoutTheSignalFunctionsAnOverrunningCommandIsStillKilledByThePollingWait(): void
+    {
+        $settings = $this->scratch.'/ini';
+        mkdir($settings);
+        file_put_contents($settings.'/no-signals.ini', "disable_functions = pcntl_sigprocmask,pcntl_sigtimedwait\n");
+
+        // A leading separator keeps the default scan folder, so the extensions stay loaded.
+        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2', 'PHP_INI_SCAN_DIR' => ':'.$settings]);
+
+        self::assertSame(124, $run['exit']);
+        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $run['errors']);
+    }
+
+    public function testACommandLimitThatIsNotFiniteInNanosecondsIsRefusedBeforeTheCommandRuns(): void
+    {
+        $marker = $this->scratch.'/ran';
+
+        $run = $this->runInstance(self::stubProject(), ['touch', $marker], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1e300']);
+
+        self::assertSame(1, $run['exit']);
+        self::assertSame('failed', $this->decoded($run['status'])['status']);
+        self::assertStringContainsString('must be a finite number of nanoseconds', $this->decoded($run['status'])['reason']);
+        self::assertFileDoesNotExist($marker);
+    }
+
     #[DataProvider('signals')]
     public function testAConsoleCommandStoppedBySignalExitsWith128PlusTheSignalNumberThroughTheInstance(int $signal, int $expected): void
     {
