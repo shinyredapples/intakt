@@ -171,13 +171,7 @@ final class GateChildTreeTest extends TestCase
     // Because a zombie's command line is empty, only a process that can still run matches.
     private function aProcessNamesTheMarker(): bool
     {
-        foreach (glob('/proc/[0-9]*/cmdline') ?: [] as $commandLine) {
-            if (str_contains((string) @file_get_contents($commandLine), $this->marker)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(glob('/proc/[0-9]*/cmdline') ?: [], fn ($commandLine) => str_contains((string) @file_get_contents($commandLine), $this->marker));
     }
 
     private function descendantGroup(): int
