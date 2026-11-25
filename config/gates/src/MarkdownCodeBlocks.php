@@ -19,55 +19,60 @@ final readonly class MarkdownCodeBlocks
      */
     public function blanked(array $lines): array
     {
-        $lists = [];
-        $fence = null;
+        $position = new MarkdownFencePosition([], null, MarkdownLineKind::Blank);
 
         foreach ($lines as $index => $line) {
-            [$lists, $fence, $lines[$index]] = $this->read($line, $lists, $fence);
+            $position = $this->after($line, $position);
+            $lines[$index] = MarkdownLineKind::Code === $position->kind ? '' : $line;
         }
 
         return $lines;
     }
 
-    /**
-     * @param list<int> $lists
-     *
-     * @return array{list<int>, ?string, string}
-     */
-    private function read(string $line, array $lists, ?string $fence): array
+    private function after(string $line, MarkdownFencePosition $before): MarkdownFencePosition
     {
-        $open = '' === trim($line) ? $lists : $this->indents->within($lists, $this->indents->indent($line));
+        $open = '' === trim($line) ? $before->lists : $this->indents->within($before->lists, $this->indents->indent($line));
 
         // CommonMark ends an item at a line indented less than its content, so a fence the item holds ends there too.
-        if (null === $fence || count($open) < count($lists)) {
-            return $this->opening($line, $open);
+        if (null !== $before->fence && count($open) === count($before->lists)) {
+            return new MarkdownFencePosition($open, $this->fences->fenceAfter($this->indents->outdented($line, $this->indents->innermost($open)), $before->fence), MarkdownLineKind::Code);
         }
 
-        return [$open, $this->fences->fenceAfter($this->indents->outdented($line, $this->indents->innermost($open)), $fence), ''];
+        return $this->startsAListItem($line, $before) ? $this->item($line, $open) : $this->opening($line, $before, $open);
+    }
+
+    private function startsAListItem(string $line, MarkdownFencePosition $before): bool
+    {
+        return 0 === preg_match(MarkdownLineKinds::THEMATIC_BREAK, $line) && $this->indents->startsItem($line, $before->kind, $before->lists);
     }
 
     /**
-     * @param list<int> $lists
-     *
-     * @return array{list<int>, ?string, string}
+     * @param list<int> $open
      */
-    private function opening(string $line, array $lists): array
+    private function item(string $line, array $open): MarkdownFencePosition
     {
-        $content = $this->indents->outdented($line, $this->indents->innermost($lists));
+        // A fence may open on the marker line itself, so the item's content is read without its marker.
+        $fence = $this->fences->fenceAfter($this->indents->afterMarker($line), null);
+        $kind = null !== $fence ? MarkdownLineKind::Code : MarkdownLineKind::ListItem;
 
-        if ($this->startsAListItem($line)) {
-            // A fence may open on the marker line itself, so the item's content is read without its marker.
-            $content = $this->indents->afterMarker($line);
-            $lists[] = $this->indents->contentIndent($line);
-        }
-
-        $fence = $this->fences->fenceAfter($content, null);
-
-        return [$lists, $fence, null === $fence ? $line : ''];
+        return new MarkdownFencePosition([...$open, $this->indents->contentIndent($line)], $fence, $this->indents->opensWithCode($line) ? MarkdownLineKind::CodeItem : $kind);
     }
 
-    private function startsAListItem(string $line): bool
+    /**
+     * @param list<int> $open
+     */
+    private function opening(string $line, MarkdownFencePosition $before, array $open): MarkdownFencePosition
     {
-        return 1 === preg_match(MarkdownLineKinds::LIST_ITEM, $line) && 0 === preg_match(MarkdownLineKinds::THEMATIC_BREAK, $line);
+        $fence = $this->fences->fenceAfter($this->indents->outdented($line, $this->indents->innermost($open)), null);
+
+        if (null !== $fence) {
+            return new MarkdownFencePosition($open, $fence, MarkdownLineKind::Code);
+        }
+
+        $kind = new MarkdownTextLines($this->fences, $this->indents)->kindOf($line, $before->kind, $open);
+        // A line that continues a paragraph is lazy in CommonMark, so its indentation closes no list item.
+        $continues = $before->kind->isText() && $kind->isText();
+
+        return new MarkdownFencePosition($continues ? $before->lists : $open, null, $kind);
     }
 }

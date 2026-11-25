@@ -52,6 +52,26 @@ final class MarkdownPageTest extends TestCase
         self::assertSame(['one two continued', 'three'], $this->texts($paragraphs));
     }
 
+    public function testAnOrderedItemThatStartsAtOneInterruptsAParagraph(): void
+    {
+        self::assertSame(['prose', 'foo', 'bar'], $this->texts($this->page('prose', '1. foo', '2. bar')->paragraphs()));
+    }
+
+    public function testALaterNumberOrAnEmptyItemContinuesTheParagraph(): void
+    {
+        self::assertSame(['prose 2. more *'], $this->texts($this->page('prose', '2. more', '*')->paragraphs()));
+    }
+
+    public function testALaterNumberInsideAnItemsTextContinuesThatText(): void
+    {
+        self::assertSame(['item 2. more', 'next'], $this->texts($this->page('- item', '  2. more', '- next')->paragraphs()));
+    }
+
+    public function testALaterNumberAfterABlankLineStartsAnItem(): void
+    {
+        self::assertSame(['prose', 'more'], $this->texts($this->page('prose', '', '2. more')->paragraphs()));
+    }
+
     public function testThePageWordsCountHeadingsTablesAndProseButNotCode(): void
     {
         $page = $this->page('# Title here', '', '| a | b |', '|---|---|', '', 'Some prose.', '', '    code not counted');

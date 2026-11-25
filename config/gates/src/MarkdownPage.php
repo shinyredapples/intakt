@@ -6,14 +6,14 @@ namespace Intakt\Gates;
 
 final readonly class MarkdownPage
 {
-    private const string QUOTE_MARKER = '/^ {0,3}>[ \t]?/';
+    public const string QUOTE_MARKER = '/^ {0,3}>[ \t]?/';
 
     // CommonMark: a closing run of hashes counts only after a space, so "In short###" is another heading.
     private const string SUMMARY_HEADING = '/^ {0,3}#{1,6}[ \t]+In short(?:[ \t]+#*)?[ \t]*$/i';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
-    private const string FRAMED_LINE = '/^[ \t]*\|.*(?<!\\\\)\|[ \t]*$/';
+    public const string FRAMED_LINE = '/^[ \t]*\|.*(?<!\\\\)\|[ \t]*$/';
 
     private const string WORD = '/[\p{L}\p{N}]/u';
 
@@ -57,6 +57,7 @@ final readonly class MarkdownPage
     {
         $paragraphs = [];
         $lines = [];
+        $start = 0;
         $openDepth = 0;
 
         foreach ($this->kinds as $index => $kind) {
@@ -67,12 +68,13 @@ final readonly class MarkdownPage
                 continue;
             }
 
-            $paragraphs = $this->withParagraph($paragraphs, $lines);
+            $paragraphs = $this->withParagraph($paragraphs, $lines, $start);
             $lines = in_array($kind, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true) ? [$this->textOf($index)] : [];
+            $start = $index;
             $openDepth = $this->depths[$index];
         }
 
-        return $this->withParagraph($paragraphs, $lines);
+        return $this->withParagraph($paragraphs, $lines, $start);
     }
 
     public function words(): int
@@ -145,7 +147,7 @@ final readonly class MarkdownPage
      *
      * @return list<MarkdownParagraph>
      */
-    private function withParagraph(array $paragraphs, array $lines): array
+    private function withParagraph(array $paragraphs, array $lines, int $start): array
     {
         if ([] === $lines) {
             return $paragraphs;
@@ -153,7 +155,7 @@ final readonly class MarkdownPage
 
         $text = trim(preg_replace('/\s+/u', ' ', implode(' ', $lines)) ?? '');
 
-        return [...$paragraphs, new MarkdownParagraph($text, $this->wordsIn($text))];
+        return [...$paragraphs, new MarkdownParagraph($text, $this->wordsIn($text), $start + 1)];
     }
 
     private function textOf(int $index): string
