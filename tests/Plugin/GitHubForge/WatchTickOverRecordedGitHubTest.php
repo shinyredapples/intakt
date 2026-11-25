@@ -216,19 +216,19 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $this->fixture->startFor(self::GREEN_PULL, $this->fixture->bus, 1);
         $this->headLockStore = $this->storeThatIsDown();
         $rounds = self::createStub(LatestRoundStatus::class);
-        $rounds->method('of')->willThrowException(new RuntimeException('The rounds could not be read.'));
+        $unread = new RuntimeException('The rounds could not be read.');
+        $rounds->method('of')->willThrowException($unread);
         $this->roundsOfThePass = $rounds;
 
         $reported = $this->failureOf($this->handler(new RecordingCommandBus()));
 
-        $afterTheTick = array_last($this->logger->logged);
         self::assertSame(
-            [LockAcquiringException::class, 'The status pass of {project} failed after its tick had failed.', 'alpha', 'The rounds could not be read.', $reported],
-            [$reported::class, $afterTheTick[0] ?? null, $afterTheTick[1]['project'] ?? null, ($afterTheTick[1]['exception'] ?? null)?->getMessage(), $afterTheTick[1]['tick_failure'] ?? null],
+            [LockAcquiringException::class, ['The status pass of {project} failed after its tick had failed.', ['project' => 'alpha', 'exception' => $unread, 'tick_failure' => $reported]]],
+            [$reported::class, array_last($this->logger->logged)],
         );
     }
 
-    // Maintainer decision 1 of the rework: the first open pull request's round lookup fails, and the second still gets its label on the same pass.
+    // Maintainer decision 1 of the rework, because a lookup that fails for one pull request must not keep the next one's label from being repaired on the same pass.
     public function testAFailedRoundLookupOfOnePullRequestStillMirrorsTheStatusOfTheNextAndReportsTheFirstFailure(): void
     {
         $this->fixture->startFor(self::GREEN_PULL, $this->fixture->bus, 1);
