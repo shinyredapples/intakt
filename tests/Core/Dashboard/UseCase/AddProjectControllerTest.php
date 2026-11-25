@@ -319,7 +319,7 @@ final class AddProjectControllerTest extends DashboardPageTestCase
         yield 'the share and label check' => ['4', 'form.check-share-label'];
     }
 
-    // Turbo takes over a form in the live shell and refuses an answer that is not a redirect, and a check answers with the page itself.
+    // Pinned, because Turbo takes over a form in the live shell and refuses an answer that is not a redirect, and a check answers with the page itself.
     #[DataProvider('checks')]
     public function testACheckIsSentByTheBrowserItselfAndNotByTurbo(string $step, string $form): void
     {

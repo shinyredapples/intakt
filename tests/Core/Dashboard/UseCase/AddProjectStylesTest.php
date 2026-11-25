@@ -13,29 +13,32 @@ final class AddProjectStylesTest extends TestCase
 {
     public function testOnAPhoneNoProgressLinkReachesIntoTheBreadcrumb(): void
     {
-        $reach = $this->pixels('/top:\s*-(\d+)px;/', $this->rule('.wizard .steps a', $this->block('/* The progress keeps only its bars')));
-        $gap = $this->spacing('margin-bottom', $this->rule('.crumbs', $this->sheet()))
-            + $this->spacing('margin-top', $this->rule('.add-project .steps', $this->block('/* The progress links reach')));
+        $links = $this->block('/* The progress keeps only its bars');
+        $sheet = $this->sheet();
+        $link = $this->rule('.wizard .steps a', $links);
+        $reach = $this->pixels('/top:\s*-(\d+)px;/', $link);
+        $crumbs = $this->rule('.crumbs', $sheet);
+        $steps = $this->rule('.add-project .steps', $this->block('/* The progress links reach'));
+        $gap = $this->spacing('margin-bottom', $crumbs) + $this->spacing('margin-top', $steps);
 
         self::assertGreaterThanOrEqual($reach, $gap);
     }
 
     public function testTheStepCountShowsAtEveryWidthAsInTheMock(): void
     {
-        self::assertMatchesRegularExpression('/display:\s*block;/', $this->rule('.add-project .step-count', $this->block('/* The Add project flow shows its step count')));
+        $flow = $this->block('/* The Add project flow shows its step count');
+
+        self::assertMatchesRegularExpression('/display:\s*block;/', $this->rule('.add-project .step-count', $flow));
     }
 
     public function testOnAPhoneTheShareSliderIsATouchTargetAtLeast44PxTall(): void
     {
-        self::assertGreaterThanOrEqual(44, $this->pixels('/height:\s*(\d+)px;/', $this->rule('.share-row input[type="range"]', $this->block('/* The progress links reach'))));
+        $flow = $this->block('/* The progress links reach');
+
+        self::assertGreaterThanOrEqual(44, $this->pixels('/height:\s*(\d+)px;/', $this->rule('.share-row input[type="range"]', $flow)));
     }
 
-    private function sheet(): string
-    {
-        return (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
-    }
-
-    // The rules from a comment to the end of its media block, or of the sheet.
+    // Up to the end of the comment's media block, or of the sheet, because a selector such as .wizard .steps a has other rules at other widths.
     private function block(string $comment): string
     {
         $start = strpos($this->sheet(), $comment);
@@ -46,26 +49,35 @@ final class AddProjectStylesTest extends TestCase
         return false === $end ? $rest : substr($rest, 0, $end);
     }
 
+    private function sheet(): string
+    {
+        return (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
+    }
+
     private function rule(string $selector, string $css): string
     {
-        self::assertSame(1, preg_match('/(?:^|\n)\s*'.preg_quote($selector, '/').'\s*\{([^}]*)\}/', $css, $match), $selector);
-
-        return $match[1];
+        return $this->firstGroup('/(?:^|\n)\s*'.preg_quote($selector, '/').'\s*\{([^}]*)\}/', $css);
     }
 
     private function pixels(string $pattern, string $declarations): int
     {
-        self::assertSame(1, preg_match($pattern, $declarations, $match), $pattern);
-
-        return (int) $match[1];
+        return (int) $this->firstGroup($pattern, $declarations);
     }
 
-    // A margin of one spacing token, or of a sum of them in calc(), in pixels, since each token is named by its size.
+    // In pixels, because each spacing token is named by its size, and a margin may be a sum of them in calc().
     private function spacing(string $property, string $declarations): int
     {
-        self::assertSame(1, preg_match('/'.$property.':\s*([^;]+);/', $declarations, $match), $property);
-        self::assertGreaterThan(0, preg_match_all('/var\(--s(\d+)\)/', $match[1], $tokens));
+        self::assertGreaterThan(0, preg_match_all('/var\(--s(\d+)\)/', $this->firstGroup('/'.$property.':\s*([^;]+);/', $declarations), $tokens));
 
         return array_sum(array_map(intval(...), $tokens[1]));
+    }
+
+    private function firstGroup(string $pattern, string $text): string
+    {
+        if (1 !== preg_match($pattern, $text, $match)) {
+            self::fail('No match for '.$pattern);
+        }
+
+        return $match[1];
     }
 }
