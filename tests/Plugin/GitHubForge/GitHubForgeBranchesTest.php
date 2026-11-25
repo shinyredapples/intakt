@@ -424,6 +424,21 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->forge()->delete($this->branch());
     }
 
+    public function testADeletionThatCannotReachGitHubFailsWithoutCarryingTheClientsException(): void
+    {
+        $this->defaultBranchIs('main');
+        $this->answers['GET '.self::REPOSITORY.'/branches/intakt/7-old'] = $this->current('intakt/7-old', self::HEAD, 'false');
+        $this->answers['DELETE '.self::REPOSITORY.'/git/refs/heads/intakt/7-old'] = 'unreachable';
+
+        try {
+            $this->forge()->delete($this->branch());
+            self::fail('A deletion that never reached GitHub passed.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertStringStartsWith('GitHub could not be reached (', $failed->getMessage());
+            self::assertNull($failed->getPrevious());
+        }
+    }
+
     private function defaultBranchIs(string $name): void
     {
         $this->answers['GET '.self::REPOSITORY] = sprintf('{"default_branch":"%s"}', $name);
@@ -497,6 +512,9 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->requests[] = $method.' '.$url;
         $answer = $this->answers[$method.' '.$url] ?? '404';
         $headers = isset($this->links[$method.' '.$url]) ? ['Link: '.$this->links[$method.' '.$url]] : [];
+        if ('unreachable' === $answer) {
+            return new MockResponse('', ['error' => 'The host could not be reached.']);
+        }
 
         return 1 === preg_match('/^\d{3}$/', $answer) ? new MockResponse('', ['http_code' => (int) $answer]) : new MockResponse($answer, ['response_headers' => $headers]);
     }

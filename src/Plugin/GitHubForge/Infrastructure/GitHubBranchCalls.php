@@ -98,7 +98,7 @@ final readonly class GitHubBranchCalls
         try {
             $status = $this->calls->asInstallation('DELETE', $path, ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json']])->getStatusCode();
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed($this->unreachable($failure::class)->getMessage());
+            throw $this->unsent($failure::class);
         } catch (ForgeReadFailed $noToken) {
             throw new ForgeWriteFailed($noToken->getMessage(), $noToken->getCode(), $noToken);
         }
@@ -203,5 +203,11 @@ final readonly class GitHubBranchCalls
     private function listOf(mixed $data): array
     {
         return is_array($data) && array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered something other than a list where one was expected.');
+    }
+
+    // Not chained to the client's exception, for the same reason as a failed read.
+    private function unsent(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 }
