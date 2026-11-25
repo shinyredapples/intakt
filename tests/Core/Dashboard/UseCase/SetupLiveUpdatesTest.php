@@ -172,12 +172,12 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
         $this->browser->request('GET', $path);
         $page = HTMLDocument::createFromString((string) $this->browser->getResponse()->getContent(), LIBXML_NOERROR);
 
-        $held = array_filter(iterator_to_array($page->querySelectorAll('.shell[data-controller="connection"] '.self::heldActions())), static fn (Element $button): bool => !$button->hasAttribute('disabled'));
+        $held = array_filter(iterator_to_array($page->querySelectorAll('.shell[data-controller="connection"] '.$this->heldActions())), static fn (Element $button): bool => !$button->hasAttribute('disabled'));
 
         self::assertSame($labels, array_values(array_map(static fn (Element $button): string => trim((string) $button->textContent), $held)));
     }
 
-    private static function heldActions(): string
+    private function heldActions(): string
     {
         $controller = file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
         self::assertIsString($controller);
