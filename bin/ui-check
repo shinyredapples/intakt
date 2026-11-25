@@ -27,6 +27,8 @@ const PAGES = [
   { name: 'reviews', path: '/reviews' },
   { name: 'search', path: '/reviews', search: true },
   { name: 'setup', path: '/setup' },
+  ...[2, 3, 4, 5].map((step) => ({ name: `setup-${step}`, path: `/setup?step=${step}` })),
+  ...[1, 2, 3, 4, 5].map((step) => ({ name: `add-project-${step}`, path: `/projects/new?step=${step}` })),
   { name: 'status', path: '/lanes' },
   { name: 'trends', path: '/trends' },
   { name: 'waiting', path: '/waiting' },

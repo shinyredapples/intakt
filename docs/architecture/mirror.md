@@ -1,6 +1,6 @@
 # Bare mirror
 
-Intakt keeps one bare mirror per project at `var/mirrors/<project>.git` (the container parameter `intakt.git.mirrors_directory`, `Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY`). The mirror is a cache of the remote: if it is lost, the next update clones it again.
+Intakt keeps one bare mirror per project at `var/mirrors/<project>.git` (the container parameter `intakt.git.mirrors_directory`, `Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY`). The mirror is a cache of the remote: if it is lost, the next update clones it again. Deleted branch heads are not kept here but in a separate archive on the data volume ([Branch cleanup](branch-cleanup.md#archive)).
 
 ## Updating a mirror
 

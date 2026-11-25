@@ -138,6 +138,14 @@ final class LedgerRounds
         return array_map(static fn (ReviewedRound $member): string => $member->round, $this->membersOf($round));
     }
 
+    // The first round of the review read first, as in reviews(), so it names the same round as the first review's first round.
+    public function firstRound(): ?string
+    {
+        $first = array_first($this->started);
+
+        return $first instanceof ReviewedRound ? array_first($this->roundsOfTheReviewOf($first->round)) : null;
+    }
+
     /**
      * @param list<string> $rounds
      *

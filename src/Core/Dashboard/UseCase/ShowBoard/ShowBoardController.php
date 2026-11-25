@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Domain\SetupStep;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\RememberedForgeVerdict;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
@@ -45,6 +46,7 @@ final readonly class ShowBoardController
         private WaitingCount $waiting,
         private ClockInterface $clock,
         private ServerStatus $server,
+        private RememberedForgeVerdict $forge,
     ) {
     }
 
@@ -128,8 +130,14 @@ final readonly class ShowBoardController
         return new FailingMain($main->project, $main->main, $main->toolFingerprint, $this->redactor->redact($main->reason));
     }
 
-    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
+    // The forge figure comes from the check the doctor runs, so the board and the doctor cannot judge the forge apart (decision D1 of #3826).
     private function infrastructureRow(): InfrastructureRow
+    {
+        return $this->serverRow()->withForge($this->forge->latest());
+    }
+
+    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
+    private function serverRow(): InfrastructureRow
     {
         try {
             $reading = $this->server->read();

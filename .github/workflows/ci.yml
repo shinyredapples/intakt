@@ -25,8 +25,8 @@ jobs:
   # that tested exactly the pushed commit's tree (.github/ci/pr-run-passed.sh), skips every other job. A pull request run
   # tests GitHub's merge of the head into main; its check job records that tree, and only that tree counts, usually the
   # head's own after a fast-forward land. This job then only saves the Composer and CI image caches that pull requests
-  # restore. Any other push (a direct push, a release commit) runs all. What a pull-request filter skips is then left to
-  # the nightly full run on main (#2126).
+  # restore. Any other push (a direct push, a release commit) runs all, and a failure of this job before it decides skips
+  # no job that needs it. What a pull-request filter skips is then left to the nightly full run on main (#2126).
   main:
     if: github.event_name == 'push'
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
@@ -108,7 +108,7 @@ jobs:
   # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
   check:
     needs: main
-    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     steps:
@@ -234,7 +234,7 @@ jobs:
   # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
   journeys:
     needs: main
-    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     # Every journey at 300 seconds plus the image build.
     timeout-minutes: 40
@@ -311,7 +311,7 @@ jobs:
   # misses is caught by the nightly full run on main (#2126), or until then by the next direct push or release commit.
   changes:
     needs: main
-    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     outputs:
@@ -459,7 +459,7 @@ jobs:
   # is a full machine reset and a build. The full history is fetched for the upgrade check's base commit.
   image:
     needs: main
-    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 35
     steps:

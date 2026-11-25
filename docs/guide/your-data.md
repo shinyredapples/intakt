@@ -10,6 +10,7 @@ flowchart TD
   vol --> cfg[The config file<br/>projects, panels, routing]
   vol --> keys[Its keys and secrets<br/>the GitHub App key, its signing key, the secrets vault's key;<br/>the vault: AI tokens, logins and API keys, encrypted;<br/>the AI key typed in the setup wizard, not encrypted, readable by Intakt only]
   vol --> mirror[A copy of each repository<br/>rebuilt from GitHub if lost]
+  vol --> archive[Deleted branches<br/>kept by Intakt, not rebuilt]
   vol --> cache[Caches<br/>job images, package downloads]
 ```
 
@@ -19,6 +20,7 @@ flowchart TD
 | **The config file** | your settings: projects, panels, routing | you redo the setup wizard |
 | **Its keys and secrets** | the App's private key, the signing key and the key of the secrets vault; the vault itself with the AI tokens, logins and API keys you saved, encrypted; the AI key you typed in the setup wizard, in a file of its own that is not encrypted but that only Intakt's own user can read | you reconnect the App and paste new tokens or log in again in the admin area |
 | **The repository copies** | a mirror of each project | nothing: rebuilt from GitHub |
+| **The branch archive** | the last commit of every branch Intakt deleted, one small repository per project | the commits are gone for good: it is part of the backup and is not rebuilt from GitHub |
 | **Caches** | images and downloads | nothing: rebuilt, just slower once |
 
 **What is not in Intakt:** your code, issues, pull requests, reviews and approvals all live on GitHub (or Gitea). Intakt never holds the only copy of anything of yours.
