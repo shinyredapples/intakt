@@ -37,6 +37,35 @@ final class SampleProjectDataTest extends TestCase
         self::assertArrayHasKey('output', iterator_to_array($data->price($data->secondLab())));
     }
 
+    // Issue #2816: a rate-limited router provider must not stop the demo, so each router model has a priced fallback of the same model at another router provider.
+    public function testTheShippedFileNamesAPricedFallbackAtAnotherRouterProviderForEveryRouterModel(): void
+    {
+        $data = new SampleProjectData();
+        $routerModels = array_unique([...array_map(static fn (Tier $tier): string => $data->model(Provider::OpenAiCompatible, $tier), Tier::cases()), $data->secondLab()]);
+
+        foreach ($routerModels as $model) {
+            $fallback = (string) $data->fallbackOf($model);
+            [$name, $router] = explode(':', $model);
+            [$fallbackName, $fallbackRouter] = explode(':', $fallback.':');
+
+            self::assertSame($name, $fallbackName);
+            self::assertNotSame($router, $fallbackRouter);
+            self::assertArrayHasKey('output', iterator_to_array($data->price($fallback)));
+        }
+    }
+
+    public function testAModelTheFileListsNoFallbackForHasNone(): void
+    {
+        self::assertNull($this->dataOf($this->valid())->fallbackOf('made-up-strong'));
+    }
+
+    public function testAFallbackThatIsNoModelNameIsRefused(): void
+    {
+        $this->expectExceptionObject($this->broken('fallbacks.made-up-strong'));
+
+        $this->dataOf(['fallbacks' => ['made-up-strong' => '']] + $this->valid())->fallbackOf('made-up-strong');
+    }
+
     public function testTheShippedRouterUrlHasNoVersionPathBecauseTheBridgeAppendsIt(): void
     {
         self::assertSame('', new SampleProjectData()->routerUrl()->getPath());

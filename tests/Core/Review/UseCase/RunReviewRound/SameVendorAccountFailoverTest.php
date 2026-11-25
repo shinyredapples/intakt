@@ -161,7 +161,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
-        $vendor = new AccountLimitedVendor(new VerdictPerRole(failure: new ProviderFailedTransiently(new ServerException(503))), $resolver, $this->cooldowns);
+        $vendor = new AccountLimitedVendor(new VerdictPerRole(failure: new ProviderFailedTransiently(new ServerException(503))), $resolver, new TierPlatform($resolver, new ServiceLocator([]), $this->cooldowns, new NullLogger()));
 
         try {
             $this->fixture->deliver($message, $vendor);
@@ -214,7 +214,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, self::createStub(ReviewServerAccesses::class));
 
-        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+        return new AccountLimitedVendor($vendor, $resolver, $tiers);
     }
 
     // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.

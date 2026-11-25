@@ -243,6 +243,19 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame(['openai', 'openai-model'], [$ledger->payloads()[0]['substitute'], $ledger->payloads()[0]['model']]);
     }
 
+    // Another model on the tier's own provider may answer after a pinned fallback of the same model listed before it, so the model the vendor names wins over the first one listed there.
+    public function testAnOwedCatchUpRecordsTheModelTheVendorNamedOverTheFirstListedOnThatProvider(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('substitutes')->willReturn([new ResolvedModel(Provider::OpenAiCompatible, 'owner/primary:two'), new ResolvedModel(Provider::OpenAiCompatible, 'owner/other:two')]);
+        $ledger = new InMemoryLedger();
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor(), new FindingKeys())->catchUpOwed($reviewer, Provider::OpenAiCompatible, 'owner/other:two');
+
+        self::assertSame(['openai_compatible', 'owner/other:two'], [$ledger->payloads()[0]['substitute'], $ledger->payloads()[0]['model']]);
+    }
+
     public function testAnOwedCatchUpWhoseSubstituteIsNoLongerConfiguredRecordsNoModel(): void
     {
         $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];

@@ -21,7 +21,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Bridge\Generic\Factory;
-use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
@@ -58,7 +57,7 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
     private AccountWindowsOnAClock $accounts;
 
     #[DataProvider('retryAfterHeaders')]
-    public function testARouter429CoolsThePinAndTheAccountForTheRetryAfterHeaderAndTheNextCallIsSkippedWithoutARequest(string $header, int $seconds, ?string $now = null): void
+    public function testARouter429CoolsThePinButNotTheAccountForTheRetryAfterHeaderAndTheNextCallIsSkippedWithoutARequest(string $header, int $seconds, ?string $now = null): void
     {
         if (null !== $now) {
             $this->clock->modify($now);
@@ -71,7 +70,18 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         $next = $this->failureOf(fn (): object => $platform->invoke(self::PINNED, $this->messages()));
 
         self::assertInstanceOf(EveryAccountCoolingDown::class, $next);
-        self::assertSame([$seconds, $seconds, $seconds, 1], [$this->pins->secondsUntilFree($this->pin()), $this->accounts->secondsUntilFree($this->account()), $next->secondsUntilAnAccountIsFree, $http->getRequestsCount()]);
+        self::assertSame([$seconds, 0, $seconds, 1], [$this->pins->secondsUntilFree($this->pin()), $this->accounts->secondsUntilFree($this->account()), $next->secondsUntilAnAccountIsFree, $http->getRequestsCount()]);
+    }
+
+    public function testTheFirstRouter429ReadFromTheAnswerEndsTheCallWithThePinsWaitAfterOneRequest(): void
+    {
+        $http = $this->limited(['retry-after: 300']);
+        $platform = $this->platform($http);
+
+        $failure = $this->failureOf(fn (): string => $platform->invoke(self::PINNED, $this->messages())->asText());
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $failure);
+        self::assertSame([300, 1], [$failure->secondsUntilAnAccountIsFree, $http->getRequestsCount()]);
     }
 
     /**
@@ -99,8 +109,8 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
 
         $failure = $this->failureOf(fn (): string => $platform->invoke(self::PINNED, $this->messages())->asText());
 
-        self::assertInstanceOf(RateLimitExceededException::class, $failure);
-        self::assertSame(60, $this->pins->secondsUntilFree($this->pin()));
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $failure);
+        self::assertSame([60, 60], [$failure->secondsUntilAnAccountIsFree, $this->pins->secondsUntilFree($this->pin())]);
     }
 
     /**

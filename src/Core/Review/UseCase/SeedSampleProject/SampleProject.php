@@ -114,13 +114,13 @@ final readonly class SampleProject
     /**
      * @param array<string, Provider> $tiers
      *
-     * @return array<string, array{provider: string, model: string}>
+     * @return array<string, array{provider: string, model: string, substitutes?: list<array{provider: string, model: string}>}>
      */
     private function models(array $tiers): array
     {
         $models = [];
         foreach ($tiers as $tier => $provider) {
-            $models[$tier] = ['provider' => $provider->value, 'model' => $this->model($tier, $tiers)];
+            $models[$tier] = $this->withFallback(['provider' => $provider->value, 'model' => $this->model($tier, $tiers)]);
         }
 
         return $models;
@@ -138,6 +138,19 @@ final readonly class SampleProject
         }
 
         return $this->data->model($provider, Tier::from($tier));
+    }
+
+    // A substitute on the tier's own provider, so it reviews at once while the first router provider is rate-limited and owes no catch-up (issue #2816).
+    /**
+     * @param array{provider: string, model: string} $mapping
+     *
+     * @return array{provider: string, model: string, substitutes?: list<array{provider: string, model: string}>}
+     */
+    private function withFallback(array $mapping): array
+    {
+        $fallback = $this->data->fallbackOf($mapping['model']);
+
+        return null === $fallback ? $mapping : $mapping + ['substitutes' => [['provider' => $mapping['provider'], 'model' => $fallback]]];
     }
 
     /**
@@ -177,7 +190,7 @@ final readonly class SampleProject
     }
 
     /**
-     * @param array<string, array{provider: string, model: string}> $models
+     * @param array<string, array{provider: string, model: string, substitutes?: list<array{provider: string, model: string}>}> $models
      *
      * @return array<string, array<string, int|float>>
      */
@@ -185,7 +198,9 @@ final readonly class SampleProject
     {
         $prices = [];
         foreach ($models as $tier) {
-            $prices[$tier['model']] = iterator_to_array($this->data->price($tier['model']));
+            foreach ([$tier, ...$tier['substitutes'] ?? []] as $priced) {
+                $prices[$priced['model']] = iterator_to_array($this->data->price($priced['model']));
+            }
         }
 
         return $prices;

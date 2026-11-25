@@ -17,6 +17,12 @@ models:
 # Another AI lab's model for the second reviewer when the router carries the whole panel, so the panel still has two AI labs.
 second_lab: 'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra'
 
+# The same router model at another router provider, seeded as a substitute on the same provider, so one rate-limited router provider does not stop the demo (issue #2816).
+# Each names its router provider, chosen among those the router lists with tools together with structured output, because a policy such as :fastest may pick one that refuses them.
+fallbacks:
+    'moonshotai/Kimi-K3.1-Pro:deepinfra': 'moonshotai/Kimi-K3.1-Pro:together'
+    'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra': 'deepseek-ai/DeepSeek-V4-Pro-0813:novita'
+
 # List prices in US dollars per million tokens, so the demo's first review shows a cost; the owner can change them in the seeded file.
 prices:
     claude-opus-5-5: { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 }
@@ -27,3 +33,5 @@ prices:
     gpt-6-luna: { input: 0.1, output: 0.5 }
     'moonshotai/Kimi-K3.1-Pro:deepinfra': { input: 1.9, output: 9.5 }
     'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra': { input: 1.3, output: 2.6 }
+    'moonshotai/Kimi-K3.1-Pro:together': { input: 2, output: 10 }
+    'deepseek-ai/DeepSeek-V4-Pro-0813:novita': { input: 1.254, output: 3.762 }

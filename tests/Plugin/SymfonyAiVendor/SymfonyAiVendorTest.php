@@ -514,7 +514,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testAServerErrorMidStreamReachesTheRoundAsTheBlockedVerdictThroughTheAccountLimitedVendor(): void
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
-        $vendor = new AccountLimitedVendor($this->vendor($this->toolRoundThen($this->brokenMidText(new ServerException(503)))), $resolver, new NoCooldowns());
+        $vendor = new AccountLimitedVendor($this->vendor($this->toolRoundThen($this->brokenMidText(new ServerException(503)))), $resolver, self::createStub(TierInvoker::class));
 
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
@@ -695,6 +695,21 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $review = $vendor->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Provider::OpenAi, $review->substitute);
+    }
+
+    // Recorded under the model that answered, because another model on the tier's own provider is a substitute and owes a catch-up (maintainer decision 3 of issue #2861).
+    public function testAnotherModelOnTheOwnProviderIsReturnedAsASubstituteWithItsModel(): void
+    {
+        $review = $this->answeredOnTheOwnProviderBy('owner/other:two')->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame([Provider::OpenAiCompatible, 'owner/other:two'], [$review->substitute, $review->substituteModel]);
+    }
+
+    public function testThePinnedFallbackOfTheSameModelIsNoSubstitute(): void
+    {
+        $review = $this->answeredOnTheOwnProviderBy('owner/primary:two')->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame([null, null], [$review->substitute, $review->substituteModel]);
     }
 
     public function testTheStartedRowOfAReviewNamesTheModelItsTierResolvedTo(): void
@@ -1351,6 +1366,20 @@ final class SymfonyAiVendorTest extends KernelTestCase
     }
 
     // The tier's own provider is the subscription CLI, which cannot read the checkout, and its one substitute reads it.
+    /**
+     * @param non-empty-string $model
+     */
+    private function answeredOnTheOwnProviderBy(string $model): SymfonyAiVendor
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/primary:one']]]], []);
+        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: $this->dispatcher);
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willReturn(new ResolvedModel(Provider::OpenAiCompatible, $model));
+        $tiers->method('invoke')->willReturnCallback(static fn (ResolvedModel $answering, TierRequest $request): DeferredResult => $request->invokeOn($answer, $answering->model));
+
+        return new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
     private function substitutedVendor(Closure $own, Closure $substitute, AccountCooldowns $cooldowns): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver([

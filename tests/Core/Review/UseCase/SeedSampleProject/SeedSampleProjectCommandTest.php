@@ -87,7 +87,7 @@ final class SeedSampleProjectCommandTest extends TestCase
     {
         $this->seed(...$keyed);
 
-        $named = array_values(array_unique(array_column($this->writtenProject()['tiers'], 'model')));
+        $named = array_values(array_unique([...array_column($this->writtenProject()['tiers'], 'model'), ...$this->writtenSubstituteModels()]));
         $priced = array_keys($this->writtenPrices());
         sort($named);
         sort($priced);
@@ -104,9 +104,30 @@ final class SeedSampleProjectCommandTest extends TestCase
 
         self::assertEquals([
             'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra' => ['input' => 1.3, 'output' => 2.6],
+            'deepseek-ai/DeepSeek-V4-Pro-0813:novita' => ['input' => 1.254, 'output' => 3.762],
             'moonshotai/Kimi-K3.1-Pro:deepinfra' => ['input' => 1.9, 'output' => 9.5],
+            'moonshotai/Kimi-K3.1-Pro:together' => ['input' => 2, 'output' => 10],
         ], $this->writtenPrices());
         self::assertSame('2026-11-13', $this->written()['budget']['price_date']);
+    }
+
+    // Issue #2816: every router tier, the judge's light tier among them, lists the same model at another router provider as a substitute on the same provider, so one rate-limited router provider does not stop the demo.
+    public function testWithOnlyTheRouterEveryTierListsItsPinnedFallbackOnTheSameProvider(): void
+    {
+        $this->seed(Provider::OpenAiCompatible);
+
+        self::assertSame([
+            'strong' => [['provider' => 'openai_compatible', 'model' => 'moonshotai/Kimi-K3.1-Pro:together']],
+            'standard' => [['provider' => 'openai_compatible', 'model' => 'deepseek-ai/DeepSeek-V4-Pro-0813:novita']],
+            'light' => [['provider' => 'openai_compatible', 'model' => 'moonshotai/Kimi-K3.1-Pro:together']],
+        ], array_map(static fn (array $tier): array => $tier['substitutes'] ?? [], $this->writtenProject()['tiers']));
+    }
+
+    public function testATierOnAProviderWithoutAFallbackListsNoSubstitute(): void
+    {
+        $this->seed(Provider::Anthropic, Provider::OpenAi);
+
+        self::assertSame([], $this->writtenSubstituteModels());
     }
 
     public function testOneKeyPutsTheWholePanelOnThatProvider(): void
@@ -409,11 +430,19 @@ final class SeedSampleProjectCommandTest extends TestCase
     }
 
     /**
-     * @return array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}
+     * @return array{tiers: array<string, array{provider: string, model: string, substitutes?: list<array{provider: string, model: string}>}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}
      */
     private function writtenProject(): array
     {
         return $this->written()['projects']['sample'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function writtenSubstituteModels(): array
+    {
+        return array_merge(...array_map(static fn (array $tier): array => array_column($tier['substitutes'] ?? [], 'model'), array_values($this->writtenProject()['tiers'])));
     }
 
     /**

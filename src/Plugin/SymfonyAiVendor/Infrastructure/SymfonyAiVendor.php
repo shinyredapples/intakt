@@ -8,7 +8,6 @@ use Closure;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
-use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\ReviewServerReads;
@@ -84,7 +83,7 @@ final readonly class SymfonyAiVendor implements Vendor
         };
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut($answering, fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut($answering, fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute?->provider, $substitute?->model));
     }
 
     /**
@@ -120,10 +119,10 @@ final readonly class SymfonyAiVendor implements Vendor
         }
     }
 
-    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute; against the configured model, because a disabled one is substituted too.
-    private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?Provider
+    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute; against the configured model, because a disabled one is substituted too; a pinned fallback of the same model owes no catch-up, another model on the own provider does.
+    private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?ResolvedModel
     {
-        return $this->resolver->configured($project, $tier)->provider === $answering->provider ? null : $answering->provider;
+        return $answering->isTheSameModelAs($this->resolver->configured($project, $tier)) ? null : $answering;
     }
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict

@@ -107,12 +107,12 @@ final readonly class RoundLedger
     }
 
     // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up; the substitute's model goes with it, because the dashboard then names the reviewer by the model that answered.
-    public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
+    public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute, ?string $model = null): void
     {
         $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(
             ...$this->identify($reviewer),
             substitute: $substitute,
-            model: $this->substituteModelOf($reviewer, $substitute),
+            model: $model ?? $this->substituteModelOf($reviewer, $substitute),
         ));
     }
 
@@ -224,7 +224,7 @@ final readonly class RoundLedger
         return '' === $stored ? null : $stored;
     }
 
-    // The first substitute on that provider, because the vendor tries the tier's substitutes in order and an outage takes a whole provider out.
+    // The first substitute on that provider when the vendor named no model, because the vendor tries another provider's substitutes in order and an outage takes that whole provider out.
     private function substituteModelOf(RoundReviewer $reviewer, Provider $substitute): ?string
     {
         try {

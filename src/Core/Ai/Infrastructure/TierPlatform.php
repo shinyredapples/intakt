@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
+use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -49,25 +50,35 @@ final readonly class TierPlatform implements TierInvoker
         $own = $this->resolver->configured($project, $tier);
         $outages = [];
 
-        foreach ([$own, ...$this->resolver->substitutes($project, $tier)] as $model) {
-            // Per provider, judged by the first model listed on it (the tier's own model, else its first substitute there): an outage takes the whole provider out, so a cooling pin never moves the tier to another router of the same provider, and the substitute model the ledger records for a provider is always the one that answers.
+        foreach ($this->inOrderOfPreference($own, $this->resolver->substitutes($project, $tier)) as $model) {
             $key = $model->provider->value;
-            if (array_key_exists($key, $outages)) {
+            if (array_key_exists($key, $outages) && $model->provider !== $own->provider) {
                 continue;
             }
 
-            $outages[$key] = $this->outageOf($model);
-            if (!$outages[$key] instanceof ProviderOutage) {
+            $outage = $this->outageOf($model);
+            if (!$outage instanceof ProviderOutage) {
                 $this->recordSwitch($own, $model);
 
                 return $model;
             }
+
+            $outages[$key] = $this->shorter($outages[$key] ?? null, $outage);
         }
 
         /** @var non-empty-list<ProviderOutage> $out */
-        $out = array_values(array_filter($outages));
+        $out = array_values($outages);
 
         throw new EveryProviderOut($out);
+    }
+
+    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform) in one read, so a pin that outlasts its account window still keeps the model out, and a window that ends while the platform is built is not kept by an earlier provider-wide read; the account windows alone decide for a platform that cannot tell.
+    #[Override]
+    public function secondsUntilFree(ResolvedModel $model): int
+    {
+        $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
+
+        return $platform instanceof AccountFailoverPlatform ? $platform->modelWaits()->secondsUntilFree($model->model) : $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
     }
 
     // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.
@@ -76,15 +87,6 @@ final readonly class TierPlatform implements TierInvoker
     public function invoke(ResolvedModel $model, TierRequest $request): DeferredResult
     {
         return $this->withOutputLimit($model, $request)->invokeOn($this->platforms->get($model->provider->value), $model->model);
-    }
-
-    private function withOutputLimit(ResolvedModel $model, TierRequest $request): TierRequest
-    {
-        if (null === $model->maxOutput || !$model->provider->limitsOutput()) {
-            return $request;
-        }
-
-        return $request->withDefaults(...[PlatformOptions::MAX_OUTPUT_TOKENS => $model->maxOutput]);
     }
 
     // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked, but not for keys that were all rejected, because no wait brings them back.
@@ -101,6 +103,42 @@ final readonly class TierPlatform implements TierInvoker
         }
 
         return $own;
+    }
+
+    // The own model first, then its pinned fallbacks (same model on the own provider, another router provider), then every other substitute in the order listed, because a fallback that serves the same model owes no catch-up and a free one beats a substitute listed earlier. An unpinned alias keeps its listed place, because the router may send it to the very provider whose pin cools.
+    /**
+     * @param list<ResolvedModel> $substitutes
+     *
+     * @return list<ResolvedModel>
+     */
+    private function inOrderOfPreference(ResolvedModel $own, array $substitutes): array
+    {
+        $fallbacks = array_values(array_filter($substitutes, fn (ResolvedModel $model): bool => $this->isPinnedFallbackOfTheOwnModel($own, $model)));
+        $others = array_values(array_filter($substitutes, static fn (ResolvedModel $model): bool => !in_array($model, $fallbacks, true)));
+
+        return [$own, ...$fallbacks, ...$others];
+    }
+
+    private function isPinnedFallbackOfTheOwnModel(ResolvedModel $own, ResolvedModel $model): bool
+    {
+        $pinned = PinnedProvider::parts($model->model)[1] ?? null;
+
+        return null !== $pinned && $pinned !== (PinnedProvider::parts($own->model)[1] ?? null) && $this->isFallbackOfTheOwnModel($own, $model);
+    }
+
+    // Another model on the own provider is a substitute. A provider is judged once by its first model, except the own provider, which is judged per model because each pin has its own window.
+    private function isFallbackOfTheOwnModel(ResolvedModel $own, ResolvedModel $model): bool
+    {
+        return $model !== $own && $model->isTheSameModelAs($own);
+    }
+
+    private function withOutputLimit(ResolvedModel $model, TierRequest $request): TierRequest
+    {
+        if (null === $model->maxOutput || !$model->provider->limitsOutput()) {
+            return $request;
+        }
+
+        return $request->withDefaults(...[PlatformOptions::MAX_OUTPUT_TOKENS => $model->maxOutput]);
     }
 
     // One read of the cooldowns decides both whether the provider answers and the reason it does not, so a cooldown that ends in between never gives a wait of 0 s. Ends blocked even when every substitute is disabled, because the owner named a way around the outage.
@@ -120,20 +158,28 @@ final readonly class TierPlatform implements TierInvoker
         return 0 < $wait ? ProviderOutage::coolingDown($provider, $wait) : null;
     }
 
-    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform) in one read, so a pin that outlasts its account window still keeps the model out, and a window that ends while the platform is built is not kept by an earlier provider-wide read; the account windows alone decide for a platform that cannot tell.
-    private function secondsUntilFree(ResolvedModel $model): int
-    {
-        $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
-
-        return $platform instanceof AccountFailoverPlatform ? $platform->modelWaits()->secondsUntilFree($model->model) : $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
-    }
-
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void
     {
         if ($answering === $own) {
             return;
         }
 
-        $this->logger->info('Provider {own} is out, so the review goes to the substitute {substitute}.', ['own' => $own->provider->value, 'substitute' => $answering->provider->value]);
+        if ($this->isFallbackOfTheOwnModel($own, $answering)) {
+            $this->logger->info('Model {own} cannot be served right now, so the review goes to {fallback} on the same provider.', ['own' => $own->model, 'fallback' => $answering->model]);
+
+            return;
+        }
+
+        $this->logger->info('Provider {own} is out, so the review goes to the substitute {substitute}.', ['own' => $own->provider->value, 'substitute' => $answering->provider === $own->provider ? $answering->model : $answering->provider->value]);
+    }
+
+    // The shortest wait, because the call may go on as soon as any one of the provider's pins frees.
+    private function shorter(?ProviderOutage $kept, ProviderOutage $outage): ProviderOutage
+    {
+        if (!$kept instanceof ProviderOutage || null === $kept->secondsUntilFree || null === $outage->secondsUntilFree) {
+            return $kept ?? $outage;
+        }
+
+        return $outage->secondsUntilFree < $kept->secondsUntilFree ? $outage : $kept;
     }
 }

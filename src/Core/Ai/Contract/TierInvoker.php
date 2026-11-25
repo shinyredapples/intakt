@@ -18,6 +18,9 @@ interface TierInvoker
      */
     public function answering(string $project, Tier $tier): ResolvedModel;
 
+    // How long a call of the model must wait, zero when it can go out at once; read with the router provider the model pins, so a 429 that cooled only the pin is waited for like a cooled account.
+    public function secondsUntilFree(ResolvedModel $model): int;
+
     #[NoDiscard('the answer is only in the result')]
     public function invoke(ResolvedModel $model, TierRequest $request): DeferredResult;
 }

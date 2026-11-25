@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
+use Generator;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
@@ -22,9 +26,14 @@ use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Stringable;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
@@ -48,6 +57,9 @@ use Throwable;
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
+#[UsesClass(TierRequest::class)]
+#[UsesClass(EveryProviderOut::class)]
+#[UsesClass(ProviderOutage::class)]
 final class TierPlatformPinnedProviderTest extends TestCase
 {
     private const string PINNED = 'owner/model:router';
@@ -56,7 +68,15 @@ final class TierPlatformPinnedProviderTest extends TestCase
 
     private const array SUBSTITUTE = ['provider' => Provider::Anthropic->value, 'model' => 'other'];
 
+    private const array FALLBACK = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/model:other-router'];
+
+    private const array ALIAS = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/model'];
+
+    private const array OTHER_MODEL = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/other:free-router'];
+
     private MockClock $clock;
+
+    private ?LoggerInterface $logger = null;
 
     private PinnedProviderCooldownWindows $pins;
 
@@ -95,6 +115,22 @@ final class TierPlatformPinnedProviderTest extends TestCase
         self::assertSame(120, $out->secondsUntilAnAccountIsFree);
     }
 
+    // A limit raised by the stream itself reaches the caller untyped, so the vendor's wait comes from here (AccountLimitedVendor).
+    public function testAPinnedLimitReadFromAStreamIsReportedAsTheModelsWaitWhileTheAccountReadsFree(): void
+    {
+        $router = $this->router(MockPlatformFactory::createPlatform(static fn (): StreamResult => new StreamResult((static function (): Generator {
+            yield from [];
+
+            throw new RateLimitExceededException(120);
+        })())));
+        $answer = $router->invoke(self::PINNED, 'Review.');
+
+        $this->failureOf(static fn (): array => iterator_to_array($answer->asStream()));
+
+        self::assertSame(0, $this->accounts->secondsUntilAnAccountIsFree(self::ROUTER));
+        self::assertSame(120, $this->tiers($router, [])->secondsUntilFree(new ResolvedModel(self::ROUTER, self::PINNED)));
+    }
+
     public function testATierWhosePinnedModelIsFreeKeepsItsOwnModel(): void
     {
         $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::SUBSTITUTE])->answering('demo', Tier::Strong);
@@ -118,14 +154,103 @@ final class TierPlatformPinnedProviderTest extends TestCase
         self::assertSame([self::ROUTER, self::PINNED], [$answering->provider, $answering->model]);
     }
 
-    // Only the first model listed on a provider counts, so a cooling pin does not move the tier to another router of the same provider, and the substitute recorded for a provider is always the model that answered.
-    public function testASubstituteOnTheTiersOwnProviderIsSkippedSoTheTierGoesToTheNextProvider(): void
+    public function testAPinnedFallbackOnTheTiersOwnProviderAnswersWhileThePinCools(): void
     {
         $this->pins->coolDown($this->pin(), 120);
 
-        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [['provider' => self::ROUTER->value, 'model' => 'owner/other:other-router'], self::SUBSTITUTE])->answering('demo', Tier::Strong);
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::FALLBACK, self::SUBSTITUTE])->answering('demo', Tier::Strong);
+
+        self::assertSame([self::ROUTER, self::FALLBACK['model']], [$answering->provider, $answering->model]);
+    }
+
+    public function testWhenThePinnedFallbackCoolsTooTheTierGoesToTheNextProvider(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'other-router'), 30);
+
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::FALLBACK, self::SUBSTITUTE])->answering('demo', Tier::Strong);
 
         self::assertSame([Provider::Anthropic, 'other'], [$answering->provider, $answering->model]);
+    }
+
+    public function testWhenTheOwnModelAndItsPinnedFallbackCoolTheOutageNamesTheProviderOnce(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'other-router'), 30);
+
+        $out = $this->failureOf(fn (): object => $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::FALLBACK])->answering('demo', Tier::Strong));
+
+        self::assertInstanceOf(EveryProviderOut::class, $out);
+        self::assertSame('Every provider of the tier is out: openai_compatible for 30 s.', $out->getMessage());
+    }
+
+    public function testAFreeFallbackOnTheOwnProviderWinsOverAnEarlierSubstituteOnAnotherProvider(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::SUBSTITUTE, self::FALLBACK])->answering('demo', Tier::Strong);
+
+        self::assertSame([self::ROUTER, self::FALLBACK['model']], [$answering->provider, $answering->model]);
+    }
+
+    public function testAnUnpinnedAliasOfTheOwnModelKeepsItsListedPlaceAfterAnEarlierSubstitute(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::SUBSTITUTE, self::ALIAS])->answering('demo', Tier::Strong);
+
+        self::assertSame([Provider::Anthropic, 'other'], [$answering->provider, $answering->model]);
+    }
+
+    public function testAnotherModelOnTheOwnProviderIsRecordedAsASubstituteAndNotAsAFallback(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $messages = [];
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                $this->messages[] = (string) $message;
+            }
+        };
+
+        $this->logger = $logger;
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::OTHER_MODEL])->answering('demo', Tier::Strong);
+
+        self::assertSame(['owner/other:free-router', ['Provider {own} is out, so the review goes to the substitute {substitute}.']], [$answering->model, $logger->messages]);
+    }
+
+    public function testWhenEveryPinCoolsTheReportedWaitIsTheShortestOne(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'other-router'), 30);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'free-router'), 120);
+
+        $out = $this->failureOf(fn (): object => $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::OTHER_MODEL, self::FALLBACK])->answering('demo', Tier::Strong));
+
+        self::assertInstanceOf(EveryProviderOut::class, $out);
+        self::assertSame(30, $out->outages[0]->secondsUntilFree);
+    }
+
+    // The whole call, because selection alone does not show that the account still serves the fallback after the pinned 429 (issue #2825).
+    public function testAPinned429IsFollowedByTheCallCompletingThroughThePinnedFallback(): void
+    {
+        $sent = [];
+        $router = MockPlatformFactory::createPlatform(static function (string|Model $model) use (&$sent): string {
+            $name = $model instanceof Model ? $model->getName() : $model;
+            $sent[] = $name;
+
+            return self::PINNED === $name ? throw new RateLimitExceededException(60) : 'reviewed by the fallback';
+        });
+        $tiers = $this->tiers($this->router($router), [self::FALLBACK, self::SUBSTITUTE]);
+
+        $limited = $this->failureOf(fn (): object => $tiers->invoke($tiers->answering('demo', Tier::Strong), TierRequest::of('Review.')));
+        $answer = $tiers->invoke($tiers->answering('demo', Tier::Strong), TierRequest::of('Review.'))->asText();
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $limited);
+        self::assertSame('reviewed by the fallback', $answer);
+        self::assertSame([self::PINNED, self::FALLBACK['model']], $sent);
     }
 
     protected function setUp(): void
@@ -162,7 +287,7 @@ final class TierPlatformPinnedProviderTest extends TestCase
             Provider::Anthropic->value => static fn (): PlatformInterface => $substitute,
         ]);
 
-        return new TierPlatform(new ConfiguredTierResolver(['demo' => ['tiers' => ['strong' => $strong]]], []), $platforms, $this->accounts, new NullLogger());
+        return new TierPlatform(new ConfiguredTierResolver(['demo' => ['tiers' => ['strong' => $strong]]], []), $platforms, $this->accounts, $this->logger ?? new NullLogger());
     }
 
     private function failureOf(callable $call): Throwable

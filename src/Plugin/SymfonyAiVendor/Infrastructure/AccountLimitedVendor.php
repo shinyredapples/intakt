@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Closure;
-use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -31,7 +31,7 @@ final readonly class AccountLimitedVendor implements Vendor
         #[Autowire(service: SymfonyAiVendor::class)]
         private Vendor $vendor,
         private TierResolver $resolver,
-        private AccountCooldowns $cooldowns,
+        private TierInvoker $tiers,
     ) {
     }
 
@@ -78,12 +78,12 @@ final readonly class AccountLimitedVendor implements Vendor
             return new VendorAccountOut($out);
         }
 
-        $wait = $this->carriedWait($out) ?? $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
+        $wait = $this->carriedWait($out) ?? $this->tiers->secondsUntilFree($this->resolver->resolve($project, $tier));
 
         return 0 === $wait ? new VendorAccountOut($out) : new ProviderRateLimited($wait, $out);
     }
 
-    // The account failover read its wait from the account and the pinned provider windows in the same read that found no account free, so it is used as it is; the account cooldowns alone know nothing of a pinned provider and could read 0 while it still cools.
+    // The account failover read its wait from the account and the pinned provider windows in the same read that found no account free, so it is used as it is; a second read could see a window that ended meanwhile. A limit read from a stream carries no wait, so nextAccountOrWait() reads the model's own windows for it.
     private function carriedWait(Throwable $out): ?int
     {
         for ($cause = $out->getPrevious(); $cause instanceof Throwable; $cause = $cause->getPrevious()) {

@@ -8,10 +8,9 @@ use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
-use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use NoDiscard;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
@@ -50,9 +49,9 @@ final readonly class ReviewerLeases
 
     // Says whether the stored verdict answered a stop request, because the stop may be shown only once this transaction has committed.
     #[NoDiscard]
-    public function recordVerdict(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): bool
+    public function recordVerdict(RoundReviewer $reviewer, VendorReview $review): bool
     {
-        return true === $this->record($reviewer, fn (RoundReviewer $stored): bool => $this->moves->receive($stored, $verdict, $substitute));
+        return true === $this->record($reviewer, fn (RoundReviewer $stored): bool => $this->moves->receive($stored, $review));
     }
 
     public function recordFailure(RoundReviewer $reviewer, string $failure): void
