@@ -21,7 +21,7 @@ final class InfrastructureCheckTest extends TestCase
         $check = InfrastructureCheck::passed(new WorkerThreads(2, 1));
 
         self::assertTrue($check->passes());
-        self::assertSame('2/1', $check->presented(self::read(...), self::down(...)));
+        self::assertSame('2/1', $check->presented($this->read(...), $this->down(...)));
     }
 
     public function testAFailedCheckWithAReadingFailsAndStillPresentsWhatItRead(): void
@@ -29,7 +29,7 @@ final class InfrastructureCheckTest extends TestCase
         $check = InfrastructureCheck::failed(new WorkerThreads(0, 0), 'no worker thread is ready', 'look at the log');
 
         self::assertFalse($check->passes());
-        self::assertSame('0/0', $check->presented(self::read(...), self::down(...)));
+        self::assertSame('0/0', $check->presented($this->read(...), $this->down(...)));
     }
 
     public function testACheckWhoseSourceIsUnreadableFailsAndPresentsTheReasonInsteadOfAReading(): void
@@ -37,15 +37,15 @@ final class InfrastructureCheckTest extends TestCase
         $check = InfrastructureCheck::unreadable(new EndpointDown('/frankenphp/threads did not answer'), 'worker threads down', 'start it');
 
         self::assertFalse($check->passes());
-        self::assertSame('down: /frankenphp/threads did not answer', $check->presented(self::read(...), self::down(...)));
+        self::assertSame('down: /frankenphp/threads did not answer', $check->presented($this->read(...), $this->down(...)));
     }
 
-    private static function read(WorkerThreads $threads): string
+    private function read(WorkerThreads $threads): string
     {
         return $threads->busy.'/'.$threads->idle;
     }
 
-    private static function down(string $reason): string
+    private function down(string $reason): string
     {
         return 'down: '.$reason;
     }

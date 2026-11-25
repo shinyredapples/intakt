@@ -62,7 +62,7 @@ final readonly class InfrastructureChecks
     private static function metricsCheck(ServerMetrics|EndpointDown $metrics): InfrastructureCheck
     {
         return $metrics instanceof EndpointDown
-            ? InfrastructureCheck::unreadable($metrics,'server metrics down ('.$metrics->reason.')', self::METRICS_FIX)
+            ? InfrastructureCheck::unreadable($metrics, 'server metrics down ('.$metrics->reason.')', self::METRICS_FIX)
             : InfrastructureCheck::passed($metrics);
     }
 }

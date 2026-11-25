@@ -13,9 +13,6 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class InfrastructureCheck
 {
-    /**
-     * @param T|EndpointDown $source
-     */
     private function __construct(
         private WorkerThreads|ServerMetrics|HubHealth|EndpointDown $source,
         public ?string $problem,
