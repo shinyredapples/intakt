@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\LocalGitForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeGitDirectories;
 use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeLocks;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(WorktreeLocks::class)]
+#[CoversClass(WorktreeGitDirectories::class)]
 #[UsesClass(ForgeReadFailed::class)]
 final class WorktreeLocksTest extends TestCase
 {

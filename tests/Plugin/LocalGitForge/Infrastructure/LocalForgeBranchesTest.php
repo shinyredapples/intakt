@@ -14,6 +14,8 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalForgeBranches;
+use Intakt\Plugin\LocalGitForge\Infrastructure\RebasesAndBisects;
+use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeGitDirectories;
 use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeLocks;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -32,6 +34,8 @@ use Symfony\Component\Process\Process;
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(LocalRepository::class)]
+#[UsesClass(RebasesAndBisects::class)]
+#[UsesClass(WorktreeGitDirectories::class)]
 #[UsesClass(WorktreeLocks::class)]
 final class LocalForgeBranchesTest extends TestCase
 {

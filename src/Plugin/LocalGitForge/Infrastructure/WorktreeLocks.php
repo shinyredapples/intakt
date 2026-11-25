@@ -6,14 +6,16 @@ namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Finder\Finder;
-use Symfony\Component\Finder\SplFileInfo;
 
 // git switch and checkout take index.lock before they change a file and write HEAD through HEAD.lock, and give up while either exists. Holding both for every worktree keeps a checkout from naming a branch between a check and a delete.
 final readonly class WorktreeLocks
 {
     // index.lock comes first, so a checkout that is held off has not touched its working tree yet.
     private const array NAMES = ['index.lock', 'HEAD.lock'];
+
+    public function __construct(private WorktreeGitDirectories $directories = new WorktreeGitDirectories())
+    {
+    }
 
     /**
      * @return list<string>
@@ -52,24 +54,10 @@ final readonly class WorktreeLocks
     private function lockFiles(string $common): array
     {
         $files = [];
-        foreach ([$common, ...$this->linkedWorktrees($common)] as $directory) {
+        foreach ($this->directories->of($common) as $directory) {
             array_push($files, ...array_map(static fn (string $name): string => $directory.'/'.$name, self::NAMES));
         }
 
         return $files;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function linkedWorktrees(string $common): array
-    {
-        if (!is_dir($common.'/worktrees')) {
-            return [];
-        }
-
-        $worktrees = Finder::create()->directories()->depth(0)->ignoreDotFiles(false)->ignoreVCS(false)->in($common.'/worktrees');
-
-        return array_map(static fn (SplFileInfo $worktree): string => $worktree->getPathname(), iterator_to_array($worktrees, false));
     }
 }
