@@ -43,6 +43,8 @@ A dropped finding still shows on the page, apart from the others, marked **Quote
 
 The owl marks each finding to fix now, to defer to a follow-up, or to reject. Its power has a limit: a P1 or P2 finding stays on the list whatever the owl marks it. Only a P3 leaves the list when the owl defers or rejects it. A P3 finding a reviewer marks as a gap in a `bin/check` gate is never on the list: it goes to the follow-ups, even when the owl says to fix it now, and only a reject drops it. Those cards read **Dropped: deferred to a follow-up issue** or **Dropped: rejected or not marked by the judge**.
 
+A rejected finding is also remembered, when the project memory has an embedding model. Reviewers of later changes to the same file are told it is settled and why, until that file changes. A reviewer may still raise it, and then has to show why the reason no longer holds.
+
 ## The next pass keeps the ids
 
 You fix F1 and F2, commit to the same branch, and press **Start round 2** on the review page. The path grows: Pass 1, Fix, Pass 2.
