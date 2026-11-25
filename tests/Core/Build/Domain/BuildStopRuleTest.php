@@ -159,10 +159,10 @@ final class BuildStopRuleTest extends TestCase
 
     public function testReorderingNumericLookingTestNamesIsNoProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->failing(1_200, ['01' => 'failed', '1' => 'failed']));
+        $watch = $this->rule->startWatching($this->limits(), $this->failing(1_200, ['01' => 'failed', '1e0' => 'failed']));
 
         $this->clock->sleep(self::IDLE_SECONDS - 1);
-        $watch = $this->rule->observe($watch, $this->failing(1_300, ['1' => 'failed', '01' => 'failed']));
+        $watch = $this->rule->observe($watch, $this->failing(1_300, ['1e0' => 'failed', '01' => 'failed']));
         $this->clock->sleep(1);
 
         self::assertSame(BuildStopCause::NoProgress, $this->rule->stopCause($watch));
