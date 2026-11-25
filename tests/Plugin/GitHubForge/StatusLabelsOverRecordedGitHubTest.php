@@ -62,8 +62,8 @@ final class StatusLabelsOverRecordedGitHubTest extends KernelTestCase
 
     public function testAJudgedRoundWhosePublicationHasNotRunStaysInReviewAfterTheNextReconcile(): void
     {
-        $roundId = $this->queuedRound();
-        $this->judge($roundId);
+        $this->queuedRound();
+        $this->judge();
 
         $this->mirror()->reconcile('alpha', new ChangeId(self::PULL));
 
@@ -73,7 +73,7 @@ final class StatusLabelsOverRecordedGitHubTest extends KernelTestCase
     public function testAVerdictPublishedWhileTheQueueWriterHoldsTheLockEndsWaitingOnYouAfterTheNextReconcileWithoutAComment(): void
     {
         $roundId = $this->fixture->startFor(self::PULL, $this->fixture->bus, 2);
-        $this->judge($roundId);
+        $this->judge();
         $this->pull->whileReadingLabels = fn () => $this->publishWithoutJudging($roundId);
 
         $this->queueSide()($this->fixture->bus->announced[0]);
@@ -101,11 +101,11 @@ final class StatusLabelsOverRecordedGitHubTest extends KernelTestCase
 
     private function publish(string $roundId): void
     {
-        $this->judge($roundId);
+        $this->judge();
         $this->publishWithoutJudging($roundId);
     }
 
-    private function judge(string $roundId): void
+    private function judge(): void
     {
         $vendor = new VerdictPerRole([]);
         foreach ($this->fixture->bus->messages as $message) {

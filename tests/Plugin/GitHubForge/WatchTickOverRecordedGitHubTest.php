@@ -361,7 +361,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     {
         return match (true) {
             str_contains($url, '/pulls') && $this->listingUnchanged => new MockResponse('', ['http_code' => 304]),
-            str_contains($url, '/pulls') =>new MockResponse($this->fixture('pulls_open.json'), ['response_headers' => ['ETag' => 'W/"recorded"']]),
+            str_contains($url, '/pulls') => new MockResponse($this->fixture('pulls_open.json'), ['response_headers' => ['ETag' => 'W/"recorded"']]),
             str_contains($url, 'head_sha='.self::GREEN) => new MockResponse($this->fixture('runs_green_head_2.json')),
             str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->firstHeadRuns)),
             default => new MockResponse($this->fixture('suites_none.json')),
