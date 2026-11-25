@@ -10,6 +10,7 @@ use Intakt\Core\Git\Contract\ArchivedBranch;
 use Intakt\Core\Git\Contract\ArchivedHead;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\RemoteWrite;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\MirroredHead;
@@ -120,6 +121,93 @@ final class PushArchivedHeadTest extends TestCase
         try {
             $this->expectRefusal('The branch was not pushed: the push did not create the branch topic, so another writer made it during the restore');
             $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+        } finally {
+            $programs->remove();
+        }
+    }
+
+    public function testARefusalBeforeThePushSaysThatNothingWasWritten(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $this->git($this->forge->path, 'branch', 'topic', $this->base);
+
+        try {
+            $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+            self::fail('A branch that exists must not be restored over.');
+        } catch (BranchNotPushed $refused) {
+            self::assertSame(RemoteWrite::None, $refused->write);
+        }
+    }
+
+    public function testAPushTheRemoteRefusesSaysThatAWriteIsUnknown(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $git = new ExecutableFinder()->find('git') ?? self::fail('git is not on PATH.');
+        $programs = new ProgramOnPath();
+        $programs->runFirstOn('git', 'push', sprintf('%s -C %s branch topic %s', escapeshellarg($git), escapeshellarg($this->forge->path), $this->base));
+
+        try {
+            $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+            self::fail('A branch made before the push must not be moved by it.');
+        } catch (BranchNotPushed $refused) {
+            self::assertSame(RemoteWrite::Unknown, $refused->write);
+        } finally {
+            $programs->remove();
+        }
+    }
+
+    public function testAPushThatIsKilledSaysThatAWriteIsUnknownAndKeepsItsReason(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $programs = new ProgramOnPath();
+        $programs->killOn('git', 'push');
+
+        try {
+            $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+            self::fail('A killed push must not count as a restore.');
+        } catch (BranchNotPushed $stopped) {
+            self::assertSame(RemoteWrite::Unknown, $stopped->write);
+            self::assertSame($stopped->getPrevious()?->getMessage(), $stopped->getMessage());
+            self::assertStringStartsWith('The branch was not pushed: ', $stopped->getMessage());
+        } finally {
+            $programs->remove();
+        }
+    }
+
+    public function testAPushWhoseBranchCannotBeReadAfterwardsSaysThatTheBranchWasCreated(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $mark = escapeshellarg($this->root.'/read');
+        $programs = new ProgramOnPath();
+        $programs->runFirstOn('git', 'ls-remote', sprintf('test ! -e %s || exit 9; touch %s', $mark, $mark));
+
+        try {
+            $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+            self::fail('A push that cannot be confirmed must not count as a restore.');
+        } catch (BranchNotPushed $unread) {
+            self::assertSame(RemoteWrite::Created, $unread->write);
+            self::assertSame('The branch was not pushed: git ls-remote failed with exit code 9', $unread->getMessage());
+        } finally {
+            $programs->remove();
+        }
+
+        self::assertSame($this->topicHead, $this->git($this->forge->path, 'rev-parse', 'refs/heads/topic'));
+    }
+
+    public function testAPushThatLandedOnAnotherHeadThanTheBranchShowsSaysThatTheBranchWasCreated(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $git = sprintf('%s -C %s', escapeshellarg(new ExecutableFinder()->find('git') ?? self::fail('git is not on PATH.')), escapeshellarg($this->forge->path));
+        $mark = escapeshellarg($this->root.'/read');
+        $programs = new ProgramOnPath();
+        $programs->runFirstOn('git', 'ls-remote', sprintf('test ! -e %s || %s update-ref refs/heads/topic %s; touch %s', $mark, $git, $this->base, $mark));
+
+        try {
+            $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+            self::fail('A branch moved after the push must not count as a restore.');
+        } catch (BranchNotPushed $moved) {
+            self::assertSame(RemoteWrite::Created, $moved->write);
+            self::assertSame('The branch was not pushed: the remote branch topic is not at the archived head after the push', $moved->getMessage());
         } finally {
             $programs->remove();
         }

@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\ArchivedHeadPush;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\GitServices;
 use Intakt\Core\Git\Contract\RemoteCredential;
+use Intakt\Core\Git\Contract\RemoteWrite;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Override;
@@ -87,27 +88,45 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
     {
         $archive = $this->archiveOf($head);
         $branch = $head->head->branch;
-        $ref = self::BRANCHES.$branch;
         $git->refuseRewrittenRemote($archive, $remote);
 
         if (null !== $git->remoteTip($archive, $remote, $branch)) {
             throw BranchNotPushed::because(sprintf('the branch %s exists on the remote, and a restore never overwrites a branch', $branch));
         }
 
-        // A lease on an empty value lets the push only create the branch: one made since the read above is refused by git and by the remote's ref update, also when the archived head would fast-forward it.
-        [$exitCode, $statuses] = $git->outcomeAtRemote($archive, ['push', '--porcelain', '--force-with-lease='.$ref.':', '--', $remote, $head->head->commit.':'.$ref]);
+        $this->create($git, $head, $remote);
+
+        try {
+            $tip = $git->remoteTip($archive, $remote, $branch);
+        } catch (BranchNotPushed $unread) {
+            throw $unread->after(RemoteWrite::Created);
+        }
+
+        if ($tip !== $head->head->commit) {
+            throw BranchNotPushed::because(sprintf('the remote branch %s is not at the archived head after the push', $branch), write: RemoteWrite::Created);
+        }
+    }
+
+    // Every failure from here on says whether the remote may hold a new ref, because a remote can follow a symbolic branch and write another ref than the one pushed to, which only the forge can find and remove.
+    private function create(BranchGit $git, ArchivedHead $head, #[SensitiveParameter] string $remote): void
+    {
+        $branch = $head->head->branch;
+        $ref = self::BRANCHES.$branch;
+
+        try {
+            // A lease on an empty value lets the push only create the branch: one made since the read before it is refused by git and by the remote's ref update, also when the archived head would fast-forward it.
+            [$exitCode, $statuses] = $git->outcomeAtRemote($this->archiveOf($head), ['push', '--porcelain', '--force-with-lease='.$ref.':', '--', $remote, $head->head->commit.':'.$ref]);
+        } catch (BranchNotPushed $stopped) {
+            throw $stopped->after(RemoteWrite::Unknown);
+        }
 
         if (0 !== $exitCode) {
-            throw BranchNotPushed::because(sprintf('the remote refused the restore of %s (git push exited with %d)', $branch, $exitCode));
+            throw BranchNotPushed::because(sprintf('the remote refused the restore of %s (git push exited with %d)', $branch, $exitCode), write: RemoteWrite::Unknown);
         }
 
         // Only a new branch counts, because a branch another writer made at the same head meanwhile is "up to date" to git, which then pushes nothing and exits with 0.
         if (!in_array("*\t".$head->head->commit.':'.$ref."\t[new branch]", explode("\n", $statuses), true)) {
-            throw BranchNotPushed::because(sprintf('the push did not create the branch %s, so another writer made it during the restore', $branch));
-        }
-
-        if ($git->remoteTip($archive, $remote, $branch) !== $head->head->commit) {
-            throw BranchNotPushed::because(sprintf('the remote branch %s is not at the archived head after the push', $branch));
+            throw BranchNotPushed::because(sprintf('the push did not create the branch %s, so another writer made it during the restore', $branch), write: RemoteWrite::Unknown);
         }
     }
 

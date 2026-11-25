@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\ArchivedHeadPush;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RemoteWrite;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\BranchRestore;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
@@ -35,17 +36,24 @@ final readonly class LocalBranchRestore
     {
         $name = $restore->name;
         $common = $this->commonDirectory($name);
+        $head = $restore->head->hash;
         $this->refuseExisting($name);
+        $before = $this->branchRefs($name, 'before the push');
 
         try {
-            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($name, $restore->head->hash)), $common);
+            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($name, $head)), $common);
         } catch (BranchNotPushed $failed) {
-            $this->undoWriteThroughSymbolicBranch($name, $restore->head->hash);
+            // A push refused before git push ran wrote nothing, so nothing is looked for and nothing removed.
+            if (RemoteWrite::None !== $failed->write) {
+                $this->settleWriteElsewhere($name, $head, $before, $failed->write, $failed);
+            }
 
             throw $this->notRestored($name, $failed->getMessage(), $failed);
         }
 
-        $this->undoWriteThroughSymbolicBranch($name, $restore->head->hash);
+        if (!$this->settleWriteElsewhere($name, $head, $before, RemoteWrite::Created)) {
+            throw $this->notRestored($name, 'it is no branch at the archived head after the push, so another writer changed it during the restore.');
+        }
     }
 
     // Only the newline git ends its answer with, because a directory's own name may end in one, and a name without it can be another repository.
@@ -69,23 +77,55 @@ final readonly class LocalBranchRestore
         }
     }
 
-    // A symbolic branch another writer makes after the check is not listed to the push, whose empty lease then lets the remote create the branch it names. That target did not exist when the push wrote it, so it is removed again while it still holds the archived head.
-    private function undoWriteThroughSymbolicBranch(string $name, string $head): void
+    // Every ref under refs/heads/ with its commit and, for a symbolic one, its target, so the refs that exist before the push are known by name and never removed after it.
+    /**
+     * @return array<string, array{string, string}>
+     */
+    private function branchRefs(string $name, string $moment): array
     {
-        $symbolic = $this->git($name, ['symbolic-ref', '--quiet', 'refs/heads/'.$name]);
+        $process = $this->git($name, ['for-each-ref', '--format=%(refname) %(objectname) %(symref)', 'refs/heads/']);
 
-        if (1 === $symbolic->getExitCode()) {
-            return;
+        if (!$process->isSuccessful()) {
+            throw $this->notRestored($name, sprintf('git for-each-ref failed %s: %s', $moment, trim($process->getErrorOutput())));
         }
 
-        if (!$symbolic->isSuccessful()) {
-            throw $this->notRestored($name, sprintf('git symbolic-ref failed after the push: %s', trim($symbolic->getErrorOutput())));
+        $refs = [];
+
+        // No ref name holds a space, so the first two spaces of a line end the name and the commit.
+        foreach (array_filter(explode("\n", $process->getOutput()), static fn (string $line): bool => '' !== $line) as $line) {
+            $fields = explode(' ', $line, 3);
+            $refs[$fields[0]] = [$fields[1] ?? '', $fields[2] ?? ''];
         }
 
-        $target = trim($symbolic->getOutput());
+        return $refs;
+    }
+
+    // A symbolic branch another writer makes after the check is not listed to the push, whose empty lease then lets the remote create the branch it names. Whether the branch itself was restored is the answer. A ref made elsewhere is removed only when git push reported one new branch and exactly one ref that was missing before the push now holds the archived head, because only then is it the push's own; in every other case nothing is removed and the refs are named.
+    /**
+     * @param array<string, array{string, string}> $before
+     */
+    private function settleWriteElsewhere(string $name, string $head, array $before, RemoteWrite $write, ?BranchNotPushed $failed = null): bool
+    {
+        $after = $this->branchRefs($name, 'after the push, so a branch the push wrote through a symbolic branch may be left');
+        $ref = 'refs/heads/'.$name;
+        $created = array_keys(array_filter($after, static fn (array $state, string $other): bool => [$head, ''] === $state && !array_key_exists($other, $before), ARRAY_FILTER_USE_BOTH));
+        $elsewhere = array_values(array_diff($created, [$ref]));
+
+        $restored = in_array($ref, $created, true);
+
+        if ($restored || [] === $elsewhere) {
+            return $restored;
+        }
+
+        $target = $elsewhere[0];
+
+        if (RemoteWrite::Created !== $write || [$target] !== $elsewhere) {
+            throw $this->notRestored($name, sprintf('another writer changed it during the restore, the push may have written one of %s, and nothing was removed, because none is proven to be the push\'s own.', implode(', ', $elsewhere)), $failed);
+        }
+
         $undo = $this->git($name, ['update-ref', '--no-deref', '-d', $target, $head]);
 
-        throw $this->notRestored($name, $undo->isSuccessful() ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target) : sprintf('another writer made it a symbolic branch during the restore, so the push may have written %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())));
+        throw $this->notRestored($name, $undo->isSuccessful() ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target) : sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())), $failed);
     }
 
     /**

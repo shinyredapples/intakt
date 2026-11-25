@@ -10,7 +10,7 @@ use SensitiveParameter;
 interface ArchivedHeadPush
 {
     /**
-     * @throws BranchNotPushed
+     * @throws BranchNotPushed whose write says whether git push ran and whether it reported the new branch
      */
     public function push(ArchivedHead $head, #[SensitiveParameter] string $remote, ?RemoteCredential $credential = null): void;
 }
