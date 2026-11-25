@@ -209,6 +209,14 @@ The board shows the same reading in a row under its columns, read once each time
 unhealthy: the hub reports unhealthy
 ```
 
+`php bin/console intakt:doctor` runs the same checks for a person at the terminal (in the compose stack: `docker compose exec intakt php bin/console intakt:doctor`). It prints one line per check, `worker threads`, `server metrics` and `Mercure hub`: `pass: <check>`, or `fail: <check>: <problem>; fix: <what to do>`, with any line break or other control character in the text turned into a space. It exits with 0 only when every check passes. It changes nothing and calls no model. A refused `FRANKENPHP_ADMIN_URL` fails every check as `cannot run`, without a request. For example:
+
+```
+pass: worker threads
+pass: server metrics
+fail: Mercure hub: the hub reports unhealthy; fix: check the FrankenPHP log for the Mercure hub's error, for example a transport file under MERCURE_BOLT_PATH it cannot write
+```
+
 The Caddyfile turns on Caddy's `metrics` option, because FrankenPHP reports its queue depth and worker restarts only then.
 
 ## Background work

@@ -67,6 +67,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Live updates](live-updates.md): how a running review reaches the open page without a reload.
 - [Status read model](status.md): the status JSON per project.
 - [Server status](server-status.md): reading the web server's own state from inside the container.
+- [Doctor](doctor.md): `intakt:doctor`, the infrastructure health checks from the terminal, one line per check with what to do.
 
 ### Models and budget
 
