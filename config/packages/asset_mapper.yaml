@@ -11,6 +11,12 @@ framework:
         # 3 days in seconds, because JavaScript packages follow the same rule as the Composer cooldown (config.policy.cooldown.period in composer.json).
         minimum_release_age: 259200
 
+when@test:
+    framework:
+        asset_mapper:
+            # The suite runs without debug, where the framework would stop serving the mapped assets; the tests fetch them as the browser does.
+            server: true
+
 when@prod:
     framework:
         asset_mapper:
