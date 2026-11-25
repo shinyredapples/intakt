@@ -207,7 +207,7 @@ final class PushArchivedHeadTest extends TestCase
 
     private function forgeHolds(string $commit): bool
     {
-        return new Process(['git', 'cat-file', '-e', $commit], $this->forge->path, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->run() === 0;
+        return 0 === new Process(['git', 'cat-file', '-e', $commit], $this->forge->path, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->run();
     }
 
     private function restorer(): PushArchivedHead
