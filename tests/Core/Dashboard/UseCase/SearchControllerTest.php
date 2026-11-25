@@ -187,6 +187,16 @@ final class SearchControllerTest extends DashboardPageTestCase
         self::assertStringStartsWith('All projects', $row->filter('.sub')->text());
     }
 
+    public function testSearchingForTeamListsTheTeamPageInThePagesGroup(): void
+    {
+        $crawler = $this->browser->request('GET', '/search?q=Team');
+
+        $row = $this->rowsOf($crawler, 'Pages');
+        self::assertSame('Team', $row->filter('.lbl')->text());
+        self::assertSame('/team', $row->attr('href'));
+        self::assertSame('All projects, every account and the roles it serves', $row->filter('.sub')->text());
+    }
+
     public function testAnActionIsFoundByItsWordsAndHasNoLink(): void
     {
         $crawler = $this->browser->request('GET', '/search?q=theme');

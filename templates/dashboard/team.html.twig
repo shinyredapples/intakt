@@ -1,0 +1,53 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Team and accounts - Intakt{% endblock %}
+
+{# Roomy, because DESIGN.md's split page puts the roles beside the accounts from 1500 px and grows to 1720 px. #}
+{% block content_width %} roomy{% endblock %}
+
+{# No windows, spend, reset times or ceilings yet: the bars come with part 3 of #3699, and reset times and ceilings wait for the owner session. #}
+{% block body %}
+<div class="page-head">
+    <div>
+        <h1>Team and accounts</h1>
+        <p class="lead">Who does what, and which account pays for it.</p>
+    </div>
+</div>
+<div class="split">
+<section aria-labelledby="accounts-h">
+    <h2 id="accounts-h">Accounts</h2>
+    {% for row in team.accounts %}
+    <article class="acct">
+        <div>
+            <h3 class="acct-name">{{ row.account.name }}</h3>
+            <p class="acct-kind">{{ row.account.provider.spendsAPlan ? 'Subscription' : 'API key' }}, {{ row.account.provider.value }}</p>
+            <span class="chip strong on-page"><span class="dot {{ row.state.dot }}"></span>{{ row.state.inWords }}</span>
+        </div>
+        {% if row.roles is empty %}
+        <p class="acct-roles muted">Serves no role.</p>
+        {% else %}
+        <p class="acct-roles"><span class="muted">Serves:</span> {{ row.roles|map(role => role.inWords)|join(', ') }}</p>
+        {% endif %}
+    </article>
+    {% else %}
+    <p class="none">No account is listed.</p>
+    {% endfor %}
+</section>
+{% set by_role = team.byRole %}
+<aside class="side" aria-labelledby="roles-h">
+    <h2 id="roles-h">Roles</h2>
+    {% if by_role is empty %}
+    <p class="none">No account serves a role yet.</p>
+    {% else %}
+    <div class="roles">
+        {% for name, holders in by_role %}
+        <div class="role">
+            <h3>{{ name }}</h3>
+            <p class="meta">{% for holder in holders %}<span>{{ holder.account.key }}{% if holder.role.buildRuntime is same as(enum('Intakt\\Core\\Dashboard\\UseCase\\ShowTeam\\BuildRuntime').CannotRun) %} {{ constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTeam\\TeamRole::BUILD_RUNTIME_MARK') }}{% endif %}</span>{% endfor %}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</aside>
+</div>
+{% endblock %}

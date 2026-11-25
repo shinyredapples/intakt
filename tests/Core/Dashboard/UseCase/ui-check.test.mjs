@@ -92,6 +92,14 @@ test('the Waiting on you page at /waiting is checked', () => {
     assert.ok(PAGES.some((page) => page.name === 'waiting' && page.path === '/waiting'));
 });
 
+test('the Team page at /team is checked', () => {
+    assert.ok(PAGES.some((page) => page.name === 'team' && page.path === '/team'));
+});
+
+test('the search overlay is checked with Team typed, so its Pages group shows the Team row', () => {
+    assert.deepEqual(PAGES.filter((page) => page.search !== undefined).map((page) => [page.name, page.search]), [['search', 'Team']]);
+});
+
 test('every page is checked in both themes at 1440, 1920 and 390 wide', () => {
     const jobs = jobsFor([{ name: 'projects', path: '/projects' }]);
 
