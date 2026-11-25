@@ -34,7 +34,8 @@ final readonly class AppJwt
         $payload = $this->encode(['alg' => 'RS256', 'typ' => 'JWT']).'.'.$this->encode([
             'iat' => $now - self::DRIFT_SECONDS,
             'exp' => $now + self::LIFETIME_SECONDS,
-            'iss' => $this->appId,
+            // Trimmed, because the forge check judges the trimmed ID and GitHub refuses an issuer with a space around it.
+            'iss' => trim($this->appId),
         ]);
 
         return $payload.'.'.$this->base64Url($this->signature($payload));
@@ -52,7 +53,8 @@ final readonly class AppJwt
     {
         $key = openssl_pkey_get_private($this->privateKey);
         $signature = null;
-        if (false === $key || !openssl_sign($payload, $signature, $key, OPENSSL_ALGO_SHA256) || !is_string($signature)) {
+        // RSA only, because another key type signs as well but GitHub refuses its signature under RS256.
+        if (false === $key || OPENSSL_KEYTYPE_RSA !== (openssl_pkey_get_details($key)['type'] ?? null) || !openssl_sign($payload, $signature, $key, OPENSSL_ALGO_SHA256) || !is_string($signature)) {
             throw InstallationTokenNotMinted::becauseTheKeyCannotSign();
         }
 

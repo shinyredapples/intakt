@@ -296,7 +296,7 @@ final class BudgetReserveTest extends TestCase
         // The pool expires slots by the test clock, so the seconds a slot lives are the seconds the clock moves.
         $this->pool = new ArrayAdapter(clock: $this->clock);
         $this->locks = new LockFactory(new InMemoryStore());
-        $this->readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
+        $this->readings = new RateLimitReadings(new ArrayAdapter(clock: $this->clock), $this->clock, new LockFactory(new InMemoryStore()));
     }
 
     private function read(int $remaining): void
