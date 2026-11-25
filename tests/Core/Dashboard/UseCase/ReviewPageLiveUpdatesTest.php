@@ -8,6 +8,7 @@ use Closure;
 use DateTimeImmutable;
 use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\GlossaryTerm;
@@ -1276,7 +1277,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testAPageOpenedBeforeTheRoundStartsCountsTheToolCallsByKindInPlainWords(): void
     {
-        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 2), new ToolCallCount('search_files', 1)], Cost::inUsd(0.1), ['src/discount.js'], [], [], [], false));
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 2), new ToolCallCount('search_files', 1)], Cost::inUsd(0.1), new Paths('src/discount.js'), [], [], [], false));
 
         $this->publishedUpdates()->summaryChanged($round);
 
@@ -1287,12 +1288,12 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     // One text node in one nowrap button, so neither the markup nor the button's own style can put "F" and "1" on two lines; review-finding-id.browser.mjs measures it in a narrow viewport.
     public function testAFindingIdPushedToAPageOpenedWithAnEmptyLiveSummaryAppearsOnlyAfterThePushInOneNowrapButton(): void
     {
-        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [], [], false);
         [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
         self::assertCount(0, $page->filter('#round-'.$id.'-summary-findings .linkbtn'));
         self::assertStringNotContainsString('F1', $page->filter('#round-'.$id.'-summary-findings')->text());
 
-        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [$this->longFinding()], [], false);
         $this->publishedUpdates()->summaryChanged($round);
 
         $updated = $this->replaced($page, $this->publishedStreams());
@@ -1307,7 +1308,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     // review-finding-id.browser.mjs applies these files with the pinned Turbo, so they must stay what the page renders and pushes.
     public function testTheBrowserChecksFindingsPartIsTheOneOfAPageWithAnEmptyLiveSummary(): void
     {
-        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [], [], false);
         [, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
 
         self::assertSame($this->findingIdFixture('before.html'), $this->normalized(str_replace($id, 'ROUND', $page->filter('#round-'.$id.'-summary-findings')->outerHtml())));
@@ -1315,9 +1316,9 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testTheBrowserChecksStreamIsTheOnePushedForALongFinding(): void
     {
-        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [], [], false);
         [$round, $id] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
-        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [$this->longFinding()], [], false);
 
         $this->publishedUpdates()->summaryChanged($round);
 
@@ -1435,10 +1436,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), new Paths('src/A.php'), [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1/record');
 
-        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [], [], false)]);
+        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), new Paths(),[], [], [], false)]);
 
         $targets = new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
         self::assertCount(4, $targets);
@@ -1470,11 +1471,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testASummaryPushedToThePageLeavesTheReviewWideCostAlone(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1/record');
         $before = $page->filter('.ls-cost dd')->eq(1)->text();
 
-        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [], false)]));
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), new Paths(),[], [], [], false)]));
 
         self::assertStringStartsWith('0.9000 USD,', $updated->filter('.ls-cost dd')->first()->text());
         self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
@@ -1482,11 +1483,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testASummaryPushedToThePageRendersFindingIdsAsHighlightButtons(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1/record');
         $reported = new Finding('F7', Severity::P2, 'src/A.php', 3, null, 'Name it.', FixableBy::Builder, false, null, null);
 
-        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [$reported], [], false)]));
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), new Paths(),[], [$reported], [], false)]));
 
         self::assertSame('F7', $updated->filter('#round-round-1-summary-findings .ls-findings button')->attr('data-highlight-finding'));
     }
@@ -1618,7 +1619,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->browser->disableReboot();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), new Paths(),[], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
         $this->givenTheHubRecordsWhatIsPublished();
         $round = Uuid::v7();

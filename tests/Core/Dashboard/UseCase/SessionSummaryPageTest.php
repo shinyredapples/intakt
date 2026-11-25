@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
@@ -111,7 +112,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithNothingRecordedYetSaysSoInEachPart(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], [], false));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(),[], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
@@ -120,7 +121,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithoutToolCallsShowsNoToolList(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], [], false));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(),[], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
@@ -149,7 +150,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testAFindingTextAndAFileNameWithMarkupAreEscaped(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), ['<b>x</b>.php'], [$this->finding('F1', Severity::P2, '<script>alert(1)</script>')], [], [], false));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths('<b>x</b>.php'), [$this->finding('F1', Severity::P2, '<script>alert(1)</script>')], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
@@ -160,7 +161,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testABacktickSpanInAFindingOfTheSummaryShowsAsCode(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [$this->finding('F1', Severity::P2, 'Call `Lock::acquire()` first.')], [], [], false));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(),[$this->finding('F1', Severity::P2, 'Call `Lock::acquire()` first.')], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
@@ -174,7 +175,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [$this->finding('F2', Severity::P2, 'Broken.')], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), new Paths(),[$this->finding('F2', Severity::P2, 'Broken.')], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
@@ -210,7 +211,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         return new SessionSummary(
             [new ToolCallCount('list_directory', 1), new ToolCallCount('read_file', 4)],
             Cost::inUsd(0.61),
-            ['src/PushGate.php', 'tests/PushGateTest.php'],
+            new Paths('src/PushGate.php', 'tests/PushGateTest.php'),
             [$checked, $open],
             $reported ?? [$this->finding('F4', Severity::P2, 'Order the queue by hold time.')],
             [$checked],

@@ -914,7 +914,7 @@ final class LedgerRoundsTest extends TestCase
      */
     private function reported(string $reviewer, array $findings): RecordedEvent
     {
-        return $this->row(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded('r1', $reviewer, $findings));
+        return $this->row(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded('r1', $reviewer, new FindingIds(...$findings)));
     }
 
     private function quorumStart(int $reviewers, QuorumPolicy $quorum): RecordedEvent
