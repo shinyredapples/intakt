@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
-use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
+use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoRuns;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
