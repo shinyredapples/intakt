@@ -15,7 +15,7 @@ use Intakt\Core\Budget\Domain\AccountCooldownRecord;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 
-// Outside the persistence group: these cases prove the SQLite path, which the other engines never take.
+// Not in the persistence group, because MySQL, MariaDB and PostgreSQL never take the SQLite path these cases prove.
 #[CoversNothing]
 final class EmptyDatabaseOnSqliteTest extends KernelTestCase
 {
@@ -79,7 +79,7 @@ final class EmptyDatabaseOnSqliteTest extends KernelTestCase
 
         EmptyDatabase::rowsIn(self::getContainer());
 
-        self::assertArrayHasKey('alert_pending', $this->connection()->createSchemaManager()->listTableColumns('watcher_boot_result'));
+        self::assertContains('alert_pending', $this->connection()->fetchFirstColumn("SELECT name FROM pragma_table_info('watcher_boot_result')"));
     }
 
     public function testAResetDropsTheTriggersAMigrationLeftBehind(): void
@@ -93,6 +93,14 @@ final class EmptyDatabaseOnSqliteTest extends KernelTestCase
         self::assertEquals(0, $this->connection()->fetchOne('SELECT COUNT(*) FROM budget_account_cooldown'));
     }
 
+    private function connection(): Connection
+    {
+        $connection = self::getContainer()->get('doctrine.dbal.default_connection');
+        self::assertInstanceOf(Connection::class, $connection);
+
+        return $connection;
+    }
+
     private function writeCooldown(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
@@ -100,13 +108,5 @@ final class EmptyDatabaseOnSqliteTest extends KernelTestCase
         $now = new DateTimeImmutable('2026-11-02T10:00:00+00:00');
         $entities->persist(new AccountCooldownRecord(new Account(Provider::Anthropic, 'main'), $now->modify('+1 hour'), $now));
         $entities->flush();
-    }
-
-    private function connection(): Connection
-    {
-        $connection = self::getContainer()->get('doctrine.dbal.default_connection');
-        self::assertInstanceOf(Connection::class, $connection);
-
-        return $connection;
     }
 }

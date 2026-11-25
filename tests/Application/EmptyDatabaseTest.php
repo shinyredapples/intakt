@@ -6,6 +6,7 @@ namespace Intakt\Tests\Application;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\TableNotFoundException;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
@@ -43,11 +44,11 @@ final class EmptyDatabaseTest extends KernelTestCase
     public function testAResetOnADatabaseWithoutTablesCreatesTheMappedSchema(): void
     {
         EmptyDatabase::in(self::getContainer());
-        self::assertNotContains('budget_account_cooldown', $this->tables());
+        self::assertFalse($this->exists('budget_account_cooldown'));
 
         EmptyDatabase::rowsIn(self::getContainer());
 
-        self::assertContains('budget_account_cooldown', $this->tables());
+        self::assertTrue($this->exists('budget_account_cooldown'));
     }
 
     public function testAResetDropsTheConversationAndQueueTablesByName(): void
@@ -58,8 +59,8 @@ final class EmptyDatabaseTest extends KernelTestCase
 
         EmptyDatabase::rowsIn(self::getContainer());
 
-        self::assertNotContains('reviewer_conversation', $this->tables());
-        self::assertNotContains('messenger_messages', $this->tables());
+        self::assertFalse($this->exists('reviewer_conversation'));
+        self::assertFalse($this->exists('messenger_messages'));
     }
 
     private function writeCooldown(): void
@@ -79,12 +80,16 @@ final class EmptyDatabaseTest extends KernelTestCase
         return (int) $count;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function tables(): array
+    // The schema manager hides the conversation and queue tables behind the schema filter, so a query is what shows whether a table is there.
+    private function exists(string $table): bool
     {
-        return $this->connection()->createSchemaManager()->listTableNames();
+        try {
+            $this->connection()->fetchOne(sprintf('SELECT 1 FROM %s', $table));
+
+            return true;
+        } catch (TableNotFoundException) {
+            return false;
+        }
     }
 
     private function connection(): Connection

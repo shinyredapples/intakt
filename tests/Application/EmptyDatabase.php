@@ -12,8 +12,6 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final class EmptyDatabase
 {
-    private static ?string $built = null;
-
     // The mapped tables go through the schema tool; the conversation and queue tables are outside the mapping (the schema filter hides them), so they are dropped by name.
     public static function in(ContainerInterface $container): void
     {
@@ -35,14 +33,16 @@ final class EmptyDatabase
         $manager->clear();
         $metadata = $manager->getMetadataFactory()->getAllMetadata();
         $connection = $container->get('doctrine.dbal.default_connection');
-        assert($connection instanceof Connection);
         $sqlite = $connection->getDatabasePlatform() instanceof SQLitePlatform;
+        $stored = $sqlite ? $connection->fetchOne('PRAGMA user_version') : null;
 
-        // Comparing the schema with the mapping costs about as much as rebuilding it, so the reset compares the definitions with those the tool wrote last.
-        if (!$sqlite || self::$built !== self::definitions($connection)) {
+        // Comparing the schema with the mapping costs about as much as rebuilding it, so the file header keeps a fingerprint of the definitions the tool wrote last.
+        if (!is_numeric($stored) || self::fingerprint($connection) !== (int) $stored) {
             self::in($container);
             new SchemaTool($manager)->createSchema($metadata);
-            self::$built = $sqlite ? self::definitions($connection) : null;
+            if ($sqlite) {
+                $connection->executeStatement(sprintf('PRAGMA user_version = %d', self::fingerprint($connection)));
+            }
 
             return;
         }
@@ -57,33 +57,14 @@ final class EmptyDatabase
         $connection->executeStatement('DROP TABLE IF EXISTS messenger_messages');
     }
 
-    /**
-     * @param list<string> $tables
-     */
-    private static function deleteRows(Connection $connection, array $tables): void
-    {
-        $enforced = (int) $connection->fetchOne('PRAGMA foreign_keys');
-        $connection->executeStatement('PRAGMA foreign_keys = OFF');
-
-        try {
-            foreach ($tables as $table) {
-                $connection->executeStatement(sprintf('DELETE FROM "%s"', $table));
-            }
-            if (in_array('sqlite_sequence', self::names($connection, 'table'), true)) {
-                $connection->executeStatement('DELETE FROM sqlite_sequence');
-            }
-        } finally {
-            $connection->executeStatement(sprintf('PRAGMA foreign_keys = %d', $enforced));
-        }
-    }
-
-    private static function definitions(Connection $connection): string
+    // user_version holds a signed 32-bit number and starts at 0, so the hash is cut to 31 bits and never 0.
+    private static function fingerprint(Connection $connection): int
     {
         $rows = $connection->fetchAllNumeric(
             "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'index') AND tbl_name NOT IN ('sqlite_sequence', 'reviewer_conversation', 'messenger_messages') ORDER BY type, name",
         );
 
-        return json_encode($rows, JSON_THROW_ON_ERROR);
+        return (crc32(json_encode($rows, JSON_THROW_ON_ERROR)) & 0x7FFFFFFF) ?: 1;
     }
 
     /**
@@ -95,5 +76,25 @@ final class EmptyDatabase
         $names = $connection->fetchFirstColumn('SELECT name FROM sqlite_master WHERE type = ?', [$type]);
 
         return $names;
+    }
+
+    /**
+     * @param list<string> $tables
+     */
+    private static function deleteRows(Connection $connection, array $tables): void
+    {
+        $enforced = in_array($connection->fetchOne('PRAGMA foreign_keys'), [1, '1'], true) ? 'ON' : 'OFF';
+        $connection->executeStatement('PRAGMA foreign_keys = OFF');
+
+        try {
+            foreach ($tables as $table) {
+                $connection->executeStatement(sprintf('DELETE FROM "%s"', $table));
+            }
+            if (in_array('sqlite_sequence', self::names($connection, 'table'), true)) {
+                $connection->executeStatement('DELETE FROM sqlite_sequence');
+            }
+        } finally {
+            $connection->executeStatement(sprintf('PRAGMA foreign_keys = %s', $enforced));
+        }
     }
 }
