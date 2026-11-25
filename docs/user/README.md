@@ -21,6 +21,7 @@ You will meet these characters on the dashboard. Each one stands where its job h
 - <picture><source media="(prefers-color-scheme: dark)" srcset="../../assets/images/characters/judge-dark.webp"><img src="../../assets/images/characters/judge-light.webp" alt="An owl with a gavel" width="48" height="48"></picture> **The owl, judge.** Weighs every finding and makes one list of what to fix.
 - <picture><source media="(prefers-color-scheme: dark)" srcset="../../assets/images/characters/developer-dark.webp"><img src="../../assets/images/characters/developer-light.webp" alt="A beaver with a wrench" width="48" height="48"></picture> **The beaver, developer.** Stands on the Fix step, while you or your agent fix the list.
 - <picture><source media="(prefers-color-scheme: dark)" srcset="../../assets/images/characters/maintainer-dark.webp"><img src="../../assets/images/characters/maintainer-light.webp" alt="A tortoise with a toolbox" width="48" height="48"></picture> **The tortoise, maintainer.** Waits at Merge once a pass approves.
+- <picture><source media="(prefers-color-scheme: dark)" srcset="../../assets/images/characters/technical_writer-dark.webp"><img src="../../assets/images/characters/technical_writer-light.webp" alt="A heron with a notebook under its wing" width="48" height="48"></picture> **The heron, technical writer.** A new member of the cast, after the tortoise in the README's team picture. Its review of the docs people read is still planned, so you will not meet it on the dashboard yet.
 
 ## The chapters
 
