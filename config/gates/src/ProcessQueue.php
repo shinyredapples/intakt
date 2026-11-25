@@ -15,8 +15,14 @@ final readonly class ProcessQueue
 
     private const int POLL_MICROSECONDS = 10000;
 
-    public function __construct(private int $seconds, private int $overallSeconds)
+    private TimeLimit $job;
+
+    private TimeLimit $pass;
+
+    public function __construct(int|float $seconds, int|float $overallSeconds)
     {
+        $this->job = new TimeLimit($seconds);
+        $this->pass = new TimeLimit($overallSeconds);
     }
 
     /**
@@ -32,7 +38,7 @@ final readonly class ProcessQueue
         $order = array_keys($jobs);
         $results = [];
         $running = [];
-        $deadline = hrtime(true) + $this->overallSeconds * 1_000_000_000;
+        $deadline = hrtime(true) + $this->pass->nanoseconds();
         // A job builder must return without waiting, because the running processes are polled only between builds.
         $start = fn (int $worker, Closure $job): ?array => hrtime(true) < $deadline ? $this->started($this->built($job, $worker), $directory, $deadline) : null;
 
@@ -82,9 +88,9 @@ final readonly class ProcessQueue
             return [$this->notStarted(), ''];
         }
 
-        // Because the limits are whole seconds, the reason of a job timeout equal to the overall limit is the job's own, not a pass that started a moment before it; the process still stops at the time left.
-        $ownTimeout = $this->seconds <= ceil($left);
-        $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->seconds, $left));
+        // Because a pass starts a moment before its first job, a job limit equal to the pass limit is still the job's own reason; the process still stops at the time left.
+        $ownTimeout = $this->job->seconds <= $left || (float) $this->job->seconds === (float) $this->pass->seconds;
+        $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->job->seconds, $left));
 
         try {
             $process->start();
@@ -92,7 +98,7 @@ final readonly class ProcessQueue
             return [new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$command[0]), ''];
         }
 
-        return [$process, $ownTimeout ? 'timed out after '.$this->seconds.' seconds' : $this->overallLimit()];
+        return [$process, $ownTimeout ? 'timed out after '.$this->job->label() : $this->overallLimit()];
     }
 
     /**
@@ -173,7 +179,7 @@ final readonly class ProcessQueue
 
     private function overallLimit(): string
     {
-        return 'timed out: the test pass reached its overall limit of '.$this->overallSeconds.' seconds';
+        return 'timed out: the test pass reached its overall limit of '.$this->pass->label();
     }
 
     private function finished(Process $process, string $limit): ?ProcessResult

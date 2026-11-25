@@ -8,11 +8,14 @@ use Closure;
 use Intakt\Gates\ProcessQueue;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\TimeLimit;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(ProcessQueue::class)]
 #[UsesClass(ProcessResult::class)]
+#[UsesClass(TimeLimit::class)]
 final class ProcessQueueTest extends SandboxTestCase
 {
     public function testEachJobRunsInTheWorkerWhoseIndexItWasBuiltFor(): void
@@ -136,6 +139,56 @@ final class ProcessQueueTest extends SandboxTestCase
         $results = new ProcessQueue(30, 30)->run(['first' => $this->php(''), 'second' => $this->php('exit(3);')], 1, $this->emptySandbox()->root);
 
         self::assertSame([0, 3], [$results['first']->exitCode, $results['second']->exitCode]);
+    }
+
+    public function testAJobPastAFractionalTimeoutIsStoppedAndNamesItsLimitAndLastOutput(): void
+    {
+        $started = hrtime(true);
+
+        $results = new ProcessQueue(0.3, 60)->run(['hang' => $this->php('echo "waiting for the server\n"; sleep(30);')], 1, $this->emptySandbox()->root);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['hang']->exitCode);
+        self::assertSame('timed out after 0.3 seconds, last output: waiting for the server', $results['hang']->firstErrorLine());
+        self::assertLessThan(20 * 1_000_000_000, hrtime(true) - $started);
+    }
+
+    public function testAtAFractionalOverallLimitTheRunningJobIsStoppedAndTheWaitingOneNeverStarts(): void
+    {
+        $sandbox = $this->emptySandbox();
+
+        $results = new ProcessQueue(30, 0.3)->run(['hang' => $this->php('echo "waiting for the server\n"; sleep(30);'), 'waiting' => $this->appending('waiting')], 1, $sandbox->root);
+
+        self::assertSame('timed out: the test pass reached its overall limit of 0.3 seconds, last output: waiting for the server', $results['hang']->firstErrorLine());
+        self::assertSame('timed out: the test pass reached its overall limit of 0.3 seconds', $results['waiting']->firstErrorLine());
+        self::assertFileDoesNotExist($sandbox->root.'/order');
+    }
+
+    public function testAJobStartedLateInThePassWhoseOwnTimeoutIsLongerThanWhatIsLeftIsNamedByTheOverallLimit(): void
+    {
+        $late = static function (int $worker): array {
+            // Most of the pass is used up before the job starts, so the pass ends long before the job's own limit would.
+            usleep(500_000);
+
+            return [['php', '-r', 'sleep(30);'], []];
+        };
+
+        $results = new ProcessQueue(0.9, 1)->run(['late' => $late], 1, $this->emptySandbox()->root);
+
+        self::assertSame('timed out: the test pass reached its overall limit of 1 seconds', $results['late']->firstErrorLine());
+    }
+
+    public function testAQueueWithAJobLimitThatIsNotFiniteInNanosecondsIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessQueue(PHP_FLOAT_MAX, 60);
+    }
+
+    public function testAQueueWithAPassLimitThatIsNotFiniteInNanosecondsIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessQueue(30, PHP_FLOAT_MAX);
     }
 
     public function testAJobThatCannotStartFailsWithoutHoldingItsWorker(): void

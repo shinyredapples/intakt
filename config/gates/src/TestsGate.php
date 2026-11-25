@@ -24,8 +24,8 @@ final readonly class TestsGate implements RunsTheChangesCode
     private const int FILE_TIMEOUT_SECONDS = 600;
 
     public function __construct(
-        private int $fileTimeoutSeconds = self::FILE_TIMEOUT_SECONDS,
-        private int $passTimeoutSeconds = self::PASS_TIMEOUT_SECONDS,
+        private int|float $fileTimeoutSeconds = self::FILE_TIMEOUT_SECONDS,
+        private int|float $passTimeoutSeconds = self::PASS_TIMEOUT_SECONDS,
     ) {
     }
 
