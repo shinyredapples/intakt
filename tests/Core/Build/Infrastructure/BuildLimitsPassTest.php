@@ -37,15 +37,15 @@ final class BuildLimitsPassTest extends TestCase
         self::assertSame(60, $container->getDefinition(BuildLimits::class)->getArgument(1));
     }
 
-    #[TestWith([BuildServices::ALLOWANCE_TOKENS, 'allowance', true, 'bool'])]
-    #[TestWith([BuildServices::IDLE_SECONDS, 'idle time', '900', 'string'])]
-    #[TestWith([BuildServices::CEILING_TOKENS, 'runaway ceiling', 6_000_000.0, 'float'])]
-    #[TestWith([BuildServices::TASK_TOTAL_TOKENS, 'per-task total', null, 'null'])]
-    public function testALimitThatIsNotAWholeNumberIsRefused(string $parameter, string $limit, mixed $given, string $type): void
+    #[TestWith([BuildServices::ALLOWANCE_TOKENS, true, 'The build\'s allowance must be a whole number, not bool.'])]
+    #[TestWith([BuildServices::IDLE_SECONDS, '900', 'The build\'s idle time must be a whole number, not string.'])]
+    #[TestWith([BuildServices::CEILING_TOKENS, 6_000_000.0, 'The build\'s runaway ceiling must be a whole number, not float.'])]
+    #[TestWith([BuildServices::TASK_TOTAL_TOKENS, null, 'The build\'s per-task total must be a whole number, not null.'])]
+    public function testALimitThatIsNotAWholeNumberIsRefused(string $parameter, bool|float|string|null $given, string $refusal): void
     {
         $container = $this->containerWith([$parameter => $given]);
 
-        $this->expectExceptionObject(new InvalidArgumentException(sprintf('The build\'s %s must be a whole number, not %s.', $limit, $type)));
+        $this->expectExceptionObject(new InvalidArgumentException($refusal));
 
         new BuildLimitsPass()->process($container);
     }
@@ -78,7 +78,7 @@ final class BuildLimitsPassTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $changed
+     * @param array<string, bool|float|int|string|null> $changed
      */
     private function containerWith(array $changed): ContainerBuilder
     {

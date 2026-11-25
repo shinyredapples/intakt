@@ -74,7 +74,7 @@ final readonly class RunBuildJob
         private GatesAtOnce $gatesAtOnce,
         #[Autowire(param: BuildServices::TOOL_TIME_LIMIT)]
         mixed $toolTimeLimitSeconds,
-        // Injected for D4 of #1737 and public for the watch that stops a running build (#3965), the one reader; BuildLimitsPass refuses a wrong setting when the container compiles.
+        // Public, because the watch that stops a running build (#3965) is its one reader; injected, so BuildLimitsPass can refuse a wrong setting when the container compiles.
         public BuildLimits $limits,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
