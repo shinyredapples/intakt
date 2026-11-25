@@ -22,7 +22,7 @@ flowchart LR
   score --> report
 ```
 
-Each bench change is a pair: the **base**, the sample project before the change, and the **change** itself, the edit a pull request would bring. The Code reviewers read the change exactly as it would read a real pull request. The judge only sorts what the reviewers found; the score comes from comparing each reviewer's own findings with the planted mistakes, so every reviewer is measured on its own.
+Each bench change is a pair: the **base**, the sample project before the change, and the **change** itself, the edit a pull request would bring. The Code reviewers read the change exactly as they would read a real pull request. The judge only sorts what the reviewers found; the score comes from comparing each reviewer's own findings with the planted mistakes, so every reviewer is measured on its own.
 
 ## Both commands call your paid models
 
@@ -37,7 +37,7 @@ Each review of a bench change is a real review by your project's Code reviewers:
 
 `intakt:bench:review` is the quick look: it names one change (for example `free-shipping`) and prints, for each reviewer, what it caught and missed, its false alarms, its tokens and time, and the judge's list of what to fix. It writes no file.
 
-`intakt:bench` is the full run. Add `--repeat=3` to review every change three times, each time from a fresh copy of the code, to see whether the answers vary: the same reviewer can catch a mistake once and miss it the next time. More repeats tell you more and cost more: on the demo panel of two reviewers, `--repeat=3` makes 24 rounds (eight changes, three times each), so 48 reviews by a reviewer and up to 24 calls of the judge.
+`intakt:bench` is the full run. Add `--repeat=3` to review every change three times, each time from a fresh copy of the code, to see whether the answers vary: the same reviewer can catch a mistake once and miss it the next time. More repeats tell you more and cost more: with the demo's two Code reviewers, `--repeat=3` makes 24 rounds (eight changes, three times each), so 48 reviews by a reviewer and up to 24 calls of the judge.
 
 ```mermaid
 flowchart TD
