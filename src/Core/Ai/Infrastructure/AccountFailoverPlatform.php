@@ -192,9 +192,27 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         // Every free account was sent to and limited, so no window stands: a pin ended between its save and this read, or a store saved none (issue #3975). A pinned call then waits the shortest time its limits named, never a flat second, because a store that keeps refusing saves would otherwise let the caller send again every second against a longer reset. An unpinned call keeps the failover's error.
-        $named = null === $routerProvider ? null : $failures->shortestLimitedWait();
+        $named = null === $routerProvider ? null : $this->shortestWaitNamed($waits, $failures);
 
         return null === $named ? $everyAccountFailed : new EveryAccountCoolingDown($this->provider, $named);
+    }
+
+    // Per account the longer of what its limit still has to run and the window now stored for it, because another worker can have extended a window that this call's own limit names shorter; null when no account of the call recorded a limit.
+    /**
+     * @param array<string, int> $waits
+     */
+    private function shortestWaitNamed(array $waits, SendFailures $failures): ?int
+    {
+        $now = $this->clock->now()->getTimestamp();
+        $named = [];
+        foreach (array_keys($this->platforms) as $name) {
+            $left = $failures->limitedWait(new Account($this->provider, $name), $now);
+            if (null !== $left) {
+                $named[] = max($left, $waits[$name] ?? 0);
+            }
+        }
+
+        return [] === $named ? null : min($named);
     }
 
     /**

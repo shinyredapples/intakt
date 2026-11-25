@@ -189,7 +189,7 @@ final readonly class AccountPlatform implements PlatformInterface
     {
         $retryAfter = null === $reset ? null : max(1, $reset);
         // Noted before either store is written, because a pinned call whose windows were not saved still has to wait what the limit named (AccountFailoverPlatform::typed()).
-        $this->failures->limitedFor($this->account, min(AccountCooldowns::LONGEST_SECONDS, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET));
+        $this->failures->limitedUntil($this->account, $this->clock->now()->getTimestamp() + min(AccountCooldowns::LONGEST_SECONDS, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET));
 
         try {
             if (null === $retryAfter && $this->account->provider->spendsAPlan()) {

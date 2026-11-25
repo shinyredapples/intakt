@@ -363,6 +363,63 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame(45, $out->secondsUntilAnAccountIsFree);
     }
 
+    // Forced order: another worker extends the first account's pin to 300 seconds while the second call is in flight, and the second account's 120-second pin is not saved, so the shortest original reset (1) would send the retry to the second account too early.
+    public function testAnAccountWhosePinAnotherWorkerExtendedIsNotRetriedBeforeTheOtherAccountsReset(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            public bool $refuses = false;
+
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return !$this->refuses && parent::save($item);
+            }
+        };
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $first = $this->answering(static fn (): never => throw new RateLimitExceededException(1));
+        $second = $this->answering(function () use ($pins, $pool): never {
+            $pins->coolDown($this->deepinfra(Account::DEFAULT), 300);
+            $pool->refuses = true;
+
+            throw new RateLimitExceededException(120);
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame(120, $out->secondsUntilAnAccountIsFree);
+    }
+
+    // Forced order: the pin's save succeeds and the clock then runs past the whole reset before the call reads, so only the one-second typed minimum is left, not the full reset again.
+    public function testAPinWhoseWindowAlreadyRanOutBeforeTheReadWaitsOnlyTheMinimumNotTheWholeResetAgain(): void
+    {
+        $clock = $this->clock;
+        $pool = new class($clock) extends ArrayAdapter {
+            public function __construct(private readonly MockClock $clock)
+            {
+                parent::__construct();
+            }
+
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                $saved = parent::save($item);
+                $this->clock->sleep(120);
+
+                return $saved;
+            }
+        };
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $limited = $this->answering(static fn (): never => throw new RateLimitExceededException(120));
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame(1, $out->secondsUntilAnAccountIsFree);
+    }
+
     // Forced order: a pinned 429 without a reset and no window saved, so the wait is the default minute the pin would have cooled for.
     public function testAPinnedLimitWithoutAResetWhoseWindowsAreNotSavedWaitsTheDefaultMinute(): void
     {
