@@ -12,6 +12,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final class EmptyDatabase
 {
+    private static ?string $built = null;
+
     // The mapped tables go through the schema tool; the conversation and queue tables are outside the mapping (the schema filter hides them), so they are dropped by name.
     public static function in(ContainerInterface $container): void
     {
@@ -34,11 +36,13 @@ final class EmptyDatabase
         $metadata = $manager->getMetadataFactory()->getAllMetadata();
         $connection = $container->get('doctrine.dbal.default_connection');
         assert($connection instanceof Connection);
-        $tool = new SchemaTool($manager);
+        $sqlite = $connection->getDatabasePlatform() instanceof SQLitePlatform;
 
-        if (!$connection->getDatabasePlatform() instanceof SQLitePlatform || [] !== $tool->getUpdateSchemaSql($metadata)) {
+        // Comparing the schema with the mapping costs about as much as rebuilding it, so the reset compares the definitions with those the tool wrote last.
+        if (!$sqlite || self::$built !== self::definitions($connection)) {
             self::in($container);
-            $tool->createSchema($metadata);
+            new SchemaTool($manager)->createSchema($metadata);
+            self::$built = $sqlite ? self::definitions($connection) : null;
 
             return;
         }
@@ -71,6 +75,15 @@ final class EmptyDatabase
         } finally {
             $connection->executeStatement(sprintf('PRAGMA foreign_keys = %d', $enforced));
         }
+    }
+
+    private static function definitions(Connection $connection): string
+    {
+        $rows = $connection->fetchAllNumeric(
+            "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'index') AND tbl_name NOT IN ('sqlite_sequence', 'reviewer_conversation', 'messenger_messages') ORDER BY type, name",
+        );
+
+        return json_encode($rows, JSON_THROW_ON_ERROR);
     }
 
     /**
