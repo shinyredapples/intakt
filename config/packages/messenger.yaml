@@ -36,6 +36,8 @@ framework:
             Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer: async
             Intakt\Core\Review\UseCase\JudgeRound\JudgeRound: async
             Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings: async
+            # Queued, so the embedding call of a settled finding runs in a worker and never holds up the judging or the escalation.
+            Intakt\Core\Review\UseCase\SettleRejectedFindings\SettleRejectedFinding: async
             Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict: async
             Intakt\Core\Review\Contract\RoundOpened: async
             # Queued in the judging's transaction on the Doctrine queue, so it commits with the recurrence and its strong-tier call runs outside the judging's locks.

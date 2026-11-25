@@ -13,6 +13,8 @@ final readonly class EscalateRecurringP1 implements CommandMessage
         public string $round,
         public string $finding,
         public string $key,
+        // The hash of the finding's file as the round's checkout held it, taken when the escalation is queued, because that checkout is removed once the round is judged and a rejection is settled with it; null when it could not be read, and then nothing is settled.
+        public ?string $codeHash = null,
     ) {
     }
 }

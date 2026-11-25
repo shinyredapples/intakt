@@ -48,6 +48,7 @@ use Intakt\Core\Review\Infrastructure\EscalationAgent;
 use Intakt\Core\Review\Infrastructure\EscalationPrompt;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
+use Intakt\Core\Review\Infrastructure\SettledCode;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
@@ -77,6 +78,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Core\Review\UseCase\SettleRejectedFindings\RejectedFindings;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Vendor\Contract\EscalationReviews;
@@ -85,6 +87,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\QueuedEscalations;
+use Intakt\Tests\Core\Review\UseCase\SettleRejectedFindings\QueuedSettlements;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
@@ -116,6 +119,7 @@ final readonly class RoundFixture
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public QueuedEscalations $escalations;
+    public QueuedSettlements $settlements;
     public MockClock $clock;
     public BufferingLogger $log;
     public EventDispatcher $events;
@@ -134,6 +138,7 @@ final readonly class RoundFixture
         $this->serializer = $container->get('serializer.stored');
         $this->bus = new RecordingBus();
         $this->escalations = new QueuedEscalations();
+        $this->settlements = new QueuedSettlements();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
@@ -270,7 +275,12 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new AddedLinesInCheckout(new DiffAddedLines(new DiffPaths()), $this->container->get(Redactor::class)), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events, $this->container->get(Redactor::class));
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new AddedLinesInCheckout(new DiffAddedLines(new DiffPaths()), $this->container->get(Redactor::class)), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events, $this->container->get(Redactor::class), $this->rejectedFindings());
+    }
+
+    public function rejectedFindings(): RejectedFindings
+    {
+        return new RejectedFindings(new SettledCode(), $this->container->get(Redactor::class), $this->settlements);
     }
 
     public function recurringP1s(Ledger $ledger, InMemoryTransport $failed = new InMemoryTransport()): RecurringP1s
@@ -289,7 +299,7 @@ final readonly class RoundFixture
         $agent = new EscalationAgent(new EscalationPrompt(new Fence()), new VerdictPerRole(), $reviews, $this->container->get(Redactor::class));
         $rounds = $this->rounds($this->entities);
 
-        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $locks ?? $this->locks)($message);
+        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $locks ?? $this->locks, $this->rejectedFindings())($message);
     }
 
     public function escalationsOfChange(?Ledger $ledger = null): EscalationsOfChange
@@ -484,7 +494,7 @@ final readonly class RoundFixture
 
     private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
     {
-        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
+        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations, $this->storedFindingsOn($this->entities), new SettledCode());
     }
 
     private function panelOf(int $reviewers): Panel

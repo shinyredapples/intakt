@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PromptAssembly;
@@ -18,7 +19,6 @@ use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\MultiPartResult;
 use Symfony\AI\Platform\Result\ObjectResult;
 
@@ -66,7 +66,8 @@ final readonly class ReviewerPrompt
     ) {
     }
 
-    public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief): MessageBag
+    // The checkout is the head under review, so a settled finding is given only while the code it was settled on is the same there.
+    public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief, ?Checkout $checkout = null): MessageBag
     {
         $messages = [
             $this->assembly->systemWithRole(self::INSTRUCTIONS, $conversation),
@@ -74,10 +75,8 @@ final readonly class ReviewerPrompt
             $this->assembly->user('The diff of the change:', $this->cut->fenced(UntrustedSource::Diff, $brief->change->diff)),
         ];
 
-        // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.
-        $briefing = $this->memory?->briefingOn($brief);
-
-        if ($briefing instanceof UserMessage) {
+        // User messages of their own, never part of the system message, so the notes stay data under the instructions' fencing rule.
+        foreach ($this->memory?->briefingOn($brief, $checkout) ?? [] as $briefing) {
             $messages[] = $briefing;
         }
 

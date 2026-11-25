@@ -17,6 +17,7 @@ use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\UseCase\SettleRejectedFindings\RejectedFindings;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -33,6 +34,7 @@ final readonly class JudgeRoundHandler
         private Vendor $vendor,
         private EventDispatcherInterface $events,
         private Redactor $redactor,
+        private RejectedFindings $rejected,
     ) {
     }
 
@@ -49,7 +51,9 @@ final readonly class JudgeRoundHandler
         $judged = JudgedFindings::of($judgement, $findings, $dropped);
         // Only after a committed judge transition, because a listener drops what an unjudged round still needs, such as its kept snapshot.
         if ($this->rounds->record($round, $judged)) {
+            $settle = $this->rejected->ofJudgement($round, $judgement, $judged);
             $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
+            $this->rejected->send(...$settle);
         }
     }
 
