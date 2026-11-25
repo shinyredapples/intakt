@@ -35,7 +35,7 @@ final readonly class DoctorCommand
         $checks = $this->checks();
         foreach ($checks as $name => $check) {
             // Raw, because a reason is outside text and must not be read as console markup.
-            $output->writeln(self::line($name, $check), OutputInterface::OUTPUT_RAW);
+            $output->writeln($this->line($name, $check), OutputInterface::OUTPUT_RAW);
         }
 
         return array_all($checks, static fn (InfrastructureCheck $check): bool => $check->passes())
@@ -62,17 +62,17 @@ final readonly class DoctorCommand
     /**
      * @param InfrastructureCheck<WorkerThreads|ServerMetrics|HubHealth> $check
      */
-    private static function line(string $name, InfrastructureCheck $check): string
+    private function line(string $name, InfrastructureCheck $check): string
     {
         $line = $check->passes()
             ? 'pass: '.$name
             : sprintf('fail: %s: %s; fix: %s', $name, $check->problem, $check->fix);
 
-        return self::oneLine($line);
+        return $this->oneLine($line);
     }
 
     // Decision D4 of #3826 promises one line per check, so a line break or terminal escape in any part, also in outside text, becomes a space here and nowhere else.
-    private static function oneLine(string $text): string
+    private function oneLine(string $text): string
     {
         return preg_replace('/[\p{Cc}\p{Zl}\p{Zp}]/u', ' ', mb_scrub($text, 'UTF-8')) ?? '';
     }
