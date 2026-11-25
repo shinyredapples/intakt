@@ -109,6 +109,39 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         self::assertStringNotContainsString('Property', $this->ruleFindingsOf('contract-array-promoted-normalized'));
     }
 
+    public function testAPromotedPropertyAndItsDifferingParameterBothFail(): void
+    {
+        self::assertCount(2, explode("\n", $this->ruleFindingsOf('contract-array-promoted-both-refused')));
+    }
+
+    public function testADifferingParameterOfAPrivateConstructorPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('contract-array-private-normalized');
+    }
+
+    public function testAPromotedPublicPropertyATraitBringsFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('contract-array-trait-promoted', 'src/Core/Sample/Contract/Carried.php:18 intakt.contractArrayType Property Intakt\Core\Sample\Contract\Carried::$items is typed array<int, DateTimeImmutable>');
+    }
+
+    public function testAContractInheritingAListOfStringsFromAParentOutsideContractFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('contract-array-inherited-method', 'src/Core/Sample/Contract/Named.php:9 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Named::names() returns list<string>');
+    }
+
+    public function testAMethodInheritedFromAContractParentIsReportedOnlyInTheParent(): void
+    {
+        $findings = explode("\n", $this->ruleFindingsOf('contract-array-contract-parent'));
+
+        self::assertCount(1, $findings);
+        self::assertStringStartsWith('src/Core/Sample/Contract/ListedBase.php:12 intakt.contractArrayType', $findings[0]);
+    }
+
+    public function testAContractExtendingABuiltInExceptionPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('contract-array-builtin-parent');
+    }
+
     public function testTheCaseMethodsPhpGivesAnEnumPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('contract-array-enum-cases');

@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
-use PhpParser\Comment\Doc;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Variable;
-use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Analyser\Scope;
+use PHPStan\BetterReflection\Reflection\Adapter\ReflectionClass;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
+use PHPStan\BetterReflection\Reflection\Adapter\ReflectionProperty;
 use PHPStan\Node\InClassNode;
+use PHPStan\PhpDoc\Tag\ParamTag;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\ParameterReflection;
 use PHPStan\Reflection\ParametersAcceptor;
@@ -53,18 +54,15 @@ final readonly class ContractArrayTypeRule implements Rule
 
         $class = $node->getClassReflection();
         $declaration = $node->getOriginalNode();
-        $constructor = $declaration->getMethod('__construct');
-        $promoted = $constructor instanceof ClassMethod ? $this->promotedPublicNamesOf($constructor) : [];
+        $promoted = $this->promotedPublicNamesOf($class);
         $findings = [];
 
         foreach ($this->exposedMethodsOf($class) as $method) {
-            $skipped = $this->isConstructor($method) ? array_keys($promoted) : [];
+            $skipped = $this->isConstructor($method) ? $promoted : [];
             $findings = [...$findings, ...$this->findingsOf($this->signatureTypes($method, $class, $skipped), $this->lineOf($method, $declaration))];
         }
 
-        $inputs = $constructor instanceof ClassMethod ? $this->promotedInputFindings($constructor, $promoted, $class) : [];
-
-        return [...$findings, ...$inputs, ...$this->propertyFindings($promoted, $class)];
+        return [...$findings, ...$this->promotedInputFindings($promoted, $class, $declaration), ...$this->propertyFindings($promoted, $class, $declaration)];
     }
 
     private function isContract(string $file): bool
@@ -72,34 +70,34 @@ final readonly class ContractArrayTypeRule implements Rule
         return str_starts_with($file, $this->root.'/') && 1 === preg_match(self::CONTRACT_FOLDER, substr($file, strlen($this->root) + 1));
     }
 
+    // a promoted property a trait's constructor brings is the using class's own property, so it crosses the boundary as part of the class
     /**
-     * @return array<string, int>
+     * @return list<string>
      */
-    private function promotedPublicNamesOf(ClassMethod $constructor): array
+    private function promotedPublicNamesOf(ClassReflection $class): array
     {
-        $names = [];
+        $promoted = array_filter($class->getNativeReflection()->getProperties(ReflectionProperty::IS_PUBLIC), fn (ReflectionProperty $property): bool => $property->isPromoted() && $this->isJudgedHere($property->getDeclaringClass(), $class));
 
-        foreach (array_filter($constructor->params, static fn (Param $param): bool => $param->isPromoted() && $param->isPublic()) as $param) {
-            $names[$this->parameterName($param)] = $param->getStartLine();
-        }
-
-        return $names;
+        return array_values(array_map(static fn (ReflectionProperty $property): string => $property->getName(), $promoted));
     }
 
-    private function parameterName(Param $param): string
+    // a member PHP or a vendor package declares has a signature this project cannot change, and a member of a parent under Contract/ is judged in the parent's own file
+    private function isJudgedHere(ReflectionClass $declaring, ClassReflection $class): bool
     {
-        return $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '';
+        $file = $declaring->getFileName();
+
+        return $declaring->getName() === $class->getName() || (is_string($file) && str_starts_with($file, $this->root.'/src/') && !$this->isContract($file));
     }
 
-    // a public method a trait brings becomes the using class's own method, so it crosses the boundary as part of the class
+    // a public method a trait brings becomes the using class's own method, so it crosses the boundary as part of the class, and so does one a parent outside Contract/ declares
     /**
      * @return list<string>
      */
     private function exposedMethodsOf(ClassReflection $class): array
     {
-        $own = array_filter($class->getNativeReflection()->getMethods(ReflectionMethod::IS_PUBLIC), static fn (ReflectionMethod $method): bool => $method->getDeclaringClass()->getName() === $class->getName());
+        $exposed = array_filter($class->getNativeReflection()->getMethods(ReflectionMethod::IS_PUBLIC), fn (ReflectionMethod $method): bool => $this->isJudgedHere($method->getDeclaringClass(), $class));
 
-        return array_values(array_filter(array_map(static fn (ReflectionMethod $method): string => $method->getName(), $own), fn (string $method): bool => !$this->isFixedByBuiltInInterface($method, $class)));
+        return array_values(array_filter(array_map(static fn (ReflectionMethod $method): string => $method->getName(), $exposed), fn (string $method): bool => !$this->isFixedByBuiltInInterface($method, $class)));
     }
 
     // PHP itself declares such a method's signature (JsonSerializable::jsonSerialize() returns array), so a contract cannot type it otherwise
@@ -143,7 +141,7 @@ final readonly class ContractArrayTypeRule implements Rule
         return array_values(array_map(static fn (ParameterReflection $parameter): array => [sprintf('%s parameter $%s is typed', $method, $parameter->getName()), $parameter->getType()], $kept));
     }
 
-    // a method a trait brings has no line in this file, so it is reported where the class starts
+    // a method a trait or a parent brings has no line in this class, so it is reported where the class starts
     private function lineOf(string $method, ClassLike $declaration): int
     {
         $declared = $declaration->getMethod($method);
@@ -194,29 +192,20 @@ final readonly class ContractArrayTypeRule implements Rule
         return RuleErrorBuilder::message($what.self::HOW_TO_COMPLY)->identifier('intakt.contractArrayType')->line($line)->build();
     }
 
-    // a constructor may take a promoted property in another shape (@param) than it keeps (@var), and callers pass the @param shape
+    // a public constructor may take a promoted property in another shape (@param) than it keeps (@var), and callers pass the @param shape; a private one is reached only through the class's own typed factories
     /**
-     * @param array<string, int> $promoted
+     * @param list<string> $promoted
      *
      * @return list<IdentifierRuleError>
      */
-    private function promotedInputFindings(ClassMethod $constructor, array $promoted, ClassReflection $class): array
+    private function promotedInputFindings(array $promoted, ClassReflection $class, ClassLike $declaration): array
     {
-        $comment = $constructor->getDocComment();
-        $file = $class->getFileName();
-
-        if (!$comment instanceof Doc || null === $file) {
-            return [];
-        }
-
-        $tags = $this->typeMapper->getResolvedPhpDoc($file, $class->getName(), null, $constructor->name->toString(), $comment->getText())->getParamTags();
+        $tags = $this->promotedParamTagsOf($class);
         $findings = [];
 
-        foreach (array_intersect_key($tags, $promoted) as $name => $tag) {
-            $input = $tag->getType();
-
+        foreach (array_intersect_key($tags, array_flip($promoted)) as $name => $input) {
             if (!$input->equals($class->getNativeProperty($name)->getReadableType()) && $this->isRefused($input)) {
-                $findings[] = $this->finding(sprintf('Method %s::%s() parameter $%s is typed %s', $class->getDisplayName(), $constructor->name->toString(), $name, $this->described($input)), $constructor->getStartLine());
+                $findings[] = $this->finding(sprintf('Method %s::__construct() parameter $%s is typed %s', $class->getDisplayName(), $name, $this->described($input)), $this->lineOf('__construct', $declaration));
             }
         }
 
@@ -224,22 +213,59 @@ final readonly class ContractArrayTypeRule implements Rule
     }
 
     /**
-     * @param array<string, int> $promoted
+     * @return array<string, Type>
+     */
+    private function promotedParamTagsOf(ClassReflection $class): array
+    {
+        $constructor = $class->getNativeReflection()->getConstructor();
+
+        if (!$constructor instanceof ReflectionMethod || !$constructor->isPublic() || !is_string($comment = $constructor->getDocComment()) || !is_string($file = $constructor->getFileName())) {
+            return [];
+        }
+
+        $declaring = $constructor->getBetterReflection()->getDeclaringClass();
+        $trait = $declaring->isTrait() ? $declaring->getName() : null;
+        $tags = $this->typeMapper->getResolvedPhpDoc($file, $constructor->getDeclaringClass()->getName(), $trait, '__construct', $comment)->getParamTags();
+
+        return array_map(static fn (ParamTag $tag): Type => $tag->getType(), $tags);
+    }
+
+    /**
+     * @param list<string> $promoted
      *
      * @return list<IdentifierRuleError>
      */
-    private function propertyFindings(array $promoted, ClassReflection $class): array
+    private function propertyFindings(array $promoted, ClassReflection $class, ClassLike $declaration): array
     {
+        $lines = $this->promotedLinesOf($declaration);
         $findings = [];
 
-        foreach ($promoted as $name => $line) {
+        foreach ($promoted as $name) {
             $type = $class->getNativeProperty($name)->getReadableType();
 
             if ($this->isRefused($type)) {
-                $findings[] = $this->finding(sprintf('Property %s::$%s is typed %s', $class->getDisplayName(), $name, $this->described($type)), $line);
+                $findings[] = $this->finding(sprintf('Property %s::$%s is typed %s', $class->getDisplayName(), $name, $this->described($type)), $lines[$name] ?? $declaration->getStartLine());
             }
         }
 
         return $findings;
+    }
+
+    // a property a trait or a parent promotes has no line in this class, so it is reported where the class starts
+    /**
+     * @return array<string, int>
+     */
+    private function promotedLinesOf(ClassLike $declaration): array
+    {
+        $constructor = $declaration->getMethod('__construct');
+        $lines = [];
+
+        foreach ($constructor instanceof ClassMethod ? $constructor->params : [] as $param) {
+            if ($param->isPromoted() && $param->var instanceof Variable && is_string($param->var->name)) {
+                $lines[$param->var->name] = $param->getStartLine();
+            }
+        }
+
+        return $lines;
     }
 }

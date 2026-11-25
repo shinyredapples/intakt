@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use DateTimeImmutable;
+
+final class Normalized
+{
+    /**
+     * @param array<int, DateTimeImmutable> $items
+     */
+    private function __construct(
+        /** @var list<DateTimeImmutable> */
+        public array $items,
+    ) {
+        $this->items = array_values($items);
+    }
+
+    public static function of(DateTimeImmutable ...$items): self
+    {
+        return new self($items);
+    }
+}
