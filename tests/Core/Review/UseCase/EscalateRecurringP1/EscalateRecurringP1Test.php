@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\EscalationFailed;
 use Intakt\Core\Review\Contract\EscalationOutcome;
@@ -22,7 +23,11 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\RecurringP1Found;
+use Intakt\Core\Review\Contract\RequestedRound;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\StartReview;
+use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Infrastructure\CitedCodeNotShown;
@@ -37,12 +42,15 @@ use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationCallFailed;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationLimited;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\HolderReReviews;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalation;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalationHandler;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\TransientEscalationFailures;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Vendor\Contract\EscalationReviews;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -86,6 +94,7 @@ use Throwable;
 #[CoversClass(EscalateRecurringP1::class)]
 #[CoversClass(EscalationRequests::class)]
 #[CoversClass(EscalationsOfChange::class)]
+#[CoversClass(HolderReReviews::class)]
 #[CoversClass(EscalationBusy::class)]
 #[CoversClass(EscalationCallFailed::class)]
 #[CoversClass(RecordRecurringP1s::class)]
@@ -619,6 +628,122 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::PULL));
     }
 
+    public function testARejectionStartsTheNextRoundOfTheChangeOnTheRejectedHeadFromItsRepository(): void
+    {
+        $this->recurredFromARepository();
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertEquals([new StartReviewAtHead(new StartReview('alpha', RoundFixture::TASK, new RequestedRound(self::CHANGE, 3, new ChangeSource('/repos/alpha', 'main'))), new CommitId(self::HEAD_B))], $this->fixture->reviewStarts->starts);
+    }
+
+    public function testAConfirmationAndAFailedEscalationStartNoRound(): void
+    {
+        $this->judged($this->readFromARepositoryAt(self::HEAD_A, $this->keyedP1(), $this->otherP1()));
+        $this->judged($this->readFromARepositoryAt(self::HEAD_B, $this->repeated($this->keyedP1()), $this->repeated($this->otherP1(), 'F2')));
+
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+        $this->fixture->escalate($this->fixture->escalations->messages[1], new ScriptedEscalations(null));
+
+        self::assertSame([], $this->fixture->reviewStarts->starts);
+    }
+
+    public function testARedeliveredRejectionStartsTheHoldersReReviewOnce(): void
+    {
+        $this->recurredFromARepository();
+        $this->escalateQueued($this->rejecting());
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertCount(1, $this->fixture->reviewStarts->starts);
+    }
+
+    public function testARedeliveryAfterAStartThatFailedStartsTheHoldersReReview(): void
+    {
+        $this->recurredFromARepository();
+        $this->fixture->reviewStarts->failure = new RuntimeException('The repository could not be read.');
+
+        try {
+            $this->escalateQueued($this->rejecting());
+            self::fail('The failed start was swallowed.');
+        } catch (RuntimeException $failure) {
+            self::assertSame('The repository could not be read.', $failure->getMessage());
+        }
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertCount(1, $this->fixture->reviewStarts->starts);
+    }
+
+    public function testARejectionInARoundWithoutARepositoryStartsNoRound(): void
+    {
+        $this->judged($this->readFromARepositoryAt(self::HEAD_A, $this->keyedP1()));
+        $withoutSource = $this->fixture->startWithDiffAtHead(self::CHANGE, self::HEAD_B, self::DIFF);
+        $this->judged($this->delivered($withoutSource, new Verdict(Decision::Changes, [$this->repeated($this->keyedP1())], [], [])));
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertSame([], $this->fixture->reviewStarts->starts);
+    }
+
+    public function testARejectionReusedByAQueuedEscalationOfANewerHeadStartsTheReReviewOfThatHead(): void
+    {
+        $this->recurredFromARepository();
+        $this->judged($this->readFromARepositoryAt(self::HEAD_C, $this->repeated($this->keyedP1())));
+        [$second, $third] = $this->fixture->escalations->messages;
+        $this->fixture->escalate($second, $this->rejecting());
+
+        $this->fixture->escalate($third, $this->rejecting());
+
+        self::assertSame([[3, self::HEAD_B], [4, self::HEAD_C]], array_map(static fn (StartReviewAtHead $start): array => [$start->start->round->number, $start->head->hash], $this->fixture->reviewStarts->starts));
+    }
+
+    public function testARoundOnAHeadThatAnEarlierRoundReviewedStartsNoFurtherReReview(): void
+    {
+        $this->judged($this->readFromARepositoryAt(self::HEAD_A, $this->keyedP1()));
+        $this->judged($this->readFromARepositoryAt(self::HEAD_B));
+        $this->judged($this->readFromARepositoryAt(self::HEAD_B, $this->repeated($this->keyedP1())));
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertSame(['rejected'], array_column($this->payloadsOf(LedgerEventKind::EscalationReviewed), 'outcome'));
+        self::assertSame([], $this->fixture->reviewStarts->starts);
+    }
+
+    public function testAfterARejectionTheReReviewHoldsTheFindingOpenAndItsReviewersAreShownTheReasons(): void
+    {
+        $this->recurredFromARepository();
+        $this->escalateQueued($this->rejecting());
+
+        $next = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Approve, [], [new ResolvedFinding('F1')], [])]);
+        $this->fixture->deliver($this->messagesOf($next)[0], $vendor);
+
+        self::assertEquals(['F1' => new EscalationVerdict(EscalationOutcome::Rejected, 'The retry in send() delivers it.')], $vendor->briefs['Look at part 1.']->escalations);
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $vendor->briefs['Look at part 1.']->open));
+    }
+
+    public function testAfterAConfirmationTheNextRoundsReviewersAreShownIt(): void
+    {
+        $this->recurredFromARepository();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $next = $this->fixture->round($this->fixture->startAtHead(self::CHANGE, self::HEAD_C));
+
+        self::assertEquals(['F1' => new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')], $this->fixture->escalationsOfChange()->ofOpenFindings($next));
+    }
+
+    public function testAResolvedFindingCarriesNoEscalationIntoTheNextRound(): void
+    {
+        $this->recurredFromARepository();
+        $this->escalateQueued($this->rejecting());
+        $this->judged($this->delivered($this->fixture->startAtHead(self::CHANGE, self::HEAD_B), new Verdict(Decision::Approve, [], [new ResolvedFinding('F1')], [])));
+
+        $fourth = $this->fixture->round($this->fixture->startAtHead(self::CHANGE, self::HEAD_C));
+
+        self::assertSame([], $this->fixture->escalationsOfChange()->ofOpenFindings($fourth));
+    }
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
@@ -663,6 +788,24 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private function escalateQueued(ScriptedEscalations $escalations): void
     {
         $this->fixture->escalate($this->fixture->escalations->messages[0], $escalations);
+    }
+
+    private function recurredFromARepository(): void
+    {
+        $this->judged($this->readFromARepositoryAt(self::HEAD_A, $this->keyedP1()));
+        $this->judged($this->readFromARepositoryAt(self::HEAD_B, $this->repeated($this->keyedP1())));
+    }
+
+    private function readFromARepositoryAt(string $head, Finding ...$findings): string
+    {
+        $round = $this->fixture->startFromRepositoryAtHead(self::CHANGE, $head, self::DIFF);
+
+        return $this->delivered($round, new Verdict(Decision::Changes, array_values($findings), [], []));
+    }
+
+    private function rejecting(): ScriptedEscalations
+    {
+        return new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'The retry in send() delivers it.'));
     }
 
     private function throwing(Throwable $failure): ScriptedEscalations
@@ -750,17 +893,27 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
     private function completedWithDiffAt(string $head, string $diff, Finding ...$findings): string
     {
-        $round = $this->fixture->startWithDiffAtHead(self::CHANGE, $head, $diff);
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, array_values($findings), [], [])]);
+        return $this->delivered($this->fixture->startWithDiffAtHead(self::CHANGE, $head, $diff), new Verdict(Decision::Changes, array_values($findings), [], []));
+    }
 
-        // Only the reviewers of this round, so the rounds started before are not delivered again.
-        foreach ($this->fixture->bus->messages as $message) {
-            if ($this->fixture->reviewer($message->reviewerId)->round()->id()->toRfc4122() === $round) {
-                $this->fixture->deliver($message, $vendor);
-            }
+    private function delivered(string $round, Verdict $verdict): string
+    {
+        $vendor = new VerdictPerRole(['Look at part 1.' => $verdict]);
+
+        foreach ($this->messagesOf($round) as $message) {
+            $this->fixture->deliver($message, $vendor);
         }
 
         return $round;
+    }
+
+    // Only the reviewers of this round, so the rounds started before are not delivered again.
+    /**
+     * @return list<ReviewWithReviewer>
+     */
+    private function messagesOf(string $round): array
+    {
+        return array_values(array_filter($this->fixture->bus->messages, fn (ReviewWithReviewer $message): bool => $this->fixture->reviewer($message->reviewerId)->round()->id()->toRfc4122() === $round));
     }
 
     // Names a file of the fixture's checkout, so it gets a key; tied to a requirement, so the goalpost rule keeps it a P1 in later rounds.

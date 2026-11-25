@@ -53,6 +53,7 @@ use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\HolderReReviews;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
@@ -85,6 +86,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\QueuedEscalations;
+use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\StartedReviews;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
@@ -116,6 +118,7 @@ final readonly class RoundFixture
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public QueuedEscalations $escalations;
+    public StartedReviews $reviewStarts;
     public MockClock $clock;
     public BufferingLogger $log;
     public EventDispatcher $events;
@@ -134,6 +137,7 @@ final readonly class RoundFixture
         $this->serializer = $container->get('serializer.stored');
         $this->bus = new RecordingBus();
         $this->escalations = new QueuedEscalations();
+        $this->reviewStarts = new StartedReviews();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
@@ -182,6 +186,15 @@ final readonly class RoundFixture
         $target = new ReviewTarget(new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, $diff), $command->target->identity);
 
         return $this->startWith(new RunReviewRound($target, $command->panel, $command->round), $this->bus);
+    }
+
+    // As startAtHead(), read from a repository, so the ledger holds the source a next round of the change starts from.
+    public function startFromRepositoryAtHead(string $change, string $head, string $diff): string
+    {
+        $command = $this->commandAt($change, $head, 2);
+        $target = new ReviewTarget(new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, $diff), $command->target->identity);
+
+        return $this->startWith(new RunReviewRound($target, $command->panel, new RequestedRound($change, null, new ChangeSource('/repos/alpha', 'main'))), $this->bus);
     }
 
     public function commandFor(string $change, int $reviewers): RunReviewRound
@@ -253,7 +266,7 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities));
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities), $this->escalationsOfChangeOn($entities, $ledger));
     }
 
     // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
@@ -289,12 +302,12 @@ final readonly class RoundFixture
         $agent = new EscalationAgent(new EscalationPrompt(new Fence()), new VerdictPerRole(), $reviews, $this->container->get(Redactor::class));
         $rounds = $this->rounds($this->entities);
 
-        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $locks ?? $this->locks)($message);
+        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $this->escalationsOfChange(), new HolderReReviews($rounds, $this->ledger, $this->ledgerPayloads(), $this->reviewStarts), $locks ?? $this->locks)($message);
     }
 
     public function escalationsOfChange(?Ledger $ledger = null): EscalationsOfChange
     {
-        return new EscalationsOfChange($this->rounds($this->entities), $ledger ?? $this->ledger, $this->ledgerPayloads());
+        return $this->escalationsOfChangeOn($this->entities, $ledger ?? $this->ledger);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -450,6 +463,11 @@ final readonly class RoundFixture
         $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), $this->roundLedger($ledger ?? $this->ledger), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
+    }
+
+    private function escalationsOfChangeOn(EntityManagerInterface $entities, Ledger $ledger): EscalationsOfChange
+    {
+        return new EscalationsOfChange($this->rounds($entities), new KeptVerdicts($entities, $this->clock), $ledger, $this->ledgerPayloads());
     }
 
     private function subject(): ReviewSubject

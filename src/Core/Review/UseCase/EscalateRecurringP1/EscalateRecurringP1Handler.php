@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\UseCase\EscalateRecurringP1;
 use Closure;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\EscalationFailed;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationRequest;
 use Intakt\Core\Review\Contract\EscalationReviewed;
 use Intakt\Core\Review\Contract\EscalationReviewer;
@@ -39,12 +40,29 @@ final readonly class EscalateRecurringP1Handler
         private EscalationReviewer $reviewer,
         private RoundLedger $ledger,
         private EscalationsOfChange $recorded,
+        private HolderReReviews $reReviews,
         private LockFactory $locks,
     ) {
     }
 
-    // Not waited for, because Messenger brings a busy message back and it then finds the verdict the holder of the key kept, so two deliveries of one key rarely pay for two answers.
     public function __invoke(EscalateRecurringP1 $command): void
+    {
+        $this->settleWhileTheKeyIsHeld($command);
+
+        // From the ledger and after the lock, so a redelivery whose first delivery stopped before the start still starts the re-review, and a round already started refuses a second one.
+        if (EscalationOutcome::Rejected === $this->recorded->outcomeFor($command->round, $command->key)) {
+            $this->reReviews->startAfterRejectionIn($command->round);
+        }
+    }
+
+    // The same lock for the escalation and the record of its failure, so the two never write for one key at once.
+    public static function lockNameOf(string $key): string
+    {
+        return self::LOCK_PREFIX.hash('sha256', $key);
+    }
+
+    // Not waited for, because Messenger brings a busy message back and it then finds the verdict the holder of the key kept, so two deliveries of one key rarely pay for two answers.
+    private function settleWhileTheKeyIsHeld(EscalateRecurringP1 $command): void
     {
         $lock = $this->locks->createLock(self::lockNameOf($command->key));
 
@@ -57,12 +75,6 @@ final readonly class EscalateRecurringP1Handler
         } finally {
             $lock->release();
         }
-    }
-
-    // The same lock for the escalation and the record of its failure, so the two never write for one key at once.
-    public static function lockNameOf(string $key): string
-    {
-        return self::LOCK_PREFIX.hash('sha256', $key);
     }
 
     // Once per round and key: what the ledger holds for them stands, so a redelivery asks no model and records nothing twice, also after a failure.
