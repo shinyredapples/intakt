@@ -21,7 +21,7 @@
         <div>
             <h3 class="acct-name">{{ row.account.name }}</h3>
             <p class="acct-kind">{{ row.account.provider.spendsAPlan ? 'Subscription' : 'API key' }}, {{ row.account.provider.value }}</p>
-            <span class="chip strong on-page"><span class="dot {{ row.state.dot }}"></span>{{ row.state.inWords }}</span>
+            {{ include('dashboard/components/chip.html.twig', {dot: row.state.dot, label: row.state.inWords, on_page: true}, with_context = false) }}
         </div>
         {% if row.roles is empty %}
         <p class="acct-roles muted">Serves no role.</p>
