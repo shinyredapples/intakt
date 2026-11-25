@@ -17,7 +17,7 @@ final readonly class WebServerCheck
     private const array OPTIONS = ['max_redirects' => 0, 'timeout' => 4, 'max_duration' => 4];
     private const string DOWN_FIX = 'check that FrankenPHP is running and listens on SERVER_PORT (in the compose stack, docker compose restart intakt starts it again)';
     private const string ERROR_FIX = 'check the FrankenPHP log and var/log for the error the page ends on';
-    private const string PORT_FIX = 'set SERVER_PORT and DASHBOARD_PORT in .env.local to port numbers between 1 and 65535';
+    private const string PORT_FIX = 'set SERVER_PORT and DASHBOARD_PORT to port numbers between 1 and 65535 where this install gets its environment (.env.local, or the env file or variables given to the container)';
 
     // Read as text and checked here, because a port the container cast to a number would stop the whole doctor before its first line (decision D5).
     public function __construct(
@@ -50,8 +50,8 @@ final readonly class WebServerCheck
 
     private function port(string $value): ?int
     {
-        // Digits only, because the integer filter also takes a sign or surrounding blanks no port carries.
-        $port = 1 === preg_match('/^[0-9]{1,5}$/', $value) ? (int) $value : 0;
+        // Digits only up to the very end, because the integer filter also takes a sign or surrounding blanks no port carries, and a plain end anchor lets a line feed through.
+        $port = 1 === preg_match('/^[0-9]{1,5}\z/', $value) ? (int) $value : 0;
 
         return $port >= 1 && $port <= 65535 ? $port : null;
     }

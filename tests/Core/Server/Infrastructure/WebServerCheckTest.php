@@ -21,7 +21,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 final class WebServerCheckTest extends TestCase
 {
     private const string DOWN_FIX = 'check that FrankenPHP is running and listens on SERVER_PORT (in the compose stack, docker compose restart intakt starts it again)';
-    private const string PORT_FIX = 'set SERVER_PORT and DASHBOARD_PORT in .env.local to port numbers between 1 and 65535';
+    private const string PORT_FIX = 'set SERVER_PORT and DASHBOARD_PORT to port numbers between 1 and 65535 where this install gets its environment (.env.local, or the env file or variables given to the container)';
 
     public function testAWebServerThatAnswers200Passes(): void
     {
@@ -110,6 +110,19 @@ final class WebServerCheckTest extends TestCase
         self::assertSame(self::PORT_FIX, $verdict->fix);
     }
 
+    #[DataProvider('portsOutOfRange')]
+    public function testAMalformedServerOrDashboardPortSendsNoRequest(string $port): void
+    {
+        $http = new MockHttpClient(new MockResponse('', ['error' => 'refused']));
+
+        $asServerPort = new WebServerCheck($http, $port, '7781')->run();
+        $asDashboardPort = new WebServerCheck($http, '7781', $port)->run();
+
+        self::assertSame(0, $http->getRequestsCount());
+        self::assertSame('cannot run (SERVER_PORT or DASHBOARD_PORT is not a port number)', $asServerPort->problem);
+        self::assertSame('cannot run (SERVER_PORT or DASHBOARD_PORT is not a port number)', $asDashboardPort->problem);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
@@ -119,6 +132,9 @@ final class WebServerCheckTest extends TestCase
         yield 'one above the top' => ['65536'];
         yield 'negative' => ['-1'];
         yield 'blank around it' => [' 7781'];
+        yield 'blank after it' => ['7781 '];
+        yield 'line feed after it' => ["7781\n"];
+        yield 'carriage return and line feed after it' => ["7781\r\n"];
         yield 'empty' => [''];
     }
 

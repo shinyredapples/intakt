@@ -81,11 +81,64 @@ final class ConsumerProcessesCheckTest extends TestCase
     public function testAConsumerStartedWithAFullPhpPathAndIniOptionsCounts(): void
     {
         $verdict = $this->check(new FakeProcessRoot([
-            ['/usr/local/bin/php', '-d', 'memory_limit=1G', '/app/bin/console', 'messenger:consume', 'async'],
+            ['/usr/local/bin/php', '-d', 'memory_limit=1G', FakeProcessRoot::INSTALL.'/bin/console', 'messenger:consume', 'async'],
             ['php8.5', 'bin/console', 'messenger:consume', 'scheduler_watcher', 'scheduler_retention'],
-        ]));
+        ], [0 => null]));
 
         self::assertTrue($verdict->passes());
+    }
+
+    public function testAnUnrelatedScriptNamedConsoleDoesNotCountAsAWorker(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['php', '/elsewhere/console', 'messenger:consume', 'async'],
+            ['php', FakeProcessRoot::OTHER_INSTALL.'/bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ]));
+
+        self::assertSame('no async worker is running, so no review or build moves', $verdict->problem);
+    }
+
+    public function testAConsumerOfAnotherInstallDoesNotCountAsAWorker(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ], [0 => FakeProcessRoot::OTHER_INSTALL]));
+
+        self::assertSame('no async worker is running, so no review or build moves', $verdict->problem);
+    }
+
+    public function testAConsumerWhoseWorkingDirectoryCannotBeReadDoesNotCountAsAWorker(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ], [1 => null]));
+
+        self::assertSame('the scheduler worker is not running, so pull requests are not watched', $verdict->problem);
+    }
+
+    public function testAConsumerStartedThroughALinkToTheInstallCounts(): void
+    {
+        $this->root = new FakeProcessRoot([
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ]);
+        symlink($this->root->install, $this->root->path.'/linked');
+
+        $verdict = new ConsumerProcessesCheck($this->root->path.'/linked', $this->root->path)->run();
+
+        self::assertTrue($verdict->passes());
+    }
+
+    public function testAnInstallWithoutItsConsoleCountsNoWorker(): void
+    {
+        $this->root = FakeProcessRoot::healthy();
+
+        $verdict = new ConsumerProcessesCheck($this->root->path.'/no-install', $this->root->path)->run();
+
+        self::assertSame(self::MISSING_FIX, $verdict->fix);
     }
 
     public function testEveryCommandLineUnreadableFailsAsCannotRun(): void
@@ -97,7 +150,7 @@ final class ConsumerProcessesCheckTest extends TestCase
             chmod($file, 0o000);
         }
 
-        $verdict = new ConsumerProcessesCheck($this->root->path)->run();
+        $verdict = $this->root->check()->run();
 
         self::assertStringStartsWith('cannot run (the process list under ', (string) $verdict->problem);
         self::assertSame(self::CANNOT_RUN_FIX, $verdict->fix);
@@ -108,14 +161,14 @@ final class ConsumerProcessesCheckTest extends TestCase
         $this->root = new FakeProcessRoot([[''], ['php', 'bin/console', 'messenger:consume', 'async']]);
         chmod($this->root->path.'/101/cmdline', 0o000);
 
-        $verdict = new ConsumerProcessesCheck($this->root->path)->run();
+        $verdict = $this->root->check()->run();
 
         self::assertSame('no async worker is running, so no review or build moves; the scheduler worker is not running, so pull requests are not watched', $verdict->problem);
     }
 
     public function testAMissingProcessRootFailsAsCannotRun(): void
     {
-        $verdict = new ConsumerProcessesCheck(sys_get_temp_dir().'/intakt-no-such-proc')->run();
+        $verdict = new ConsumerProcessesCheck(sys_get_temp_dir(), sys_get_temp_dir().'/intakt-no-such-proc')->run();
 
         self::assertSame('cannot run (the process list under '.sys_get_temp_dir().'/intakt-no-such-proc cannot be read)', $verdict->problem);
         self::assertSame(self::CANNOT_RUN_FIX, $verdict->fix);
@@ -126,7 +179,7 @@ final class ConsumerProcessesCheckTest extends TestCase
         $this->root = FakeProcessRoot::healthy();
         chmod($this->root->path, 0o000);
 
-        $verdict = new ConsumerProcessesCheck($this->root->path)->run();
+        $verdict = $this->root->check()->run();
 
         self::assertStringStartsWith('cannot run (the process list under ', (string) $verdict->problem);
     }
@@ -148,6 +201,6 @@ final class ConsumerProcessesCheckTest extends TestCase
     {
         $this->root = $root;
 
-        return new ConsumerProcessesCheck($root->path)->run();
+        return $root->check()->run();
     }
 }

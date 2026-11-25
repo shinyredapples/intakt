@@ -164,7 +164,7 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame(
-            "fail: web server: cannot run (SERVER_PORT or DASHBOARD_PORT is not a port number); fix: set SERVER_PORT and DASHBOARD_PORT in .env.local to port numbers between 1 and 65535\n"
+            "fail: web server: cannot run (SERVER_PORT or DASHBOARD_PORT is not a port number); fix: set SERVER_PORT and DASHBOARD_PORT to port numbers between 1 and 65535 where this install gets its environment (.env.local, or the env file or variables given to the container)\n"
             ."pass: worker threads\npass: server metrics\npass: Mercure hub\n".self::WORKERS_AND_FORGE,
             $tester->getDisplay(),
         );
@@ -312,7 +312,7 @@ final class DoctorCommandTest extends TestCase
         $root = $processes ?? FakeProcessRoot::healthy();
         $this->roots[] = $root;
 
-        return new ConsumerProcessesCheck($root->path);
+        return $root->check();
     }
 
     private function statusReading(EndpointDown $threads): ServerStatus
