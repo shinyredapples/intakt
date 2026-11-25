@@ -9,7 +9,9 @@
 {#- The columns a round moves between, replaced from the board's own partial: a round starts in In review and ends in Done. Each is pushed with at most the page limit of cards (pushed), so the update does not grow with the install's history. -#}
 {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
 {% for column in [constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::InReview'), constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::Done')] %}
-<turbo-stream action="replace" target="col-{{ column.value|lower|replace({' ': '-'}) }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit, pushed: true}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="col-{{ column.slug }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit, pushed: true}, with_context = false) }}</template></turbo-stream>
+{#- The phone switcher's button for the same column, updated inside so it keeps the column a swipe pressed and the keyboard focus. -#}
+<turbo-stream action="update" target="switch-{{ column.slug }}"><template>{{ include('dashboard/_board_switch.html.twig', {board: board, column: column}, with_context = false) }}</template></turbo-stream>
 {% endfor %}
 {#- The status line, replaced from the partial the board page includes: it is the board's one summary of who works, so a pushed board never says "Quiet" after a reviewer started. -#}
 <turbo-stream action="replace" target="status-line"><template>{{ include('dashboard/_status_line.html.twig', {working: board.whoIsWorking()}, with_context = false) }}</template></turbo-stream>

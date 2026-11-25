@@ -21,7 +21,7 @@ final class BoardStylesTest extends TestCase
     // Asserted, because an absolute .sr-only label of a folded strip escaped the static scroller and widened the page at 1440 (#2659).
     public function testTheBoardScrollerHoldsItsScreenReaderLabelsSoTheyNeverWidenThePage(): void
     {
-        $rules = $this->rulesOf($this->sheet());
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
 
         self::assertMatchesRegularExpression('/overflow-x:\s*auto;.*position:\s*relative/s', $rules['.board'] ?? '');
     }
@@ -65,6 +65,62 @@ final class BoardStylesTest extends TestCase
 
         self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.col-hide'] ?? '');
         self::assertArrayNotHasKey('.board .col.collapsed', $this->rulesOf($this->sheetOutside('min-width: 761px')));
+    }
+
+    // Asserted, because DESIGN.md (Phone patterns) asks for one column at a time that a swipe snaps column by column.
+    public function testOnAPhoneTheBoardShowsOneColumnAtATimeAndSnapsByColumn(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlock('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/scroll-snap-type:\s*x mandatory/', $rules['.board'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*flex:\s*0 0 100%;\s*min-width:\s*0;\s*scroll-snap-align:\s*start;\s*$/', $rules['.board .col, .board .col.col-needs'] ?? '');
+    }
+
+    // Sticky, because the switcher must stay in reach while a long column scrolls; 44 px, because that is the phone floor of DESIGN.md.
+    public function testOnAPhoneTheColumnSwitcherIsStickyWith44PxButtonsAndOnlyThere(): void
+    {
+        $phone = $this->rulesOf($this->mediaBlock('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/display:\s*flex;.*position:\s*sticky;\s*top:\s*var\(--top\)/s', $phone['.colswitch'] ?? '');
+        self::assertMatchesRegularExpression('/height:\s*44px/', $phone['.colswitch button'] ?? '');
+        self::assertMatchesRegularExpression('/background:\s*var\(--selected\)/', $phone['.colswitch button[aria-pressed="true"]'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $this->rulesOf($this->sheetOutside('max-width: 760px'))['.colswitch'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $phone['.stagemap'] ?? '');
+    }
+
+    // No amber, because DESIGN.md keeps amber for what waits on the owner; the map marks the columns in view in green.
+    public function testTheColumnMapMarksColumnsInViewInGreenWithoutAmber(): void
+    {
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/background:\s*var\(--primary\)/', $rules['.sm-seg.in::before'] ?? '');
+        self::assertMatchesRegularExpression('/height:\s*8px/', $rules['.sm-seg.in::before'] ?? '');
+        // An out-of-view column's bar is a thinner --muted line, because the mock's --tint-2 stood out from the page by under 3:1 (WCAG 1.4.11).
+        self::assertMatchesRegularExpression('/width:\s*18px;\s*height:\s*4px/', $rules['.sm-seg::before'] ?? '');
+        self::assertMatchesRegularExpression('/background:\s*var\(--muted\)/', $rules['.sm-seg::before'] ?? '');
+        foreach (['.stagemap', '.sm-seg', '.sm-seg::before', '.sm-seg.in::before'] as $selector) {
+            self::assertStringNotContainsString('amber', $rules[$selector] ?? '');
+        }
+    }
+
+    // WCAG 1.4.11 asks 3:1 of the bar, because it is the segment's only visible cue.
+    public function testTheColumnMapBarsStandOutFromThePageInTheLightTheme(): void
+    {
+        $this->assertMapBarsStandOutFromThePage(':root, [data-theme="light"]');
+    }
+
+    public function testTheColumnMapBarsStandOutFromThePageInTheDarkTheme(): void
+    {
+        $this->assertMapBarsStandOutFromThePage('[data-theme="dark"]');
+    }
+
+    // WCAG 2.5.8 asks for 24 by 24 px; the segments sit side by side, so spacing cannot make up for a narrower one.
+    public function testEachColumnMapSegmentIsAtLeast24PxWideAndHigh(): void
+    {
+        $segment = $this->rulesOf($this->sheetOutside('max-width: 760px'))['.sm-seg'] ?? '';
+
+        self::assertMatchesRegularExpression('/(?<![-\w])width:\s*24px/', $segment);
+        self::assertMatchesRegularExpression('/(?<![-\w])height:\s*24px/', $segment);
     }
 
     public function testTheFirstDayPanelStacksItsOctopusAboveItsTextAtMost144PxHigh(): void
@@ -217,6 +273,45 @@ final class BoardStylesTest extends TestCase
     public function testBelow761WideTheBoardNeverFades(): void
     {
         self::assertStringNotContainsString('mask-image', $this->sheetOutside('min-width: 761px'));
+    }
+
+    private function assertMapBarsStandOutFromThePage(string $theme): void
+    {
+        $tokens = file_get_contents(__DIR__.'/../../../../assets/styles/tokens.css');
+        self::assertIsString($tokens);
+        $colors = $this->rulesOf($tokens)[$theme] ?? '';
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
+
+        foreach (['.sm-seg::before', '.sm-seg.in::before'] as $bar) {
+            preg_match('/background:\s*var\((--[\w-]+)\)/', $rules[$bar] ?? '', $token);
+
+            self::assertGreaterThanOrEqual(3.0, $this->contrast($this->colorOf($colors, $token[1] ?? self::fail($bar)), $this->colorOf($colors, '--page')), $bar);
+        }
+    }
+
+    private function colorOf(string $tokens, string $name): string
+    {
+        preg_match('/(?<![\w-])'.preg_quote($name, '/').':\s*(#[0-9A-Fa-f]{6})\s*;/', $tokens, $color);
+
+        return $color[1] ?? self::fail($name);
+    }
+
+    private function contrast(string $one, string $other): float
+    {
+        $luminances = [$this->luminance($one), $this->luminance($other)];
+
+        return (max($luminances) + 0.05) / (min($luminances) + 0.05);
+    }
+
+    private function luminance(string $color): float
+    {
+        $linear = array_map(static function (string $channel): float {
+            $value = hexdec($channel) / 255;
+
+            return $value <= 0.03928 ? $value / 12.92 : (($value + 0.055) / 1.055) ** 2.4;
+        }, str_split(substr($color, 1), 2));
+
+        return 0.2126 * $linear[0] + 0.7152 * $linear[1] + 0.0722 * $linear[2];
     }
 
     private function sheet(): string

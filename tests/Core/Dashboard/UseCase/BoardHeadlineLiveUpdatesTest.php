@@ -185,6 +185,38 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringContainsString('feat/a', $column->filter('.col-cards')->text());
     }
 
+    public function testAStartedRoundsPushCountsItInThePhoneSwitchersInReviewButton(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        $updated = $this->updated($page, $this->pushedHeadlineAfterAReviewerStarted());
+
+        self::assertSame('In review 1 task', $updated->filter('#switch-in-review')->text());
+    }
+
+    public function testAJudgedRoundsPushMovesItsCountFromInReviewToDoneInThePhoneSwitcher(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $started = $this->pushedHeadlineAfterAReviewerStarted();
+        $this->ledger->judgeRound(self::ROUND);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $updated = $this->updated($page, $started.$this->lastShellUpdate());
+        self::assertSame('In review 0 tasks', $updated->filter('#switch-in-review')->text());
+        self::assertSame('Done 1 task', $updated->filter('#switch-done')->text());
+    }
+
+    public function testThePushedSwitcherButtonWordsAreTheSameMarkupAsTheButtonOfAPageLoadedAfterIt(): void
+    {
+        $streams = new Crawler($this->pushedHeadlineAfterAReviewerStarted());
+
+        $page = $this->browser->request('GET', '/');
+
+        $pushed = $streams->filter('turbo-stream[action="update"][target="switch-in-review"] template');
+        self::assertSame(trim($page->filter('#switch-in-review')->html()), trim($pushed->html()));
+    }
+
     public function testAJudgedRoundsPushMovesItsCardFromInReviewToDone(): void
     {
         $this->pushedHeadlineAfterAReviewerStarted();
@@ -481,9 +513,10 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         return $last->getData();
     }
 
+    // The phone switcher's buttons are updated too, so the headline is the update that is not one of theirs.
     private function targetOf(string $stream): string
     {
-        $update = new Crawler($stream)->filter('turbo-stream[action="update"]');
+        $update = new Crawler($stream)->filter('turbo-stream[action="update"]:not([target^="switch-"])');
         self::assertCount(1, $update);
 
         return (string) $update->attr('target');

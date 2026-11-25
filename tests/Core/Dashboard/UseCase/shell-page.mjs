@@ -85,7 +85,11 @@ class FakeSelect extends FakeElement {
 // A board column as the server renders it, so also as a push brings it: open unless it starts collapsed, never expanded, its strip saying which.
 class FakeColumn extends FakeElement {
     constructor(page, id, collapsed = false) {
-        super(page, '', { '.col-fold': new FakeElement(page) });
+        super(page, '', { '.col-fold': new FakeElement(page), '.col-hide': new FakeElement(page) });
+        Object.entries(this.children).forEach(([selector, control]) => {
+            control.matches = (other) => other === selector;
+            control.closest = () => null;
+        });
         this.cards = [Object.assign(new FakeElement(page), { id: `${id}-card` })];
         this.cards[0].setAttribute('href', '/reviews/round-1');
         // The card's glossary terms, each focusable without a link of its own.
@@ -108,7 +112,7 @@ class FakeColumn extends FakeElement {
     }
 
     contains(element) {
-        return this.cards.includes(element) || this.terms.includes(element);
+        return this.cards.includes(element) || this.terms.includes(element) || Object.values(this.children).includes(element);
     }
 
     querySelectorAll(selector) {

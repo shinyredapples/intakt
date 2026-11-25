@@ -289,6 +289,18 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .col.collapsed .col-fold .count { background: var(--raised); }
 }
 
+/* The column map (DESIGN.md, Board edge and stage map): assets/board-map.js shows it while the board is wider than its space and marks the columns in view. It uses no amber. Each segment is a 24 by 24 px button, the pointer target WCAG 2.5.8 asks for, that draws the mock's 18 by 8 px bar in its middle, so the bars sit 6 px apart rather than the mock's 3 px. */
+.stagemap { display: flex; align-items: center; justify-content: flex-end; gap: var(--s12); height: 24px; margin: 0 0 var(--s8); color: var(--muted); font-size: var(--t13); }
+.stagemap[hidden] { display: none; }
+.sm-bar { display: inline-flex; }
+.sm-seg { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; }
+/* An out-of-view column's bar is a thinner --muted line, so it stands out from the page by at least 3:1 in both themes (WCAG 1.4.11, the mock's --tint-2 gave 1.13:1 and 1.30:1), and the columns in view keep the mock's full --primary bar, told apart by height as well as color. */
+.sm-seg::before { content: ""; width: 18px; height: 4px; border-radius: 2px; background: var(--muted); }
+.sm-seg.in::before { height: 8px; border-radius: 3px; background: var(--primary); }
+/* A focused column shows where a jump landed; the ring sits inside, so the board's scroller does not cut it off. */
+.board .col:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--r-card); }
+.colswitch { display: none; }
+
 /* Connection state; the page stays at full contrast while it shows (DESIGN.md: never fade the page). */
 .conn { display: flex; align-items: center; gap: var(--s12); margin-bottom: var(--s16); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .conn p { flex: 1; margin: 0; }
@@ -301,6 +313,20 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 @media (max-width: 760px) {
   .btn, .btn.sm, .linkbtn, .toast button { min-height: 44px; }
   .col-hide { display: none; }
+  /* The phone board (DESIGN.md, Phone patterns): one column at a time under a sticky switcher of every column, and a swipe snaps column by column. The switcher names the column, so its own head is not repeated. */
+  .stagemap { display: none; }
+  .colswitch {
+    display: flex; gap: calc(var(--s4) + 2px); overflow-x: auto; position: sticky; top: var(--top); z-index: 10; margin: 0 calc(-1 * var(--s16)) var(--s12); padding: var(--s8) var(--s16);
+    background: var(--page); scrollbar-width: none;
+  }
+  .colswitch button {
+    flex: none; display: inline-flex; align-items: center; gap: var(--s8); height: 44px; padding: 0 calc(var(--s12) + 2px); border: 0; border-radius: var(--r-btn);
+    background: var(--tint); color: var(--ink); font: 500 var(--t15)/1 var(--f-head); cursor: pointer;
+  }
+  .colswitch button[aria-pressed="true"] { background: var(--selected); }
+  .board { margin: 0 calc(-1 * var(--s16)); padding: 0 var(--s16) var(--s16); scroll-snap-type: x mandatory; scroll-padding: 0 var(--s16); scrollbar-width: none; }
+  .board .col, .board .col.col-needs { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
+  .board .col-head { display: none; }
   .icon-btn { width: 44px; height: 44px; }
   .fchip { flex: none; height: 44px; }
   .seg { display: flex; }
