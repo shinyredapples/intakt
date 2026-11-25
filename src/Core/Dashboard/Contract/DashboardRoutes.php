@@ -11,6 +11,7 @@ final readonly class DashboardRoutes
     public const string SHOW_BOARD = self::PREFIX.'show_board';
     public const string RUN_SETUP = self::PREFIX.'run_setup';
     public const string LIST_PROJECTS = self::PREFIX.'list_projects';
+    public const string ADD_PROJECT = self::PREFIX.'add_project';
     public const string LIST_REVIEWS = self::PREFIX.'list_reviews';
     public const string LIST_WAITING = self::PREFIX.'list_waiting';
     public const string SHOW_TRENDS = self::PREFIX.'show_trends';

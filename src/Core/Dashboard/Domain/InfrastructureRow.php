@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use Closure;
-use Intakt\Core\Server\Contract\EndpointDown;
 use Intakt\Core\Server\Contract\HubHealth;
+use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\WorkerThreads;
@@ -31,11 +31,23 @@ final readonly class InfrastructureRow
      */
     public static function of(ServerReading $reading, Closure $redact): self
     {
+        $checks = InfrastructureChecks::of($reading);
         // Redacted as well, because the reason of a down source is free text the board does not control.
+        $down = static fn (string $name, string $reason): InfrastructureFigure => InfrastructureFigure::down($name, $redact($reason));
+
         return new self([
-            ...self::threadsOf($reading->threads, $redact),
-            ...self::metricsOf($reading->metrics, $redact),
-            self::hubOf($reading->hub, $redact),
+            ...$checks->threads->presented(
+                static fn (WorkerThreads $threads): array => [new InfrastructureFigure('Threads busy', (string) $threads->busy), new InfrastructureFigure('Threads idle', (string) $threads->idle)],
+                static fn (string $reason): array => [$down(self::THREADS, $reason)],
+            ),
+            ...$checks->metrics->presented(
+                static fn (ServerMetrics $metrics): array => [new InfrastructureFigure('Queue depth', (string) $metrics->queueDepth), new InfrastructureFigure('Worker restarts', (string) $metrics->workerRestarts)],
+                static fn (string $reason): array => [$down(self::METRICS, $reason)],
+            ),
+            $checks->hub->presented(
+                static fn (HubHealth $hub): InfrastructureFigure => new InfrastructureFigure(self::HUB, $hub->value, $checks->hub->passes() ? FigureState::Fine : FigureState::Unhealthy),
+                static fn (string $reason): InfrastructureFigure => $down(self::HUB, $reason),
+            ),
         ]);
     }
 
@@ -46,41 +58,5 @@ final readonly class InfrastructureRow
             InfrastructureFigure::down(self::METRICS, $reason),
             InfrastructureFigure::down(self::HUB, $reason),
         ]);
-    }
-
-    /**
-     * @param Closure(string): string $redact
-     *
-     * @return list<InfrastructureFigure>
-     */
-    private static function threadsOf(WorkerThreads|EndpointDown $threads, Closure $redact): array
-    {
-        return $threads instanceof EndpointDown
-            ? [InfrastructureFigure::down(self::THREADS, $redact($threads->reason))]
-            : [new InfrastructureFigure('Threads busy', (string) $threads->busy), new InfrastructureFigure('Threads idle', (string) $threads->idle)];
-    }
-
-    /**
-     * @param Closure(string): string $redact
-     *
-     * @return list<InfrastructureFigure>
-     */
-    private static function metricsOf(ServerMetrics|EndpointDown $metrics, Closure $redact): array
-    {
-        return $metrics instanceof EndpointDown
-            ? [InfrastructureFigure::down(self::METRICS, $redact($metrics->reason))]
-            : [new InfrastructureFigure('Queue depth', (string) $metrics->queueDepth), new InfrastructureFigure('Worker restarts', (string) $metrics->workerRestarts)];
-    }
-
-    /**
-     * @param Closure(string): string $redact
-     */
-    private static function hubOf(HubHealth|EndpointDown $hub, Closure $redact): InfrastructureFigure
-    {
-        return match (true) {
-            $hub instanceof EndpointDown => InfrastructureFigure::down(self::HUB, $redact($hub->reason)),
-            HubHealth::Healthy === $hub => new InfrastructureFigure(self::HUB, $hub->value),
-            HubHealth::Unhealthy === $hub => new InfrastructureFigure(self::HUB, $hub->value, FigureState::Unhealthy),
-        };
     }
 }

@@ -208,6 +208,16 @@ final class SearchControllerTest extends DashboardPageTestCase
         self::assertNull($row->attr('href'));
     }
 
+    public function testAddAProjectIsAnActionThatLinksToTheFlow(): void
+    {
+        $row = $this->rowsOf($this->browser->request('GET', '/search?q=add'), 'Actions');
+
+        self::assertSame('Add a project', $row->filter('.lbl')->text());
+        self::assertSame('a', $row->nodeName());
+        self::assertSame('/projects/new', $row->attr('href'));
+        self::assertNull($row->attr('data-search-action'));
+    }
+
     public function testAnActionRowNamesTheActionTheOverlayRuns(): void
     {
         $crawler = $this->browser->request('GET', '/search?q=theme');
