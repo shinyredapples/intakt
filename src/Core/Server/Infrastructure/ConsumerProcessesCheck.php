@@ -40,8 +40,9 @@ final readonly class ConsumerProcessesCheck
             : DoctorCheckVerdict::failed(implode('; ', array_map(static fn (string $receiver): string => self::KINDS[$receiver], $missing)), self::MISSING_FIX);
     }
 
+    // Keyed by the process's folder, because a relative script is placed from the working directory that folder links to.
     /**
-     * @return array<string, list<string>>|null the arguments of each process, keyed by its folder under the process root
+     * @return array<string, list<string>>|null
      */
     private function commandLines(): ?array
     {

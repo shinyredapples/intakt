@@ -18,9 +18,10 @@ final readonly class FakeProcessRoot
     public string $install;
     public string $otherInstall;
 
+    // A working directory is given by the process's index when it is not the install: a folder, or null for one that cannot be read.
     /**
      * @param list<list<string>>      $commandLines
-     * @param array<int, string|null> $workingDirectories the working directory of the process at that index when it is not the install: a folder, or null for one that cannot be read
+     * @param array<int, string|null> $workingDirectories
      */
     public function __construct(array $commandLines, array $workingDirectories = [])
     {
@@ -41,11 +42,6 @@ final readonly class FakeProcessRoot
         }
     }
 
-    private function placed(string $text): string
-    {
-        return str_replace([self::INSTALL, self::OTHER_INSTALL], [$this->install, $this->otherInstall], $text);
-    }
-
     public static function healthy(): self
     {
         return new self([
@@ -64,5 +60,10 @@ final readonly class FakeProcessRoot
     {
         new Filesystem()->chmod($this->path, 0o755);
         new Filesystem()->remove($this->path);
+    }
+
+    private function placed(string $text): string
+    {
+        return str_replace([self::INSTALL, self::OTHER_INSTALL], [$this->install, $this->otherInstall], $text);
     }
 }
