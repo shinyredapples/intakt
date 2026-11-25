@@ -32,7 +32,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-// The refs a restore's push may leave behind, apart from LocalForgeBranchesTest, which covers the restore itself.
+// Apart from LocalForgeBranchesTest, because these tests need a push that fails at a chosen point, and that class restores through the real archive only.
 #[CoversClass(LocalBranchRestore::class)]
 #[UsesClass(ArchivedHead::class)]
 #[UsesClass(BranchGit::class)]
@@ -165,17 +165,6 @@ final class LocalBranchRestoreTest extends TestCase
         new Filesystem()->remove($this->archives());
     }
 
-    private function refusalOf(ArchivedHeadPush $push, ?string $head = null): string
-    {
-        try {
-            new LocalBranchRestore(new LocalRepository($this->forge->path, 'main'), $push, new HardenedGit())->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($head ?? $this->head)));
-        } catch (ForgeWriteFailed $refused) {
-            return $refused->getMessage();
-        }
-
-        self::fail('The restore was not refused.');
-    }
-
     // A push that runs one git command in the forge, as another writer would during it, and then fails.
     /**
      * @param list<string> $command
@@ -192,9 +181,15 @@ final class LocalBranchRestoreTest extends TestCase
         return $push;
     }
 
-    private function theRealPush(): PushArchivedHead
+    private function refusalOf(ArchivedHeadPush $push, ?string $head = null): string
     {
-        return new PushArchivedHead(new BranchGit(new HardenedGit(), new GuardedRun()), new LockFactory(new InMemoryStore()), new Mirrors($this->archives()));
+        try {
+            new LocalBranchRestore(new LocalRepository($this->forge->path, 'main'), $push, new HardenedGit())->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($head ?? $this->head)));
+        } catch (ForgeWriteFailed $refused) {
+            return $refused->getMessage();
+        }
+
+        self::fail('The restore was not refused.');
     }
 
     // A commit only the archive made, which the forge's branch intakt/keep holds too, so a restore that removes a ref at the archived head could remove that branch.
@@ -213,6 +208,11 @@ final class LocalBranchRestoreTest extends TestCase
     private function inTheForge(string $command): string
     {
         return sprintf('%s -C %s %s', $this->realGit(), escapeshellarg($this->forge->path), $command);
+    }
+
+    private function theRealPush(): PushArchivedHead
+    {
+        return new PushArchivedHead(new BranchGit(new HardenedGit(), new GuardedRun()), new LockFactory(new InMemoryStore()), new Mirrors($this->archives()));
     }
 
     private function realGit(): string

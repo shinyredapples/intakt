@@ -38,25 +38,8 @@ final readonly class LocalBranchRestore
         $common = $this->commonDirectory($name);
         $this->refuseExisting($name);
         $before = $this->branchRefs($name, 'before the push');
-        $failed = $this->failureOfPush($restore, $common);
 
-        // A push refused before git push ran wrote nothing, so no ref is looked for and none removed.
-        if (RemoteWrite::None === $failed?->write) {
-            throw $this->notRestored($name, $failed->getMessage(), $failed);
-        }
-
-        $this->settle($restore, $this->refsMadeSince($restore, $before), $failed);
-    }
-
-    private function failureOfPush(BranchRestore $restore, string $common): ?BranchNotPushed
-    {
-        try {
-            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $common);
-        } catch (BranchNotPushed $failed) {
-            return $failed;
-        }
-
-        return null;
+        $this->settle($restore, $before, $this->failureOfPush($restore, $common));
     }
 
     // Only the newline git ends its answer with, because a directory's own name may end in one, and a name without it can be another repository.
@@ -103,27 +86,31 @@ final readonly class LocalBranchRestore
         return $refs;
     }
 
-    // Only refs that are not symbolic, hold the archived head and were missing before the push, because the push's empty lease can create a ref and never move one, so a ref that was there before is not the push's and is never removed.
-    /**
-     * @param array<string, array{string, string}> $before
-     *
-     * @return list<string>
-     */
-    private function refsMadeSince(BranchRestore $restore, array $before): array
+    private function failureOfPush(BranchRestore $restore, string $common): ?BranchNotPushed
     {
-        $head = $restore->head->hash;
-        $after = $this->branchRefs($restore->name, 'after the push, so a branch the push wrote through a symbolic branch may be left');
+        try {
+            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $common);
+        } catch (BranchNotPushed $failed) {
+            return $failed;
+        }
 
-        return array_keys(array_filter($after, static fn (array $state, string $ref): bool => [$head, ''] === $state && !array_key_exists($ref, $before), ARRAY_FILTER_USE_BOTH));
+        return null;
     }
 
     // A symbolic branch another writer makes after the check is not listed to the push, whose empty lease then lets the remote create the branch it names. That ref is removed only when git push reported the new branch and it is the one new ref, because only then is it proven to be the push's own; in every other case nothing is removed and the new refs are named.
     /**
-     * @param list<string> $made
+     * @param array<string, array{string, string}> $before
      */
-    private function settle(BranchRestore $restore, array $made, ?BranchNotPushed $failed): void
+    private function settle(BranchRestore $restore, array $before, ?BranchNotPushed $failed): void
     {
         $name = $restore->name;
+
+        // A push refused before git push ran wrote nothing, so no ref is looked for and none removed.
+        if (RemoteWrite::None === $failed?->write) {
+            throw $this->notRestored($name, $failed->getMessage(), $failed);
+        }
+
+        $made = $this->refsMadeSince($restore, $before);
         $ref = 'refs/heads/'.$name;
         $elsewhere = array_values(array_diff($made, [$ref]));
 
@@ -144,6 +131,20 @@ final readonly class LocalBranchRestore
         $undo = $this->git($name, ['update-ref', '--no-deref', '-d', $target, $restore->head->hash]);
 
         throw $this->notRestored($name, $undo->isSuccessful() ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target) : sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())), $failed);
+    }
+
+    // Only refs that are not symbolic, hold the archived head and were missing before the push, because the push's empty lease can create a ref and never move one, so a ref that was there before is not the push's and is never removed.
+    /**
+     * @param array<string, array{string, string}> $before
+     *
+     * @return list<string>
+     */
+    private function refsMadeSince(BranchRestore $restore, array $before): array
+    {
+        $head = $restore->head->hash;
+        $after = $this->branchRefs($restore->name, 'after the push, so a branch the push wrote through a symbolic branch may be left');
+
+        return array_keys(array_filter($after, static fn (array $state, string $ref): bool => [$head, ''] === $state && !array_key_exists($ref, $before), ARRAY_FILTER_USE_BOTH));
     }
 
     /**
