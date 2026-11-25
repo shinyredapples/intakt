@@ -1,6 +1,6 @@
 # When a build over its allowance stops
 
-Progress, not spend, ends a build ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. Nothing calls it yet: the build job wires it in with T60 (#1737), together with the ledger record of the cause, the configured limits and the pages.
+Progress, not spend, ends a build: one over its allowance keeps going while it makes progress, until the runaway ceiling or the per-task total applies ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. Nothing calls it yet: the build job wires it in with T60 (#1737), together with the ledger record of the cause, the configured limits and the pages.
 
 ## The classes
 

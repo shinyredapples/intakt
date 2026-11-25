@@ -56,8 +56,8 @@ final readonly class BuildStopRule
 
     private function isIdlePastTheLimit(BuildWatch $watch): bool
     {
-        $idleSeconds = $this->clock->now()->getTimestamp() - $watch->lastProgressAt->getTimestamp();
+        $deadline = $watch->lastProgressAt->modify(sprintf('+%d seconds', $watch->limits->idleSeconds));
 
-        return $idleSeconds >= $watch->limits->idleSeconds;
+        return $this->clock->now() >= $deadline;
     }
 }

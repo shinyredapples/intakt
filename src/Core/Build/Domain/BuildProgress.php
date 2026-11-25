@@ -34,7 +34,7 @@ final readonly class BuildProgress
     private function failingTestNames(): array
     {
         $names = array_map(strval(...), array_keys($this->failingTests));
-        sort($names);
+        sort($names, SORT_STRING);
 
         return $names;
     }
