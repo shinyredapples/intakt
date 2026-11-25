@@ -51,6 +51,8 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(InstallationTokens::class)]
 final class ProjectSteeringAccountsTest extends TestCase
 {
+    private MockClock $clock;
+
     private RecordedTrust $github;
 
     public function testAnAccountWithWriteAccessToTheProjectsRepositorySteers(): void
@@ -90,12 +92,13 @@ final class ProjectSteeringAccountsTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->github = new RecordedTrust();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->github = new RecordedTrust($this->clock);
     }
 
     private function accounts(): ProjectSteeringAccounts
     {
-        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $clock = $this->clock;
         $http = $this->github->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);

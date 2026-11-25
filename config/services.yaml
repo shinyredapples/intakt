@@ -28,8 +28,12 @@ parameters:
     !php/const Intakt\Core\HandBack\Contract\HandBackServices::DEPENDENCY_SNAPSHOT_COUNT: 10
     # One bare mirror per project lives here, rebuilt from the remote if lost.
     !php/const Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY: '%kernel.project_dir%/var/mirrors'
+    # Deleted branch heads are kept here, under var/data because that is where the image keeps its volume: unlike the mirrors, the archive survives a container replacement.
+    !php/const Intakt\Core\Git\Contract\GitServices::BRANCH_ARCHIVE_DIRECTORY: '%kernel.project_dir%/var/data/branch-archive'
     # The orchestrator's own private key, under var/data because that is where the image keeps its volume; it is never mounted into a job.
     !php/const Intakt\Core\Git\Contract\GitServices::SIGNING_KEY: '%kernel.project_dir%/var/data/keys/signing_key'
+    # The port the Caddyfile listens on when SERVER_PORT is unset, so the doctor's web server check asks where the server is.
+    env(SERVER_PORT): '7781'
 
 services:
     # default configuration for services in *this* file
@@ -76,6 +80,13 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+    # Measures the forge check's deadline, because a wall clock set back during the run would lengthen it.
+    Symfony\Component\Clock\MonotonicClock: ~
+    Intakt\Plugin\GitHubForge\Infrastructure\ForgeConnectionCheck:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
     Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'
@@ -138,6 +149,12 @@ services:
     Intakt\Core\Git\Domain\Mirrors:
         arguments:
             $directory: '%intakt.git.mirrors_directory%'
+    # The same folder rule as the mirrors, over the archive's own directory.
+    intakt.git.branch_archives:
+        class: Intakt\Core\Git\Domain\Mirrors
+        arguments:
+            $directory: '%intakt.git.branch_archive_directory%'
+    Intakt\Core\Git\Contract\BranchArchive: '@Intakt\Core\Git\UseCase\ArchiveBranch\MirrorBranchArchive'
 
     # Built from the forge's and the vendors' configuration, because its probes are values, not services.
     Intakt\Core\Outage\Infrastructure\ProbedConnectivity:

@@ -55,6 +55,12 @@ final readonly class LedgerReviewPages
         return $rounds->reviewOf($round);
     }
 
+    // Null on a fresh install; read from the starts alone, so a live update can learn whether a round is the install's first before it builds and prices that review.
+    public function firstRound(): ?string
+    {
+        return $this->rounds($this->ledger->readOfKind(LedgerEventKind::ReviewStarted))->firstRound();
+    }
+
     // Null on a fresh install, because then no review has run.
     public function firstReview(): ?Review
     {

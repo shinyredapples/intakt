@@ -9,7 +9,6 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
@@ -147,8 +146,7 @@ final readonly class RoundFixture
         $this->ledger = new DoctrineLedger($registry, $this->clock);
         $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
 
-        EmptyDatabase::in($container);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn($container);
     }
 
     public function start(int $reviewers): ReviewRound
@@ -377,6 +375,12 @@ final readonly class RoundFixture
     public function transactions(): ReviewRounds
     {
         return $this->rounds($this->entities);
+    }
+
+    // On its own connection and entity manager, because a round another messenger:consume process writes is not in this fixture's identity map.
+    public function anotherWorkersRounds(): ReviewRounds
+    {
+        return $this->rounds(new EntityManager(DriverManager::getConnection($this->entities->getConnection()->getParams()), $this->entities->getConfiguration()), new InMemoryLedger());
     }
 
     public function transactionsOn(EntityManagerInterface $entities): ReviewRounds
