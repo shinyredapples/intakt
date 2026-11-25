@@ -37,6 +37,7 @@ use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -264,8 +265,8 @@ final class LedgerRounds
         $row = $this->payloads->reviewerFindingsOf($recorded);
 
         if ($row instanceof ReviewerFindingsRecorded) {
-            $this->findingsByReviewer[$row->round][$row->reviewer] = $row->findings;
-            $this->severitiesByReviewer[$row->round][$row->reviewer] = $row->severities;
+            $this->findingsByReviewer[$row->round][$row->reviewer] = [...$row->findings];
+            $this->severitiesByReviewer[$row->round][$row->reviewer] = null === $row->severities ? null : array_map(static fn (Severity $severity): string => $severity->value, $row->severities);
         }
     }
 
