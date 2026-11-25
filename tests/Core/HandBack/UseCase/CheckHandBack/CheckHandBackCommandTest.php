@@ -137,16 +137,16 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertStringContainsString('refused, handed over: '.HandBackRefusal::TouchesMain->reason(), $this->flat($tester));
     }
 
-    public function testAPullRequestTextThatCannotBeReadFailsWithItsPath(): void
+    public function testAPullRequestTextWithANameLongerThanTheErrorBlockFailsWithItsWholePathAndWritesNothing(): void
     {
         $this->history->commit('First');
-        $missing = $this->history->folder.'/missing.md';
+        // Longer than the block's 120 columns, so the name is always cut, whatever the checkout path or terminal.
+        $missing = $this->history->folder.'/'.str_repeat('missing-', 25).'text.md';
 
         $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $missing]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        // Without the folder, because the error block wraps a long path.
-        self::assertStringContainsString('missing.md" cannot be read', $this->flat($tester));
+        self::assertStringContainsString($this->unwrapped('"'.$missing.'" cannot be read'), $this->unwrapped($tester->getDisplay()));
         self::assertSame([], $this->ledger->kinds());
     }
 
@@ -279,5 +279,11 @@ final class CheckHandBackCommandTest extends TestCase
     private function flat(CommandTester $tester): string
     {
         return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
+    }
+
+    // Every space goes, because the block cuts a long word anywhere and indents the rest.
+    private function unwrapped(string $text): string
+    {
+        return (string) preg_replace('/\s+/', '', $text);
     }
 }
