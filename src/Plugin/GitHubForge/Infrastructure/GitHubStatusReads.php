@@ -33,12 +33,19 @@ final readonly class GitHubStatusReads
     public function labelsOn(PullRequestAddress $address): array
     {
         $labels = [];
-        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
+        for ($page = 1; $page <= self::MAX_PAGES + 1; ++$page) {
             $listed = $this->page($address->issuePath().'/labels', $page);
+            if ($page > self::MAX_PAGES) {
+                break;
+            }
             array_push($labels, ...array_map($this->labelName(...), $listed));
             if (count($listed) < self::PAGE_SIZE) {
                 return $labels;
             }
+        }
+
+        if ([] === $listed) {
+            return $labels;
         }
 
         throw new ForgeReadFailed('The change holds more labels than this forge reads.');
@@ -52,8 +59,11 @@ final readonly class GitHubStatusReads
     public function of(PullRequestAddress $address): array
     {
         $events = [];
-        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
+        for ($page = 1; $page <= self::MAX_PAGES + 1; ++$page) {
             $listed = $this->page($address->issuePath().'/events', $page);
+            if ($page > self::MAX_PAGES) {
+                break;
+            }
             foreach ($listed as $event) {
                 $read = $this->labelEvent($event);
                 if ($read instanceof LabelEvent) {
@@ -63,6 +73,10 @@ final readonly class GitHubStatusReads
             if (count($listed) < self::PAGE_SIZE) {
                 return $events;
             }
+        }
+
+        if ([] === $listed) {
+            return $events;
         }
 
         throw new ForgeReadFailed('The change holds more events than this forge reads.');
@@ -95,7 +109,7 @@ final readonly class GitHubStatusReads
             throw new ForgeReadFailed(sprintf('GitHub listed %s as something other than JSON.', $path), $invalid->getCode(), previous: $invalid);
         }
 
-        if (!is_array($entries) || !array_is_list($entries)) {
+        if (!is_array($entries) || !array_is_list($entries) || ([] === $entries && !str_starts_with(ltrim($body), '['))) {
             throw new ForgeReadFailed(sprintf('GitHub answered a listing of %s that is not a list.', $path));
         }
 
@@ -147,6 +161,10 @@ final readonly class GitHubStatusReads
         $label = $event['label'] ?? null;
         $actor = $event['actor'] ?? null;
         $name = is_array($label) ? ($label['name'] ?? null) : null;
+        if (is_string($name) && !RoundStatusLabel::isStatus($name)) {
+            return null;
+        }
+
         $login = is_array($actor) ? ($actor['login'] ?? null) : null;
         if (!is_string($name) || '' === $name || !is_string($login) || '' === $login) {
             throw new ForgeReadFailed('GitHub listed a label event without its label or actor.');
