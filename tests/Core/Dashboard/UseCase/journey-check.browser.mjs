@@ -4,13 +4,14 @@
 // Needs Node.js 22 and Playwright (NODE_PATH names where it is installed); CHROME_PATH names a system Chrome or Chromium.
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { STEP_TIMEOUT_MS, VERDICT_TIMEOUT_MS, JOURNEYS, runJourney, open, press, see, report, exitCode } = require('../../../../bin/journey-check');
+const { STEP_TIMEOUT_MS, VERDICT_TIMEOUT_MS, JOURNEYS, runJourney, open, press, see, seeRoleSince, report, exitCode } = require('../../../../bin/journey-check');
 const { chromium } = require('playwright');
 const ORIGIN = 'http://localhost';
 const PAGE = '<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>Start</h1>'
@@ -50,7 +51,8 @@ function demoSite({ playLabel = 'Play the demo run', playTarget = '/demo?play=p1
     const arrive = `<h2>${verdict}</h2><a href="/reviews/r1/record#f1"><span>The check changed from <code>amount &gt;= 100</code> ${finding}</span> <span>src/discount.js:3</span></a>`;
 
     return {
-        '/setup': html('Start', `<h1>See a real review</h1><p>1 minute · no key</p><button onclick="location.assign('${playTarget}')">${playLabel}</button>`),
+        '/setup': html('Start', '<h1>See a real review</h1>'),
+        '/setup?step=5': html('Start', `<h1>See a real review</h1><p>1 minute · no key</p><button onclick="location.assign('${playTarget}')">${playLabel}</button>`),
         '/demo': html('The demo run', demo),
         '/elsewhere': html('The demo run', DEMO_THAT_FOLLOWS_LATER),
         '/reviews/r1': html('Review', '<h1>Review of sample-change in sample</h1><section id="later"></section>'
@@ -64,8 +66,8 @@ function routedSite(pages, statuses = {}) {
         newContext: async () => {
             const context = await browser.newContext();
             await context.route('**/*', (route) => {
-                const path = new URL(route.request().url()).pathname;
-                const body = pages[path];
+                const { pathname: path, search } = new URL(route.request().url());
+                const body = pages[path + search] ?? pages[path];
 
                 return body === undefined ? route.fulfill({ status: 404, body: 'Not found' }) : route.fulfill({ status: statuses[path]?.shift() ?? 200, contentType: 'text/html', body });
             });
@@ -172,8 +174,8 @@ test('the first journey passes when the demo page follows to the review at once,
 
 test('the first journey passes when the button fetches the demo page and pushes its address, as Turbo does, and the page follows at once', async () => {
     const pages = demoSite();
-    const fetchAndPush = 'fetch(\'/demo?play=p1\').then((answer) => answer.text()).then(() => { history.pushState({}, \'\', \'/demo?play=p1\'); location.assign(\'/reviews/r1\'); })';
-    pages['/setup'] = `<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>See a real review</h1><button onclick="${fetchAndPush}">Play the demo run</button></main></body></html>`;
+    const fetchAndPush = 'fetch(\'/demo?play=p1\', { headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => answer.text()).then(() => { history.pushState({}, \'\', \'/demo?play=p1\'); location.assign(\'/reviews/r1\'); })';
+    pages['/setup?step=5'] = `<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>See a real review</h1><button onclick="${fetchAndPush}">Play the demo run</button></main></body></html>`;
 
     const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
 
@@ -325,10 +327,14 @@ test('a review page that leaves for another round, which shows the verdict and t
 test('a demo page that shows the verdict and the finding itself and never follows to the review fails the first journey at step 4', async () => {
     const shown = '<h1>The demo run</h1><h2>Changes needed</h2><a href="/reviews/r1/record#f1">The check changed from <code>amount &gt;= 100</code> to <code>amount &gt; 100</code>.</a>';
 
-    const result = await runJourney(routedSite(demoSite({ demo: shown })), ORIGIN, FIRST_RUN, scratch(), 1);
+    // The step's own wait for the review page is as long as its wait for the verdict, so it is cut short here.
+    const verdict = seeRoleSince('/demo', 'heading', 'Changes needed', 1_000);
+    const journey = { name: FIRST_RUN.name, steps: FIRST_RUN.steps.with(3, { name: FIRST_RUN.steps[3].name, run: verdict.run }) };
+
+    const result = await runJourney(routedSite(demoSite({ demo: shown })), ORIGIN, journey, scratch(), 1);
 
     assert.equal(result.failure.step, 'wait for the verdict of the demo run');
-    assert.equal(result.failure.error, 'the page shows it at http://localhost/demo, not on a review page');
+    assert.equal(result.failure.error, 'the page stayed at http://localhost/demo, not on a review page');
 });
 
 test('a demo page that answers HTTP 500 and then fetches its own address with a success fails the first journey at step 3', async () => {
@@ -338,6 +344,36 @@ test('a demo page that answers HTTP 500 and then fetches its own address with a 
 
     assert.equal(result.failure.step, 'reach /demo and see the demo run');
     assert.match(result.failure.error, /it led to http:\/\/localhost\/demo \(HTTP 500\), then /);
+});
+
+test('the first journey passes when the button posts as Turbo does, the answer redirects to the demo page and the page follows', async () => {
+    const server = createServer((request, response) => {
+        if (request.method === 'POST') return response.writeHead(303, { location: '/demo?play=p1' }).end();
+
+        return response.writeHead(200, { 'content-type': 'text/html' }).end(pages[request.url] ?? pages[request.url.split('?')[0]] ?? '');
+    });
+    const pages = demoSite();
+    const post = 'fetch(\'/demo\', { method: \'POST\', headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => { history.pushState({}, \'\', answer.url); location.assign(\'/reviews/r1\'); })';
+    pages['/setup?step=5'] = `<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>See a real review</h1><button onclick="${post}">Play the demo run</button></main></body></html>`;
+    await new Promise((resolve) => server.listen(0, 'localhost', resolve));
+    try {
+        const result = await runJourney(browser, `http://localhost:${server.address().port}`, FIRST_RUN, scratch(), 1);
+
+        assert.equal(result.failure, null);
+    } finally {
+        server.closeAllConnections();
+        server.close();
+    }
+});
+
+test('a background fetch of the demo page that answers HTTP 404 before the navigation answers HTTP 200 leaves the first journey passing', async () => {
+    const pages = demoSite();
+    // Forces the order: the button navigates only once the fetch was answered.
+    pages['/setup?step=5'] = pages['/setup?step=5'].replace('location.assign(\'/demo?play=p1\')', 'fetch(\'/demo?play=p1\').then(() => location.assign(\'/demo?play=p1\'))');
+
+    const result = await runJourney(routedSite(pages, { '/demo': [404] }), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure, null);
 });
 
 test('a demo page that stays and does not show its heading fails the first journey at step 3', async () => {

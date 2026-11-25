@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -199,4 +200,45 @@ test('the first journey is First run without a key with its five steps in order'
         'wait for the verdict of the demo run',
         'see the recorded finding on the review page',
     ]]]);
+});
+
+// Forces the order: the match is seen while the page is on /demo, and the navigation to the review commits before the step resumes.
+for (const [position, shown] of [[3, 'the verdict'], [4, 'the finding']]) {
+    test(`${shown} seen on /demo right before the navigation to the review commits fails step ${position + 1}`, async (t) => {
+        const soon = globalThis.setTimeout;
+        t.mock.method(globalThis, 'setTimeout', (callback) => soon(callback, 10));
+        const origin = 'http://localhost';
+        const page = new EventEmitter();
+        let at = `${origin}/setup?step=5`;
+        const visit = (path) => { at = origin + path; page.emit('framenavigated', page); };
+        const locator = {
+            filter: () => locator,
+            first: () => locator,
+            click: async () => visit('/demo'),
+            waitFor: async () => queueMicrotask(() => visit('/reviews/r1')),
+        };
+        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
+        const { steps } = JOURNEYS[0];
+        await steps[1].run(page, origin);
+
+        await assert.rejects(steps[position].run(page, origin), /the page stayed at http:\/\/localhost\/demo, not on a review page/);
+    });
+}
+
+test('a verdict seen on the review page right before the page leaves and returns fails step 4', async () => {
+    const origin = 'http://localhost';
+    const page = new EventEmitter();
+    let at = `${origin}/setup?step=5`;
+    const visit = (path) => { at = origin + path; page.emit('framenavigated', page); };
+    const locator = {
+        filter: () => locator,
+        first: () => locator,
+        click: async () => { visit('/demo'); visit('/reviews/r1'); },
+        waitFor: async () => { visit('/demo'); visit('/reviews/r1'); },
+    };
+    Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
+    const { steps } = JOURNEYS[0];
+    await steps[1].run(page, origin);
+
+    await assert.rejects(steps[3].run(page, origin), /the page moved on to http:\/\/localhost\/reviews\/r1 while http:\/\/localhost\/reviews\/r1 was looked at/);
 });
