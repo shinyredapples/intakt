@@ -11,6 +11,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
 use JsonException;
+use stdClass;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 // The labels on a change and only the events of status labels, because the status reconciliation reads nothing else.
@@ -91,17 +92,19 @@ final readonly class GitHubStatusReads
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of %s.', $status, $path));
         }
 
+        // Decoded as objects first, because as arrays `{}` and an object with the keys 0, 1, ... look like lists.
         try {
+            $shape = json_decode($body, false, flags: JSON_THROW_ON_ERROR);
             $entries = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $invalid) {
             throw new ForgeReadFailed(sprintf('GitHub listed %s as something other than JSON.', $path), $invalid->getCode(), previous: $invalid);
         }
 
-        if (!is_array($entries) || !array_is_list($entries)) {
+        if (!is_array($shape) || !is_array($entries) || !array_is_list($entries)) {
             throw new ForgeReadFailed(sprintf('GitHub answered a listing of %s that is not a list.', $path));
         }
 
-        return array_map(fn (mixed $entry): array => $this->objectOf($entry, $path), $entries);
+        return array_map(fn (mixed $entry, mixed $kind): array => $this->objectOf($entry, $kind, $path), $entries, $shape);
     }
 
     // A full last page asks for one more, because only an empty answer shows that the listing ended.
@@ -175,8 +178,8 @@ final readonly class GitHubStatusReads
      *
      * @throws ForgeReadFailed
      */
-    private function objectOf(mixed $entry, string $path): array
+    private function objectOf(mixed $entry, mixed $kind, string $path): array
     {
-        return is_array($entry) && [] !== $entry && !array_is_list($entry) ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path));
+        return $kind instanceof stdClass && is_array($entry) && [] !== $entry ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path));
     }
 }

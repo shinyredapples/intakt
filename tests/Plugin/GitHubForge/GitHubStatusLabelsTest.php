@@ -85,6 +85,10 @@ final class GitHubStatusLabelsTest extends TestCase
 
     private bool $refuseWrites = false;
 
+    private bool $refuseAdds = false;
+
+    private ?string $unlabeledByDelete = null;
+
     private ?Closure $whileReadingLabels = null;
 
     private ?Closure $whileWriting = null;
@@ -259,6 +263,52 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->reconcile();
 
         self::assertSame([[], ['status:in-review'], []], [$this->statusesAfterTheFailedPass, $this->statusesNow(), $this->comments]);
+    }
+
+    public function testAnExtraLabelAPersonRemovedBeforeTheDeleteGetsNoCommentBecauseNothingChanged(): void
+    {
+        $this->round = RoundStatusLabel::WaitingOnYou;
+        $this->labeled('status:waiting-on-you', self::OWN);
+        $this->labeled('status:in-review', self::PERSON);
+        $this->unlabeledByDelete = 'status:in-review';
+
+        $this->reconcile();
+
+        self::assertSame([['status:waiting-on-you'], []], [$this->statusesNow(), $this->comments]);
+    }
+
+    public function testAnAddThatFailsAfterTheRemovalStillLeavesTheOneCommentAndTheRetryPostsNone(): void
+    {
+        $this->round = RoundStatusLabel::WaitingOnYou;
+        $this->labeled('status:in-review', self::PERSON);
+        $this->refuseAdds = true;
+        try {
+            $this->reconcile();
+        } catch (ForgeWriteFailed) {
+        }
+        $this->refuseAdds = false;
+
+        $this->reconcile();
+
+        self::assertSame([['status:waiting-on-you'], 1], [$this->statusesNow(), count($this->comments)]);
+    }
+
+    public function testTheQueueWriterLeavesInReviewWhileTheBusyPassWritesNothingBeforeTheNextPassRepairs(): void
+    {
+        $this->round = RoundStatusLabel::InReview;
+        $busyPassLeft = null;
+        $this->whileReadingLabels = function () use (&$busyPassLeft): void {
+            $this->whileReadingLabels = null;
+            $this->round = RoundStatusLabel::WaitingOnYou;
+            $this->reconcile();
+            $busyPassLeft = $this->statusesNow();
+        };
+        $this->reconcile();
+        $afterQueueWriter = $this->statusesNow();
+
+        $this->reconcile();
+
+        self::assertSame([[], ['status:in-review'], ['status:waiting-on-you']], [$busyPassLeft, $afterQueueWriter, $this->statusesNow()]);
     }
 
     public function testAStatusOfAPullRequestWhoseAddressSpellsTheRepositoryInOtherCaseIsWritten(): void
@@ -450,6 +500,16 @@ final class GitHubStatusLabelsTest extends TestCase
         $body = is_string($options['body'] ?? null) ? $options['body'] : '';
         if (str_ends_with($path, '/comments')) {
             return $this->comment($body);
+        }
+
+        if ('POST' === $method && $this->refuseAdds) {
+            return new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]);
+        }
+        if ('DELETE' === $method && null !== $this->unlabeledByDelete) {
+            $this->unlabeled($this->unlabeledByDelete, self::PERSON);
+            $this->unlabeledByDelete = null;
+
+            return new MockResponse('{"message":"Label does not exist"}', ['http_code' => 404]);
         }
 
         $this->writes[] = trim($method.' '.$path.' '.$body);

@@ -47,6 +47,8 @@ final class GitHubStatusReadsTest extends TestCase
         yield 'an empty list' => ['[[]]'];
         yield 'a string' => ['["status:in-review"]'];
         yield 'null' => ['[null]'];
+        yield 'an empty object instead of a list' => ['{}'];
+        yield 'an object with the key 0 instead of a list' => ['{"0":{"name":"status:in-review","event":"labeled"}}'];
     }
 
     #[DataProvider('entriesThatAreNoObjects')]

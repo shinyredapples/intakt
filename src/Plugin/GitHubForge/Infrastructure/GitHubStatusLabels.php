@@ -41,14 +41,19 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
 
         $comment = $reconciliation->owesComment($this->reads->of($address), $this->isOwn(...));
+        $removed = false;
         foreach ($reconciliation->remove as $label) {
-            $this->writes->remove($address->issuePath(), $label);
+            $removed = $this->writes->remove($address->issuePath(), $label) || $removed;
+        }
+
+        $adds = $reconciliation->add instanceof RoundStatusLabel;
+        // Posted before the add, because a failed add leaves Intakt's own removal as the latest event and the retry would owe no comment.
+        // A removal that found the label already gone changed nothing, so it owes none either.
+        if ($comment && ($removed || $adds)) {
+            $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
         }
         if ($reconciliation->add instanceof RoundStatusLabel) {
             $this->writes->add($address->issuePath(), $reconciliation->add->value);
-        }
-        if ($comment) {
-            $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
         }
     }
 

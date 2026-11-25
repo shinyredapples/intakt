@@ -32,9 +32,9 @@ final readonly class GitHubLabelWrites
     /**
      * @throws ForgeWriteFailed
      */
-    public function remove(string $issuePath, string $label): void
+    public function remove(string $issuePath, string $label): bool
     {
-        $this->write('DELETE', $issuePath.'/labels/'.rawurlencode($label), []);
+        return self::NOT_FOUND !== $this->write('DELETE', $issuePath.'/labels/'.rawurlencode($label), []);
     }
 
     /**
@@ -42,7 +42,7 @@ final readonly class GitHubLabelWrites
      *
      * @throws ForgeWriteFailed
      */
-    private function write(string $method, string $path, array $body): void
+    private function write(string $method, string $path, array $body): int
     {
         $options = ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
         if ([] !== $body) {
@@ -59,6 +59,8 @@ final readonly class GitHubLabelWrites
         if (('DELETE' !== $method || self::NOT_FOUND !== $status) && ($status < 200 || $status >= 300)) {
             throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));
         }
+
+        return $status;
     }
 
     /**
