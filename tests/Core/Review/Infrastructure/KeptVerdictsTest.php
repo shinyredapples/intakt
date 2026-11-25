@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
@@ -107,8 +106,7 @@ final class KeptVerdictsTest extends KernelTestCase
     {
         $entities = self::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->entities = $entities;
         $this->verdicts = new KeptVerdicts($entities, new MockClock('2026-11-21 10:00:00'));
     }

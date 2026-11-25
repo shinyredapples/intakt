@@ -84,6 +84,11 @@ test('the first-run page at /setup is checked', () => {
     assert.ok(PAGES.some((page) => page.name === 'setup' && page.path === '/setup'));
 });
 
+test('every step of the setup wizard and of Add project is checked', () => {
+    for (const step of [2, 3, 4, 5]) assert.ok(PAGES.some((page) => page.name === `setup-${step}` && page.path === `/setup?step=${step}`));
+    for (const step of [1, 2, 3, 4, 5]) assert.ok(PAGES.some((page) => page.name === `add-project-${step}` && page.path === `/projects/new?step=${step}`));
+});
+
 test('the Status page at /lanes is checked', () => {
     assert.ok(PAGES.some((page) => page.name === 'status' && page.path === '/lanes'));
 });

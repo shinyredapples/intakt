@@ -852,8 +852,7 @@ final class IntakeStoreTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->store = new IntakeStore($entities);
     }
 

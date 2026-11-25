@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use RuntimeException;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -17,6 +18,7 @@ final readonly class RoundStarts
         private MessageBusInterface $commands,
         private StartedRounds $rounds,
         private WatcherLedger $ledger,
+        private ChangeLabels $labels,
     ) {
     }
 
@@ -37,7 +39,8 @@ final readonly class RoundStarts
 
     private function queue(WatchedProject $project, OpenChange $green): QueuedRound
     {
-        $queued = $this->commands->dispatch($project->startAt($green))->last(HandledStamp::class)?->getResult();
+        $labels = $this->labels->steeringOf($project->name, $green);
+        $queued = $this->commands->dispatch($project->startAt($green, $labels))->last(HandledStamp::class)?->getResult();
 
         return $queued instanceof QueuedRound ? $queued : throw new RuntimeException('The review start did not answer the queued round.');
     }
