@@ -126,7 +126,7 @@ final class ShowFlowReportCommandTest extends KernelTestCase
 
     public function testAListingThatCameBackShortFromTheWorkSourceFailsWithoutAReport(): void
     {
-         = $this->show('alpha', $this->source());
+        $tester = $this->show('alpha', $this->source());
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame('', $tester->getDisplay());
