@@ -23,6 +23,8 @@
             root.dataset.tour = 'closed';
         }
     })();</script>
+    {# .dockerignore leaves the development folder out of the image, so there the include finds nothing. #}
+    {% include 'dashboard/dev/hot_reload.html.twig' ignore missing %}
     <link rel="icon" type="image/png" href="{{ asset('images/favicon-32.png') }}">
     <link rel="stylesheet" href="{{ asset('styles/fonts.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">

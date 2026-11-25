@@ -6,7 +6,7 @@ Intakt and its checks call programs outside PHP, such as `git`, `composer`, `git
 
 Worth knowing:
 
-- The full `bin/check` needs Linux tools such as `unshare` and `setsid`; on another system, run it in the development container.
+- The full `bin/check` needs Linux tools such as `unshare` and `setsid`; on another system, run it on a Linux machine or virtual machine (the [development setup](development-setup.md)'s container has no Composer, so it is not one).
 - Calls through Symfony Process use an argument list, never a shell string, and always have a time limit.
 - Every `git` call is hardened, so the repository's own config and attributes cannot run code.
 - A change that adds a new external command adds it to this page in the same change.
@@ -56,7 +56,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 
 The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's `bin/console cache:warmup --env=test` (`cache:clear` while it has no dump yet) to dump the test container that static analysis reads.
 
-`unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux (or in the development container, plan task T35). On another system, run it in that container.
+`unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux. On another system, run it on a Linux machine or virtual machine with the tools above; the container of the [development setup](development-setup.md) is not one, because its image has no Composer.
 
 ## To run Intakt's own CI
 
