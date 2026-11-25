@@ -236,7 +236,7 @@ final class GitHubForgeRateLimitTest extends TestCase
         }, 'https://api.github.com');
         // The retry codes come from the shipped config, so the test fails if a 429 were retried there.
         $http = new RetryableHttpClient($client, new GenericRetryStrategy($this->configuredRetryCodes(), delayMs: 0), 2);
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($this->clock, 'installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $this->clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');

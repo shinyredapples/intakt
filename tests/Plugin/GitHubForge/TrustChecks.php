@@ -27,9 +27,14 @@ final class TrustChecks
         return self::wiring($github->client())->check;
     }
 
+    public static function clock(): MockClock
+    {
+        return new MockClock('2026-11-25 10:00:00 UTC');
+    }
+
     public static function wiring(HttpClientInterface $http): TrustWiring
     {
-        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $clock = self::clock();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');

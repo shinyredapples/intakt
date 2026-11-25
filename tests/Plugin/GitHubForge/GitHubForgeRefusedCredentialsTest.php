@@ -173,7 +173,7 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
     private function forgeAnswering(Closure $answer, int $exchangeStatus = 201): GitHubForge
     {
         $http = new MockHttpClient(static fn (string $method, string $url): ResponseInterface => $answer($url), 'https://api.github.com');
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($this->clock, 'installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
         $readings = FreshReadings::at($this->clock);
         $exchange = 201 === $exchangeStatus
