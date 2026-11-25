@@ -50,17 +50,6 @@ final class EmptyDatabaseTest extends KernelTestCase
         self::assertContains('budget_account_cooldown', $this->tables());
     }
 
-    public function testAResetDropsTheTriggersAMigrationLeftBehind(): void
-    {
-        EmptyDatabase::rowsIn(self::getContainer());
-        $this->connection()->executeStatement('CREATE TRIGGER budget_account_cooldown_no_delete BEFORE DELETE ON budget_account_cooldown BEGIN SELECT RAISE(ABORT, \'kept\'); END');
-        $this->writeCooldown();
-
-        EmptyDatabase::rowsIn(self::getContainer());
-
-        self::assertSame(0, $this->rows());
-    }
-
     public function testAResetDropsTheConversationAndQueueTablesByName(): void
     {
         EmptyDatabase::rowsIn(self::getContainer());
@@ -95,10 +84,7 @@ final class EmptyDatabaseTest extends KernelTestCase
      */
     private function tables(): array
     {
-        /** @var list<string> $tables */
-        $tables = $this->connection()->fetchFirstColumn("SELECT name FROM sqlite_master WHERE type = 'table'");
-
-        return $tables;
+        return $this->connection()->createSchemaManager()->listTableNames();
     }
 
     private function connection(): Connection

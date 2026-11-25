@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -24,7 +25,7 @@ final class EmptyDatabase
         $connection->executeStatement('DROP TABLE IF EXISTS messenger_messages');
     }
 
-    // The mapped tables are built once per database file and kept: a later call deletes their rows instead of dropping and creating them (the conversation and queue tables are still dropped by name, because tests create them from their migration), with no wrapping transaction so a test of a rollback still sees a real one.
+    // Recreating the schema per test costs a synced transaction per DDL statement on SQLite; the other engines keep the rebuild.
     public static function rowsIn(ContainerInterface $container): void
     {
         $manager = $container->get('doctrine')->getManager();
@@ -32,12 +33,12 @@ final class EmptyDatabase
         $manager->clear();
         $metadata = $manager->getMetadataFactory()->getAllMetadata();
         $connection = $container->get('doctrine.dbal.default_connection');
+        assert($connection instanceof Connection);
+        $tool = new SchemaTool($manager);
 
-        $present = self::names($connection, 'table');
-        $mapped = array_map(static fn ($class): string => $class->getTableName(), $metadata);
-        if ([] !== array_diff($mapped, $present)) {
+        if (!$connection->getDatabasePlatform() instanceof SQLitePlatform || [] !== $tool->getUpdateSchemaSql($metadata)) {
             self::in($container);
-            new SchemaTool($manager)->createSchema($metadata);
+            $tool->createSchema($metadata);
 
             return;
         }
@@ -47,14 +48,29 @@ final class EmptyDatabase
             $connection->executeStatement(sprintf('DROP TRIGGER "%s"', $trigger));
         }
 
-        $connection->executeStatement('PRAGMA foreign_keys = OFF');
-        foreach (array_intersect($present, $mapped) as $table) {
-            $connection->executeStatement(sprintf('DELETE FROM "%s"', $table));
-        }
-        $connection->executeStatement('DELETE FROM sqlite_sequence');
+        self::deleteRows($connection, array_map(static fn ($class): string => $class->getTableName(), $metadata));
         $connection->executeStatement('DROP TABLE IF EXISTS reviewer_conversation');
         $connection->executeStatement('DROP TABLE IF EXISTS messenger_messages');
-        $connection->executeStatement('PRAGMA foreign_keys = ON');
+    }
+
+    /**
+     * @param list<string> $tables
+     */
+    private static function deleteRows(Connection $connection, array $tables): void
+    {
+        $enforced = (int) $connection->fetchOne('PRAGMA foreign_keys');
+        $connection->executeStatement('PRAGMA foreign_keys = OFF');
+
+        try {
+            foreach ($tables as $table) {
+                $connection->executeStatement(sprintf('DELETE FROM "%s"', $table));
+            }
+            if (in_array('sqlite_sequence', self::names($connection, 'table'), true)) {
+                $connection->executeStatement('DELETE FROM sqlite_sequence');
+            }
+        } finally {
+            $connection->executeStatement(sprintf('PRAGMA foreign_keys = %d', $enforced));
+        }
     }
 
     /**
