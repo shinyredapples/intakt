@@ -190,7 +190,8 @@ final class DevelopmentCaddyfileTest extends TestCase
 
         try {
             $filesystem->copy(self::ROOT.'/docker/dev/Caddyfile', $directory.'/Caddyfile');
-            $process = new Process([$frankenphp, 'adapt', '--config', 'Caddyfile', '--adapter', 'caddyfile'], $directory, ['MERCURE_JWT_SECRET' => 'a-test-key-that-is-at-least-thirty-two-bytes-long', 'MERCURE_JWT_ISSUER' => 'http://localhost:7790', 'CADDY_ADMIN' => false]);
+            $filesystem->copy(self::ROOT.'/.env', $directory.'/.env');
+            $process = new Process([$frankenphp, 'adapt', '--config', 'Caddyfile', '--adapter', 'caddyfile', '--envfile', '.env'], $directory, ['MERCURE_JWT_SECRET' => 'a-test-key-that-is-at-least-thirty-two-bytes-long', 'MERCURE_JWT_ISSUER' => 'http://localhost:7790', 'CADDY_ADMIN' => false]);
             $process->mustRun();
         } finally {
             $filesystem->remove($directory);
