@@ -279,6 +279,73 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([120, 120, 0], [$out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT)), $pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
     }
 
+    // Forced order: a 429 with a reset of zero, and the pin store's cache refuses the save, so the account's window is the only one; it lasts the same second a header of zero gives, so the call reports a typed wait instead of the failover's error.
+    public function testAZeroResetWhosePinIsNotSavedStillCoolsTheAccountForASecondAndGivesATypedWait(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return false;
+            }
+        };
+        $requests = 0;
+        $accounts = new AccountWindowsOnAClock($this->clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $limited = $this->answering(static function () use (&$requests): never {
+            ++$requests;
+
+            throw new RateLimitExceededException(0);
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], $accounts, $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame([1, 1, 1], [$requests, $out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT))]);
+    }
+
+    public function testAZeroResetCoolsThePinForASecondLikeARetryAfterHeaderOfZero(): void
+    {
+        $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException(0)), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();
+
+        self::assertSame(1, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
+    }
+
+    // Forced order: the accounts never cool, so only the pin decides, and its one-second window ends right after it was saved, before the call reads the waits again; the call still reports a typed wait instead of the failover's error.
+    public function testAPinWhoseWindowEndsBetweenTheSaveAndTheReadAfterSendingStillGivesATypedWait(): void
+    {
+        $clock = $this->clock;
+        $pool = new class($clock) extends ArrayAdapter {
+            public function __construct(private readonly MockClock $clock)
+            {
+                parent::__construct();
+            }
+
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                $saved = parent::save($item);
+                $this->clock->sleep(2);
+
+                return $saved;
+            }
+        };
+        $requests = 0;
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $limited = $this->answering(static function () use (&$requests): never {
+            ++$requests;
+
+            throw new RateLimitExceededException(1);
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame([1, 1, 0], [$requests, $out->secondsUntilAnAccountIsFree, $pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
+    }
+
     // Forced order: the account store throws while saving its window, so only the pin can cool; it still cools for the 429's wait and the caller gets the provider's own 429, not the store's error.
     public function testAnAccountStoreThatThrowsWhileSavingCostsThePinNeitherItsCooldownNorTheCallerThe429(): void
     {
