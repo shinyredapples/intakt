@@ -114,6 +114,8 @@ final readonly class BranchGit
 
     /**
      * @throws BranchNotPushed
+     *
+     * @phpstan-impure
      */
     public function remoteTip(string $repository, string $remote, string $branch): ?string
     {

@@ -624,7 +624,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testARestoreWhosePushIsRefusedFailsAsAWrite(): void
     {
-        $push = $this->createStub(ArchivedHeadPush::class);
+        $push = self::createStub(ArchivedHeadPush::class);
         $push->method('push')->willThrowException(BranchNotPushed::because('the remote refused the restore of intakt/7-old (git push exited with 1)'));
 
         $this->expectExceptionObject(new ForgeWriteFailed('The branch "intakt/7-old" was not restored: The branch was not pushed: the remote refused the restore of intakt/7-old (git push exited with 1)'));
@@ -672,7 +672,7 @@ final class GitHubForgeBranchesTest extends TestCase
         // Retrying as the scoped client is in the container, so a call that must not be retried shows it.
         $http = new RetryableHttpClient(new MockHttpClient($this->answer(...), 'https://api.github.com'), new GenericRetryStrategy(delayMs: 0), 2);
 
-        return new GitHubForgeBranches(new RepositoryAddress('acme', 'widgets'), new GitHubBranchCalls(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new NextLinks()), $push ?? $this->createStub(ArchivedHeadPush::class));
+        return new GitHubForgeBranches(new RepositoryAddress('acme', 'widgets'), new GitHubBranchCalls(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new NextLinks()), $push ?? self::createStub(ArchivedHeadPush::class));
     }
 
     private function pulls(int $page): string

@@ -133,10 +133,10 @@ A restore pushes the archived commit and its objects to the forge branch with gi
 
 Every refusal and failure is `BranchNotPushed`, whose reason never names the remote, because the remote can hold a credential.
 
-**On the forges.** Each forge reads the branch first and refuses one that exists (`it exists, and a restore never overwrites a branch.`), then calls the push with its own remote. A refusal or failure, the push's included, is a `ForgeWriteFailed` starting `The branch "<name>" was not restored:`.
+**On the forges.** Each forge calls the push with its own remote. A refusal or failure, the push's included, is a `ForgeWriteFailed` starting `The branch "<name>" was not restored:`.
 
-- `LocalForgeBranches` reads the branch with `git show-ref --exists refs/heads/<name>` and pushes to the repository's own path.
-- `GitHubForgeBranches` reads `GET /repos/<owner>/<repo>/branches/<name>`: `200` is a branch that exists (also a renamed branch GitHub redirects to its new name), `404` a missing one, and any other status a refusal. It pushes to `https://x-access-token:<installation token>@github.com/<owner>/<repo>.git`, with the App's installation token as the password. A rate-limited read throws `ForgeRateLimited`.
+- `LocalForgeBranches` pushes to the repository's own path, so the push's `ls-remote` under the lock (step 4) is its existence check.
+- `GitHubForgeBranches` first reads `GET /repos/<owner>/<repo>/branches/<name>`: `200` is a branch that exists (also a renamed branch GitHub redirects to its new name) and is refused (`it exists, and a restore never overwrites a branch.`) before any push, `404` a missing one, and any other status a refusal. It pushes to `https://x-access-token:<installation token>@github.com/<owner>/<repo>.git`, with the App's installation token as the password. A rate-limited read throws `ForgeRateLimited`.
 
 ### Tests
 

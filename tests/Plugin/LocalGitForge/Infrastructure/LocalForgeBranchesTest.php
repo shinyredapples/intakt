@@ -765,19 +765,21 @@ final class LocalForgeBranchesTest extends TestCase
         self::assertTrue($this->holds($head));
     }
 
-    public function testItRefusesToRestoreABranchThatExistsAndPushesNothing(): void
+    public function testItRefusesToRestoreABranchThatExistsAndLeavesItsHead(): void
     {
         $this->repository->checkoutNewBranch('intakt/feature');
-        $current = $this->repository->commitFile('src/New.php', "<?php\n");
+        $archived = $this->repository->commitFile('src/New.php', "<?php\n");
         $this->repository->checkout('main');
-        $push = $this->createMock(ArchivedHeadPush::class);
-        $push->expects($this->never())->method('push');
+        $this->archiveAndDeleteFeature($archived);
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $current = $this->repository->commitFile('src/Other.php', "<?php\n");
+        $this->repository->checkout('main');
 
         try {
-            new LocalForgeBranches(new LocalRepository($this->repository->path, 'main'), $push)->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId(str_repeat('a', 40))));
+            $this->branches()->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($archived)));
             self::fail('An existing branch must not be restored over.');
         } catch (ForgeWriteFailed $refused) {
-            self::assertSame('The branch "intakt/feature" was not restored: it exists, and a restore never overwrites a branch.', $refused->getMessage());
+            self::assertSame('The branch "intakt/feature" was not restored: The branch was not pushed: the branch intakt/feature exists on the remote, and a restore never overwrites a branch', $refused->getMessage());
         }
 
         self::assertSame($current, $this->repository->objectAt('refs/heads/intakt/feature'));
@@ -785,11 +787,10 @@ final class LocalForgeBranchesTest extends TestCase
 
     public function testARestoreThePushRefusesFailsAsAWrite(): void
     {
-        $push = $this->createStub(ArchivedHeadPush::class);
+        $push = self::createStub(ArchivedHeadPush::class);
         $push->method('push')->willThrowException(BranchNotPushed::because('another push of this branch is running'));
 
-        $this->expectException(ForgeWriteFailed::class);
-        $this->expectExceptionMessage('The branch "intakt/feature" was not restored: The branch was not pushed: another push of this branch is running');
+        $this->expectExceptionObject(new ForgeWriteFailed('The branch "intakt/feature" was not restored: The branch was not pushed: another push of this branch is running'));
 
         new LocalForgeBranches(new LocalRepository($this->repository->path, 'main'), $push)->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId(str_repeat('a', 40))));
     }

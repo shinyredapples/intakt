@@ -89,11 +89,10 @@ final readonly class LocalForgeBranches implements ForgeBranches
 
     public function restore(BranchRestore $restore): void
     {
+        // The repository's own path as the remote, so the push reaches this forge and brings the commit's objects with it; the push's own read of the branch under its lock is the existence check, because the forge is the same repository.
         try {
-            $this->refuseExisting($restore->name);
-            // The repository's own path as the remote, so the push reaches this forge and brings the commit's objects with it.
             $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $this->repository->path);
-        } catch (ForgeReadFailed|BranchNotPushed $failed) {
+        } catch (BranchNotPushed $failed) {
             throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: %s', $restore->name, $failed->getMessage()), $failed->getCode(), $failed);
         }
     }
@@ -354,17 +353,5 @@ final readonly class LocalForgeBranches implements ForgeBranches
         } catch (CommitIdMalformed $invalid) {
             throw new ForgeReadFailed('git printed something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
-    }
-
-    // show-ref --exists, because it tells a missing branch from a read that failed; the push checks the branch once more under its lock.
-    private function refuseExisting(string $name): void
-    {
-        $exists = $this->git(['show-ref', '--exists', self::HEADS.$name]);
-
-        match ($exists->getExitCode()) {
-            0 => throw new ForgeReadFailed('it exists, and a restore never overwrites a branch.'),
-            self::MISSING => null,
-            default => throw new ForgeReadFailed(sprintf('git show-ref failed: %s', trim($exists->getErrorOutput()))),
-        };
     }
 }

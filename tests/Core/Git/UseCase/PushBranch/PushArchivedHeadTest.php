@@ -222,8 +222,7 @@ final class PushArchivedHeadTest extends TestCase
 
     private function expectRefusal(string $message): void
     {
-        $this->expectException(BranchNotPushed::class);
-        $this->expectExceptionMessage($message);
+        $this->expectExceptionObject(new BranchNotPushed($message));
     }
 
     private function archivePath(): string
