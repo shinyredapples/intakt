@@ -33,20 +33,23 @@ final class BuildStopRuleTest extends TestCase
 
     private BuildStopRule $rule;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->rule = new BuildStopRule($this->clock);
-    }
-
     public function testABuildOverItsAllowanceThatKeepsMakingProgressContinues(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 900, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 900,
+            content: 'a',
+        ));
 
         $this->clock->sleep(500);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_500, content: 'b'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_500,
+            content: 'b',
+        ));
         $this->clock->sleep(500);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 2_000, content: 'c'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 2_000,
+            content: 'c',
+        ));
         $this->clock->sleep(500);
 
         self::assertNull($this->rule->stopCause($watch));
@@ -54,20 +57,32 @@ final class BuildStopRuleTest extends TestCase
 
     public function testABuildUnderItsAllowanceIsNeverStoppedForLackOfProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 100, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 100,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS * 10);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 900, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 900,
+            content: 'a',
+        ));
 
         self::assertNull($this->rule->stopCause($watch));
     }
 
     public function testAContentChangingCommitResetsTheIdleTime(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS - 1);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_300, content: 'b'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_300,
+            content: 'b',
+        ));
         $this->clock->sleep(self::IDLE_SECONDS - 1);
 
         self::assertNull($this->rule->stopCause($watch));
@@ -86,10 +101,16 @@ final class BuildStopRuleTest extends TestCase
 
     public function testAnEmptyCommitDoesNotResetTheIdleTime(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS - 1);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_300, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_300,
+            content: 'a',
+        ));
         $this->clock->sleep(1);
 
         self::assertSame(BuildStopCause::NoProgress, $this->rule->stopCause($watch));
@@ -108,67 +129,108 @@ final class BuildStopRuleTest extends TestCase
 
     public function testABuildOverItsAllowanceWithNoProgressJustBeforeTheIdleLimitContinues(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS - 1);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_300, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_300,
+            content: 'a',
+        ));
 
         self::assertNull($this->rule->stopCause($watch));
     }
 
     public function testABuildOverItsAllowanceWithNoProgressAtTheIdleLimitStopsWithNoProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_300, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_300,
+            content: 'a',
+        ));
 
         self::assertSame(BuildStopCause::NoProgress, $this->rule->stopCause($watch));
     }
 
     public function testABuildThatCrossesItsAllowanceLongAfterItsLastProgressStopsWithNoProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 100, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 100,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: self::ALLOWANCE, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: self::ALLOWANCE,
+            content: 'a',
+        ));
 
         self::assertSame(BuildStopCause::NoProgress, $this->rule->stopCause($watch));
     }
 
     public function testABuildReachingTheRunawayCeilingStopsWhileStillMakingProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 3_000, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 3_000,
+            content: 'a',
+        ));
 
         $this->clock->sleep(10);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: self::CEILING, content: 'b'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: self::CEILING,
+            content: 'b',
+        ));
 
         self::assertSame(BuildStopCause::RunawayCeiling, $this->rule->stopCause($watch));
     }
 
     public function testABuildJustBelowTheRunawayCeilingThatMakesProgressContinues(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 3_000, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 3_000,
+            content: 'a',
+        ));
 
         $this->clock->sleep(10);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: self::CEILING - 1, content: 'b'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: self::CEILING - 1,
+            content: 'b',
+        ));
 
         self::assertNull($this->rule->stopCause($watch));
     }
 
     public function testATaskReachingItsTotalAcrossContinuationsStopsWhileStillMakingProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 100, content: 'a', taskTokens: 9_500));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 100,
+            content: 'a',
+            taskTokens: 9_500,
+        ));
 
         $this->clock->sleep(10);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 600, content: 'b', taskTokens: self::TASK_TOTAL));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 600,
+            content: 'b',
+            taskTokens: self::TASK_TOTAL,
+        ));
 
         self::assertSame(BuildStopCause::PerTaskTotal, $this->rule->stopCause($watch));
     }
 
     public function testARunningCheckKeepsTheBuildGoingPastTheIdleLimit(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS - 1);
         $watch = $this->rule->observe($watch, $this->checking(1_300));
@@ -180,17 +242,29 @@ final class BuildStopRuleTest extends TestCase
 
     public function testTheIdleTimeStartsAgainWhenARunningCheckEnds(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS * 3);
         $watch = $this->rule->observe($watch, $this->checking(1_300));
         $this->clock->sleep(self::IDLE_SECONDS * 3);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_300, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_300,
+            content: 'a',
+        ));
         $this->clock->sleep(self::IDLE_SECONDS - 1);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_300, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_300,
+            content: 'a',
+        ));
         $justBeforeTheLimit = $this->rule->stopCause($watch);
         $this->clock->sleep(1);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: 1_300, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: 1_300,
+            content: 'a',
+        ));
 
         self::assertNull($justBeforeTheLimit);
         self::assertSame(BuildStopCause::NoProgress, $this->rule->stopCause($watch));
@@ -198,27 +272,43 @@ final class BuildStopRuleTest extends TestCase
 
     public function testThePerTaskTotalWinsOverTheCeilingAndNoProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: self::CEILING, content: 'a', taskTokens: self::TASK_TOTAL));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: self::CEILING,
+            content: 'a',
+            taskTokens: self::TASK_TOTAL,
+        ));
 
         self::assertSame(BuildStopCause::PerTaskTotal, $this->rule->stopCause($watch));
     }
 
     public function testTheCeilingWinsOverNoProgress(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(self::IDLE_SECONDS);
-        $watch = $this->rule->observe($watch, $this->progress(tokens: self::CEILING, content: 'a'));
+        $watch = $this->rule->observe($watch, $this->progress(
+            tokens: self::CEILING,
+            content: 'a',
+        ));
 
         self::assertSame(BuildStopCause::RunawayCeiling, $this->rule->stopCause($watch));
     }
 
     public function testTheCeilingAndThePerTaskTotalStopABuildEvenWhileACheckRuns(): void
     {
-        $watch = $this->rule->startWatching($this->limits(), $this->progress(tokens: 1_200, content: 'a'));
+        $watch = $this->rule->startWatching($this->limits(), $this->progress(
+            tokens: 1_200,
+            content: 'a',
+        ));
 
         $this->clock->sleep(10);
         $ceiling = $this->rule->observe($watch, $this->checking(self::CEILING));
@@ -226,6 +316,12 @@ final class BuildStopRuleTest extends TestCase
 
         self::assertSame(BuildStopCause::RunawayCeiling, $this->rule->stopCause($ceiling));
         self::assertSame(BuildStopCause::PerTaskTotal, $this->rule->stopCause($total));
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->rule = new BuildStopRule($this->clock);
     }
 
     private function limits(): BuildLimits
