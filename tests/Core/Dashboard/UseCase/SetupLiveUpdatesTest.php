@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Dom\Element;
 use Dom\HTMLDocument;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
@@ -149,6 +150,40 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $crawler->filter('.shell[data-controller="connection"]'));
         self::assertCount(1, $crawler->filter('.shell [data-connection-target="line"][hidden]'));
         self::assertCount(0, $crawler->filter('form[method="post"] button[type="submit"][disabled]'));
+    }
+
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function pagesWithActions(): iterable
+    {
+        yield 'setup, step 1' => ['/setup?step=1', ['Check the address']];
+        yield 'add project, step 1' => ['/projects/new?step=1', ['Check the address']];
+        yield 'add project, step 4' => ['/projects/new?step=4', ['Check the share and label']];
+    }
+
+    // The selector is read from the connection controller (#3521), so the step's own buttons are the ones the rule holds with its "Connecting to live updates…" note when the connection drops; the steps whose forms depend on the install's state are left out.
+    /**
+     * @param list<string> $labels
+     */
+    #[DataProvider('pagesWithActions')]
+    public function testTheHeldButtonRuleReachesTheEnabledSubmitButtonsOfAWizardStep(string $path, array $labels): void
+    {
+        $this->browser->request('GET', $path);
+        $page = HTMLDocument::createFromString((string) $this->browser->getResponse()->getContent(), LIBXML_NOERROR);
+
+        $held = array_filter(iterator_to_array($page->querySelectorAll('.shell[data-controller="connection"] '.self::heldActions())), static fn (Element $button): bool => !$button->hasAttribute('disabled'));
+
+        self::assertSame($labels, array_values(array_map(static fn (Element $button): string => trim((string) $button->textContent), $held)));
+    }
+
+    private static function heldActions(): string
+    {
+        $controller = file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
+        self::assertIsString($controller);
+        self::assertSame(1, preg_match("/^const ACTIONS = '(.+)';$/m", $controller, $actions));
+
+        return $actions[1];
     }
 
     // Assembled here from the container's page reading and Twig, because the container inlines its hub, so a recording one cannot be set there.

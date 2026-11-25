@@ -17,7 +17,7 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 use Twig\Environment;
 
-// Only the install's first round, because it is the one that changes the setup wizard's last step; later rounds leave that section as it is.
+// Only the install's first round, because it is the one that changes the setup wizard's last step; later rounds leave that section as it is, so a step 5 page left open keeps its link to round 1 while a fresh load links to the review's latest round.
 #[AsCommandHandler]
 final readonly class PublishFirstReview
 {
@@ -44,9 +44,14 @@ final readonly class PublishFirstReview
 
     private function publishWhenFirst(RoundOpened $opened): void
     {
-        $review = $this->pages->firstReview();
+        // Checked from the starts before the review is read, because every round opens through here and only the first one needs its review built and priced.
+        if ($this->pages->firstRound() !== $opened->round) {
+            return;
+        }
 
-        if (!$review instanceof Review || $review->rounds[0]->round !== $opened->round) {
+        $review = $this->pages->reviewOf($opened->round);
+
+        if (!$review instanceof Review) {
             return;
         }
 
