@@ -63,20 +63,11 @@ final readonly class ProcessGroup
         return '' === self::startTimeOf(posix_getpid()) ? 'the stop cannot read '.$own : null;
     }
 
-    // Because only an unreaped child's PID is surely still the launcher's, the bare PID is signaled only then, and its zombie then holds the PID, so a session it created in the meantime is still its own.
     public function kill(): void
     {
-        if ($this->isOursWithoutItsGroup()) {
-            posix_kill($this->id, 9);
-
-            if (posix_getpgid($this->id) !== $this->id) {
-                $this->awaitTheKilledLauncher();
-
-                return;
-            }
+        if ($this->isKilledWithoutItsGroup()) {
+            $this->awaitTheKilledLauncher();
         }
-
-        posix_kill(-$this->id, 9);
     }
 
     public function stop(): void
@@ -107,8 +98,10 @@ final readonly class ProcessGroup
             $group->outlives($deadline);
         }
 
-        foreach ($groups as $group) {
-            $group->kill();
+        $killedLaunchers = array_filter($groups, static fn (self $group): bool => $group->isKilledWithoutItsGroup());
+
+        foreach ($killedLaunchers as $launcher) {
+            $launcher->awaitTheKilledLauncher();
         }
     }
 
@@ -119,6 +112,22 @@ final readonly class ProcessGroup
         }
 
         return $this->isAlive();
+    }
+
+    // Because only an unreaped child's PID is surely still the launcher's, the bare PID is signaled only then, and its zombie then holds the PID, so a session it created in the meantime is still its own. True means the launcher was killed without its group and is still to be awaited; the wait is left to the caller so a stop of several groups sends every kill before it waits for any launcher.
+    private function isKilledWithoutItsGroup(): bool
+    {
+        if ($this->isOursWithoutItsGroup()) {
+            posix_kill($this->id, 9);
+
+            if (posix_getpgid($this->id) !== $this->id) {
+                return true;
+            }
+        }
+
+        posix_kill(-$this->id, 9);
+
+        return false;
     }
 
     // Because a launcher that has no group yet runs nothing it could stop, it is not asked; `stop()` waits for its group or kills it.
