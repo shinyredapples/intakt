@@ -15,6 +15,7 @@ use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Psr\Log\LoggerInterface;
 
@@ -30,6 +31,7 @@ final readonly class PublishVerdictHandler
         private OwnerAsks $ownerAsks,
         private ForgeWrites $forge,
         private ChangePublications $publications,
+        private RoundStatusMirror $status,
         private LoggerInterface $logger,
     ) {
     }
@@ -99,6 +101,10 @@ final readonly class PublishVerdictHandler
 
         if ($published && HeadStatus::Error !== $verdict->status) {
             $this->rounds->recordPublication($round);
+        }
+
+        if ($published) {
+            $this->status->reconcile($round->project(), new ChangeId($round->change()));
         }
 
         return $published;

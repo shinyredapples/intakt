@@ -28,7 +28,7 @@ final readonly class StartedRounds
     /**
      * @param Closure(): QueuedRound $start
      */
-    public function startOnce(string $project, OpenChange $change, Closure $start): void
+    public function startOnce(string $project, OpenChange $change, Closure $start): ?QueuedRound
     {
         $connection = $this->entities->getConnection();
         $connection->beginTransaction();
@@ -48,6 +48,8 @@ final readonly class StartedRounds
 
             throw $failure;
         }
+
+        return $queued;
     }
 
     /**
@@ -106,6 +108,12 @@ final readonly class StartedRounds
         $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
 
         return $loaded instanceof StartedRound ? $this->readAgain($loaded) : null;
+    }
+
+    // At any head, stale included, because the status label belongs to the pull request and stays from a round of an earlier head after a push.
+    public function hasRoundOf(string $project, OpenChange $change): bool
+    {
+        return null !== $this->entities->getRepository(StartedRound::class)->findOneBy(['project' => $project, 'change' => $change->id->value]);
     }
 
     // Marked and recorded in one transaction with the ledger's own write, so a failed append leaves the round unmarked for a later tick and a second worker that marks the same round finds it taken.

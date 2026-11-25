@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use RuntimeException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
@@ -19,13 +20,19 @@ final readonly class RoundStarts
         private StartedRounds $rounds,
         private WatcherLedger $ledger,
         private ChangeLabels $labels,
+        private RoundStatusMirror $status,
     ) {
     }
 
     // Queues the round before the ledger line, so a ledger that is down cannot cost a round; the stored round owes its line until the ledger takes it.
     public function startFor(WatchedProject $project, HeadDecision $decision): void
     {
-        $this->rounds->startOnce($project->name, $decision->change, fn (): QueuedRound => $this->queue($project, $decision->change));
+        $queued = $this->rounds->startOnce($project->name, $decision->change, fn (): QueuedRound => $this->queue($project, $decision->change));
+        // After the commit, so a round rolled back never shows as in review.
+        if ($queued instanceof QueuedRound) {
+            $this->status->reconcile($project->name, $decision->change->id);
+        }
+
         $this->recordQueued($project->name);
     }
 

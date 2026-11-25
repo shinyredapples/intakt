@@ -33,7 +33,17 @@ use Intakt\Core\Review\Contract\BootHarness;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
+use Intakt\Core\Review\Contract\ReviewStatus;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
+use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
+use Intakt\Plugin\GitHubForge\Domain\StatusReconciliation;
+use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Panel;
@@ -127,6 +137,12 @@ use Symfony\Component\Messenger\Exception\HandlerFailedException;
 #[CoversClass(StartedRounds::class)]
 #[CoversClass(StartedRound::class)]
 #[CoversClass(RoundStarts::class)]
+#[CoversClass(StatusMirrors::class)]
+#[UsesClass(RoundStatusMirror::class)]
+#[UsesClass(ChangeAddress::class)]
+#[UsesClass(RoundStatusLabel::class)]
+#[UsesClass(StatusReconciliation::class)]
+#[UsesClass(LabelEvent::class)]
 #[CoversClass(StaleVerdicts::class)]
 #[CoversClass(VerdictsWithdrawalRefused::class)]
 #[CoversClass(WatcherLedger::class)]
@@ -186,6 +202,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
     private Labels $steering;
+    private RecordingStatusLabels $statusLabels;
+    private ?RoundStatusMirror $mirror = null;
+    private ?ReviewStatus $storedStatus = ReviewStatus::InReview;
     // Read from its own ledger, because the in-memory one reads nothing back.
     private ?Ledger $openings = null;
     private ?ChangeAuthorship $authorship = null;
@@ -273,6 +292,67 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tick();
 
         self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued, LedgerEventKind::HeadPending], $this->ledger->kinds());
+    }
+
+    public function testAnUnchangedPullRequestIsReconciledAgainOnTheNextPassAfterAFailedReconcile(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->statusLabels->labels = [];
+        $this->statusLabels->failOnceReading(RecordingStatusLabels::LABELS);
+        $this->tick();
+        self::assertSame([], $this->statusLabels->labels);
+
+        $this->tick();
+
+        self::assertSame(1, $this->listing->fullReads);
+        self::assertSame(['status:in-review'], $this->statusLabels->labels);
+    }
+
+    public function testEveryOpenPullRequestWithARoundAtAnyHeadIsReconciledOnEachPassWhenNoHeadIsDue(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->statusLabels->labels = [];
+
+        $this->tick();
+
+        self::assertSame(['status:in-review'], $this->statusLabels->labels);
+    }
+
+    public function testAPullRequestWithoutARoundIsNotReconciled(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+        $this->tick();
+
+        self::assertSame([], $this->statusLabels->passes);
+    }
+
+    public function testAJudgedRoundWhosePublicationHasNotRunStaysInReview(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->storedStatus = ReviewStatus::InReview;
+
+        $this->tick();
+
+        self::assertSame(['status:in-review'], $this->statusLabels->labels);
+    }
+
+    public function testAPublicationMadeWhileTheQueueWriterHoldsTheLockLeavesOnlyThePublishedStatusAfterTheNextReconcile(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->statusLabels->whileReading(function (): void {
+            $this->storedStatus = ReviewStatus::WaitingOnYou;
+            $this->mirror?->reconcile('alpha', new ChangeId('1'));
+        });
+        $this->tick();
+        self::assertSame(['[] -> [status:in-review]', '[status:in-review] -> [status:waiting-on-you]'], $this->statusLabels->passes);
+
+        self::assertSame(['status:waiting-on-you'], $this->statusLabels->labels);
+        self::assertLessThanOrEqual(1, $this->statusLabels->comments);
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -1527,6 +1607,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->locks = new BeforeChangeLockStore();
         $this->logger = new RecordingLogger();
         $this->steering = new Labels();
+        $this->statusLabels = new RecordingStatusLabels([]);
         $this->handler = $this->handler();
     }
 
@@ -1672,7 +1753,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $steering = self::createStub(ChangeLabels::class);
         $steering->method('steeringOf')->willReturnCallback(fn (): Labels => $this->steering);
-        $starts = new RoundStarts($this->commands, $rounds, $ledger, $steering);
+        $status = self::createStub(LatestRoundStatus::class);
+        $status->method('of')->willReturnCallback(fn (): ?ReviewStatus => $this->storedStatus);
+        $mirror = $this->mirror = new RoundStatusMirror($status, $locks, $logger, $this->statusLabels);
+        $starts = new RoundStarts($this->commands, $rounds, $ledger, $steering, $mirror);
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
         $authors = self::createStub(AuthorTrust::class);
         $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
@@ -1682,7 +1766,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
         $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), new StatusMirrors($find, $rounds, $mirror));
     }
 
     private function panel(): Panel

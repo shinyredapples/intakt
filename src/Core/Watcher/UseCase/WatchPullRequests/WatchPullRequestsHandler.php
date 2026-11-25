@@ -16,6 +16,7 @@ final readonly class WatchPullRequestsHandler
         private WatchedProjects $projects,
         private ChangedHeads $changed,
         private LookAtHeads $heads,
+        private StatusMirrors $mirrors,
     ) {
     }
 
@@ -27,6 +28,16 @@ final readonly class WatchPullRequestsHandler
     {
         $project = $this->projects->named($tick->project);
 
+        // In finally, because a failing head must not keep the labels of the other pull requests from being repaired; it reads the last completed listing, so a running listing does not matter.
+        try {
+            $this->lookAtHeads($project);
+        } finally {
+            $this->mirrors->reconcileOpenOf($project->name);
+        }
+    }
+
+    private function lookAtHeads(WatchedProject $project): void
+    {
         try {
             $this->changed->enqueue($project->name);
         } catch (ListingInProgress) {

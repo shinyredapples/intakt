@@ -30,6 +30,8 @@ use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
+use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\ChangePublications;
@@ -118,6 +120,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ReplayMark::class)]
 #[UsesClass(CountedVote::class)]
 #[UsesClass(StoredLatestRoundStatus::class)]
+#[UsesClass(RoundStatusMirror::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -130,6 +133,7 @@ final class PublishVerdictTest extends KernelTestCase
     private RoundFixture $fixture;
     private ScriptedGitHub $github;
     private LockFactory $locks;
+    private RecordingStatusLabels $statusLabels;
 
     private ProtectedChanges $protectedChanges;
 
@@ -344,6 +348,27 @@ final class PublishVerdictTest extends KernelTestCase
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
         self::assertEquals(new DateTimeImmutable('2026-10-30 12:00:00', new DateTimeZone('UTC')), $this->fixture->transactions()->stored($roundId)->publishedAt());
+    }
+
+    public function testAVerdictTheForgeTookReconcilesTheStatusLabelToWaitingOnYou(): void
+    {
+        $this->handOver('alpha', self::PULL);
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame(['status:waiting-on-you'], $this->statusLabels->labels);
+    }
+
+    public function testAVerdictTheForgeDidNotPublishReconcilesNothing(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $roundId = $this->judgedRound(self::PULL, []);
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturn(false);
+
+        $this->handlerOver($forge, new ConfiguredProjectModes([]))(new PublishVerdict($roundId));
+
+        self::assertSame([], $this->statusLabels->passes);
     }
 
     public function testAVerdictTheForgeDidNotPublishLeavesTheRoundUnpublished(): void
@@ -984,6 +1009,7 @@ final class PublishVerdictTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $this->github = new ScriptedGitHub();
         $this->locks = new LockFactory(new InMemoryStore());
+        $this->statusLabels = new RecordingStatusLabels(['status:in-review']);
         $this->protectedChanges = ProtectedChanges::touching(new Paths());
     }
 
@@ -1113,7 +1139,7 @@ final class PublishVerdictTest extends KernelTestCase
         $handed = new HandedOverChanges($this->fixture->ledger());
         $asks = new OwnerAsks($handed, $this->protectedHeads(), $askLedger ?? $this->fixture->ledger());
 
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log);
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), new LockFactory(new InMemoryStore()), $this->fixture->log, $this->statusLabels), $this->fixture->log);
     }
 
     private function protectedHeads(): ProtectedHeads
