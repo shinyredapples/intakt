@@ -52,11 +52,17 @@ final readonly class ContractArrayTypeRule implements Rule
         $declaration = $node->getOriginalNode();
         $findings = [];
 
-        foreach (array_filter($declaration->getMethods(), static fn (ClassMethod $method): bool => $method->isPublic()) as $method) {
+        foreach (array_filter($declaration->getMethods(), fn (ClassMethod $method): bool => $method->isPublic() && !$this->isFixedByBuiltInInterface($method, $class)) as $method) {
             $findings = [...$findings, ...$this->signatureFindings($method, $class)];
         }
 
         return [...$findings, ...$this->propertyFindings($declaration, $class)];
+    }
+
+    // PHP itself declares such a method's signature (JsonSerializable::jsonSerialize() returns array), so a contract cannot type it otherwise
+    private function isFixedByBuiltInInterface(ClassMethod $method, ClassReflection $class): bool
+    {
+        return array_any($class->getInterfaces(), static fn (ClassReflection $interface): bool => $interface->isBuiltin() && $interface->hasNativeMethod($method->name->toString()));
     }
 
     private function isContract(string $file): bool

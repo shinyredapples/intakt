@@ -93,6 +93,16 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('contract-array-nested-folder', 'src/Core/Sample/Contract/Event/Happened.php:14 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Event\Happened::labels() returns array<string, string>');
     }
 
+    public function testAMethodABuiltInInterfaceFixesPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('contract-array-builtin-interface');
+    }
+
+    public function testAMethodOfAnOwnInterfaceReturningAnArrayShapeFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('contract-array-own-interface', 'src/Core/Sample/Contract/Exported.php:16 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Exported::jsonSerialize() returns array{note: string}');
+    }
+
     protected function ruleFor(string $root): ContractArrayTypeRule
     {
         return new ContractArrayTypeRule($root);

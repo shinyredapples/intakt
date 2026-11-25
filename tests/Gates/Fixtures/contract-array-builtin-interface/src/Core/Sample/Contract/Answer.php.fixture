@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use JsonSerializable;
+
+final readonly class Answer implements JsonSerializable
+{
+    public function __construct(private string $note)
+    {
+    }
+
+    /**
+     * @return array{note: string}
+     */
+    public function jsonSerialize(): array
+    {
+        return ['note' => $this->note];
+    }
+}
