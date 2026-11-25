@@ -117,6 +117,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [The demo with docker compose](demo-with-docker-compose.md): the one-command demo.
 - [The demo recording](demo-recording.md): recording a real review and playing it back in the demo.
 - [Container image](container-image.md): the image and its smoke test.
+- [Development setup](development-setup.md): the compose override that watches files and reloads the workers.
 - [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
 - [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
 - [Persistence](persistence.md): the supported databases.
