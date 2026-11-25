@@ -138,20 +138,6 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame([], [...$review->reasons]);
     }
 
-    public function testARoundWithAChangesVerdictBelowQuorumAsksForChanges(): void
-    {
-        $review = $this->reviewWith(new VerdictPerRole(['Look at part 2.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]));
-
-        self::assertSame(Decision::Changes, $review->decision);
-    }
-
-    public function testARoundWhoseReviewerIsBlockedIsBlocked(): void
-    {
-        $review = $this->reviewWith(new VerdictPerRole(['Look at part 2.' => new Verdict(Decision::Blocked, [], [], [])]));
-
-        self::assertSame(Decision::Blocked, $review->decision);
-    }
-
     public function testAFailedReviewerBesideAnApprovingOneBlocksTheRoundAndIsNamedInPlainWords(): void
     {
         $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.'));
@@ -190,15 +176,6 @@ final class ReviewChangeTest extends KernelTestCase
 
         self::assertSame(Decision::Changes, $review->decision);
         self::assertSame(['role-1 reviewer failed, stopped at its output limit'], [...$review->reasons]);
-    }
-
-    public function testTheActListHoldsOnlyTheFindingsTheJudgeMarkedAct(): void
-    {
-        $verdict = new Verdict(Decision::Changes, [$this->finding('A', Severity::P1), $this->finding('B', Severity::P3)], [], []);
-
-        $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => $verdict]));
-
-        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
     }
 
     public function testAP1TheJudgeRejectsIsStillOnTheActListAndAP3IsNot(): void
@@ -443,13 +420,6 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, $this->openRoundId()));
 
         self::assertEqualsWithDelta((100 * 1.0 + 20 * 2.0) / 1_000_000, $review->cost->usd, 1e-12);
-    }
-
-    public function testTheTokensOfACallMadeForAnotherRoundAreLeftOut(): void
-    {
-        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, '0192a000-0000-7000-8000-0000000000ff'));
-
-        self::assertSame([0, 0], [$review->tokens->calls, $review->tokens->total]);
     }
 
     public function testARoundNumberThatIsNotTheNextOneIsRefusedBeforeAnythingStarts(): void

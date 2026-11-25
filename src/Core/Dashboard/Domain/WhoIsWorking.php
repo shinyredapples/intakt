@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use DateInterval;
+use DateTimeImmutable;
+use Intakt\Core\Review\Contract\ReviewCeiling;
+
 // Reviewers only, because build lanes and slots have no source until the build lane lands.
 final readonly class WhoIsWorking
 {
@@ -16,9 +20,10 @@ final readonly class WhoIsWorking
     /**
      * @param list<Review> $reviews
      */
-    public function __construct(array $reviews, private int $builds = 0)
+    // The time is used here and not kept, because the live board compares serialized boards and a kept time would make every push differ.
+    public function __construct(DateTimeImmutable $now, array $reviews, private int $builds = 0)
     {
-        $this->lanes = array_merge(...array_map($this->lanesOf(...), $reviews));
+        $this->lanes = array_merge(...array_map(static fn (Review $review): array => self::lanesOf($review, $now), $reviews));
         $this->activeRounds = array_values(array_filter(array_map(static fn (Review $review): ?ReviewedRound => $review->activeRound(), $reviews)));
     }
 
@@ -67,7 +72,7 @@ final readonly class WhoIsWorking
      * @return list<Lane>
      */
     // A judged or ended round has nothing running, so a reviewer still marked running there is a stray row.
-    private function lanesOf(Review $review): array
+    private static function lanesOf(Review $review, DateTimeImmutable $now): array
     {
         $round = $review->activeRound();
 
@@ -75,8 +80,14 @@ final readonly class WhoIsWorking
             return [];
         }
 
-        $running = array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Running === $outcome->progress);
+        $running = array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Running === $outcome->progress && self::withinTheCeiling($outcome, $now));
 
         return array_values(array_map(static fn (ReviewerOutcome $outcome): Lane => new Lane($outcome->id, $outcome->role, $outcome->tier, $round->project, $round->change, $round->number, $outcome->since, $round->round), $running));
+    }
+
+    // A round nobody judges (an orchestrator crash, judging failed for good) would keep its reviewers running forever, so a lane ends where the worker's hold ends: past the review ceiling a redelivery may treat the worker as stopped (#1715).
+    private static function withinTheCeiling(ReviewerOutcome $outcome, DateTimeImmutable $now): bool
+    {
+        return $outcome->since->add(new DateInterval('PT'.ReviewCeiling::SECONDS.'S')) > $now;
     }
 }

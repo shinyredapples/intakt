@@ -23,16 +23,17 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReplayMark;
-use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Dashboard\UseCase\ReviewBoundLedger;
+use Intakt\Tests\Support\FixedRoundCosts;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 
 #[CoversClass(LedgerReviewPages::class)]
 #[CoversClass(LedgerRounds::class)]
@@ -96,6 +97,21 @@ final class LedgerReviewPagesTest extends TestCase
         $review = $this->pagesOn(new ReviewBoundLedger($ledger))->reviewOf('r1');
 
         self::assertSame(1200, $review?->rounds[0]->tokens->total());
+    }
+
+    public function testTheFirstRoundIsTheFirstRoundOfTheReviewStartedFirstReadFromTheStartsAlone(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->startRoundOf('feat/b', 'other', 1);
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        self::assertSame('r1', $this->pagesOn(new ReviewBoundLedger($ledger))->firstRound());
+    }
+
+    public function testAFreshInstallHasNoFirstRound(): void
+    {
+        self::assertNull($this->pagesOn(new ReviewBoundLedger(new DashboardLedger()))->firstRound());
     }
 
     public function testAReviewOfARoundTheLedgerNeverStartedIsNotRead(): void
@@ -318,9 +334,8 @@ final class LedgerReviewPagesTest extends TestCase
      */
     private function pagesOn(Ledger $ledger, array $replays = [], array $stored = []): LedgerReviewPages
     {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+        $costs = new FixedRoundCosts(Cost::inUsd(0.5));
 
-        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays, $stored)));
+        return new LedgerReviewPages(new MockClock(), $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays, $stored)));
     }
 }

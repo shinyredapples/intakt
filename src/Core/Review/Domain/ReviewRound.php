@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Domain;
 
+use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -56,6 +57,10 @@ final class ReviewRound implements HasPlace
     #[ORM\Column(options: ['default' => false])]
     private bool $replay = false;
 
+    // Null until the forge took the verdict, because a judged round whose publication was skipped, refused or is still queued is still in review for the people on the pull request.
+    #[ORM\Column(name: 'published_at', nullable: true)]
+    private ?DateTimeImmutable $publishedAt = null;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
@@ -92,6 +97,16 @@ final class ReviewRound implements HasPlace
     public function hasStaleVerdicts(): bool
     {
         return $this->verdictsStale;
+    }
+
+    public function recordPublication(DateTimeImmutable $at): void
+    {
+        $this->publishedAt = $at;
+    }
+
+    public function publishedAt(): ?DateTimeImmutable
+    {
+        return $this->publishedAt;
     }
 
     public function markAsReplay(): void

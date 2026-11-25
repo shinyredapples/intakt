@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Domain;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -64,8 +63,7 @@ final class ReviewRoundReviewerOrderTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
 
-        EmptyDatabase::in($container);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn($container);
     }
 
     /**
