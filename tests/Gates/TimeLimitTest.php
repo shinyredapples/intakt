@@ -36,6 +36,25 @@ final class TimeLimitTest extends TestCase
         yield 'infinite' => [INF];
         yield 'negative infinite' => [-INF];
         yield 'not a number' => [NAN];
+        yield 'infinite in nanoseconds' => [PHP_FLOAT_MAX];
+    }
+
+    public function testTheLargestFloatIsNotAFiniteNumberOfNanoseconds(): void
+    {
+        self::assertFalse(TimeLimit::isFinite(PHP_FLOAT_MAX));
+    }
+
+    public function testALargeLimitWithinTheFloatRangeOfNanosecondsIsFinite(): void
+    {
+        self::assertTrue(TimeLimit::isFinite(10_000_000_000.0));
+    }
+
+    public function testTheLargestFloatCannotRunWithoutNamingTheValue(): void
+    {
+        $refusal = TimeLimit::refusal('sh', PHP_FLOAT_MAX);
+
+        self::assertSame(127, $refusal->exitCode);
+        self::assertSame('cannot run sh: its time limit is not a finite number of seconds', $refusal->errors);
     }
 
     public function testALimitOfZeroTimesOutNamingTheLimit(): void

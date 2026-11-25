@@ -8,12 +8,14 @@ use Closure;
 use Intakt\Gates\ProcessQueue;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\TimeLimit;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(ProcessQueue::class)]
 #[UsesClass(ProcessResult::class)]
+#[UsesClass(TimeLimit::class)]
 final class ProcessQueueTest extends SandboxTestCase
 {
     public function testAnInfinitePassLimitIsRefused(): void
@@ -28,6 +30,20 @@ final class ProcessQueueTest extends SandboxTestCase
         $this->expectException(InvalidArgumentException::class);
 
         new ProcessQueue(NAN, 60);
+    }
+
+    public function testAFinitePassLimitThatOverflowsToInfiniteNanosecondsIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessQueue(0.5, PHP_FLOAT_MAX);
+    }
+
+    public function testAFiniteJobLimitThatOverflowsToInfiniteNanosecondsIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new ProcessQueue(PHP_FLOAT_MAX, 60);
     }
 
     public function testAFiniteFractionalLimitIsAccepted(): void

@@ -192,6 +192,14 @@ final class ProcessRunnerTest extends TestCase
         self::assertSame('cannot run sh: its time limit is not a finite number of seconds', $result->errors);
     }
 
+    public function testATimedCommandWithALimitInfiniteInNanosecondsIsRefusedWithoutRunning(): void
+    {
+        $result = new ProcessRunner()->runWithin(['sh', '-c', 'echo ran'], sys_get_temp_dir(), PHP_FLOAT_MAX);
+
+        self::assertSame(127, $result->exitCode);
+        self::assertSame('', $result->output);
+    }
+
     public function testACommandRunToItsEndWithAnInfiniteLimitIsRefusedWithoutRunning(): void
     {
         $result = new ProcessRunner()->runToItsEnd(['sh', '-c', 'echo ran'], sys_get_temp_dir(), INF);

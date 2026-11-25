@@ -20,8 +20,8 @@ final readonly class ProcessQueue
 
     public function __construct(private float $seconds, private float $overallSeconds)
     {
-        // Because an infinite pass limit would disable the overall deadline, and a NAN one would compare false with every time left.
-        if (!is_finite($seconds) || !is_finite($overallSeconds)) {
+        // Because an infinite pass limit, or one infinite in nanoseconds, would disable the overall deadline, and a NAN one would compare false with every time left.
+        if (!TimeLimit::isFinite($seconds) || !TimeLimit::isFinite($overallSeconds)) {
             throw new InvalidArgumentException('A test pass takes only time limits that are a finite number of seconds.');
         }
     }

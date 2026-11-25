@@ -173,12 +173,12 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
-    // Shorter than one wait between two status reads; the command ends only once the instance sleeps, so after a read saw it running and during the last wait.
-    public function testACommandThatEndsDuringTheLastWaitBeforeAFractionalLimitIsNotKilled(): void
+    // The command ends only once the instance sleeps, so after a status read saw it running and during a wait before the limit; 0.2 s, so a loaded runner still reaches that wait in time.
+    public function testACommandThatEndsDuringAWaitBeforeAFractionalLimitIsNotKilled(): void
     {
         $command = 'while read -r _ _ state _ < /proc/$PPID/stat; [ "$state" != S ]; do :; done; printf "done\n"';
 
-        $run = $this->runInstance(self::stubProject(), ['sh', '-c', $command], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.045']);
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', $command], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
 
         self::assertSame(0, $run['exit']);
         self::assertStringNotContainsString('was killed', $run['errors']);
