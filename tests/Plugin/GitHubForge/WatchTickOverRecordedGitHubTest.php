@@ -16,6 +16,7 @@ use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -92,13 +93,17 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Throwable;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 // One tick over recorded GitHub answers for two pull requests, because the ledger of a real tick is the evidence: #7 with CI still running, #8 with CI finished and green.
@@ -123,6 +128,12 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     private bool $listingUnchanged = false;
 
     private bool $listingFails = false;
+
+    private string $now = '2026-11-02T10:00:00+00:00';
+
+    private ?PersistingStoreInterface $headLockStore = null;
+
+    private ?LatestRoundStatus $roundsOfThePass = null;
 
     // Evidence E1 of #3878 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
     public function testAPullRequestsTrustedSteeringLabelsReachTheQueuedRoundWithTheValueAppliedLast(): void
@@ -178,6 +189,36 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         }
 
         self::assertSame(['status:in-review'], $this->statusLabels->labels);
+    }
+
+    // The second tick comes an hour later, so the head whose CI still runs is due again and its lock is asked of a store that is down, while the label writes still work.
+    public function testATickWhoseHeadStepFailsAfterAFailedReconcileStillPutsTheStatusLabelBackAndReportsTheHeadFailure(): void
+    {
+        $this->fixture->startFor(self::GREEN_PULL, $this->fixture->bus, 1);
+        $this->statusLabels->labelReadStatus = 503;
+        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+        $afterTheFailedReconcile = $this->statusLabels->labels;
+        $this->statusLabels->labelReadStatus = 200;
+        $this->now = '2026-11-02T11:00:00+00:00';
+        $this->headLockStore = $this->storeThatIsDown();
+
+        $reported = $this->failureOf($this->handler(new RecordingCommandBus()));
+
+        self::assertSame([[], LockAcquiringException::class, ['status:in-review']], [$afterTheFailedReconcile, $reported::class, $this->statusLabels->labels]);
+    }
+
+    // The status pass fails as well here, and the head step's failure must stay the one the tick reports.
+    public function testATickWhoseHeadStepAndStatusPassBothFailReportsTheHeadFailure(): void
+    {
+        $this->fixture->startFor(self::GREEN_PULL, $this->fixture->bus, 1);
+        $this->headLockStore = $this->storeThatIsDown();
+        $rounds = self::createStub(LatestRoundStatus::class);
+        $rounds->method('of')->willThrowException(new RuntimeException('The rounds could not be read.'));
+        $this->roundsOfThePass = $rounds;
+
+        $reported = $this->failureOf($this->handler(new RecordingCommandBus()));
+
+        self::assertSame(LockAcquiringException::class, $reported::class);
     }
 
     // The fixture queues its round at another head than the listing names, so only a round at any head brings the pull request into the pass.
@@ -320,7 +361,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private function handler(RecordingCommandBus $commands): WatchPullRequestsHandler
     {
-        $clock = new MockClock('2026-11-02T10:00:00+00:00');
+        $clock = new MockClock($this->now);
         $locks = new LockFactory(new InMemoryStore());
         $logger = new RecordingLogger();
         $ledgerStore = self::getContainer()->get(Ledger::class);
@@ -353,9 +394,29 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
         $latest = new StoredLatestRoundStatus($this->fixture->transactions());
-        $statuses = new StatusMirrors($find, $latest, new RoundStatusMirror($latest, $locks, $logger, $this->statusLabels->adapter('acme/widgets')));
+        $statuses = new StatusMirrors($find, $this->roundsOfThePass ?? $latest, new RoundStatusMirror($latest, $locks, $logger, $this->statusLabels->adapter('acme/widgets')), $logger);
+        $headLocks = $this->headLockStore instanceof PersistingStoreInterface ? new LockFactory($this->headLockStore) : $locks;
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $headLocks, $installWide, $logger), $decisions, $settle), $statuses);
+    }
+
+    private function storeThatIsDown(): PersistingStoreInterface
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('The head lock store is down.'));
+
+        return $store;
+    }
+
+    private function failureOf(WatchPullRequestsHandler $handler): Throwable
+    {
+        try {
+            $handler(new WatchPullRequests('alpha'));
+        } catch (Throwable $failure) {
+            return $failure;
+        }
+
+        self::fail('The tick reported no failure.');
     }
 
     private function recordedEvents(): string

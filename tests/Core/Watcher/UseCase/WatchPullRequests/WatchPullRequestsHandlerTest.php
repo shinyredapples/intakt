@@ -1688,7 +1688,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
         // No round in Review's store, so the status pass has nothing to reconcile and these tests read only the heads.
-        $statuses = new StatusMirrors($find, self::createStub(LatestRoundStatus::class), new RoundStatusMirror(self::createStub(LatestRoundStatus::class), $locks, $logger));
+        $statuses = new StatusMirrors($find, self::createStub(LatestRoundStatus::class), new RoundStatusMirror(self::createStub(LatestRoundStatus::class), $locks, $logger), $logger);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
     }
