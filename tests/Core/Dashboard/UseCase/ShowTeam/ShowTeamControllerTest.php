@@ -99,9 +99,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
     {
         $this->givenAccounts(
             [Provider::Codex->value => ['ready', 'cooling', 'rejected', 'nokey']],
-            withoutKey: 'codex.nokey',
-            coolingDown: 'codex.cooling',
-            rejected: 'codex.rejected',
+            ['codex.nokey' => AccountState::NoKey, 'codex.cooling' => AccountState::CoolingDown, 'codex.rejected' => AccountState::Rejected],
         );
 
         $chips = $this->browser->request('GET', '/team')->filter('.acct .chip');
@@ -133,16 +131,18 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
     /**
      * @param array<string, list<string>> $accounts
+     * @param array<string, AccountState> $states   by account key; an account not named is ready
      */
-    private function givenAccounts(array $accounts, string $withoutKey = '', string $coolingDown = '', string $rejected = ''): void
+    private function givenAccounts(array $accounts, array $states = []): void
     {
         $listed = self::createStub(ListedAccounts::class);
         $listed->method('of')->willReturnCallback(static fn (Provider $provider): array => array_map(static fn (string $name): Account => new Account($provider, $name), $accounts[$provider->value] ?? []));
         $credentials = self::createStub(AccountCredentials::class);
-        $credentials->method('areSet')->willReturnCallback(static fn (Account $account): bool => $account->key() !== $withoutKey);
+        $credentials->method('areSet')->willReturnCallback(static fn (Account $account): bool => AccountState::NoKey !== ($states[$account->key()] ?? null));
         $cooldowns = self::createStub(AccountCooldowns::class);
-        $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => $account->key() === $rejected);
-        $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), [$coolingDown, $rejected], true));
+        $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => AccountState::Rejected === ($states[$account->key()] ?? null));
+        // A rejected key also cools down, as the cooldown windows report it.
+        $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($states[$account->key()] ?? null, [AccountState::CoolingDown, AccountState::Rejected], true));
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturnCallback(static fn (string $project, BuildFacts $facts): TierChoice => EscalationOutcome::Confirmed === $facts->escalation ? new TierChoice(Tier::Strong, TierReason::ConfirmedEscalation) : new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
