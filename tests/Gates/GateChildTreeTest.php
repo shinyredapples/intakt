@@ -18,7 +18,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ProcessResult::class)]
 final class GateChildTreeTest extends TestCase
 {
-    // A safety net only: every wait below ends on a file the child writes or on its process group being gone.
+    // Long, because it only stops a hang: every wait below ends early on a file the child writes or on its process group being gone.
     private const int SECONDS_TO_WAIT = 5;
 
     private string $marker;
