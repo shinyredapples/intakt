@@ -588,14 +588,14 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
-    // The writer starts between the reading's update and its commit, because on a read-committed engine it would otherwise see no recovery and leave the notice without an end; it is refused the shared lock there, then runs after the commit and gives the notice the reading's moment.
+    // The writer starts at the driver's commit, because on a read-committed engine it would otherwise see no recovery and leave the notice without an end; it is refused the shared lock there, then runs after the commit and gives the notice the reading's moment.
     public function testTheOnlyRecoveryReadingHoldsTheAccountsLockUntilItCommitsAndThenGivesTheNoticeItsMomentAsTheEnd(): void
     {
         $shared = new AccountReadingLock(new LockFactory(new RefusingToWaitStore(new InMemoryStore())));
         $outage = new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
         $notices = new DoctrineOutageNotices($this->entities, $this->locks, self::createStub(LoggerInterface::class), $shared);
         $refused = false;
-        $hook = $this->afterTheReadingsEndOfOutages(function () use (&$refused, $notices, $outage): void {
+        $hook = $this->atTheDriversCommit(function () use (&$refused, $notices, $outage): void {
             try {
                 $notices->noticeOnce($outage);
             } catch (LockConflictedException) {
@@ -872,6 +872,27 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             public function log(mixed $level, string|Stringable $message, array $context = []): void
             {
                 if (!$this->inside instanceof Closure || !str_starts_with(is_string($context['sql'] ?? null) ? $context['sql'] : '', 'UPDATE budget_outage_notice ')) {
+                    return;
+                }
+
+                $run = $this->inside;
+                $this->inside = null;
+                $run();
+            }
+        };
+    }
+
+    // The driver logs this just before it commits, so the hook runs at the commit boundary.
+    private function atTheDriversCommit(Closure $inside): AbstractLogger
+    {
+        return new class($inside) extends AbstractLogger {
+            public function __construct(private ?Closure $inside)
+            {
+            }
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (!$this->inside instanceof Closure || 'Committing transaction' !== (string) $message) {
                     return;
                 }
 
