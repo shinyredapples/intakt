@@ -12,11 +12,11 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ShareAndLabelField::class)]
 final class ShareAndLabelFieldTest extends TestCase
 {
-    public function testBeforeACheckTheLabelIsTheDefaultAndNothingIsAcceptedOrWrong(): void
+    public function testBeforeACheckTheShareAndLabelAreTheDefaultsAndNothingIsAcceptedOrWrong(): void
     {
         $field = ShareAndLabelField::unsubmitted('intakt');
 
-        self::assertSame(['', 'intakt', null, null, false], [$field->share, $field->label, $field->shareError, $field->labelError, $field->isAccepted()]);
+        self::assertSame(['20', 'intakt', null, null, false], [$field->share, $field->label, $field->shareError, $field->labelError, $field->isAccepted()]);
     }
 
     /** @return iterable<string, array{string, ?string}> */
@@ -49,10 +49,15 @@ final class ShareAndLabelFieldTest extends TestCase
         yield 'fifty-one characters' => [str_repeat('a', 51), ShareAndLabelField::LABEL_TOO_LONG];
         yield 'fifty letters that take two bytes each' => [str_repeat('é', 50), null];
         yield 'with spaces inside' => ['good first issue', null];
+        yield 'fifty-one letters that take two bytes each' => [str_repeat('é', 51), ShareAndLabelField::LABEL_TOO_LONG];
+        yield 'with a line break inside' => ["good\nfirst", ShareAndLabelField::LABEL_NOT_ONE_LINE];
+        yield 'with a tab inside' => ["good\tfirst", ShareAndLabelField::LABEL_NOT_ONE_LINE];
+        yield 'with a line break at the end, trimmed away' => ["intakt\n", null];
+        yield 'not UTF-8' => ["bad\xFF", ShareAndLabelField::LABEL_NOT_ONE_LINE];
     }
 
     #[DataProvider('labels')]
-    public function testALabelIsNotEmptyAndAtMostFiftyCharacters(string $label, ?string $error): void
+    public function testALabelIsOneLineOfAtMostFiftyCharacters(string $label, ?string $error): void
     {
         self::assertSame($error, ShareAndLabelField::submitted('20', $label)->labelError);
     }

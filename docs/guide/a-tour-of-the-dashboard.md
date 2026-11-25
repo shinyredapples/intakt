@@ -23,7 +23,7 @@ Thirteen pages are built. They show what Intakt has written down about its revie
   1. **Repository:** paste the address and press **Check the address**; Intakt says what is wrong or shows "GitHub, repository owner/name".
   2. **Install the App:** the install button does nothing yet (planned).
   3. **Check:** each watched project whose main branch failed its boot check, with the reason, or "No failed boot of main recorded". Checking the new repository itself is planned.
-  4. **Share and label:** type the weekly share (a whole number from 0 to 100) and the issue label (at most 50 characters), then press **Check the share and label**; each wrong value gets its own red line.
+  4. **Share and label:** move the slider to the weekly share (from 0 to 100 percent; the percent shows beside it) and type the issue label (one line, at most 50 characters), then press **Check the share and label**; each wrong value gets its own red line.
   5. **Start:** the Start button does nothing yet (planned).
 
   Nothing you type is kept yet: each step says so, and a new project is still added in the project file.

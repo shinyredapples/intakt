@@ -13,12 +13,12 @@ enum AddProjectStep: int
     case ShareAndLabel = 4;
     case Start = 5;
 
-    // Anything but a step's number opens the first step, because a hand-typed or stale address should still land on the flow.
+    // Anything but a step's number written plainly opens the first step, because a hand-typed or stale address should still land on the flow; filter_var alone would also read "+2" and " 2" as step 2.
     public static function fromQuery(string $step): self
     {
         $number = filter_var($step, FILTER_VALIDATE_INT);
 
-        return false === $number ? self::Repository : self::tryFrom($number) ?? self::Repository;
+        return false === $number || (string) $number !== $step ? self::Repository : self::tryFrom($number) ?? self::Repository;
     }
 
     public function label(): string

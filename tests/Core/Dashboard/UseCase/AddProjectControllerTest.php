@@ -291,8 +291,58 @@ final class AddProjectControllerTest extends DashboardPageTestCase
         self::assertSame('post', $form->attr('method'));
         self::assertSame('/projects/new?step=4', $form->attr('action'));
         self::assertSame('intakt', $form->filter('input#lbl[name=label]')->attr('value'));
-        self::assertSame('', $form->filter('input#share[name=share]')->attr('value'));
+        self::assertSame(ShareAndLabelField::DEFAULT_SHARE, $form->filter('input#share[name=share]')->attr('value'));
         self::assertCount(0, $page->filter('.field-error, [aria-invalid], .detected'));
+    }
+
+    public function testTheWeeklyShareIsASliderFromZeroToOneHundredWithItsPercentBesideIt(): void
+    {
+        $row = $this->browser->request('GET', '/projects/new?step=4')->filter('#step-share-label .share-row');
+
+        $slider = $row->filter('input#share');
+        self::assertSame(['range', '0', '100', '1'], [$slider->attr('type'), $slider->attr('min'), $slider->attr('max'), $slider->attr('step')]);
+        self::assertSame('share-percent', $slider->attr('data-share-output'));
+        self::assertSame(['share', '20%'], [$row->filter('output#share-percent')->attr('for'), $row->filter('output#share-percent')->text()]);
+    }
+
+    public function testACheckedShareIsShownBesideTheSlider(): void
+    {
+        $page = $this->browser->request('POST', '/projects/new?step=4', ['share' => '35', 'label' => 'intakt']);
+
+        self::assertSame(['35', '35%'], [$page->filter('input#share')->attr('value'), $page->filter('output#share-percent')->text()]);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function checks(): iterable
+    {
+        yield 'the address check' => ['1', 'form.check-repository'];
+        yield 'the share and label check' => ['4', 'form.check-share-label'];
+    }
+
+    // Turbo takes over a form in the live shell and refuses an answer that is not a redirect, and a check answers with the page itself.
+    #[DataProvider('checks')]
+    public function testACheckIsSentByTheBrowserItselfAndNotByTurbo(string $step, string $form): void
+    {
+        $page = $this->browser->request('GET', '/projects/new?step='.$step);
+
+        self::assertSame('false', $page->filter('main '.$form)->attr('data-turbo'));
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function stepNumbers(): iterable
+    {
+        foreach (AddProjectStep::cases() as $step) {
+            yield $step->label() => [$step->value];
+        }
+    }
+
+    #[DataProvider('stepNumbers')]
+    public function testEveryStepSaysWhatIsNotBuiltBeforeItsButtons(int $step): void
+    {
+        $section = $this->browser->request('GET', '/projects/new?step='.$step)->filter('main section.step');
+
+        $classes = $section->children()->each(static fn (Crawler $child): string => (string) $child->attr('class'));
+        self::assertSame(['not-wired', 'step-nav'], array_values(array_intersect($classes, ['not-wired', 'step-nav'])));
     }
 
     public function testAShareOutOfRangeAndAnEmptyLabelShowBothErrorsAndKeepTheStep(): void

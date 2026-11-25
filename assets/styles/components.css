@@ -653,6 +653,17 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .wizard .step-count { display: block; margin-bottom: var(--s24); font-size: var(--t15); }
   .wizard .step-nav { flex-wrap: wrap; }
 }
+/* The Add project flow shows its step count at every width, under the progress (mock add-project.html, .flow .step-count), and its weekly share is a slider with its percent beside it. */
+.add-project .step-count { display: block; margin: calc(-1 * var(--s24)) 0 var(--s24); }
+.share-row { display: flex; align-items: center; gap: var(--s16); max-width: 420px; }
+.share-row input[type="range"] { flex: 1; height: 24px; accent-color: var(--deep); }
+.share-row output { min-width: 48px; font-weight: 600; }
+@media (max-width: 760px) {
+  /* The progress links reach 20 px above their bars, so the bars sit 32 px under the breadcrumb and no link covers the Projects link. */
+  .add-project .steps { margin-top: calc(var(--s16) + var(--s4)); }
+  .add-project .step-count { margin: 0 0 calc(var(--s16) + var(--s4)); }
+  .share-row input[type="range"] { height: 44px; }
+}
 .comp-nav { display: flex; flex-wrap: wrap; gap: var(--s8); margin-bottom: var(--s24); }
 .comp-nav a { padding: var(--s4) var(--s12); border-radius: var(--r-chip); background: var(--tint); color: var(--ink); font-size: var(--t13); text-decoration: none; }
 .comp-sec { margin-bottom: var(--s48); }

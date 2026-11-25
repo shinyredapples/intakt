@@ -14,6 +14,10 @@ final readonly class ShareAndLabelField
     public const string SHARE_OUT_OF_RANGE = 'The weekly share is a whole number from 0 to 100.';
     public const string LABEL_EMPTY = 'Enter the issue label.';
     public const string LABEL_TOO_LONG = 'A GitHub label has at most 50 characters.';
+    public const string LABEL_NOT_ONE_LINE = 'A GitHub label is one line of text, without tabs or line breaks.';
+
+    // The mock's starting position of the slider, so the step opens on a share instead of the slider's midpoint; nothing keeps it yet.
+    public const string DEFAULT_SHARE = '20';
 
     // GitHub's own limit for a label's name, because a label GitHub would refuse should fail here and not at the first call to GitHub.
     private const int LABEL_LIMIT = 50;
@@ -29,7 +33,7 @@ final readonly class ShareAndLabelField
 
     public static function unsubmitted(string $defaultLabel): self
     {
-        return new self('', $defaultLabel, null, null, checked: false);
+        return new self(self::DEFAULT_SHARE, $defaultLabel, null, null, checked: false);
     }
 
     public static function submitted(string $share, string $label): self
@@ -62,6 +66,11 @@ final readonly class ShareAndLabelField
     {
         if ('' === $label) {
             return self::LABEL_EMPTY;
+        }
+
+        // A text that is not UTF-8 makes the match fail, and is refused like a control character, since GitHub refuses both.
+        if (1 === preg_match('/\p{Cc}/u', $label) || false === preg_match('//u', $label)) {
+            return self::LABEL_NOT_ONE_LINE;
         }
 
         return mb_strlen($label) > self::LABEL_LIMIT ? self::LABEL_TOO_LONG : null;

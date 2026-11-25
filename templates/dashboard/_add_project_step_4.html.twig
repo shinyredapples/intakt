@@ -2,10 +2,12 @@
 <section class="step" id="step-share-label" data-s="4" aria-labelledby="a4h">
     <h1 id="a4h">Share and label</h1>
     <p class="lead">How much of the week this project gets, and which issues it picks up.</p>
-    <form method="post" action="{{ path(route, {(query): step.value}) }}" class="check-share-label" novalidate>
+    {#- Turbo is left out of the check, because it accepts only a redirect after a form and the check answers with the page itself. -#}
+    <form method="post" action="{{ path(route, {(query): step.value}) }}" class="check-share-label" data-turbo="false" novalidate>
         <div class="field">
             <label for="share">Weekly share</label>
-            <input class="input narrow" id="share" type="text" inputmode="numeric" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\AddProject\\AddProjectController::SHARE') }}" value="{{ field.share }}" autocomplete="off" aria-describedby="share-hint{% if field.shareError %} share-error{% endif %}"{% if field.shareError %} aria-invalid="true"{% endif %}>
+            {#- The output shows the share the server rendered; assets/share-output.js follows the slider as it moves. -#}
+            <div class="share-row"><input id="share" type="range" min="0" max="100" step="1" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\AddProject\\AddProjectController::SHARE') }}" value="{{ field.share }}" data-share-output="share-percent" aria-describedby="share-hint{% if field.shareError %} share-error{% endif %}"{% if field.shareError %} aria-invalid="true"{% endif %}><output id="share-percent" for="share">{{ field.share|trim }}%</output></div>
             <span class="hint" id="share-hint">A whole number of percent, from 0 to 100.</span>
             {%- if field.shareError %}
             <span class="field-error" id="share-error" role="alert">{{ field.shareError }}</span>

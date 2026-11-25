@@ -21,6 +21,9 @@ final class AddProjectStepTest extends TestCase
         yield 'one past the last' => ['6', AddProjectStep::Repository];
         yield 'negative' => ['-3', AddProjectStep::Repository];
         yield 'a leading zero' => ['03', AddProjectStep::Repository];
+        yield 'a plus sign' => ['+2', AddProjectStep::Repository];
+        yield 'a leading space' => [' 2', AddProjectStep::Repository];
+        yield 'a trailing space' => ['2 ', AddProjectStep::Repository];
         yield 'a fraction' => ['2.5', AddProjectStep::Repository];
         yield 'a word' => ['three', AddProjectStep::Repository];
         yield 'empty' => ['', AddProjectStep::Repository];
