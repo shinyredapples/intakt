@@ -16,6 +16,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Psr\Log\LoggerInterface;
 
 // The mode and the hand-over are read here and not when the round is queued, so a project switched to or from reviewer-for-loop after its judge publishes by its mode at publication; a failed write is left to Messenger's retries.
@@ -30,6 +31,7 @@ final readonly class PublishVerdictHandler
         private OwnerAsks $ownerAsks,
         private ForgeWrites $forge,
         private ChangePublications $publications,
+        private RoundStatusMirror $mirror,
         private LoggerInterface $logger,
     ) {
     }
@@ -99,6 +101,11 @@ final readonly class PublishVerdictHandler
 
         if ($published && HeadStatus::Error !== $verdict->status) {
             $this->rounds->recordPublication($round);
+        }
+
+        // After the record, because the label follows the stored round; the step never throws, so a label costs the publication nothing.
+        if ($published) {
+            $this->mirror->reconcile($round->project(), new ChangeId($round->change()));
         }
 
         return $published;
