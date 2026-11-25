@@ -16,14 +16,14 @@ final class ReadmeTeamPictureTest extends TestCase
     {
         $picture = $this->picture();
 
-        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark\.webp" width="760" height="104">/', $picture));
+        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark\.webp" width="760" height="109">/', $picture));
         self::assertFileExists($this->root().'/docs/assets/team-dark.webp');
     }
 
     // One sharp file per theme, shown at 760 px: phones that skip a srcset would otherwise stretch a 760 px file and blur it.
     public function testTheTeamPictureDimensionsMatchTheImageFilesTheyDescribe(): void
     {
-        foreach (['light' => 101, 'dark' => 104] as $theme => $height) {
+        foreach (['light' => 106, 'dark' => 109] as $theme => $height) {
             $image = getimagesize($this->root().'/docs/assets/team-'.$theme.'.webp');
 
             self::assertIsArray($image);
