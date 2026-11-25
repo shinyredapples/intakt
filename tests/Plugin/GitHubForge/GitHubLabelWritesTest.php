@@ -39,15 +39,30 @@ final class GitHubLabelWritesTest extends TestCase
         $this->writesAnswering(403)->remove('/repos/acme/widget/issues/7', 'model:light');
     }
 
+    public function testAnAdditionPostsTheLabelByName(): void
+    {
+        $this->writesAnswering(200)->add('/repos/acme/widget/issues/7', 'status:in-review');
+
+        self::assertSame(['POST /repos/acme/widget/issues/7/labels {"labels":["status:in-review"]}'], $this->writes);
+    }
+
+    public function testAnAdditionTheForgeDoesNotFindFailsTheWrite(): void
+    {
+        $this->expectException(ForgeWriteFailed::class);
+
+        $this->writesAnswering(404)->add('/repos/acme/widget/issues/7', 'status:in-review');
+    }
+
     private function writesAnswering(int $status): GitHubLabelWrites
     {
         $identity = new RecordedTrust()->client();
         $wiring = TrustChecks::wiring(new MockHttpClient(function (string $method, string $url, array $options) use ($identity, $status): ResponseInterface {
             $path = (string) parse_url($url, PHP_URL_PATH);
-            if (!str_contains($path, '/issues/7/labels/')) {
+            if (!str_contains($path, '/issues/7/labels')) {
                 return $identity->request($method, $url, $options);
             }
-            $this->writes[] = $method.' '.$path;
+            $body = is_string($options['body'] ?? null) ? $options['body'] : '';
+            $this->writes[] = trim($method.' '.$path.' '.$body);
 
             return new MockResponse('[]', ['http_code' => $status]);
         }, 'https://api.github.com'));
