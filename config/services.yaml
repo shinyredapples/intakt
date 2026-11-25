@@ -76,6 +76,13 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+    # Measures the forge check's deadline, because a wall clock set back during the run would lengthen it.
+    Symfony\Component\Clock\MonotonicClock: ~
+    Intakt\Plugin\GitHubForge\Infrastructure\ForgeConnectionCheck:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
     Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'

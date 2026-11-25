@@ -32,6 +32,13 @@ final class AppJwtTest extends TestCase
         self::assertSame(1, openssl_verify($header.'.'.$claims, $this->bytes($signature), $key->public, OPENSSL_ALGO_SHA256));
     }
 
+    public function testAnAppIdWithSurroundingSpacesIsSignedAsTheNumberAlone(): void
+    {
+        $claims = explode('.', new AppJwt(' 12345 ', AppKey::generate()->private, new MockClock())->sign())[1];
+
+        self::assertSame('12345', $this->decode($claims)['iss']);
+    }
+
     public function testAKeyThatCannotSignFailsWithoutNamingTheKey(): void
     {
         $unreadable = 'not a key '.AppKey::generate()->body();
@@ -43,6 +50,15 @@ final class AppJwtTest extends TestCase
         } catch (InstallationTokenNotMinted $failure) {
             self::assertStringNotContainsString($unreadable, $failure->getMessage());
         }
+    }
+
+    public function testAKeyThatIsNotRsaDoesNotSign(): void
+    {
+        $jwt = new AppJwt('12345', AppKey::ellipticCurvePem(), new MockClock());
+
+        $this->expectException(InstallationTokenNotMinted::class);
+
+        (void) $jwt->sign();
     }
 
     /**
