@@ -47,8 +47,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
 
         $adds = $reconciliation->add instanceof RoundStatusLabel;
-        // Posted before the add, because a failed add leaves Intakt's own removal as the latest event and the retry would owe no comment.
-        // A removal that found the label already gone changed nothing, so it owes none either.
+        // Before the add, because a failed add leaves Intakt's own removal as the latest event and the retry owes none; a removal that found the label gone changed nothing.
         if ($comment && ($removed || $adds)) {
             $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
         }
