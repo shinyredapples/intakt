@@ -13,10 +13,10 @@ use Doctrine\DBAL\Driver\Statement;
 use RuntimeException;
 use SensitiveParameter;
 
-// The second end of an outage fails on its way to the database, because a reading's second end runs after its commit, so the first end and the reading it saved are already kept.
-final readonly class SecondOutageEndFails implements Middleware
+// Any end of an outage sent after the driver committed fails, because a reading's end that runs once its reading is committed can fail with the reading already kept, leaving the notice with the later end it had.
+final readonly class OutageEndAfterTheCommitFails implements Middleware
 {
-    public const string FAILURE = 'The end of the outage was not moved after the commit.';
+    public const string FAILURE = 'The end of the outage failed after the commit.';
 
     public function wrap(Driver $driver): Driver
     {
@@ -24,29 +24,35 @@ final readonly class SecondOutageEndFails implements Middleware
             public function connect(#[SensitiveParameter] array $params): Connection
             {
                 return new class(parent::connect($params)) extends AbstractConnectionMiddleware {
-                    private int $ends = 0;
+                    private bool $committed = false;
+
+                    public function commit(): void
+                    {
+                        parent::commit();
+                        $this->committed = true;
+                    }
 
                     public function prepare(string $sql): Statement
                     {
-                        $this->failOnTheSecondEnd($sql);
+                        $this->failOnAnEndAfterTheCommit($sql);
 
                         return parent::prepare($sql);
                     }
 
                     public function exec(string $sql): int|string
                     {
-                        $this->failOnTheSecondEnd($sql);
+                        $this->failOnAnEndAfterTheCommit($sql);
 
                         return parent::exec($sql);
                     }
 
-                    private function failOnTheSecondEnd(string $sql): void
+                    private function failOnAnEndAfterTheCommit(string $sql): void
                     {
-                        if (!str_starts_with($sql, 'UPDATE budget_outage_notice ') || 2 !== ++$this->ends) {
+                        if (!$this->committed || !str_starts_with($sql, 'UPDATE budget_outage_notice ')) {
                             return;
                         }
 
-                        throw new RuntimeException(SecondOutageEndFails::FAILURE);
+                        throw new RuntimeException(OutageEndAfterTheCommitFails::FAILURE);
                     }
                 };
             }
