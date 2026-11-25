@@ -46,6 +46,6 @@ Intakt ships a review bench: small changes with planted defects. On 2026-11-21 a
 
 ## What Intakt is not, yet
 
-Today Intakt reviews branches of a local git repository, from the dashboard, the command line or your agent. It also watches pull requests on GitHub, reviews each new head once its CI passes, and lets you steer that review with labels ([Steering Intakt](../guide/steering-intakt.md#labels-on-a-reviewed-pull-request)). Building tasks on its own is planned. This guide sticks to what works now.
+Today Intakt reviews branches of a local git repository, from the dashboard, the command line or your agent. It also watches pull requests on GitHub, reviews each new head once its CI passes, and lets you steer that review with labels ([Steering Intakt](../guide/steering-intakt.md#labels-on-a-reviewed-pull-request)). It marks each reviewed pull request with a `status:in-review` or `status:waiting-on-you` label for reading only: a changed one is put back by the next watcher pass that writes it successfully. Building tasks on its own is planned. This guide sticks to what works now.
 
 Next: [The first five minutes](02-the-first-five-minutes.md)

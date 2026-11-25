@@ -1,5 +1,6 @@
 name: ci
-# Every gate on each pull request (on GitHub's test merge of it) and on main; a newer run of the same ref cancels the one it replaces.
+# Every gate on each pull request (on GitHub's test merge of it) and on main, where a push that reuses a pull request's
+# result skips them (the main job); a newer run of the same ref cancels the one it replaces.
 # Never pull_request_target: pull-request code must not run with the base repository's secrets or write token.
 on:
   pull_request:
@@ -20,10 +21,94 @@ permissions:
 # it discards afterwards (a hosted runner service): the jobs then prepare the host as on GitHub's runners. The optional
 # secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (read-only) log Docker in to Docker Hub before the jobs pull from it.
 jobs:
+  # A push to main whose commit already passed ci as the head of a pull request into main from this repository, in a run
+  # that tested exactly the pushed commit's tree (.github/ci/pr-run-passed.sh), skips every other job. A pull request run
+  # tests GitHub's merge of the head into main; its check job records that tree, and only that tree counts, usually the
+  # head's own after a fast-forward land. This job then only saves the Composer and CI image caches that pull requests
+  # restore. Any other push (a direct push, a release commit) runs all, and a failure of this job before it decides skips
+  # no job that needs it. What a pull-request filter skips is then left to the nightly full run on main (#2126).
+  main:
+    if: github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      full: ${{ steps.passed.outputs.full }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A failed lookup (an API call or git), or one LOOKUP_TIMEOUT_SECONDS stops before the job's own limit, never reads as
+      # "passed": it warns and runs every job. -k kills one that ignores the stop signal.
+      - name: Decide whether the commit passed as the head of a pull request into main
+        id: passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOOKUP_TIMEOUT_SECONDS: 300
+        run: |
+          set -eu
+          if ! { tree=$(timeout -k 2 "$LOOKUP_TIMEOUT_SECONDS" git rev-parse "$GITHUB_SHA^{tree}") && passed=$(timeout -k 2 "$LOOKUP_TIMEOUT_SECONDS" .github/ci/pr-run-passed.sh "$GITHUB_SHA" "$tree"); }; then
+            echo "::warning::The lookup of a passed pull request run for $GITHUB_SHA failed or took over $LOOKUP_TIMEOUT_SECONDS seconds, so every job runs."
+            passed=unknown
+          fi
+          echo "full=$([ "$passed" = yes ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+          echo "passed as the head of a pull request into main: $passed"
+      - name: Name the CI image cache
+        id: image-name
+        if: steps.passed.outputs.full == 'false'
+        run: echo "key=intakt-ci-image-$(.github/ci/build-image.sh --print-hash)" >> "$GITHUB_OUTPUT"
+      - name: Look up the CI image cache
+        id: image-cache
+        if: steps.passed.outputs.full == 'false'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/intakt-ci-image.tar
+          key: ${{ steps.image-name.outputs.key }}
+          lookup-only: true
+      - name: Restore Composer's cache
+        id: composer-cache
+        if: steps.passed.outputs.full == 'false'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Log in to Docker Hub
+        if: steps.passed.outputs.full == 'false' && (steps.image-cache.outputs.cache-hit != 'true' || steps.composer-cache.outputs.cache-hit != 'true')
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
+      # Builds and saves the CI image when main has none cached for its inputs; loads it for Composer otherwise.
+      - name: Build or restore the CI image
+        if: steps.passed.outputs.full == 'false' && (steps.image-cache.outputs.cache-hit != 'true' || steps.composer-cache.outputs.cache-hit != 'true')
+        uses: $/.github/actions/ci-image
+      - name: Fill Composer's cache
+        if: steps.passed.outputs.full == 'false' && steps.composer-cache.outputs.cache-hit != 'true'
+        run: |
+          set -eu
+          cache="$RUNNER_TEMP/composer-cache"
+          mkdir -p "$cache"
+          chmod -R a+rwX "$cache"
+          docker run --rm --user 1000:1000 \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --tmpfs /tmp:rw,exec,size=1g \
+            --volume "$cache:/composer-cache" --env COMPOSER_CACHE_DIR=/composer-cache --env COMPOSER_CACHE_READ_ONLY=0 \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh true
+      - name: Save Composer's cache
+        if: steps.passed.outputs.full == 'false' && steps.composer-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: ${{ steps.composer-cache.outputs.cache-primary-key }}
   # bin/check runs in the CI image (.github/ci/Dockerfile: the PHP image pinned by digest plus the tools bin/check needs),
   # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
   check:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     steps:
@@ -125,10 +210,31 @@ jobs:
         with:
           path: ${{ runner.temp }}/gates-cache
           key: ${{ steps.gates-cache-name.outputs.name }}
+      # The tree this pull request run tested (GitHub's merge commit), for the push that lands the head: its main job skips
+      # the full run only when this tree is the pushed commit's tree. Reached only when the gates passed. Only a pull request
+      # into main records it: another base's path filters may have skipped an application change that main lacks.
+      - name: Record the tested tree
+        id: tested-tree
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: |
+          set -eu
+          tree=$(git rev-parse "$GITHUB_SHA^{tree}")
+          echo "$tree" > "$RUNNER_TEMP/tested-tree"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+      - name: Upload the tested tree
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: main-tested-tree-${{ steps.tested-tree.outputs.tree }}
+          path: ${{ runner.temp }}/tested-tree
+          retention-days: 30
+          # A re-run of the workflow uploads the same name again; replacing it keeps a passing check green.
+          overwrite: true
   # The journeys on the change itself, so one that breaks the first install or the live review page fails its own pull
   # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
   journeys:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     # Every journey at 300 seconds plus the image build.
     timeout-minutes: 40
@@ -137,9 +243,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Decided in a step, like the image job's, so the check always reports: every push to main runs the journeys, a pull
-      # request only when it needs the app image (.github/ci/image-needed.sh) or touches the journeys' test code (the paths
-      # below). git diff exits 1 for a change and 0 for none; any other status is a git error and fails the step.
+      # Decided in a step, like the image job's, so the check always reports: every push to main that the main job lets run
+      # runs the journeys, a pull request only when it needs the app image (.github/ci/image-needed.sh) or touches the
+      # journeys' test code (the paths below). git diff exits 1 for a change and 0 for none; any other status is a git error
+      # and fails the step.
       - name: Decide on the journeys
         id: journeys
         env:
@@ -199,10 +306,12 @@ jobs:
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check --journeys
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
   # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming
-  # Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. Every push to
-  # main runs the engines regardless, so a change this filter misses is caught on main.
+  # Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. A push to main
+  # runs the engines only when its commit did not pass as the head of a pull request into main, so a change this filter
+  # misses is caught by the nightly full run on main (#2126), or until then by the next direct push or release commit.
   changes:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     outputs:
@@ -256,7 +365,8 @@ jobs:
   # so their disk syncs only cost time. The tests run in the CI image as uid 1000 on the
   # network the runner creates for the job's services, and reach each database by its service name; no port is published
   # and there is no job container, so no Docker socket inside. The databases take no password (throwaway, never published).
-  # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database services instead:
+  # The job's if is the fork guard behind a status check (a skipped main job must not skip it on a pull request, and a
+  # changes job skipped on main skips it too), so the changes job's answer gates the steps and the database services instead:
   # when the change does not touch persistence, no service starts (an empty image) and every step is skipped.
   # The services take no Docker Hub credentials: an empty secret there is a template error that fails the job, so
   # their images pull anonymously; the steps log in like the other jobs. A changes
@@ -264,7 +374,7 @@ jobs:
   # reports every engine, each in its own log group.
   persistence:
     needs: changes
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    if: ${{ !cancelled() && !failure() && needs.changes.result == 'success' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     env:
@@ -348,7 +458,8 @@ jobs:
   # needed, docker/verify-upgrade.sh on it; every check is in the scripts. One job, because each job on an ephemeral runner
   # is a full machine reset and a build. The full history is fetched for the upgrade check's base commit.
   image:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 35
     steps:
@@ -362,7 +473,10 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
       # Decided in a step, not by a paths filter, so the job reports on every pull request. The base is the pull request's
-      # merge base, or on main the commit before the push; every push to main runs the check. A failing git fails the step.
+      # merge base, or on a full push run the head's first parent. A push to main whose commit passed as the head of a pull request into
+      # main skips this job; a later full run's check starts from its own first parent, so the upgrade across the skipped
+      # change stays unchecked. The rest of what the check misses is left to the nightly full run on main (#2126). A failing
+      # git fails the step.
       - name: Decide on the app image and the upgrade check
         id: upgrade
         env:
