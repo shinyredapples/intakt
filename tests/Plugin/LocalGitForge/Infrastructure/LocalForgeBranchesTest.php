@@ -19,6 +19,7 @@ use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeGitDirectories;
 use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeLocks;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
@@ -428,6 +429,53 @@ final class LocalForgeBranchesTest extends TestCase
         }
     }
 
+    #[TestWith(['apply', 'rebase-apply', null])]
+    #[TestWith(['apply', 'rebase-apply', ''])]
+    #[TestWith(['merge', 'rebase-merge', ''])]
+    public function testItDoesNotDeleteABranchWhoseRebaseStateNamesNoBranch(string $backend, string $state, ?string $headName): void
+    {
+        $listed = $this->aBranchThatConflictsWithMain('intakt/feature');
+        $this->repository->checkout('intakt/feature');
+        $this->rebaseOntoMainStopsIn($this->repository->path, $backend);
+        $file = $this->repository->path.'/.git/'.$state.'/head-name';
+        null === $headName ? new Filesystem()->remove($file) : new Filesystem()->dumpFile($file, $headName);
+
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The branch being rebased was deleted.');
+        } catch (ForgeWriteFailed $refused) {
+            self::assertInstanceOf(ForgeReadFailed::class, $refused->getPrevious());
+            self::assertSame($listed->head->hash, $this->repository->objectAt('refs/heads/intakt/feature'));
+        }
+    }
+
+    public function testItDoesNotDeleteABranchWhileAnApplyStateCannotTellARebaseFromAnAm(): void
+    {
+        $listed = $this->aBranchThatConflictsWithMain('intakt/feature');
+        $this->repository->checkout('intakt/feature');
+        $this->rebaseOntoMainStopsIn($this->repository->path, 'apply');
+        new Filesystem()->remove([$this->repository->path.'/.git/rebase-apply/rebasing', $this->repository->path.'/.git/rebase-apply/head-name']);
+
+        $this->expectException(ForgeWriteFailed::class);
+
+        $this->branches()->delete($listed);
+    }
+
+    public function testItDeletesABranchWhileAnAmIsUnderWayOnAnotherBranch(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        $this->aBranchThatConflictsWithMain('intakt/other');
+        $patch = new Process(['git', 'format-patch', '-1', '--stdout', 'intakt/other'], $this->repository->path)->mustRun()->getOutput();
+        $am = new Process(['git', '-c', 'user.name=Test', '-c', 'user.email='.self::INTAKT, 'am'], $this->repository->path, input: $patch);
+        self::assertNotSame(0, $am->run(), 'The am did not stop on its conflict.');
+
+        $this->branches()->delete($listed);
+
+        self::assertNotContains('intakt/feature', $this->names());
+    }
+
     public function testItDoesNotDeleteABranchABisectStartedOn(): void
     {
         $this->repository->checkoutNewBranch('intakt/feature');
@@ -723,9 +771,9 @@ final class LocalForgeBranchesTest extends TestCase
         return $this->branch($name);
     }
 
-    private function rebaseOntoMainStopsIn(string $worktree): void
+    private function rebaseOntoMainStopsIn(string $worktree, string $backend = 'merge'): void
     {
-        $rebase = new Process(['git', '-c', 'user.name=Test', '-c', 'user.email='.self::INTAKT, 'rebase', 'main'], $worktree);
+        $rebase = new Process(['git', '-c', 'user.name=Test', '-c', 'user.email='.self::INTAKT, 'rebase', '--'.$backend, 'main'], $worktree);
 
         self::assertNotSame(0, $rebase->run(), 'The rebase did not stop on its conflict.');
     }

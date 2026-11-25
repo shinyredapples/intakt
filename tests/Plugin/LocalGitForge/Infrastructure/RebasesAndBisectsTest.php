@@ -27,6 +27,7 @@ final class RebasesAndBisectsTest extends TestCase
     public function testItNamesTheBranchOfEachRebaseAndBisectInTheRepositoryAndInEveryLinkedWorktree(): void
     {
         new Filesystem()->dumpFile($this->common.'/rebase-merge/head-name', "refs/heads/intakt/merged\n");
+        new Filesystem()->dumpFile($this->common.'/worktrees/linked/rebase-apply/rebasing', '');
         new Filesystem()->dumpFile($this->common.'/worktrees/linked/rebase-apply/head-name', "refs/heads/intakt/applied\n");
         new Filesystem()->dumpFile($this->common.'/worktrees/linked/BISECT_START', "intakt/bisected\n");
 
@@ -43,9 +44,55 @@ final class RebasesAndBisectsTest extends TestCase
         self::assertSame([], new RebasesAndBisects()->branchesHeldIn($this->common));
     }
 
+    public function testARebaseStartedOnADetachedHeadNamesNoBranch(): void
+    {
+        new Filesystem()->dumpFile($this->common.'/rebase-merge/head-name', "detached HEAD\n");
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/rebasing', '');
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/head-name', "detached HEAD\n");
+
+        self::assertSame([], new RebasesAndBisects()->branchesHeldIn($this->common));
+    }
+
     public function testAMergeRebaseWithoutAHeadNameThrowsBecauseItsBranchCannotBeTold(): void
     {
         new Filesystem()->mkdir($this->common.'/rebase-merge');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        new RebasesAndBisects()->branchesHeldIn($this->common);
+    }
+
+    public function testAMergeRebaseWithAnEmptyHeadNameThrowsBecauseItsBranchCannotBeTold(): void
+    {
+        new Filesystem()->dumpFile($this->common.'/rebase-merge/head-name', "\n");
+
+        $this->expectException(ForgeReadFailed::class);
+
+        new RebasesAndBisects()->branchesHeldIn($this->common);
+    }
+
+    public function testAnApplyRebaseWithoutAHeadNameThrowsBecauseItsBranchCannotBeTold(): void
+    {
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/rebasing', '');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        new RebasesAndBisects()->branchesHeldIn($this->common);
+    }
+
+    public function testAnApplyRebaseWithAnEmptyHeadNameThrowsBecauseItsBranchCannotBeTold(): void
+    {
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/rebasing', '');
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/head-name', '');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        new RebasesAndBisects()->branchesHeldIn($this->common);
+    }
+
+    public function testAnApplyStateWithNeitherARebaseNorAnAmMarkerThrowsBecauseItsBranchCannotBeTold(): void
+    {
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/head-name', "refs/heads/intakt/applied\n");
 
         $this->expectException(ForgeReadFailed::class);
 

@@ -41,19 +41,39 @@ final readonly class RebasesAndBisects
     // Read whenever the directory exists, because git writes head-name with it, so a missing one is a state that cannot be told.
     private function mergeRebase(string $state): ?string
     {
-        return is_dir($state) ? trim($this->read($state.self::HEAD_NAME)) : null;
+        return is_dir($state) ? $this->startedOn($state) : null;
     }
 
-    // Read only with a head-name, because git am also uses rebase-apply without one and keeps HEAD on its branch, where the listing names it.
+    // git am also uses rebase-apply and keeps HEAD on its branch, where the listing names it; only the rebasing or applying marker tells the two apart.
     private function applyRebase(string $state): ?string
     {
-        return file_exists($state.self::HEAD_NAME) ? trim($this->read($state.self::HEAD_NAME)) : null;
+        if (!is_dir($state) || file_exists($state.'/applying') && !file_exists($state.'/rebasing')) {
+            return null;
+        }
+
+        if (!file_exists($state.'/rebasing')) {
+            throw new ForgeReadFailed(sprintf('"%s" holds neither a rebase nor a git am, so which branch it holds cannot be told', $state));
+        }
+
+        return $this->startedOn($state);
     }
 
     // The short name is made a full one, because BISECT_START holds the short name of the branch the bisect started on (or a hash, which names no branch).
     private function bisect(string $file): ?string
     {
         return file_exists($file) ? 'refs/heads/'.trim($this->read($file)) : null;
+    }
+
+    // An empty head-name cannot tell which branch the rebase writes back, while git writes "detached HEAD" for a rebase that started on no branch.
+    private function startedOn(string $state): ?string
+    {
+        $name = trim($this->read($state.self::HEAD_NAME));
+
+        if ('' === $name) {
+            throw new ForgeReadFailed(sprintf('a rebase is under way in "%s", but its head-name is empty, so which branch it holds cannot be told', $state));
+        }
+
+        return 'detached HEAD' === $name ? null : $name;
     }
 
     private function read(string $path): string
