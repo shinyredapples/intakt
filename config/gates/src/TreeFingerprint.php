@@ -14,6 +14,9 @@ final readonly class TreeFingerprint
     // Because the check itself writes these while its gates run (its report and record, the test result cache, the reference a debug kernel writes); they are left out only where the gates' own file listing does not name them.
     private const array WRITTEN_BY_THE_CHECK = ['var', '.phpunit.cache', 'config/reference.php', 'config/schema.json'];
 
+    // Because the gates take their files with this same ignore option (Scope::repositoryFiles()).
+    private const string GITIGNORE_ONLY = '--exclude-per-directory=.gitignore';
+
     // Because git keeps its own state there, and what the gates judge of it (the commits and the index) is part of the fingerprint by itself.
     private const string GIT_FOLDER = '.git';
 
@@ -57,7 +60,7 @@ final readonly class TreeFingerprint
                 ...$this->homeInputs($settledBefore),
                 ...$this->optionsAndRuntime(),
             ]);
-        } catch (RepositoryAttributesRefused|ScopeFailure|UnexpectedValueException) {
+        } catch (RepositoryAttributesRefused|UnexpectedValueException) {
             return null;
         }
     }
@@ -112,17 +115,38 @@ final readonly class TreeFingerprint
     // Because the fast check takes its files from the index too, a staged edit is another check even when the working file is back as it was; the listing reads the index and never writes it or any object.
     private function index(): string
     {
-        $staged = $this->runner->git(['ls-files', '--stage', '-z'], $this->root);
+        $hash = hash_init('sha256');
 
-        if (!$staged->succeeded()) {
-            throw new UnexpectedValueException('cannot list the index');
+        foreach ($this->listed(['ls-files', '--stage', '-z']) as $part) {
+            hash_update($hash, $part);
         }
 
-        return $staged->output;
+        return hash_final($hash);
     }
 
     /**
-     * @throws ScopeFailure
+     * @param list<string> $arguments
+     *
+     * @return iterable<string>
+     *
+     * @throws RepositoryAttributesRefused
+     * @throws UnexpectedValueException
+     */
+    // Because a listing of any length must cost no more memory than the entries may, git is stopped once it printed more bytes than that.
+    private function listed(array $arguments): iterable
+    {
+        $bytes = 0;
+
+        foreach ($this->runner->gitInParts($arguments, $this->root) as $part) {
+            $bytes += strlen($part);
+            $this->expectWithinLimits(0, $bytes);
+
+            yield $part;
+        }
+    }
+
+    /**
+     * @throws RepositoryAttributesRefused
      * @throws UnexpectedValueException
      */
     // Because the gates read files that git ignores (vendor/, .env.*.local, phpunit.xml) and ignore rules differ between the gates and git, every file counts, ignored or not.
@@ -148,7 +172,7 @@ final readonly class TreeFingerprint
     /**
      * @return iterable<iterable<string, string>>
      *
-     * @throws ScopeFailure
+     * @throws RepositoryAttributesRefused
      * @throws UnexpectedValueException
      */
     // Because the walk stops once it counted too many entries or bytes, each part is started only when the one before it is counted.
@@ -172,27 +196,30 @@ final readonly class TreeFingerprint
     }
 
     /**
-     * @return list<string>
+     * @return iterable<string>
      *
-     * @throws ScopeFailure
+     * @throws RepositoryAttributesRefused
+     * @throws UnexpectedValueException
      */
-    // Because the gates take their files from this very listing, a path the check writes is left out only while the listing does not name it: a tracked file under var/, or an untracked one the committed .gitignore leaves in, counts like any other file.
-    private function gateInputsAmongWhatTheCheckWrites(string $root): array
+    // Because the gates take their files from this very listing (Scope::repositoryFiles(), asked here only for these names), a path the check writes is left out only while the listing does not name it: a tracked file under var/, or an untracked one the committed .gitignore leaves in, counts like any other file.
+    private function gateInputsAmongWhatTheCheckWrites(string $root): iterable
     {
-        $inputs = [];
+        $rest = '';
 
-        foreach (new Scope($this->root, $this->runner)->repositoryFiles() as $listed) {
-            // Because git lists a repository nested in the tree as a folder, with a slash at its end.
-            $path = rtrim($listed, '/');
-            $written = array_any(self::WRITTEN_BY_THE_CHECK, static fn (string $name): bool => $path === $name || str_starts_with($path, $name.'/'));
+        foreach ($this->listed(['ls-files', '-z', '--cached', '--others', self::GITIGNORE_ONLY, '--', ...self::WRITTEN_BY_THE_CHECK]) as $part) {
+            $paths = explode("\0", $rest.$part);
+            $rest = array_pop($paths);
 
-            // Because the index, which is part of the fingerprint, already tells a tracked file that is gone.
-            if ($written && (file_exists($root.'/'.$path) || is_link($root.'/'.$path))) {
-                $inputs[] = $path;
+            foreach ($paths as $listed) {
+                // Because git lists a repository nested in the tree as a folder, with a slash at its end.
+                $path = rtrim($listed, '/');
+
+                // Because the index, which is part of the fingerprint, already tells a tracked file that is gone.
+                if (file_exists($root.'/'.$path) || is_link($root.'/'.$path)) {
+                    yield $path;
+                }
             }
         }
-
-        return $inputs;
     }
 
     /**

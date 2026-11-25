@@ -8,10 +8,10 @@ use Intakt\Gates\FullReport;
 use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\Options;
+use Intakt\Gates\OutputInParts;
 use Intakt\Gates\PassedTree;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
-use Intakt\Gates\Scope;
 use Intakt\Gates\TreeFingerprint;
 use Intakt\Gates\TreeWalk;
 use Intakt\Gates\Workspace;
@@ -22,6 +22,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use UnexpectedValueException;
 
+#[CoversClass(OutputInParts::class)]
 #[CoversClass(PassedTree::class)]
 #[CoversClass(TreeFingerprint::class)]
 #[CoversClass(TreeWalk::class)]
@@ -30,7 +31,6 @@ use UnexpectedValueException;
 #[UsesClass(Options::class)]
 #[UsesClass(ProcessResult::class)]
 #[UsesClass(ProcessRunner::class)]
-#[UsesClass(Scope::class)]
 #[UsesClass(Workspace::class)]
 final class PassedTreeTest extends SandboxTestCase
 {
@@ -760,6 +760,42 @@ final class PassedTreeTest extends SandboxTestCase
 
         self::assertNull($this->fingerprintOfAtMostBytes($bytes, $root)->taken());
         self::assertNotNull($this->fingerprintOfAtMostBytes($bytes + 1, $root)->taken());
+    }
+
+    public function testATreeWhoseStagedListingIsLongerThanTheFingerprintHoldsGivesNoFingerprintAndRecordsNoPass(): void
+    {
+        [$root] = $this->checkedTreeAndHome();
+        $within = $this->fingerprintOfAtMostBytes(2_000, $root);
+        self::assertNotNull($within->taken());
+
+        // Staged only, so the walk finds none of these paths and nothing but the listing is long.
+        $blob = trim($root->git('rev-parse', 'HEAD:README.md')->output);
+        foreach (range(1, 12) as $number) {
+            $root->git('update-index', '--add', '--cacheinfo', '100644,'.$blob.','.str_repeat('a', 200).'/'.$number);
+        }
+        $tree = PassedTree::before($within, $this->settledClock());
+
+        self::assertNull($within->taken());
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($tree->hasPassed());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+        self::assertNotNull($this->fingerprintOfAtMostBytes(10_000, $root)->taken());
+    }
+
+    public function testAnUntrackedFileUnderAVarThatIsNotIgnoredCountsThoughTheRestOfTheListingIsNotRead(): void
+    {
+        [$root] = $this->checkedTreeAndHome();
+        $root->write('.gitignore', '/'.FullReport::FOLDER."/\n");
+        $root->commitAll('chore: ignore only the folder of the check');
+        $root->write('var/notes.md', "clean\n");
+        $fingerprint = $this->fingerprintOfAtMostBytes(2_000, $root);
+        $before = $fingerprint->taken();
+
+        $root->write('var/notes.md', "edited\n");
+
+        self::assertNotNull($before);
+        self::assertNotNull($fingerprint->taken());
+        self::assertNotSame($before, $fingerprint->taken());
     }
 
     public function testARecordOfAnotherFingerprintIsNotReused(): void
