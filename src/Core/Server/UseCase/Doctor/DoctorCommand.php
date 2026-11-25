@@ -12,6 +12,8 @@ use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
+use Intakt\Core\Server\Infrastructure\ConsumerProcessesCheck;
+use Intakt\Core\Server\Infrastructure\WebServerCheck;
 use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -21,29 +23,40 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'intakt:doctor', description: 'Run the infrastructure health checks and print one pass or fail line per check, with what to do for a failure')]
 final readonly class DoctorCommand
 {
+    private const string WEB_SERVER = 'web server';
     private const string THREADS = 'worker threads';
     private const string METRICS = 'server metrics';
     private const string HUB = 'Mercure hub';
+    private const string WORKERS = 'workers';
     private const string FORGE = 'forge';
     private const string REFUSED_FIX = 'set FRANKENPHP_ADMIN_URL to plain http on localhost, for example http://localhost:2019';
 
     public function __construct(
         private ServerStatus $status,
         private ForgeConnection $forge,
+        private WebServerCheck $webServer,
+        private ConsumerProcessesCheck $consumers,
     ) {
     }
 
     public function __invoke(OutputInterface $output): int
     {
+        $webServer = $this->webServer->run();
         $checks = $this->checks();
+        $consumers = $this->consumers->run();
         $forge = $this->forge->run();
-        $lines = [...array_map($this->line(...), array_keys($checks), $checks), $this->render(self::FORGE, $forge->problem, $forge->fix)];
+        $lines = [
+            $this->render(self::WEB_SERVER, $webServer->problem, $webServer->fix),
+            ...array_map($this->line(...), array_keys($checks), $checks),
+            $this->render(self::WORKERS, $consumers->problem, $consumers->fix),
+            $this->render(self::FORGE, $forge->problem, $forge->fix),
+        ];
         foreach ($lines as $line) {
             // Raw, because a reason is outside text and must not be read as console markup.
             $output->writeln($line, OutputInterface::OUTPUT_RAW);
         }
 
-        return $forge->passes() && array_all($checks, static fn (InfrastructureCheck $check): bool => $check->passes())
+        return $webServer->passes() && $consumers->passes() && $forge->passes() && array_all($checks, static fn (InfrastructureCheck $check): bool => $check->passes())
             ? Command::SUCCESS
             : Command::FAILURE;
     }

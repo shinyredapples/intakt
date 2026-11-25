@@ -16,7 +16,10 @@ use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
 use Intakt\Core\Server\Infrastructure\AdminApi;
 use Intakt\Core\Server\Infrastructure\AdminApiServerStatus;
+use Intakt\Core\Server\Infrastructure\CheckVerdict;
+use Intakt\Core\Server\Infrastructure\ConsumerProcessesCheck;
 use Intakt\Core\Server\Infrastructure\PrometheusSamples;
+use Intakt\Core\Server\Infrastructure\WebServerCheck;
 use Intakt\Core\Server\UseCase\Doctor\DoctorCommand;
 use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
@@ -34,6 +37,7 @@ use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
@@ -54,18 +58,35 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(ExpectedInstallation::class)]
 #[UsesClass(AppJwt::class)]
 #[UsesClass(RateLimitReadings::class)]
+#[UsesClass(WebServerCheck::class)]
+#[UsesClass(ConsumerProcessesCheck::class)]
+#[UsesClass(CheckVerdict::class)]
+#[UsesClass(FakeProcessRoot::class)]
 final class DoctorCommandTest extends TestCase
 {
+    private const string WEB = "pass: web server\n";
+    private const string WORKERS_AND_FORGE = "pass: workers\npass: forge\n";
     private const string THREADS_FIX = 'check that FrankenPHP is running and that FRANKENPHP_ADMIN_URL points at its admin API';
     private const string METRICS_FIX = "check that the Caddyfile's global options turn on metrics and that FRANKENPHP_ADMIN_URL points at the admin API";
     private const string HUB_DOWN_FIX = "check that FrankenPHP runs with the Caddyfile's mercure block and that FRANKENPHP_ADMIN_URL points at its admin API";
+    private const string WEB_DOWN = 'fail: web server: web server down (/status did not answer on port 7781); fix: check that FrankenPHP is running and listens on SERVER_PORT (in the compose stack, docker compose restart intakt starts it again)';
+
+    /** @var list<FakeProcessRoot> */
+    private array $roots = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->roots as $root) {
+            $root->remove();
+        }
+    }
 
     public function testAHealthyInstallPassesEveryCheckAndExitsZero(): void
     {
         $tester = $this->execute(new RecordedAdminApi()->status());
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertSame("pass: worker threads\npass: server metrics\npass: Mercure hub\npass: forge\n", $tester->getDisplay());
+        self::assertSame("pass: web server\npass: worker threads\npass: server metrics\npass: Mercure hub\npass: workers\npass: forge\n", $tester->getDisplay());
     }
 
     public function testWorkerThreadsThatAreAllRestartingFailTheWorkerCheckWithItsFix(): void
@@ -74,8 +95,8 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame(
-            "fail: worker threads: no worker thread is ready; fix: check the FrankenPHP log for a worker that fails to boot or keeps restarting\n"
-            ."pass: server metrics\npass: Mercure hub\npass: forge\n",
+            self::WEB."fail: worker threads: no worker thread is ready; fix: check the FrankenPHP log for a worker that fails to boot or keeps restarting\n"
+            ."pass: server metrics\npass: Mercure hub\n".self::WORKERS_AND_FORGE,
             $tester->getDisplay(),
         );
     }
@@ -86,8 +107,8 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame(
-            'fail: worker threads: worker threads down (/frankenphp/threads did not answer); fix: '.self::THREADS_FIX."\n"
-            ."pass: server metrics\npass: Mercure hub\npass: forge\n",
+            self::WEB.'fail: worker threads: worker threads down (/frankenphp/threads did not answer); fix: '.self::THREADS_FIX."\n"
+            ."pass: server metrics\npass: Mercure hub\n".self::WORKERS_AND_FORGE,
             $tester->getDisplay(),
         );
     }
@@ -98,9 +119,9 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame(
-            "pass: worker threads\n"
+            self::WEB."pass: worker threads\n"
             .'fail: server metrics: server metrics down (/metrics answered with status 500); fix: '.self::METRICS_FIX."\n"
-            ."pass: Mercure hub\npass: forge\n",
+            ."pass: Mercure hub\n".self::WORKERS_AND_FORGE,
             $tester->getDisplay(),
         );
     }
@@ -111,26 +132,51 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame(
-            "pass: worker threads\npass: server metrics\n"
-            ."fail: Mercure hub: the hub reports unhealthy; fix: check the FrankenPHP log for the Mercure hub's error, for example a transport file under MERCURE_BOLT_PATH it cannot write\npass: forge\n",
+            self::WEB."pass: worker threads\npass: server metrics\n"
+            ."fail: Mercure hub: the hub reports unhealthy; fix: check the FrankenPHP log for the Mercure hub's error, for example a transport file under MERCURE_BOLT_PATH it cannot write\n".self::WORKERS_AND_FORGE,
             $tester->getDisplay(),
         );
     }
 
-    public function testAStoppedWebServerFailsEveryCheckWithItsFix(): void
+    public function testAStoppedWebServerFailsTheWebServerAndAdminChecksWithTheirFixes(): void
     {
-        $tester = $this->execute(new RecordedAdminApi()->unreachable()->status());
+        $tester = $this->runDoctor(new DoctorCommand(new RecordedAdminApi()->unreachable()->status(), $this->forge(), $this->stoppedWebServer(), $this->consumers(null)));
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame(
-            'fail: worker threads: worker threads down (/frankenphp/threads did not answer); fix: '.self::THREADS_FIX."\n"
+            self::WEB_DOWN."\n"
+            .'fail: worker threads: worker threads down (/frankenphp/threads did not answer); fix: '.self::THREADS_FIX."\n"
             .'fail: server metrics: server metrics down (/metrics did not answer); fix: '.self::METRICS_FIX."\n"
-            .'fail: Mercure hub: hub down (/mercure/health/ready did not answer); fix: '.self::HUB_DOWN_FIX."\npass: forge\n",
+            .'fail: Mercure hub: hub down (/mercure/health/ready did not answer); fix: '.self::HUB_DOWN_FIX."\n".self::WORKERS_AND_FORGE,
             $tester->getDisplay(),
         );
     }
 
-    public function testAnAdminApiOffLocalhostFailsEveryCheckAsNotRunWithoutARequest(): void
+    public function testAWebServerThatDoesNotAnswerAloneFailsItsLineAndExitsOne(): void
+    {
+        $tester = $this->runDoctor(new DoctorCommand(new RecordedAdminApi()->status(), $this->forge(), $this->stoppedWebServer(), $this->consumers(null)));
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(
+            self::WEB_DOWN."\npass: worker threads\npass: server metrics\npass: Mercure hub\n".self::WORKERS_AND_FORGE,
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testStoppedWorkersAloneFailTheWorkersLineAndExitOne(): void
+    {
+        $tester = $this->runDoctor(new DoctorCommand(new RecordedAdminApi()->status(), $this->forge(), $this->webServer(), $this->consumers(new FakeProcessRoot([['frankenphp', 'run']]))));
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(
+            self::WEB."pass: worker threads\npass: server metrics\npass: Mercure hub\n"
+            .'fail: workers: no async worker is running, so no review or build moves; the scheduler worker is not running, so pull requests are not watched; '
+            ."fix: restart the container with docker compose restart intakt; outside the container, start them with messenger:consume async and messenger:consume scheduler_watcher scheduler_retention\npass: forge\n",
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testAnAdminApiOffLocalhostFailsEveryAdminCheckAsNotRunWithoutARequest(): void
     {
         $api = new RecordedAdminApi();
 
@@ -138,10 +184,10 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         $lines = explode("\n", rtrim($tester->getDisplay(), "\n"));
-        self::assertCount(4, $lines);
+        self::assertCount(6, $lines);
         foreach (['worker threads', 'server metrics', 'Mercure hub'] as $index => $name) {
-            self::assertStringStartsWith('fail: '.$name.': cannot run (FRANKENPHP_ADMIN_URL must be plain http on localhost', $lines[$index]);
-            self::assertStringEndsWith('; fix: set FRANKENPHP_ADMIN_URL to plain http on localhost, for example http://localhost:2019', $lines[$index]);
+            self::assertStringStartsWith('fail: '.$name.': cannot run (FRANKENPHP_ADMIN_URL must be plain http on localhost', $lines[$index + 1]);
+            self::assertStringEndsWith('; fix: set FRANKENPHP_ADMIN_URL to plain http on localhost, for example http://localhost:2019', $lines[$index + 1]);
         }
         self::assertSame([], $api->requestedUrls);
     }
@@ -150,8 +196,9 @@ final class DoctorCommandTest extends TestCase
     {
         $check = InfrastructureCheck::unreadable(new EndpointDown('x'), "the problem\nin two lines", "first step\nsecond step\r\x1B[31m");
         $line = new ReflectionMethod(DoctorCommand::class, 'line');
+        $command = new DoctorCommand(self::createStub(ServerStatus::class), $this->forge(), $this->webServer(), $this->consumers(null));
 
-        $printed = $line->invoke(new DoctorCommand(self::createStub(ServerStatus::class), $this->forge()), 'worker threads', $check);
+        $printed = $line->invoke($command, 'worker threads', $check);
 
         self::assertSame('fail: worker threads: the problem in two lines; fix: first step second step  [31m', $printed);
     }
@@ -161,8 +208,8 @@ final class DoctorCommandTest extends TestCase
         $tester = $this->execute($this->statusReading(threads: new EndpointDown("first\nsecond\r\x1B[31mthird\u{2028}fourth\u{85}fifth")));
 
         self::assertSame(
-            'fail: worker threads: worker threads down (first second  [31mthird fourth fifth); fix: '.self::THREADS_FIX."\n"
-            ."pass: server metrics\npass: Mercure hub\npass: forge\n",
+            self::WEB.'fail: worker threads: worker threads down (first second  [31mthird fourth fifth); fix: '.self::THREADS_FIX."\n"
+            ."pass: server metrics\npass: Mercure hub\n".self::WORKERS_AND_FORGE,
             $tester->getDisplay(),
         );
     }
@@ -171,7 +218,7 @@ final class DoctorCommandTest extends TestCase
     {
         $tester = $this->execute($this->statusReading(threads: new EndpointDown("broken \xFF\nbyte")));
 
-        self::assertSame(4, substr_count($tester->getDisplay(), "\n"));
+        self::assertSame(6, substr_count($tester->getDisplay(), "\n"));
         self::assertStringContainsString('(broken ? byte)', $tester->getDisplay());
     }
 
@@ -200,7 +247,7 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertSame(
-            "pass: worker threads\npass: server metrics\npass: Mercure hub\n"
+            self::WEB."pass: worker threads\npass: server metrics\npass: Mercure hub\npass: workers\n"
             ."fail: forge: GITHUB_APP_ID is empty while GITHUB_APP_INSTALLATION_ID or GITHUB_APP_PRIVATE_KEY is still set; fix: set GITHUB_APP_ID to the App ID, or empty the installation ID and the private key as well to run without an App\n",
             $tester->getDisplay(),
         );
@@ -236,6 +283,24 @@ final class DoctorCommandTest extends TestCase
         );
     }
 
+    private function webServer(): WebServerCheck
+    {
+        return new WebServerCheck(new MockHttpClient(new MockResponse('{}')), 7781, 7781);
+    }
+
+    private function stoppedWebServer(): WebServerCheck
+    {
+        return new WebServerCheck(new MockHttpClient(new MockResponse('', ['error' => 'Failed to connect'])), 7781, 7781);
+    }
+
+    private function consumers(?FakeProcessRoot $processes): ConsumerProcessesCheck
+    {
+        $root = $processes ?? FakeProcessRoot::healthy();
+        $this->roots[] = $root;
+
+        return new ConsumerProcessesCheck($root->path);
+    }
+
     private function statusReading(EndpointDown $threads): ServerStatus
     {
         $status = self::createStub(ServerStatus::class);
@@ -246,8 +311,13 @@ final class DoctorCommandTest extends TestCase
 
     private function execute(ServerStatus $status, ?ForgeConnectionCheck $forge = null): CommandTester
     {
+        return $this->runDoctor(new DoctorCommand($status, $forge ?? $this->forge(), $this->webServer(), $this->consumers(null)));
+    }
+
+    private function runDoctor(DoctorCommand $doctor): CommandTester
+    {
         $application = new Application();
-        $application->addCommand(new DoctorCommand($status, $forge ?? $this->forge()));
+        $application->addCommand($doctor);
         $tester = new CommandTester($application->find('intakt:doctor'));
         $tester->execute([]);
 
