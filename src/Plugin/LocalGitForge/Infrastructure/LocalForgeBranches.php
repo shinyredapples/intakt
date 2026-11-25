@@ -15,6 +15,8 @@ use Intakt\Plugin\Forge\Contract\ForgeBranches;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
@@ -265,6 +267,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
             array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'branch ')),
         ));
 
+        $branches = [...$branches, ...$this->branchesBeingRebasedOrBisected($common)];
         $head = $this->git(['symbolic-ref', '--quiet', 'HEAD'], $common);
 
         return match ($head->getExitCode()) {
@@ -272,6 +275,46 @@ final readonly class LocalForgeBranches implements ForgeBranches
             self::NOT_SYMBOLIC => $branches,
             default => throw new ForgeReadFailed(sprintf('git symbolic-ref failed: %s', trim($head->getErrorOutput()))),
         };
+    }
+
+    /**
+     * @return list<string>
+     */
+    // A rebase or a bisect detaches a worktree's HEAD, so the listing names no branch, yet finishing or aborting it writes the branch back; git branch -d refuses such a branch for the same reason.
+    private function branchesBeingRebasedOrBisected(string $common): array
+    {
+        $directories = [$common];
+        if (is_dir($common.'/worktrees')) {
+            foreach (Finder::create()->directories()->depth(0)->ignoreDotFiles(false)->ignoreVCS(false)->in($common.'/worktrees') as $directory) {
+                $directories[] = $directory->getPathname();
+            }
+        }
+
+        $branches = [];
+        foreach ($directories as $directory) {
+            foreach (['rebase-merge', 'rebase-apply'] as $rebase) {
+                // git am also uses rebase-apply, without a head-name, and keeps HEAD on its branch, so the listing already names that one.
+                if (is_dir($directory.'/'.$rebase) && ('rebase-merge' === $rebase || file_exists($directory.'/'.$rebase.'/head-name'))) {
+                    $branches[] = trim($this->stateFile($directory.'/'.$rebase.'/head-name'));
+                }
+            }
+
+            // BISECT_START holds the short name of the branch the bisect started on, or a hash when it started detached.
+            if (file_exists($directory.'/BISECT_START')) {
+                $branches[] = self::HEADS.trim($this->stateFile($directory.'/BISECT_START'));
+            }
+        }
+
+        return $branches;
+    }
+
+    private function stateFile(string $path): string
+    {
+        try {
+            return new Filesystem()->readFile($path);
+        } catch (IOException $unread) {
+            throw new ForgeReadFailed(sprintf('a rebase or a bisect is under way, but which branch it holds cannot be read: %s', $unread->getMessage()), $unread->getCode(), previous: $unread);
+        }
     }
 
     // A worktree added meanwhile takes no lock this delete holds, so the check is read again. A check that cannot answer counts as checked out, because the branch is already gone here and a refusal must leave it in place.
@@ -304,7 +347,12 @@ final readonly class LocalForgeBranches implements ForgeBranches
         try {
             $current = $this->git(['show-ref', '--verify', '--hash', $reference]);
             if ($current->isSuccessful()) {
-                return sprintf('was deleted at %s and exists again at %s', $head->hash, $this->commitFrom(trim($current->getOutput()))->hash);
+                $commit = $this->commitFrom(trim($current->getOutput()));
+
+                // A branch made again as a symbolic ref can name a tag of a blob or a tree, and that is no commit to report.
+                return 'commit' === trim($this->read(['cat-file', '-t', $commit->hash]))
+                    ? sprintf('was deleted at %s and exists again at %s', $head->hash, $commit->hash)
+                    : $unreadable;
             }
 
             return self::MISSING === $this->git(['show-ref', '--exists', $reference])->getExitCode()

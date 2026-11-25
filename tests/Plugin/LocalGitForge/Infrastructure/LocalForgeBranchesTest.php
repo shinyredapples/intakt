@@ -246,6 +246,25 @@ final class LocalForgeBranchesTest extends TestCase
         }
     }
 
+    public function testABranchMadeAgainAsASymbolicRefToABlobIsNotReportedAsExistingAgainAtACommit(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        new Process(['git', 'update-ref', 'refs/tags/blob', $this->repository->objectAt('HEAD:README.md')], $this->repository->path)->mustRun();
+        $listed = $this->branch('intakt/feature');
+        $madeAgainAtABlob = sprintf("  *' update-ref --no-deref '*) %s; exit 128 ;;\n", $this->inTheRepository(['symbolic-ref', 'refs/heads/intakt/feature', 'refs/tags/blob']));
+
+        try {
+            $this->withGit($madeAgainAtABlob.$this->aWorktreeAddAfterTheFirstListingAndNoSecondListing(), function () use ($listed): void {
+                $this->branches()->delete($listed);
+            });
+            self::fail('The delete did not report the branch it could not put back.');
+        } catch (ForgeWriteFailed $lost) {
+            self::assertStringContainsString(sprintf('The branch "intakt/feature" was deleted at %s and its current state could not be read', $head), $lost->getMessage());
+        }
+    }
+
     public function testItRefusesToDeleteWhileAWorktreeIsStillBeingAdded(): void
     {
         $this->repository->checkoutNewBranch('intakt/feature');
@@ -375,6 +394,64 @@ final class LocalForgeBranchesTest extends TestCase
         $this->expectException(ForgeWriteFailed::class);
 
         $this->branches()->delete($listed);
+    }
+
+    public function testItDoesNotDeleteABranchBeingRebasedInTheRepository(): void
+    {
+        $listed = $this->aBranchThatConflictsWithMain('intakt/feature');
+        $this->repository->checkout('intakt/feature');
+        $this->rebaseOntoMainStopsIn($this->repository->path);
+
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The branch being rebased was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame($listed->head->hash, $this->repository->objectAt('refs/heads/intakt/feature'));
+        }
+    }
+
+    public function testItDoesNotDeleteABranchBeingRebasedInAnotherWorktree(): void
+    {
+        $listed = $this->aBranchThatConflictsWithMain('intakt/feature');
+        $this->repository->addWorktree($this->worktree(), 'intakt/feature');
+        $this->rebaseOntoMainStopsIn($this->worktree());
+
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The branch being rebased in another worktree was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame($listed->head->hash, $this->repository->objectAt('refs/heads/intakt/feature'));
+        }
+    }
+
+    public function testItDoesNotDeleteABranchABisectStartedOn(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->commitFile('src/One.php', "<?php\n");
+        $head = $this->repository->commitFile('src/Two.php', "<?php\n");
+        $listed = $this->branch('intakt/feature');
+        new Process(['git', 'bisect', 'start', 'intakt/feature', 'main'], $this->repository->path)->mustRun();
+
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The branch a bisect started on was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame($head, $this->repository->objectAt('refs/heads/intakt/feature'));
+        }
+    }
+
+    public function testItDeletesABranchWhileAnotherBranchIsBeingRebased(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        $this->aBranchThatConflictsWithMain('intakt/other');
+        $this->repository->checkout('intakt/other');
+        $this->rebaseOntoMainStopsIn($this->repository->path);
+
+        $this->branches()->delete($listed);
+
+        self::assertNotContains('intakt/feature', $this->names());
     }
 
     public function testItDoesNotDeleteABranchWhoseHeadMovedAfterTheListing(): void
@@ -629,6 +706,24 @@ final class LocalForgeBranchesTest extends TestCase
             $this->inTheRepository(['worktree', 'add', '--quiet', $this->worktree(), 'intakt/feature']),
             $mark,
         );
+    }
+
+    // The branch and main both change README.md, so a rebase of the branch onto main stops on the conflict.
+    private function aBranchThatConflictsWithMain(string $name): ForgeBranch
+    {
+        $this->repository->checkoutNewBranch($name);
+        $this->repository->commitFile('README.md', $name."\n");
+        $this->repository->checkout('main');
+        $this->repository->commitFile('README.md', "main\n");
+
+        return $this->branch($name);
+    }
+
+    private function rebaseOntoMainStopsIn(string $worktree): void
+    {
+        $rebase = new Process(['git', '-c', 'user.name=Test', '-c', 'user.email='.self::INTAKT, 'rebase', 'main'], $worktree);
+
+        self::assertNotSame(0, $rebase->run(), 'The rebase did not stop on its conflict.');
     }
 
     private function realGit(): string

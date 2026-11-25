@@ -37,6 +37,8 @@ A lock that already exists is a refusal (a checkout or another git command is un
 
 **Checks.** Holding the locks, the delete refuses the branch when `git symbolic-ref --quiet refs/heads/<name>` says it is symbolic now, and when any worktree's `HEAD` names it. It reads `git worktree list --porcelain -z`, and the `HEAD` in the common directory (`git --git-dir=<common dir> --bare symbolic-ref --quiet HEAD` through `HardenedGit::callInBareRepository()`). A bare repository lists that `HEAD` without a branch line, also when the forge is opened through one of its linked worktrees.
 
+A rebase or a bisect detaches a worktree's `HEAD`, so the listing names no branch while finishing or aborting it writes the branch back (git's own `branch -d` refuses such a branch too). The delete therefore also refuses the branch that `rebase-merge/head-name`, `rebase-apply/head-name` or `BISECT_START` names, in the common directory and in each `worktrees/<id>` directory under it. A `rebase-merge` directory without a `head-name`, or a state file it cannot read, is a refusal.
+
 A worktree the listing shows as `locked initializing` is one `git worktree add` has not finished, so the check cannot answer and the delete is refused.
 
 **Delete.** `git update-ref -d --no-deref refs/heads/<name> <expected head>` deletes the branch; git refuses when it is no longer at that head. `--no-deref` means a delete never goes through a symbolic ref: a branch that became symbolic after the check loses only its own ref, never the branch it names.
@@ -48,8 +50,8 @@ When the put-back succeeds, the delete reports a refusal: `The branch "<name>" w
 When the put-back fails, the delete reads the branch once more with `git show-ref --verify --hash refs/heads/<name>` (and `git show-ref --exists` to tell a missing branch from a failed read). The `ForgeWriteFailed` then says, with git's error and the reason for the put-back, and never that the branch was not deleted:
 
 - the branch is missing: `The branch "<name>" is deleted at <expected head> and could not be put back`; that head restores it by hand;
-- another writer made it again: `The branch "<name>" was deleted at <expected head> and exists again at <commit>`;
-- the read fails: `The branch "<name>" was deleted at <expected head> and its current state could not be read`.
+- another writer made it again at a commit (`git cat-file -t` says `commit`): `The branch "<name>" was deleted at <expected head> and exists again at <commit>`;
+- the read fails, or the branch was made again as a symbolic ref to an object that is no commit: `The branch "<name>" was deleted at <expected head> and its current state could not be read`.
 
 **Limits.** A `git worktree add` that resolved the branch before the delete and creates its worktree directory only after the second check is seen by neither check, and its `HEAD` then names the deleted branch. A second writer that holds the branch's ref lock during the put-back makes it fail in that same window; the delete then reports the branch as deleted with the head that restores it.
 
