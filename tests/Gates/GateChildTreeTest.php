@@ -152,7 +152,7 @@ final class GateChildTreeTest extends TestCase
 
         // Because in a PID namespace the group leader lies outside it, the descendant reads group 0 there, and only its command line finds it.
         if ($group > 0) {
-            self::assertFalse(new ProcessGroup($group)->outlives($this->deadline()), sprintf('Process group %d still runs %d seconds after its gate child ended.', $group, self::SECONDS_TO_WAIT));
+            self::assertFalse(new ProcessGroup($group, launcherStart: '')->outlives($this->deadline()), sprintf('Process group %d still runs %d seconds after its gate child ended.', $group, self::SECONDS_TO_WAIT));
         }
 
         self::assertFalse($this->aProcessNamingTheMarkerOutlives($this->deadline()), sprintf('A process naming %s still runs %d seconds after its gate child ended.', $this->marker, self::SECONDS_TO_WAIT));
