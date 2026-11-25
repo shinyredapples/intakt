@@ -253,6 +253,62 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("Text.\n\n---\n## Evidence\nShown.\n\n".self::LINES, $body);
     }
 
+    public function testAnOpenCommentAtTheEndIsClosedBeforeTheResultsAreAdded(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Text.\n\n<!-- note\nstill open");
+
+        self::assertSame("Text.\n\n<!-- note\nstill open\n-->\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnOpenPreBlockInTheEvidenceSectionIsClosedBeforeTheResultsAreAdded(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n<pre>\ncode");
+
+        self::assertSame("## Evidence\n<pre>\ncode\n</pre>\n\n".self::LINES, $body);
+    }
+
+    public function testAnOpenProcessingInstructionAtTheEndIsClosedBeforeTheResultsAreAdded(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo('<?php');
+
+        self::assertSame("<?php\n?>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingInsideADeclarationIsNotTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<!DOCTYPE\n\n## Evidence\n>\nText.");
+
+        self::assertSame("<!DOCTYPE\n\n## Evidence\n>\nText.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnOpenCdataBlockAtTheEndIsClosedBeforeTheResultsAreAdded(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<![CDATA[\n## Evidence");
+
+        self::assertSame("<![CDATA[\n## Evidence\n]]>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnIndentedLineWithATabAfterSpacesIsCodeNotASetextHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("  \tEvidence\n---\n## Evidence\nShown.");
+
+        self::assertSame("  \tEvidence\n---\n## Evidence\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAnIndentedContinuationLineBelongsToTheSetextHeadingTitle(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Evidence\n    details\n---\nShown.");
+
+        self::assertSame("Evidence\n    details\n---\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAVerticalTabLineDoesNotEndAnHtmlBlock(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<div>\n\x0b\n## Evidence\n \t\n## Notes\nLater.");
+
+        self::assertSame("<div>\n\x0b\n## Evidence\n \t\n## Notes\nLater.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
     private function runs(): RegressionRuns
     {
         return new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed);

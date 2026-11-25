@@ -12,10 +12,12 @@ final readonly class RegressionEvidence
 {
     private const string SAFE_PATH = '#^[A-Za-z0-9_./@+ -]+$#';
 
+    private ReadableLines $readable;
+
     public function __construct(
         private RegressionRuns $runs,
-        private ReadableLines $readable = new ReadableLines(),
     ) {
+        $this->readable = new ReadableLines();
     }
 
     public function addedTo(string $body): string

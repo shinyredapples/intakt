@@ -10,11 +10,19 @@ final readonly class ReadableLines
     private const string BLOCK_TAGS = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
     private const string ATTRIBUTE = '\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"\'=<>`]+|\'[^\']*\'|"[^"]*"))?';
     private const string BLANK = 'blank';
+    // The text that ends a block of kinds 1 to 5, keyed by its end pattern, so a block left open at the end can be closed.
+    private const array CLOSERS = [
+        '#</(?:pre|script|style|textarea)>#i' => '</pre>',
+        '/-->/' => '-->',
+        '/\?>/' => '?>',
+        '/>/' => '>',
+        '/\]\]>/' => ']]>',
+    ];
 
     /**
      * @param list<string> $lines
      *
-     * @return array{0: array<int, array{int, string}>, 1: ?string}
+     * @return array{0: array<int, array{int, string}>, 1: ?string} the headings and the text that closes a fence or HTML block left open
      */
     public function scanned(array $lines): array
     {
@@ -29,7 +37,7 @@ final readonly class ReadableLines
             }
         }
 
-        return [$headings, $state['fence']];
+        return [$headings, $state['fence'] ?? (null === $state['html'] ? null : (self::CLOSERS[$state['html']] ?? null))];
     }
 
     /**
@@ -49,13 +57,14 @@ final readonly class ReadableLines
             return [$this->htmlAfter($line, $state), null];
         }
 
-        if ('' === trim($line)) {
+        if ($this->blank($line)) {
             return [$this->withParagraph($state, null), null];
         }
 
-        if (1 === preg_match('/^(?: {4,}|\t)/', $line)) {
-            // Indented code cannot interrupt a paragraph, so inside one the line is only more text.
-            return [$state, null];
+        // Spaces before a tab reach column four too, so a tab after up to three spaces is indentation as well.
+        if (1 === preg_match('/^(?: {4,}| {0,3}\t)/', $line)) {
+            // Indented code cannot interrupt a paragraph, so inside one the line is only more text of it.
+            return [$this->continued($state, $line), null];
         }
 
         return $this->blockAt($line, $number, $state);
@@ -74,7 +83,7 @@ final readonly class ReadableLines
      */
     private function htmlAfter(string $line, array $state): array
     {
-        $ends = self::BLANK === $state['html'] ? '' === trim($line) : 1 === preg_match($state['html'] ?? '', $line);
+        $ends = self::BLANK === $state['html'] ? $this->blank($line) : 1 === preg_match($state['html'] ?? '', $line);
 
         return $this->withParagraph($state, null, $ends ? null : $state['html']);
     }
@@ -129,6 +138,28 @@ final readonly class ReadableLines
         $text = trim($line);
 
         return [$this->withParagraph($state, null === $paragraph ? [$number, $text] : [$paragraph[0], $paragraph[1].' '.$text]), null];
+    }
+
+    // Only spaces and tabs make a line blank in CommonMark, so trim() would also take a vertical tab.
+    private function blank(string $line): bool
+    {
+        return 1 === preg_match('/^[ \t]*$/', $line);
+    }
+
+    /**
+     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     *
+     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     */
+    private function continued(array $state, string $line): array
+    {
+        $paragraph = $state['paragraph'];
+
+        if (null === $paragraph) {
+            return $state;
+        }
+
+        return $this->withParagraph($state, [$paragraph[0], $paragraph[1].' '.trim($line)]);
     }
 
     private function opening(string $line): ?string
