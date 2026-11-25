@@ -56,6 +56,9 @@ final readonly class ReviewerInJob implements JobReviewer
         try {
             $answer = $this->jobs->run(new ReviewJobRequest($request->brief->change->project, $clone, $job->head->hash, $job->reviewer, $model, $prompt, $login));
             $read = $this->clones->holdsARegularFileOf($clone, $job->head, $answer->readFiles);
+        } catch (ReviewJobFailure $failure) {
+            // Kept instead of thrown only when the CLI reported usage, because that usage has to settle the call.
+            return [] === $failure->usage ? throw $failure : new JobVerdict($failure, false, $failure->usage, $login?->account);
         } finally {
             $this->clones->remove($clone);
         }

@@ -44,14 +44,23 @@ final readonly class ReviewJobAnswer
             default => null,
         };
 
+        $usage = self::usageOf($provider, $events);
+
         if (null === $text || '' === $text) {
-            throw ReviewJobFailure::unreadableAnswer($provider);
+            throw ReviewJobFailure::unreadableAnswer($provider, $usage);
         }
 
-        return Provider::ClaudeCode === $provider
-            ? new self($text, $claudeCode->readFiles(), $claudeCode->usage())
-            // No read counts, because the job's Codex has its shell and every other tool off, so its events can show no file it read.
-            : new self($text, [], self::codexUsage($events));
+        // No read counts for Codex, because the job's Codex has its shell and every other tool off, so its events can show no file it read.
+        return new self($text, Provider::ClaudeCode === $provider ? $claudeCode->readFiles() : [], $usage);
+    }
+
+    // Apart from read(), because a CLI that failed reports what it spent and answers nothing.
+    /**
+     * @return list<TokenUsageInterface>
+     */
+    public static function usageIn(Provider $provider, string $output): array
+    {
+        return self::usageOf($provider, self::events($output) ?? []);
     }
 
     /**
@@ -115,6 +124,20 @@ final readonly class ReviewJobAnswer
         }
 
         return $answer;
+    }
+
+    /**
+     * @param list<array<mixed>> $events
+     *
+     * @return list<TokenUsageInterface>
+     */
+    private static function usageOf(Provider $provider, array $events): array
+    {
+        return match ($provider) {
+            Provider::ClaudeCode => new ClaudeCodeJobEvents($events)->usage(),
+            Provider::Codex => self::codexUsage($events),
+            default => [],
+        };
     }
 
     // Each completed turn reports its own usage, so every one is kept.

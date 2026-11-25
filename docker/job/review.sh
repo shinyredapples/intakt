@@ -180,12 +180,17 @@ use_the_login() {
     fi
 }
 
-# Only file reads for Claude Code, and no settings, so neither the head's settings nor a hook can give it more.
+# Only reads of the checkout for Claude Code, and no settings, so neither the head's settings nor a hook can give it more. dontAsk refuses whatever the
+# allow rule does not name, a committed link out of the checkout included, because the CLI checks the place a link leads to as well; the deny rules
+# name where the login is (its file, the CLI's environment) and what else the job holds, so no read of them works whatever another rule allows.
+# In a rule, // starts an absolute path.
 run_claude_code() {
     use_the_login
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
     export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
-    claude -p --model "$model" --output-format stream-json --verbose --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
+    claude -p --model "$model" --output-format stream-json --verbose --tools Read,Grep,Glob --permission-mode dontAsk \
+        --allowedTools "Read(/$checkout/**)" \
+        --disallowedTools "Read(/${login:-/input/login})" "Read(/$prompt)" "Read(/$output/**)" "Read(/$HOME/**)" 'Read(//proc/**)' 'Read(//dev/**)' 'Read(//sys/**)' \
         --setting-sources '' --strict-mcp-config --no-session-persistence
 }
 

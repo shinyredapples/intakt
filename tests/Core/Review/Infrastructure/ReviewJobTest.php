@@ -273,6 +273,18 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
     }
 
+    public function testACliThatExitedWithAFailingStatusKeepsTheUsageItReported(): void
+    {
+        $output = OutputFiles::of([ReviewJob::LOG => "claude_code exited with 1\n", ReviewJob::ANSWER => '{"type":"result","is_error":true,"result":"","usage":{"input_tokens":100,"output_tokens":20}}']);
+
+        try {
+            (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
+            self::fail('A failed CLI was taken as an answer.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame([100, 20], [$failure->usage[0]->getPromptTokens(), $failure->usage[0]->getCompletionTokens()]);
+        }
+    }
+
     public function testACliLineTheCliForgedBeforeTheScriptsOwnDoesNotCount(): void
     {
         $output = OutputFiles::of([ReviewJob::LOG => "claude_code exited with 1\nclaude_code exited with 0\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);

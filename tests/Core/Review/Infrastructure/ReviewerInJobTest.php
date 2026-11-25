@@ -35,10 +35,12 @@ use Intakt\Core\Review\Infrastructure\HeadClones;
 use Intakt\Core\Review\Infrastructure\JobPrompt;
 use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\ReportedUsage;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewerInJob;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
+use Intakt\Core\Review\Infrastructure\ReviewJobFailure;
 use Intakt\Core\Review\Infrastructure\ReviewJobImages;
 use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Plugin\Forge\Contract\CommitId;
@@ -48,6 +50,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -218,6 +221,32 @@ final class ReviewerInJobTest extends TestCase
         $answer->verdict();
     }
 
+    public function testThePromptEndsWithTheSchemaItsAnswerIsReadBy(): void
+    {
+        $formats = new ResponseFormatFactory();
+
+        $prompt = new JobPrompt($formats)->textOf(new MessageBag());
+
+        self::assertStringEndsWith(json_encode($formats->create(ReviewerAnswer::class)['json_schema']['schema'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), $prompt);
+    }
+
+    public function testAFailedCliWithReportedUsageHandsItOnWithItsAccount(): void
+    {
+        $answer = $this->jobVerdictOf($this->answering('', usage: ['input_tokens' => 100, 'output_tokens' => 20]));
+
+        self::assertSame([100, 'team'], [$answer->usage[0]->getPromptTokens(), $answer->account?->name]);
+        $this->expectException(ReviewJobFailure::class);
+        $answer->verdict();
+    }
+
+    public function testTheLoginReachesTheClisEnvironmentAndNotItsCommandLine(): void
+    {
+        $this->reviewInJob($this->answering("```json\n".self::APPROVE."\n```"));
+
+        self::assertSame(self::TOKEN, (string) file_get_contents($this->folder.'/token'));
+        self::assertStringNotContainsString(self::TOKEN, (string) file_get_contents($this->folder.'/arguments'));
+    }
+
     public function testThePromptCarriesTheTaskAndAsksForTheVerdictAsOneJsonBlock(): void
     {
         $this->reviewInJob($this->answering("```json\n".self::APPROVE."\n```"));
@@ -355,8 +384,8 @@ final class ReviewerInJobTest extends TestCase
             $this->changeModes($clone, static fn (int $mode): int => $mode & ~0o222);
             $result = ['type' => 'result', 'is_error' => false, 'result' => $text] + ([] === $usage ? [] : ['usage' => $usage]);
             file_put_contents($this->folder.'/answer.txt', implode("\n", array_map(static fn (array $event): string => json_encode($event, JSON_THROW_ON_ERROR), [...$before, $result]))."\n");
-            $this->givenClaude('git rev-parse HEAD > "$RECORD/head"; cat "$RECORD/answer.txt"');
-            $run = $this->runTheScript($clone, $spec->inputs[1]->hostPath);
+            $this->givenClaude('git rev-parse HEAD > "$RECORD/head"; printf "%s\n" "$@" > "$RECORD/arguments"; printf "%s" "$CLAUDE_CODE_OAUTH_TOKEN" > "$RECORD/token"; cat "$RECORD/answer.txt"');
+            $run = $this->runTheScript($clone, $spec->inputs[1]->hostPath, $spec->inputs[2]->hostPath);
             $this->changeModes($clone, static fn (int $mode): int => $mode | 0o200);
             $this->seen['exit'] = (string) $run->getExitCode();
             $this->seen['log'] = (string) @file_get_contents($this->folder.'/output/'.ReviewJob::LOG);
@@ -417,7 +446,7 @@ final class ReviewerInJobTest extends TestCase
         chmod($this->folder.'/bin/claude', 0o755);
     }
 
-    private function runTheScript(string $checkout, string $prompt): Process
+    private function runTheScript(string $checkout, string $prompt, string $login): Process
     {
         $proxy = 'http://egress-proxy:3128';
         $environment = [
@@ -438,7 +467,7 @@ final class ReviewerInJobTest extends TestCase
         ];
         $prompts = new Filesystem();
         $prompts->copy($prompt, $this->folder.'/prompt.md');
-        $run = new Process(['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-review', $checkout, $this->head, $this->folder.'/prompt.md', 'claude_code', 'claude-sonnet-5-5'], null, $environment, timeout: 20);
+        $run = new Process(['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-review', $checkout, $this->head, $this->folder.'/prompt.md', 'claude_code', 'claude-sonnet-5-5', $login], null, $environment, timeout: 20);
         $run->run();
 
         return $run;

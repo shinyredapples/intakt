@@ -167,11 +167,13 @@ final readonly class ReviewJob
         $provider = $request->model->provider;
         $status = $this->cliStatusIn($provider, $output);
 
+        $answer = $output->contents(self::ANSWER) ?? '';
+
         if (0 !== $status) {
-            throw ReviewJobFailure::cliFailed($provider, $status);
+            throw ReviewJobFailure::cliFailed($provider, $status, ReviewJobAnswer::usageIn($provider, $answer));
         }
 
-        return ReviewJobAnswer::read($provider, $output->contents(self::ANSWER) ?? '', fn (string $text): string => $this->withoutLogin($request, $text));
+        return ReviewJobAnswer::read($provider, $answer, fn (string $text): string => $this->withoutLogin($request, $text));
     }
 
     // The script refuses before the CLI runs, so the log holds only its own lines and git's.
