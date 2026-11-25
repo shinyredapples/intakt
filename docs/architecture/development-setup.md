@@ -16,11 +16,21 @@ Run both install commands on the host first: the override mounts the checkout ov
 
 - `APP_ENV=dev` and `APP_DEBUG=1`.
 - The checkout is mounted at `/app`, and `docker/dev/Caddyfile` over `/app/Caddyfile`, so `docker/entrypoint.sh` is unchanged.
-- All of `var/` is the named volume `intakt-dev-var`. Docker fills a new named volume from the image's `var/`, so it belongs to the image's user (id 10001) whoever owns the checkout's `var/` on the host: the entrypoint writes the cache, the log and the seed's mark `var/sample-ready` there. `var/data` stays on the demo's volume. The host's `var/` is not used by the container; `docker compose -f compose.yaml -f compose.dev.yaml down -v` removes both volumes. Docker fills the volume only when it is new, so after a rebuild (`--build`) run `down -v` before `up`: the new `intakt-dev-var` volume is then filled from the new image's `var/`.
+- All of `var/` is the named volume `intakt-dev-var`. Docker fills a new named volume from the image's `var/`, so it belongs to the image's user (id 10001) whoever owns the checkout's `var/` on the host: the entrypoint writes the cache, the log and the seed's mark `var/sample-ready` there. `var/data` stays on the demo's volume. The host's `var/` is not used by the container.
+
+Docker fills the volume only when it is new, so after a rebuild (`--build`) replace only `intakt-dev-var` before `up`, and the new volume is filled from the new image's `var/`:
+
+```
+docker compose -f compose.yaml -f compose.dev.yaml down
+docker volume rm <project>_intakt-dev-var
+docker compose -f compose.yaml -f compose.dev.yaml up --wait --build
+```
+
+`<project>` is the Compose project name, by default the checkout folder's name; `docker volume ls` lists the volume's full name. This keeps `intakt-data`, the demo's database and sample repository. `down -v` is a full reset: it removes both volumes, `intakt-data` with its database and sample repository included, so use it only to start from nothing.
 
 ## What is watched
 
-`docker/dev/Caddyfile` is the shipped `Caddyfile` plus four things, and `DevelopmentCaddyfileTest` fails if their lines differ in anything else. It compares normalized lines (trimmed, comment lines left out) and leaves out every brace line and the `route {` line on both sides, so it does not prove that the two files nest their blocks the same way:
+`docker/dev/Caddyfile` is the shipped `Caddyfile` plus four things, and `DevelopmentCaddyfileTest` fails if their lines differ in anything else. It compares normalized lines (trimmed, comment lines left out) and leaves out every closing-brace line and the `route {` line on both sides, so it does not prove that the two files nest their blocks the same way:
 
 - a `watch` in both workers (`app` and `mcp`) for `src/**/*.php`, `templates/**/*.twig`, `config/**/*.{php,yaml}` and `.env*`: a change restarts that worker's threads, so the next request serves it without a manual restart;
 - `hot_reload` on the `php_server`, which publishes a change to the Mercure hub, for the same folders plus CSS and JavaScript under `assets/`;
