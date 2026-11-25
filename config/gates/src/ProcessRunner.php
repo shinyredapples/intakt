@@ -75,7 +75,7 @@ final class ProcessRunner
     {
         $call = $this->hardened->call($arguments, $directory);
 
-        return new OutputInParts(new Process($call->command, $call->directory, [...getenv(), ...$call->environment], null, self::OVERALL_TIMEOUT_SECONDS))->read();
+        return new OutputInParts($call->command, $call->directory, $call->environment, self::OVERALL_TIMEOUT_SECONDS)->read();
     }
 
     /**
