@@ -17,10 +17,9 @@ final readonly class Team
     }
 
     /**
-     * Keyed by the role's name, so a role that runs on several accounts shows once with all of them.
-     *
      * @return array<string, list<array{account: Account, role: TeamRole}>>
      */
+    // Keyed by the role's name, so a role that runs on several accounts shows once with all of them.
     public function byRole(): array
     {
         $holders = [];

@@ -131,8 +131,9 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
     /**
      * @param array<string, list<string>> $accounts
-     * @param array<string, AccountState> $states   by account key; an account not named is ready
+     * @param array<string, AccountState> $states
      */
+    // States are keyed by the account key, and an account not named is ready, because most tests need only ready accounts.
     private function givenAccounts(array $accounts, array $states = []): void
     {
         $listed = self::createStub(ListedAccounts::class);
@@ -141,7 +142,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
         $credentials->method('areSet')->willReturnCallback(static fn (Account $account): bool => AccountState::NoKey !== ($states[$account->key()] ?? null));
         $cooldowns = self::createStub(AccountCooldowns::class);
         $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => AccountState::Rejected === ($states[$account->key()] ?? null));
-        // A rejected key also cools down, as the cooldown windows report it.
+        // Rejected counts as cooling down too, because the cooldown windows report a rejected key as cooling down.
         $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($states[$account->key()] ?? null, [AccountState::CoolingDown, AccountState::Rejected], true));
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturnCallback(static fn (string $project, BuildFacts $facts): TierChoice => EscalationOutcome::Confirmed === $facts->escalation ? new TierChoice(Tier::Strong, TierReason::ConfirmedEscalation) : new TierChoice(Tier::Standard, TierReason::Default));
