@@ -60,6 +60,11 @@ final readonly class NextLinks
         }
 
         $rel = array_find($found, static fn (array $parameter): bool => 'rel' === strtolower($parameter[1]));
+        // A value-less `rel` names no relation this forge can read, and taking it as none could end the listing before an open pull request.
+        if (null !== $rel && null === $rel[2] && null === $rel[3]) {
+            throw $this->unreadable();
+        }
+
         $types = preg_split('/\s+/', strtolower(null === $rel ? '' : $this->valueOf($rel)));
         $relations = array_values(array_filter(false === $types ? [] : $types, static fn (string $relation): bool => '' !== $relation));
         $anchors = array_filter($found, static fn (array $parameter): bool => 'anchor' === strtolower($parameter[1]));
