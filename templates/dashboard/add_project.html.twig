@@ -1,0 +1,30 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Add a project - Intakt{% endblock %}
+
+{% block content_width %} wide{% endblock %}
+
+{% block body %}
+{%- set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::ADD_PROJECT') %}
+{%- set query = constant('Intakt\\Core\\Dashboard\\UseCase\\AddProject\\AddProjectController::STEP') %}
+{%- set projects = path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')) %}
+<div class="setup wizard add-project">
+    {{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
+        {label: 'Projects', href: projects},
+        {label: 'Add a project'},
+    ]}, with_context = false) }}
+    {#- Numbered, because the steps are a real sequence; each marker is a link, so any step opens without a script. -#}
+    <ol class="steps" aria-label="Add project progress">
+        {%- for marker in steps %}
+        {%- set state = marker.markerAt(step) %}
+        <li class="{{ state }}" data-s="{{ marker.value }}"{% if state == 'current' %} aria-current="step"{% endif %}><a href="{{ path(route, {(query): marker.value}) }}"><span>{{ marker.value }} {{ marker.label }}</span></a></li>
+        {%- endfor %}
+    </ol>
+    <p class="step-count">{{ step.count }}</p>
+
+    {#- Back and Continue are links to the neighboring steps, so each partial only says what its own buttons are. -#}
+    {%- set back = step.previous ? path(route, {(query): step.previous.value}) : null %}
+    {%- set continue = step.next ? path(route, {(query): step.next.value}) : null %}
+    {{ include('dashboard/_add_project_step_' ~ step.value ~ '.html.twig') }}
+</div>
+{% endblock %}

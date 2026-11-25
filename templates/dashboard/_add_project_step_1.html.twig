@@ -1,0 +1,23 @@
+<section class="step" id="step-repository" data-s="1" aria-labelledby="a1h">
+    <h1 id="a1h">Which repository?</h1>
+    <p class="lead">Intakt works from its issues and pull requests.</p>
+    <form method="post" action="{{ path(route, {(query): step.value}) }}" class="check-repository" novalidate>
+        <div class="field">
+            <label for="repo">Repository address</label>
+            <input class="input" id="repo" type="text" inputmode="url" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\AddProject\\AddProjectController::REPOSITORY') }}" value="{{ repository.input }}" autocomplete="off" spellcheck="false" aria-describedby="repo-hint{% if repository.error %} repo-error{% endif %}"{% if repository.error %} aria-invalid="true"{% endif %}>
+            <span class="hint" id="repo-hint">An https address or owner/name.</span>
+            {%- if repository.error %}
+            <span class="field-error" id="repo-error" role="alert">{{ repository.error }}</span>
+            {%- endif %}
+        </div>
+        {{ include('dashboard/components/button.html.twig', {kind: 'secondary', type: 'submit', label: 'Check the address'}, with_context = false) }}
+    </form>
+    {%- if repository.repository %}
+    <div class="detected" role="status">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+        <p><strong>GitHub</strong>, repository {{ repository.repository }}</p>
+    </div>
+    {%- endif %}
+    <p class="not-wired">This step checks the address only; Intakt does not keep it yet. A project's repository is set as <span class="mono">github</span> under its <span class="mono">watch</span> section in the project file that INTAKT_CONFIG names.</p>
+    <div class="step-nav"><a class="btn quiet" href="{{ projects }}">Cancel</a><span class="grow"></span><a class="btn primary" href="{{ continue }}">Continue</a></div>
+</section>

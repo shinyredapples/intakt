@@ -1,0 +1,32 @@
+{%- set field = share_and_label %}
+<section class="step" id="step-share-label" data-s="4" aria-labelledby="a4h">
+    <h1 id="a4h">Share and label</h1>
+    <p class="lead">How much of the week this project gets, and which issues it picks up.</p>
+    <form method="post" action="{{ path(route, {(query): step.value}) }}" class="check-share-label" novalidate>
+        <div class="field">
+            <label for="share">Weekly share</label>
+            <input class="input narrow" id="share" type="text" inputmode="numeric" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\AddProject\\AddProjectController::SHARE') }}" value="{{ field.share }}" autocomplete="off" aria-describedby="share-hint{% if field.shareError %} share-error{% endif %}"{% if field.shareError %} aria-invalid="true"{% endif %}>
+            <span class="hint" id="share-hint">A whole number of percent, from 0 to 100.</span>
+            {%- if field.shareError %}
+            <span class="field-error" id="share-error" role="alert">{{ field.shareError }}</span>
+            {%- endif %}
+        </div>
+        <div class="field">
+            <label for="lbl">Issue label</label>
+            <input class="input narrow" id="lbl" type="text" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\AddProject\\AddProjectController::LABEL') }}" value="{{ field.label }}" autocomplete="off" spellcheck="false" aria-describedby="lbl-hint{% if field.labelError %} lbl-error{% endif %}"{% if field.labelError %} aria-invalid="true"{% endif %}>
+            <span class="hint" id="lbl-hint">Intakt picks up open issues with this label.</span>
+            {%- if field.labelError %}
+            <span class="field-error" id="lbl-error" role="alert">{{ field.labelError }}</span>
+            {%- endif %}
+        </div>
+        {{ include('dashboard/components/button.html.twig', {kind: 'secondary', type: 'submit', label: 'Check the share and label'}, with_context = false) }}
+    </form>
+    {%- if field.accepted %}
+    <div class="detected" role="status">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+        <p><strong>{{ field.percent }}%</strong> of the week, issues labeled <strong>{{ field.label|trim }}</strong></p>
+    </div>
+    {%- endif %}
+    <p class="not-wired">This step checks the values only; Intakt does not keep them yet. A project's issue label is set as <span class="mono">eligibility_label</span> under its <span class="mono">watch</span> section in the project file that INTAKT_CONFIG names.</p>
+    <div class="step-nav"><a class="btn quiet" href="{{ back }}">Back</a><span class="grow"></span><a class="btn primary" href="{{ continue }}">Continue</a></div>
+</section>
