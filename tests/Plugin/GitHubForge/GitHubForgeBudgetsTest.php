@@ -118,7 +118,7 @@ final class GitHubForgeBudgetsTest extends TestCase
     {
         $jwt = new AppJwt('12345', 'never-signed', $this->clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, new MockHttpClient(), new NullLogger()), $installationId, $this->clock);
-        $reserve = new BudgetReserve(new ArrayAdapter(), $this->readings, $tokens, $this->clock, new LockFactory(new InMemoryStore()), FreshReadings::RESERVE_PERCENT);
+        $reserve = new BudgetReserve(new ArrayAdapter(clock: $this->clock), $this->readings, $tokens, $this->clock, new LockFactory(new InMemoryStore()), FreshReadings::RESERVE_PERCENT);
 
         return new GitHubForgeBudgets($tokens, $this->readings, $reserve);
     }

@@ -39,6 +39,12 @@ final readonly class PullRequestAddress
         return new self($match[1], $match[2], (int) $match[3]);
     }
 
+    // Without regard to case, because GitHub treats owner and repository names so and a pull request's address may spell them unlike the configuration.
+    public function isIn(RepositoryAddress $repository): bool
+    {
+        return 0 === strcasecmp($this->owner, $repository->owner()) && 0 === strcasecmp($this->repository, $repository->name());
+    }
+
     public function repositoryPath(): string
     {
         return '/repos/'.rawurlencode($this->owner).'/'.rawurlencode($this->repository);

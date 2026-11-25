@@ -10,6 +10,7 @@ use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\WorkerThreads;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 
 // The board's infrastructure row: a source that is down shows one down figure in place of its values, so the others still show theirs.
 final readonly class InfrastructureRow
@@ -17,6 +18,7 @@ final readonly class InfrastructureRow
     private const string THREADS = 'Worker threads';
     private const string METRICS = 'Server metrics';
     private const string HUB = 'Hub';
+    private const string FORGE = 'Forge';
 
     /**
      * @param list<InfrastructureFigure> $figures
@@ -58,5 +60,17 @@ final readonly class InfrastructureRow
             InfrastructureFigure::down(self::METRICS, $reason),
             InfrastructureFigure::down(self::HUB, $reason),
         ]);
+    }
+
+    // Last, because it is the one figure judged by a call to the forge rather than by the admin API reading; null while another board load runs the check.
+    public function withForge(?ForgeConnectionVerdict $forge): self
+    {
+        return new self([...$this->figures, match (true) {
+            !$forge instanceof ForgeConnectionVerdict => new InfrastructureFigure(self::FORGE, 'checking'),
+            null !== $forge->problem => InfrastructureFigure::down(self::FORGE, $forge->problem),
+            // Not "connected", because without an App nothing was asked of the forge.
+            !$forge->configured => new InfrastructureFigure(self::FORGE, 'not configured'),
+            default => new InfrastructureFigure(self::FORGE, 'connected'),
+        }]);
     }
 }

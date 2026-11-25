@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
@@ -116,8 +115,7 @@ final class DoctrineHoldsTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
         $this->holds = new DoctrineHolds($entities, $this->clock);
     }

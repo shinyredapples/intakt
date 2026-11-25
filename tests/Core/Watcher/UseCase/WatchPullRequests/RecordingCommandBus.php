@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
 use Intakt\Core\Review\Contract\DiscardQueuedRound;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\PublishHandedOverChange;
 use Intakt\Core\Review\Contract\QueuedRound;
@@ -68,11 +69,11 @@ final class RecordingCommandBus implements MessageBusInterface
             ($this->whileStarting)($message);
         }
 
-        return new Envelope($message, [new HandledStamp(self::queued(count($this->started)), 'handler')]);
+        return new Envelope($message, [new HandledStamp(self::queued(count($this->started), $message->start->labels), 'handler')]);
     }
 
-    public static function queued(int $start): QueuedRound
+    public static function queued(int $start, Labels $labels = new Labels()): QueuedRound
     {
-        return new QueuedRound('round-'.$start, 'snapshot-'.$start);
+        return new QueuedRound('round-'.$start, 'snapshot-'.$start, $labels);
     }
 }

@@ -252,9 +252,10 @@ final class ProcessRunner
     private function refusal(string $program, int|float $seconds): ?ProcessResult
     {
         $endsAtOnce = $this->endsAtOnce($seconds);
+        $lacking = ProcessGroup::whatTheStopLacks();
 
-        if (!function_exists('posix_kill')) {
-            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': the PHP posix extension is missing');
+        if (null !== $lacking) {
+            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': '.$lacking);
         }
 
         return $endsAtOnce ? $this->timedOut($program, $seconds) : null;
@@ -284,17 +285,18 @@ final class ProcessRunner
     {
         // Because a process that failed to start or timed out in its start is not running, it has no pid.
         $failures = $this->startAll([$process]);
-        $leader = $process->getPid();
+        // Because a launcher whose start time cannot be read is killed at once, it is named while still held, before it runs anything.
+        $group = ProcessGroup::ofLauncherIfRunning($process->getPid());
         $release->write("\n");
         $release->close();
 
-        if (null === $leader) {
+        if (!$group instanceof ProcessGroup) {
             $process->stop(0);
 
             return $failures[0] ?? self::CANNOT_RUN;
         }
 
-        return new ProcessGroup($leader);
+        return $group;
     }
 
     private function namespacesAreAvailable(): bool

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
@@ -14,6 +13,7 @@ use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\BranchCleanup\Contract\BranchCleanupServices;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
@@ -145,6 +145,20 @@ final class ProjectTiersTest extends KernelTestCase
         file_put_contents($this->file, "projects:\n    beta:\n        review_job: { image: 'intakt-job/beta:review' }\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
         self::assertSame(['beta' => 'intakt-job/beta:review'], $this->bootedContainer()->getParameter(ReviewServices::JOB_IMAGES));
+    }
+
+    public function testTheBranchCleanupKeysOfAProjectReachTheCleanupSettings(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        clean_other_branches: true\n        keep_branches: [experiments]\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['beta' => ['clean_other_branches' => true, 'keep_branches' => ['experiments']]], $this->bootedContainer()->getParameter(BranchCleanupServices::PROJECTS));
+    }
+
+    public function testTheHyphenatedBranchCleanupKeysOfTheDesignReachTheCleanupSettings(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        clean-other-branches: true\n        keep-branches: [feature/keep-me]\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['beta' => ['clean_other_branches' => true, 'keep_branches' => ['feature/keep-me']]], $this->bootedContainer()->getParameter(BranchCleanupServices::PROJECTS));
     }
 
     public function testAReviewJobSectionWithoutItsImageStopsTheBoot(): void
@@ -452,8 +466,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
     }
 
     private function listAccounts(string $line): void
@@ -477,8 +490,10 @@ final class ProjectTiersTest extends KernelTestCase
         // Nothing injects the loader yet, so the compiled container drops it; the parameter is what the config feeds it.
         /** @var array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $parameter */
         $parameter = $this->bootedContainer()->getParameter(ReviewServices::PANELS);
+        /** @var array<string, array{tiers: array<string, array{provider: string}>}> $projects */
+        $projects = $this->bootedContainer()->getParameter(AiServices::PROJECTS);
 
-        return new ConfiguredPanels($parameter);
+        return new ConfiguredPanels($parameter, $projects);
     }
 
     /**
