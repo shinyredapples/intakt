@@ -270,7 +270,7 @@ final class ProcessRunner
         $release->write("\n");
         $release->close();
 
-        if (null === $group) {
+        if (!$group instanceof ProcessGroup) {
             $process->stop(0);
         }
 

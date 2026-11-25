@@ -100,14 +100,6 @@ final readonly class ProcessGroup
         }
     }
 
-    // Because a launcher that has no group yet runs nothing it could stop, it is not asked; `stop()` waits for its group or kills it.
-    private function askToStop(): void
-    {
-        if (!$this->isOursWithoutItsGroup()) {
-            posix_kill(-$this->id, 15);
-        }
-    }
-
     public function outlives(float $deadline): bool
     {
         while ($this->isAlive() && (hrtime(true) / 1_000_000_000) < $deadline) {
@@ -115,6 +107,14 @@ final readonly class ProcessGroup
         }
 
         return $this->isAlive();
+    }
+
+    // Because a launcher that has no group yet runs nothing it could stop, it is not asked; `stop()` waits for its group or kills it.
+    private function askToStop(): void
+    {
+        if (!$this->isOursWithoutItsGroup()) {
+            posix_kill(-$this->id, 15);
+        }
     }
 
     // Because asking the group before the launcher leads it would miss what the launcher starts right after, a launcher still held before its session is left for the next round; one that leads its group, has ended or is no longer ours is asked now.
