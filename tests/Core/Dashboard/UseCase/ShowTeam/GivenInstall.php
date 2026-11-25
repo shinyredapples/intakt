@@ -49,7 +49,7 @@ final readonly class GivenInstall
         return clone ($this, ['rejected' => [...$this->rejected, $key]]);
     }
 
-    // Routed to the standard tier by default, as a project without a build section is.
+    // The standard tier, because that is the build tier of a project whose config has no build section.
     public function project(string $name, Provider $standard, ?Provider $strong = null): self
     {
         return clone ($this, [
@@ -60,10 +60,9 @@ final readonly class GivenInstall
 
     public function sensitivePaths(string $project, string ...$globs): self
     {
-        $routing = $this->routing;
-        $routing[$project]['sensitive_paths'] = array_values($globs);
+        $routing = $this->routing[$project] ?? ['tier' => Tier::Standard->value, 'sensitive_paths' => [], 'escalate_on' => []];
 
-        return clone ($this, ['routing' => $routing]);
+        return clone ($this, ['routing' => [...$this->routing, $project => [...$routing, 'sensitive_paths' => array_values($globs)]]]);
     }
 
     public function tier(string $project, Tier $tier, Provider $provider): self
