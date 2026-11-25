@@ -44,14 +44,37 @@ final readonly class ProcessGroup
         posix_kill(-$this->id, 9);
     }
 
-    // Because only the gate child can reach the session of its contained run, it is asked to stop first and killed when it does not.
     public function stop(): void
     {
+        self::stopTogether([$this]);
+    }
+
+    // Because only the gate child can reach the session of its contained run, each is asked to stop and killed when it does not; all share one grace, and each is asked the moment its group exists, so none waits for another's grace.
+    /**
+     * @param list<self> $groups
+     */
+    public static function stopTogether(array $groups): void
+    {
         $deadline = (hrtime(true) / 1_000_000_000) + self::STOP_GRACE_SECONDS;
-        $this->waitForItsGroup($deadline);
-        $this->askToStop();
-        $this->outlives($deadline);
-        $this->kill();
+        $unasked = $groups;
+
+        while (true) {
+            $unasked = self::askedOnceTheyLeadTheirGroup($unasked);
+
+            if ([] === $unasked || (hrtime(true) / 1_000_000_000) >= $deadline) {
+                break;
+            }
+
+            usleep(self::POLL_MICROSECONDS);
+        }
+
+        foreach ($groups as $group) {
+            $group->outlives($deadline);
+        }
+
+        foreach ($groups as $group) {
+            $group->kill();
+        }
     }
 
     // Because a launcher that has no group yet runs nothing it could stop, it is not asked; `stop()` waits for its group or kills it.
@@ -71,20 +94,56 @@ final readonly class ProcessGroup
         return $this->isAlive();
     }
 
-    // Because asking the group before the launcher leads it would miss what the launcher starts right after, the stop waits, within its grace, until the launcher leads its group or has ended.
-    private function waitForItsGroup(float $deadline): void
+    // Because asking the group before the launcher leads it would miss what the launcher starts right after, a launcher still held before its session is left for the next round; one that leads its group, has ended or is no longer ours is asked now.
+    /**
+     * @param list<self> $groups
+     *
+     * @return list<self> the groups still held before their session
+     */
+    private static function askedOnceTheyLeadTheirGroup(array $groups): array
     {
-        while ($this->isOursWithoutItsGroup() && (hrtime(true) / 1_000_000_000) < $deadline) {
-            usleep(self::POLL_MICROSECONDS);
+        $held = [];
+
+        foreach ($groups as $group) {
+            if ($group->isHeldBeforeItsSession()) {
+                $held[] = $group;
+
+                continue;
+            }
+
+            $group->askToStop();
         }
+
+        return $held;
+    }
+
+    private function isHeldBeforeItsSession(): bool
+    {
+        $info = $this->unreapedState();
+
+        return null !== $info && 0 === ($info['pid'] ?? 0) && $this->isTheLauncherWithoutItsGroup();
     }
 
     // Because the stop runs inside a signal handler that may interrupt Symfony Process mid-call, ownership is asked of the kernel without touching the launcher's pipes: `WNOWAIT` reaps nothing, so the number stays the launcher's while this is true, and a failed call means it was reaped.
     private function isOursWithoutItsGroup(): bool
     {
-        $unreaped = pcntl_waitid(P_PID, $this->id, $status, WEXITED | WNOHANG | WNOWAIT);
+        return null !== $this->unreapedState() && $this->isTheLauncherWithoutItsGroup();
+    }
 
-        return $unreaped && '' !== $this->launcherStart && self::startTimeOf($this->id) === $this->launcherStart && posix_getpgid($this->id) !== $this->id;
+    private function isTheLauncherWithoutItsGroup(): bool
+    {
+        return '' !== $this->launcherStart && self::startTimeOf($this->id) === $this->launcherStart && posix_getpgid($this->id) !== $this->id;
+    }
+
+    // Because `WNOHANG` leaves the reported PID at 0 while the child still runs, a nonzero one means it has ended and waits as a zombie.
+    /**
+     * @return array<string, mixed>|null null once the number is no longer an unreaped child of bin/check
+     */
+    private function unreapedState(): ?array
+    {
+        $info = [];
+
+        return pcntl_waitid(P_PID, $this->id, $info, WEXITED | WNOHANG | WNOWAIT) ? $info : null;
     }
 
     private static function startTimeOf(int $id): string

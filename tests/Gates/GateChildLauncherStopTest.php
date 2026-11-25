@@ -82,18 +82,46 @@ final class GateChildLauncherStopTest extends TestCase
     public function testALauncherThatCreatesItsSessionAsTheStopBeginsHasTheProgramItStartsOnTheFirstSignalStopped(): void
     {
         $child = $this->heldBeforeItsSetsid(self::SESSION_ON_GO_SETSID, ['true']);
-        $releaser = $this->releaserOnceTheStopHasBegun((int) $child->process->getPid());
 
-        touch($this->folder.'/stopping');
-        $child->group->stop();
-        $releaser->wait();
+        $release = $this->releasedInsideTheStop((int) $child->process->getPid(), $child->group->stop(...));
         $descendant = (int) @file_get_contents($this->folder.'/descendant');
         $this->pollFor($child, 100_000);
 
-        self::assertSame('outside its session', trim($releaser->getOutput()), $releaser->getErrorOutput());
+        self::assertSame(['stop under way' => true, 'outside its session' => true, 'signaled before' => false], $release);
         self::assertGreaterThan(0, $descendant, 'the first signal reached the new session');
         self::assertFalse($this->isLive($descendant), 'the program started after the first signal is stopped');
         self::assertFalse($child->process->isRunning(), 'the launcher is stopped');
+    }
+
+    public function testLaunchersStoppedTogetherBeforeTheirSetsidShareOneGrace(): void
+    {
+        $first = $this->childOutsideAnySession();
+        $second = $this->childOutsideAnySession();
+
+        $start = hrtime(true);
+        ProcessGroup::stopTogether([ProcessGroup::ofLauncher($first), ProcessGroup::ofLauncher($second)]);
+        $seconds = (hrtime(true) - $start) / 1_000_000_000;
+
+        self::assertSame([SIGKILL, SIGKILL], [$this->signalThatEnded($first), $this->signalThatEnded($second)]);
+        self::assertLessThan(ProcessGroup::STOP_GRACE_SECONDS + 1, $seconds);
+    }
+
+    public function testALauncherThatCreatesItsSessionWhileAnotherHoldsTheStopIsAskedWithinTheSharedGrace(): void
+    {
+        $other = $this->childOutsideAnySession();
+        $child = $this->heldBeforeItsSetsid(self::SESSION_ON_GO_SETSID, ['true']);
+        $start = hrtime(true);
+
+        $release = $this->releasedInsideTheStop((int) $child->process->getPid(), static fn () => ProcessGroup::stopTogether([ProcessGroup::ofLauncher($other), $child->group]));
+        $seconds = (hrtime(true) - $start) / 1_000_000_000;
+        $descendant = (int) @file_get_contents($this->folder.'/descendant');
+        $this->signalThatEnded($other);
+        $this->pollFor($child, 100_000);
+
+        self::assertSame(['stop under way' => true, 'outside its session' => true, 'signaled before' => false], $release);
+        self::assertGreaterThan(0, $descendant, 'the launcher was asked once its session existed');
+        self::assertFalse($this->isLive($descendant), 'the program it started is stopped');
+        self::assertLessThan(ProcessGroup::STOP_GRACE_SECONDS + 1, $seconds);
     }
 
     public function testAStopDoesNotHandALauncherHeldInItsSessionTheLineThatReleasesItsGate(): void
@@ -194,18 +222,59 @@ final class GateChildLauncherStopTest extends TestCase
         return $child;
     }
 
-    // Because the stop runs in the test's own process, only another process can release the launcher while the stop is under way; it waits a little past the stop's start, so a stop that returns at once has already returned, and it reports whether the launcher was still outside its session then.
-    private function releaserOnceTheStopHasBegun(int $launcher): Process
+    // Because an alarm handler runs inside the test's own process, it releases the launcher at a point it can see: whether the stop had returned, whether the launcher was still outside its session and whether any signal had reached it yet. A stop that returns at once leaves the release to come after it.
+    /**
+     * @param callable(): void $stop
+     *
+     * @return array{'stop under way': bool, 'outside its session': bool, 'signaled before': bool}|null
+     */
+    private function releasedInsideTheStop(int $launcher, callable $stop): ?array
     {
-        $code = '$folder = '.var_export($this->folder, true).';'
-            .'while (!is_file($folder."/stopping")) { usleep(1000); }'
-            .'usleep(200000);'
-            .'echo posix_getpgid('.$launcher.') === '.$launcher.' ? "in its session" : "outside its session";'
-            .'touch($folder."/go");';
-        $releaser = new Process([PHP_BINARY, '-r', $code]);
-        $releaser->start();
+        $returned = false;
+        $release = null;
+        $asynchronous = pcntl_async_signals(true);
+        pcntl_signal(SIGALRM, function () use (&$returned, &$release, $launcher): void {
+            $release = ['stop under way' => !$returned, 'outside its session' => posix_getpgid($launcher) !== $launcher, 'signaled before' => is_file($this->folder.'/descendant')];
+            touch($this->folder.'/go');
+        });
 
-        return $releaser;
+        try {
+            pcntl_alarm(1);
+            $stop();
+            $returned = true;
+
+            for ($waited = 0; null === $release && $waited < 2_000_000; $waited += 10_000) {
+                usleep(10_000);
+            }
+        } finally {
+            pcntl_alarm(0);
+            pcntl_signal(SIGALRM, SIG_DFL);
+            pcntl_async_signals($asynchronous);
+        }
+
+        return $release;
+    }
+
+    // Because a forked child that only sleeps never creates a session, it stands for a launcher held before its setsid for the whole grace.
+    private function childOutsideAnySession(): int
+    {
+        $pid = pcntl_fork();
+
+        if (0 === $pid) {
+            pcntl_exec('/bin/sleep', ['30']);
+            posix_kill(posix_getpid(), SIGKILL);
+        }
+
+        self::assertGreaterThan(0, $pid);
+
+        return $pid;
+    }
+
+    private function signalThatEnded(int $pid): int
+    {
+        pcntl_waitpid($pid, $status);
+
+        return pcntl_wifsignaled($status) ? pcntl_wtermsig($status) : 0;
     }
 
     // Because Symfony Process hands the launcher its release line only while the process is polled, the test polls as bin/check does instead of only sleeping.
