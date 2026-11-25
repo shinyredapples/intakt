@@ -154,6 +154,18 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         self::assertStringNotContainsString('$accepted', $this->ruleFindingsOf('contract-array-trait-constructor-params'));
     }
 
+    public function testAConstructorOfATraitTheClassNamesInAnotherCaseIsJudgedByItsParamTagsNotItsProperties(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Sample/Domain/Inputs.php', "<?php\nnamespace Intakt\\Core\\Sample\\Domain;\nuse stdClass;\ntrait Inputs {\n    /**\n     * @param list<int> \$rejected\n     * @param list<stdClass> \$accepted\n     */\n    public function __construct(\n        /** @var list<stdClass> */ protected array \$rejected,\n        /** @var array<int, stdClass> */ private array \$accepted,\n    ) {\n        \$this->rejected = array_map(static fn (int \$id): stdClass => (object) ['id' => \$id], \$rejected);\n    }\n}\n");
+        $sandbox->write('src/Core/Sample/Contract/Batch.php', "<?php\nnamespace Intakt\\Core\\Sample\\Contract;\nuse Intakt\\Core\\Sample\\Domain\\inputs;\nfinal class Batch { use inputs; }\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('parameter $rejected is typed list<int>', $findings);
+        self::assertStringNotContainsString('parameter $accepted', $findings);
+    }
+
     public function testAContractInheritingAListOfStringsFromAParentOutsideContractFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('contract-array-inherited-method', 'src/Core/Sample/Contract/Named.php:9 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Named::names() returns list<string>');
