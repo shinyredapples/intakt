@@ -29,6 +29,9 @@ final class EntrypointProcessesTest extends TestCase
 
     private const string ZOMBIE = 'Z';
 
+    // Every stand-in inherits it from the entrypoint, so the cleanup kills a saved PID only while its environment holds exactly this name with the test's folder.
+    private const string STAND_IN_FOLDER = 'INTAKT_ENTRYPOINT_TEST_FOLDER';
+
     private const string CADDYFILE_REJECTED = 'parsing caddyfile tokens: wrong argument count, at Caddyfile:19';
 
     private Process $entrypoint;
@@ -206,14 +209,20 @@ final class EntrypointProcessesTest extends TestCase
         $standIn = (int) array_search('scheduler_watcher', $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]), true);
         $unrelated = new Process(['sleep', '30']);
         $unrelated->start();
+        $namingASimilarFolder = new Process(['sleep', '30'], env: [self::STAND_IN_FOLDER => $this->directory.'-other']);
+        $namingASimilarFolder->start();
 
         try {
-            $this->killStandInsStillRunning([$standIn, (int) $unrelated->getPid()]);
+            $this->waitUntilItsEnvironmentHolds((int) $namingASimilarFolder->getPid(), self::STAND_IN_FOLDER.'='.$this->directory.'-other');
+
+            $this->killStandInsStillRunning([$standIn, (int) $unrelated->getPid(), (int) $namingASimilarFolder->getPid()]);
 
             $this->waitUntilEnded([$standIn]);
             self::assertTrue($unrelated->isRunning());
+            self::assertTrue($namingASimilarFolder->isRunning());
         } finally {
             $unrelated->stop(0);
+            $namingASimilarFolder->stop(0);
         }
     }
 
@@ -224,6 +233,7 @@ final class EntrypointProcessesTest extends TestCase
         new Filesystem()->mkdir($this->directory);
         $this->environment = [
             'PATH' => $this->standInPrograms().':'.getenv('PATH'),
+            self::STAND_IN_FOLDER => $this->directory,
             // In the test's folder, because every start removes the cache it builds again, and this one runs in the checkout.
             'APP_CACHE_DIR' => $this->directory.'/cache',
             'APP_BUILD_DIR' => false,
@@ -375,17 +385,43 @@ final class EntrypointProcessesTest extends TestCase
         return false !== $end && self::ZOMBIE !== substr($status, $end + 2, 1);
     }
 
-    // Only a running process whose environment names this test's folder, because a saved PID of a child that ended may already name an unrelated process.
+    // Only a running process whose environment holds this test's mark exactly, because a saved PID of a child that ended may already name an unrelated process.
     /**
      * @param list<int> $pids
      */
     private function killStandInsStillRunning(array $pids): void
     {
         foreach ($pids as $pid) {
-            if ($this->hasNotEnded($pid) && str_contains((string) @file_get_contents('/proc/'.$pid.'/environ'), $this->directory)) {
+            // The PID may still be reused between this read and the signal: accepted, because the window is microseconds in a test and PHP has no pidfd to close it.
+            if ($this->hasNotEnded($pid) && in_array($this->standInMark(), $this->environmentOf($pid), true)) {
                 posix_kill($pid, self::KILL);
             }
         }
+    }
+
+    private function standInMark(): string
+    {
+        return self::STAND_IN_FOLDER.'='.$this->directory;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function environmentOf(int $pid): array
+    {
+        return explode("\0", (string) @file_get_contents('/proc/'.$pid.'/environ'));
+    }
+
+    // A process reads its parent's environment until it runs its own program, so the test waits for that before it checks the cleanup spares it.
+    private function waitUntilItsEnvironmentHolds(int $pid, string $entry): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && !in_array($entry, $this->environmentOf($pid), true)) {
+            usleep(1_000);
+        }
+
+        self::assertContains($entry, $this->environmentOf($pid));
     }
 
     /**
