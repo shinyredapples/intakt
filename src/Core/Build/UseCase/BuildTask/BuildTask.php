@@ -231,18 +231,6 @@ final readonly class BuildTask
         return $this->unpark($request) ?? $outcome;
     }
 
-    // Cleared once a later build job built, because the question an earlier one asked no longer says where the task stands.
-    private function unpark(BuildTaskRequest $request): ?string
-    {
-        try {
-            $this->parkedTasks->clear($request->project, $request->issue);
-        } catch (ParkedTaskNotCleared $notCleared) {
-            return $notCleared->getMessage();
-        }
-
-        return null;
-    }
-
     /**
      * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
@@ -347,5 +335,17 @@ final readonly class BuildTask
         $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null, TaskKind::fromLabels($labels));
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
+    }
+
+    // Cleared once a later build job built, because the question an earlier one asked no longer says where the task stands.
+    private function unpark(BuildTaskRequest $request): ?string
+    {
+        try {
+            $this->parkedTasks->clear($request->project, $request->issue);
+        } catch (ParkedTaskNotCleared $notCleared) {
+            return $notCleared->getMessage();
+        }
+
+        return null;
     }
 }

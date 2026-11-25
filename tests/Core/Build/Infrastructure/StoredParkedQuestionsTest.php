@@ -26,11 +26,6 @@ final class StoredParkedQuestionsTest extends TestCase
 {
     private Connection $connection;
 
-    protected function setUp(): void
-    {
-        $this->connection = ParkedTaskTable::inMemory();
-    }
-
     public function testAParkedTaskGivesItsQuestionChoicesRecommendationAndTime(): void
     {
         $this->park('alpha', 7, '{"question":"Keep the old flag?","choices":["keep it","drop it"],"recommendation":"drop it"}');
@@ -73,6 +68,11 @@ final class StoredParkedQuestionsTest extends TestCase
         $this->connection->update(ParkedTaskRecord::TABLE, $broken, ['project' => 'alpha']);
 
         self::assertNull(new StoredParkedQuestions($this->connection)->of('alpha', 7));
+    }
+
+    protected function setUp(): void
+    {
+        $this->connection = ParkedTaskTable::inMemory();
     }
 
     private function park(string $project, int $task, string $question): void

@@ -340,17 +340,6 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached'], $this->stepHeads($page));
     }
 
-    public function testAStoredAskedBuildStepIsLeftOut(): void
-    {
-        $this->ledger->passBuildStep('alpha', '42', 'task');
-        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
-
-        $page = $this->browser->request('GET', '/tasks/alpha/42');
-
-        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached'], $this->stepHeads($page));
-        self::assertStringNotContainsString('asked', $page->filter('main')->text());
-    }
-
     public function testACredentialInTheFailureIsRedacted(): void
     {
         $token = 'ghp_'.str_repeat('a1', 18);

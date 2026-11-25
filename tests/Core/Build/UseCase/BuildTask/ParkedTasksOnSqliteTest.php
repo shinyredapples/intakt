@@ -69,8 +69,8 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     public function testAClearedTaskLosesItsRowWhileAnotherTaskKeepsItsOwn(): void
     {
         $parked = $this->parkedTasks();
-        $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
-        $parked->park('sample', 43, BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 43, 'run-2'), BuildQuestion::fromHandedBack(self::QUESTION));
 
         $parked->clear('sample', 42);
 
