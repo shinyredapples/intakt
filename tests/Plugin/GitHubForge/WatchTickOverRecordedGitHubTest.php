@@ -103,8 +103,8 @@ use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
-use Throwable;
 use Symfony\Contracts\HttpClient\ResponseInterface;
+use Throwable;
 
 // One tick over recorded GitHub answers for two pull requests, because the ledger of a real tick is the evidence: #7 with CI still running, #8 with CI finished and green.
 #[CoversNothing]
