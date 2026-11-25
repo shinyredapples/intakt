@@ -77,14 +77,6 @@ final readonly class DoctorCommand
         return [self::THREADS => $checks->threads, self::METRICS => $checks->metrics, self::HUB => $checks->hub];
     }
 
-    /**
-     * @param InfrastructureCheck<WorkerThreads|ServerMetrics|HubHealth> $check
-     */
-    private function line(string $name, InfrastructureCheck $check): string
-    {
-        return $this->render($name, $check->problem, $check->fix);
-    }
-
     private function render(string $name, ?string $problem, ?string $fix): string
     {
         $line = null === $problem
@@ -92,6 +84,14 @@ final readonly class DoctorCommand
             : sprintf('fail: %s: %s; fix: %s', $name, $problem, $fix);
 
         return $this->oneLine($line);
+    }
+
+    /**
+     * @param InfrastructureCheck<WorkerThreads|ServerMetrics|HubHealth> $check
+     */
+    private function line(string $name, InfrastructureCheck $check): string
+    {
+        return $this->render($name, $check->problem, $check->fix);
     }
 
     // Decision D4 of #3826 promises one line per check, so a line break or terminal escape in any part, also in outside text, becomes a space here and nowhere else.

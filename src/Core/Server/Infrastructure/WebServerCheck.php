@@ -46,7 +46,7 @@ final readonly class WebServerCheck
      */
     private function options(): array
     {
-        // The dashboard answers only when named by localhost and its own port (DashboardHost), and a loopback call never goes through a proxy.
+        // Named so, because DashboardHost refuses any other name; past no proxy, because a proxy would ask its own localhost.
         return [...self::OPTIONS, 'headers' => ['Host' => 'localhost:'.$this->dashboardPort], 'no_proxy' => '*'];
     }
 }

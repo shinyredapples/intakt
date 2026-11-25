@@ -8,7 +8,8 @@ namespace Intakt\Core\Server\Infrastructure;
 final readonly class ConsumerProcessesCheck
 {
     private const string CONSUME = 'messenger:consume';
-    /** @var array<string, string> the receiver each consumer kind reads, and how its absence reads */
+    // Keyed by receiver, because the receiver argument is what tells the consumers docker/entrypoint.sh starts apart.
+    /** @var array<string, string> */
     private const array KINDS = [
         'async' => 'no async worker is running, so no review or build moves',
         'scheduler_watcher' => 'the scheduler worker is not running, so pull requests are not watched',
