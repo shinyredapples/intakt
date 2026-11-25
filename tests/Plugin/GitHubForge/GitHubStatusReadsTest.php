@@ -53,11 +53,6 @@ final class GitHubStatusReadsTest extends TestCase
         $this->readerOfEvents(static fn (int $page): string => '{}')->of($this->address());
     }
 
-    private function address(): PullRequestAddress
-    {
-        return PullRequestAddress::of(new ChangeId(RecordedTrust::PULL_BY_WRITER));
-    }
-
     /**
      * @param Closure(int): string $body
      */
@@ -76,5 +71,10 @@ final class GitHubStatusReadsTest extends TestCase
         $wiring = TrustChecks::wiring($http);
 
         return new GitHubStatusReads($wiring->calls, $wiring->tokens);
+    }
+
+    private function address(): PullRequestAddress
+    {
+        return PullRequestAddress::of(new ChangeId(RecordedTrust::PULL_BY_WRITER));
     }
 }
