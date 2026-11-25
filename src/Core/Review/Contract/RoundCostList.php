@@ -20,6 +20,6 @@ final readonly class RoundCostList
     // A round that was not asked for has no figure, because reading it as zero would show a free round.
     public function of(string $roundId): Cost
     {
-        return array_find($this->costs, static fn (RoundCost $cost): bool => $cost->roundId === $roundId)?->cost ?? throw new InvalidArgumentException(sprintf('The cost of round "%s" was not asked for.', $roundId));
+        return array_find($this->costs, static fn (RoundCost $cost): bool => $cost->roundId === $roundId)->cost ?? throw new InvalidArgumentException(sprintf('The cost of round "%s" was not asked for.', $roundId));
     }
 }
