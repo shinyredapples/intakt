@@ -10,7 +10,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
-// Apart from the comments, because a label is written as the App's installation on the issue's label path.
+// One home for adding and removing a label, because the status label and an outvoted steering label are written the same way.
 final readonly class GitHubLabelWrites
 {
     private const int NOT_FOUND = 404;
@@ -24,20 +24,43 @@ final readonly class GitHubLabelWrites
     /**
      * @throws ForgeWriteFailed
      */
-    public function remove(string $issuePath, string $label): void
+    public function add(string $issuePath, string $label): void
+    {
+        $this->write('POST', $issuePath.'/labels', ['labels' => [$label]]);
+    }
+
+    /**
+     * @throws ForgeWriteFailed
+     */
+    public function remove(string $issuePath, string $label): bool
+    {
+        return self::NOT_FOUND !== $this->write('DELETE', $issuePath.'/labels/'.rawurlencode($label), []);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     *
+     * @throws ForgeWriteFailed
+     */
+    private function write(string $method, string $path, array $body): int
     {
         $options = ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
+        if ([] !== $body) {
+            $options['json'] = $body;
+        }
 
         try {
-            $status = $this->calls->asInstallation('DELETE', $issuePath.'/labels/'.rawurlencode($label), $options)->getStatusCode();
+            $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
         }
 
         // Tolerated, because a label someone removed meanwhile is the state the removal asks for.
-        if (self::NOT_FOUND !== $status && ($status < 200 || $status >= 300)) {
+        if (('DELETE' !== $method || self::NOT_FOUND !== $status) && ($status < 200 || $status >= 300)) {
             throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));
         }
+
+        return $status;
     }
 
     /**
