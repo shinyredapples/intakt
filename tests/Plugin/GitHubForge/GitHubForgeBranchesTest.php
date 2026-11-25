@@ -7,7 +7,6 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
 use Intakt\Plugin\Forge\Contract\CommitId;
-use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -649,9 +648,9 @@ final class GitHubForgeBranchesTest extends TestCase
             return new MockResponse('', ['error' => 'The host could not be reached.']);
         }
 
-        // A 403 with an empty budget, because a 429 with Retry-After would make the retrying client wait.
+        // A 403 with an empty budget until an hour after the clock's moment, because a 429 with Retry-After would make the retrying client wait.
         if ('limited' === $answer) {
-            return new MockResponse('', ['http_code' => 403, 'response_headers' => ['x-ratelimit-remaining: 0', 'x-ratelimit-reset: '.new DateTimeImmutable('2026-11-25 11:00:00 UTC')->getTimestamp()]]);
+            return new MockResponse('', ['http_code' => 403, 'response_headers' => ['x-ratelimit-remaining: 0', 'x-ratelimit-reset: 1795604400']]);
         }
 
         return 1 === preg_match('/^\d{3}$/', $answer) ? new MockResponse('', ['http_code' => (int) $answer]) : new MockResponse($answer, ['response_headers' => $headers]);
