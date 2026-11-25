@@ -40,6 +40,8 @@ final class CheckedInstallationTokensTest extends TestCase
 {
     private const string MATCHING = 'contents:write,pull_requests:write,workflows:write';
 
+    private MockClock $clock;
+
     private RecordedInstallation $github;
 
     public function testAMatchingInstallationHandsOutTheToken(): void
@@ -86,14 +88,22 @@ final class CheckedInstallationTokensTest extends TestCase
         self::assertSame(2, $this->readBacks());
     }
 
+    public function testATokenIsHandedOutUnderAClockFarAheadOfTheWallClock(): void
+    {
+        $this->clock->modify('2999-11-25 10:00:00 UTC');
+
+        self::assertSame('minted-value', $this->tokens(self::MATCHING)->current()->value);
+    }
+
     protected function setUp(): void
     {
-        $this->github = new RecordedInstallation();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->github = new RecordedInstallation($this->clock);
     }
 
     private function tokens(string $permissions): CheckedInstallationTokens
     {
-        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $clock = $this->clock;
         $http = $this->github->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);

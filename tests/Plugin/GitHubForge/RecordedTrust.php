@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
-use DateTimeZone;
-use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
@@ -71,15 +70,9 @@ final class RecordedTrust
     public array $credentials = [];
 
     public function __construct(
+        private readonly ClockInterface $readerClock,
         private readonly int $tokenStatus = 201,
-        private readonly string $tokenExpiresAt = '2026-11-25T11:00:00Z',
     ) {
-    }
-
-    // For the container, whose clock is the wall clock, so the recorded token must still be valid there.
-    public static function onTheWallClock(): self
-    {
-        return new self(tokenExpiresAt: new NativeClock()->now()->modify('+1 hour')->setTimezone(new DateTimeZone('UTC'))->format(DATE_ATOM));
     }
 
     public function client(): MockHttpClient
@@ -123,7 +116,7 @@ final class RecordedTrust
             return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/access_tokens_401.json'), ['http_code' => $this->tokenStatus]);
         }
 
-        return new MockResponse(json_encode(['token' => 'minted-value', 'expires_at' => $this->tokenExpiresAt], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+        return new MockResponse(json_encode(['token' => 'minted-value', 'expires_at' => RecordedTokenExpiry::anHourAfter($this->readerClock)], JSON_THROW_ON_ERROR), ['http_code' => 201]);
     }
 
     private function fixture(string $name): MockResponse
