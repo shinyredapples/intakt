@@ -190,8 +190,17 @@ fi
 # chmod follows a link, so a link the builder left is removed below without being touched.
 chmod u+rwx -- "$output"
 # A named pipe or a link in the log's place would make the first append wait or write elsewhere, so the log is started again, without what the builder replaced.
+# A folder there may hold folders the builder took the permissions away from, which a recursive removal cannot empty, so they are given back first, never through a link, which chmod would follow.
 if [ ! -f "$log" ] || [ -L "$log" ]; then
+    if [ -d "$log" ] && [ ! -L "$log" ]; then
+        chmod -R u+rwx -- "$log"
+    fi
     rm -rf -- "$log"
+    # Every later line goes to the log, and a redirection that fails skips its command, the bundle's too, so the reason goes to the job's standard error and the exit code makes the orchestrator read no result instead of a build without commits.
+    if [ -e "$log" ] || [ -L "$log" ]; then
+        echo 'the build log could not be started again' >&2
+        exit 3
+    fi
 fi
 printf 'claude exited with %d\n' "$status" >> "$log"
 if [ "$cut" -eq 0 ]; then
