@@ -9,6 +9,9 @@ final readonly class ProcessGroup
 {
     public const int STOP_GRACE_SECONDS = 2;
 
+    // Because a stop that finds one of these disabled would throw before it signals anything, bin/check refuses to start a gate without them.
+    public const array FUNCTIONS = ['pcntl' => ['pcntl_waitid'], 'posix' => ['posix_kill', 'posix_getpgid']];
+
     private const int POLL_MICROSECONDS = 10000;
 
     private const string ZOMBIE = 'Z';

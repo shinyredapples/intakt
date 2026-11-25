@@ -82,12 +82,15 @@ final class GateChildLauncherStopTest extends TestCase
     public function testALauncherThatCreatesItsSessionAsTheStopBeginsHasTheProgramItStartsOnTheFirstSignalStopped(): void
     {
         $child = $this->heldBeforeItsSetsid(self::SESSION_ON_GO_SETSID, ['true']);
+        $releaser = $this->releaserOnceTheStopHasBegun((int) $child->process->getPid());
 
-        touch($this->folder.'/go');
+        touch($this->folder.'/stopping');
         $child->group->stop();
+        $releaser->wait();
         $descendant = (int) @file_get_contents($this->folder.'/descendant');
         $this->pollFor($child, 100_000);
 
+        self::assertSame('outside its session', trim($releaser->getOutput()), $releaser->getErrorOutput());
         self::assertGreaterThan(0, $descendant, 'the first signal reached the new session');
         self::assertFalse($this->isLive($descendant), 'the program started after the first signal is stopped');
         self::assertFalse($child->process->isRunning(), 'the launcher is stopped');
@@ -189,6 +192,20 @@ final class GateChildLauncherStopTest extends TestCase
         self::assertFileExists($this->folder.'/reached');
 
         return $child;
+    }
+
+    // Because the stop runs in the test's own process, only another process can release the launcher while the stop is under way; it waits a little past the stop's start, so a stop that returns at once has already returned, and it reports whether the launcher was still outside its session then.
+    private function releaserOnceTheStopHasBegun(int $launcher): Process
+    {
+        $code = '$folder = '.var_export($this->folder, true).';'
+            .'while (!is_file($folder."/stopping")) { usleep(1000); }'
+            .'usleep(200000);'
+            .'echo posix_getpgid('.$launcher.') === '.$launcher.' ? "in its session" : "outside its session";'
+            .'touch($folder."/go");';
+        $releaser = new Process([PHP_BINARY, '-r', $code]);
+        $releaser->start();
+
+        return $releaser;
     }
 
     // Because Symfony Process hands the launcher its release line only while the process is polled, the test polls as bin/check does instead of only sleeping.
