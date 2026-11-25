@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Domain\OutageNoticeRecord;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
+use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
@@ -26,6 +27,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[Group('persistence')]
 #[CoversClass(DoctrineOutageNotices::class)]
 #[CoversClass(OutageNoticeRecord::class)]
+#[UsesClass(AccountReadingLock::class)]
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(Account::class)]
 final class DoctrineOutageNoticesTest extends KernelTestCase
@@ -47,7 +49,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning')->with(self::anything(), ['account' => 'claude_code.main', 'since' => '2026-11-02T08:00:00+00:00']);
 
-        new DoctrineOutageNotices($this->entities, $this->locks, $logger)->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
+        new DoctrineOutageNotices($this->entities, $this->locks, $logger, new AccountReadingLock($this->locks))->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
     }
 
     public function testAWarningThatFailedIsTriedAgain(): void
@@ -59,7 +61,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
                 throw new RuntimeException('The warning could not be written.');
             }
         });
-        $notices = new DoctrineOutageNotices($this->entities, $this->locks, $logger);
+        $notices = new DoctrineOutageNotices($this->entities, $this->locks, $logger, new AccountReadingLock($this->locks));
 
         try {
             $notices->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
@@ -120,7 +122,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->exactly($times))->method('warning');
 
-        return new DoctrineOutageNotices($this->entities, $this->locks, $logger);
+        return new DoctrineOutageNotices($this->entities, $this->locks, $logger, new AccountReadingLock($this->locks));
     }
 
     private function claude(string $name): Account

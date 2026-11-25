@@ -73,6 +73,7 @@ final class CodexLoginTest extends TestCase
         yield 'a token that is no string' => [str_replace('"access-1"', '5', self::json('2026-10-01T00:00:00Z'))];
         yield 'no last refresh' => ['{"tokens": {"id_token": "a", "access_token": "b", "refresh_token": "c"}}'];
         yield 'an unreadable last refresh' => [self::json('yesterday')];
+        yield 'a last refresh with a NUL byte' => [self::json("2026-10-01T00:00:00Z\0")];
     }
 
     #[DataProvider('unusableLogins')]

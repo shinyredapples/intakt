@@ -31,12 +31,29 @@ final class TestsGateTest extends SandboxTestCase
 
     public function testPassingTestsPassTheGate(): void
     {
-        $this->assertAcceptedBy('tests', 'tests-clean');
+        $cache = $this->emptySandbox();
+
+        $run = $this->sandboxWith('tests-clean')->checkWith(['INTAKT_GATES_CACHE' => $cache->root], '--only=tests');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+        self::assertTrue($run->passed('tests'), $run->output());
+        $written = json_decode((string) file_get_contents($cache->root.'/tests/durations.json'), true);
+        self::assertIsArray($written);
+        self::assertEqualsCanonicalizing(['tests/SampleTest.php', 'tests/Gates/GateTest.php'], array_keys($written));
+        self::assertEqualsCanonicalizing(['tests/SampleTest.php', 'tests/Gates/GateTest.php'], $run->slowestFilesOf('tests'));
+        self::assertSame(1, substr_count($run->output(), '"slowest"'), $run->output());
     }
 
     public function testAMockWithoutExpectationsFailsTheGate(): void
     {
-        $this->assertRejectedBy('tests', 'tests-mock-without-expectations', 'No expectations were configured for the mock object');
+        $cache = $this->emptySandbox();
+
+        $run = $this->sandboxWith('tests-mock-without-expectations')->checkWith(['INTAKT_GATES_CACHE' => $cache->root], '--only=tests');
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('No expectations were configured for the mock object', $run->findingsOf('tests'));
+        self::assertFileExists($cache->root.'/tests/durations.json');
     }
 
     public function testAPhpunitDeprecationFailsTheGate(): void

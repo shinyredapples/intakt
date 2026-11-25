@@ -23,130 +23,40 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Finding::class)]
 final class QuorumPolicyTest extends TestCase
 {
-    public function testAllIsMetByAPanelOfOneApproval(): void
+    /**
+     * @param list<PanelVerdict> $votes
+     */
+    #[DataProvider('votesAndOutcomes')]
+    public function testAPolicyIsMetOnlyByTheVotesItsRuleAccepts(QuorumPolicy $policy, array $votes, bool $met): void
     {
-        self::assertTrue(QuorumPolicy::All->isMet([$this->vote(Tier::Standard, Decision::Approve)]));
+        self::assertSame($met, $policy->isMet($votes));
     }
 
-    public function testAllIsNotMetByAPanelOfOneThatAsksForChanges(): void
+    /**
+     * @return iterable<string, array{QuorumPolicy, list<PanelVerdict>, bool}>
+     */
+    public static function votesAndOutcomes(): iterable
     {
-        self::assertFalse(QuorumPolicy::All->isMet([$this->vote(Tier::Standard, Decision::Changes)]));
-    }
+        $approve = Decision::Approve;
+        $changes = Decision::Changes;
+        $invalid = new Verdict($changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [], []);
 
-    public function testAllIsNotMetByAPanelOfTwoWhereOneAsksForChanges(): void
-    {
-        $panel = [$this->vote(Tier::Strong, Decision::Approve), $this->vote(Tier::Standard, Decision::Changes)];
-
-        self::assertFalse(QuorumPolicy::All->isMet($panel));
-    }
-
-    public function testAllIsMetByAPanelOfThreeApprovals(): void
-    {
-        $panel = [
-            $this->vote(Tier::Strong, Decision::Approve),
-            $this->vote(Tier::Standard, Decision::Approve),
-            $this->vote(Tier::Light, Decision::Approve),
-        ];
-
-        self::assertTrue(QuorumPolicy::All->isMet($panel));
-    }
-
-    public function testAllIsNotMetWhenOneOfThreeIsBlocked(): void
-    {
-        $panel = [
-            $this->vote(Tier::Strong, Decision::Approve),
-            $this->vote(Tier::Standard, Decision::Approve),
-            $this->vote(Tier::Light, Decision::Blocked),
-        ];
-
-        self::assertFalse(QuorumPolicy::All->isMet($panel));
-    }
-
-    public function testARecordedInvalidOutputVerdictIsNoApproval(): void
-    {
-        $invalid = new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [], []);
-        $panel = [
-            $this->vote(Tier::Strong, Decision::Approve),
-            new PanelVerdict(Tier::Standard, $invalid),
-        ];
-
-        self::assertFalse(QuorumPolicy::All->isMet($panel));
-    }
-
-    public function testMajorityIsMetByAPanelOfOneApproval(): void
-    {
-        self::assertTrue(QuorumPolicy::Majority->isMet([$this->vote(Tier::Light, Decision::Approve)]));
-    }
-
-    public function testMajorityIsNotMetByAPanelOfOneThatAsksForChanges(): void
-    {
-        self::assertFalse(QuorumPolicy::Majority->isMet([$this->vote(Tier::Light, Decision::Changes)]));
-    }
-
-    public function testMajorityIsNotMetByOneApprovalOutOfTwo(): void
-    {
-        $panel = [$this->vote(Tier::Strong, Decision::Approve), $this->vote(Tier::Standard, Decision::Changes)];
-
-        self::assertFalse(QuorumPolicy::Majority->isMet($panel));
-    }
-
-    public function testMajorityIsMetByTwoApprovalsOutOfThree(): void
-    {
-        $panel = [
-            $this->vote(Tier::Standard, Decision::Approve),
-            $this->vote(Tier::Standard, Decision::Approve),
-            $this->vote(Tier::Strong, Decision::Changes),
-        ];
-
-        self::assertTrue(QuorumPolicy::Majority->isMet($panel));
-    }
-
-    public function testMajorityIsNotMetByOneApprovalOutOfThree(): void
-    {
-        $panel = [
-            $this->vote(Tier::Strong, Decision::Approve),
-            $this->vote(Tier::Standard, Decision::Changes),
-            $this->vote(Tier::Standard, Decision::Blocked),
-        ];
-
-        self::assertFalse(QuorumPolicy::Majority->isMet($panel));
-    }
-
-    public function testOneStrongPlusOneIsNotMetByAPanelOfOneStrongApproval(): void
-    {
-        self::assertFalse(QuorumPolicy::OneStrongPlusOne->isMet([$this->vote(Tier::Strong, Decision::Approve)]));
-    }
-
-    public function testOneStrongPlusOneIsMetByAStrongAndAStandardApproval(): void
-    {
-        $panel = [$this->vote(Tier::Strong, Decision::Approve), $this->vote(Tier::Standard, Decision::Approve)];
-
-        self::assertTrue(QuorumPolicy::OneStrongPlusOne->isMet($panel));
-    }
-
-    public function testOneStrongPlusOneIsNotMetByTwoStandardApprovals(): void
-    {
-        $panel = [$this->vote(Tier::Standard, Decision::Approve), $this->vote(Tier::Standard, Decision::Approve)];
-
-        self::assertFalse(QuorumPolicy::OneStrongPlusOne->isMet($panel));
-    }
-
-    public function testOneStrongPlusOneIsNotMetWhenTheStrongReviewerAsksForChanges(): void
-    {
-        $panel = [$this->vote(Tier::Strong, Decision::Changes), $this->vote(Tier::Standard, Decision::Approve)];
-
-        self::assertFalse(QuorumPolicy::OneStrongPlusOne->isMet($panel));
-    }
-
-    public function testOneStrongPlusOneIsMetByThreeWhereOnlyTheLightReviewerAsksForChanges(): void
-    {
-        $panel = [
-            $this->vote(Tier::Strong, Decision::Approve),
-            $this->vote(Tier::Standard, Decision::Approve),
-            $this->vote(Tier::Light, Decision::Changes),
-        ];
-
-        self::assertTrue(QuorumPolicy::OneStrongPlusOne->isMet($panel));
+        yield 'all is met by a panel of one approval' => [QuorumPolicy::All, [self::vote(Tier::Standard, $approve)], true];
+        yield 'all is not met by a panel of one that asks for changes' => [QuorumPolicy::All, [self::vote(Tier::Standard, $changes)], false];
+        yield 'all is not met by a panel of two where one asks for changes' => [QuorumPolicy::All, [self::vote(Tier::Strong, $approve), self::vote(Tier::Standard, $changes)], false];
+        yield 'all is met by a panel of three approvals' => [QuorumPolicy::All, [self::vote(Tier::Strong, $approve), self::vote(Tier::Standard, $approve), self::vote(Tier::Light, $approve)], true];
+        yield 'all is not met when one of three is blocked' => [QuorumPolicy::All, [self::vote(Tier::Strong, $approve), self::vote(Tier::Standard, $approve), self::vote(Tier::Light, Decision::Blocked)], false];
+        yield 'a recorded invalid output verdict is no approval' => [QuorumPolicy::All, [self::vote(Tier::Strong, $approve), new PanelVerdict(Tier::Standard, $invalid)], false];
+        yield 'majority is met by a panel of one approval' => [QuorumPolicy::Majority, [self::vote(Tier::Light, $approve)], true];
+        yield 'majority is not met by a panel of one that asks for changes' => [QuorumPolicy::Majority, [self::vote(Tier::Light, $changes)], false];
+        yield 'majority is not met by one approval out of two' => [QuorumPolicy::Majority, [self::vote(Tier::Strong, $approve), self::vote(Tier::Standard, $changes)], false];
+        yield 'majority is met by two approvals out of three' => [QuorumPolicy::Majority, [self::vote(Tier::Standard, $approve), self::vote(Tier::Standard, $approve), self::vote(Tier::Strong, $changes)], true];
+        yield 'majority is not met by one approval out of three' => [QuorumPolicy::Majority, [self::vote(Tier::Strong, $approve), self::vote(Tier::Standard, $changes), self::vote(Tier::Standard, Decision::Blocked)], false];
+        yield 'one strong plus one is not met by a panel of one strong approval' => [QuorumPolicy::OneStrongPlusOne, [self::vote(Tier::Strong, $approve)], false];
+        yield 'one strong plus one is met by a strong and a standard approval' => [QuorumPolicy::OneStrongPlusOne, [self::vote(Tier::Strong, $approve), self::vote(Tier::Standard, $approve)], true];
+        yield 'one strong plus one is not met by two standard approvals' => [QuorumPolicy::OneStrongPlusOne, [self::vote(Tier::Standard, $approve), self::vote(Tier::Standard, $approve)], false];
+        yield 'one strong plus one is not met when the strong reviewer asks for changes' => [QuorumPolicy::OneStrongPlusOne, [self::vote(Tier::Strong, $changes), self::vote(Tier::Standard, $approve)], false];
+        yield 'one strong plus one is met by three where only the light reviewer asks for changes' => [QuorumPolicy::OneStrongPlusOne, [self::vote(Tier::Strong, $approve), self::vote(Tier::Standard, $approve), self::vote(Tier::Light, $changes)], true];
     }
 
     #[DataProvider('policies')]
@@ -171,7 +81,7 @@ final class QuorumPolicyTest extends TestCase
         }
     }
 
-    private function vote(Tier $tier, Decision $decision): PanelVerdict
+    private static function vote(Tier $tier, Decision $decision): PanelVerdict
     {
         return new PanelVerdict($tier, new Verdict($decision, [], [], []));
     }

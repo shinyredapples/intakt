@@ -82,8 +82,8 @@ final readonly class CheckPullRequestTextCommand
     {
         $io->error(sprintf('failed%s: %s', null === $route ? '' : ', '.$route, $outcome->verdict->reason()));
 
-        if ([] !== $outcome->missingItems) {
-            $io->writeln('missing: '.implode(', ', array_map(static fn (int $item): string => 'E'.$item, $outcome->missingItems)));
+        if (!$outcome->missingItems->isEmpty()) {
+            $io->writeln('missing: '.$outcome->missingItems->references());
         }
 
         $io->writeln(sprintf('body: %d characters, cap %d', $outcome->bodyCharacters, PullRequestTextRule::MAX_BODY_CHARACTERS));

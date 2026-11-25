@@ -24,7 +24,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-// Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
+// Covers nothing because it proves the wiring of config/packages/ai.php, which is not a class; the key-presence rule itself is unit-tested in ProviderKeySourceTest.
 #[CoversNothing]
 final class AiProvidersTest extends KernelTestCase
 {
@@ -100,31 +100,6 @@ final class AiProvidersTest extends KernelTestCase
         );
     }
 
-    public function testAnEmptyKeyCountsAsMissing(): void
-    {
-        $container = $this->bootWith([...$this->allSet(), 'OPENAI_API_KEY' => '']);
-
-        self::assertFalse($container->has('ai.platform.openai'));
-        $disabled = $container->getParameter(AiServices::DISABLED_PROVIDERS);
-
-        self::assertIsArray($disabled);
-        self::assertArrayHasKey('openai', $disabled);
-    }
-
-    public function testTheCompatibleEndpointNeedsBothItsAddressAndItsKey(): void
-    {
-        $values = $this->allSet();
-        unset($values['OPENAI_COMPATIBLE_API_KEY']);
-
-        $container = $this->bootWith($values);
-
-        self::assertFalse($container->has('ai.platform.generic.openai_compatible'));
-        self::assertSame(
-            ['openai_compatible' => 'Provider "openai_compatible" is disabled: set OPENAI_COMPATIBLE_API_KEY to enable it.'],
-            $container->getParameter(AiServices::DISABLED_PROVIDERS),
-        );
-    }
-
     public function testWithoutAnyKeyEveryProviderIsDisabledAndTheKernelStillBoots(): void
     {
         $container = $this->bootWith([]);
@@ -133,16 +108,6 @@ final class AiProvidersTest extends KernelTestCase
 
         self::assertIsArray($disabled);
         self::assertSame(['anthropic', 'openai', 'openai_compatible', 'claude_code'], array_keys($disabled));
-    }
-
-    public function testAKeyInTheEnvironmentArrayWinsOverAnEmptyServerValue(): void
-    {
-        $_SERVER['OPENAI_API_KEY'] = '';
-        $_ENV['OPENAI_API_KEY'] = 'test-value';
-
-        $container = $this->bootWith(array_diff_key($this->allSet(), ['OPENAI_API_KEY' => true]), keep: ['OPENAI_API_KEY']);
-
-        self::assertTrue($container->has('ai.platform.openai'));
     }
 
     public function testAKeptKeyEnablesItsProviderWhenTheEnvironmentHasNone(): void
@@ -222,92 +187,6 @@ final class AiProvidersTest extends KernelTestCase
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
         self::assertInstanceOf(PlatformInterface::class, $container->get('ai.platform.anthropic'));
-    }
-
-    public function testAnEmptyKeyInTheSecretsVaultCountsAsMissing(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', '');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertFalse($container->has('ai.platform.anthropic'));
-        self::assertSame(
-            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter(AiServices::DISABLED_PROVIDERS),
-        );
-    }
-
-    public function testAMalformedDecryptionSecretLeavesAProviderWithItsKeyInTheEnvironmentEnabled(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('UNRELATED_VAULT_ENTRY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        $this->useMalformedDecryptionSecret();
-
-        $container = $this->bootWith($this->allSet());
-
-        self::assertTrue($container->has('ai.platform.anthropic'));
-        self::assertTrue($container->has('ai.platform.openai'));
-        self::assertTrue($container->has('ai.platform.generic.openai_compatible'));
-        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
-    }
-
-    public function testAKeyStoredOnlyInTheVaultBehindAMalformedDecryptionSecretCountsAsMissing(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        $this->useMalformedDecryptionSecret();
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertFalse($container->has('ai.platform.anthropic'));
-        self::assertSame(
-            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter(AiServices::DISABLED_PROVIDERS),
-        );
-    }
-
-    public function testAKeyInAVaultBehindAUrlSafeEncodedDecryptionSecretEnablesItsProvider(): void
-    {
-        // All bits set, so the encoded key is made of the characters only the URL-safe alphabet has.
-        $secretKey = str_repeat("\xFF", SODIUM_CRYPTO_BOX_SECRETKEYBYTES);
-        $keyPair = sodium_crypto_box_keypair_from_secretkey_and_publickey($secretKey, sodium_crypto_box_publickey_from_secretkey($secretKey));
-        $vault = new SodiumVault($this->vaultDirectory(), $keyPair);
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = strtr(base64_encode($keyPair), '+/', '-_');
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertTrue($container->has('ai.platform.anthropic'));
-        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
-    }
-
-    public function testAKeyStoredOnlyInAVaultWithoutAnyUsableDecryptionKeyCountsAsMissing(): void
-    {
-        $vault = new SodiumVault($this->vaultDirectory());
-        $vault->generateKeys();
-        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.encrypt.public.php');
-        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.decrypt.private.php');
-        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
-        // Only characters base64 ignores, so the secret decodes to an empty key.
-        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = '!!!';
-
-        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
-
-        self::assertFalse($container->has('ai.platform.anthropic'));
-        self::assertSame(
-            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter(AiServices::DISABLED_PROVIDERS),
-        );
     }
 
     public function testAVaultSecretBehindADecryptionSecretOfTheWrongLengthDisablesItsProviderDespiteAKeptKey(): void
