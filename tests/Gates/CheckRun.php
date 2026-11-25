@@ -13,6 +13,11 @@ final readonly class CheckRun
     {
     }
 
+    public function result(): ProcessResult
+    {
+        return $this->result;
+    }
+
     public function exitCode(): int
     {
         return $this->result->exitCode;

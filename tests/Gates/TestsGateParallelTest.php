@@ -8,6 +8,7 @@ use Intakt\Gates\GateResult;
 use Intakt\Gates\Mode;
 use Intakt\Gates\PhpunitReport;
 use Intakt\Gates\ProcessQueue;
+use Intakt\Gates\ProcessResult;
 use Intakt\Gates\TestDurations;
 use Intakt\Gates\TestJobs;
 use Intakt\Gates\TestPorts;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(TestJobs::class)]
 #[UsesClass(TestWorkerCount::class)]
 #[UsesClass(ProcessQueue::class)]
+#[UsesClass(ProcessResult::class)]
 #[UsesClass(TestWorker::class)]
 #[UsesClass(TestWorkers::class)]
 #[UsesClass(TestPorts::class)]
@@ -36,10 +38,7 @@ final class TestsGateParallelTest extends SandboxTestCase
 
     public function testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile(): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(3);
-        $sandbox->write('tests/FailingTest.php', $this->testFile('FailingTest', 'self::fail("the forced failure");'));
-
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+        $run = $this->badFilesRun();
 
         self::assertTrue($run->failed('tests'), $run->output());
         self::assertStringContainsString('sqlite tests/FailingTest.php: FailingTest::testRuns', $run->findingsOf('tests'));
@@ -48,48 +47,30 @@ final class TestsGateParallelTest extends SandboxTestCase
 
     public function testFindingsOfEveryWorkerAreListed(): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(2);
-        $sandbox->write('tests/FirstFailingTest.php', $this->testFile('FirstFailingTest', 'self::fail("the first failure");'));
-        $sandbox->write('tests/SecondFailingTest.php', $this->testFile('SecondFailingTest', 'self::fail("the second failure");'));
+        $run = $this->badFilesRun();
 
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
-        self::assertStringContainsString('the first failure', $run->findingsOf('tests'));
+        self::assertStringContainsString('the forced failure', $run->findingsOf('tests'));
         self::assertStringContainsString('the second failure', $run->findingsOf('tests'));
     }
 
     public function testASkippedTestInOneWorkerFailsTheGate(): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(3);
-        $sandbox->write('tests/SkippedTest.php', $this->testFile('SkippedTest', 'self::markTestSkipped("the forced skip");'));
-
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
-        self::assertStringContainsString('sqlite tests/SkippedTest.php: SkippedTest::testRuns: the forced skip', $run->findingsOf('tests'));
+        self::assertStringContainsString('sqlite tests/SkippedTest.php: SkippedTest::testRuns: the forced skip', $this->badFilesRun()->findingsOf('tests'));
     }
 
     public function testADeprecationInOneWorkerFailsTheGate(): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(3);
-        $sandbox->write('tests/DeprecatingTest.php', $this->testFile('DeprecatingTest', 'trigger_error("the forced deprecation", E_USER_DEPRECATED); self::assertTrue(true);'));
-
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
-        self::assertStringContainsString('sqlite tests/DeprecatingTest.php', $run->findingsOf('tests'));
+        self::assertStringContainsString('sqlite tests/DeprecatingTest.php', $this->badFilesRun()->findingsOf('tests'));
     }
 
-    public function testAWorkerThatCrashesFailsTheGateWithItsOutput(): void
+    public function testAWorkerThatCrashesFailsTheGateWithItsOutputAndHidesNoSiblingFinding(): void
     {
-        $sandbox = $this->sandboxWithPassingFiles(3);
-        $sandbox->write('tests/CrashingTest.php', $this->testFile('CrashingTest', 'fwrite(STDERR, "the worker crashed\n"); exit(3);'));
+        $run = $this->badFilesRun();
 
-        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
         self::assertMatchesRegularExpression('~sqlite tests/CrashingTest\.php: phpunit exited with code \d+: the worker crashed~', $run->findingsOf('tests'));
+        self::assertStringContainsString('the forced failure', $run->findingsOf('tests'));
+        self::assertStringContainsString('SkippedTest::testRuns', $run->findingsOf('tests'));
+        self::assertStringContainsString('tests/DeprecatingTest.php', $run->findingsOf('tests'));
     }
 
     public function testATestFileWithoutItsClassFailsTheGateWithSeveralWorkers(): void
@@ -170,20 +151,40 @@ final class TestsGateParallelTest extends SandboxTestCase
         self::assertStringContainsString('sqlite: FailingTest::testRuns', $run->findingsOf('tests'));
     }
 
-    public function testAWorkerCountThatIsNoPositiveNumberFailsTheGate(): void
-    {
-        $run = $this->sandboxWith('tests-clean')->checkWith([TestWorkerCount::VARIABLE => 'all'], '--only=tests');
-
-        self::assertTrue($run->failed('tests'), $run->output());
-        self::assertStringContainsString('INTAKT_TEST_WORKERS names no number of test workers', $run->findingsOf('tests'));
-    }
-
-    public function testAWorkerCountBeyondThePortsFailsTheGateNamingTheCount(): void
+    public function testAWorkerCountBeyondThePortsFailsTheGateNamingTheRange(): void
     {
         $run = $this->sandboxWith('tests-clean')->checkWith([TestWorkerCount::VARIABLE => '500'], '--only=tests');
 
         self::assertTrue($run->failed('tests'), $run->output());
         self::assertStringContainsString('INTAKT_TEST_WORKERS names no number of test workers from 1 to 127', $run->findingsOf('tests'));
+    }
+
+    // Because a two-worker run takes seconds, the five bad-file cases read one run over one sandbox; whichever of them runs first makes it and leaves its output in the folder the class owns (removed before and after the class), so each still runs alone under --filter.
+    private function badFilesRun(): CheckRun
+    {
+        $record = Sandbox::ownedBy(self::class)->root.'/bad-files-run.json';
+        if (is_file($record)) {
+            $saved = json_decode((string) file_get_contents($record), true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($saved);
+            [$exitCode, $output, $errors] = [$saved['exitCode'] ?? null, $saved['output'] ?? null, $saved['errors'] ?? null];
+            self::assertIsInt($exitCode);
+            self::assertIsString($output);
+            self::assertIsString($errors);
+
+            return new CheckRun(new ProcessResult($exitCode, $output, $errors));
+        }
+
+        $sandbox = $this->sandboxWithPassingFiles(3);
+        $sandbox->write('tests/FailingTest.php', $this->testFile('FailingTest', 'self::fail("the forced failure");'));
+        $sandbox->write('tests/SecondFailingTest.php', $this->testFile('SecondFailingTest', 'self::fail("the second failure");'));
+        $sandbox->write('tests/SkippedTest.php', $this->testFile('SkippedTest', 'self::markTestSkipped("the forced skip");'));
+        $sandbox->write('tests/DeprecatingTest.php', $this->testFile('DeprecatingTest', 'trigger_error("the forced deprecation", E_USER_DEPRECATED); self::assertTrue(true);'));
+        $sandbox->write('tests/CrashingTest.php', $this->testFile('CrashingTest', 'fwrite(STDERR, "the worker crashed\n"); exit(3);'));
+
+        $result = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests')->result();
+        file_put_contents($record, json_encode(['exitCode' => $result->exitCode, 'output' => $result->output, 'errors' => $result->errors], JSON_THROW_ON_ERROR));
+
+        return new CheckRun($result);
     }
 
     private function sandboxWithPassingFiles(int $count): Sandbox

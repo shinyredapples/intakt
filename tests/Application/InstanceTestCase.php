@@ -111,7 +111,7 @@ abstract class InstanceTestCase extends TestCase
         $stub = self::stubProject();
         new Filesystem()->mkdir($stub);
         ProjectCopy::refresh(self::ROOT, $stub, 'bin', 'public', 'composer.json');
-        file_put_contents($stub.'/public/index.php', "<?php\necho 'ok';\n");
+        file_put_contents($stub.'/public/index.php', "<?php\necho 'ok';\nif (isset(\$_GET['admin'])) { echo ' ', getenv('FRANKENPHP_ADMIN_URL'); }\n");
     }
 
     protected static function stubProject(): string

@@ -16,6 +16,7 @@ final readonly class AiServices
     public const string DISABLED_PROVIDERS = 'intakt.ai.disabled_providers';
     public const string DISABLED_ACCOUNTS = 'intakt.ai.disabled_accounts';
     public const string ACCOUNTS = 'intakt.ai.accounts';
+    public const string LISTED_ACCOUNTS = 'intakt.ai.listed_accounts';
     public const string COMPATIBLE_BASE_URLS = 'intakt.ai.compatible_base_urls';
     public const string PROJECTS = 'intakt.projects';
     public const string KEPT_KEY_DIRECTORY = 'intakt.ai.kept_key_directory';
