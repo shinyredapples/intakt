@@ -7,8 +7,8 @@
 {%- set reviews = path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: project.name}) -%}
 <article class="pblock" id="{{ project.elementId }}" data-project="{{ project.name }}">
     <div>
-        <h2><span class="dot {{ {Failing: 'broken', Running: 'ok', Quiet: 'idle'}[project.status] }}"></span><a class="plink" href="{{ reviews }}" title="{{ project.name }}">{{ project.name }}</a></h2>
-        <p class="small state{{ project.failing ? ' failing' : ' muted' }}">{{ project.status }}{% if project.problem is not null %}: {{ project.problem }}{% endif %}</p>
+        <h2><span class="dot {{ project.status.dot }}"></span><a class="plink" href="{{ reviews }}" title="{{ project.name }}">{{ project.name }}</a></h2>
+        <p class="small state{{ project.failing ? ' failing' : ' muted' }}">{{ project.status.words }}{% if project.problem is not null %}: {{ project.problem }}{% endif %}</p>
         <ul class="tiers">
             {% for tier in project.tiers %}
             <li><span class="muted">{{ tier.tier|capitalize }}</span> {{ tier.provider == '-' ? tier.modelOrProblem : tier.provider ~ ' ' ~ tier.modelOrProblem }}</li>

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Dashboard\Domain\ProjectOrder;
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
@@ -29,6 +30,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(FilterProjects::class)]
+#[CoversClass(ProjectOrder::class)]
 #[CoversClass(ProjectSummary::class)]
 #[CoversClass(ConfiguredProjects::class)]
 #[UsesClass(LedgerReviews::class)]
@@ -43,9 +45,10 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(LedgerEvent::class)]
 final class FilterProjectsTest extends TestCase
 {
-    public function testAReviewedAndABuiltProjectThatDifferOnlyInCaseKeepTheOrderTheyWereListedIn(): void
+    public function testAReviewedAndABuiltProjectThatDifferOnlyInCaseComeInByteOrderWhicheverWasListedFirst(): void
     {
-        self::assertSame(['zeta', 'Zeta'], $this->projectsOf(['zeta'], ['Zeta'])->names());
+        self::assertSame(['Zeta', 'zeta'], $this->projectsOf(['zeta'], ['Zeta'])->names());
+        self::assertSame(['Zeta', 'zeta'], $this->projectsOf(['Zeta'], ['zeta'])->names());
     }
 
     public function testAConfiguredProjectIsListedBeforeItsFirstReview(): void
@@ -53,9 +56,9 @@ final class FilterProjectsTest extends TestCase
         self::assertSame(['alpha', 'idle', 'watched', 'zeta'], $this->projectsOf(['zeta'], ['alpha'], ['idle'])->names());
     }
 
-    public function testAPageProjectThatDiffersFromASharedOneOnlyInCaseComesAfterIt(): void
+    public function testAPageProjectThatDiffersFromASharedOneOnlyInCaseComesInByteOrder(): void
     {
-        self::assertSame(['zeta', 'Zeta'], $this->projectsOf(['zeta'])->namesWith(['Zeta']));
+        self::assertSame(['Zeta', 'zeta'], $this->projectsOf(['zeta'])->namesWith(['Zeta']));
     }
 
     public function testAPageProjectWithALeadingZeroComesBeforeTheSameNumberWithout(): void

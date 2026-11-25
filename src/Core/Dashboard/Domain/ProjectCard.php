@@ -43,13 +43,12 @@ final readonly class ProjectCard
         return $this->failing > 0;
     }
 
-    // One word for the dot and the line under the name, so the state never rests on color alone.
-    public function status(): string
+    public function status(): ProjectStatus
     {
         return match (true) {
-            $this->isFailing() => 'Failing',
-            $this->running > 0 => 'Running',
-            default => 'Quiet',
+            $this->isFailing() => ProjectStatus::Failing,
+            $this->running > 0 => ProjectStatus::Running,
+            default => ProjectStatus::Quiet,
         };
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
@@ -24,15 +25,19 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
 use Intakt\Tests\Journeys\Support\StreamedPage;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
 use stdClass;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
@@ -40,6 +45,7 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 use Symfony\Component\Uid\Uuid;
+use Twig\Environment;
 
 #[CoversClass(LiveProjectCards::class)]
 #[CoversClass(ProjectCardsRoundUpdates::class)]
@@ -60,6 +66,9 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
     private const string ROUND = '0199a5b4-0000-7000-8000-000000000001';
 
     private ?string $secretBefore = null;
+
+    // Runs inside the first publish, so while the worker that publishes holds the lock.
+    private ?Closure $whilePublishing = null;
 
     /**
      * @var list<Update>
@@ -186,6 +195,44 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $this->shellUpdates());
     }
 
+    public function testAWorkerThatFindsTheLockHeldReturnsWithoutPublishing(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $second = new PublishedLiveEvents();
+        $log = new BufferingLogger();
+        $other = $this->cardsOfAnotherWorker($second, $log);
+        $publishedWhileHeld = null;
+        $this->whilePublishing = static function () use ($other, $second, &$publishedWhileHeld): void {
+            $other->publishLatest();
+            $publishedWhileHeld = count($second->events);
+        };
+
+        $this->cards()->publishLatest();
+        $other->publishLatest();
+
+        self::assertSame(0, $publishedWhileHeld);
+        self::assertSame([], $log->cleanLogs());
+        // The same worker publishes once the lock is free, so only the held lock kept it silent before.
+        self::assertCount(1, $second->events);
+    }
+
+    public function testTheHolderPublishesTheCardsThatChangedWhileItPublishedLast(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $other = $this->cardsOfAnotherWorker(new PublishedLiveEvents(), new NullLogger());
+        $this->whilePublishing = function () use ($other): void {
+            $this->ledger->startRound('round-2', 'beta');
+            $other->publishLatest();
+        };
+
+        $this->cards()->publishLatest();
+
+        self::assertSame(
+            [['alpha'], ['alpha', 'beta']],
+            array_map(static fn (Update $update): array => new Crawler($update->getData())->filter('article[data-project]')->each(static fn (Crawler $card): string => (string) $card->attr('data-project')), $this->shellUpdates()),
+        );
+    }
+
     public function testAToolCallPushesNoCards(): void
     {
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
@@ -207,6 +254,8 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         $this->browser->disableReboot();
         $hub = new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), function (Update $update): string {
             $this->published[] = $update;
+            [$meanwhile, $this->whilePublishing] = [$this->whilePublishing, null];
+            $meanwhile?->__invoke();
 
             return 'id-'.count($this->published);
         });
@@ -240,6 +289,27 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
     private function withoutTipIds(string $html): string
     {
         return (string) preg_replace('/(term|figure)-([a-z]+-)?\d+/', '$1', $html);
+    }
+
+    // Built on the same ledger and lock store, because two workers of one install share both.
+    private function cardsOfAnotherWorker(LiveUpdates $updates, LoggerInterface $log): LiveProjectCards
+    {
+        $cards = self::getContainer()->get(ProjectCards::class);
+        self::assertInstanceOf(ProjectCards::class, $cards);
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+        $locks = self::getContainer()->get(LockFactory::class);
+        self::assertInstanceOf(LockFactory::class, $locks);
+
+        return new LiveProjectCards($cards, $twig, $updates, $locks, $log);
+    }
+
+    private function cards(): LiveProjectCards
+    {
+        $cards = self::getContainer()->get(LiveProjectCards::class);
+        self::assertInstanceOf(LiveProjectCards::class, $cards);
+
+        return $cards;
     }
 
     private function watcherLedger(): WatcherLedger

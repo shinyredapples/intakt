@@ -14,17 +14,22 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
+use Intakt\Core\Dashboard\Domain\ProjectOrder;
+use Intakt\Core\Dashboard\Domain\ProjectStatus;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
 #[CoversClass(ListProjectsController::class)]
 #[CoversClass(ProjectCards::class)]
 #[CoversClass(ProjectCard::class)]
+#[CoversClass(ProjectOrder::class)]
+#[CoversClass(ProjectStatus::class)]
 final class ListProjectsControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewsOfTwoChangesOfOneProjectShareOneCard(): void
@@ -209,6 +214,33 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $this->ledger->startRound('round-4', 'item2');
 
         self::assertSame(['Beta', 'item2', 'item10', 'zeta'], $this->namesOn($this->browser->request('GET', '/projects')));
+    }
+
+    /**
+     * @param list<string> $started
+     */
+    #[TestWith([['alpha', 'Alpha']])]
+    #[TestWith([['Alpha', 'alpha']])]
+    public function testProjectsThatDifferOnlyInCaseComeInTheFiltersOrder(array $started): void
+    {
+        foreach ($started as $index => $project) {
+            $this->ledger->startRound('round-'.$index, $project);
+        }
+
+        $page = $this->browser->request('GET', '/projects');
+
+        self::assertSame(['Alpha', 'alpha'], $this->namesOn($page));
+        self::assertSame(['', 'Alpha', 'alpha'], $page->filter('#projfilter option')->each(static fn (Crawler $option): string => (string) $option->attr('value')));
+    }
+
+    public function testADecidedRoundThatNamesNoChangeIsLinkedByItsRound(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->judgeRound('round-1');
+
+        $page = $this->browser->request('GET', '/projects');
+
+        self::assertSame('Round round-1', $page->filter('[data-project="alpha"] a[href="/reviews/round-1"]')->text());
     }
 
     public function testACardKeepsItsIdWhenAProjectSortedBeforeItGetsACard(): void

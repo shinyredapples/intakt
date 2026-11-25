@@ -25,13 +25,11 @@ final readonly class WorkingCard
     ) {
     }
 
-    // A round from before the ledger named its change has no change, so the round names it, as on the board card.
     public static function ofReview(Review $review): self
     {
         $latest = $review->latest();
-        $title = '' === $review->change ? 'Round '.$latest->round : $review->change;
 
-        return new self($title, $review->project, WorkStep::Review, self::readersOf($latest), $latest->round);
+        return new self($latest->title(), $review->project, WorkStep::Review, self::readersOf($latest), $latest->round);
     }
 
     public static function ofTask(BuildTask $task): self

@@ -85,6 +85,12 @@ final readonly class ReviewedRound
         $this->severitiesByReviewer = null;
     }
 
+    // A round from before the ledger named its change has no change, so the round names it, as on the board card.
+    public function title(): string
+    {
+        return '' === $this->change ? 'Round '.$this->round : $this->change;
+    }
+
     // A replay shows like a live round, so the pages mark it, because its verdicts were never given on the change.
     public function isReplay(): bool
     {

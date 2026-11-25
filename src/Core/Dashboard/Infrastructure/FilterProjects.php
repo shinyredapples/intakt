@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Dashboard\Domain\ProjectOrder;
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Twig\Attribute\AsTwigFunction;
@@ -33,15 +34,11 @@ final readonly class FilterProjects
      */
     public function namesWith(array $shown): array
     {
-        // A project with build work and no review yet is listed too, because the board shows its asleep octopus only while the filter shows that project (#2732), and a configured one, because its card on the Projects page links to the choice of it.
-        $names = array_values(array_unique([...array_map(
+        // A project with build work and no review yet is listed too, because the board shows its asleep octopus only while the filter shows that project (#2732), and a configured one, because its card on the Projects page links to the choice of it; in name order, because the order of first reviews means nothing to a reader looking for one project in a long list.
+        return ProjectOrder::sorted([...array_map(
             static fn (ProjectSummary $project): string => $project->name,
             ProjectSummary::fromReviews($this->reviews->newestFirst()),
-        ), ...$this->reviews->builtProjects(), ...$this->configured->names(), ...$shown]));
-        // Name order, because the order of first reviews means nothing to a reader looking for one project in a long list; the sort is stable, so names it calls equal keep their order and a page's own projects come after the shared ones, where the live filter update puts them back (base.html.twig).
-        sort($names, SORT_NATURAL | SORT_FLAG_CASE);
-
-        return $names;
+        ), ...$this->reviews->builtProjects(), ...$this->configured->names(), ...$shown]);
     }
 
     public function isFirstRoundOf(string $round, string $project): bool

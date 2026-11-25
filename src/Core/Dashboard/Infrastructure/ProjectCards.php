@@ -12,6 +12,7 @@ use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
+use Intakt\Core\Dashboard\Domain\ProjectOrder;
 use Intakt\Core\Dashboard\Domain\ProjectOutcome;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -98,7 +99,7 @@ final readonly class ProjectCards
         usort($ended, static fn (ReviewedRound $one, ReviewedRound $other): int => ($other->judgedAt ?? $other->startedAt) <=> ($one->judgedAt ?? $one->startedAt));
 
         return array_map(
-            static fn (ReviewedRound $round): ProjectOutcome => new ProjectOutcome($round->change, ReviewOutcome::of($round)?->plainWords() ?? 'Judged', $round->round),
+            static fn (ReviewedRound $round): ProjectOutcome => new ProjectOutcome($round->title(), ReviewOutcome::of($round)?->plainWords() ?? 'Judged', $round->round),
             array_slice($ended, 0, self::RECENT),
         );
     }
@@ -127,13 +128,9 @@ final readonly class ProjectCards
     // Only names the project filter lists too, because a card links to the filter's choice of its project; a failing head of any other project adds no card, because the filter runs on every page and would need one more read of the ledger for it.
     private function namesOf(array $reviews): array
     {
-        $names = [
+        return ProjectOrder::sorted([
             ...$this->configured->names(),
             ...array_map(static fn (Review $review): string => $review->project, $reviews),
-        ];
-        $names = array_values(array_unique($names));
-        sort($names, SORT_NATURAL | SORT_FLAG_CASE);
-
-        return $names;
+        ]);
     }
 }
