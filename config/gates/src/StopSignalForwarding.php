@@ -44,6 +44,28 @@ final readonly class StopSignalForwarding
         return new self($handlers);
     }
 
+    // Because a signal that lands between a child's start and its registration would stop every child but that one, the stop waits until the work is done; blocking the signals instead would leave them blocked in the child too.
+    /**
+     * @param Closure(): void $work
+     */
+    public function deferredAcross(Closure $work): void
+    {
+        if ([] === $this->handlers) {
+            $work();
+
+            return;
+        }
+
+        pcntl_async_signals(false);
+
+        try {
+            $work();
+        } finally {
+            pcntl_async_signals(true);
+            pcntl_signal_dispatch();
+        }
+    }
+
     public function end(): void
     {
         foreach ($this->handlers as $signal => $handler) {

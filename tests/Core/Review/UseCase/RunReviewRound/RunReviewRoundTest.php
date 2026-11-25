@@ -116,7 +116,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testARoundCompletesWithTheLastReviewerWhicheverFinishesFirst(array $order): void
     {
         $round = $this->fixture->start(3);
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         foreach ($order as $position => $index) {
             $this->fixture->deliver($this->fixture->bus->messages[$index], $vendor);
@@ -133,7 +133,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAReviewerAsksTheVendorWithTheIdOfItsRound(): void
     {
         $round = $this->fixture->start(1);
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
 
@@ -143,7 +143,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAMessageDeliveredAgainAfterTheRoundIsCompleteChangesNothing(): void
     {
         $round = $this->fixture->start(1);
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
         $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
@@ -156,10 +156,10 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAFailedReviewerCountsAsFinishedAndTheRoundStillCompletes(): void
     {
         $round = $this->fixture->start(2);
-        $failing = new ScriptedVendor(new ProviderFailedTransiently(new RuntimeException('secret detail')));
+        $failing = new VerdictPerRole(failure: new ProviderFailedTransiently(new RuntimeException('secret detail')));
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $failing);
-        $this->fixture->deliver($this->fixture->bus->messages[1], new ScriptedVendor());
+        $this->fixture->deliver($this->fixture->bus->messages[1], new VerdictPerRole());
 
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(RoundState::Complete, $stored->state());
@@ -171,7 +171,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAReviewerWhoseStreamWasCutMidAnswerIsStoredAsABlockedVerdictWithTheCutAsItsReasonAndNeverApproves(): void
     {
         $round = $this->fixture->start(1);
-        $cut = new ScriptedVendor(verdict: Verdict::incompleteStream('The stream ended before its terminal event.', new Evidence('the call to anthropic, model big', 'cut by: platform')));
+        $cut = new VerdictPerRole(otherwise: Verdict::incompleteStream('The stream ended before its terminal event.', new Evidence('the call to anthropic, model big', 'cut by: platform')));
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $cut);
 
@@ -188,7 +188,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAReviewerAnsweringBlockedWithFindingsIsStoredAsChanges(): void
     {
         $round = $this->fixture->start(1);
-        $blocked = new ScriptedVendor(verdict: new Verdict(Decision::Blocked, [new Finding(
+        $blocked = new VerdictPerRole(otherwise: new Verdict(Decision::Blocked, [new Finding(
             id: 'F1',
             severity: Severity::P1,
             file: 'src/Cart.php',
@@ -214,7 +214,7 @@ final class RunReviewRoundTest extends KernelTestCase
     {
         $round = $this->fixture->start(1);
 
-        $this->fixture->deliver($this->fixture->bus->messages[0], new ScriptedVendor(new RuntimeException('401 invalid api key')));
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(failure: new RuntimeException('401 invalid api key')));
 
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
@@ -234,9 +234,9 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testTheLedgerHoldsTheStartAndTheEndOfEveryReviewer(): void
     {
         $this->fixture->start(2);
-        $failing = new ScriptedVendor(new ProviderFailedTransiently(new RuntimeException('down')));
+        $failing = new VerdictPerRole(failure: new ProviderFailedTransiently(new RuntimeException('down')));
 
-        $this->fixture->deliver($this->fixture->bus->messages[1], new ScriptedVendor());
+        $this->fixture->deliver($this->fixture->bus->messages[1], new VerdictPerRole());
         $this->fixture->deliver($this->fixture->bus->messages[0], $failing);
 
         self::assertSame(
@@ -249,7 +249,7 @@ final class RunReviewRoundTest extends KernelTestCase
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
         $refusingAfterTheStart = new InMemoryLedger(accepted: 1);
 
         try {
@@ -271,7 +271,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $this->fixture->start(1);
 
         try {
-            $this->fixture->worker($this->fixture->entities, new ScriptedVendor(), new InMemoryLedger(accepted: 1))($this->fixture->bus->messages[0]);
+            $this->fixture->worker($this->fixture->entities, new VerdictPerRole(), new InMemoryLedger(accepted: 1))($this->fixture->bus->messages[0]);
             self::fail('The refused ledger event was swallowed.');
         } catch (ResultNotStored $notStored) {
             self::assertInstanceOf(UnrecoverableExceptionInterface::class, $notStored);
@@ -282,7 +282,7 @@ final class RunReviewRoundTest extends KernelTestCase
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
         $worker = $this->fixture->worker($this->fixture->entities, $vendor, new RefusingVerdictsFirst(new InMemoryLedger(), 3));
 
         try {
@@ -305,7 +305,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
 
         try {
-            $this->fixture->worker($this->fixture->entities, new ScriptedVendor(), new RefusingVerdictsFirst(new InMemoryLedger(), 3))($message);
+            $this->fixture->worker($this->fixture->entities, new VerdictPerRole(), new RefusingVerdictsFirst(new InMemoryLedger(), 3))($message);
         } catch (ResultNotStored $notStored) {
             ($this->fixture->failedMessages())(new WorkerMessageFailedEvent(new Envelope($message), 'async', $notStored));
         }
@@ -318,7 +318,7 @@ final class RunReviewRoundTest extends KernelTestCase
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
         $ledger = new InMemoryLedger();
         $refusing = new RefusingVerdictsFirst($ledger, 1);
 
@@ -333,7 +333,7 @@ final class RunReviewRoundTest extends KernelTestCase
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
         $ledger = new InMemoryLedger();
         $refusing = new RefusingVerdictsFirst($ledger, 4);
 
@@ -351,11 +351,11 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testARestartedWorkerSkipsFinishedReviewersAndRunsTheRest(): void
     {
         $round = $this->fixture->start(3);
-        $before = new ScriptedVendor();
+        $before = new VerdictPerRole();
         $this->fixture->deliver($this->fixture->bus->messages[1], $before);
 
         // The queue redelivers every message after the restart because it cannot know which ones were handled.
-        $after = new ScriptedVendor();
+        $after = new VerdictPerRole();
         foreach ($this->fixture->bus->messages as $message) {
             $this->fixture->deliver($message, $after);
         }
@@ -370,7 +370,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $this->fixture->start(1);
         $this->leaveRunning($this->fixture->bus->messages[0]);
         $this->fixture->clock->modify('+15 minutes');
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         try {
             $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
@@ -416,7 +416,7 @@ final class RunReviewRoundTest extends KernelTestCase
 
         $this->expectException(ReviewerNotFound::class);
 
-        $this->fixture->deliver(new ReviewWithReviewer('019a2600-0000-7000-8000-000000000000'), new ScriptedVendor());
+        $this->fixture->deliver(new ReviewWithReviewer('019a2600-0000-7000-8000-000000000000'), new VerdictPerRole());
     }
 
     protected function setUp(): void

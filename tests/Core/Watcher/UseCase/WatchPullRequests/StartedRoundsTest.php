@@ -350,7 +350,8 @@ final class StartedRoundsTest extends KernelTestCase
             'round_id' => 'round-0',
             'stale' => false,
             'queued_recorded' => false,
-        ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
+            'labels' => [],
+        ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN, 'labels' => Types::JSON]);
     }
 
     private function deleteRoundsOnNextLoad(): void

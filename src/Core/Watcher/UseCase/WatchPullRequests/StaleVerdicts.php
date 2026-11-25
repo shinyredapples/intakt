@@ -77,7 +77,7 @@ final readonly class StaleVerdicts
 
     private function check(WatchedProject $project, OpenChange $open, StartedRound $round): void
     {
-        $current = $this->ask(new IdentityAtHead($project->startAt($open), new CommitId($round->head())), HeadIdentity::class);
+        $current = $this->ask(new IdentityAtHead($project->startAt($open, $round->labels()), new CommitId($round->head())), HeadIdentity::class);
         $verdicts = $this->ask(new VerdictsOfRound($round->roundId(), $current->identity, $current->move), RoundVerdicts::class);
 
         if (Standing::Stale === $verdicts->standing->standing) {
