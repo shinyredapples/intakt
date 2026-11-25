@@ -31,8 +31,8 @@ final readonly class WebServerCheck
 
     public function run(): DoctorCheckVerdict
     {
-        $serverPort = self::port($this->serverPort);
-        $dashboardPort = self::port($this->dashboardPort);
+        $serverPort = $this->port($this->serverPort);
+        $dashboardPort = $this->port($this->dashboardPort);
         if (null === $serverPort || null === $dashboardPort) {
             return DoctorCheckVerdict::failed('cannot run (SERVER_PORT or DASHBOARD_PORT is not a port number)', self::PORT_FIX);
         }
@@ -57,7 +57,7 @@ final readonly class WebServerCheck
         return [...self::OPTIONS, 'headers' => ['Host' => 'localhost:'.$dashboardPort], 'no_proxy' => '*'];
     }
 
-    private static function port(string $value): ?int
+    private function port(string $value): ?int
     {
         // Digits only, because the integer filter also takes a sign or surrounding blanks no port carries.
         $port = 1 === preg_match('/^[0-9]{1,5}$/', $value) ? (int) $value : 0;
