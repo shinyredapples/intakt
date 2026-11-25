@@ -219,7 +219,10 @@ final class StartedRoundsTest extends KernelTestCase
     public function testAPullRequestWhoseRoundStartedAtAnEarlierStaleHeadHasARound(): void
     {
         $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
-        $this->markStored(stale: true, recorded: true);
+        $this->markStored(
+            stale: true,
+            recorded: true,
+        );
 
         self::assertTrue($this->rounds->hasRoundOf('alpha', RecordedForge::change('7', 'e', '2026-11-02T10:05:00Z')));
     }
