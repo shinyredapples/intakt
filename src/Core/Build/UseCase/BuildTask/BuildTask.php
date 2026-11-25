@@ -158,7 +158,6 @@ final readonly class BuildTask
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
-                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
                 BuildStep::PrePushCheck => $this->prePushCheck($request, $task, $results),
                 BuildStep::Push => $this->push($request, $results),
             };
@@ -244,15 +243,6 @@ final readonly class BuildTask
         return $built instanceof BuildJobOutcome ? $built : throw new LogicException('the checks and the push run only after a build job that built');
     }
 
-    /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
-     */
-    private function textIn(array $results): string
-    {
-        // Never null, because the checks and the push run only after a build job that built, and such a job always hands back its text.
-        return $this->builtIn($results)->pullRequestText ?? throw new LogicException('the checks and the push run only after a build job that handed back its text');
-    }
-
     // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back. The regression runs of a passed check are the step's result, for the push.
     /**
      * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
@@ -268,6 +258,15 @@ final readonly class BuildTask
         $checked = $this->prePushChecks->resultOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels)));
 
         return $checked->failure ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))) ?? $checked->runs;
+    }
+
+    /**
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
+     */
+    private function textIn(array $results): string
+    {
+        // Never null, because the checks and the push run only after a build job that built, and such a job always hands back its text.
+        return $this->builtIn($results)->pullRequestText ?? throw new LogicException('the checks and the push run only after a build job that handed back its text');
     }
 
     private function bodyOf(string $text): string
@@ -325,7 +324,7 @@ final readonly class BuildTask
         $title = explode("\n", $text, 2)[0];
         $body = $this->bodyOf($text);
 
-        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), null === $runs ? $body : new RegressionEvidence($runs)->addedTo($body));
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $runs instanceof RegressionRuns ? new RegressionEvidence($runs)->addedTo($body) : $body);
     }
 
     // Asked before the build job runs, because a bug without its four parts has no failing test to write first and the builder would guess it.

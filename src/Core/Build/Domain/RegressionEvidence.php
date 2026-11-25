@@ -20,34 +20,29 @@ final readonly class RegressionEvidence
     public function addedTo(string $body): string
     {
         $lines = explode("\n", $body);
-        [$evidence, $end, $open] = $this->evidenceSectionIn($lines);
+        [$headings, $open] = $this->scanned($lines);
+        $evidence = $this->evidenceIn($headings);
+        $closing = null === $open ? '' : "\n".$open;
 
         if (null === $evidence) {
-            return $this->joined(rtrim($body."\n".($open ?? '')), "## Evidence\n\n".$this->resultLines(), '');
+            return $this->joined(rtrim($body.$closing), "## Evidence\n\n".$this->resultLines(), '');
         }
 
-        $head = rtrim(implode("\n", array_slice($lines, 0, $end))."\n".($end >= count($lines) ? ($open ?? '') : ''));
-        $rest = implode("\n", array_slice($lines, $end));
+        $end = $this->endOf($evidence, $headings, count($lines));
+        $kept = implode("\n", array_slice($lines, 0, $end));
 
-        return $this->joined($head, $this->resultLines(), $rest);
-    }
-
-    private function joined(string $head, string $added, string $rest): string
-    {
-        $text = '' === $head ? $added : $head."\n\n".$added;
-
-        return '' === trim($rest) ? $text : $text."\n\n".ltrim($rest, "\n");
+        return $this->joined(rtrim($kept.($end === count($lines) ? $closing : '')), $this->resultLines(), implode("\n", array_slice($lines, $end)));
     }
 
     /**
      * @param list<string> $lines
      *
-     * @return array{0: ?int, 1: int, 2: ?string} the Evidence heading's line, the line its section ends before and the marker that closes a fence left open at the end
+     * @return array{0: array<int, string>, 1: ?string}
      */
-    private function evidenceSectionIn(array $lines): array
+    private function scanned(array $lines): array
     {
+        $headings = [];
         $fence = null;
-        $evidence = null;
 
         foreach ($lines as $number => $line) {
             if (null !== $fence) {
@@ -58,18 +53,18 @@ final readonly class RegressionEvidence
 
             $fence = $this->opening($line);
 
-            if (null !== $fence || 1 !== preg_match('/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading)) {
-                continue;
+            if (null === $fence && 1 === preg_match('/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading)) {
+                $headings[$number] = $heading[1] ?? '';
             }
-
-            if (null !== $evidence) {
-                return [$evidence, $number, null];
-            }
-
-            $evidence = 1 === preg_match('/^evidence(?:\s|$)/i', $heading[1] ?? '') ? $number : null;
         }
 
-        return [$evidence, count($lines), null === $fence ? null : $fence];
+        return [$headings, $fence];
+    }
+
+    // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
+    private function closes(string $line, string $fence): bool
+    {
+        return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
     }
 
     private function opening(string $line): ?string
@@ -78,14 +73,43 @@ final readonly class RegressionEvidence
             return null;
         }
 
-        // A backtick fence's info string holds no backtick, because that line is an inline code span.
+        // A backtick fence's info string holds no backtick, because such a line is an inline code span.
         return '`' === $match[1][0] && str_contains($match[2], '`') ? null : $match[1];
     }
 
-    // Only the same character, repeated at least as often as the opening line, and nothing else on the line.
-    private function closes(string $line, string $fence): bool
+    /**
+     * @param array<int, string> $headings
+     */
+    private function evidenceIn(array $headings): ?int
     {
-        return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
+        foreach ($headings as $number => $text) {
+            if (1 === preg_match('/^evidence(?:\s|$)/i', $text)) {
+                return $number;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, string> $headings
+     */
+    private function endOf(int $evidence, array $headings, int $lineCount): int
+    {
+        foreach (array_keys($headings) as $number) {
+            if ($number > $evidence) {
+                return $number;
+            }
+        }
+
+        return $lineCount;
+    }
+
+    private function joined(string $head, string $added, string $rest): string
+    {
+        $text = '' === $head ? $added : $head."\n\n".$added;
+
+        return '' === trim($rest) ? $text : $text."\n\n".ltrim($rest, "\n");
     }
 
     private function resultLines(): string
@@ -110,6 +134,6 @@ final readonly class RegressionEvidence
 
     private function resultText(?RegressionRun $run): string
     {
-        return $run?->value ?? 'not run';
+        return $run->value ?? 'not run';
     }
 }

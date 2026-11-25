@@ -61,7 +61,7 @@ final class PrePushCheckTest extends TestCase
     {
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the check job'));
 
-        $this->checkThrowing(new InvalidArgumentException('a bug in the check job'))->resultOf($this->request(), 'BUNDLE', TaskKind::Task)->failure;
+        $this->checkThrowing(new InvalidArgumentException('a bug in the check job'))->resultOf($this->request(), 'BUNDLE', TaskKind::Task);
     }
 
     public function testATaskThatIsNotABugRunsNoRegressionTests(): void
