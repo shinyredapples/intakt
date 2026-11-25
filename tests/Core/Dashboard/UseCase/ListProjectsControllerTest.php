@@ -64,10 +64,27 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
     {
         $this->ledger->startRound('round-1', 'alpha');
 
-        $link = $this->browser->request('GET', '/projects')->filter('.page-head .actions a');
+        $link = $this->browser->request('GET', '/projects')->filter('.page-head .actions a.btn.secondary');
 
         self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
         self::assertSame('Set up Intakt', $link->text());
+    }
+
+    public function testOnceAProjectIsListedThePageHeadsPrimaryButtonAddsAProject(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $primary = $this->browser->request('GET', '/projects')->filter('main .btn.primary');
+
+        self::assertSame(['Add a project'], $primary->each(static fn (Crawler $a): string => $a->text()));
+        self::assertSame('/projects/new', $primary->attr('href'));
+    }
+
+    public function testBeforeAProjectIsListedThePageOffersSetupAndNotAddAProject(): void
+    {
+        $page = $this->browser->request('GET', '/projects');
+
+        self::assertCount(0, $page->filter('a[href="/projects/new"]'));
     }
 
     public function testBeforeAReviewHasRunThePageHeadLinksNoFirstRunPage(): void

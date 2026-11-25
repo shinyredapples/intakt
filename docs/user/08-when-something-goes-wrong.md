@@ -6,9 +6,11 @@
 
 It is Friday afternoon. You started a review half an hour ago, and the page still says one reviewer is running. Nothing looks broken, but nothing moves either. Most surprises in Intakt have a reason written on the screen. This chapter lists the common ones: what you see, why, and what to do.
 
-## First, look at Waiting on you
+## First steps
 
-Open **You** in the menu. Anything only you can decide shows up there, oldest first. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
+1. In the folder with Intakt's `compose.yaml`, run `docker compose exec intakt php bin/console intakt:doctor`. It works even when the dashboard does not start, and it changes nothing.
+2. Read its six lines: the web server (the dashboard answers), the worker threads (a worker is ready to take a request), the server metrics (its figures can be read), the Mercure hub (live updates work), the workers (the background workers that move reviews and builds run) and the forge (the GitHub App works). Each says `pass`, or `fail` with the problem and, after `fix:`, what to do. Fix those first. The forge line also fails when you cleared only `GITHUB_APP_ID`: to run without a GitHub App, empty all three App settings.
+3. Open **You** in the menu. Anything only you can decide shows up there, oldest first. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
 
 ![The Waiting on you page: the octopus above "Nothing needs you, Intakt keeps building and reviewing. When it needs a decision, it shows up here", then the sections Meanwhile, "No review is running now", and You handled today](../assets/guide/waiting-on-you.webp)
 
@@ -18,13 +20,13 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 - **Why:** `INTAKT_LOG_LEVEL` holds something other than one of those levels in lower case, or is empty. The message does not repeat the value, so a key set there by mistake is not printed.
 - **What to do:** set `INTAKT_LOG_LEVEL` to one of the listed levels (`warning` is the usual one, `info` shows more), or remove it from `.env.local` and your environment to get `warning`, then start Intakt again.
 
-## The setup page says a step is Missing
+## The setup wizard says no provider has a key
 
-- **What you see:** **1. Add a key here** is not Done, and lines such as Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
+- **What you see:** step 3, **Add an AI account**, says "No provider has a key yet", with lines such as Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
 - **Why:** no provider has a key, so no reviewer can run.
 - **What to do:** add a key as in [chapter 3](03-your-first-real-review.md), then restart Intakt.
 
-## The setup page refuses your key
+## The setup wizard refuses your key
 
 - **What you see:** "The provider refused the key", or "The key has the form of no listed provider".
 - **Why:** the provider said no, or the text is not a whole key of a provider Intakt knows.
@@ -70,14 +72,14 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 ## The dashboard is slow
 
 - **What you see:** pages take seconds to load.
-- **Why:** the server is busy.
-- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts and the hub. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the same.
+- **Why:** the server is busy, or GitHub answers slowly: about once a minute a load of the board checks the GitHub App connection and can wait up to 15 seconds for it, also when the server's own figures look fine.
+- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts, the hub and the forge. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the server's figures, and `php bin/console intakt:doctor` runs the forge check and says what to fix.
 
 ## Docker says the container is unhealthy
 
 - **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
 - **Why:** the health check failed three times in a row: the dashboard did not answer, the live-update hub reported a problem, no worker was ready to take a request, or the server's figures could not be read.
-- **What to do:** run `docker exec intakt php bin/console intakt:server:health`. Each `unhealthy:` line names one problem and why.
+- **What to do:** run `docker compose exec intakt php bin/console intakt:doctor`; each `fail:` line names one problem and what to do. `docker compose exec intakt php bin/console intakt:server:health` shows what the health check itself sees: each `unhealthy:` line names one problem and why.
 
 ## The dashboard says "Open the dashboard on localhost"
 

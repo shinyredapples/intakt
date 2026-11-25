@@ -28,8 +28,12 @@ parameters:
     !php/const Intakt\Core\HandBack\Contract\HandBackServices::DEPENDENCY_SNAPSHOT_COUNT: 10
     # One bare mirror per project lives here, rebuilt from the remote if lost.
     !php/const Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY: '%kernel.project_dir%/var/mirrors'
+    # Deleted branch heads are kept here, under var/data because that is where the image keeps its volume: unlike the mirrors, the archive survives a container replacement.
+    !php/const Intakt\Core\Git\Contract\GitServices::BRANCH_ARCHIVE_DIRECTORY: '%kernel.project_dir%/var/data/branch-archive'
     # The orchestrator's own private key, under var/data because that is where the image keeps its volume; it is never mounted into a job.
     !php/const Intakt\Core\Git\Contract\GitServices::SIGNING_KEY: '%kernel.project_dir%/var/data/keys/signing_key'
+    # The port the Caddyfile listens on when SERVER_PORT is unset, so the doctor's web server check asks where the server is.
+    env(SERVER_PORT): '7781'
 
 services:
     # default configuration for services in *this* file
@@ -47,6 +51,7 @@ services:
             # Defined in config/packages/ai.php beside the parameters they read, because the scan runs later and would replace those definitions.
             - '../src/Core/Budget/Domain/CeilingStartGuard.php'
             - '../src/Core/Ai/UseCase/ProbeCodexLogin/ProbeCodexLoginCommand.php'
+            - '../src/Core/Watcher/Contract/EligibilityLabels.php'
 
     # Wired here, because a Domain class carries no container attributes; its ceiling guard is wired in config/packages/ai.php.
     Intakt\Core\Budget\Contract\StartGuard: '@Intakt\Core\Budget\Domain\BudgetGuard'
@@ -75,6 +80,13 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+    # Measures the forge check's deadline, because a wall clock set back during the run would lengthen it.
+    Symfony\Component\Clock\MonotonicClock: ~
+    Intakt\Plugin\GitHubForge\Infrastructure\ForgeConnectionCheck:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
     Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'
@@ -137,6 +149,12 @@ services:
     Intakt\Core\Git\Domain\Mirrors:
         arguments:
             $directory: '%intakt.git.mirrors_directory%'
+    # The same folder rule as the mirrors, over the archive's own directory.
+    intakt.git.branch_archives:
+        class: Intakt\Core\Git\Domain\Mirrors
+        arguments:
+            $directory: '%intakt.git.branch_archive_directory%'
+    Intakt\Core\Git\Contract\BranchArchive: '@Intakt\Core\Git\UseCase\ArchiveBranch\MirrorBranchArchive'
 
     # Built from the forge's and the vendors' configuration, because its probes are values, not services.
     Intakt\Core\Outage\Infrastructure\ProbedConnectivity:
@@ -176,6 +194,8 @@ when@test:
         - { resource: '../tests/Core/Ai/services.yaml', ignore_errors: not_found }
         # The eligibility labels under a public test name, and the recorded reads intakt:queue:show makes after the listing, so a test and an install without GitHub prove the label and the queue the container hands out.
         - { resource: '../tests/Plugin/GitHubWorkSource/services.yaml', ignore_errors: not_found }
+        # The team roster under a public test name, so a test proves the accounts and states it reads from the config file before a page uses it.
+        - { resource: '../tests/Core/Dashboard/services.yaml', ignore_errors: not_found }
     services:
         # The development definition above, through its anchor, so an opted-in test profile keeps messenger also with APP_DEBUG=0.
         data_collector.messenger: *messenger_data_collector

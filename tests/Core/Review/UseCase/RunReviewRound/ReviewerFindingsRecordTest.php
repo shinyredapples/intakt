@@ -67,7 +67,7 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
     {
         $round = $this->round([self::FIRST => $this->changes($this->finding('a', severity: Severity::P1)), self::SECOND => $this->changes($this->finding('b', severity: Severity::P3))]);
 
-        self::assertSame(['role-1' => ['F1' => 'P1'], 'role-2' => ['F2' => 'P3']], $this->severitiesOf($round));
+        self::assertSame(['role-1' => ['F1' => Severity::P1], 'role-2' => ['F2' => Severity::P3]], $this->severitiesOf($round));
     }
 
     // The goalpost rule gives a repeat the severity its finding was first stored with before the verdict is stored, so both repeats count at that one.
@@ -77,7 +77,7 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
 
         $second = $this->round([self::FIRST => $this->changes($this->finding('F1', true, Severity::P3)), self::SECOND => $this->changes($this->finding('F1', true, Severity::P2))]);
 
-        self::assertSame(['role-1' => ['F1' => 'P1'], 'role-2' => ['F1' => 'P1']], $this->severitiesOf($second));
+        self::assertSame(['role-1' => ['F1' => Severity::P1], 'role-2' => ['F1' => Severity::P1]], $this->severitiesOf($second));
     }
 
     public function testAFailedReviewIsRecordedWithNoFindings(): void
@@ -117,7 +117,7 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, ?array<string, string>>
+     * @return array<string, ?array<string, Severity>>
      */
     private function severitiesOf(string $round): array
     {
@@ -155,7 +155,7 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
      */
     private function recordedOf(string $round): array
     {
-        return array_map(static fn (ReviewerFindingsRecorded $payload): array => $payload->findings, $this->payloadsByRole($round));
+        return array_map(static fn (ReviewerFindingsRecorded $payload): array => [...$payload->findings], $this->payloadsByRole($round));
     }
 
     /**

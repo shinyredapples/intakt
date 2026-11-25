@@ -55,7 +55,7 @@ final class CheckTrustCommandTest extends TestCase
 {
     public function testAWriterIsShownAsSteering(): void
     {
-        $tester = $this->execute(new RecordedTrust(), RecordedTrust::WRITER);
+        $tester = $this->execute(201, RecordedTrust::WRITER);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame("alice on acme/widget: writer, steers\n", $tester->getDisplay());
@@ -63,7 +63,7 @@ final class CheckTrustCommandTest extends TestCase
 
     public function testAForeignBotIsShownAsNotSteering(): void
     {
-        $tester = $this->execute(new RecordedTrust(), RecordedTrust::FOREIGN_BOT);
+        $tester = $this->execute(201, RecordedTrust::FOREIGN_BOT);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame("dependabot[bot] on acme/widget: foreign-bot, does not steer\n", $tester->getDisplay());
@@ -71,16 +71,16 @@ final class CheckTrustCommandTest extends TestCase
 
     public function testAFailedTokenExchangeExitsNonZeroWithTheReason(): void
     {
-        $tester = $this->execute(new RecordedTrust(401), RecordedTrust::WRITER);
+        $tester = $this->execute(401, RecordedTrust::WRITER);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('status 401', $tester->getDisplay());
     }
 
-    private function execute(RecordedTrust $github, string $account): CommandTester
+    private function execute(int $tokenStatus, string $account): CommandTester
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $http = $github->client();
+        $http = new RecordedTrust($clock, $tokenStatus)->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');

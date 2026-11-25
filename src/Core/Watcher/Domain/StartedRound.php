@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\Domain;
 
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 
 // The key is the head, so a second round for the same head cannot be stored, whichever worker tries it.
@@ -35,6 +37,11 @@ final class StartedRound
     #[ORM\Column(name: 'withdrawal_requested', options: ['default' => false])]
     private bool $withdrawalRequested = false;
 
+    // Kept on the round, because its verdicts are judged by the labels it started with; null on a round the release before this column stored, which started with none.
+    /** @var ?list<string> */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private readonly ?array $labels;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(length: 255)]
@@ -42,9 +49,13 @@ final class StartedRound
         OpenChange $started,
         #[ORM\Column(name: 'round_id', length: 36)]
         private readonly string $roundId,
+        Labels $labels = new Labels(),
     ) {
         $this->change = $started->id->value;
         $this->head = $started->head->hash;
+        $kept = [...$labels];
+        // Null for none, as on the rounds the release before this column stores, so both read alike.
+        $this->labels = [] === $kept ? null : $kept;
     }
 
     public function project(): string
@@ -65,6 +76,11 @@ final class StartedRound
     public function roundId(): string
     {
         return $this->roundId;
+    }
+
+    public function labels(): Labels
+    {
+        return new Labels(...$this->labels ?? []);
     }
 
     public function isStale(): bool

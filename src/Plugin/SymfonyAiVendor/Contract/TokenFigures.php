@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Contract;
 
-// One home for the figures the console and the dashboard show, so both show the same numbers for a round; the prompt holds the cached tokens too, because a cached prompt would otherwise read as a few tokens, and cached is what a vendor reports without telling reads from writes.
+// One home for the figures the console and the dashboard show, so both show the same numbers for a round; the prompt holds the cached tokens too, because a cached prompt would otherwise read as a few tokens, and cached is the part of a vendor's cache figure it does not tell apart into reads and writes.
 final readonly class TokenFigures
 {
     public function __construct(

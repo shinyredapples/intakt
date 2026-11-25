@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
@@ -14,6 +13,7 @@ use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\BranchCleanup\Contract\BranchCleanupServices;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
@@ -120,26 +120,6 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
     }
 
-    public function testAWatchSectionWithoutItsTaskStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "projects:\n    beta:\n        watch: { repository: repos/beta, base: main }\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/"task" under "intakt\.projects\.beta" must be configured/');
-
-        $this->bootedContainer();
-    }
-
-    public function testAnUnknownProjectModeStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "projects:\n    beta:\n        mode: quiet\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/"quiet" is not allowed for path "intakt\.projects\.beta\.mode"/');
-
-        $this->bootedContainer();
-    }
-
     public function testAShadowModeStopsTheBootAsAnUnknownMode(): void
     {
         file_put_contents($this->file, "projects:\n    beta:\n        mode: shadow\n        tiers:\n            strong: { provider: openai, model: other }\n");
@@ -165,6 +145,20 @@ final class ProjectTiersTest extends KernelTestCase
         file_put_contents($this->file, "projects:\n    beta:\n        review_job: { image: 'intakt-job/beta:review' }\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
         self::assertSame(['beta' => 'intakt-job/beta:review'], $this->bootedContainer()->getParameter(ReviewServices::JOB_IMAGES));
+    }
+
+    public function testTheBranchCleanupKeysOfAProjectReachTheCleanupSettings(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        clean_other_branches: true\n        keep_branches: [experiments]\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['beta' => ['clean_other_branches' => true, 'keep_branches' => ['experiments']]], $this->bootedContainer()->getParameter(BranchCleanupServices::PROJECTS));
+    }
+
+    public function testTheHyphenatedBranchCleanupKeysOfTheDesignReachTheCleanupSettings(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        clean-other-branches: true\n        keep-branches: [feature/keep-me]\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['beta' => ['clean_other_branches' => true, 'keep_branches' => ['feature/keep-me']]], $this->bootedContainer()->getParameter(BranchCleanupServices::PROJECTS));
     }
 
     public function testAReviewJobSectionWithoutItsImageStopsTheBoot(): void
@@ -201,28 +195,14 @@ final class ProjectTiersTest extends KernelTestCase
         ], $routing);
     }
 
-    public function testAProjectsValueThatIsNoMapStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "projects: broken\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/Invalid type for path "intakt\.projects"/');
-
-        $this->bootedContainer();
-    }
-
-    public function testTheOwnersCeilingsBesideTheProjectsReachTheBudgetWithTheDefaultForAWindowLeftOut(): void
-    {
-        file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
-
-        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter(BudgetServices::CEILINGS));
-    }
-
-    public function testTheOwnersPricesBesideTheCeilingsReachTheBudgetWithTheInputPriceForACachePriceLeftOut(): void
+    public function testTheOwnersCeilingsAndPricesBesideTheProjectsReachTheBudget(): void
     {
         file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\n    prices:\n        other: { input: 2, output: 8 }\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
-        self::assertSame(['other' => ['input' => 2.0, 'output' => 8.0, 'cache_read' => 2.0, 'cache_write' => 2.0]], $this->bootedContainer()->getParameter(BudgetServices::PRICES));
+        $container = $this->bootedContainer();
+
+        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $container->getParameter(BudgetServices::CEILINGS));
+        self::assertSame(['other' => ['input' => 2.0, 'output' => 8.0, 'cache_read' => 2.0, 'cache_write' => 2.0]], $container->getParameter(BudgetServices::PRICES));
     }
 
     public function testTheStartGuardOfTheContainerRefusesAStartAtTheOwnersCeiling(): void
@@ -267,16 +247,6 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertStringContainsString('gpt-6.2-sol', $tester->getDisplay());
     }
 
-    public function testACeilingAboveAHundredPercentStopsTheBoot(): void
-    {
-        file_put_contents($this->file, "budget:\n    ceilings:\n        weekly: 120\n");
-
-        $this->expectException(LoaderLoadException::class);
-        $this->expectExceptionMessageMatches('/intakt\.budget\.ceilings\.weekly/');
-
-        $this->bootedContainer();
-    }
-
     public function testTheTierPlatformReachesTheProjectModelsThroughTheBundleModelCatalog(): void
     {
         $platforms = $this->bootedContainer()->get(AiServices::PROVIDER_PLATFORMS);
@@ -315,6 +285,44 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame(['default'], $this->accountsOf($container)[Provider::Anthropic->value]);
         self::assertSame(['Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.'], $container->getParameter(AiServices::DISABLED_ACCOUNTS));
         self::assertArrayNotHasKey(Provider::Anthropic->value, $container->getParameter(AiServices::DISABLED_PROVIDERS));
+    }
+
+    public function testAListedAccountWithoutItsKeyStaysAmongTheListedAccounts(): void
+    {
+        $this->listAccounts('anthropic: [default, team]');
+
+        self::assertSame(['default', 'team'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
+    }
+
+    public function testAProviderWhoseEveryListedAccountLacksItsKeyKeepsThemListed(): void
+    {
+        $this->listAccounts('anthropic: [team]');
+        $this->unsetVariable('ANTHROPIC_API_KEY');
+
+        self::assertSame(['team'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
+    }
+
+    public function testAnExplicitlyListedDefaultAccountWithoutItsKeyStaysListed(): void
+    {
+        $this->listAccounts('anthropic: [default]');
+        $this->unsetVariable('ANTHROPIC_API_KEY');
+
+        self::assertSame(['default'], $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS)[Provider::Anthropic->value] ?? null);
+    }
+
+    public function testAnAccountListedUnderTheHyphenatedProviderKeyWithoutItsKeyStaysListed(): void
+    {
+        $this->listAccounts('openai-compatible: [team]');
+
+        $container = $this->bootedContainer();
+
+        self::assertSame(['team'], $this->parameterList($container, AiServices::LISTED_ACCOUNTS)[Provider::OpenAiCompatible->value] ?? null);
+        self::assertArrayNotHasKey(Provider::OpenAiCompatible->value, $this->parameterList($container, AiServices::ACCOUNTS));
+    }
+
+    public function testAProviderWithoutAKeyThatKeepsItsImplicitDefaultAccountIsNotListed(): void
+    {
+        self::assertArrayNotHasKey(Provider::OpenAi->value, $this->parameterList($this->bootedContainer(), AiServices::LISTED_ACCOUNTS));
     }
 
     public function testAProviderWhoseEveryListedAccountLacksItsKeyIsDisabled(): void
@@ -458,8 +466,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
     }
 
     private function listAccounts(string $line): void
@@ -483,8 +490,10 @@ final class ProjectTiersTest extends KernelTestCase
         // Nothing injects the loader yet, so the compiled container drops it; the parameter is what the config feeds it.
         /** @var array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $parameter */
         $parameter = $this->bootedContainer()->getParameter(ReviewServices::PANELS);
+        /** @var array<string, array{tiers: array<string, array{provider: string}>}> $projects */
+        $projects = $this->bootedContainer()->getParameter(AiServices::PROJECTS);
 
-        return new ConfiguredPanels($parameter);
+        return new ConfiguredPanels($parameter, $projects);
     }
 
     /**

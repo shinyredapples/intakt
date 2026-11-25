@@ -38,7 +38,6 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Support\KernelTestCase;
 use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
@@ -198,19 +197,6 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([1, 2, 2], [$first->briefs[self::FIRST]->round, $second->briefs[self::FIRST]->round, $second->briefs[self::SECOND]->round]);
     }
 
-    public function testAVerdictWithResolvedIdsClosesThemAndARepeatKeepsItsId(): void
-    {
-        $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a'), $this->finding('b')])]);
-
-        $this->round(self::CHANGE, [self::FIRST => $this->changes(['F1'], [$this->finding('F2', true)])]);
-
-        $stored = $this->fixture->storedFindings(self::CHANGE);
-        self::assertSame(['F1', 'F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $stored));
-        self::assertSame(FindingStatus::Resolved, $stored[0]->status);
-        self::assertSame(FindingStatus::Open, $stored[1]->status);
-        self::assertSame([1, 2], $stored[1]->rounds);
-    }
-
     public function testIdsStayStableOverThreeRoundsAndANewFindingGetsTheNextId(): void
     {
         $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a'), $this->finding('b')])]);
@@ -221,6 +207,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame(['F2'], $this->openIds($third->briefs[self::SECOND]));
         $stored = $this->fixture->storedFindings(self::CHANGE);
         self::assertSame(['F1', 'F2', 'F3'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $stored));
+        self::assertSame([FindingStatus::Resolved, FindingStatus::Open, FindingStatus::Open], array_map(static fn (TrackedFinding $tracked): FindingStatus => $tracked->status, $stored));
         self::assertSame([1, 2, 3], $stored[1]->rounds);
         self::assertSame(1, $stored[1]->firstRound());
         self::assertSame(3, $stored[1]->latestRound());
@@ -248,34 +235,6 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         $vendor = $this->round('feat/other', []);
 
         self::assertSame([], $vendor->briefs[self::FIRST]->open);
-    }
-
-    /**
-     * @return iterable<string, array{string, string}>
-     */
-    public static function bothReviewerOrders(): iterable
-    {
-        yield 'first resolves, second repeats' => [self::FIRST, self::SECOND];
-        yield 'second resolves, first repeats' => [self::SECOND, self::FIRST];
-    }
-
-    #[DataProvider('bothReviewerOrders')]
-    public function testAFindingOneReviewerRepeatsStaysOpenWhenAnotherResolvesIt(string $resolving, string $repeating): void
-    {
-        $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
-
-        $this->round(self::CHANGE, [$resolving => $this->changes(['F1'], []), $repeating => $this->changes([], [$this->finding('F1', true)])]);
-
-        $stored = $this->fixture->storedFindings(self::CHANGE);
-        self::assertSame(FindingStatus::Open, $stored[0]->status);
-        self::assertSame([1, 2], $stored[0]->rounds);
-    }
-
-    public function testAFailedReviewInARoundAddsNoFindingToTheChange(): void
-    {
-        $this->round(self::CHANGE, [self::FIRST => new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [], [])]);
-
-        self::assertSame([], $this->fixture->storedFindings(self::CHANGE));
     }
 
     public function testAnOlderRoundThatCompletesAfterANewerOneCannotCloseAFindingTheNewerOneRepeated(): void

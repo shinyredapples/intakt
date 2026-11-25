@@ -10,10 +10,12 @@ use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\P1Keys;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use Intakt\Core\Review\Infrastructure\StoredFindingNormalizer;
 use Intakt\Core\Review\Infrastructure\StoredJsonEncoder;
+use Intakt\Core\Review\Infrastructure\StoredP1KeysNormalizer;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -29,6 +31,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(FindingIds::class)]
 #[UsesClass(StoredJsonEncoder::class)]
+#[UsesClass(StoredP1KeysNormalizer::class)]
+#[UsesClass(P1Keys::class)]
 final class StoredSerializerFactoryTest extends KernelTestCase
 {
     // A started row outside a round, because it needs the enum, the name converter and the attribute context the container's serializer has.
@@ -49,6 +53,18 @@ final class StoredSerializerFactoryTest extends KernelTestCase
         self::assertInstanceOf(SerializerInterface::class, $stored);
 
         self::assertEquals($stored->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT), StoredSerializerFactory::create()->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT));
+    }
+
+    // A judge_done row with a populated p1_keys map, because only the stored P1 keys normalizer reads it.
+    public function testTheFactoryReadsAPopulatedP1KeysMapAsTheContainersStoredSerializerDoes(): void
+    {
+        $json = '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[],"p1_keys":{"F1":"abc","F2":null}}';
+        $stored = self::getContainer()->get('serializer.stored');
+        self::assertInstanceOf(SerializerInterface::class, $stored);
+        $read = StoredSerializerFactory::create()->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertSame('abc', $read->p1Keys->keyOf('F1'));
+        self::assertEquals($stored->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT), $read);
     }
 
     // A judge_done row with id lists, because only the stored finding ids normalizer writes them.
