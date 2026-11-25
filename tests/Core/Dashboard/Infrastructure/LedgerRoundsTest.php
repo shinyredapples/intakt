@@ -909,6 +909,13 @@ final class LedgerRoundsTest extends TestCase
         self::assertNull($review?->rounds[0]->findingsByReviewer);
     }
 
+    public function testARecordOfWhoReportedWhatWithASeverityOutsideTheEnumIsSkipped(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"x","findings":["F1"],"severities":{"F1":"P9"}}'));
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
     /**
      * @param list<string> $findings
      */
