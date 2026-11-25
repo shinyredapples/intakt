@@ -28,7 +28,7 @@ final readonly class BuilderPrompt
 
     private const string FIRST_BUILD = 'When the change is complete, write the pull request text to PR.md in the checkout root: a title in Conventional Commits form on the first line, a blank line, then the body.';
 
-    private const string BUG_TEST_FIRST = 'This task is a bug. Its first acceptance criterion is a regression test that fails today: write that test first, run it and watch it fail for the reason the task gives under "Today", commit it on its own, and only then fix the bug, so that the same test passes on your last commit. Keep what the task lists under "Must keep working" unchanged. Only when the task itself says the bug cannot be reproduced by a test, write no regression test and give the Evidence the other tasks give; never decide this on your own.';
+    private const string BUG_TEST_FIRST = 'This task is a bug. Its first acceptance criterion is a regression test that fails today: write that test first, run it and watch it fail for the reason the task gives under "Today", commit it on its own, and only then fix the bug, so that the same test passes on your last commit. Keep what the task lists under "Must keep working" unchanged. A head without such a test, or whose test also passes on the base, is refused before the push. A bug that no test can reproduce belongs in a task without the bug label; never decide that on your own.';
 
     private const string REWORK = 'This build is a rework of a published pull request: its commits are on the branch. Fix what the act list and the CI log below name, then edit the published pull request text: change only the lines this build changes, and write the result to PR.md in the checkout root.';
 

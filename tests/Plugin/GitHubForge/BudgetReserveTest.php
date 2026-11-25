@@ -296,7 +296,7 @@ final class BudgetReserveTest extends TestCase
         // The pool expires slots by the test clock, so the seconds a slot lives are the seconds the clock moves.
         $this->pool = new ArrayAdapter(clock: $this->clock);
         $this->locks = new LockFactory(new InMemoryStore());
-        $this->readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
+        $this->readings = new RateLimitReadings(new ArrayAdapter(clock: $this->clock), $this->clock, new LockFactory(new InMemoryStore()));
     }
 
     private function read(int $remaining): void
@@ -320,7 +320,7 @@ final class BudgetReserveTest extends TestCase
     private function reserve(string $installationId = '678', int $percent = FreshReadings::RESERVE_PERCENT, ?CacheItemPoolInterface $pool = null): BudgetReserve
     {
         $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
-        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, new RecordedInstallation('installation-secret')->client(), new NullLogger()), $installationId, $this->clock);
+        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, new RecordedInstallation($this->clock, 'installation-secret')->client(), new NullLogger()), $installationId, $this->clock);
 
         return new BudgetReserve($pool ?? $this->pool, $this->readings, $tokens, $this->clock, $this->locks, $percent);
     }

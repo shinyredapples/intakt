@@ -160,7 +160,7 @@ final class GitHubChangeLabelsTest extends TestCase
 
     private function labelsOver(IssueHistories $histories, LoggerInterface $logger): GitHubChangeLabels
     {
-        $this->identity = new RecordedTrust()->client();
+        $this->identity = new RecordedTrust(TrustChecks::clock())->client();
         $wiring = TrustChecks::wiring(new MockHttpClient($this->answer(...), 'https://api.github.com'));
         $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]);
         $outvoted = new OutvotedLabels(new GitHubLabelWrites($wiring->calls, $wiring->tokens), new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), $logger);
