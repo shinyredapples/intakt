@@ -54,7 +54,7 @@ final readonly class RoundStatusMirror
             $locked = $lock->acquire(false);
             // Boundary: a lock store that fails must not interrupt the caller, and nobody writes without the lock.
         } catch (Throwable $failure) {
-            $this->logger->warning('The status label of {change} of {project} was not reconciled, its lock failed: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => self::reasonOf($failure)]);
+            $this->logger->warning('The status label of {change} of {project} was not reconciled, its lock failed: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $this->reasonOf($failure)]);
 
             return false;
         }
@@ -72,12 +72,12 @@ final readonly class RoundStatusMirror
             $lock->release();
             // Boundary: the lock expires on its own, so a release that fails only delays the next writer.
         } catch (Throwable $failure) {
-            $this->logger->warning('The status label lock of {change} of {project} was not released: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => self::reasonOf($failure)]);
+            $this->logger->warning('The status label lock of {change} of {project} was not released: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $this->reasonOf($failure)]);
         }
     }
 
     // Symfony wraps the store's failure in a message that names only the hashed key, so the cause says more.
-    private static function reasonOf(Throwable $failure): string
+    private function reasonOf(Throwable $failure): string
     {
         return ($failure->getPrevious() ?? $failure)->getMessage();
     }
