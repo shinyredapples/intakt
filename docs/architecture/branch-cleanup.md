@@ -1,10 +1,10 @@
 ## Branch cleanup
 
-Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far the forge side exists (the `ForgeBranches` contract, its local implementation and its GitHub implementation), the cleanup rules (a pure rule chain that decides on facts it is given) and the archive of deleted branch heads. No command, job or rule calls the forge or the archive yet, and nothing in the container builds a forge implementation; pushing an archived commit back and restore, and the weekly run that applies the verdicts, come in later parts of #24.
+Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far the forge side exists (the `ForgeBranches` contract, its local implementation and its GitHub implementation), the cleanup rules (a pure rule chain that decides on facts it is given) the archive of deleted branch heads, and the restore of a branch by pushing its archived commit back to the forge. No command, job or rule calls the forge or the archive yet, and nothing in the container builds a forge implementation; the restore command and its use case, and the weekly run that applies the verdicts, come in later parts of #24.
 
 ### In short
 
-`ForgeBranches` lists a repository's branches, reads each branch's pull request, tells whether a person committed to it, and deletes it only at the head it was listed with. A read that fails throws, so a failure never reads as "no pull request" or "no commit by a person". The local forge runs git and deletes with `update-ref` at the expected head while holding every worktree's locks. The GitHub forge reads every page of the REST answers and checks each field; GitHub's delete takes no expected head, so it reads the branch right before deleting and refuses one that moved, accepting the short window between the two.
+`ForgeBranches` lists a repository's branches, reads each branch's pull request, tells whether a person committed to it, and deletes it only at the head it was listed with. A read that fails throws, so a failure never reads as "no pull request" or "no commit by a person". The local forge runs git and deletes with `update-ref` at the expected head while holding every worktree's locks. The GitHub forge reads every page of the REST answers and checks each field; GitHub's delete takes no expected head, so it reads the branch right before deleting and refuses one that moved, accepting the short window between the two. A restore on either forge git-pushes the archived commit, never makes a ref from a commit id, and refuses a branch that exists.
 
 ### Cleanup rules
 
@@ -30,14 +30,15 @@ The archive keeps every deleted branch head in a bare repository of its own on t
 
 ### The contract
 
-`Plugin/Forge/Contract/ForgeBranches` is bound to one repository, like `Forge`, and has four operations:
+`Plugin/Forge/Contract/ForgeBranches` is bound to one repository, like `Forge`, and has five operations:
 
 - `branches()` returns every branch as a `ForgeBranch`: its `name` (without `refs/heads/`), its `head` (`CommitId`), and whether it `isDefault`, `isProtected` or `isSymbolic` (a ref that names another branch). `isRelease()` is true for a branch named `release` or `releases`, or starting with `release/`, `releases/`, `release-` or `releases-` (`ForgeBranch::isReleaseName()`), so both forges report release branches the same way. `isDeletable()` is false for a default, protected, release or symbolic branch, so the rules can never pick one.
 - `changeOf(ForgeBranch)` returns the branch's pull request as a `BranchChange`: its `state` (`BranchChangeState`: `open`, `merged` or `closed-unmerged`) and its `labels` (`hasLabel('keep')`), or `null` when the branch has none (on GitHub also when no pull request holds its newest commits, see below).
 - `hasCommitByAPerson(ForgeBranch, intaktIdentity)` is true when a commit on the branch that the default branch does not hold has an author or a committer other than Intakt's identity, which is what claims a branch with no pull request.
 - `delete(ForgeBranch)` deletes the branch only at the head the `ForgeBranch` carries, so a branch that moved since the listing is kept.
+- `restore(BranchRestore)` pushes an archived head back as the branch; `BranchRestore` holds the project (which names the archive), the branch name and the head (`CommitId`). See [Restore](#restore).
 
-A read that fails or cannot answer throws `ForgeReadFailed`; it never counts as "no pull request" or "no commit by a person". A delete that is refused or fails throws `ForgeWriteFailed`. Calls into the contract use no named arguments.
+A read that fails or cannot answer throws `ForgeReadFailed`; it never counts as "no pull request" or "no commit by a person". A delete or a restore that is refused or fails throws `ForgeWriteFailed`. Calls into the contract use no named arguments.
 
 Release names are matched with their letter case: `Release/1.0` is not a release name, and it is deletable unless something else keeps it.
 
@@ -115,10 +116,30 @@ Before the write, the id must name a commit in the archive (`<id>^{commit}`), so
 
 Any failure (no mirror, a commit the mirror lacks, an id that is not a commit, a mirror `HardenedGit` refuses because of its `info/attributes`, a git error) is a `BranchNotArchived`.
 
-The archive belongs to Intakt alone: it is never cloned or fetched from a remote and never pushed, so a remote ref shaped like `refs/intakt/archive/*` is never an archive. `DeleteBranchAfterArchive` is the delete path: it archives, and only after that returns does it call `ForgeBranches::delete()`; when archiving fails, the forge is not called.
+The archive belongs to Intakt alone: it is never cloned or fetched from a remote and its archive refs are never pushed (a [restore](#restore) pushes one archived commit to a branch, never a `refs/intakt/archive/*` ref), so a remote ref shaped like `refs/intakt/archive/*` is never an archive. `DeleteBranchAfterArchive` is the delete path: it archives, and only after that returns does it call `ForgeBranches::delete()`; when archiving fails, the forge is not called.
+
+### Restore
+
+A restore pushes the archived commit and its objects to the forge branch with git (owner decision 3 of 2026-11-24 on #24). It never makes a ref from a commit id, neither with `update-ref` nor with GitHub's ref API, because the forge may already have collected a commit that nothing referenced. It never overwrites a branch that exists.
+
+**The push.** `Core/Git/Contract/ArchivedHeadPush::push(ArchivedHead, remote)` is implemented by `UseCase/PushBranch/PushArchivedHead`. It runs every git call through `BranchGit`, as the [branch push](branch-push.md) does, but signs nothing, merges nothing and opens no pull request. In order:
+
+1. The archive is `var/data/branch-archive/<project>.git` (the archive's folder rule, `GitServices::BRANCH_ARCHIVES`). The branch name must pass `git check-ref-format refs/heads/<name>`, and `git cat-file -t <head>` in the archive must say `commit`.
+2. It takes the build push's lock of the same project and branch (`PushLockName`), without waiting, so a build push and a restore of one branch never run together. A busy lock is "another push of this branch is running".
+3. It refuses a remote the archive's config rewrites, with the same check as the build push (`BranchGit::refuseRewrittenRemote()`).
+4. It reads the branch with `ls-remote` (`BranchGit::remoteTip()`) and refuses one that exists.
+5. It runs `git push --quiet --force-with-lease=refs/heads/<name>: -- <remote> <head>:refs/heads/<name>`. The empty lease lets the push only create the branch, so a branch made after step 4 is refused even when the head would fast-forward it.
+6. It reads the branch again and requires it at the head.
+
+Every refusal and failure is `BranchNotPushed`, whose reason never names the remote, because the remote can hold a credential.
+
+**On the forges.** Each forge reads the branch first and refuses one that exists (`it exists, and a restore never overwrites a branch.`), then calls the push with its own remote. A refusal or failure, the push's included, is a `ForgeWriteFailed` starting `The branch "<name>" was not restored:`.
+
+- `LocalForgeBranches` reads the branch with `git show-ref --exists refs/heads/<name>` and pushes to the repository's own path.
+- `GitHubForgeBranches` reads `GET /repos/<owner>/<repo>/branches/<name>`: `200` is a branch that exists (also a renamed branch GitHub redirects to its new name), `404` a missing one, and any other status a refusal. It pushes to `https://x-access-token:<installation token>@github.com/<owner>/<repo>.git`, with the App's installation token as the password. A rate-limited read throws `ForgeRateLimited`.
 
 ### Tests
 
-The archive tests are in `tests/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchiveTest.php`, against temporary repositories.
+The archive tests are in `tests/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchiveTest.php`, against temporary repositories. The restore push is tested in `tests/Core/Git/UseCase/PushBranch/PushArchivedHeadTest.php`, against temporary repositories where git has collected the deleted branch's commit, with a forced order for a branch made between the check and the push. The restore on the forges is tested in `LocalForgeBranchesTest` (a real archive, delete and collection) and `GitHubForgeBranchesTest` (recorded answers, the push replaced by a mock of `ArchivedHeadPush`).
 
 The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` `tests/Plugin/Forge/Contract/ForgeBranchTest.php`, and for the rules `tests/Core/BranchCleanup/Domain/BranchRulesTest.php`, `BranchWarningTest.php`, `tests/Core/BranchCleanup/Infrastructure/BranchCleanupConfigurationTest.php` and `CleanupPoliciesTest.php`, and for the project-file wiring `tests/Application/ProjectTiersTest.php`.
