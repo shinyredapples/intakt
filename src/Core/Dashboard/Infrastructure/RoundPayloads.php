@@ -109,7 +109,7 @@ final readonly class RoundPayloads
 
     public function reviewerFindingsOf(RecordedEvent $recorded): ?ReviewerFindingsRecorded
     {
-        // A severity outside the enum leaves the severities unavailable, because the reporter's finding ids must still count for them.
+        // A severity outside the enum leaves the severities unavailable, because the reporter's finding ids must still count when its severities cannot be read.
         return $this->payloads->of($recorded, ReviewerFindingsRecorded::class)
             ?? $this->payloads->ofWithout($recorded, ReviewerFindingsRecorded::class, new PayloadDefaults(severities: null));
     }
