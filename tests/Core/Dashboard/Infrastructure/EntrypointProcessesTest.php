@@ -188,7 +188,7 @@ final class EntrypointProcessesTest extends TestCase
     {
         $this->startEntrypoint();
         $children = array_keys($this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]));
-        // Left stopped as a test that fails between its SIGSTOP and its SIGCONT leaves it.
+        // Left stopped, because that is how a test that fails between its SIGSTOP and its SIGCONT leaves it.
         $this->entrypoint->signal(self::STOP);
 
         try {
