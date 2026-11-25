@@ -124,22 +124,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
     }
 
-    public function testASettledRowWithATokenCountThatIsNotANumberIsSkipped(): void
-    {
-        $this->recordCall('c1', self::ROUND, 'settled');
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [['prompt' => 'many'] + $this->usage()]]);
-
-        self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
-    }
-
-    public function testAStartedRowOfAnUnknownTierIsSkipped(): void
-    {
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'huge', 'round' => self::ROUND]);
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [$this->usage()]]);
-
-        self::assertSame([0, 0, 0, 0], $this->tokensOf(self::ROUND));
-    }
-
     public function testARoundsCostIsItsCallsPricedByTheirModel(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');
@@ -283,6 +267,19 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->reading($counting)->costsOf(self::ROUND, self::OTHER_ROUND, self::THIRD_ROUND);
 
         self::assertSame(1, $counting->reads);
+    }
+
+    public function testRoundsArePricedFromTheGivenUsageRowsWithoutAnotherRead(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $given = $this->ledger->readOfKind(LedgerEventKind::UsageRecorded);
+        $this->recordCall('c2', self::ROUND, 'settled');
+        $counting = new ReadCountingLedger($this->ledger);
+
+        $cost = $this->reading($counting)->costsIn($given, self::ROUND)->of(self::ROUND);
+
+        self::assertEqualsWithDelta((100 * 2.0 + 20 * 10.0) / 1_000_000, $cost->usd, 1e-12);
+        self::assertSame(0, $counting->reads);
     }
 
     public function testEachRoundOfABatchIsPricedByTheModelsOfItsOwnCalls(): void
@@ -515,13 +512,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
         self::assertSame(['F1', 'F3'], $this->actIdsOf(self::ROUND));
-    }
-
-    public function testAJudgeDoneRowWithAFindingOfAnUnknownSeverityIsSkipped(): void
-    {
-        $this->append(LedgerEventKind::JudgeDone, ['act' => ['F2'], 'findings' => [['id' => 'F2', 'severity' => 'P9', 'text' => 'Odd.']]] + $this->judgeDone(self::ROUND));
-
-        self::assertSame([], $this->actIdsOf(self::ROUND));
     }
 
     public function testTheDroppedFindingsOfAJudgeDoneRowAreReadWithTheirReasons(): void

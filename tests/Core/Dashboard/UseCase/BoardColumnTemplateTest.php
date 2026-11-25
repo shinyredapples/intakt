@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Tests\Support\KernelTestCase;
@@ -20,7 +21,7 @@ final class BoardColumnTemplateTest extends KernelTestCase
         self::assertInstanceOf(Environment::class, $twig);
 
         $html = $twig->render('dashboard/_board_column.html.twig', [
-            'board' => new Board([]),
+            'board' => new Board(new DateTimeImmutable('2026-11-01T10:30:00+00:00'), []),
             'column' => BoardColumn::Done,
             'limit' => Board::PAGE_LIMIT,
         ]);

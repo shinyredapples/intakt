@@ -22,7 +22,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
-// Every section comes from one read of the ledger, so one head never counts as both running and failing; a configured project the ledger never named still gets its card.
+// Every figure comes from one read of the ledger, so one head never counts as both running and failing and a cost never holds a call its tokens lack; the replay marks, how an unjudged round ended and the tiers are read apart. A configured project the ledger never named still gets its card.
 final readonly class ProjectCards
 {
     private const int RECENT = 3;
@@ -50,7 +50,7 @@ final readonly class ProjectCards
             $name,
             array_values(array_filter($reviews, static fn (Review $review): bool => $review->project === $name)),
             array_values(array_filter($failing, static fn (FailingHead $head): bool => $head->project === $name)),
-        ), $this->namesOf($reviews, $failing));
+        ), $this->namesOf($reviews));
     }
 
     /**
@@ -120,20 +120,19 @@ final readonly class ProjectCards
     }
 
     /**
-     * @param list<Review>      $reviews
-     * @param list<FailingHead> $failing
+     * @param list<Review> $reviews
      *
      * @return list<string>
      */
-    private function namesOf(array $reviews, array $failing): array
+    // Only names the project filter lists too, because a card links to the filter's choice of its project; a failing head of any other project adds no card, because the filter runs on every page and would need one more read of the ledger for it.
+    private function namesOf(array $reviews): array
     {
         $names = [
             ...$this->configured->names(),
             ...array_map(static fn (Review $review): string => $review->project, $reviews),
-            ...array_map(static fn (FailingHead $head): string => $head->project, $failing),
         ];
         $names = array_values(array_unique($names));
-        sort($names, SORT_STRING);
+        sort($names, SORT_NATURAL | SORT_FLAG_CASE);
 
         return $names;
     }

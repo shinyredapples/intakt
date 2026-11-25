@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase\ShowStatus;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Dashboard\Infrastructure\MessageQueues;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\ProjectStatuses;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\ShowStatusCommand;
@@ -92,8 +91,7 @@ final class ShowStatusCommandTest extends KernelTestCase
 
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $queue = self::getContainer()->get('messenger.transport.async');
         self::assertInstanceOf(DoctrineTransport::class, $queue);
         $queue->setup();

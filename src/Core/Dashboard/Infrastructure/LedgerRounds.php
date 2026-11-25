@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\Timeline;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -37,6 +38,7 @@ use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -68,6 +70,10 @@ final class LedgerRounds
 
     // Taken on the first unjudged round of this read, because a read's rounds all share one look at the failure transport.
     private ?RoundEndingLookup $lookup = null;
+
+    // Kept beside the tokens counted from them, because a round's cost must come from the rows its tokens come from.
+    /** @var list<RecordedEvent> */
+    private array $usage = [];
 
     private readonly LedgerTokens $tokens;
 
@@ -222,6 +228,7 @@ final class LedgerRounds
 
     private function addUsage(RecordedEvent $recorded): void
     {
+        $this->usage[] = $recorded;
         $usage = $this->payloads->usageOf($recorded);
 
         if (null !== $usage) {
@@ -263,8 +270,8 @@ final class LedgerRounds
         $row = $this->payloads->reviewerFindingsOf($recorded);
 
         if ($row instanceof ReviewerFindingsRecorded) {
-            $this->findingsByReviewer[$row->round][$row->reviewer] = $row->findings;
-            $this->severitiesByReviewer[$row->round][$row->reviewer] = $row->severities;
+            $this->findingsByReviewer[$row->round][$row->reviewer] = [...$row->findings];
+            $this->severitiesByReviewer[$row->round][$row->reviewer] = null === $row->severities ? null : array_map(static fn (Severity $severity): string => $severity->value, $row->severities);
         }
     }
 
@@ -347,13 +354,13 @@ final class LedgerRounds
         return Decision::Blocked === $decision ? self::UNRECORDED_REASON : null;
     }
 
-    // Priced together, because each pricing reads every usage row of the ledger.
+    // Priced together, because each pricing goes through every usage row of the read.
     /**
      * @param list<ReviewedRound> $rounds
      */
     private function costsOf(array $rounds): RoundCostList
     {
-        return $this->costs->costsOf(...array_map(static fn (ReviewedRound $round): string => $round->round, $rounds));
+        return $this->costs->costsIn(new RecordedEvents($this->usage), ...array_map(static fn (ReviewedRound $round): string => $round->round, $rounds));
     }
 
     /**

@@ -54,7 +54,7 @@ Trends mostly looks back. For the present moment, open **Now** in the menu. The 
 ![The board in dark mode: the sleeping octopus above the status line "Quiet, nobody working" with an arrow to the Status page, then the columns Waiting on you, In review and Done](../assets/guide/board.webp)
 
 1. Click the status line.
-2. The **Status** page lists every reviewer still at work, with its role, its change, its project and its round.
+2. The **Status** page lists every reviewer still at work, with its role, its change, its project and its round. A reviewer that started an hour ago or more is left out, since no review runs that long.
 3. Click a lane to open the review it is working on.
 
 When nobody works, the page says so: "No reviewer is working right now: reviewers appear here while they review a change".

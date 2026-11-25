@@ -132,7 +132,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         self::assertSame('1,500', $this->figuresOf($crawler, 'alpha')[0]);
     }
 
-    public function testTheCardsPriceEveryRoundFromOneReadOfTheUsageHistory(): void
+    public function testTheCardsPriceEveryRoundFromTheRowsOfTheirOneRead(): void
     {
         self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
         $this->ledger->startRoundOf('feat/a', 'round-1', 1);
@@ -145,7 +145,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
 
         self::assertSame('2,640', $this->figuresOf($page, 'alpha')[0]);
         self::assertStringStartsWith('0.0104 USD', $page->filter('[data-project="alpha"] .stat')->text());
-        self::assertSame(1, $this->ledger->readsOfKind(LedgerEventKind::UsageRecorded));
+        self::assertSame(0, $this->ledger->readsOfKind(LedgerEventKind::UsageRecorded));
     }
 
     public function testTheCardsReadTheLedgerOnce(): void
@@ -176,6 +176,54 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         self::assertCount(1, $reviews->filter('#projfilter option[value="idle-project"][selected]'));
     }
 
+    public function testAFailingHeadOfAProjectNeitherConfiguredNorReviewedAddsNoCard(): void
+    {
+        $this->browser->disableReboot();
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->failHeadBecause('old-project', 'pr-7', 'the checks timed out');
+
+        $page = $this->browser->request('GET', '/projects');
+
+        self::assertSame(['alpha'], $this->namesOn($page));
+    }
+
+    public function testEveryCardOpensTheReviewsWithItsProjectChosen(): void
+    {
+        $this->browser->disableReboot();
+        $this->ledger->startRound('round-1', 'zeta');
+        $this->ledger->startRound('round-2', 'Alpha');
+        $this->ledger->failHeadBecause('old-project', 'pr-7', 'the checks timed out');
+        $cards = $this->browser->request('GET', '/projects')->filter('.pblock');
+        $links = $cards->each(static fn (Crawler $card): string => (string) $card->filter('.plink')->attr('href'));
+
+        $chosen = array_map(fn (string $href): string => (string) $this->browser->request('GET', $href)->filter('#projfilter option[selected]')->attr('value'), $links);
+
+        self::assertSame(['Alpha', 'zeta'], $chosen);
+    }
+
+    public function testTheCardsComeInTheOrderOfTheProjectFilter(): void
+    {
+        $this->ledger->startRound('round-1', 'zeta');
+        $this->ledger->startRound('round-2', 'Beta');
+        $this->ledger->startRound('round-3', 'item10');
+        $this->ledger->startRound('round-4', 'item2');
+
+        self::assertSame(['Beta', 'item2', 'item10', 'zeta'], $this->namesOn($this->browser->request('GET', '/projects')));
+    }
+
+    public function testACardKeepsItsIdWhenAProjectSortedBeforeItGetsACard(): void
+    {
+        $this->browser->disableReboot();
+        $this->ledger->startRound('round-1', 'zeta');
+        $before = $this->browser->request('GET', '/projects')->filter('article[data-project="zeta"]')->attr('id');
+        $this->ledger->startRound('round-2', 'alpha');
+
+        $cards = $this->browser->request('GET', '/projects')->filter('article[data-project]');
+
+        self::assertSame($before, $cards->filter('[data-project="zeta"]')->attr('id'));
+        self::assertNotSame($before, $cards->filter('[data-project="alpha"]')->attr('id'));
+    }
+
     public function testAProjectWhoseTiersDoNotResolveStillGetsItsCardWithTheProblem(): void
     {
         $this->ledger->startRound('round-1', 'unmapped');
@@ -183,7 +231,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/projects');
 
         self::assertResponseIsSuccessful();
-        self::assertCount(3, $crawler->filter('[data-project="unmapped"] .tiers li'));
+        self::assertSame(array_map(static fn (Tier $tier): string => ucfirst($tier->value).' '.'Project "unmapped" is not configured.', Tier::cases()), $crawler->filter('[data-project="unmapped"] .tiers li')->each(static fn (Crawler $line): string => $line->text()));
     }
 
     public function testACredentialInATierProblemIsRedactedOnTheCard(): void
@@ -255,9 +303,26 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
     {
         $this->ledger->startRound('round-1', 'alpha');
 
-        $link = $this->browser->request('GET', '/projects')->filter('.page-head .actions a');
+        $link = $this->browser->request('GET', '/projects')->filter('.page-head .actions a.btn.secondary');
 
         self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
+    }
+
+    public function testOnceAProjectIsListedThePageHeadsPrimaryButtonAddsAProject(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $primary = $this->browser->request('GET', '/projects')->filter('main .btn.primary');
+
+        self::assertSame(['Add a project'], $primary->each(static fn (Crawler $a): string => $a->text()));
+        self::assertSame('/projects/new', $primary->attr('href'));
+    }
+
+    public function testBeforeAProjectIsListedThePageOffersSetupAndNotAddAProject(): void
+    {
+        $page = $this->browser->request('GET', '/projects');
+
+        self::assertCount(0, $page->filter('a[href="/projects/new"]'));
     }
 
     public function testWithoutAnyProjectThePageSaysSoAndLinksTheFirstRunPage(): void

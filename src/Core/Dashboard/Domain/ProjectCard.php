@@ -32,6 +32,12 @@ final readonly class ProjectCard
     ) {
     }
 
+    // From the name and never the position, because a push that adds a card before this one must not give it another project's id; hashed, because a name may hold characters an id may not.
+    public function elementId(): string
+    {
+        return 'project-'.hash('sha256', $this->name);
+    }
+
     public function isFailing(): bool
     {
         return $this->failing > 0;
