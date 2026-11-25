@@ -24,6 +24,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\ClockInterface;
 
 // The query as the container wires it, so the settings and the scoped client are proven together, with GitHub's recorded answers.
 #[CoversClass(GitHubAuthorTrust::class)]
@@ -75,7 +76,9 @@ final class AuthorTrustOnTheContainerTest extends KernelTestCase
     public function testTheWiredQueryAnswersFromRecordedAnswers(string $pullRequest, bool $trusted): void
     {
         self::bootKernel();
-        $github = RecordedTrust::onTheWallClock()->client();
+        $clock = self::getContainer()->get(ClockInterface::class);
+        self::assertInstanceOf(ClockInterface::class, $clock);
+        $github = new RecordedTrust($clock)->client();
         // Both clients, so no request leaves the test: the token door uses the default client, the trust reads the scoped one.
         self::getContainer()->set('http_client', $github);
         self::getContainer()->set('github.client', $github);

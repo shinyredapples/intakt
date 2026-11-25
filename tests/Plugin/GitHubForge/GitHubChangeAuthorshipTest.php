@@ -103,7 +103,7 @@ final class GitHubChangeAuthorshipTest extends TestCase
 
     public function testAFailedTokenExchangeFailsTheReadWithoutReadingThePullRequest(): void
     {
-        $this->github = new RecordedTrust(401);
+        $this->github = new RecordedTrust($this->clock, 401);
 
         try {
             $this->isCreatedByIntakt(RecordedTrust::PULL_BY_OWN_IDENTITY);
@@ -125,9 +125,9 @@ final class GitHubChangeAuthorshipTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->github = new RecordedTrust();
         $this->key = AppKey::generate();
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->github = new RecordedTrust($this->clock);
     }
 
     private function isCreatedByIntakt(string $change): bool

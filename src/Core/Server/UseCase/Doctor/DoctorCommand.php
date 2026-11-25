@@ -12,6 +12,7 @@ use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -23,22 +24,26 @@ final readonly class DoctorCommand
     private const string THREADS = 'worker threads';
     private const string METRICS = 'server metrics';
     private const string HUB = 'Mercure hub';
+    private const string FORGE = 'forge';
     private const string REFUSED_FIX = 'set FRANKENPHP_ADMIN_URL to plain http on localhost, for example http://localhost:2019';
 
     public function __construct(
         private ServerStatus $status,
+        private ForgeConnection $forge,
     ) {
     }
 
     public function __invoke(OutputInterface $output): int
     {
         $checks = $this->checks();
-        foreach ($checks as $name => $check) {
+        $forge = $this->forge->run();
+        $lines = [...array_map($this->line(...), array_keys($checks), $checks), $this->render(self::FORGE, $forge->problem, $forge->fix)];
+        foreach ($lines as $line) {
             // Raw, because a reason is outside text and must not be read as console markup.
-            $output->writeln($this->line($name, $check), OutputInterface::OUTPUT_RAW);
+            $output->writeln($line, OutputInterface::OUTPUT_RAW);
         }
 
-        return array_all($checks, static fn (InfrastructureCheck $check): bool => $check->passes())
+        return $forge->passes() && array_all($checks, static fn (InfrastructureCheck $check): bool => $check->passes())
             ? Command::SUCCESS
             : Command::FAILURE;
     }
@@ -64,9 +69,14 @@ final readonly class DoctorCommand
      */
     private function line(string $name, InfrastructureCheck $check): string
     {
-        $line = $check->passes()
+        return $this->render($name, $check->problem, $check->fix);
+    }
+
+    private function render(string $name, ?string $problem, ?string $fix): string
+    {
+        $line = null === $problem
             ? 'pass: '.$name
-            : sprintf('fail: %s: %s; fix: %s', $name, $check->problem, $check->fix);
+            : sprintf('fail: %s: %s; fix: %s', $name, $problem, $fix);
 
         return $this->oneLine($line);
     }

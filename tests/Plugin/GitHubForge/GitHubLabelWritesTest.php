@@ -41,7 +41,7 @@ final class GitHubLabelWritesTest extends TestCase
 
     private function writesAnswering(int $status): GitHubLabelWrites
     {
-        $identity = new RecordedTrust()->client();
+        $identity = new RecordedTrust(TrustChecks::clock())->client();
         $wiring = TrustChecks::wiring(new MockHttpClient(function (string $method, string $url, array $options) use ($identity, $status): ResponseInterface {
             $path = (string) parse_url($url, PHP_URL_PATH);
             if (!str_contains($path, '/issues/7/labels/')) {
