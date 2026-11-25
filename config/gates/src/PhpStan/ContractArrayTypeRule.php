@@ -21,6 +21,8 @@ use PHPStan\Reflection\ParametersAcceptor;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Type\ConditionalType;
+use PHPStan\Type\ConditionalTypeForParameter;
 use PHPStan\Type\FileTypeMapper;
 use PHPStan\Type\Type;
 use PHPStan\Type\UnionType;
@@ -176,11 +178,15 @@ final readonly class ContractArrayTypeRule implements Rule
         return array_values(array_map(fn (array $labeled): IdentifierRuleError => $this->finding($labeled[0].' '.$this->described($labeled[1]), $line), $refused));
     }
 
-    // a nullable or union type crosses the boundary in each of its members, so each member is judged on its own
+    // a nullable or union type crosses the boundary in each of its members, and a conditional type in each of its branches, so each is judged on its own
     private function isRefused(Type $type): bool
     {
         if ($type instanceof UnionType) {
             return array_any($type->getTypes(), $this->isRefused(...));
+        }
+
+        if ($type instanceof ConditionalType || $type instanceof ConditionalTypeForParameter) {
+            return $this->isRefused($type->getIf()) || $this->isRefused($type->getElse());
         }
 
         return $type->isArray()->yes() && !$this->isListOrStringMapOfObjects($type);

@@ -199,6 +199,22 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('contract-array-own-interface', 'src/Core/Sample/Contract/Exported.php:16 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Exported::jsonSerialize() returns array{note: string}');
     }
 
+    public function testAConditionalReturnExposingAListOfIntsOnOneBranchFailsStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Sample/Contract/Lookup.php', "<?php\nnamespace Intakt\\Core\\Sample\\Contract;\ninterface Lookup {\n    /** @return (\$name is '' ? list<int> : \\stdClass) */\n    public function find(string \$name): array|\\stdClass;\n}\n");
+
+        self::assertStringContainsString('Method Intakt\Core\Sample\Contract\Lookup::find() returns', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAConditionalReturnOfAllowedBranchesPassesStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Sample/Contract/Lookup.php', "<?php\nnamespace Intakt\\Core\\Sample\\Contract;\ninterface Lookup {\n    /** @return (\$name is '' ? list<\\stdClass> : \\stdClass) */\n    public function find(string \$name): array|\\stdClass;\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
     protected function ruleFor(string $root): ContractArrayTypeRule
     {
         return new ContractArrayTypeRule($root, self::getContainer()->getByType(FileTypeMapper::class));
