@@ -45,6 +45,17 @@ final class AppJwtTest extends TestCase
         }
     }
 
+    public function testAKeyThatIsNotRsaDoesNotSign(): void
+    {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        self::assertNotFalse($key);
+        openssl_pkey_export($key, $pem);
+
+        $this->expectException(InstallationTokenNotMinted::class);
+
+        (void) new AppJwt('12345', (string) $pem, new MockClock())->sign();
+    }
+
     /**
      * @return array<mixed>
      */

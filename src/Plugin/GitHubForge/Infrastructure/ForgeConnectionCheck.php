@@ -42,7 +42,7 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
         #[SensitiveParameter]
         private string $privateKey,
     ) {
-        $this->http = $http->withOptions(['timeout' => self::TIMEOUT_SECONDS, 'max_duration' => self::MAX_DURATION_SECONDS, 'max_retries' => 0]);
+        $this->http = $http->withOptions(['timeout' => self::TIMEOUT_SECONDS, 'max_retries' => 0]);
     }
 
     public function run(): ForgeConnectionVerdict
@@ -69,7 +69,14 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
                 'set GITHUB_APP_ID to the App ID, or empty the installation ID and the private key as well to run without an App',
             );
         }
-        if (!$appEmpty && '' === trim($this->installationId)) {
+        if ($appEmpty) {
+            return null;
+        }
+        // A number, because GitHub numbers its Apps, and outside text in the token must not end the check with an encoding error.
+        if (1 !== preg_match('/\A\d+\z/', trim($this->appId))) {
+            return ForgeConnectionVerdict::failed('GITHUB_APP_ID is not a number', 'set GITHUB_APP_ID to the App ID shown on the settings page of the App on GitHub');
+        }
+        if ('' === trim($this->installationId)) {
             return ForgeConnectionVerdict::failed('GITHUB_APP_INSTALLATION_ID is empty', 'set GITHUB_APP_INSTALLATION_ID to the installation ID of the App');
         }
 
@@ -114,11 +121,12 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
 
     private function readBackOf(): InstallationReadBack
     {
+        $http = new DeadlineHttpClient($this->http, $this->clock, $this->clock->now()->modify('+'.self::MAX_DURATION_SECONDS.' seconds'));
         $readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
-        $tokens = new InstallationTokens(new InstallationTokenMinter($this->jwt, $this->http, $this->logger), $this->installationId, $this->clock);
+        $tokens = new InstallationTokens(new InstallationTokenMinter($this->jwt, $http, $this->logger), $this->installationId, $this->clock);
 
         return new InstallationReadBack(
-            new InstallationReader($this->jwt, $tokens, new GitHubCalls($this->http, $readings, $tokens)),
+            new InstallationReader($this->jwt, $tokens, new GitHubCalls($http, $readings, $tokens)),
             $this->expected,
             $this->logger,
         );

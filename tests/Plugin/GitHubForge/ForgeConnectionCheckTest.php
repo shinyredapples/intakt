@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\DeadlineHttpClient;
 use Intakt\Plugin\GitHubForge\Infrastructure\ForgeConnectionCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
@@ -33,6 +34,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(ForgeConnectionCheck::class)]
 #[CoversClass(ForgeConnectionVerdict::class)]
+#[CoversClass(DeadlineHttpClient::class)]
 #[UsesClass(ExpectedInstallation::class)]
 #[UsesClass(Installation::class)]
 #[UsesClass(InstallationDoesNotMatchConfiguration::class)]
@@ -56,6 +58,7 @@ final class ForgeConnectionCheckTest extends TestCase
     private MockClock $clock;
     private int $requests = 0;
     private int $installationStatus = 200;
+    private int $tokenStatus = 201;
     private bool $unreachable = false;
     private string $appId = '12345';
     private string $installationId = '678';
@@ -162,6 +165,65 @@ final class ForgeConnectionCheckTest extends TestCase
         self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
     }
 
+    public function testAPrivateKeyThatIsNotRsaFailsWithTheLocalKeyFixWithoutReachingGitHub(): void
+    {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        self::assertNotFalse($key);
+        openssl_pkey_export($key, $pem);
+        $this->privateKey = (string) $pem;
+
+        $verdict = $this->check()->run();
+
+        self::assertSame('set GITHUB_APP_PRIVATE_KEY to the PEM private key of the App', $verdict->fix);
+        self::assertSame(0, $this->requests);
+    }
+
+    public function testAnAppIdThatIsNotANumberFailsWithOneVerdictAndNoRequest(): void
+    {
+        $this->appId = "invalid\xFF";
+
+        $verdict = $this->check()->run();
+
+        self::assertSame('GITHUB_APP_ID is not a number', $verdict->problem);
+        self::assertSame(0, $this->requests);
+    }
+
+    public function testAnAppIdThatIsANumberWithSurroundingSpacesIsAccepted(): void
+    {
+        $this->appId = ' 12345 ';
+
+        self::assertTrue($this->check()->run()->passes());
+    }
+
+    public function testATokenExchangeThatGitHubRefusesFailsAsNotRun(): void
+    {
+        $this->tokenStatus = 404;
+
+        $verdict = $this->check()->run();
+
+        self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
+    }
+
+    public function testRequestsThatTogetherOutlastTheDeadlineFailAsNotRunWithinIt(): void
+    {
+        $start = $this->clock->now();
+        $this->http = $this->slowPagedGitHub();
+        $this->repositories = 'acme/one,acme/two';
+
+        $verdict = $this->check()->run();
+
+        self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
+        self::assertLessThanOrEqual(15, $this->clock->now()->getTimestamp() - $start->getTimestamp());
+    }
+
+    public function testRequestsThatEndWithinTheDeadlinePass(): void
+    {
+        $this->http = $this->slowPagedGitHub(3);
+        $this->repositories = 'acme/one,acme/two';
+
+        self::assertTrue($this->check()->run()->passes());
+    }
+
     public function testARateLimitedGitHubFailsAsNotRun(): void
     {
         $limited = new MockHttpClient(static fn (): ResponseInterface => new MockResponse('{}', ['http_code' => 429, 'response_headers' => ['retry-after: 30']]));
@@ -203,11 +265,33 @@ final class ForgeConnectionCheckTest extends TestCase
                 throw new TransportException('connection reset');
             }
             if (str_ends_with($url, '/access_tokens')) {
-                return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => 201]);
+                return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => $this->tokenStatus]);
             }
             $fixture = str_contains($url, '/installation/repositories') ? 'installation_repositories.json' : 'installation.json';
 
             return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.$fixture), ['http_code' => str_contains($url, '/installation/repositories') ? 200 : $this->installationStatus]);
+        });
+    }
+
+    // Each request takes the given seconds on the clock and is cut off when its time limit is shorter, as a real transfer would be.
+    private function slowPagedGitHub(int $seconds = 4): MockHttpClient
+    {
+        return new MockHttpClient(function (string $method, string $url, array $options) use ($seconds): ResponseInterface {
+            ++$this->requests;
+            if ($options['max_duration'] < $seconds) {
+                throw new TransportException('deadline exceeded');
+            }
+            $this->clock->sleep($seconds);
+            if (str_ends_with($url, '/access_tokens')) {
+                return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => 201]);
+            }
+            if (str_contains($url, '/installation/repositories')) {
+                $name = str_ends_with($url, '&page=1') ? 'acme/one' : 'acme/two';
+
+                return new MockResponse((string) json_encode(['total_count' => 2, 'repositories' => [['full_name' => $name]]]));
+            }
+
+            return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/installation.json'));
         });
     }
 
