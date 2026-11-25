@@ -52,6 +52,7 @@ use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\Git\Domain\CommitObject;
@@ -83,6 +84,9 @@ use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\Contract\PullRequestTextTask;
 use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRun;
+use Intakt\Core\HandBack\Contract\RegressionRuns;
+use Intakt\Core\HandBack\Contract\RegressionTests;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\CodeSpans;
@@ -295,12 +299,16 @@ final class BuildTaskTest extends TestCase
 
     private const string CHECK_SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
 
+    private const string BUG_BODY = "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d";
+
     private const string IMAGE = 'intakt-job-alpha:1';
 
     // Because CI runs as a user without a git identity, and git refuses a commit without one.
     private const array IDENTITY = ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false'];
 
     private string $scanner = 'gitleaks';
+
+    private ?RegressionTests $regressionTests = null;
 
     private string $mirrors;
 
@@ -972,6 +980,51 @@ final class BuildTaskTest extends TestCase
         self::assertStringContainsString('write that test first', $prompt);
     }
 
+    public function testABugHeadWhoseTestFailsOnTheBaseAndPassesOnTheHeadGoesOnToThePushAndReview(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertContains(BuildStep::PrePushCheck, $outcome->passedSteps());
+        self::assertNotSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertNotNull($this->remoteTip());
+    }
+
+    public function testABugHeadWhoseTestPassesOnTheBaseEndsAtThePrePushCheckWithTheReasonAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Passed, RegressionRun::Passed));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the new test of a bug also passes on the base, so it proves nothing', $outcome->failure);
+        self::assertSame('failed', $ledger->payloads()[5]['outcome']);
+        self::assertSame($outcome->failure, $ledger->payloads()[5]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testABugHeadWithoutANewTestEndsAtThePrePushCheckWithTheReasonAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the head of a bug adds no regression test', $outcome->failure);
+        self::assertSame('failed', $ledger->payloads()[5]['outcome']);
+        self::assertSame($outcome->failure, $ledger->payloads()[5]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
     public function testATierLabelOfTheIssueChoosesTheBuildsTier(): void
     {
         $tiers = $this->createMock(TierResolver::class);
@@ -1451,6 +1504,14 @@ final class BuildTaskTest extends TestCase
         return $this->locks->createLock(new BuildRun('alpha', $task, 'any run')->startLockKey());
     }
 
+    private function regressionRuns(RegressionRuns $runs): RegressionTests
+    {
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn($runs);
+
+        return $regressionTests;
+    }
+
     private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, Ledger $ledger): BuildTask
     {
         $configured = self::createStub(ConfiguredRepositories::class);
@@ -1467,7 +1528,7 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

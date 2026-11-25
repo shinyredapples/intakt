@@ -9,7 +9,7 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 ## First steps
 
 1. In the folder with Intakt's `compose.yaml`, run `docker compose exec intakt php bin/console intakt:doctor`. It works even when the dashboard does not start, and it changes nothing.
-2. Read its three lines: the worker threads (a worker is ready to take a request), the server metrics (the server's figures can be read) and the Mercure hub (live updates work). Each says `pass`, or `fail` with the problem and, after `fix:`, what to do. Fix those first.
+2. Read its six lines: the web server (the dashboard answers), the worker threads (a worker is ready to take a request), the server metrics (its figures can be read), the Mercure hub (live updates work), the workers (the background workers that move reviews and builds run) and the forge (the GitHub App works). Each says `pass`, or `fail` with the problem and, after `fix:`, what to do. Fix those first. The forge line also fails when you cleared only `GITHUB_APP_ID`: to run without a GitHub App, empty all three App settings.
 3. Open **You** in the menu. Anything only you can decide shows up there, oldest first. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
 
 ![The Waiting on you page: the octopus above "Nothing needs you, Intakt keeps building and reviewing. When it needs a decision, it shows up here", then the sections Meanwhile, "No review is running now", and You handled today](../assets/guide/waiting-on-you.webp)
@@ -72,8 +72,8 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 ## The dashboard is slow
 
 - **What you see:** pages take seconds to load.
-- **Why:** the server is busy.
-- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts and the hub. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the same.
+- **Why:** the server is busy, or GitHub answers slowly: about once a minute a load of the board checks the GitHub App connection and can wait up to 15 seconds for it, also when the server's own figures look fine.
+- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts, the hub and the forge. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the server's figures, and `php bin/console intakt:doctor` runs the forge check and says what to fix.
 
 ## Docker says the container is unhealthy
 

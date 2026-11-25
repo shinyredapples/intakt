@@ -18,7 +18,7 @@ Your first live review ran on one key. Now you want the real setup: two labs on 
 
 A provider without its key is switched off, and Intakt still starts. Step 3 of the setup wizard, **Add an AI account**, lists each one, for example: Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
 
-![Step 1 of the setup page, "Add a key here", marked Done: "openai_compatible has a key", then three lines saying the anthropic, openai and claude_code providers are disabled and which variable enables each, and the tiers of the project sample: strong and light on Kimi K3.1 Pro, standard on DeepSeek V4 Pro 0813, all through openai_compatible](../assets/guide/add-a-key.webp)
+![Step 3 of the setup wizard, "Add an AI account", on an install with no key: a field to paste a key, then four lines saying the anthropic, openai, openai_compatible and claude_code providers are disabled and which variable enables each, and the Back, Skip and Keep the key buttons](../assets/guide/add-a-key.webp)
 
 ## Where a key goes
 

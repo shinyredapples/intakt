@@ -274,6 +274,14 @@ final class RunSetupControllerTest extends WebTestCase
         self::assertCount(0, $page->filter('.field-error, [aria-invalid], .detected'));
     }
 
+    // Pinned, because Turbo takes over a form in the live shell and refuses an answer that is not a redirect, and the address check answers with the page itself.
+    public function testTheAddressCheckIsSentByTheBrowserItselfAndNotByTurbo(): void
+    {
+        $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('false', $page->filter('#step-repository form.check-repository')->attr('data-turbo'));
+    }
+
     public function testCheckingAnAddressKeepsItsCredentialsOutOfTheUrl(): void
     {
         $page = $this->setupPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
