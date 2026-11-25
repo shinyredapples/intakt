@@ -56,10 +56,19 @@ final class GateChildTreeTest extends TestCase
 
     public function testAContainedRunOfATimedOutGateChildIsStoppedWithIt(): void
     {
-        $child = new ProcessRunner()->runToItsEnd($this->gateRunningWithin($this->descendant()), sys_get_temp_dir(), 1);
+        $child = new ProcessRunner()->runToItsEnd($this->gateRunningWithinOnceReady($this->descendant()), sys_get_temp_dir(), 1);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $child->exitCode);
         self::assertStringContainsString('started', $child->output);
+        $this->assertTheDescendantIsGoneWithoutWritingItsMarker();
+    }
+
+    public function testAContainedRunReadyOnlyAfterItsGateChildTimedOutIsStoppedWithIt(): void
+    {
+        // Past the runner's one second timeout, so its stop is surely sent before the descendant is ready.
+        $child = new ProcessRunner()->runToItsEnd($this->gateRunningWithinOnceReady($this->descendant(before: 'usleep(1200000);')), sys_get_temp_dir(), 1);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $child->exitCode);
         $this->assertTheDescendantIsGoneWithoutWritingItsMarker();
     }
 
@@ -128,11 +137,11 @@ final class GateChildTreeTest extends TestCase
     }
 
     // The descendant writes its process group first, renamed into place so it is never read half written, then its marker only if it outlives the stop.
-    private function descendant(string $then = ''): string
+    private function descendant(string $then = '', string $before = ''): string
     {
         $writing = var_export($this->group.'-writing', true);
 
-        return 'file_put_contents('.$writing.', (string) posix_getpgrp()); rename('.$writing.', '.var_export($this->group, true).'); '.$then.' usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
+        return $before.'file_put_contents('.$writing.', (string) posix_getpgrp()); rename('.$writing.', '.var_export($this->group, true).'); '.$then.' usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
     }
 
     /**
@@ -141,6 +150,20 @@ final class GateChildTreeTest extends TestCase
     private function gateRunningWithin(string $program): array
     {
         $gate = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; echo "started"; fflush(STDOUT); new '.ProcessRunner::class.'()->runWithin('.var_export([PHP_BINARY, '-r', $program], true).', sys_get_temp_dir(), 30);';
+
+        return [PHP_BINARY, '-r', $gate];
+    }
+
+    // Because the runner's timeout starts before the contained run exists, the gate runs it in a forked process of a session of its own and passes the timeout's SIGTERM on to that process only once the descendant's group file exists, so the stop forwarding of `runWithin()` acts only on a ready descendant. Blocking SIGTERM in the gate's own process cannot do this, because the forwarding's `pcntl_signal()` unblocks it. SIGTERM is blocked across the fork and a pending one is dropped after `posix_setsid()`, so a stop sent to the gate's group before then never reaches the run directly.
+    /**
+     * @return list<string>
+     */
+    private function gateRunningWithinOnceReady(string $program): array
+    {
+        $group = var_export($this->group, true);
+        $run = 'posix_setsid(); pcntl_sigtimedwait([15], $dropped, 0, 1); new '.ProcessRunner::class.'()->runWithin('.var_export([PHP_BINARY, '-r', $program], true).', sys_get_temp_dir(), 30); exit(0);';
+        $passOnOnceReady = 'pcntl_signal(15, static function () use ($run): void { $deadline = hrtime(true) + '.self::SECONDS_TO_WAIT.' * 1000000000; while (!is_file('.$group.') && hrtime(true) < $deadline) { usleep(10000); } posix_kill($run, 15); pcntl_waitpid($run, $status); exit(143); });';
+        $gate = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; pcntl_sigprocmask(SIG_BLOCK, [15]); $run = pcntl_fork(); if (0 === $run) { '.$run.' } pcntl_async_signals(true); '.$passOnOnceReady.' echo "started"; fflush(STDOUT); while (0 === pcntl_waitpid($run, $status, WNOHANG)) { usleep(10000); }';
 
         return [PHP_BINARY, '-r', $gate];
     }
