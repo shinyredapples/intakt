@@ -27,18 +27,18 @@ final readonly class WebServerCheck
     ) {
     }
 
-    public function run(): CheckVerdict
+    public function run(): DoctorCheckVerdict
     {
         try {
             $status = $this->http->request('GET', 'http://localhost:'.$this->serverPort.self::PATH, $this->options())->getStatusCode();
         } catch (ExceptionInterface) {
             // Without the transport's message, because the problem names the piece and the fix says what to do.
-            return CheckVerdict::failed('web server down ('.self::PATH.' did not answer on port '.$this->serverPort.')', self::DOWN_FIX);
+            return DoctorCheckVerdict::failed('web server down ('.self::PATH.' did not answer on port '.$this->serverPort.')', self::DOWN_FIX);
         }
 
         return $status >= 200 && $status < 300
-            ? CheckVerdict::passed()
-            : CheckVerdict::failed('web server answered '.self::PATH.' with status '.$status, self::ERROR_FIX);
+            ? DoctorCheckVerdict::passed()
+            : DoctorCheckVerdict::failed('web server answered '.self::PATH.' with status '.$status, self::ERROR_FIX);
     }
 
     /**

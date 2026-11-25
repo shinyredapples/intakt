@@ -22,17 +22,17 @@ final readonly class ConsumerProcessesCheck
     ) {
     }
 
-    public function run(): CheckVerdict
+    public function run(): DoctorCheckVerdict
     {
         $commandLines = $this->commandLines();
         if (null === $commandLines) {
-            return CheckVerdict::failed('cannot run (the process list under '.$this->processRoot.' cannot be read)', self::CANNOT_RUN_FIX);
+            return DoctorCheckVerdict::failed('cannot run (the process list under '.$this->processRoot.' cannot be read)', self::CANNOT_RUN_FIX);
         }
         $missing = array_keys(array_filter(self::KINDS, fn (string $problem, string $receiver): bool => !$this->runs($receiver, $commandLines), ARRAY_FILTER_USE_BOTH));
 
         return [] === $missing
-            ? CheckVerdict::passed()
-            : CheckVerdict::failed(implode('; ', array_map(static fn (string $receiver): string => self::KINDS[$receiver], $missing)), self::MISSING_FIX);
+            ? DoctorCheckVerdict::passed()
+            : DoctorCheckVerdict::failed(implode('; ', array_map(static fn (string $receiver): string => self::KINDS[$receiver], $missing)), self::MISSING_FIX);
     }
 
     /**

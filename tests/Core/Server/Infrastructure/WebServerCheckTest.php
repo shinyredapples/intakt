@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Server\Infrastructure;
 
-use Intakt\Core\Server\Infrastructure\CheckVerdict;
+use Intakt\Core\Server\Infrastructure\DoctorCheckVerdict;
 use Intakt\Core\Server\Infrastructure\WebServerCheck;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -15,7 +15,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(WebServerCheck::class)]
-#[CoversClass(CheckVerdict::class)]
+#[CoversClass(DoctorCheckVerdict::class)]
 final class WebServerCheckTest extends TestCase
 {
     private const string DOWN_FIX = 'check that FrankenPHP is running and listens on SERVER_PORT (in the compose stack, docker compose restart intakt starts it again)';
@@ -82,7 +82,7 @@ final class WebServerCheckTest extends TestCase
         self::assertStringNotContainsString('secret', (string) $verdict->problem);
     }
 
-    private function check(MockResponse $response): CheckVerdict
+    private function check(MockResponse $response): DoctorCheckVerdict
     {
         return new WebServerCheck(new MockHttpClient($response), 7781, 7781)->run();
     }

@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Server\Infrastructure;
 
-use Intakt\Core\Server\Infrastructure\CheckVerdict;
 use Intakt\Core\Server\Infrastructure\ConsumerProcessesCheck;
+use Intakt\Core\Server\Infrastructure\DoctorCheckVerdict;
 use Intakt\Tests\Core\Server\FakeProcessRoot;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ConsumerProcessesCheck::class)]
-#[CoversClass(CheckVerdict::class)]
+#[CoversClass(DoctorCheckVerdict::class)]
 #[UsesClass(FakeProcessRoot::class)]
 final class ConsumerProcessesCheckTest extends TestCase
 {
@@ -98,7 +98,7 @@ final class ConsumerProcessesCheckTest extends TestCase
         $this->root?->remove();
     }
 
-    private function check(FakeProcessRoot $root): CheckVerdict
+    private function check(FakeProcessRoot $root): DoctorCheckVerdict
     {
         $this->root = $root;
 

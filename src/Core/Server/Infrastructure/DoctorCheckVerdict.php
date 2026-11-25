@@ -8,7 +8,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Excluded from the container because each run of a doctor check builds its own answer.
 #[Exclude]
-final readonly class CheckVerdict
+final readonly class DoctorCheckVerdict
 {
     private function __construct(
         public ?string $problem,

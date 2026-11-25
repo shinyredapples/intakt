@@ -16,8 +16,8 @@ use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
 use Intakt\Core\Server\Infrastructure\AdminApi;
 use Intakt\Core\Server\Infrastructure\AdminApiServerStatus;
-use Intakt\Core\Server\Infrastructure\CheckVerdict;
 use Intakt\Core\Server\Infrastructure\ConsumerProcessesCheck;
+use Intakt\Core\Server\Infrastructure\DoctorCheckVerdict;
 use Intakt\Core\Server\Infrastructure\PrometheusSamples;
 use Intakt\Core\Server\Infrastructure\WebServerCheck;
 use Intakt\Core\Server\UseCase\Doctor\DoctorCommand;
@@ -60,7 +60,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(RateLimitReadings::class)]
 #[UsesClass(WebServerCheck::class)]
 #[UsesClass(ConsumerProcessesCheck::class)]
-#[UsesClass(CheckVerdict::class)]
+#[UsesClass(DoctorCheckVerdict::class)]
 #[UsesClass(FakeProcessRoot::class)]
 final class DoctorCommandTest extends TestCase
 {
