@@ -27,7 +27,8 @@ final readonly class LocalForgeBranches implements ForgeBranches
     private const int TIMEOUT_SECONDS = 60;
     private const int NOT_AN_ANCESTOR = 1;
     private const int NOT_SYMBOLIC = 1;
-    private const string LISTING_FORMAT = '%(refname)%00%(objectname)%00%(objecttype)%00%(symref)';
+    private const string BEING_ADDED = 'locked initializing';
+    private const string LISTING_FORMAT ='%(refname)%00%(objectname)%00%(objecttype)%00%(symref)';
 
     public function __construct(
         private LocalRepository $repository,
@@ -105,7 +106,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     /**
      * @param list<string> $arguments
      */
-    private function git(array $arguments): Process
+    private function git(array $arguments, ?string $gitDirectory = null): Process
     {
         // An argument with a NUL byte cannot reach git, because PHP refuses to start the process with it.
         if (array_any($arguments, static fn (string $argument): bool => str_contains($argument, "\0"))) {
@@ -113,7 +114,9 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
 
         try {
-            $call = $this->hardened->call($this->repository->path, ...$arguments);
+            $call = null === $gitDirectory
+                ? $this->hardened->call($this->repository->path, ...$arguments)
+                : $this->hardened->callInBareRepository($gitDirectory, ...$arguments);
             $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
             $process->run();
         } catch (RepositoryAttributesRefused $refused) {
@@ -211,13 +214,14 @@ final readonly class LocalForgeBranches implements ForgeBranches
             throw new ForgeReadFailed('it is the default, a protected, a release or a symbolic branch.');
         }
 
-        $locks = $this->lockEveryHead($this->commonDirectory());
+        $common = $this->commonDirectory();
+        $locks = $this->lockEveryWorktree($common);
         try {
             if ($this->isSymbolic($reference)) {
                 throw new ForgeReadFailed('it is a symbolic branch now.');
             }
 
-            if (in_array($reference, $this->checkedOut(), true)) {
+            if (in_array($reference, $this->checkedOut($common), true)) {
                 throw new ForgeReadFailed('it is checked out.');
             }
 
@@ -227,40 +231,45 @@ final readonly class LocalForgeBranches implements ForgeBranches
             $this->unlock($locks);
         }
 
-        // A worktree added meanwhile takes no lock this delete holds, so the check is read again and the branch put back if one names it now.
-        if (in_array($reference, $this->checkedOut(), true)) {
-            $this->read(['update-ref', '--no-deref', $reference, $branch->head->hash, '']);
-
-            throw new ForgeReadFailed('a worktree checked it out while it was deleted, so it was put back at its head.');
-        }
+        $this->putBackWhenCheckedOutMeanwhile($common, $reference, $branch);
     }
 
     /**
      * @return list<string>
      */
-    // git switch and checkout write HEAD through HEAD.lock and give up while it exists, so holding every worktree's HEAD.lock keeps a checkout from naming the branch between the check and the delete.
-    private function lockEveryHead(string $common): array
+    // git switch and checkout take index.lock before they change a file and write HEAD through HEAD.lock, and give up while either exists. Holding both for every worktree keeps a checkout from naming the branch between the check and the delete, and index.lock comes first so a checkout held off has not touched its working tree yet.
+    private function lockEveryWorktree(string $common): array
     {
-        $heads = [$common.'/HEAD'];
+        $directories = [$common];
         if (is_dir($common.'/worktrees')) {
             foreach (Finder::create()->directories()->depth(0)->ignoreDotFiles(false)->ignoreVCS(false)->in($common.'/worktrees') as $worktree) {
-                $heads[] = $worktree->getPathname().'/HEAD';
+                $directories[] = $worktree->getPathname();
             }
         }
 
         $locks = [];
-        foreach ($heads as $head) {
-            $lock = @fopen($head.'.lock', 'x');
-            if (false === $lock) {
-                $this->unlock($locks);
+        foreach ($directories as $directory) {
+            foreach (['index.lock', 'HEAD.lock'] as $name) {
+                $lock = @fopen($directory.'/'.$name, 'x');
+                if (false === $lock) {
+                    $this->unlock($locks);
 
-                throw new ForgeReadFailed(sprintf('%s.lock exists, so a checkout or another git command is under way.', $head));
+                    throw new ForgeReadFailed(sprintf('%s/%s exists, so a checkout or another git command is under way.', $directory, $name));
+                }
+                fclose($lock);
+                $locks[] = $directory.'/'.$name;
             }
-            fclose($lock);
-            $locks[] = $head.'.lock';
         }
 
         return $locks;
+    }
+
+    /**
+     * @param list<string> $locks
+     */
+    private function unlock(array $locks): void
+    {
+        new Filesystem()->remove($locks);
     }
 
     private function isSymbolic(string $reference): bool
@@ -277,16 +286,22 @@ final readonly class LocalForgeBranches implements ForgeBranches
     /**
      * @return list<string>
      */
-    // Every worktree's HEAD, because update-ref deletes a branch another worktree has checked out as readily as the repository's own; and the repository's own HEAD, because a bare repository lists it without a branch line.
-    private function checkedOut(): array
+    // Every worktree's HEAD, because update-ref deletes a branch another worktree has checked out as readily as the repository's own; and the HEAD in the common directory, because a bare repository lists it without a branch line, also when this forge is opened through one of its linked worktrees.
+    private function checkedOut(string $common): array
     {
         $lines = explode("\0", $this->read(['worktree', 'list', '--porcelain', '-z']));
+
+        // git worktree add locks the worktree with this reason until its HEAD is written, so the listing cannot tell yet which branch it will name.
+        if (in_array(self::BEING_ADDED, $lines, true)) {
+            throw new ForgeReadFailed('a worktree is being added, so the branch it checks out cannot be told yet.');
+        }
+
         $branches = array_values(array_map(
             static fn (string $line): string => substr($line, strlen('branch ')),
             array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'branch ')),
         ));
 
-        $head = $this->git(['symbolic-ref', '--quiet', 'HEAD']);
+        $head = $this->git(['symbolic-ref', '--quiet', 'HEAD'], $common);
 
         return match ($head->getExitCode()) {
             0 => [...$branches, trim($head->getOutput())],
@@ -295,12 +310,26 @@ final readonly class LocalForgeBranches implements ForgeBranches
         };
     }
 
-    /**
-     * @param list<string> $locks
-     */
-    private function unlock(array $locks): void
+    // A worktree added meanwhile takes no lock this delete holds, so the check is read again. A check that cannot answer counts as checked out, because the branch is already gone here and a refusal must leave it in place.
+    private function putBackWhenCheckedOutMeanwhile(string $common, string $reference, ForgeBranch $branch): void
     {
-        new Filesystem()->remove($locks);
+        try {
+            if (!in_array($reference, $this->checkedOut($common), true)) {
+                return;
+            }
+            $reason = 'a worktree checked it out while it was deleted';
+        } catch (ForgeReadFailed $unread) {
+            $reason = sprintf('whether a worktree checked it out while it was deleted could not be read (%s)', $unread->getMessage());
+        }
+
+        try {
+            // The empty old value creates the branch only while it is still missing, so a branch made again meanwhile is never moved.
+            $this->read(['update-ref', '--no-deref', $reference, $branch->head->hash, '']);
+        } catch (ForgeReadFailed $lost) {
+            throw new ForgeWriteFailed(sprintf('The branch "%s" is deleted at %s and could not be put back (%s): %s', $branch->name, $branch->head->hash, $lost->getMessage(), $reason), $lost->getCode(), $lost);
+        }
+
+        throw new ForgeReadFailed($reason.', so it was put back at its head.');
     }
 
     private function commitFrom(string $hash): CommitId

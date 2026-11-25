@@ -165,6 +165,138 @@ final class LocalForgeBranchesTest extends TestCase
         }
     }
 
+    public function testABranchIsPutBackWhenTheCheckAfterTheDeleteCannotBeRead(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+
+        try {
+            $this->withGit($this->aWorktreeAddAfterTheFirstListingAndNoSecondListing(), function () use ($listed): void {
+                $this->branches()->delete($listed);
+            });
+            self::fail('The delete did not report the check it could not read.');
+        } catch (ForgeWriteFailed $refused) {
+            self::assertStringContainsString('put back at its head', $refused->getMessage());
+            self::assertSame($head, $this->repository->objectAt('refs/heads/intakt/feature'));
+            self::assertSame($head, $this->headOf($this->worktree()));
+        }
+    }
+
+    public function testADeleteThatCannotPutTheBranchBackSaysTheBranchIsDeleted(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        $noPutBack = "  *' update-ref --no-deref '*) echo 'put-back refused' >&2; exit 128 ;;\n";
+
+        try {
+            $this->withGit($noPutBack.$this->aWorktreeAddAfterTheFirstListingAndNoSecondListing(), function () use ($listed): void {
+                $this->branches()->delete($listed);
+            });
+            self::fail('The delete did not report the branch it could not put back.');
+        } catch (ForgeWriteFailed $lost) {
+            self::assertStringContainsString(sprintf('The branch "intakt/feature" is deleted at %s and could not be put back', $head), $lost->getMessage());
+            self::assertStringNotContainsString('was not deleted', $lost->getMessage());
+            self::assertFalse($this->exists($this->repository->path, 'intakt/feature'));
+        }
+    }
+
+    public function testItRefusesToDeleteWhileAWorktreeIsStillBeingAdded(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        $this->addDetachedWorktreeLockedBecause('initializing');
+
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The branch was deleted while a worktree was being added.');
+        } catch (ForgeWriteFailed) {
+            self::assertTrue($this->exists($this->repository->path, 'intakt/feature'));
+        }
+    }
+
+    public function testItDeletesABranchWhileAWorktreeIsLockedForAnotherReason(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        $this->addDetachedWorktreeLockedBecause('on a removable disk');
+
+        $this->branches()->delete($listed);
+
+        self::assertFalse($this->exists($this->repository->path, 'intakt/feature'));
+    }
+
+    public function testItRefusesToDeleteTheBranchABareRepositorysHeadNamesWhenOpenedThroughALinkedWorktree(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $bare = $this->worktree();
+        new Process(['git', 'clone', '--quiet', '--bare', $this->repository->path, $bare])->mustRun();
+        new Process(['git', 'symbolic-ref', 'HEAD', 'refs/heads/intakt/feature'], $bare)->mustRun();
+        new Process(['git', 'worktree', 'add', '--quiet', $this->linked(), 'main'], $bare)->mustRun();
+        $branches = new LocalForgeBranches(new LocalRepository($this->linked(), 'main'));
+        $listed = array_find($branches->branches(), static fn (ForgeBranch $branch): bool => 'intakt/feature' === $branch->name);
+        self::assertInstanceOf(ForgeBranch::class, $listed);
+
+        try {
+            $branches->delete($listed);
+            self::fail('The branch the bare repository\'s HEAD names was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertTrue($this->exists($bare, 'intakt/feature'));
+        }
+    }
+
+    public function testACheckoutHeldOffDuringTheDeleteLeavesItsWorkingTreeUntouched(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+
+        $this->withGitThatRunsAfterTheWorktreeListing(['switch', '--quiet', 'intakt/feature'], function () use ($listed): void {
+            $this->branches()->delete($listed);
+        });
+
+        self::assertFileDoesNotExist($this->repository->path.'/src/New.php');
+        self::assertSame('', new Process(['git', 'status', '--porcelain'], $this->repository->path)->mustRun()->getOutput());
+    }
+
+    public function testItRefusesToDeleteWhileAnotherGitCommandHoldsHeadAndLeavesNoLockOfItsOwn(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        new Filesystem()->touch($this->repository->path.'/.git/HEAD.lock');
+
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The delete ignored a HEAD.lock.');
+        } catch (ForgeWriteFailed) {
+            self::assertTrue($this->exists($this->repository->path, 'intakt/feature'));
+            self::assertFileDoesNotExist($this->repository->path.'/.git/index.lock');
+        }
+    }
+
+    public function testItRefusesToDeleteWhileAnotherGitCommandHoldsTheIndex(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        new Filesystem()->touch($this->repository->path.'/.git/index.lock');
+
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The delete ignored an index.lock.');
+        } catch (ForgeWriteFailed) {
+            self::assertTrue($this->exists($this->repository->path, 'intakt/feature'));
+        }
+    }
+
     public function testItRefusesToDeleteTheBaseBranchEvenWhenTheCallerSaysItIsNotTheDefault(): void
     {
         $this->repository->checkoutNewBranch('other');
@@ -410,7 +542,7 @@ final class LocalForgeBranchesTest extends TestCase
     protected function tearDown(): void
     {
         $this->repository->remove();
-        new Filesystem()->remove($this->worktree());
+        new Filesystem()->remove([$this->worktree(), $this->linked()]);
     }
 
     private function branches(): LocalForgeBranches
@@ -436,15 +568,48 @@ final class LocalForgeBranchesTest extends TestCase
     // A git first on the path that runs another git command right after each worktree listing, so the test forces the interleaving a concurrent checkout would need: after the checked-out check, before the delete.
     private function withGitThatRunsAfterTheWorktreeListing(array $injected, callable $action): void
     {
-        $real = escapeshellarg(trim(new Process(['sh', '-c', 'command -v git'])->mustRun()->getOutput()));
-        $bin = $this->repository->path.'-bin';
-        new Filesystem()->dumpFile($bin.'/git', sprintf(
-            "#!/bin/sh\n%s \"\$@\"\nstatus=\$?\ncase \" \$* \" in\n  *' worktree list '*) env -i PATH=\"\$PATH\" %s -C %s %s >/dev/null 2>&1 ;;\nesac\nexit \$status\n",
-            $real,
-            $real,
-            escapeshellarg($this->repository->path),
-            implode(' ', array_map(escapeshellarg(...), $injected)),
-        ));
+        $this->withGit(sprintf(
+            "  *' worktree list '*) %s \"\$@\"; status=\$?; %s; exit \$status ;;\n",
+            $this->realGit(),
+            $this->inTheRepository($injected),
+        ), $action);
+    }
+
+    // The first worktree listing is followed by a worktree add of the branch and every later one fails, so the test forces the order where the delete has happened and the check after it cannot answer.
+    private function aWorktreeAddAfterTheFirstListingAndNoSecondListing(): string
+    {
+        $mark = escapeshellarg($this->bin().'/listed');
+
+        return sprintf(
+            "  *' worktree list '*) test ! -e %s || exit 128; %s \"\$@\"; status=\$?; %s; touch %s; exit \$status ;;\n",
+            $mark,
+            $this->realGit(),
+            $this->inTheRepository(['worktree', 'add', '--quiet', $this->worktree(), 'intakt/feature']),
+            $mark,
+        );
+    }
+
+    /**
+     * @param list<string> $command
+     */
+    private function inTheRepository(array $command): string
+    {
+        return sprintf('env -i PATH="$PATH" %s -C %s %s >/dev/null 2>&1', $this->realGit(), escapeshellarg($this->repository->path), implode(' ', array_map(escapeshellarg(...), $command)));
+    }
+
+    private function realGit(): string
+    {
+        return escapeshellarg(trim(new Process(['sh', '-c', 'command -v git'])->mustRun()->getOutput()));
+    }
+
+    /**
+     * @param callable(): void $action
+     */
+    // A git first on the path that handles the git commands the cases name and hands every other one to the real git.
+    private function withGit(string $cases, callable $action): void
+    {
+        $bin = $this->bin();
+        new Filesystem()->dumpFile($bin.'/git', sprintf("#!/bin/sh\ncase \" \$* \" in\n%s  *) exec %s \"\$@\" ;;\nesac\n", $cases, $this->realGit()));
         chmod($bin.'/git', 0o755);
         $path = (string) getenv('PATH');
         $this->usePath($bin.':'.$path);
@@ -475,5 +640,32 @@ final class LocalForgeBranchesTest extends TestCase
     private function worktree(): string
     {
         return $this->repository->path.'-worktree';
+    }
+
+    private function linked(): string
+    {
+        return $this->repository->path.'-linked';
+    }
+
+    private function bin(): string
+    {
+        return $this->repository->path.'-bin';
+    }
+
+    private function exists(string $repository, string $branch): bool
+    {
+        return 0 === new Process(['git', 'show-ref', '--verify', '--quiet', 'refs/heads/'.$branch], $repository)->run();
+    }
+
+    private function headOf(string $worktree): string
+    {
+        return trim(new Process(['git', 'rev-parse', '--verify', 'HEAD'], $worktree)->mustRun()->getOutput());
+    }
+
+    // git worktree add locks a worktree with the reason "initializing" until its HEAD is written, so the lock file stands for an add that is under way.
+    private function addDetachedWorktreeLockedBecause(string $reason): void
+    {
+        new Process(['git', 'worktree', 'add', '--quiet', '--detach', $this->worktree()], $this->repository->path)->mustRun();
+        new Filesystem()->dumpFile(sprintf('%s/.git/worktrees/%s/locked', $this->repository->path, basename($this->worktree())), $reason."\n");
     }
 }
