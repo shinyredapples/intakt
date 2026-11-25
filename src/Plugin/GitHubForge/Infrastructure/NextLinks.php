@@ -60,13 +60,13 @@ final readonly class NextLinks
         }
 
         $rel = array_find($found, static fn (array $parameter): bool => 'rel' === strtolower($parameter[1]));
-        $types = preg_split('/\s+/', strtolower(null === $rel ? '' : $this->valueOf($rel)));
-        $relations = array_values(array_filter(false === $types ? [] : $types, static fn (string $relation): bool => '' !== $relation));
         $anchors = array_filter($found, static fn (array $parameter): bool => 'anchor' === strtolower($parameter[1]));
-        // A value-less `anchor` is no reference at all (RFC 8288 requires one), so the header is unreadable.
-        if (array_any($anchors, static fn (array $anchor): bool => null === $anchor[2] && null === $anchor[3])) {
+        // A value-less `rel` or `anchor` fails, because RFC 8288 requires their values and taking one as none could end the listing before an open pull request.
+        if (array_any([...$anchors, ...array_filter([$rel])], static fn (array $parameter): bool => null === $parameter[2] && null === $parameter[3])) {
             throw $this->unreadable();
         }
+
+        $relations = null === $rel ? [] : $this->typesOf($rel);
 
         // An anchored `next` that is not provably this page fails, because RFC 8288 section 3.2 gives it to another resource, and dropping it could end the listing early.
         if (in_array('next', $relations, true) && array_any($anchors, fn (array $anchor): bool => !$this->namesThisRequest($this->valueOf($anchor), $target))) {
@@ -74,6 +74,21 @@ final readonly class NextLinks
         }
 
         return $relations;
+    }
+
+    // A `rel` naming no relation type (`rel=""`) fails, because RFC 8288 requires at least one and taking it as none could end the listing early.
+    /**
+     * @param array<int, ?string> $rel
+     *
+     * @return non-empty-list<string>
+     *
+     * @throws ForgeReadFailed
+     */
+    private function typesOf(array $rel): array
+    {
+        $types = preg_split('/\s+/', strtolower($this->valueOf($rel)), -1, PREG_SPLIT_NO_EMPTY);
+
+        return false === $types || [] === $types ? throw $this->unreadable() : $types;
     }
 
     /**
