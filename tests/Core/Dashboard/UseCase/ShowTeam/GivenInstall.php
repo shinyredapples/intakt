@@ -10,13 +10,13 @@ use Intakt\Core\Ai\Contract\Tier;
 final readonly class GivenInstall
 {
     /**
-     * @param array<string, list<string>>                                                             $accounts
-     * @param list<string>                                                                            $withoutKey
-     * @param list<string>                                                                            $coolingDown
-     * @param list<string>                                                                            $rejected
-     * @param array<string, array<string, Provider>>                                                  $tiers
+     * @param array<string, list<string>>                                                                  $accounts
+     * @param list<string>                                                                                 $withoutKey
+     * @param list<string>                                                                                 $coolingDown
+     * @param list<string>                                                                                 $rejected
+     * @param array<string, array<string, Provider>>                                                       $tiers
      * @param array<string, array{tier: string, sensitive_paths: list<string>, escalate_on: list<string>}> $routing
-     * @param array<string, array<non-empty-string, Provider>>                                        $reviewers
+     * @param array<string, array<non-empty-string, Provider>>                                             $reviewers
      */
     public function __construct(
         public array $accounts = [],
