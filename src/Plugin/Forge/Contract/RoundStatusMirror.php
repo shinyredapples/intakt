@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 use Throwable;
@@ -30,13 +31,15 @@ final readonly class RoundStatusMirror
     {
         try {
             $this->reconcileOrThrow($project, $change);
+        } catch (LockAcquiringException $failure) {
+            $this->logger->warning('The status label of {change} of {project} was not reconciled, its lock failed: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $this->reasonOf($failure)]);
             // Boundary: logged and dropped, because the next pass reconciles the label again and a retry of the round must not wait on a label.
         } catch (Throwable $failure) {
             $this->logger->warning('The status label of {change} of {project} was not reconciled: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $failure->getMessage()]);
         }
     }
 
-    // For the watcher's status pass, which goes on with the other pull requests and then reports the failure in its tick; a busy lock is no failure, because its holder writes.
+    // For the watcher's status pass, which goes on with the other pull requests and then reports the failure in its tick, a failing lock store among them; a busy lock is no failure, because its holder writes.
     /**
      * @throws Throwable
      */
@@ -64,18 +67,10 @@ final readonly class RoundStatusMirror
         return $this->locks->createLock(self::LOCK_PREFIX.hash('sha256', json_encode([mb_strtolower($project), mb_strtolower(ChangeAddress::canonical($change->value))], JSON_THROW_ON_ERROR)), autoRelease: false);
     }
 
-    // Tried without waiting, because the holder reads the stored round under the lock and every later pass reconciles again.
+    // Tried without waiting, because the holder reads the stored round under the lock and every later pass reconciles again; a store that fails throws, so nobody writes without the lock.
     private function tryLock(LockInterface $lock, string $project, ChangeId $change): bool
     {
-        try {
-            $locked = $lock->acquire(false);
-            // Boundary: a lock store that fails must not interrupt the caller, and nobody writes without the lock.
-        } catch (Throwable $failure) {
-            $this->logger->warning('The status label of {change} of {project} was not reconciled, its lock failed: {reason}', ['change' => $change->value, 'project' => $project, 'reason' => $this->reasonOf($failure)]);
-
-            return false;
-        }
-
+        $locked = $lock->acquire(false);
         if (!$locked) {
             $this->logger->info('The status label of {change} of {project} was left to the writer holding its lock.', ['change' => $change->value, 'project' => $project]);
         }

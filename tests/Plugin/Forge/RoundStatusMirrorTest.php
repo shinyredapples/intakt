@@ -20,6 +20,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -197,6 +198,24 @@ final class RoundStatusMirrorTest extends TestCase
 
         self::assertSame(['[status:in-review] -> [status:waiting-on-you]'], $forge->passes);
         self::assertLoggedError('info', 'The status label of octo/app#7 of alpha was left to the writer holding its lock.');
+    }
+
+    public function testAReconcileThatMustReportItsFailureRethrowsAFailingLockStoreAndWritesNothing(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('Lock storage is unavailable.'));
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $rounds = self::createStub(LatestRoundStatus::class);
+        $rounds->method('of')->willReturn(ReviewStatus::WaitingOnYou);
+
+        try {
+            new RoundStatusMirror($rounds, new LockFactory($store), $this->logger(), $forge)->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+            self::fail('The failed lock store was swallowed.');
+        } catch (LockAcquiringException $failure) {
+            self::assertSame('Lock storage is unavailable.', $failure->getPrevious()?->getMessage());
+        }
+
+        self::assertSame([[], ['status:in-review']], [$forge->passes, $forge->labels]);
     }
 
     public function testAForgeWithoutLabelsIsLeftAlone(): void
