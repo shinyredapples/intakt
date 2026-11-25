@@ -69,7 +69,7 @@ final readonly class ContractArrayTypeRule implements Rule
         return [...$findings, ...$this->promotedInputFindings($class, $declaration, $promoted), ...$this->propertyFindings($promoted, $class, $declaration)];
     }
 
-    // only a parameter the constructor itself promotes is typed like a property; one that shares its name with a property a parent promotes is an ordinary parameter
+    // read from the constructor, not the class's properties, because a parameter that only shares its name with a property a parent promotes is an ordinary parameter
     /**
      * @return list<string>
      */
@@ -237,7 +237,7 @@ final readonly class ContractArrayTypeRule implements Rule
         return $findings;
     }
 
-    // without its own @param, PHPStan types a promoted parameter like its property
+    // the fallback for a parameter without its own @param, because PHPStan then types a promoted parameter like its property
     /**
      * @return array<string, Type>
      */
