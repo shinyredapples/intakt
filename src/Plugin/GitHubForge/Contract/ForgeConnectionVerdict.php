@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Contract;
 
-// One answer for the board and the doctor, so the check and its fix text have no second copy (decision D1 of #3826).
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// One answer for the board and the doctor, so the check and its fix text have no second copy (decision D1 of #3826); excluded from the container because each run of the check builds its own.
+#[Exclude]
 final readonly class ForgeConnectionVerdict
 {
     private function __construct(

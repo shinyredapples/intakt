@@ -318,15 +318,16 @@ final class ForgeConnectionCheckTest extends TestCase
         });
     }
 
-    // Only a request that carries the App JWT has an issuer; the installation token is no JWT.
+    // Matched as a three-part token, because only a request that carries the App JWT has an issuer and the installation token is no JWT.
     private function noteTheIssuerOf(mixed $headers): void
     {
-        foreach (is_array($headers) ? $headers : [] as $header) {
-            if (is_string($header) && 1 === preg_match('/^authorization: bearer [\w-]+\.([\w-]+)\.[\w-]+$/i', $header, $match)) {
-                $claims = json_decode((string) base64_decode(strtr($match[1], '-_', '+/'), true), true);
-                $this->issuers[] = is_array($claims) ? $claims['iss'] ?? null : null;
-            }
+        $lines = implode("\n", array_filter(is_array($headers) ? $headers : [], is_string(...)));
+        if (1 !== preg_match('/^authorization: bearer [\w-]+\.([\w-]+)\.[\w-]+$/im', $lines, $match)) {
+            return;
         }
+
+        $claims = json_decode((string) base64_decode(strtr($match[1], '-_', '+/'), true), true);
+        $this->issuers[] = is_array($claims) ? $claims['iss'] ?? null : null;
     }
 
     // Each request takes the given seconds on the clock and is cut off when its time limit is shorter, as a real transfer would be.
