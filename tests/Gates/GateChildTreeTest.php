@@ -65,7 +65,7 @@ final class GateChildTreeTest extends TestCase
 
     public function testAContainedRunReadyOnlyAfterItsGateChildTimedOutIsStoppedWithIt(): void
     {
-        $child = new ProcessRunner()->runToItsEnd($this->gateRunningWithinStoppedOnceReady($this->descendant(before: $this->waitingFor($this->stopReceived()))), sys_get_temp_dir(), 1);
+        $child = new ProcessRunner()->runToItsEnd($this->gateRunningWithinStoppedOnceReady($this->descendant(before: $this->onlyOnceItExists($this->stopReceived()))), sys_get_temp_dir(), 1);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $child->exitCode);
         self::assertFileExists($this->group, 'The descendant never became ready after its gate child received the stop.');
@@ -162,9 +162,10 @@ final class GateChildTreeTest extends TestCase
         return $this->marker.'-stop-received';
     }
 
-    private function waitingFor(string $file): string
+    // Ends without writing the group file when the deadline passes first, so a run ready before the stop fails the test instead of passing on an order it did not force.
+    private function onlyOnceItExists(string $file): string
     {
-        return '$deadline = hrtime(true) + '.self::SECONDS_TO_WAIT.' * 1000000000; while (!is_file('.var_export($file, true).') && hrtime(true) < $deadline) { usleep(1000); } ';
+        return '$deadline = hrtime(true) + '.self::SECONDS_TO_WAIT.' * 1000000000; while (!is_file('.var_export($file, true).') && hrtime(true) < $deadline) { usleep(1000); } if (!is_file('.var_export($file, true).')) { exit(1); } ';
     }
 
     /**
