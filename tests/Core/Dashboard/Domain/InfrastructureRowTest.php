@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Domain\InfrastructureFigure;
 use Intakt\Core\Dashboard\Domain\InfrastructureRow;
 use Intakt\Core\Server\Contract\EndpointDown;
 use Intakt\Core\Server\Contract\HubHealth;
+use Intakt\Core\Server\Contract\HubVerdict;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\WorkerThreads;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(WorkerThreads::class)]
 #[UsesClass(ServerMetrics::class)]
 #[UsesClass(EndpointDown::class)]
+#[UsesClass(HubVerdict::class)]
 final class InfrastructureRowTest extends TestCase
 {
     public function testAReadingWithEverySourceUpShowsThreadsBusyAndIdleQueueDepthRestartsAndHubHealth(): void

@@ -6,6 +6,8 @@ namespace Intakt\Tests\Core\Server;
 
 use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
 use Intakt\Core\Server\Contract\EndpointDown;
+use Intakt\Core\Server\Contract\HubVerdict;
+use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\ServerStatus;
@@ -30,6 +32,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(ServerMetrics::class)]
 #[UsesClass(EndpointDown::class)]
 #[UsesClass(AdminApiNotOnLocalhost::class)]
+#[UsesClass(InfrastructureChecks::class)]
+#[UsesClass(HubVerdict::class)]
 final class CheckServerHealthCommandTest extends TestCase
 {
     public function testARecordedHealthyServerPassesTheHealthCheck(): void
