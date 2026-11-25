@@ -64,7 +64,7 @@ final class EmptyDatabase
             "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'index') AND tbl_name NOT IN ('sqlite_sequence', 'reviewer_conversation', 'messenger_messages') ORDER BY type, name",
         );
 
-        return (crc32(json_encode($rows, JSON_THROW_ON_ERROR)) & 0x7FFFFFFF) ?: 1;
+        return max(1, crc32(json_encode($rows, JSON_THROW_ON_ERROR)) & 0x7FFFFFFF);
     }
 
     /**
