@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class ReadmeRoadmapPictureTest extends TestCase
 {
-    private const array MILESTONES = ['M0 Unblock', 'M1 Review core', 'M2 Panel and rounds', 'M3 Agents and memory', 'M4 Live dashboard', 'M5 Demo', 'M6 Runs alongside', 'M7 Builder half', 'M8 Switch'];
+    private const array MILESTONES = ['M0 Unblock', 'M1 Review core', 'M2 Panel and rounds', 'M3 Agents and memory', 'M4 Live dashboard', 'M5 Demo', 'M6 Reviewer for the loop', 'M7 Builder half', 'M8 Switch'];
 
     public function testTheRoadmapPictureServesTheDarkImageForADarkColorScheme(): void
     {
@@ -86,6 +86,33 @@ final class ReadmeRoadmapPictureTest extends TestCase
         self::assertStringContainsString('22 Nov', $alt);
         foreach (self::MILESTONES as $milestone) {
             self::assertStringContainsString($milestone, $alt);
+        }
+    }
+
+    public function testTheRoadmapPictureAltPutsWeAreHereAtM6AfterM5Done(): void
+    {
+        $alt = $this->imgAttribute('alt');
+
+        $m5 = strpos($alt, 'M5 Demo');
+        $here = strpos($alt, 'we are here');
+        $m6 = strpos($alt, 'M6 Reviewer for the loop');
+
+        self::assertIsInt($m5);
+        self::assertIsInt($here);
+        self::assertIsInt($m6);
+        self::assertLessThan($here, $m5);
+        self::assertLessThan($m6, $here);
+    }
+
+    public function testBothRoadmapImagesNameM6ReviewerForTheLoopAndNoStaleLabel(): void
+    {
+        foreach (['light', 'dark'] as $theme) {
+            $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
+
+            self::assertStringContainsString('Reviewer for the loop', $svg);
+            self::assertStringContainsString('reviews the build', $svg);
+            self::assertStringNotContainsString('Runs alongside', $svg);
+            self::assertStringNotContainsString('beside the build loop', $svg);
         }
     }
 
