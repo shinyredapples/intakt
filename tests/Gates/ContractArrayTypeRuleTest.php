@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\ContractArrayTypeRule;
+use PHPStan\Type\FileTypeMapper;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
@@ -88,9 +89,29 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('contract-array-plugin-scalars', 'src/Plugin/Sample/Contract/Checks.php:12 intakt.contractArrayType Method Intakt\Plugin\Sample\Contract\Checks::exitCodes() returns list<int>');
     }
 
-    public function testAStaticEnumMethodInAFolderBelowContractFailsStaticAnalysis(): void
+    public function testAContractMethodInAFolderBelowContractFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('contract-array-nested-folder', 'src/Core/Sample/Contract/Event/Happened.php:14 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Event\Happened::labels() returns array<string, string>');
+    }
+
+    public function testAContractExposingAListOfStringsThroughATraitFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('contract-array-trait-method', 'src/Core/Sample/Contract/Names.php:18 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Names::names() returns list<string>');
+    }
+
+    public function testAPromotedPropertyWhoseParameterTakesAnIntKeyedMapFailsAsItsParameter(): void
+    {
+        $this->assertRuleRejects('contract-array-promoted-normalized', 'src/Core/Sample/Contract/Batch.php:14 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Batch::__construct() parameter $items is typed array<int, DateTimeImmutable>');
+    }
+
+    public function testAPromotedPropertyNormalizedToAListOfObjectsPassesAsTheProperty(): void
+    {
+        self::assertStringNotContainsString('Property', $this->ruleFindingsOf('contract-array-promoted-normalized'));
+    }
+
+    public function testTheCaseMethodsPhpGivesAnEnumPassStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('contract-array-enum-cases');
     }
 
     public function testAMethodABuiltInInterfaceFixesPassesStaticAnalysis(): void
@@ -105,6 +126,6 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
 
     protected function ruleFor(string $root): ContractArrayTypeRule
     {
-        return new ContractArrayTypeRule($root);
+        return new ContractArrayTypeRule($root, self::getContainer()->getByType(FileTypeMapper::class));
     }
 }
