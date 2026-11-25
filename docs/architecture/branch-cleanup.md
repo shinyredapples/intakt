@@ -1,6 +1,10 @@
 ## Branch cleanup
 
-Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far only the forge side exists: the `ForgeBranches` contract and its local implementation. No command, job or rule calls it yet; the GitHub implementation, the archive refs and restore, the cleanup rules and the weekly run come in later parts of #24.
+Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far only the forge side exists: the `ForgeBranches` contract, its local implementation and its GitHub implementation. No command, job or rule calls it yet, and nothing in the container builds either implementation; the archive refs and restore, the cleanup rules and the weekly run come in later parts of #24.
+
+### In short
+
+`ForgeBranches` lists a repository's branches, reads each branch's pull request, tells whether a person committed to it, and deletes it only at the head it was listed with. A read that fails throws, so a failure never reads as "no pull request" or "no commit by a person". The local forge runs git and deletes with `update-ref` at the expected head while holding every worktree's locks. The GitHub forge reads every page of the REST answers and checks each field; GitHub's delete takes no expected head, so it reads the branch right before deleting and refuses one that moved, accepting the short window between the two.
 
 ### The contract
 
@@ -57,6 +61,23 @@ When the put-back fails, the delete reads the branch once more with `git show-re
 
 A process killed while it holds the locks leaves the `index.lock` and `HEAD.lock` files behind. Git then refuses to check out or change `HEAD` until they are removed, as after any crashed git command.
 
+### The GitHub forge
+
+`Plugin/GitHubForge/Infrastructure/GitHubForgeBranches` implements it for one repository (a `RepositoryAddress`). `GitHubBranchCalls` makes the REST calls as the installation (through `GitHubCalls`, with the checked installation token) and checks each answer's shape; `GitHubForgeBranches` maps the answers onto the contract.
+
+- **Answers:** only `200` counts for a read (`204` for the delete); any other status, an answer that is not JSON, a missing or mistyped field and a head that is not a full commit id are a `ForgeReadFailed`. A JSON object whose keys read as a list (`{}`, or keys `"0"`, `"1"` and so on) is read as no value, so it never passes for a list of branches, pull requests, commits or labels. A rate-limited call throws `ForgeRateLimited`, as every GitHub call does. A branch name with an empty part or a part that starts with `.` is refused before any call names it (for the delete as a `ForgeWriteFailed`), and every part is URL-encoded.
+- **Pages:** every listing asks for 100 entries a page and reads the next page while the answer's `Link` header names a `next` link, read with `NextLinks` (RFC 8288); an unreadable `Link` header is a `ForgeReadFailed`. The page number is counted by the forge, never taken from the link. More than 100 pages is a `ForgeReadFailed`, never a shorter listing.
+- **Listing:** `GET /repos/<owner>/<repo>` names the `default_branch`, and `GET /repos/<owner>/<repo>/branches` lists each branch's `name`, `commit.sha` and `protected` flag. The branch named as the default is `isDefault`; release branches are told by their name, as on every forge. GitHub has no symbolic branches, so none is `isSymbolic`.
+- **Pull request:** `GET /repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>&sort=created&direction=desc`, every page, so an open or `keep`-labelled pull request on a later page is never missed. An open pull request decides first (`open`); otherwise the newest whose `head.sha` is the branch's head decides (`merged` when `merged_at` is set, `closed-unmerged` when it is `null`), because a pull request closed before later commits says nothing about them. With neither, the branch has none (`null`). The labels are those of every pull request of the branch, so a `keep` on an older one still counts. A pull request without `state`, `merged_at`, `labels` or a valid `head.sha` is a `ForgeReadFailed`.
+- **Commit by a person:** the default branch's head is read first (`GET /repos/<owner>/<repo>/branches/<default>`), and `GET /repos/<owner>/<repo>/compare/<default head>...<branch head>` lists the commits on the branch that the default branch does not hold, every page. Comparing with a commit and not the default branch's name keeps a default branch that advances between pages from shifting commits. Every page's `total_commits` must equal the number of commits read, or the read is a `ForgeReadFailed`. Each commit's `commit.author.email` and `commit.committer.email` are compared with Intakt's identity case-insensitively (`mb_strtolower`); an empty identity or email is a `ForgeReadFailed`.
+- **Delete:** see [Delete on the GitHub forge](#delete-on-the-github-forge).
+
+### Delete on the GitHub forge
+
+A branch whose `isDeletable()` is false is refused before any call. Then the forge reads `GET /repos/<owner>/<repo>` and `GET /repos/<owner>/<repo>/branches/<name>` once more, and refuses the branch when it is the default branch now, when GitHub answers for another name (it redirects a renamed branch to its new name), when it is protected now, or when its head is no longer the head the `ForgeBranch` carries. Only then does `DELETE /repos/<owner>/<repo>/git/refs/heads/<name>` delete it. Every refusal and failure is a `ForgeWriteFailed`, and a read that fails before the delete means nothing is deleted.
+
+**Accepted window.** GitHub's REST ref deletion takes no expected head. GraphQL's `updateRefs` mutation names the expected old commit, but it is not used, because this change could not prove it against an installation's permissions. So a push that lands between the final read and the delete is deleted with the branch. That window is short and accepted, because cleanup candidates have been idle for weeks (owner decision of 2026-11-24 on #24).
+
 ### Tests
 
-The tests are in `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` and `tests/Plugin/Forge/Contract/ForgeBranchTest.php`.
+The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` and `tests/Plugin/Forge/Contract/ForgeBranchTest.php`.
