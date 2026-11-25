@@ -24,10 +24,33 @@ final readonly class ProcessGroup
     ) {
     }
 
-    // Because the launcher is still bin/check's unreaped child right after its start, its start time read then names it apart from any later process given its number.
+    // Because the launcher is still bin/check's unreaped child right after its start, its start time read then names it apart from any later process given its number; without one no later stop could prove it ours, so it is killed while that still holds.
     public static function ofLauncher(int $id): self
     {
-        return new self($id, self::startTimeOf($id));
+        $group = new self($id, self::startTimeOf($id));
+
+        if ('' === $group->launcherStart && null !== $group->hasTheUnreapedChildEnded()) {
+            posix_kill($id, 9);
+            $group->awaitTheKilledLauncher();
+        }
+
+        return $group;
+    }
+
+    // Because a stop without these functions or without /proc could not reach a launcher before its session, the process that would start one refuses to.
+    public static function whatTheStopLacks(): ?string
+    {
+        foreach (self::FUNCTIONS as $functions) {
+            foreach ($functions as $function) {
+                if (!function_exists($function)) {
+                    return 'the PHP function '.$function.' is missing';
+                }
+            }
+        }
+
+        $own = '/proc/'.posix_getpid().'/stat';
+
+        return '' === self::startTimeOf(posix_getpid()) ? 'the stop cannot read '.$own : null;
     }
 
     // Because only an unreaped child's PID is surely still the launcher's, the bare PID is signaled only then, and its zombie then holds the PID, so a session it created in the meantime is still its own.
@@ -78,7 +101,7 @@ final readonly class ProcessGroup
     }
 
     // Because a launcher that has no group yet runs nothing it could stop, it is not asked; `stop()` waits for its group or kills it.
-    public function askToStop(): void
+    private function askToStop(): void
     {
         if (!$this->isOursWithoutItsGroup()) {
             posix_kill(-$this->id, 15);
@@ -115,6 +138,16 @@ final readonly class ProcessGroup
         }
 
         return $held;
+    }
+
+    // Because a kill is delivered after `posix_kill()` returns, the launcher is waited for, within the stop grace, so it has ended once bin/check goes on.
+    private function awaitTheKilledLauncher(): void
+    {
+        $deadline = (hrtime(true) / 1_000_000_000) + self::STOP_GRACE_SECONDS;
+
+        while (false === $this->hasTheUnreapedChildEnded() && (hrtime(true) / 1_000_000_000) < $deadline) {
+            usleep(self::POLL_MICROSECONDS);
+        }
     }
 
     private function isHeldBeforeItsSession(): bool

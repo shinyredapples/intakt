@@ -149,7 +149,6 @@ final class GateChildLauncherStopTest extends TestCase
         $pid = (int) trim($orphan->getOutput());
         $group = ProcessGroup::ofLauncher($pid);
 
-        $group->askToStop();
         $group->stop();
         $group->kill();
         $stillLive = $this->isLive($pid);
@@ -164,7 +163,6 @@ final class GateChildLauncherStopTest extends TestCase
         $bystander->start();
         $group = new ProcessGroup((int) $bystander->getPid(), 'the start time of a reaped launcher');
 
-        $group->askToStop();
         $group->stop();
         $group->kill();
         $stillRunning = $bystander->isRunning();

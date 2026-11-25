@@ -235,8 +235,14 @@ final class ProcessRunner
 
     private function refusal(string $program, int $seconds): ?ProcessResult
     {
-        if (!function_exists('posix_kill')) {
+        if (!function_exists('posix_getpid')) {
             return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': the PHP posix extension is missing');
+        }
+
+        $lacking = ProcessGroup::whatTheStopLacks();
+
+        if (null !== $lacking) {
+            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': '.$lacking);
         }
 
         return $seconds < 1 ? $this->timedOut($program, $seconds) : null;
@@ -259,16 +265,16 @@ final class ProcessRunner
     private function startHeld(Process $process, InputStream $release): ?ProcessGroup
     {
         $leader = [] === $this->startAll([$process]) ? $process->getPid() : null;
+        // Because a launcher whose start time cannot be read is killed at once, it is named while still held, before it runs anything.
+        $group = null === $leader ? null : ProcessGroup::ofLauncher($leader);
         $release->write("\n");
         $release->close();
 
-        if (null === $leader) {
+        if (null === $group) {
             $process->stop(0);
-
-            return null;
         }
 
-        return ProcessGroup::ofLauncher($leader);
+        return $group;
     }
 
     private function namespacesAreAvailable(): bool
