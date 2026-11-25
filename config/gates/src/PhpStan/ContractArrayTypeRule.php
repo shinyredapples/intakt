@@ -69,17 +69,6 @@ final readonly class ContractArrayTypeRule implements Rule
         return [...$findings, ...$this->promotedInputFindings($class, $declaration, $promoted), ...$this->propertyFindings($promoted, $class, $declaration)];
     }
 
-    // read from the constructor, not the class's properties, because a parameter that only shares its name with a property a parent promotes is an ordinary parameter
-    /**
-     * @return list<string>
-     */
-    private function promotedParametersOf(ReflectionMethod $constructor): array
-    {
-        $promoted = array_filter($constructor->getParameters(), static fn (ReflectionParameter $parameter): bool => $parameter->isPromoted());
-
-        return array_values(array_map(static fn (ReflectionParameter $parameter): string => $parameter->getName(), $promoted));
-    }
-
     private function isContract(string $file): bool
     {
         return str_starts_with($file, $this->root.'/') && 1 === preg_match(self::CONTRACT_FOLDER, substr($file, strlen($this->root) + 1));
@@ -102,6 +91,17 @@ final readonly class ContractArrayTypeRule implements Rule
         $file = $declaring->getFileName();
 
         return $declaring->getName() === $class->getName() || (is_string($file) && str_starts_with($file, $this->root.'/src/') && !$this->isContract($file));
+    }
+
+    // read from the constructor, not the class's properties, because a parameter that only shares its name with a property a parent promotes is an ordinary parameter
+    /**
+     * @return list<string>
+     */
+    private function promotedParametersOf(ReflectionMethod $constructor): array
+    {
+        $promoted = array_filter($constructor->getParameters(), static fn (ReflectionParameter $parameter): bool => $parameter->isPromoted());
+
+        return array_values(array_map(static fn (ReflectionParameter $parameter): string => $parameter->getName(), $promoted));
     }
 
     // a public method a trait brings becomes the using class's own method, so it crosses the boundary as part of the class, and so does one a parent outside Contract/ declares
@@ -237,23 +237,6 @@ final readonly class ContractArrayTypeRule implements Rule
         return $findings;
     }
 
-    // the fallback for a parameter without its own @param, because PHPStan then types a promoted parameter like its property
-    /**
-     * @return array<string, Type>
-     */
-    private function parameterTypesByName(ClassReflection $class, string $method): array
-    {
-        $typed = [];
-
-        foreach ($class->getNativeMethod($method)->getVariants() as $variant) {
-            foreach ($variant->getParameters() as $parameter) {
-                $typed[$parameter->getName()] = $parameter->getType();
-            }
-        }
-
-        return $typed;
-    }
-
     // the PHPDoc is resolved under the constructor's declared name, since PHP accepts it in any case
     /**
      * @return array<string, Type>
@@ -269,6 +252,23 @@ final readonly class ContractArrayTypeRule implements Rule
         $tags = $this->typeMapper->getResolvedPhpDoc($file, $constructor->getDeclaringClass()->getName(), $trait, $constructor->getName(), $comment)->getParamTags();
 
         return array_map(static fn (ParamTag $tag): Type => $tag->getType(), $tags);
+    }
+
+    // the fallback for a parameter without its own @param, because PHPStan then types a promoted parameter like its property
+    /**
+     * @return array<string, Type>
+     */
+    private function parameterTypesByName(ClassReflection $class, string $method): array
+    {
+        $typed = [];
+
+        foreach ($class->getNativeMethod($method)->getVariants() as $variant) {
+            foreach ($variant->getParameters() as $parameter) {
+                $typed[$parameter->getName()] = $parameter->getType();
+            }
+        }
+
+        return $typed;
     }
 
     /**
