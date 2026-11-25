@@ -24,6 +24,9 @@ final class DeadlineHttpClient implements HttpClientInterface
         $this->client = $client;
     }
 
+    /**
+     * @param array<mixed> $options
+     */
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
         $left = (float) $this->deadline->format('U.u') - (float) $this->clock->now()->format('U.u');

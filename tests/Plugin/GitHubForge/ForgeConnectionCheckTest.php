@@ -167,10 +167,7 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAPrivateKeyThatIsNotRsaFailsWithTheLocalKeyFixWithoutReachingGitHub(): void
     {
-        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
-        self::assertNotFalse($key);
-        openssl_pkey_export($key, $pem);
-        $this->privateKey = (string) $pem;
+        $this->privateKey = AppKey::ellipticCurvePem();
 
         $verdict = $this->check()->run();
 
@@ -282,17 +279,23 @@ final class ForgeConnectionCheckTest extends TestCase
                 throw new TransportException('deadline exceeded');
             }
             $this->clock->sleep($seconds);
-            if (str_ends_with($url, '/access_tokens')) {
-                return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => 201]);
-            }
-            if (str_contains($url, '/installation/repositories')) {
-                $name = str_ends_with($url, '&page=1') ? 'acme/one' : 'acme/two';
 
-                return new MockResponse((string) json_encode(['total_count' => 2, 'repositories' => [['full_name' => $name]]]));
-            }
-
-            return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/installation.json'));
+            return $this->pagedAnswerTo($url);
         });
+    }
+
+    // Two repositories on two pages, so the listing takes two requests.
+    private function pagedAnswerTo(string $url): MockResponse
+    {
+        if (str_ends_with($url, '/access_tokens')) {
+            return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => 201]);
+        }
+        if (!str_contains($url, '/installation/repositories')) {
+            return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/installation.json'));
+        }
+        $name = str_ends_with($url, '&page=1') ? 'acme/one' : 'acme/two';
+
+        return new MockResponse((string) json_encode(['total_count' => 2, 'repositories' => [['full_name' => $name]]]));
     }
 
     private function unreadableSettings(): ExpectedInstallation
