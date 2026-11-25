@@ -47,7 +47,7 @@ final class FailedMessageTest extends KernelTestCase
     public function testAReviewerMessageThatReachesTheFailureTransportMarksTheReviewerBlockedAndCompletesTheRound(): void
     {
         $round = $this->fixture->start(2);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new ScriptedVendor());
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole());
         $message = $this->fixture->bus->messages[1];
 
         ($this->fixture->failedMessages())(new WorkerMessageFailedEvent(new Envelope($message), 'async', new RuntimeException('gave up')));
@@ -125,7 +125,7 @@ final class FailedMessageTest extends KernelTestCase
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $this->fixture->deliver($message, new ScriptedVendor());
+        $this->fixture->deliver($message, new VerdictPerRole());
 
         ($this->fixture->failedMessages())(new WorkerMessageFailedEvent(new Envelope($message), 'async', new RuntimeException('late')));
 

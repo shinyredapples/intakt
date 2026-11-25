@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
@@ -52,6 +52,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(PullRequestsOfTasks::class)]
 #[UsesClass(IntakeStore::class)]
 #[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
 #[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(IntakeRules::class)]
 #[UsesClass(IntakePlan::class)]
@@ -281,8 +282,7 @@ final class ShowQueueCommandTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->store = new IntakeStore($entities);
         $this->reads = new RecordedIssueReads();
         $this->logger = new BufferingLogger();
@@ -316,7 +316,7 @@ final class ShowQueueCommandTest extends KernelTestCase
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturn(true);
         $references = new IssueReferences();
-        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(['alpha' => ['eligibility_label' => $this->eligibilityLabel]]), $references, $this->logger);
+        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), $references, $this->logger);
 
         return new GitHubWorkSource($listing, $histories, $accounts, $references, $this->store, new PullRequestsOfTasks(new RecordedPullRequestBranches($this->reads), $histories, $accounts, $references), $this->logger);
     }

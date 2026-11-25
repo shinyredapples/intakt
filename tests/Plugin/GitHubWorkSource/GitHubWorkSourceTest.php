@@ -14,6 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\BranchPullRequest;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -66,6 +67,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(BranchPullRequest::class)]
 #[UsesClass(CompleteListing::class)]
 #[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
 #[UsesClass(IntakeStore::class)]
 #[UsesClass(StoredIssue::class)]
 #[UsesClass(TaskFailure::class)]
@@ -962,8 +964,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->store = new IntakeStore($entities);
         $this->reads = new RecordedIssueReads();
         $this->branches = new RecordedPullRequestBranches($this->reads);
@@ -1087,7 +1088,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             return in_array($account, $this->writers, true);
         });
-        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(['alpha' => ['eligibility_label' => $this->eligibilityLabel]]), new IssueReferences(), $this->logger);
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), new IssueReferences(), $this->logger);
 
         return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, new PullRequestsOfTasks($this->branches, $histories, $accounts, new IssueReferences()), $this->logger);
     }

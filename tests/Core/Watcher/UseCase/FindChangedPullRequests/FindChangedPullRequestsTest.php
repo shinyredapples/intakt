@@ -8,7 +8,6 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\ListingInProgress;
 use Intakt\Core\Watcher\Domain\ListingValidator;
 use Intakt\Core\Watcher\Domain\SeenChange;
@@ -240,8 +239,7 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->forge = new RecordedForge();
         $this->log = new RecordingLogger();
         $this->locks = new LockFactory(new InMemoryStore());

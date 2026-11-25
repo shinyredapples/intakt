@@ -194,7 +194,7 @@ final class ProbeTest extends TestCase
         $child = $this->childMarker();
         $this->probe('Hang.php', $this->spawningEscapedChild($child).'sleep(30);');
 
-        $run = $this->runProbe('tests/Probe/Hang.php', ['INTAKT_INSTANCE_COMMAND_SECONDS' => '2']);
+        $run = $this->runProbe('tests/Probe/Hang.php', ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.5']);
 
         self::assertStringContainsString('exit code: 124', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(124, $run->getExitCode());

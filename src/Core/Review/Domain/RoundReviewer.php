@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\ReviewCeiling;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity]
@@ -17,8 +18,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Index(name: 'round_reviewer_round', columns: ['round_id'])]
 final class RoundReviewer implements HasPlace
 {
-    // One hour, because a redelivery inside the hold must wait for the live worker while one after it may treat the worker as stopped; the transport's redeliver_timeout stays above it so a redelivery never arrives inside the hold.
-    public const int REVIEW_CEILING_SECONDS = 3600;
+    public const int REVIEW_CEILING_SECONDS = ReviewCeiling::SECONDS;
     public const string REVIEW_CEILING = 'PT'.self::REVIEW_CEILING_SECONDS.'S';
 
     private const int FAILURE_LENGTH = 255;
