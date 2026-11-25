@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
@@ -135,6 +136,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private ?LatestRoundStatus $roundsOfThePass = null;
 
+    private RecordingLogger $logger;
+
     // Evidence E1 of #3878 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
     public function testAPullRequestsTrustedSteeringLabelsReachTheQueuedRoundWithTheValueAppliedLast(): void
     {
@@ -218,7 +221,37 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
         $reported = $this->failureOf($this->handler(new RecordingCommandBus()));
 
-        self::assertSame(LockAcquiringException::class, $reported::class);
+        $afterTheTick = array_last($this->logger->logged);
+        self::assertSame(
+            [LockAcquiringException::class, 'The status pass of {project} failed after its tick had failed.', 'alpha', 'The rounds could not be read.', $reported],
+            [$reported::class, $afterTheTick[0] ?? null, $afterTheTick[1]['project'] ?? null, ($afterTheTick[1]['exception'] ?? null)?->getMessage(), $afterTheTick[1]['tick_failure'] ?? null],
+        );
+    }
+
+    // Maintainer decision 1 of the rework: the first open pull request's round lookup fails, and the second still gets its label on the same pass.
+    public function testAFailedRoundLookupOfOnePullRequestStillMirrorsTheStatusOfTheNextAndReportsTheFirstFailure(): void
+    {
+        $this->fixture->startFor(self::GREEN_PULL, $this->fixture->bus, 1);
+        $failure = new RuntimeException('The first round lookup failed.');
+        $stored = new StoredLatestRoundStatus($this->fixture->transactions());
+        $looked = [];
+        $rounds = self::createStub(LatestRoundStatus::class);
+        $rounds->method('of')->willReturnCallback(static function (string $project, string $change) use (&$looked, $failure, $stored): ?ReviewStatus {
+            $looked[] = $change;
+            if (1 === count($looked)) {
+                throw $failure;
+            }
+
+            return $stored->of($project, $change);
+        });
+        $this->roundsOfThePass = $rounds;
+
+        $reported = $this->failureOf($this->handler(new RecordingCommandBus()));
+
+        self::assertSame(
+            [$failure, ['https://github.com/acme/widgets/pull/7', self::GREEN_PULL], ['status:in-review'], ['The status of {change} in {project} could not be reconciled.', ['project' => 'alpha', 'change' => 'https://github.com/acme/widgets/pull/7', 'exception' => $failure]]],
+            [$reported, $looked, $this->statusLabels->labels, array_find($this->logger->logged, static fn (array $record): bool => str_starts_with($record[0], 'The status of '))],
+        );
     }
 
     // The fixture queues its round at another head than the listing names, so only a round at any head brings the pull request into the pass.
@@ -338,6 +371,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         EmptyDatabase::rowsIn(self::getContainer());
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $this->statusLabels = new RecordedStatusLabels('/repos/acme/widgets/issues/8');
+        $this->logger = new RecordingLogger();
     }
 
     // The real read of the labels over the recorded pull request, so the permission answer and the family rule decide what reaches the round; the permissions are the ones recorded for `acme/widget`, because the listing's fixtures name `acme/widgets`.
@@ -363,7 +397,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     {
         $clock = new MockClock($this->now);
         $locks = new LockFactory(new InMemoryStore());
-        $logger = new RecordingLogger();
+        $logger = $this->logger;
         $ledgerStore = self::getContainer()->get(Ledger::class);
         self::assertInstanceOf(Ledger::class, $ledgerStore);
         $ledger = new WatcherLedger($ledgerStore);

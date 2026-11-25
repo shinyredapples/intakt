@@ -7,6 +7,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
+use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -33,13 +34,34 @@ final readonly class StatusMirrors
         }
     }
 
+    // The first failure is rethrown only after the loop, so one pull request whose round or labels cannot be read never keeps the others' labels from being repaired on this pass.
     public function reconcileEveryOpenWithRound(string $project): void
     {
+        $firstFailure = null;
         foreach ($this->open->openOf($project) as $change) {
+            $failure = $this->reconcileOne($project, $change->id);
+            $firstFailure ??= $failure;
+        }
+
+        if ($firstFailure instanceof Throwable) {
+            throw $firstFailure;
+        }
+    }
+
+    private function reconcileOne(string $project, ChangeId $change): ?Throwable
+    {
+        try {
             // Review's rounds and not the watcher's own, because a round queued by another door has no started row here.
-            if ($this->rounds->of($project, $change->id->value) instanceof ReviewStatus) {
-                $this->mirror->reconcile($project, $change->id);
+            if ($this->rounds->of($project, $change->value) instanceof ReviewStatus) {
+                $this->mirror->reconcile($project, $change);
             }
+
+            return null;
+            // Boundary: logged and returned, because the pass goes on with the other open pull requests and rethrows the first failure at its end.
+        } catch (Throwable $notReconciled) {
+            $this->logger->error('The status of {change} in {project} could not be reconciled.', ['project' => $project, 'change' => $change->value, 'exception' => $notReconciled]);
+
+            return $notReconciled;
         }
     }
 }
