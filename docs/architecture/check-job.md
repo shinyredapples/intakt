@@ -6,7 +6,7 @@ The check job is the pre-push check: it runs the project's check command on what
 
 Worth knowing:
 
-- `intakt:build:task` calls it through `CheckJobs`; the push does not call it yet. For a bug it then runs the head's [regression tests](#regression-tests-of-a-bug) on the base and the head, logs both results, and `PrePushCheck` judges the pair: a head with no new test, or whose new test also passes on the base, fails the step like a red check.
+- `intakt:build:task` calls it through `CheckJobs`; the push does not call it yet. For a bug it then runs the head's [regression tests](#regression-tests-of-a-bug) on the base and the head, logs both results, and `PrePushCheck` judges the pair: a head with no new test, or whose new test also passes on the base, fails the step like a red check; a pair that passes the check is written into the pull request body by the push step ([how](build-task.md)).
 - The pull request text check records a first miss as sent back and stops the build before its push, and sends a second miss in a row on to the reviewers, counted apart from the hand-back round; `intakt:build:task` runs it after a passed check job, and the command runs it only when given a repository and a branch.
 - The job gets 4 GiB of memory, 2 CPUs and 1800 seconds, and no network beyond the gate's registry hosts.
 - A second check of the same head while one runs is refused as already running.

@@ -100,6 +100,12 @@ final readonly class StartedRounds
         return $rounds;
     }
 
+    // At any head and stale or not, because the label mirrors the latest round Review stored for the pull request, and a moved head keeps that round until its own one starts.
+    public function hasRoundOf(string $project, OpenChange $change): bool
+    {
+        return $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value]) > 0;
+    }
+
     // Read once per start, so the row this read returns decides both whether the round starts and whether the head stays due; a stale row is returned too, because a start replaces it with a fresh round.
     public function roundAt(string $project, OpenChange $change): ?StartedRound
     {
