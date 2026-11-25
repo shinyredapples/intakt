@@ -23,6 +23,8 @@ final readonly class ReviewerConversation
         public bool $askedAgain = false,
         // Set on the retry after a changes or blocked answer that named no finding, because a reviewer asked again in the same words tends to answer the same way.
         public bool $askedToNameFindings = false,
+        // Carried by every retry, because a retry in the code lane would show the Technical writer the code rules instead of its own.
+        public ReviewLane $lane = ReviewLane::Code,
     ) {
     }
 }

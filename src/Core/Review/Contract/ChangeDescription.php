@@ -11,6 +11,8 @@ final readonly class ChangeDescription
 {
     public const string FULL_REVIEW_LABEL = 'review:full';
 
+    public const string TECHNICAL_WRITER_LABEL = 'review:technical_writer';
+
     /**
      * @param non-negative-int $lines
      */
@@ -18,6 +20,8 @@ final readonly class ChangeDescription
         public int $lines,
         public Paths $paths,
         public Labels $labels,
+        // The pages whose "In short" section the change touches, read by the forge from both sides of the diff because a summary can change outside the lines a hunk shows; empty where nobody read them.
+        public Paths $summaries = new Paths(),
     ) {
     }
 
@@ -32,5 +36,10 @@ final readonly class ChangeDescription
     public function wantsFullReview(): bool
     {
         return $this->labels->contains(self::FULL_REVIEW_LABEL);
+    }
+
+    public function asksForTechnicalWriter(): bool
+    {
+        return $this->labels->contains(self::TECHNICAL_WRITER_LABEL);
     }
 }

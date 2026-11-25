@@ -57,13 +57,13 @@ final readonly class JudgedFindings
 
     private static function actedOn(Finding $finding, ?Mark $mark): bool
     {
-        return self::blocking($finding) || (!$finding->gate_gap && Mark::Act === $mark);
+        return self::blocking($finding) || (!self::neverActedOn($finding) && Mark::Act === $mark);
     }
 
-    // A gate-gap P3 the judge marked act is deferred as well, because a gate that misses a case gets a gate issue and not a send-back.
+    // A gate-gap P3 or an owner's proposal the judge marked act is deferred as well, because a gate that misses a case gets a gate issue and a proposal waits for the owner, not a send-back.
     private static function deferred(Finding $finding, ?Mark $mark): bool
     {
-        return !self::blocking($finding) && ($finding->gate_gap ? in_array($mark, [Mark::Act, Mark::Defer], true) : Mark::Defer === $mark);
+        return !self::blocking($finding) && (self::neverActedOn($finding) ? in_array($mark, [Mark::Act, Mark::Defer], true) : Mark::Defer === $mark);
     }
 
     private static function rejected(Finding $finding, ?Mark $mark): bool
@@ -92,5 +92,10 @@ final readonly class JudgedFindings
     private static function blocking(Finding $finding): bool
     {
         return Severity::P3 !== $finding->severity;
+    }
+
+    private static function neverActedOn(Finding $finding): bool
+    {
+        return $finding->gate_gap || $finding->proposesToOwner();
     }
 }

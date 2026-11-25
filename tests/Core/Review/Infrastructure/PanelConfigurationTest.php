@@ -6,8 +6,10 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DocsPages;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelCannotReachQuorum;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -16,7 +18,9 @@ use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\TechnicalWriterTrigger;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -41,6 +45,10 @@ use Symfony\Component\Config\Definition\Processor;
 #[UsesClass(Verdict::class)]
 #[UsesClass(Decision::class)]
 #[UsesClass(PanelCannotReachQuorum::class)]
+#[UsesClass(ReviewLane::class)]
+#[UsesClass(ChangeDecision::class)]
+#[UsesClass(TechnicalWriterTrigger::class)]
+#[UsesClass(DocsPages::class)]
 final class PanelConfigurationTest extends TestCase
 {
     private const array TIER_PROVIDERS = [
@@ -102,6 +110,56 @@ final class PanelConfigurationTest extends TestCase
 
         self::assertSame(200, $alpha['rules'][0]['min_lines']);
         self::assertSame(['src/**'], $alpha['rules'][0]['paths']);
+    }
+
+    public function testATechnicalWriterWithoutPathsWatchesTheDocsPeopleRead(): void
+    {
+        $processed = $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'technical_writer' => $this->writer()]]]);
+
+        /** @var array{technical_writer: array{paths: list<string>, tier: string}} $alpha */
+        $alpha = $processed['projects']['alpha'];
+
+        self::assertSame(['docs/user/**', 'docs/guide/**', 'README.md'], $alpha['technical_writer']['paths']);
+        self::assertSame('standard', $alpha['technical_writer']['tier']);
+    }
+
+    public function testAProjectWithoutATechnicalWriterLoadsWithoutOne(): void
+    {
+        $processed = $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()]]]]);
+
+        self::assertArrayNotHasKey('technical_writer', (array) $processed['projects']['alpha']);
+    }
+
+    public function testATechnicalWriterOnAnotherProviderThanItsTierIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/'.preg_quote('The technical writer of project "alpha" names provider "openai", but the project maps tier "standard" to "anthropic".', '/').'/');
+
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'technical_writer' => $this->writer(['provider' => 'openai'])]]]);
+    }
+
+    public function testATechnicalWriterWithAnEmptyPathListIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'technical_writer' => $this->writer(['paths' => []])]]]);
+    }
+
+    public function testAReviewerCannotTakeTheTechnicalWritersRoleName(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/The role "technical_writer" is reserved for the technical_writer section/');
+
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer(['role' => ReviewerRole::TECHNICAL_WRITER])]]]]);
+    }
+
+    public function testARuleReviewerCannotTakeTheTechnicalWritersRoleName(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/reserved for the technical_writer section/');
+
+        $rule = ['paths' => ['docs/**'], 'reviewers' => [$this->reviewer(['role' => ReviewerRole::TECHNICAL_WRITER])]];
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [$rule]]]]);
     }
 
     public function testARuleWithoutATriggerIsRefused(): void
@@ -324,6 +382,16 @@ final class PanelConfigurationTest extends TestCase
     private function reviewer(array $override = []): array
     {
         return $override + ['role' => 'correctness', 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Check the logic.', 'budget' => 5];
+    }
+
+    /**
+     * @param array<string, mixed> $override
+     *
+     * @return array<string, mixed>
+     */
+    private function writer(array $override = []): array
+    {
+        return $override + ['tier' => 'standard', 'provider' => 'anthropic', 'prompt' => 'Read it as a newcomer.', 'budget' => 4];
     }
 
     /**

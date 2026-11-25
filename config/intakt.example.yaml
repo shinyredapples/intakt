@@ -54,6 +54,9 @@ projects:
                 - paths: [config/**, src/**/Security/**]
                   reviewers:
                       - { role: security, tier: strong, provider: anthropic, prompt: Look for ways the change weakens a check., budget: 8 }
+            # Optional: the Technical writer joins a change that touches a Markdown page under docs/ or README.md, when a page matches paths
+            # (default docs/user/**, docs/guide/**, README.md), a page's "In short" section changed, or the label review:technical_writer is set.
+            technical_writer: { tier: standard, provider: anthropic, prompt: Check that a newcomer can follow the pages., budget: 6 }
         # An optional build section routes the tier a build starts on: tier (strong, standard or light; standard by default) for an ordinary build;
         # a build touching a sensitive path starts strong whatever its label says, else a model:<tier> label sets the tier;
         # escalate_on lists the setbacks (failed-attempt, blocking-finding, stall) that raise the next build to strong (all three by default).

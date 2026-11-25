@@ -7,8 +7,10 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DocsPages;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
@@ -18,7 +20,9 @@ use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\TechnicalWriterTrigger;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -40,6 +44,10 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(PanelVerdict::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Decision::class)]
+#[UsesClass(TechnicalWriterTrigger::class)]
+#[UsesClass(DocsPages::class)]
+#[UsesClass(ReviewLane::class)]
+#[UsesClass(ChangeDecision::class)]
 final class ConfiguredPanelsTest extends TestCase
 {
     private const array TIERS = ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic'], 'standard' => ['provider' => 'anthropic'], 'light' => ['provider' => 'anthropic']]]];
@@ -115,6 +123,30 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness'], $this->roles($panel));
     }
 
+    public function testAChangeToAUserChapterAddsTheTechnicalWriterAfterThePanel(): void
+    {
+        $panel = $this->written()->panelForChange('alpha', new ChangeDescription(1, new Paths('src/Cart.php', 'docs/user/cart.md'), new Labels()));
+
+        self::assertSame(['correctness', ReviewerRole::TECHNICAL_WRITER], $this->roles($panel));
+        self::assertSame('Read it as a newcomer.', $panel->reviewers[1]->role->prompt);
+        self::assertSame(Tier::Standard, $panel->reviewers[1]->model->tier);
+        self::assertSame(4, $panel->reviewers[1]->budget);
+    }
+
+    public function testAChangeToCodeOnlyGetsNoTechnicalWriter(): void
+    {
+        $panel = $this->written()->panelForChange('alpha', new ChangeDescription(1, new Paths('src/Cart.php'), new Labels()));
+
+        self::assertSame(['correctness'], $this->roles($panel));
+    }
+
+    public function testAProjectWithoutATechnicalWriterNeverGetsOne(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths('docs/user/cart.md'), new Labels(ChangeDescription::TECHNICAL_WRITER_LABEL)));
+
+        self::assertNotContains(ReviewerRole::TECHNICAL_WRITER, $this->roles($panel));
+    }
+
     public function testAModelLabelSetsTheTierOfEveryReviewer(): void
     {
         $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
@@ -182,6 +214,15 @@ final class ConfiguredPanelsTest extends TestCase
         $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:standard')));
 
         self::assertSame([Tier::Strong], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    private function written(): ConfiguredPanels
+    {
+        return new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [$this->reviewer('correctness')],
+            'technical_writer' => ['tier' => 'standard', 'provider' => 'anthropic', 'prompt' => 'Read it as a newcomer.', 'budget' => 4, 'paths' => ['docs/user/**', 'README.md']],
+        ]], self::TIERS);
     }
 
     private function ruled(): ConfiguredPanels

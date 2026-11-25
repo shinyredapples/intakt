@@ -14,6 +14,8 @@ use Symfony\Component\Validator\Constraints\Valid;
 #[Exclude]
 final readonly class Finding
 {
+    public const string PROPOSAL = 'Proposal:';
+
     public function __construct(
         #[NotBlank]
         public string $id,
@@ -55,6 +57,22 @@ final readonly class Finding
     public function withSeverity(Severity $severity): self
     {
         return clone ($this, ['severity' => $severity]);
+    }
+
+    // Only the owner decides the user guide's structure and the docs gate's limits, so the Technical writer's proposal on them is a P3 follow-up the builder never acts on (docs/design/05-architecture/07-reviews.md#the-technical-writer).
+    public function proposesToOwner(): bool
+    {
+        return Severity::P3 === $this->severity && FixableBy::Owner === $this->fixable_by && $this->namesProposal();
+    }
+
+    public function namesProposal(): bool
+    {
+        return 0 === stripos(ltrim($this->requirement ?? ''), self::PROPOSAL);
+    }
+
+    public function withFixableBy(FixableBy $fixableBy): self
+    {
+        return clone ($this, ['fixable_by' => $fixableBy]);
     }
 
     public function withMerged(FindingIds $ids): self

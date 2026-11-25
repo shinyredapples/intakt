@@ -9,11 +9,15 @@ use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Domain\GoalpostRule;
+use Intakt\Core\Review\Domain\OwnerProposals;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\DocsPartOfDiff;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -30,6 +34,8 @@ final readonly class ReviewWithReviewerHandler
         private ReviewRounds $rounds,
         private GoalpostRule $goalposts,
         private LiveRoundProgress $progress,
+        private DocsPartOfDiff $docsPart = new DocsPartOfDiff(),
+        private OwnerProposals $proposals = new OwnerProposals(),
     ) {
     }
 
@@ -59,10 +65,11 @@ final readonly class ReviewWithReviewerHandler
     private function review(RoundReviewer $reviewer): void
     {
         $round = $reviewer->round();
+        $lane = ReviewLane::ofRole($reviewer->roleName());
 
         try {
-            $brief = new ReviewBrief(new ChangeUnderReview($round->project(), $round->task(), $round->diff()), $this->rounds->openFindingsOf($round), $round->number());
-            $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), $round->id(), $reviewer->id()));
+            $brief = new ReviewBrief(new ChangeUnderReview($round->project(), $round->task(), $this->diffFor($lane, $round->diff())), $this->rounds->openFindingsOf($round), $round->number());
+            $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), $round->id(), $reviewer->id(), lane: $lane));
             $review = $this->vendor->review($round->project(), $reviewer->tier(), $request);
         } catch (ProviderRateLimited $limited) {
             $this->leases->handBack($reviewer);
@@ -91,9 +98,20 @@ final readonly class ReviewWithReviewerHandler
             return;
         }
 
-        $verdict = $this->goalposts->applyToVerdict($round->number(), $review->verdict->asRecorded(), $brief->open);
+        $verdict = $this->goalposts->applyToVerdict($round->number(), $this->proposalsLowered($lane, $review->verdict->asRecorded()), $brief->open);
         if ($this->leases->recordVerdict($reviewer, $verdict, $review->substitute)) {
             $this->progress->publishStopOf($reviewer);
         }
+    }
+
+    private function diffFor(ReviewLane $lane, string $diff): string
+    {
+        return ReviewLane::Docs === $lane ? $this->docsPart->of($diff) : $diff;
+    }
+
+    // Here too and not only in the reviewer agent, because another vendor answers without it and the recorded verdict must hold the lowered severity.
+    private function proposalsLowered(ReviewLane $lane, Verdict $verdict): Verdict
+    {
+        return ReviewLane::Docs === $lane ? $this->proposals->applyToVerdict($verdict) : $verdict;
     }
 }

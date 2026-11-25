@@ -18,7 +18,7 @@ final readonly class Panel
         }
 
         // Asked of the policy itself, so a panel that could never pass fails when it is configured instead of on every review.
-        if (!$quorum->isMet($this->unanimousApproval())) {
+        if (Decision::Approve !== new ChangeDecision()->of($quorum, $this->unanimousApproval())) {
             throw new PanelCannotReachQuorum($quorum);
         }
     }
@@ -30,6 +30,6 @@ final readonly class Panel
     {
         $approval = new Verdict(Decision::Approve, [], [], []);
 
-        return array_map(static fn (PanelReviewer $reviewer): PanelVerdict => new PanelVerdict($reviewer->model->tier, $approval), $this->reviewers);
+        return array_map(static fn (PanelReviewer $reviewer): PanelVerdict => new PanelVerdict($reviewer->model->tier, $approval, ReviewLane::ofRole($reviewer->role->name)), $this->reviewers);
     }
 }

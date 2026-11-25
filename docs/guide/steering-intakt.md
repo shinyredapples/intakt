@@ -26,6 +26,7 @@ flowchart LR
 | `plan:required`, `plan:skip` | the Tech lead writes a plan for your approval first, or skips it |
 | `review:full` | all the Code reviewers, specialists included, on every round, even for small changes |
 | `review:<role>` | adds a specialist reviewer, for example `review:security` |
+| `review:technical_writer` | the Technical writer also reads changed reference and technical pages, not only the user guide, these guides and the README; a change with no changed page under `docs/` and no README still gets none |
 | `keep` | on a closed pull request: don't delete its branch |
 | `hands-off` | you work on this issue or pull request yourself: Intakt stays off it |
 | `take-over` | Intakt works on an issue or pull request it did not create |
@@ -94,6 +95,6 @@ An approval always names one exact version. If the change itself is pushed again
 
 ## Labels on a reviewed pull request
 
-On GitHub, two labels steer a review. `review:full` asks for every reviewer the change could get, and `model:<tier>` (`strong`, `standard` or `light`) sets the tier the reviewers start on. Code reviewers that need one strong reviewer keeps that reviewer strong. A reviewer also keeps its configured tier when your project maps the labeled tier to another provider than the reviewer's, or to no model, so a label never moves a reviewer to another provider. Only labels a person with write access applied, and still on the pull request, count. If Intakt cannot read the labels, none counts and the review runs with the configured Code reviewers. A review keeps the labels it started with.
+On GitHub, three labels steer a review. `review:full` asks for every reviewer the change could get, `review:technical_writer` asks for the Technical writer when your project has one and the change touches a docs page, and `model:<tier>` (`strong`, `standard` or `light`) sets the tier the reviewers start on. Code reviewers that need one strong reviewer keeps that reviewer strong. A reviewer also keeps its configured tier when your project maps the labeled tier to another provider than the reviewer's, or to no model, so a label never moves a reviewer to another provider. Only labels a person with write access applied, and still on the pull request, count. If Intakt cannot read the labels, none counts and the review runs with the configured Code reviewers. A review keeps the labels it started with.
 
 When two values of one family (two `model:` labels, say) are present, the one applied last wins, and Intakt removes the other with a comment. If the pull request changed after Intakt listed it, Intakt removes nothing this time, so a label you just applied again stays. If you apply it again in the very moment of the removal, it is removed anyway (GitHub cannot remove a label only if it is unchanged); the comment then asks you to apply it once more, and that value counts. A `model:` label that names no tier steers nothing and never pushes out a valid one. This holds for the one-value families `priority:`, `class:`, `model:` and `plan:`; Intakt never removes `review:` labels or labels of your own, such as `area:docs`.

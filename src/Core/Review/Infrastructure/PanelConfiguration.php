@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerRole;
 use InvalidArgumentException;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Builder\NodeBuilder;
@@ -20,6 +21,9 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
 // Its own tree because the projects tree of the AI module refuses keys it does not know; each tree gets only its part of a project.
 final readonly class PanelConfiguration implements ConfigurationInterface
 {
+    // The user guide, the plain-words guides and the README by default, because those are the pages people read (docs/design/05-architecture/07-reviews.md#the-technical-writer).
+    private const array TECHNICAL_WRITER_PATHS = ['docs/user/**', 'docs/guide/**', 'README.md'];
+
     /**
      * @param array<int|string, array<string, string>> $tierProviders
      */
@@ -48,14 +52,15 @@ final readonly class PanelConfiguration implements ConfigurationInterface
             ->end()
             ->validate()->ifTrue(static fn (array $list): bool => !array_is_list($list))->thenInvalid('The paths must be a list, not a map.');
         $this->reviewers($ruleKeys->arrayNode('reviewers'));
+        $this->technicalWriter($panel->arrayNode('technical_writer')->children());
 
         return $tree;
     }
 
     /**
-     * @param array<int|string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules: list<array{min_lines?: positive-int, paths: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
+     * @param array<int|string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules: list<array{min_lines?: positive-int, paths: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>, technical_writer?: array{tier: string, provider: string, prompt: non-empty-string, budget: positive-int, paths: list<string>}}> $panels
      *
-     * @return array<int|string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules: list<array{min_lines?: positive-int, paths: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}>
+     * @return array<int|string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules: list<array{min_lines?: positive-int, paths: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>, technical_writer?: array{tier: string, provider: string, prompt: non-empty-string, budget: positive-int, paths: list<string>}}>
      */
     private function refuseUnusablePanels(array $panels): array
     {
@@ -65,6 +70,10 @@ final readonly class PanelConfiguration implements ConfigurationInterface
 
             foreach ($panel['rules'] as $rule) {
                 $this->refuseOtherProviders((string) $project, $rule['reviewers']);
+            }
+
+            if (isset($panel['technical_writer'])) {
+                $this->refuseOtherProvider((string) $project, 'The technical writer', $panel['technical_writer']);
             }
 
             $this->refuseUnreachableQuorum((string) $project, $panel);
@@ -78,12 +87,12 @@ final readonly class PanelConfiguration implements ConfigurationInterface
         $reviewers->isRequired()->requiresAtLeastOneElement();
         // Keys would be dropped silently, and a key that reads like a role name is easy to mistake for the role.
         $reviewers->validate()->ifTrue(static fn (array $list): bool => !array_is_list($list))->thenInvalid('The reviewers must be a list, not a map.');
-        $reviewer = $reviewers->arrayPrototype()->children();
+        $prototype = $reviewers->arrayPrototype();
+        // Reserved, because the role name puts a reviewer in the docs lane, which only the technical_writer section's trigger may add.
+        $prototype->validate()->ifTrue(static fn (array $reviewer): bool => ReviewerRole::TECHNICAL_WRITER === ($reviewer['role'] ?? null))->thenInvalid(sprintf('The role "%s" is reserved for the technical_writer section.', ReviewerRole::TECHNICAL_WRITER));
+        $reviewer = $prototype->children();
         $this->text($reviewer, 'role');
-        $reviewer->enumNode('tier')->isRequired()->values(array_column(Tier::cases(), 'value'));
-        $reviewer->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-        $this->text($reviewer, 'prompt');
-        $reviewer->integerNode('budget')->isRequired()->min(1);
+        $this->member($reviewer);
     }
 
     private function text(NodeBuilder $reviewer, string $key): void
@@ -93,23 +102,49 @@ final readonly class PanelConfiguration implements ConfigurationInterface
             ->validate()->ifTrue(static fn (string $text): bool => 1 === preg_match('/^\s*$/u', $text))->thenInvalid(sprintf('The "%s" key must not be blank.', $key))->end();
     }
 
+    private function member(NodeBuilder $member): void
+    {
+        $member->enumNode('tier')->isRequired()->values(array_column(Tier::cases(), 'value'));
+        $member->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
+        $this->text($member, 'prompt');
+        $member->integerNode('budget')->isRequired()->min(1);
+    }
+
+    private function technicalWriter(NodeBuilder $writer): void
+    {
+        $this->member($writer);
+        $writer->arrayNode('paths')->defaultValue(self::TECHNICAL_WRITER_PATHS)->requiresAtLeastOneElement()
+            ->stringPrototype()->cannotBeEmpty()
+                ->validate()->ifTrue(static fn (string $glob): bool => !mb_check_encoding($glob, 'UTF-8'))->thenInvalid('A path pattern must be valid UTF-8.')->end()
+            ->end()
+            ->validate()->ifTrue(static fn (array $list): bool => !array_is_list($list))->thenInvalid('The paths must be a list, not a map.');
+    }
+
     /**
      * @param list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}> $reviewers
      */
     private function refuseOtherProviders(string $project, array $reviewers): void
     {
         foreach ($reviewers as $index => $reviewer) {
-            $mapped = $this->tierProviders[$project][$reviewer['tier']] ?? null;
-
-            if ($mapped !== $reviewer['provider']) {
-                // A tier call reaches the provider the project maps the tier to, so a reviewer naming another one would silently run elsewhere.
-                throw new InvalidArgumentException(sprintf('Reviewer %d of project "%s" names provider "%s", but the project maps tier "%s" to %s.', $index, $project, $reviewer['provider'], $reviewer['tier'], null === $mapped ? 'no provider' : '"'.$mapped.'"'));
-            }
+            $this->refuseOtherProvider($project, sprintf('Reviewer %d', $index), $reviewer);
         }
     }
 
     /**
-     * @param array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules: list<array{min_lines?: positive-int, paths: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>} $panel
+     * @param array{tier: string, provider: string} $member
+     */
+    private function refuseOtherProvider(string $project, string $who, array $member): void
+    {
+        $mapped = $this->tierProviders[$project][$member['tier']] ?? null;
+
+        if ($mapped !== $member['provider']) {
+            // A tier call reaches the provider the project maps the tier to, so a reviewer naming another one would silently run elsewhere.
+            throw new InvalidArgumentException(sprintf('%s of project "%s" names provider "%s", but the project maps tier "%s" to %s.', $who, $project, $member['provider'], $member['tier'], null === $mapped ? 'no provider' : '"'.$mapped.'"'));
+        }
+    }
+
+    /**
+     * @param array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules: list<array{min_lines?: positive-int, paths: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>, technical_writer?: array{tier: string, provider: string, prompt: non-empty-string, budget: positive-int, paths: list<string>}} $panel
      */
     private function refuseUnreachableQuorum(string $project, array $panel): void
     {

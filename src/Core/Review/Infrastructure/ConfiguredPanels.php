@@ -19,13 +19,14 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\ReviewServices;
+use Intakt\Core\Review\Domain\TechnicalWriterTrigger;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final readonly class ConfiguredPanels implements Panels
 {
     /**
-     * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules?: list<array{min_lines?: positive-int, paths?: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
-     * @param array<string, array{tiers: array<string, array{provider: string}>}>                                                                                                                                                                                                                                                                                                       $projects
+     * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules?: list<array{min_lines?: positive-int, paths?: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>, technical_writer?: array{tier: string, provider: string, prompt: non-empty-string, budget: positive-int, paths: list<string>}}> $panels
+     * @param array<string, array{tiers: array<string, array{provider: string}>}>                                                                                                                                                                                                                                                                                                                                                                                                                                      $projects
      */
     public function __construct(
         #[Autowire(param: ReviewServices::PANELS)]
@@ -50,6 +51,12 @@ final readonly class ConfiguredPanels implements Panels
             if ($change->wantsFullReview() || $this->matches($rule, $change)) {
                 $reviewers = [...$reviewers, ...$rule['reviewers']];
             }
+        }
+
+        $writer = $panel['technical_writer'] ?? null;
+
+        if (null !== $writer && new TechnicalWriterTrigger($writer['paths'])->matches($change)) {
+            $reviewers[] = ['role' => ReviewerRole::TECHNICAL_WRITER, 'tier' => $writer['tier'], 'provider' => $writer['provider'], 'prompt' => $writer['prompt'], 'budget' => $writer['budget']];
         }
 
         $quorum = QuorumPolicy::from($panel['quorum']);

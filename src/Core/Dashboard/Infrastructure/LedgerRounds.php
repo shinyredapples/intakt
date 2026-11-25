@@ -32,6 +32,7 @@ use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
@@ -444,7 +445,7 @@ final class LedgerRounds
             return $round;
         }
 
-        $votes = array_map(static fn (ReviewerOutcome $outcome): PanelVerdict => new PanelVerdict(Tier::from($outcome->tier), new Verdict(self::voteOf($outcome, $counted), [], [], [])), $round->outcomes);
+        $votes = array_map(static fn (ReviewerOutcome $outcome): PanelVerdict => new PanelVerdict(Tier::from($outcome->tier), new Verdict(self::voteOf($outcome, $counted), [], [], []), ReviewLane::ofRole($outcome->role)), $round->outcomes);
         $unstarted = array_fill(0, max(0, $round->reviewers - count($votes)), new PanelVerdict(Tier::Standard, new Verdict(Decision::Blocked, [], [], [])));
 
         return $round->decidedAs($this->decision->of($round->quorum, [...$votes, ...$unstarted]));
