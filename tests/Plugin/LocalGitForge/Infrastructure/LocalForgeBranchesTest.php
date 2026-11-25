@@ -31,6 +31,7 @@ use Intakt\Plugin\Forge\Contract\ForgeBranch;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Infrastructure\LocalBranchRestore;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalForgeBranches;
 use Intakt\Plugin\LocalGitForge\Infrastructure\RebasesAndBisects;
 use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeGitDirectories;
@@ -49,6 +50,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(LocalForgeBranches::class)]
+#[CoversClass(LocalBranchRestore::class)]
 #[UsesClass(ArchivedBranch::class)]
 #[UsesClass(ArchivedHead::class)]
 #[UsesClass(BranchGit::class)]

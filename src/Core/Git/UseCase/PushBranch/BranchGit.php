@@ -191,7 +191,8 @@ final readonly class BranchGit
         }
 
         $environment = $process->getEnv();
-        $index = (int) ($environment['GIT_CONFIG_COUNT'] ?? 0);
+        $count = $environment['GIT_CONFIG_COUNT'] ?? '0';
+        $index = is_string($count) ? (int) $count : 0;
 
         return $process->setEnv([...$environment, 'GIT_CONFIG_COUNT' => (string) ($index + 1), 'GIT_CONFIG_KEY_'.$index => 'http.extraHeader', 'GIT_CONFIG_VALUE_'.$index => $this->credential->authorizationHeader()]);
     }

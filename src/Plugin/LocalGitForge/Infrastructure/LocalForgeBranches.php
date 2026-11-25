@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
-use Intakt\Core\Git\Contract\ArchivedHead;
 use Intakt\Core\Git\Contract\ArchivedHeadPush;
-use Intakt\Core\Git\Contract\BranchHead;
-use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\BranchChange;
@@ -87,24 +84,9 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
     }
 
-    // The repository's absolute common directory as the remote, because git resolves a relative path from the archive, where it could name another repository; the push brings the commit's objects with it.
     public function restore(BranchRestore $restore): void
     {
-        try {
-            $common = $this->commonDirectory();
-            $this->refuseExisting($restore->name);
-            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $common);
-        } catch (ForgeReadFailed|BranchNotPushed $failed) {
-            throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: %s', $restore->name, $failed->getMessage()), $failed->getCode(), $failed);
-        }
-    }
-
-    // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch. A ref that cannot be read is refused alike, because only a missing one may be created.
-    private function refuseExisting(string $name): void
-    {
-        if (self::MISSING !== $this->git(['show-ref', '--exists', self::HEADS.$name])->getExitCode()) {
-            throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: it exists or cannot be read, and a restore never overwrites a branch.', $name));
-        }
+        new LocalBranchRestore($this->repository, $this->archivedHeads, $this->hardened)->restore($restore);
     }
 
     // Only a files repository, because both the listing check and the delete's HEAD locks read the ref files.
