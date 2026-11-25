@@ -215,6 +215,14 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAListOfATemplateWhoseDeclaredBoundIncludesAScalarFailsStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Sample/Contract/Selection.php', "<?php\nnamespace Intakt\\Core\\Sample\\Contract;\ninterface Selection {\n    /**\n     * @template T of int|\\stdClass\n     * @param T \$value\n     * @return (T is \\stdClass ? list<T> : \\stdClass)\n     */\n    public function select(int|\\stdClass \$value): array|\\stdClass;\n}\n");
+
+        self::assertStringContainsString('Method Intakt\Core\Sample\Contract\Selection::select() returns', $this->ruleFindingsIn($sandbox));
+    }
+
     protected function ruleFor(string $root): ContractArrayTypeRule
     {
         return new ContractArrayTypeRule($root, self::getContainer()->getByType(FileTypeMapper::class));
