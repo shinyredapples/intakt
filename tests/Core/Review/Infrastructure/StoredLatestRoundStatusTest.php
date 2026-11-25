@@ -138,10 +138,7 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
 
         self::assertNull($status->of('alpha', 'https://github.com/acme/widgets/pull/99'));
         self::assertNull($status->of('alpha', 'feat/open'));
-        self::assertSame([], array_values(array_filter(
-            array_map(static fn (array $entry): string => (string) ($entry[2]['sql'] ?? ''), $log->cleanLogs()),
-            static fn (string $sql): bool => str_contains($sql, 'FROM review_round') && !str_contains(substr($sql, (int) strpos($sql, 'WHERE')), 'change_ref'),
-        )));
+        self::assertSame([], $this->roundReadsWithoutAChangeFilter($log));
     }
 
     protected function setUp(): void
@@ -161,6 +158,22 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         $connection = DriverManager::getConnection($original->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($log)]));
 
         return new EntityManager($connection, $original->getConfiguration());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function roundReadsWithoutAChangeFilter(BufferingLogger $log): array
+    {
+        $reads = [];
+        foreach ($log->cleanLogs() as $entry) {
+            $sql = is_array($entry) && is_array($entry[2] ?? null) && is_string($entry[2]['sql'] ?? null) ? $entry[2]['sql'] : '';
+            if (str_contains($sql, 'FROM review_round') && !str_contains(substr($sql, (int) strpos($sql, 'WHERE')), 'change_ref')) {
+                $reads[] = $sql;
+            }
+        }
+
+        return $reads;
     }
 
     private function publishedRound(): void
