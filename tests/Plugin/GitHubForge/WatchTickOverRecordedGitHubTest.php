@@ -457,18 +457,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         return new GitHubStatusLabels(new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), new GitHubLabelWrites($wiring->calls, $wiring->tokens));
     }
 
-    private function publicationHandler(RoundFixture $fixture): PublishVerdictHandler
-    {
-        $handed = new HandedOverChanges($fixture->ledger());
-        $protected = self::createStub(ProtectedHeads::class);
-        $protected->method('of')->willReturn(ProtectedChanges::touching(new Paths()));
-        $locks = new LockFactory(new InMemoryStore());
-        $mirror = $this->recordedMirror($fixture);
-        $verdicts = new VerdictForTheLoop(new StoredVerdicts(self::getContainer()->get('serializer.stored')), $fixture->findingStore(), new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads(), new ConfiguredPrices([])), new ChangeDecision());
-
-        return new PublishVerdictHandler($fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $handed, $verdicts, new OwnerAsks($handed, $protected, $fixture->ledger()), new ScriptedGitHub()->forge(), new ChangePublications($locks), $mirror, new NullLogger());
-    }
-
     private function recordedMirror(RoundFixture $fixture): RoundStatusMirror
     {
         return new RoundStatusMirror(new StoredLatestRoundStatus($fixture->transactions()), new LockFactory(new InMemoryStore()), new NullLogger(), $this->statusLabels());
@@ -491,6 +479,18 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         foreach ($fixture->judgings() as $judging) {
             $fixture->judge($vendor)($judging);
         }
+    }
+
+    private function publicationHandler(RoundFixture $fixture): PublishVerdictHandler
+    {
+        $handed = new HandedOverChanges($fixture->ledger());
+        $protected = self::createStub(ProtectedHeads::class);
+        $protected->method('of')->willReturn(ProtectedChanges::touching(new Paths()));
+        $locks = new LockFactory(new InMemoryStore());
+        $mirror = $this->recordedMirror($fixture);
+        $verdicts = new VerdictForTheLoop(new StoredVerdicts(self::getContainer()->get('serializer.stored')), $fixture->findingStore(), new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads(), new ConfiguredPrices([])), new ChangeDecision());
+
+        return new PublishVerdictHandler($fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $handed, $verdicts, new OwnerAsks($handed, $protected, $fixture->ledger()), new ScriptedGitHub()->forge(), new ChangePublications($locks), $mirror, new NullLogger());
     }
 
     private function fixture(string $name): string
