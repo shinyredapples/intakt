@@ -9,6 +9,7 @@ use Dom\HTMLDocument;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\PublishFirstReview;
@@ -22,6 +23,10 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
@@ -29,6 +34,7 @@ use Twig\Environment;
 
 #[CoversClass(PublishFirstReview::class)]
 #[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(FirstReviewStep::class)]
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(RoundOpened::class)]
@@ -175,6 +181,20 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
         $held = array_filter(iterator_to_array($page->querySelectorAll('.shell[data-controller="connection"] '.$this->heldActions())), static fn (Element $button): bool => !$button->hasAttribute('disabled'));
 
         self::assertSame($labels, array_values(array_map(static fn (Element $button): string => trim((string) $button->textContent), $held)));
+    }
+
+    // Step 5 offers the start only with a configured sample project and a key, so its shared section is rendered on its own inside the controller's shell.
+    public function testTheHeldButtonRuleReachesTheStartOfTheFirstReviewOnStepFive(): void
+    {
+        $request = new Request();
+        $request->setSession(new Session(new MockArraySessionStorage()));
+        self::getContainer()->get(RequestStack::class)->push($request);
+        $section = self::getContainer()->get(Environment::class)->render('dashboard/_setup_first_review.html.twig', ['first_review' => new FirstReviewStep(null, true), 'review_button' => 'primary']);
+        $page = HTMLDocument::createFromString('<!DOCTYPE html><div class="shell" data-controller="connection">'.$section.'</div>', LIBXML_NOERROR);
+
+        $held = array_map(static fn (Element $button): string => trim((string) $button->textContent), iterator_to_array($page->querySelectorAll('.shell[data-controller="connection"] '.$this->heldActions())));
+
+        self::assertSame(['Start the first review'], array_values($held));
     }
 
     private function heldActions(): string
