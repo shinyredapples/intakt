@@ -188,13 +188,20 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
     {
         $request = new Request();
         $request->setSession(new Session(new MockArraySessionStorage()));
-        self::getContainer()->get(RequestStack::class)->push($request);
-        $section = self::getContainer()->get(Environment::class)->render('dashboard/_setup_first_review.html.twig', ['first_review' => new FirstReviewStep(null, true), 'review_button' => 'primary']);
+        $requests = self::getContainer()->get(RequestStack::class);
+        $requests->push($request);
+        try {
+            $section = self::getContainer()->get(Environment::class)->render('dashboard/_setup_first_review.html.twig', ['first_review' => new FirstReviewStep(null, true), 'review_button' => 'primary']);
+        } finally {
+            $requests->pop();
+        }
         $page = HTMLDocument::createFromString('<!DOCTYPE html><div class="shell" data-controller="connection">'.$section.'</div>', LIBXML_NOERROR);
 
-        $held = array_map(static fn (Element $button): string => trim((string) $button->textContent), iterator_to_array($page->querySelectorAll('.shell[data-controller="connection"] '.$this->heldActions())));
+        $held = array_values(iterator_to_array($page->querySelectorAll('.shell[data-controller="connection"] '.$this->heldActions())));
 
-        self::assertSame(['Start the first review'], array_values($held));
+        self::assertSame(['Start the first review'], array_map(static fn (Element $button): string => trim((string) $button->textContent), $held));
+        // The rule skips a disabled button, so the start must be enabled for the hold to reach it.
+        self::assertFalse($held[0]->hasAttribute('disabled'));
     }
 
     private function heldActions(): string
