@@ -10,6 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use Symfony\Component\Process\Process;
 
 #[CoversNothing]
 #[Group('instance')]
@@ -203,6 +204,53 @@ final class InstanceTest extends InstanceTestCase
 
         self::assertSame(124, $instance->getExitCode());
         self::assertStringContainsString('ran longer than 0.2 seconds', $instance->getErrorOutput());
+    }
+
+    // The first status read is held until the limit passed and the command ended, so only a time read after the status can tell that the command was late.
+    public function testACommandFoundEndedByAStatusReadThatEndsPastTheLimitCountsAsTimedOut(): void
+    {
+        preg_match('/^final readonly class CommandWait\b.*?^}$/ms', (string) file_get_contents(self::ROOT.'/bin/instance'), $class);
+        $wait = $this->scratch.'/command-wait.php';
+        file_put_contents($wait, "<?php\nnamespace HeldStatusRead;\n".$class[0]."\n");
+        $code = <<<'PHP'
+            namespace HeldStatusRead;
+            function proc_get_status($process): array
+            {
+                static $held = false;
+                if (!$held) {
+                    $held = true;
+                    usleep(300_000);
+                    fclose($GLOBALS['release']);
+                    while (\proc_get_status($GLOBALS['child'])['running'] ?? false) {
+                        usleep(1000);
+                    }
+                }
+
+                return \proc_get_status($process);
+            }
+            require $argv[1];
+            $GLOBALS['child'] = proc_open(['sh', '-c', 'read -r _; exit 0'], [0 => ['pipe', 'r']], $pipes);
+            $GLOBALS['release'] = $pipes[0];
+            echo new CommandWait(0.2)->exitCodeOf($GLOBALS['child']);
+            PHP;
+        $process = new Process([PHP_BINARY, '-r', $code, $wait]);
+
+        $process->run();
+
+        self::assertSame('124', $process->getOutput(), $process->getErrorOutput());
+        self::assertStringContainsString('ran longer than 0.2 seconds', $process->getErrorOutput());
+    }
+
+    public function testACommandIsStillKilledAtItsLimitWhenPhpDisablesTheSignalFunctions(): void
+    {
+        $ran = $this->scratch.'/ran';
+        $instance = $this->startedInstance(self::stubProject(), ['sh', '-c', 'sleep 0.4; touch "$1"', 'sh', $ran], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2'], ['-d', 'disable_functions=pcntl_sigprocmask,pcntl_sigtimedwait']);
+
+        $instance->wait();
+
+        self::assertSame(124, $instance->getExitCode(), $instance->getErrorOutput());
+        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $instance->getErrorOutput());
+        self::assertFileDoesNotExist($ran);
     }
 
     public function testACommandLimitPastTheIntegerRangeOfNanosecondsLetsTheCommandFinish(): void

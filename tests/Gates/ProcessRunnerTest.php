@@ -252,8 +252,10 @@ final class ProcessRunnerTest extends TestCase
         $marker = $this->markerFile();
         $duration = $this->uniqueDuration();
 
-        // The command ends only once the detached child has started, so the child always outlives it.
-        $result = $runner->runWithin(['sh', '-c', 'env -i setsid sh -c '.escapeshellarg(': > '.escapeshellarg($marker).'; exec sleep '.$duration).' >/dev/null 2>&1 & until [ -e '.escapeshellarg($marker).' ]; do sleep 0.01; done; exit 0'], sys_get_temp_dir(), 10);
+        // The command ends only once the detached child runs the sleep the cleanup check looks for, so that sleep always outlives it.
+        $detached = 'echo $$ > '.escapeshellarg($marker).'; exec sleep '.$duration;
+        $untilSleeping = 'until [ "$(cat /proc/"$(cat '.escapeshellarg($marker).' 2>/dev/null)"/comm 2>/dev/null)" = sleep ]; do sleep 0.01; done';
+        $result = $runner->runWithin(['sh', '-c', 'env -i setsid sh -c '.escapeshellarg($detached).' >/dev/null 2>&1 & '.$untilSleeping.'; exit 0'], sys_get_temp_dir(), 10);
 
         self::assertTrue($result->succeeded());
         $this->assertStartedAndGone($marker, $duration);

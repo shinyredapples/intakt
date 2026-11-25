@@ -17,7 +17,7 @@ final class ProcessRunner
 
     public const string PROCESS_GROUP = 'process group';
 
-    private const int CANNOT_RUN = 127;
+    public const int CANNOT_RUN = 127;
 
     private const int OVERALL_TIMEOUT_SECONDS = 3600;
 
