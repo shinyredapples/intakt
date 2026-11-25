@@ -25,7 +25,7 @@ final readonly class ConfiguredPanels implements Panels
 {
     /**
      * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules?: list<array{min_lines?: positive-int, paths?: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
-     * @param array<string, array{tiers: array<string, array{provider: string}>}>                                                                                                                                                                                                                                   $projects
+     * @param array<string, array{tiers: array<string, array{provider: string}>}>                                                                                                                                                                                                                                                                                                       $projects
      */
     public function __construct(
         #[Autowire(param: ReviewServices::PANELS)]
