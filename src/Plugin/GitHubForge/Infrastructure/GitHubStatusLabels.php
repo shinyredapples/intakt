@@ -9,6 +9,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
 use Intakt\Plugin\Forge\Contract\StatusLabels;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
@@ -87,7 +88,7 @@ final readonly class GitHubStatusLabels implements StatusLabels
         foreach ($reconciliation->remove as $label) {
             $this->writes->remove($address->issuePath(), $label);
         }
-        if (null !== $reconciliation->add) {
+        if ($reconciliation->add instanceof RoundStatusLabel) {
             $this->writes->add($address->issuePath(), $reconciliation->add->value);
         }
         if ($comment) {

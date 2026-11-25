@@ -17,8 +17,8 @@ use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
-use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -106,9 +106,9 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 {
     private const string GREEN = '2222222222222222222222222222222222222222';
 
-    private EntityManagerInterface $entities;
-
     private const string GREEN_PULL = 'https://github.com/acme/widgets/pull/8';
+
+    private EntityManagerInterface $entities;
 
     private string $firstHeadRuns = 'runs_in_progress.json';
 
@@ -250,12 +250,12 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
             : $identity->request($method, $url, $options), 'https://api.github.com');
         $wiring = TrustChecks::wiring($http);
         $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
-        $round = new class(fn (): ?RoundStatusLabel => match (true) {
+        $round = new readonly class(fn (): ?RoundStatusLabel => match (true) {
             [] === $commands->started => null,
             $this->published => RoundStatusLabel::WaitingOnYou,
             default => RoundStatusLabel::InReview,
         }) implements LatestRoundStatus {
-            public function __construct(private readonly Closure $now)
+            public function __construct(private Closure $now)
             {
             }
 

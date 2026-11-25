@@ -53,7 +53,6 @@ final class GitHubStatusLabelsTest extends TestCase
     private const string ADD_IN_REVIEW = 'POST /repos/acme/widget/issues/1/labels {"labels":["status:in-review"]}';
     private const string ADD_WAITING = 'POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}';
     private const string REMOVE_IN_REVIEW = 'DELETE /repos/acme/widget/issues/1/labels/status%3Ain-review';
-    private const string REMOVE_WAITING = 'DELETE /repos/acme/widget/issues/1/labels/status%3Awaiting-on-you';
 
     private ?RoundStatusLabel $round = null;
 
@@ -399,8 +398,8 @@ final class GitHubStatusLabelsTest extends TestCase
 
     private function storedRound(): LatestRoundStatus
     {
-        return new class($this->roundNow(...)) implements LatestRoundStatus {
-            public function __construct(private readonly Closure $now)
+        return new readonly class($this->roundNow(...)) implements LatestRoundStatus {
+            public function __construct(private Closure $now)
             {
             }
 

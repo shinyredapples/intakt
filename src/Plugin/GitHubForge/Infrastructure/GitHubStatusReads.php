@@ -84,9 +84,8 @@ final readonly class GitHubStatusReads
             $response = $this->calls->asInstallation('GET', $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
-            // Not chained to the client's exception, because its trace holds the request options with the bearer token.
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -116,6 +115,12 @@ final readonly class GitHubStatusReads
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read of the status labels: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 
     /**
