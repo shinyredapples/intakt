@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Closure;
-use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
@@ -253,6 +253,7 @@ final readonly class GitHubWorkSource implements WorkSource
     {
         return new Task($issue->number(), $issue->title(), $reworks[$issue->number()] ?? null);
     }
+
     // The holder comes from status labels an account with write access applied last, because Intakt's mirror of a row is what says who it waits on.
     private function openTaskOf(QueuedIssue $issue): OpenTask
     {

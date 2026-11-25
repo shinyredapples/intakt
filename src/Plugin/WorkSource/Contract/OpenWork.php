@@ -10,7 +10,7 @@ use DateTimeImmutable;
 final readonly class OpenWork
 {
     /**
-     * @param list<OpenTask>         $tasks
+     * @param list<OpenTask>          $tasks
      * @param list<DateTimeImmutable> $emptyMilestones
      */
     public function __construct(
