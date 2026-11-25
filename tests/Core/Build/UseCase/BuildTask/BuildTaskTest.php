@@ -50,8 +50,10 @@ use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcomes;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\UnwatchedBuilds;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
@@ -271,6 +273,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
+#[UsesClass(UnwatchedBuilds::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildLimits::class)]
@@ -337,6 +340,8 @@ final class BuildTaskTest extends TestCase
 
     private JobRunner $runner;
 
+    private ?BuildStops $stops = null;
+
     private LockFactory $locks;
 
     private JobRunner $checkRunner;
@@ -385,24 +390,22 @@ final class BuildTaskTest extends TestCase
         self::assertSame(['task'], array_column($this->stepsIn($ledger), 'step'));
     }
 
-    // Stopped through stoppedBy(), as the watch of #3965 will stop it, because nothing feeds the progress rule into a running job yet.
     #[TestWith([BuildStopCause::NoProgress])]
     #[TestWith([BuildStopCause::RunawayCeiling])]
     #[TestWith([BuildStopCause::PerTaskTotal])]
-    public function testAStoppedBuildJobHandsItsBundleToTheHandBackCheckWithItsPullRequestText(BuildStopCause $cause): void
+    public function testAStoppedBuildJobPassesTheHandBackCheckAndIsPushedWithItsPullRequestText(BuildStopCause $cause): void
     {
         $this->runner = $this->committingRunner();
-        $checkout = $this->checkout();
-        $checkout->updateMirror('alpha', $this->remote->path);
-        $checkout->makeClone('alpha', 'feat/task', $this->clone);
+        $this->stops = self::createStub(BuildStops::class);
+        $this->stops->method('causeFor')->willReturn($cause);
+        $ledger = new InMemoryLedger();
 
-        $stopped = $this->builds()->run(new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief("Task 7\n\nBuild it.", new Decisions(), null, TaskKind::Task), Tier::Standard, self::IMAGE))->stoppedBy($cause);
-        $checked = new HandBackCheck($checkout, $this->handBackChecks(), $this->handBackFile($checkout))->check($this->request(7, $this->remote->path), $stopped->bundle ?? '');
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
-        self::assertTrue($stopped->built());
-        self::assertSame($cause, $stopped->stopCause);
-        self::assertSame("feat: task 7\n", $stopped->pullRequestText);
-        self::assertInstanceOf(AcceptedHandBack::class, $checked);
+        self::assertSame(BuildStep::Push, $outcome->last);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
+        self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
+        self::assertSame([1, 'feat: task 7'], [$this->changes->opened, $this->changes->text?->title]);
     }
 
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
@@ -1575,7 +1578,7 @@ final class BuildTaskTest extends TestCase
 
     private function builds(): RunBuildJob
     {
-        return new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        return new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops ?? new UnwatchedBuilds());
     }
 
     private function handBackChecks(): CheckHandBack

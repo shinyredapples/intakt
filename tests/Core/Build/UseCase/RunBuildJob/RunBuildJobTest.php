@@ -13,6 +13,7 @@ use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
@@ -21,8 +22,10 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcomes;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\UnwatchedBuilds;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -53,6 +56,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuilderNotOnClaudeCode::class)]
 #[CoversClass(BuildCloneIsNoFolder::class)]
 #[CoversClass(BuildJobOutcomes::class)]
+#[CoversClass(UnwatchedBuilds::class)]
 #[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
@@ -89,6 +93,8 @@ final class RunBuildJobTest extends TestCase
 
     private ?BuildLimits $limits = null;
 
+    private ?BuildStops $stops = null;
+
     public function testTheBuildJobKeepsTheLimitsItIsGiven(): void
     {
         $this->limits = new BuildLimits(1, 1, 1, 1);
@@ -101,6 +107,19 @@ final class RunBuildJobTest extends TestCase
         $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
 
         self::assertNull($outcome->stopCause);
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAJobTheWatchStoppedCarriesItsCauseAndStaysBuilt(BuildStopCause $cause): void
+    {
+        $this->stops = self::createStub(BuildStops::class);
+        $this->stops->method('causeFor')->willReturn($cause);
+
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertSame([$cause, true], [$outcome->stopCause, $outcome->built()]);
     }
 
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
@@ -382,6 +401,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits ?? new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits ?? new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops ?? new UnwatchedBuilds());
     }
 }

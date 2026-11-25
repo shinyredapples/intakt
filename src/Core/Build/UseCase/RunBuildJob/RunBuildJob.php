@@ -82,6 +82,7 @@ final readonly class RunBuildJob
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
+        private BuildStops $stops = new UnwatchedBuilds(),
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {
@@ -110,8 +111,9 @@ final readonly class RunBuildJob
         $prompt = $this->promptFileFor($job);
 
         try {
-            // TODO(#3965): pass the cause the watch of the running build names; nothing watches a build yet, so no job is stopped.
-            return $this->outcomes->of($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])), null);
+            $result = $this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)]));
+
+            return $this->outcomes->of($result, $this->stops->causeFor($job));
         } finally {
             $this->filesystem->remove($prompt);
         }
