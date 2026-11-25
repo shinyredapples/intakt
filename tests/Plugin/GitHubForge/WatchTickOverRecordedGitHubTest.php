@@ -22,7 +22,6 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
-use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
@@ -84,7 +83,6 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\RecordingCommandBus;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\StandingQueryBus;
-use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
@@ -115,9 +113,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private ?ChangeLabels $steering = null;
 
-    private ReviewStatus $storedStatus = ReviewStatus::InReview;
-
-    private RecordingStatusLabels $statusLabels;
 
     // Evidence E1 of #3878 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
     public function testAPullRequestsTrustedSteeringLabelsReachTheQueuedRoundWithTheValueAppliedLast(): void
@@ -138,19 +133,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
             [['review:full', 'model:strong'], ['review:full', 'model:strong'], ['review:full', 'model:strong', 'model:standard'], ['Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`. If you applied one of them again just now, apply it once more: the value applied last counts.']],
             [[...$commands->started[0]->start->labels], [...$stored->labels()], $pull->labels, $pull->comments],
         );
-    }
-
-    // The publication handler itself runs in PublishVerdictTest, because it needs a stored round this tick does not build.
-    public function testTheLabelsGoFromNoneToInReviewAfterQueueingAndToWaitingOnYouOncePublished(): void
-    {
-        self::assertSame([], $this->statusLabels->labels);
-
-        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
-        $queued = $this->statusLabels->labels;
-        $this->storedStatus = ReviewStatus::WaitingOnYou;
-        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
-
-        self::assertSame([['status:in-review'], ['status:waiting-on-you']], [$queued, $this->statusLabels->labels]);
     }
 
     public function testATickOverTwoRecordedPullRequestsRecordsOnePendingHeadAndQueuesOneRound(): void
@@ -250,7 +232,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
         EmptyDatabase::rowsIn(self::getContainer());
-        $this->statusLabels = new RecordingStatusLabels([]);
     }
 
     // The real read of the labels over the recorded pull request, so the permission answer and the family rule decide what reaches the round; the permissions are the ones recorded for `acme/widget`, because the listing's fixtures name `acme/widgets`.
@@ -296,9 +277,9 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
             $steering = self::createStub(ChangeLabels::class);
             $steering->method('steeringOf')->willReturn(new Labels());
         }
+        // No round of these ticks is stored, so the mirror has no status to write; the labels over stored rounds are in StatusLabelOverRecordedGitHubTest.
         $stored = self::createStub(LatestRoundStatus::class);
-        $stored->method('of')->willReturnCallback(fn (): ReviewStatus => $this->storedStatus);
-        $mirror = new RoundStatusMirror($stored, $locks, $logger, $this->statusLabels);
+        $mirror = new RoundStatusMirror($stored, $locks, $logger);
         $starts = new RoundStarts($commands, $rounds, $ledger, $steering, $mirror);
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $queries = new StandingQueryBus($recorded, $this->entities);
@@ -309,7 +290,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), new StatusMirrors($find, $rounds, $mirror));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), new StatusMirrors($find, $stored, $mirror, $logger));
     }
 
     private function recordedEvents(): string

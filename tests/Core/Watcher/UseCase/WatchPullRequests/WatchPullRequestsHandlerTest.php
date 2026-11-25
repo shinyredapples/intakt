@@ -203,8 +203,6 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private bool $trustCheckDown = false;
     private Labels $steering;
     private RecordingStatusLabels $statusLabels;
-    private ?RoundStatusMirror $mirror = null;
-    private ReviewStatus $storedStatus = ReviewStatus::InReview;
     // Read from its own ledger, because the in-memory one reads nothing back.
     private ?Ledger $openings = null;
     private ?ChangeAuthorship $authorship = null;
@@ -328,31 +326,6 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tick();
 
         self::assertSame([], $this->statusLabels->passes);
-    }
-
-    public function testAJudgedRoundWhosePublicationHasNotRunStaysInReview(): void
-    {
-        $this->listing->opens('alpha', RecordedForge::change('1', self::GREEN, '2026-11-02T09:00:00Z'));
-        $this->tick();
-        $this->storedStatus = ReviewStatus::InReview;
-
-        $this->tick();
-
-        self::assertSame(['status:in-review'], $this->statusLabels->labels);
-    }
-
-    public function testAPublicationMadeWhileTheQueueWriterHoldsTheLockLeavesOnlyThePublishedStatusAfterTheNextReconcile(): void
-    {
-        $this->listing->opens('alpha', RecordedForge::change('1', self::GREEN, '2026-11-02T09:00:00Z'));
-        $this->statusLabels->whileReading(function (): void {
-            $this->storedStatus = ReviewStatus::WaitingOnYou;
-            $this->mirror?->reconcile('alpha', new ChangeId('1'));
-        });
-        $this->tick();
-        self::assertSame(['[] -> [status:in-review]', '[status:in-review] -> [status:waiting-on-you]'], $this->statusLabels->passes);
-
-        self::assertSame(['status:waiting-on-you'], $this->statusLabels->labels);
-        self::assertLessThanOrEqual(1, $this->statusLabels->comments);
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -1754,8 +1727,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $steering = self::createStub(ChangeLabels::class);
         $steering->method('steeringOf')->willReturnCallback(fn (): Labels => $this->steering);
         $status = self::createStub(LatestRoundStatus::class);
-        $status->method('of')->willReturnCallback(fn (): ReviewStatus => $this->storedStatus);
-        $mirror = $this->mirror = new RoundStatusMirror($status, $locks, $logger, $this->statusLabels);
+        $status->method('of')->willReturnCallback($this->storedStatusOf(...));
+        $mirror = new RoundStatusMirror($status, $locks, $logger, $this->statusLabels);
         $starts = new RoundStarts($this->commands, $rounds, $ledger, $steering, $mirror);
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
         $authors = self::createStub(AuthorTrust::class);
@@ -1766,7 +1739,13 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
         $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), new StatusMirrors($find, $rounds, $mirror));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), new StatusMirrors($find, $status, $mirror, $logger));
+    }
+
+    // In review once the watcher stored a round, because this test's command bus queues no review round; the stored review rounds are read in StatusLabelOverRecordedGitHubTest.
+    private function storedStatusOf(string $project, string $change): ?ReviewStatus
+    {
+        return null === $this->entities->getRepository(StartedRound::class)->findOneBy(['project' => $project, 'change' => $change]) ? null : ReviewStatus::InReview;
     }
 
     private function panel(): Panel
