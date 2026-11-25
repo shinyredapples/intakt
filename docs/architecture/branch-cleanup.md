@@ -88,10 +88,12 @@ A branch whose `isDeletable()` is false is refused before any call. Then the for
 
 1. Creates the bare repository when it is missing, in the mirror's object format.
 2. Copies the commit and its objects from the mirror with a local fetch by id (`git fetch --no-tags --no-write-fetch-head -- <mirror> <commit>`, the `file` protocol allowed for this call only). The archive has no remote and writes no ref from the fetch.
-3. Writes `refs/intakt/archive/<UTC moment>/<branch>` (moment as `YYYYMMDDTHHMMSSZ`, from `ClockInterface`) with `update-ref <ref> <commit> ''`, which creates the ref only: an existing archive ref is never moved.
+3. Writes `refs/intakt/archive/<UTC moment>/<branch>` (moment as `YYYYMMDDTHHMMSSZ`, from `ClockInterface`, counted up on a clash as below) with `update-ref <ref> <commit> ''`, which creates the ref only: an existing archive ref is never moved.
 4. Reads the ref back and returns an `ArchivedBranch`.
 
-Any failure (no mirror, a commit the mirror lacks, a ref that exists, a git error) is a `BranchNotArchived`.
+Before the write, the id must name a commit in the archive (`<id>^{commit}`), so a tree or blob is refused and no ref is left. When the name is taken by another commit (two heads of one branch in the same second), the moment gets a count: `<moment>-2/<branch>`, `-3`, and so on; the same commit again keeps its ref.
+
+Any failure (no mirror, a commit the mirror lacks, an id that is not a commit, a mirror `HardenedGit` refuses because of its `info/attributes`, a git error) is a `BranchNotArchived`.
 
 The archive belongs to Intakt alone: it is never cloned or fetched from a remote and never pushed, so a remote ref shaped like `refs/intakt/archive/*` is never an archive. `DeleteBranchAfterArchive` is the delete path: it archives, and only after that returns does it call `ForgeBranches::delete()`; when archiving fails, the forge is not called.
 

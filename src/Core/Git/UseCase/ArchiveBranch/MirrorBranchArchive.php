@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\ArchiveBranch;
 
+use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Git\Contract\ArchivedBranch;
 use Intakt\Core\Git\Contract\BranchArchive;
+use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchNotArchived;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\GitServices;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\MirroredHead;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Symfony\Component\Clock\ClockInterface;
@@ -53,7 +56,7 @@ final readonly class MirrorBranchArchive implements BranchArchive
 
         try {
             return $this->keep($head, $mirror, $archive);
-        } catch (IOException|ProcessFailure $failed) {
+        } catch (IOException|ProcessFailure|RepositoryAttributesRefused $failed) {
             throw BranchNotArchived::because($failed->getMessage(), $failed);
         } finally {
             $lock->release();
@@ -64,13 +67,47 @@ final readonly class MirrorBranchArchive implements BranchArchive
     {
         $this->createArchiveLike($mirror, $archive);
         $this->copyObjects($head->head->commit, $mirror, $archive);
+        $this->mustBeCommit($head->head->commit, $archive);
         $moment = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
-        $ref = self::REF_PREFIX.$moment->format('Ymd\THis\Z').'/'.$head->head->branch;
-        // The empty old value makes the write create the ref only, so an archive is never moved.
-        $this->mustRun(['update-ref', $ref, $head->head->commit, ''], $archive);
+        $ref = $this->freeRef($moment, $head->head, $archive);
+
+        if (null === $this->heldBy($ref, $archive)) {
+            // The empty old value makes the write create the ref only, so an archive is never moved.
+            $this->mustRun(['update-ref', $ref, $head->head->commit, ''], $archive);
+        }
+
         $this->mustHold($ref, $head->head->commit, $archive);
 
         return new ArchivedBranch($ref, $head->head, $moment);
+    }
+
+    private function mustBeCommit(string $commit, string $archive): void
+    {
+        $this->mustRun(['rev-parse', '--verify', '--quiet', $commit.'^{commit}'], $archive);
+    }
+
+    /**
+     * Two heads of one branch archived in the same second would meet at one name, so the later one counts up.
+     */
+    private function freeRef(DateTimeImmutable $moment, BranchHead $head, string $archive): string
+    {
+        $base = self::REF_PREFIX.$moment->format('Ymd\THis\Z');
+
+        for ($count = 1;; ++$count) {
+            $ref = ($count === 1 ? $base : $base.'-'.$count).'/'.$head->branch;
+            $held = $this->heldBy($ref, $archive);
+
+            if (null === $held || $held === $head->commit) {
+                return $ref;
+            }
+        }
+    }
+
+    private function heldBy(string $ref, string $archive): ?string
+    {
+        $process = $this->start($this->hardened->callInBareRepository($archive, 'rev-parse', '--verify', '--quiet', $ref));
+
+        return $process->isSuccessful() ? trim($process->getOutput()) : null;
     }
 
     private function createArchiveLike(string $mirror, string $archive): void
@@ -116,13 +153,20 @@ final readonly class MirrorBranchArchive implements BranchArchive
 
     private function run(GitCall $call): string
     {
-        $process = new Process([...$call->command], $call->directory, [...$call->environment], null, self::TIMEOUT);
-        $process->run();
+        $process = $this->start($call);
 
         if (!$process->isSuccessful()) {
             throw BranchNotArchived::because(trim($process->getErrorOutput()));
         }
 
         return $process->getOutput();
+    }
+
+    private function start(GitCall $call): Process
+    {
+        $process = new Process([...$call->command], $call->directory, [...$call->environment], null, self::TIMEOUT);
+        $process->run();
+
+        return $process;
     }
 }

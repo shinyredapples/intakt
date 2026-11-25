@@ -126,14 +126,49 @@ final class MirrorBranchArchiveTest extends TestCase
         $this->archiver()->archive(new MirroredHead('../escape', new BranchHead('topic', $this->topicHead)));
     }
 
-    public function testAnArchiveRefThatAlreadyExistsIsNeverMoved(): void
+    public function testTwoHeadsOfOneBranchArchivedInTheSameSecondKeepDistinctRefs(): void
     {
         $this->mirror();
-        $this->archiver()->archive($this->head('topic', $this->topicHead));
+        $first = $this->archiver()->archive($this->head('topic', $this->topicHead));
+
+        $second = $this->archiver()->archive($this->head('topic', $this->remote->objectAt('main')));
+
+        self::assertNotSame($first->ref, $second->ref);
+        self::assertSame($this->topicHead, $this->git($this->archivePath(), 'rev-parse', $first->ref));
+        self::assertSame($this->remote->objectAt('main'), $this->git($this->archivePath(), 'rev-parse', $second->ref));
+    }
+
+    public function testTheSameHeadArchivedTwiceInOneSecondKeepsItsRef(): void
+    {
+        $this->mirror();
+        $first = $this->archiver()->archive($this->head('topic', $this->topicHead));
+
+        $again = $this->archiver()->archive($this->head('topic', $this->topicHead));
+
+        self::assertSame($first->ref, $again->ref);
+    }
+
+    public function testATreeIsNotArchivedAndLeavesNoArchiveRef(): void
+    {
+        $this->mirror();
+        $tree = $this->git($this->root.'/mirrors/alpha.git', 'rev-parse', $this->topicHead.'^{tree}');
+
+        try {
+            $this->archiver()->archive($this->head('topic', $tree));
+            self::fail('A tree is not a branch head.');
+        } catch (BranchNotArchived) {
+            self::assertSame('', $this->git($this->archivePath(), 'for-each-ref'));
+        }
+    }
+
+    public function testAMirrorWithRepositoryAttributesIsReportedAsNotArchived(): void
+    {
+        $this->mirror();
+        new Filesystem()->dumpFile($this->root.'/mirrors/alpha.git/info/attributes', "* text\n");
 
         $this->expectException(BranchNotArchived::class);
 
-        $this->archiver()->archive($this->head('topic', $this->remote->objectAt('main')));
+        $this->archiver()->archive($this->head('topic', $this->topicHead));
     }
 
     public function testAFailedArchiveDeletesNothing(): void
