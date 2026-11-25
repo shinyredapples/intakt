@@ -560,7 +560,7 @@ final class GitHubStatusLabelsTest extends TestCase
 
         $body = is_string($options['body'] ?? null) ? $options['body'] : '';
         if (str_ends_with($path, '/comments')) {
-            return $this->refuseComments ? new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]) : $this->comment($body);
+            return $this->comment($body);
         }
 
         if ('POST' === $method && $this->refuseAdds) {
@@ -584,6 +584,10 @@ final class GitHubStatusLabelsTest extends TestCase
 
     private function comment(string $body): ResponseInterface
     {
+        if ($this->refuseComments) {
+            return new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]);
+        }
+
         $payload = (array) json_decode($body, true, flags: JSON_THROW_ON_ERROR);
         $this->comments[] = is_string($payload['body'] ?? null) ? $payload['body'] : '';
         $stored = [...$payload, 'user' => ['login' => self::OWN, 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => 12345]];

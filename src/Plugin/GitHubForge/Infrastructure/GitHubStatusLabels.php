@@ -40,32 +40,8 @@ final readonly class GitHubStatusLabels implements StatusLabels
             return;
         }
 
-        $comment = $reconciliation->owesComment($this->reads->of($address), $this->isOwn(...));
-        $removed = false;
-        foreach ($reconciliation->remove as $label) {
-            $removed = $this->writes->remove($address->issuePath(), $label) || $removed;
-        }
-
-        // The comment follows the first write that changed the labels, so the latest event is Intakt's own and a retry posts no second one.
-        // After a removal that is before the add: an add that fails then still leaves the one comment.
-        if ($comment && $removed) {
-            $this->restored($project, $address);
-        }
-        if (!$reconciliation->add instanceof RoundStatusLabel) {
-            return;
-        }
-
-        $this->writes->add($address->issuePath(), $reconciliation->add->value);
-        // A removal that found the label gone changed nothing, so the add is the first write and a failed add posts nothing.
-        if ($comment && !$removed) {
-            $this->restored($project, $address);
-        }
-    }
-
-    // A post that fails is not retried, because the next pass finds Intakt's own write as the latest event: the comment is lost, never doubled, and the labels are still repaired.
-    private function restored(string $project, PullRequestAddress $address): void
-    {
-        $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
+        $owesComment = $reconciliation->owesComment($this->reads->of($address), $this->isOwn(...));
+        $this->rewrite($reconciliation, $address, $owesComment ? new TaskIssue($project, $address->number) : null);
     }
 
     /**
@@ -77,6 +53,46 @@ final readonly class GitHubStatusLabels implements StatusLabels
             return $this->identities->isOwn($login);
         } catch (TrustNotChecked $unchecked) {
             throw new ForgeReadFailed($unchecked->getMessage(), $unchecked->getCode(), previous: $unchecked);
+        }
+    }
+
+    // The comment follows the first write that changed the labels, so the latest event is Intakt's own and a retry posts no second one.
+    private function rewrite(StatusReconciliation $reconciliation, PullRequestAddress $address, ?TaskIssue $owed): void
+    {
+        $removed = $this->removed($address, $reconciliation->remove);
+        // Before the add when a removal changed the labels, so an add that fails still leaves the one comment.
+        if ($removed) {
+            $this->restored($owed);
+        }
+        if (!$reconciliation->add instanceof RoundStatusLabel) {
+            return;
+        }
+
+        $this->writes->add($address->issuePath(), $reconciliation->add->value);
+        // A removal that found the label gone changed nothing, so the add is the first write and a failed add posts nothing.
+        if (!$removed) {
+            $this->restored($owed);
+        }
+    }
+
+    /**
+     * @param list<string> $labels
+     */
+    private function removed(PullRequestAddress $address, array $labels): bool
+    {
+        $removed = false;
+        foreach ($labels as $label) {
+            $removed = $this->writes->remove($address->issuePath(), $label) || $removed;
+        }
+
+        return $removed;
+    }
+
+    // A post that fails is not retried, because the next pass finds Intakt's own write as the latest event: the comment is lost, never doubled, and the labels are still repaired.
+    private function restored(?TaskIssue $owed): void
+    {
+        if ($owed instanceof TaskIssue) {
+            $this->comments->post($owed, self::RESTORED);
         }
     }
 }
