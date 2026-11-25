@@ -43,6 +43,23 @@ final class SameCauseTest extends TestCase
         new SameCause()->with('F3', '');
     }
 
+    public function testAStoredLinkWithoutACauseIdIsNamedAsRefused(): void
+    {
+        self::assertSame('A same-cause link needs a finding id and a cause id.', SameCause::refusalOfStored('F3', ''));
+    }
+
+    public function testAStoredLinkOfAFindingToItselfIsNotNamedAsRefused(): void
+    {
+        self::assertNull(SameCause::refusalOfStored('F3', 'F3'));
+    }
+
+    public function testAStoredLinkThatIsNamedAsRefusedIsRefusedWhenAdded(): void
+    {
+        $this->expectExceptionMessage((string) SameCause::refusalOfStored('', 'F1'));
+
+        new SameCause()->withStored('', 'F1');
+    }
+
     public function testAFindingIdThatOnlyStartsLikeItsCauseIsAllowed(): void
     {
         self::assertSame('F1', new SameCause()->with('F10', 'F1')->causeOf('F10'));

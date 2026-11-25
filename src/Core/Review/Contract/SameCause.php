@@ -41,11 +41,18 @@ final readonly class SameCause implements IteratorAggregate
     // Only for reading a stored row, because rows written before the guard may hold a finding as its own cause and must read back and write back unchanged.
     public function withStored(string $finding, string $cause): self
     {
-        if ('' === $finding || '' === $cause) {
-            throw new SameCauseLinkRefused('A same-cause link needs a finding id and a cause id.');
+        $refusal = self::refusalOfStored($finding, $cause);
+        if (null !== $refusal) {
+            throw new SameCauseLinkRefused($refusal);
         }
 
         return $this->put($finding, $cause);
+    }
+
+    // Asked before withStored(), because a stored row turns a refused link into its own read failure and no other failure may be mistaken for one.
+    public static function refusalOfStored(string $finding, string $cause): ?string
+    {
+        return '' === $finding || '' === $cause ? 'A same-cause link needs a finding id and a cause id.' : null;
     }
 
     public function causeOf(string $finding): ?string

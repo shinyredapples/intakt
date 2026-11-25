@@ -138,6 +138,7 @@ final class StoredFindingIdsNormalizerTest extends TestCase
     public function testAStoredLinkWithAnEmptyCauseFailsToRead(): void
     {
         $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('holds a link it refuses: A same-cause link needs a finding id and a cause id.');
 
         new StoredFindingIdsNormalizer()->denormalize(['F2' => ''], SameCause::class);
     }
