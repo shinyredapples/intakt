@@ -782,6 +782,21 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertNotNull($this->fingerprintOfAtMostBytes(10_000, $root)->taken());
     }
 
+    public function testATreeWhoseShallowBoundaryIsLongerThanTheFingerprintHoldsGivesNoFingerprintAndRecordsNoPass(): void
+    {
+        [$root] = $this->checkedTreeAndHome();
+        $boundary = str_repeat(trim($root->git('rev-parse', 'HEAD')->output)."\n", 100);
+        file_put_contents($root->root.'/.git/shallow', $boundary);
+        $beyond = $this->fingerprintOfAtMostBytes(2_000, $root);
+        $tree = PassedTree::before($beyond, $this->settledClock());
+
+        self::assertNull($beyond->taken());
+        self::assertFalse($tree->recordPass());
+        self::assertFalse($tree->hasPassed());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+        self::assertNotNull($this->fingerprintOfAtMostBytes(10_000, $root)->taken());
+    }
+
     public function testAnUntrackedFileUnderAVarThatIsNotIgnoredCountsThoughTheRestOfTheListingIsNotRead(): void
     {
         [$root] = $this->checkedTreeAndHome();

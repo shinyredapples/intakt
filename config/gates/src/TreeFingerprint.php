@@ -103,9 +103,16 @@ final readonly class TreeFingerprint
             return null;
         }
 
-        $boundary = is_file($shallow) ? file_get_contents($shallow) : false;
+        // Because a boundary of any size would otherwise be read whole into memory, one byte past the limit is enough to refuse a longer one.
+        $boundary = is_file($shallow) ? file_get_contents($shallow, length: max(0, $this->mostBytes) + 1) : false;
 
-        return false === $boundary ? throw new UnexpectedValueException('cannot read the shallow file') : $boundary;
+        if (false === $boundary) {
+            throw new UnexpectedValueException('cannot read the shallow file');
+        }
+
+        $this->expectWithinLimits(0, strlen($boundary));
+
+        return $boundary;
     }
 
     /**
