@@ -415,7 +415,8 @@ final class GitHubForgeTest extends TestCase
 
     public function testItTurnsAnUnmintableTokenIntoAForgeReadFailure(): void
     {
-        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        // On the wall clock, because the recorded expiry is an hour after it.
+        $clock = new MockClock();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $identity = new RecordedInstallation(self::MINTED)->client();
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);

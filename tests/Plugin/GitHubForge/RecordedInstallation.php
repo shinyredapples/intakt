@@ -27,7 +27,7 @@ final class RecordedInstallation
     {
         $this->requested[] = $url;
         if (str_ends_with($url, '/access_tokens')) {
-            return new MockResponse(json_encode(['token' => $this->token, 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+            return new MockResponse(json_encode(['token' => $this->token, 'expires_at' => RecordedTokenExpiry::anHourFromNow()], JSON_THROW_ON_ERROR), ['http_code' => 201]);
         }
 
         $fixture = str_contains($url, '/installation/repositories') ? 'installation_repositories.json' : 'installation.json';

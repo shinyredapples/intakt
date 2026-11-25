@@ -75,7 +75,7 @@ final class AuthorTrustOnTheContainerTest extends KernelTestCase
     public function testTheWiredQueryAnswersFromRecordedAnswers(string $pullRequest, bool $trusted): void
     {
         self::bootKernel();
-        $github = RecordedTrust::onTheWallClock()->client();
+        $github = new RecordedTrust()->client();
         // Both clients, so no request leaves the test: the token door uses the default client, the trust reads the scoped one.
         self::getContainer()->set('http_client', $github);
         self::getContainer()->set('github.client', $github);
