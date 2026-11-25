@@ -432,6 +432,9 @@ final class LocalForgeBranchesTest extends TestCase
     #[TestWith(['apply', 'rebase-apply', null])]
     #[TestWith(['apply', 'rebase-apply', ''])]
     #[TestWith(['merge', 'rebase-merge', ''])]
+    #[TestWith(['merge', 'rebase-merge', "invalid branch\n"])]
+    #[TestWith(['apply', 'rebase-apply', "invalid branch\n"])]
+    #[TestWith(['merge', 'rebase-merge', "intakt/feature\n"])]
     public function testItDoesNotDeleteABranchWhoseRebaseStateNamesNoBranch(string $backend, string $state, ?string $headName): void
     {
         $listed = $this->aBranchThatConflictsWithMain('intakt/feature');

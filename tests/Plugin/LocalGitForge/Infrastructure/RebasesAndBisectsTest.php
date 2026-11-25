@@ -8,6 +8,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Infrastructure\RebasesAndBisects;
 use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeGitDirectories;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
@@ -84,6 +85,32 @@ final class RebasesAndBisectsTest extends TestCase
     {
         new Filesystem()->dumpFile($this->common.'/rebase-apply/rebasing', '');
         new Filesystem()->dumpFile($this->common.'/rebase-apply/head-name', '');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        new RebasesAndBisects()->branchesHeldIn($this->common);
+    }
+
+    #[TestWith(['invalid branch'])]
+    #[TestWith(['intakt/merged'])]
+    #[TestWith(['refs/heads/'])]
+    #[TestWith(['refs/heads/intakt merged'])]
+    #[TestWith(['refs/tags/v1'])]
+    public function testAMergeRebaseWhoseHeadNameIsNoBranchRefThrowsBecauseItsBranchCannotBeTold(string $headName): void
+    {
+        new Filesystem()->dumpFile($this->common.'/rebase-merge/head-name', $headName."\n");
+
+        $this->expectException(ForgeReadFailed::class);
+
+        new RebasesAndBisects()->branchesHeldIn($this->common);
+    }
+
+    #[TestWith(['invalid branch'])]
+    #[TestWith(['intakt/applied'])]
+    public function testAnApplyRebaseWhoseHeadNameIsNoBranchRefThrowsBecauseItsBranchCannotBeTold(string $headName): void
+    {
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/rebasing', '');
+        new Filesystem()->dumpFile($this->common.'/rebase-apply/head-name', $headName."\n");
 
         $this->expectException(ForgeReadFailed::class);
 

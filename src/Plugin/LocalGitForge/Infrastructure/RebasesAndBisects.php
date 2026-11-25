@@ -12,6 +12,7 @@ use Symfony\Component\Filesystem\Filesystem;
 final readonly class RebasesAndBisects
 {
     private const string HEAD_NAME = '/head-name';
+    private const string BRANCH_REF = '#^refs/heads/\S+$#D';
 
     public function __construct(private WorktreeGitDirectories $directories = new WorktreeGitDirectories())
     {
@@ -64,16 +65,20 @@ final readonly class RebasesAndBisects
         return file_exists($file) ? 'refs/heads/'.trim($this->read($file)) : null;
     }
 
-    // An empty head-name cannot tell which branch the rebase writes back, while git writes "detached HEAD" for a rebase that started on no branch.
+    // Git writes only a full refs/heads/ name, or "detached HEAD" for a rebase that started on no branch; any other text matches no listed branch, so it would let the rebased branch be deleted.
     private function startedOn(string $state): ?string
     {
         $name = trim($this->read($state.self::HEAD_NAME));
 
-        if ('' === $name) {
-            throw new ForgeReadFailed(sprintf('a rebase is under way in "%s", but its head-name is empty, so which branch it holds cannot be told', $state));
+        if ('detached HEAD' === $name) {
+            return null;
         }
 
-        return 'detached HEAD' === $name ? null : $name;
+        if (1 !== preg_match(self::BRANCH_REF, $name)) {
+            throw new ForgeReadFailed(sprintf('a rebase is under way in "%s", but its head-name is neither a refs/heads/ name nor "detached HEAD", so which branch it holds cannot be told', $state));
+        }
+
+        return $name;
     }
 
     private function read(string $path): string
