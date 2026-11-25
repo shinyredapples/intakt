@@ -14,6 +14,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalForgeBranches;
+use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeLocks;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -31,6 +32,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(LocalRepository::class)]
+#[UsesClass(WorktreeLocks::class)]
 final class LocalForgeBranchesTest extends TestCase
 {
     // Stands for Intakt's identity, because TemporaryRepository commits with this email.
@@ -589,6 +591,11 @@ final class LocalForgeBranchesTest extends TestCase
         );
     }
 
+    private function realGit(): string
+    {
+        return escapeshellarg(trim(new Process(['sh', '-c', 'command -v git'])->mustRun()->getOutput()));
+    }
+
     /**
      * @param list<string> $command
      */
@@ -597,15 +604,10 @@ final class LocalForgeBranchesTest extends TestCase
         return sprintf('env -i PATH="$PATH" %s -C %s %s >/dev/null 2>&1', $this->realGit(), escapeshellarg($this->repository->path), implode(' ', array_map(escapeshellarg(...), $command)));
     }
 
-    private function realGit(): string
-    {
-        return escapeshellarg(trim(new Process(['sh', '-c', 'command -v git'])->mustRun()->getOutput()));
-    }
-
     /**
      * @param callable(): void $action
      */
-    // A git first on the path that handles the git commands the cases name and hands every other one to the real git.
+    // A git first on the path, because only a command that runs inside the delete's own git calls can force the order a concurrent git command would need.
     private function withGit(string $cases, callable $action): void
     {
         $bin = $this->bin();

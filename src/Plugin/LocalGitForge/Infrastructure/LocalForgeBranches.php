@@ -15,7 +15,6 @@ use Intakt\Plugin\Forge\Contract\ForgeBranches;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
-use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
@@ -33,6 +32,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     public function __construct(
         private LocalRepository $repository,
         private HardenedGit $hardened = new HardenedGit(),
+        private WorktreeLocks $locks = new WorktreeLocks(),
     ) {
     }
 
@@ -215,7 +215,8 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
 
         $common = $this->commonDirectory();
-        $locks = $this->lockEveryWorktree($common);
+        // Held across the checks and the delete, so no checkout can name the branch in between.
+        $locks = $this->locks->take($common);
         try {
             if ($this->isSymbolic($reference)) {
                 throw new ForgeReadFailed('it is a symbolic branch now.');
@@ -228,48 +229,10 @@ final readonly class LocalForgeBranches implements ForgeBranches
             // --no-deref, so a branch that became symbolic since the check above loses only its own ref, never the branch it names.
             $this->read(['update-ref', '-d', '--no-deref', $reference, $branch->head->hash]);
         } finally {
-            $this->unlock($locks);
+            $this->locks->release($locks);
         }
 
         $this->putBackWhenCheckedOutMeanwhile($common, $reference, $branch);
-    }
-
-    /**
-     * @return list<string>
-     */
-    // git switch and checkout take index.lock before they change a file and write HEAD through HEAD.lock, and give up while either exists. Holding both for every worktree keeps a checkout from naming the branch between the check and the delete, and index.lock comes first so a checkout held off has not touched its working tree yet.
-    private function lockEveryWorktree(string $common): array
-    {
-        $directories = [$common];
-        if (is_dir($common.'/worktrees')) {
-            foreach (Finder::create()->directories()->depth(0)->ignoreDotFiles(false)->ignoreVCS(false)->in($common.'/worktrees') as $worktree) {
-                $directories[] = $worktree->getPathname();
-            }
-        }
-
-        $locks = [];
-        foreach ($directories as $directory) {
-            foreach (['index.lock', 'HEAD.lock'] as $name) {
-                $lock = @fopen($directory.'/'.$name, 'x');
-                if (false === $lock) {
-                    $this->unlock($locks);
-
-                    throw new ForgeReadFailed(sprintf('%s/%s exists, so a checkout or another git command is under way.', $directory, $name));
-                }
-                fclose($lock);
-                $locks[] = $directory.'/'.$name;
-            }
-        }
-
-        return $locks;
-    }
-
-    /**
-     * @param list<string> $locks
-     */
-    private function unlock(array $locks): void
-    {
-        new Filesystem()->remove($locks);
     }
 
     private function isSymbolic(string $reference): bool
