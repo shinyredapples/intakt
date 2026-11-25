@@ -146,16 +146,6 @@ final readonly class ProcessGroup
         return $held;
     }
 
-    // Because a kill is delivered after `posix_kill()` returns, the launcher is waited for, within the stop grace, so it has ended once bin/check goes on.
-    private function awaitTheKilledLauncher(): void
-    {
-        $deadline = (hrtime(true) / 1_000_000_000) + self::STOP_GRACE_SECONDS;
-
-        while (false === $this->hasTheUnreapedChildEnded() && (hrtime(true) / 1_000_000_000) < $deadline) {
-            usleep(self::POLL_MICROSECONDS);
-        }
-    }
-
     private function isHeldBeforeItsSession(): bool
     {
         return false === $this->hasTheUnreapedChildEnded() && $this->isTheLauncherWithoutItsGroup();
@@ -165,6 +155,16 @@ final readonly class ProcessGroup
     private function isOursWithoutItsGroup(): bool
     {
         return null !== $this->hasTheUnreapedChildEnded() && $this->isTheLauncherWithoutItsGroup();
+    }
+
+    // Because a kill is delivered after `posix_kill()` returns, the launcher is waited for, within the stop grace, so it has ended once bin/check goes on.
+    private function awaitTheKilledLauncher(): void
+    {
+        $deadline = (hrtime(true) / 1_000_000_000) + self::STOP_GRACE_SECONDS;
+
+        while (false === $this->hasTheUnreapedChildEnded() && (hrtime(true) / 1_000_000_000) < $deadline) {
+            usleep(self::POLL_MICROSECONDS);
+        }
     }
 
     // Because `WNOHANG` leaves the reported PID at 0 while the child still runs, a nonzero one means it has ended and waits as a zombie; null means the number is no longer an unreaped child of bin/check.
