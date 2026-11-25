@@ -9,8 +9,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use Psr\Log\LoggerInterface;
 
-// A family holds one value, so the value applied earlier is taken off the pull request and the comment says which one counts (docs/design/05-architecture/04-labels.md).
-// The comment also says how to take a removal back, because GitHub removes a label by name only, so a value applied again in the instant before the removal is removed too, and Intakt never applies a steering label to put it back.
+// A family holds one value, so the value applied earlier is taken off the pull request and the comment says which one counts (docs/design/05-architecture/04-labels.md); it also says how to take a removal back, because GitHub removes a label by name only, so a value applied again in the instant before the removal is removed too, and Intakt never applies a steering label to put it back.
 final readonly class OutvotedLabels
 {
     private const string REMOVED = 'Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: %s. If you applied one of them again just now, apply it once more: the value applied last counts.';
