@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Budget\Contract\Cost;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -112,7 +112,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithNothingRecordedYetSaysSoInEachPart(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(),[], [], [], false));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(), [], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
@@ -121,7 +121,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithoutToolCallsShowsNoToolList(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(),[], [], [], false));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(), [], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
@@ -161,7 +161,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testABacktickSpanInAFindingOfTheSummaryShowsAsCode(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(),[$this->finding('F1', Severity::P2, 'Call `Lock::acquire()` first.')], [], [], false));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(), [$this->finding('F1', Severity::P2, 'Call `Lock::acquire()` first.')], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
@@ -175,7 +175,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), new Paths(),[$this->finding('F2', Severity::P2, 'Broken.')], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), new Paths(), [$this->finding('F2', Severity::P2, 'Broken.')], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');

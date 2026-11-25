@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Fiber;
 use Intakt\Core\Budget\Contract\Cost;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -19,6 +18,7 @@ use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -334,7 +334,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testAJudgedRoundPublishesItsSummaryBeforeItsStateSoTheJudgedStateIsTheLastUpdate(): void
     {
-        $summary = new SessionSummary([], Cost::none(), new Paths(),[], [], [], false);
+        $summary = new SessionSummary([], Cost::none(), new Paths(), [], [], [], false);
 
         $this->updates(null, $this->summaries($summary))->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
@@ -379,7 +379,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testTheReReadAfterTheLockIsReleasedAddsNoSecondPublish(): void
     {
-        $updates = $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), new Paths(),[], [], [], false)));
+        $updates = $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), new Paths(), [], [], [], false)));
 
         $updates->summaryChanged(Uuid::fromString(self::ROUND));
 
@@ -393,7 +393,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $paused = false;
         $summaries = self::createStub(SessionSummaries::class);
         $summaries->method('ofRound')->willReturnCallback(static function () use (&$count, &$paused): SessionSummary {
-            $summary = new SessionSummary([new ToolCallCount('read_file', $count)], Cost::none(), new Paths(),[], [], [], false);
+            $summary = new SessionSummary([new ToolCallCount('read_file', $count)], Cost::none(), new Paths(), [], [], [], false);
             if (!$paused) {
                 $paused = true;
                 Fiber::suspend();
@@ -423,7 +423,7 @@ final class MercureRoundUpdatesTest extends TestCase
                 Fiber::suspend();
             }
 
-            return new SessionSummary([], Cost::none(), new Paths(),[], [], [], false);
+            return new SessionSummary([], Cost::none(), new Paths(), [], [], [], false);
         });
         $updates = $this->updates(null, $summaries);
         $held = new Fiber(static fn () => $updates->summaryChanged(Uuid::fromString(self::ROUND)));
@@ -472,7 +472,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testAToolCallRecordedAfterTheRoundWasJudgedPublishesNoSummary(): void
     {
-        $judged = new SessionSummary([new ToolCallCount('read_file', 2)], Cost::none(), new Paths(),[], [], [], true);
+        $judged = new SessionSummary([new ToolCallCount('read_file', 2)], Cost::none(), new Paths(), [], [], [], true);
 
         $this->updates(null, $this->summaries($judged))->summaryChanged(Uuid::fromString(self::ROUND));
 
@@ -673,7 +673,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $store = self::createStub(PersistingStoreInterface::class);
         $store->method('save')->willThrowException(new RuntimeException('the lock store is gone'));
 
-        $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), new Paths(),[], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+        $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), new Paths(), [], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertCount(1, $this->published);
         self::assertStringContainsString('Checked.', $this->published[0]->getData());
@@ -692,7 +692,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $store = self::createStub(PersistingStoreInterface::class);
         $store->method('delete')->willThrowException(new RuntimeException('the lock store is gone'));
 
-        $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), new Paths(),[], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+        $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), new Paths(), [], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertSame(['replace round-'.self::ROUND.'-summary-tools', 'replace round-'.self::ROUND.'-state'], array_map($this->actionAndTargetOf(...), $this->published));
         self::assertStringContainsString('Checked.', array_last($this->published)?->getData() ?? '');
@@ -704,7 +704,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $store = self::createStub(PersistingStoreInterface::class);
         $store->method('delete')->willThrowException(new RuntimeException('the lock store is gone'));
 
-        $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), new Paths(),[], [], [], false)), $store)->summaryChanged(Uuid::fromString(self::ROUND));
+        $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), new Paths(), [], [], [], false)), $store)->summaryChanged(Uuid::fromString(self::ROUND));
 
         self::assertSame(['replace round-'.self::ROUND.'-summary-tools'], array_map($this->actionAndTargetOf(...), $this->published));
         self::assertSame([LockReleasingException::class], $this->exceptionsLogged());
@@ -776,12 +776,12 @@ final class MercureRoundUpdatesTest extends TestCase
         $summaries = self::createStub(SessionSummaries::class);
         $summaries->method('ofRound')->willReturnCallback(static function () use (&$reads): SessionSummary {
             if (0 !== $reads++) {
-                return new SessionSummary([new ToolCallCount('read_file', 2)], Cost::none(), new Paths(),[], [], [], true);
+                return new SessionSummary([new ToolCallCount('read_file', 2)], Cost::none(), new Paths(), [], [], [], true);
             }
 
             Fiber::suspend();
 
-            return new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), new Paths(),[], [], [], false);
+            return new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), new Paths(), [], [], [], false);
         });
 
         return $summaries;
