@@ -72,8 +72,8 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 ## The dashboard is slow
 
 - **What you see:** pages take seconds to load.
-- **Why:** the server is busy.
-- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts and the hub. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the same.
+- **Why:** the server is busy, or GitHub answers slowly: about once a minute a load of the board checks the GitHub App connection and can wait up to 15 seconds for it, also when the server's own figures look fine.
+- **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts, the hub and the forge. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the server's figures, and `php bin/console intakt:doctor` runs the forge check and says what to fix.
 
 ## Docker says the container is unhealthy
 
