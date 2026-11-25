@@ -83,6 +83,14 @@ final readonly class MirrorBranchArchive implements BranchArchive
         return new ArchivedBranch($ref, $head->head, $moment);
     }
 
+    /**
+     * @param list<string> $arguments
+     */
+    private function mustRun(array $arguments, string $repository): string
+    {
+        return $this->run($this->hardened->callInBareRepository($repository, ...$arguments));
+    }
+
     private function createArchiveLike(string $mirror, string $archive): void
     {
         if (is_file($archive.'/HEAD') && is_dir($archive.'/objects') && is_dir($archive.'/refs')) {
@@ -130,20 +138,6 @@ final readonly class MirrorBranchArchive implements BranchArchive
         }
     }
 
-    // Git cannot hold a ref and a ref below it, in either order.
-    private function overlaps(string $ref, string $archive): bool
-    {
-        $names = explode("\n", trim($this->mustRun(['for-each-ref', '--format=%(refname)', self::REF_PREFIX], $archive)));
-
-        foreach ($names as $name) {
-            if ('' !== $name && (str_starts_with($name, $ref.'/') || str_starts_with($ref, $name.'/'))) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private function heldBy(string $ref, string $archive): ?string
     {
         $process = $this->start($this->hardened->callInBareRepository($archive, 'rev-parse', '--verify', '--quiet', $ref));
@@ -151,12 +145,12 @@ final readonly class MirrorBranchArchive implements BranchArchive
         return $process->isSuccessful() ? trim($process->getOutput()) : null;
     }
 
-    /**
-     * @param list<string> $arguments
-     */
-    private function mustRun(array $arguments, string $repository): string
+    // Git cannot hold a ref and a ref below it, in either order.
+    private function overlaps(string $ref, string $archive): bool
     {
-        return $this->run($this->hardened->callInBareRepository($repository, ...$arguments));
+        $names = explode("\n", trim($this->mustRun(['for-each-ref', '--format=%(refname)', self::REF_PREFIX], $archive)));
+
+        return array_any($names, static fn (string $name): bool => '' !== $name && (str_starts_with($name, $ref.'/') || str_starts_with($ref, $name.'/')));
     }
 
     private function mustHold(string $ref, string $commit, string $archive): void
