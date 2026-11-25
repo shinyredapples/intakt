@@ -38,7 +38,7 @@ final class KilledWorkerTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
         $this->fixture->takeAndStop($message);
         $this->fixture->clock->modify('+1 hour');
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         $this->fixture->deliver($message, $vendor);
 
@@ -55,7 +55,7 @@ final class KilledWorkerTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
         $stopped = $this->fixture->takeAndStop($message);
         $this->fixture->clock->modify('+1 hour');
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         $this->fixture->deliver($message, $vendor);
 
@@ -71,7 +71,7 @@ final class KilledWorkerTest extends KernelTestCase
         $this->fixture->clock->modify('+1 hour');
         $this->fixture->takeAndStop($message);
         $this->fixture->clock->modify('+1 hour');
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
 
         $this->fixture->deliver($message, $vendor);
 
@@ -85,7 +85,7 @@ final class KilledWorkerTest extends KernelTestCase
     public function testARoundWhoseLastOpenReviewerIsBlockedIsComplete(): void
     {
         $round = $this->fixture->start(2);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new ScriptedVendor());
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole());
         self::assertSame(RoundState::Collecting, $this->fixture->round($round->id()->toRfc4122())->state());
         $stopped = $this->fixture->bus->messages[1];
         $this->fixture->takeAndStop($stopped);
@@ -93,7 +93,7 @@ final class KilledWorkerTest extends KernelTestCase
         $this->fixture->takeAndStop($stopped);
         $this->fixture->clock->modify('+1 hour');
 
-        $this->fixture->deliver($stopped, new ScriptedVendor());
+        $this->fixture->deliver($stopped, new VerdictPerRole());
 
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(RoundState::Complete, $stored->state());

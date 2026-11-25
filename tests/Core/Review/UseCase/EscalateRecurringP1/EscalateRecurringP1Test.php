@@ -51,7 +51,6 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
-use Intakt\Tests\Core\Review\UseCase\RunReviewRound\ScriptedVendor;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -118,8 +117,8 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private const string HEAD_C = 'cccccccccccccccccccccccccccccccccccccccc';
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
     private const string FORGE_SPELLING = 'https://github.com/Acme/Widgets/pull/7';
-    // Changes RecordingBus.php and ScriptedVendor.php, files of the fixture's checkout, so a finding naming either has a key and its code to show.
-    private const string DIFF = RoundFixture::DIFF_OF_RECORDING_BUS."diff --git a/ScriptedVendor.php b/ScriptedVendor.php\n@@ -5 +5 @@\n-old\n+new\n";
+    // Changes RecordingBus.php and VerdictPerRole.php, files of the fixture's checkout, so a finding naming either has a key and its code to show.
+    private const string DIFF = RoundFixture::DIFF_OF_RECORDING_BUS."diff --git a/VerdictPerRole.php b/VerdictPerRole.php\n@@ -5 +5 @@\n-old\n+new\n";
 
     private RoundFixture $fixture;
 
@@ -710,7 +709,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private function withStrongTier(EscalationReviews $reviews): void
     {
         $container = self::getContainer();
-        $container->set(Vendor::class, new ScriptedVendor());
+        $container->set(Vendor::class, new VerdictPerRole());
         $container->set(EscalationReviews::class, $reviews);
         $this->asyncQueue()->reset();
     }
@@ -785,7 +784,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
     private function otherP1(): Finding
     {
-        return new Finding('B', Severity::P1, 'ScriptedVendor.php', 5, null, 'The vendor forgets the model.', FixableBy::Builder, false, 'Every model is kept.', null);
+        return new Finding('B', Severity::P1, 'VerdictPerRole.php', 5, null, 'The vendor forgets the model.', FixableBy::Builder, false, 'Every model is kept.', null);
     }
 
     private function repeated(Finding $finding, string $id = 'F1'): Finding
@@ -818,7 +817,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private function workerAnswers(array $messages, EscalationVerdict ...$verdicts): void
     {
         $container = self::getContainer();
-        $container->set(Vendor::class, new ScriptedVendor());
+        $container->set(Vendor::class, new VerdictPerRole());
         $container->set(EscalationReviews::class, new VerdictsInTurn(array_values($verdicts)));
         $queue = new DoctrineTransport(new Connection(['queue_name' => 'escalations'], $container->get('doctrine.dbal.default_connection')), new PhpSerializer());
         foreach ($messages as $message) {
