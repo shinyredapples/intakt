@@ -41,7 +41,7 @@ When the container is built, a provider is included only if each of its variable
 
 - a wrong key returns null (kernel: `testAKeptKeyIsUsedBehindAVaultSecretThatAWrongKeyOfTheRightLengthCannotOpen`);
 - a key of the wrong length throws `SodiumException` (unit: `testAKeyStoredOnlyInTheVaultBehindAMalformedDecryptionSecretCountsAsMissing`; kernel: `testAVaultSecretBehindADecryptionSecretOfTheWrongLengthDisablesItsProviderDespiteAKeptKey`);
-- no key at all (a secret that decodes to nothing and no key file in the vault) throws `RuntimeException` (unit: `testAKeyStoredOnlyInAVaultWithoutAnyUsableDecryptionKeyCountsAsMissing`; kernel: `testAVaultSecretWithoutAnyUsableDecryptionKeyDisablesItsProviderDespiteAKeptKey`).
+- no key at all (a secret that decodes to nothing and no key file in the vault) throws a bare `RuntimeException`, the only class the vault catch lets through as "no key"; a subclass or any other exception passes (unit: `testAKeyStoredOnlyInAVaultWithoutAnyUsableDecryptionKeyCountsAsMissing`; kernel: `testAVaultSecretWithoutAnyUsableDecryptionKeyDisablesItsProviderDespiteAKeptKey`).
 
 Both exceptions are caught.
 
