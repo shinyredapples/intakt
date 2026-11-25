@@ -47,6 +47,12 @@ final readonly class RoundStatusMirror
         }
     }
 
+    // Keyed on the canonical address in lower case, because the round reader takes every alias for one pull request, and without auto-release, because a destructor would retry a failed release where nothing catches it.
+    private function lockOf(string $project, ChangeId $change): LockInterface
+    {
+        return $this->locks->createLock(self::LOCK_PREFIX.hash('sha256', json_encode([mb_strtolower($project), mb_strtolower(ChangeAddress::canonical($change->value))], JSON_THROW_ON_ERROR)), autoRelease: false);
+    }
+
     // Tried without waiting, because the holder reads the stored round under the lock and every later pass reconciles again.
     private function tryLock(LockInterface $lock, string $project, ChangeId $change): bool
     {
@@ -66,6 +72,13 @@ final readonly class RoundStatusMirror
         return $locked;
     }
 
+    private function wantedOf(string $project, ChangeId $change): ?RoundStatusLabel
+    {
+        $status = $this->rounds->of($project, $change->value);
+
+        return $status instanceof ReviewStatus ? RoundStatusLabel::of($status) : null;
+    }
+
     private function release(LockInterface $lock, string $project, ChangeId $change): void
     {
         try {
@@ -80,19 +93,5 @@ final readonly class RoundStatusMirror
     private function reasonOf(Throwable $failure): string
     {
         return ($failure->getPrevious() ?? $failure)->getMessage();
-    }
-
-    // Keyed on the canonical address in lower case, because the round reader takes every alias of a pull request for one, and a forge such as GitHub reads owner and repository so.
-    // Released by the mirror alone, because a release that fails must not be tried again from a destructor where nothing catches it.
-    private function lockOf(string $project, ChangeId $change): LockInterface
-    {
-        return $this->locks->createLock(self::LOCK_PREFIX.hash('sha256', json_encode([mb_strtolower($project), mb_strtolower(ChangeAddress::canonical($change->value))], JSON_THROW_ON_ERROR)), autoRelease: false);
-    }
-
-    private function wantedOf(string $project, ChangeId $change): ?RoundStatusLabel
-    {
-        $status = $this->rounds->of($project, $change->value);
-
-        return $status instanceof ReviewStatus ? RoundStatusLabel::of($status) : null;
     }
 }
