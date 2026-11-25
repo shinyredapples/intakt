@@ -28,8 +28,18 @@ final class GateChildStopPreconditionsTest extends TestCase
             exit(99);
         }
         pcntl_waitpid($pid, $status, WUNTRACED);
-        ini_set('open_basedir', dirname($argv[1], 2).':'.sys_get_temp_dir());
-        Intakt\Gates\ProcessGroup::ofLauncher($pid)->stop();
+        $narrow = static fn () => ini_set('open_basedir', dirname($argv[1], 2).':'.sys_get_temp_dir());
+        if ('after' !== $argv[2]) {
+            $narrow();
+        }
+        $group = Intakt\Gates\ProcessGroup::ofLauncher($pid);
+        if ('after' === $argv[2]) {
+            $narrow();
+        }
+        if (null === Intakt\Gates\ProcessGroup::whatTheStopLacks()) {
+            throw new RuntimeException('/proc is still readable');
+        }
+        $group->stop();
         $ended = pcntl_waitpid($pid, $status, WNOHANG) === $pid;
         if (!$ended) {
             posix_kill($pid, SIGKILL);
@@ -51,7 +61,15 @@ final class GateChildStopPreconditionsTest extends TestCase
 
     public function testALauncherWhoseStartTimeCannotBeReadIsStoppedWhileItIsStillBinCheckSChild(): void
     {
-        $stop = new Process([PHP_BINARY, '-r', self::STOP_WITHOUT_PROC, $this->autoload()]);
+        $stop = new Process([PHP_BINARY, '-r', self::STOP_WITHOUT_PROC, $this->autoload(), 'before']);
+        $stop->mustRun();
+
+        self::assertSame('ended', $stop->getOutput());
+    }
+
+    public function testALauncherHeldBeforeItsSetsidIsStoppedWhenProcBecomesUnreadableAfterItsStart(): void
+    {
+        $stop = new Process([PHP_BINARY, '-r', self::STOP_WITHOUT_PROC, $this->autoload(), 'after']);
         $stop->mustRun();
 
         self::assertSame('ended', $stop->getOutput());

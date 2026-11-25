@@ -64,6 +64,8 @@ final readonly class ProcessGroup
             posix_kill($this->id, 9);
 
             if (posix_getpgid($this->id) !== $this->id) {
+                $this->awaitTheKilledLauncher();
+
                 return;
             }
         }
@@ -177,9 +179,12 @@ final readonly class ProcessGroup
         return is_array($info) && 0 !== ($info['pid'] ?? 0);
     }
 
+    // Because only an unreaped child is asked this, the number is still the launcher's; a start time that can no longer be read proves nothing against that, so only one read and different disowns it.
     private function isTheLauncherWithoutItsGroup(): bool
     {
-        return '' !== $this->launcherStart && self::startTimeOf($this->id) === $this->launcherStart && posix_getpgid($this->id) !== $this->id;
+        $start = self::startTimeOf($this->id);
+
+        return '' !== $this->launcherStart && ('' === $start || $start === $this->launcherStart) && posix_getpgid($this->id) !== $this->id;
     }
 
     private static function startTimeOf(int $id): string
