@@ -40,15 +40,46 @@ final readonly class LocalBranchRestore
         try {
             $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($name, $restore->head->hash)), $common);
         } catch (BranchNotPushed $failed) {
+            $this->undoWriteThroughSymbolicBranch($name, $restore->head->hash);
+
             throw $this->notRestored($name, $failed->getMessage(), $failed);
         }
+
+        $this->undoWriteThroughSymbolicBranch($name, $restore->head->hash);
     }
 
+    // Only the newline git ends its answer with, because a directory's own name may end in one, and a name without it can be another repository.
     private function commonDirectory(string $name): string
     {
         $process = $this->git($name, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+        $output = $process->getOutput();
 
-        return $process->isSuccessful() ? rtrim($process->getOutput(), "\n") : throw $this->notRestored($name, sprintf('git rev-parse failed: %s', trim($process->getErrorOutput())));
+        if (!$process->isSuccessful() || !str_ends_with($output, "\n")) {
+            throw $this->notRestored($name, sprintf('git rev-parse failed: %s', trim($process->getErrorOutput())));
+        }
+
+        return substr($output, 0, -1);
+    }
+
+    // A symbolic branch another writer makes after the check is not listed to the push, whose empty lease then lets the remote create the branch it names. That target did not exist when the push wrote it, so it is removed again while it still holds the archived head.
+    private function undoWriteThroughSymbolicBranch(string $name, string $head): void
+    {
+        $symbolic = $this->git($name, ['symbolic-ref', '--quiet', 'refs/heads/'.$name]);
+
+        if (1 === $symbolic->getExitCode()) {
+            return;
+        }
+
+        if (!$symbolic->isSuccessful()) {
+            throw $this->notRestored($name, sprintf('git symbolic-ref failed after the push: %s', trim($symbolic->getErrorOutput())));
+        }
+
+        $target = trim($symbolic->getOutput());
+        $undo = $this->git($name, ['update-ref', '--no-deref', '-d', $target, $head]);
+
+        throw $this->notRestored($name, $undo->isSuccessful()
+            ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target)
+            : sprintf('another writer made it a symbolic branch during the restore, so the push may have written %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())));
     }
 
     // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch. A ref that cannot be read is refused alike, because only a missing one may be created.

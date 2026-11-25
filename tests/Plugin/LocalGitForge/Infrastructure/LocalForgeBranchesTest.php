@@ -824,6 +824,53 @@ final class LocalForgeBranchesTest extends TestCase
         self::assertSame($head, $this->repository->objectAt('refs/heads/intakt/feature'));
     }
 
+    public function testABranchIsRestoredIntoARepositoryWhosePathEndsInANewlineAndNotIntoItsSibling(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $this->archiveAndDeleteFeature($head);
+        $sibling = $this->repository->path.'-bare';
+        $intended = $sibling."\n";
+
+        try {
+            foreach ([$sibling, $intended] as $bare) {
+                new Process(['git', 'init', '--quiet', '--bare', $bare], null, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->mustRun();
+            }
+
+            $this->forgeAt(new LocalRepository($intended, 'main'))->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($head)));
+
+            self::assertFalse($this->exists($sibling, 'intakt/feature'));
+            self::assertTrue($this->exists($intended, 'intakt/feature'));
+        } finally {
+            new Filesystem()->remove([$sibling, $intended]);
+        }
+    }
+
+    public function testASymbolicBranchAnotherWriterMakesBeforeThePushIsRefusedAndItsTargetIsRemovedAgain(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $archived = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $this->archiveAndDeleteFeature($archived);
+
+        $this->withGit(sprintf(
+            "  *' push '*) %s; exec %s \"\$@\" ;;\n",
+            $this->inTheRepository(['symbolic-ref', 'refs/heads/intakt/feature', 'refs/heads/intakt/other']),
+            $this->realGit(),
+        ), function () use ($archived): void {
+            try {
+                $this->branches()->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($archived)));
+                self::fail('A push through a symbolic branch made during the restore must not count as a restore.');
+            } catch (ForgeWriteFailed $refused) {
+                self::assertSame('The branch "intakt/feature" was not restored: another writer made it a symbolic branch during the restore, so the push wrote refs/heads/intakt/other, which was removed again.', $refused->getMessage());
+            }
+        });
+
+        self::assertFileDoesNotExist($this->repository->path.'/.git/refs/heads/intakt/other');
+        self::assertSame("ref: refs/heads/intakt/other\n", file_get_contents($this->repository->path.'/.git/refs/heads/intakt/feature'));
+    }
+
     public function testARestoreThePushRefusesFailsAsAWrite(): void
     {
         $push = self::createStub(ArchivedHeadPush::class);
