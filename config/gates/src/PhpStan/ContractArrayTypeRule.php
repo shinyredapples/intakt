@@ -63,7 +63,7 @@ final readonly class ContractArrayTypeRule implements Rule
             $findings = [...$findings, ...$this->findingsOf($this->signatureTypes($method, $class, $skipped), $this->lineOf($method, $declaration))];
         }
 
-        return [...$findings, ...$this->promotedInputFindings($class, $declaration),...$this->propertyFindings($promoted, $class, $declaration)];
+        return [...$findings, ...$this->promotedInputFindings($class, $declaration), ...$this->propertyFindings($promoted, $class, $declaration)];
     }
 
     private function isContract(string $file): bool
