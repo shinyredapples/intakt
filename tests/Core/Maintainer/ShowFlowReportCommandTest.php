@@ -160,16 +160,6 @@ final class ShowFlowReportCommandTest extends KernelTestCase
         parent::tearDown();
     }
 
-    private function show(string $project, WorkSource $source): CommandTester
-    {
-        $application = new Application();
-        $application->addCommand(new ShowFlowReportCommand($source, new MockClock('2026-11-20 10:00:00')));
-        $tester = new CommandTester($application->find('intakt:maintainer:flow-report'));
-        $tester->execute(['project' => $project], ['capture_stderr_separately' => true]);
-
-        return $tester;
-    }
-
     private function source(): GitHubWorkSource
     {
         $histories = self::createStub(IssueHistories::class);
@@ -184,5 +174,15 @@ final class ShowFlowReportCommandTest extends KernelTestCase
         $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', 'intakt')), $references, $this->logger);
 
         return new GitHubWorkSource($listing, $histories, $accounts, $references, $this->store, new PullRequestsOfTasks(new RecordedPullRequestBranches($this->reads), $histories, $accounts, $references), $this->logger);
+    }
+
+    private function show(string $project, WorkSource $source): CommandTester
+    {
+        $application = new Application();
+        $application->addCommand(new ShowFlowReportCommand($source, new MockClock('2026-11-20 10:00:00')));
+        $tester = new CommandTester($application->find('intakt:maintainer:flow-report'));
+        $tester->execute(['project' => $project], ['capture_stderr_separately' => true]);
+
+        return $tester;
     }
 }

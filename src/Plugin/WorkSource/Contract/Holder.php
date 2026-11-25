@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\WorkSource\Contract;
 
-// What an open task waits on in the way of a hand-over: a Maintainer session or a person, or nothing.
+// A hand-over is offered to a Maintainer session or a person, because the report ranks what each of them holds.
 enum Holder
 {
     case Session;

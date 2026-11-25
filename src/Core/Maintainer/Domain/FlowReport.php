@@ -9,8 +9,10 @@ use Intakt\Plugin\WorkSource\Contract\Holder;
 use Intakt\Plugin\WorkSource\Contract\OpenTask;
 use Intakt\Plugin\WorkSource\Contract\OpenWork;
 use Intakt\Plugin\WorkSource\Contract\TaskPriority;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // The three figures the weekly review reads, counted in plain code from the open tasks, so the model never counts.
+#[Exclude]
 final readonly class FlowReport
 {
     /**
@@ -41,6 +43,24 @@ final readonly class FlowReport
             $mix,
             null !== $urgent && $urgent->share > $urgentThreshold,
         );
+    }
+
+    /**
+     * @param list<OpenTask> $tasks
+     *
+     * @return list<PriorityShare>
+     */
+    private static function priorityMixOf(array $tasks): array
+    {
+        if ([] === $tasks) {
+            return [];
+        }
+
+        return array_map(static function (TaskPriority $priority) use ($tasks): PriorityShare {
+            $count = count(array_filter($tasks, static fn (OpenTask $task): bool => $task->priority === $priority));
+
+            return new PriorityShare($priority, $count, $count / count($tasks));
+        }, TaskPriority::cases());
     }
 
     // Most held first, then the lower number, because the order is the one hand-overs are offered to the Maintainer's sessions in.
@@ -110,24 +130,6 @@ final readonly class FlowReport
         }
         ksort($open);
 
-        return array_values(array_map(static fn (int $key): OverdueMilestone => new OverdueMilestone($dues[$key], $open[$key]), array_keys($open)));
-    }
-
-    /**
-     * @param list<OpenTask> $tasks
-     *
-     * @return list<PriorityShare>
-     */
-    private static function priorityMixOf(array $tasks): array
-    {
-        if ([] === $tasks) {
-            return [];
-        }
-
-        return array_map(static function (TaskPriority $priority) use ($tasks): PriorityShare {
-            $count = count(array_filter($tasks, static fn (OpenTask $task): bool => $task->priority === $priority));
-
-            return new PriorityShare($priority, $count, $count / count($tasks));
-        }, TaskPriority::cases());
+        return array_map(static fn (int $key): OverdueMilestone => new OverdueMilestone($dues[$key], $open[$key]), array_keys($open));
     }
 }

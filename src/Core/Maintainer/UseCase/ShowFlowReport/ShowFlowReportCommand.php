@@ -23,7 +23,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 final readonly class ShowFlowReportCommand
 {
     private const string UNICODE_CONTROLS = '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u';
-    // More than a third urgent, the default until the owner's config holds a value.
+    // More than a third urgent is the default, because the owner's config holds no value for it yet.
     private const float URGENT_THRESHOLD = 1 / 3;
 
     public function __construct(
@@ -49,6 +49,18 @@ final readonly class ShowFlowReportCommand
         $this->printPriorityMix($io, $report);
 
         return Command::SUCCESS;
+    }
+
+    private function printable(string $line): string
+    {
+        // Unicode's controls, format characters and line breaks too, the set ShowQueueCommand strips; text that is not UTF-8 keeps only its printable ASCII.
+        return preg_replace(self::UNICODE_CONTROLS, ' ', $line) ?? (string) preg_replace('/[^\x20-\x7E]/', '?', $line);
+    }
+
+    // Raw and without control characters, because a title is issue text anyone can write and must not restyle or rewrite the terminal.
+    private function printLine(SymfonyStyle $io, string $line): void
+    {
+        $io->writeln($this->printable($line), OutputInterface::OUTPUT_RAW);
     }
 
     private function printHandOvers(SymfonyStyle $io, FlowReport $report): void
@@ -110,17 +122,5 @@ final readonly class ShowFlowReportCommand
     private function shareLine(PriorityShare $share): string
     {
         return sprintf('  %s: %d (%d%%)', $share->priority->value, $share->openTasks, round($share->share * 100));
-    }
-
-    private function printable(string $line): string
-    {
-        // Unicode's controls, format characters and line breaks too, the set ShowQueueCommand strips; text that is not UTF-8 keeps only its printable ASCII.
-        return preg_replace(self::UNICODE_CONTROLS, ' ', $line) ?? (string) preg_replace('/[^\x20-\x7E]/', '?', $line);
-    }
-
-    // Raw and without control characters, because a title is issue text anyone can write and must not restyle or rewrite the terminal.
-    private function printLine(SymfonyStyle $io, string $line): void
-    {
-        $io->writeln($this->printable($line), OutputInterface::OUTPUT_RAW);
     }
 }
