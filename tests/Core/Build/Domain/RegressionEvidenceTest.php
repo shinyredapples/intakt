@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
+use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\RegressionRun;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RegressionEvidence::class)]
+#[UsesClass(ReadableLines::class)]
 #[UsesClass(RegressionRuns::class)]
 #[UsesClass(RegressionRun::class)]
 #[UsesClass(Paths::class)]
@@ -158,6 +160,97 @@ final class RegressionEvidenceTest extends TestCase
         $body = new RegressionEvidence($this->runs())->addedTo("## Evidenced\nShown.");
 
         self::assertSame("## Evidenced\nShown.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnIndentedEvidenceLineFollowedByDashesIsCodeAndTheRealEvidenceSectionAtTheEndGetsTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Text.\n\n    Evidence\n---\n\n## Evidence\n\nShown.");
+
+        self::assertSame("Text.\n\n    Evidence\n---\n\n## Evidence\n\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAParagraphLineUnderlinedWithEqualsIsALevelOneEvidenceHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Evidence\n=====\nShown.");
+
+        self::assertSame("Evidence\n=====\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAParagraphLineUnderlinedWithDashesIsALevelTwoEvidenceHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Evidence\n-----\nShown.\n\n# Next");
+
+        self::assertSame("Evidence\n-----\nShown.\n\n".self::LINES."\n\n# Next", $body);
+    }
+
+    public function testASetextHeadingOfTheSameLevelEndsTheEvidenceSectionBeforeItsText(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\nShown.\n\nFollow-ups\n---\nnone");
+
+        self::assertSame("## Evidence\nShown.\n\n".self::LINES."\n\nFollow-ups\n---\nnone", $body);
+    }
+
+    public function testAnEvidenceHeadingInsideAKindSixHtmlBlockIsNotTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<div>\n## Evidence\n\nText.");
+
+        self::assertSame("<div>\n## Evidence\n\nText.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingInsideALoneSpanTagBlockIsNotTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<span>\n## Evidence\n\nText.");
+
+        self::assertSame("<span>\n## Evidence\n\nText.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingInsideALoneClosingTagBlockIsNotTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("</span>\n## Evidence\n\nText.");
+
+        self::assertSame("</span>\n## Evidence\n\nText.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testALoneTagLineAfterAParagraphLineDoesNotStartAnHtmlBlock(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Text\n<span>\n## Evidence\nShown.");
+
+        self::assertSame("Text\n<span>\n## Evidence\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAPreBlockEndsAtAScriptEndTagNotAtABlankLine(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<pre>\n\n## Evidence\n</script>\n\n## Evidence\nShown.");
+
+        self::assertSame("<pre>\n\n## Evidence\n</script>\n\n## Evidence\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingInsideAnHtmlCommentIsNotTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<!--\n\n## Evidence\n-->\nText.");
+
+        self::assertSame("<!--\n\n## Evidence\n-->\nText.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingAfterASingleLineHtmlCommentIsTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<!-- note -->\n## Evidence\nShown.");
+
+        self::assertSame("<!-- note -->\n## Evidence\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAnUnderlineInsideAFenceDoesNotMakeASetextHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("```\nEvidence\n---\n```\nText.");
+
+        self::assertSame("```\nEvidence\n---\n```\nText.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testADashLineAfterABlankLineIsNotASetextUnderline(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Text.\n\n---\n## Evidence\nShown.");
+
+        self::assertSame("Text.\n\n---\n## Evidence\nShown.\n\n".self::LINES, $body);
     }
 
     private function runs(): RegressionRuns
