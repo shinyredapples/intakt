@@ -86,28 +86,6 @@ final readonly class GitHubStatusLabels implements StatusLabels
         return $this->locks->createLock(GitHubForgeServices::STATUS_LABEL_LOCK_PREFIX.hash('sha256', json_encode([strtolower($address->owner), strtolower($address->repository), $address->number], JSON_THROW_ON_ERROR)));
     }
 
-    // False when the lock stayed busy for every try; tried without blocking and paced by the clock, so the wait has a bound and a lock store that cannot block still serves.
-    /**
-     * @param Closure(): void $write
-     */
-    private function whileHeld(LockInterface $lock, int $tries, Closure $write): bool
-    {
-        for ($try = 1; !$lock->acquire(); ++$try) {
-            if ($try >= $tries) {
-                return false;
-            }
-            $this->clock->sleep(self::WAIT_PAUSE_SECONDS);
-        }
-
-        try {
-            $write();
-        } finally {
-            $lock->release();
-        }
-
-        return true;
-    }
-
     // Read once more after the write, because a writer past the wait can land between the last read and the write; each writer reads after its own write, so at least one of two overlapping writers sees the other's status and settles the label.
     /**
      * @throws ForgeReadFailed
@@ -133,6 +111,28 @@ final readonly class GitHubStatusLabels implements StatusLabels
         }
 
         throw new ForgeWriteFailed('The labels of the change kept changing while Intakt planned its status label.');
+    }
+
+    // False when the lock stayed busy for every try; tried without blocking and paced by the clock, so the wait has a bound and a lock store that cannot block still serves.
+    /**
+     * @param Closure(): void $write
+     */
+    private function whileHeld(LockInterface $lock, int $tries, Closure $write): bool
+    {
+        for ($try = 1; !$lock->acquire(); ++$try) {
+            if ($try >= $tries) {
+                return false;
+            }
+            $this->clock->sleep(self::WAIT_PAUSE_SECONDS);
+        }
+
+        try {
+            $write();
+        } finally {
+            $lock->release();
+        }
+
+        return true;
     }
 
     /**
