@@ -23,6 +23,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -75,7 +76,9 @@ final class TrustOnTheContainerTest extends KernelTestCase
     public function testTheWiredCommandShowsTheTrustDecisionFromRecordedAnswers(string $account, string $decision): void
     {
         $kernel = self::bootKernel();
-        $github = RecordedTrust::onTheWallClock()->client();
+        $clock = self::getContainer()->get(ClockInterface::class);
+        self::assertInstanceOf(ClockInterface::class, $clock);
+        $github = new RecordedTrust($clock)->client();
         // Both clients, so no request leaves the test: the token door uses the default client, the trust reads the scoped one.
         self::getContainer()->set('http_client', $github);
         self::getContainer()->set('github.client', $github);
