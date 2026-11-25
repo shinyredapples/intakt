@@ -129,7 +129,17 @@ final class DoctorCommandTest extends TestCase
         self::assertSame([], $api->requestedUrls);
     }
 
-    public function testAProblemTextWithLineBreaksAndControlCharactersStaysOnOneLine(): void
+    public function testAFixTextWithALineBreakPrintsAsOneLine(): void
+    {
+        $check = InfrastructureCheck::unreadable(new EndpointDown('x'), "the problem\nin two lines", "first step\nsecond step\r\x1B[31m");
+        $line = new \ReflectionMethod(DoctorCommand::class, 'line');
+
+        $printed = $line->invoke(new DoctorCommand($this->createStub(ServerStatus::class)), 'worker threads', $check);
+
+        self::assertSame('fail: worker threads: the problem in two lines; fix: first step second step  [31m', $printed);
+    }
+
+    public function testAProblemTextWithLineBreaksAndControlCharactersGoesThroughTheSameOneLineHelperAsTheFixText(): void
     {
         $tester = $this->execute($this->statusReading(threads: new EndpointDown("first\nsecond\r\x1B[31mthird\u{2028}fourth\u{85}fifth")));
 
