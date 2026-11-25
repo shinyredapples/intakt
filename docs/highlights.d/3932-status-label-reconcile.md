@@ -1,0 +1,2 @@
+## Symfony components
+| Lock | one reconcile of a pull request's `status:` label at a time, tried without waiting and created without auto-release (`LockFactory`, `RoundStatusMirror`); a writer that finds it held writes nothing, because the queued round, the publication and every watcher pass reconcile from the stored round | in progress | #3932 (part of #3879), `src/Plugin/Forge/Contract/RoundStatusMirror.php`, `src/Core/Watcher/UseCase/WatchPullRequests/StatusMirrors.php` |
