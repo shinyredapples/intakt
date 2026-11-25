@@ -37,7 +37,7 @@ use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
-use InvalidArgumentException;
+use Intakt\Core\Job\Contract\JobRefused;
 use LogicException;
 use NoDiscard;
 use Symfony\Component\Filesystem\Exception\IOException;
@@ -216,7 +216,7 @@ final readonly class BuildTask
 
         try {
             $outcome = $this->builds->run($this->jobOf($request, $task));
-        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|InvalidArgumentException|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
+        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|JobRefused|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
             return $failure->getMessage();
         }
 

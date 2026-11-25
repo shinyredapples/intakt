@@ -22,6 +22,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use InvalidArgumentException;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -111,6 +112,17 @@ final class ForgeConnectionCheckTest extends TestCase
         self::assertSame('the App settings cannot be read (GITHUB_APP_PERMISSIONS must list name:level pairs, such as contents:write.)', $verdict->problem);
         self::assertStringContainsString('GITHUB_APP_PERMISSIONS', (string) $verdict->fix);
         self::assertSame(0, $this->requests);
+    }
+
+    public function testAnUnexpectedExceptionWhileReadingTheSettingsPassesThrough(): void
+    {
+        $this->expected = new ReflectionClass(ExpectedInstallation::class)->newLazyGhost(static function (): never {
+            throw new LogicException('a bug in the settings');
+        });
+
+        $this->expectException(LogicException::class);
+
+        $this->check()->run();
     }
 
     public function testAnEmptyAppIdWithTheInstallationIdStillSetFails(): void

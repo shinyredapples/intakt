@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use RuntimeException;
 use SensitiveParameter;
 use SodiumException;
+use Throwable;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
@@ -82,8 +83,16 @@ final readonly class ProviderKeySource
 
         try {
             return $this->vault->reveal($name);
-        } catch (SodiumException|RuntimeException) {
-            // A decryption key of the wrong length, or no key at all, throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
+        } catch (SodiumException) {
+            // A decryption key of the wrong length throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
+            return false;
+        // Boundary: Symfony's vault throws a bare RuntimeException when it has no key
+        } catch (Throwable $failure) {
+            if (RuntimeException::class !== $failure::class) {
+                throw $failure;
+            }
+
+            // No key at all throws as well, and the secret is unusable then too.
             return false;
         }
     }

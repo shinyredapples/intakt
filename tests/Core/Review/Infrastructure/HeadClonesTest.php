@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Review\Infrastructure\HeadClones;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -86,6 +87,30 @@ final class HeadClonesTest extends TestCase
             self::fail('A head the source does not hold was cloned.');
         } catch (ProcessFailedException) {
             self::assertSame([$first], glob($this->root.'/clones/head-*'));
+        }
+    }
+
+    public function testAnUnexpectedExceptionWhileCloningPassesThroughAfterTheCloneIsRemoved(): void
+    {
+        $head = $this->committed("one\n");
+        $filesystem = new class extends Filesystem {
+            private int $made = 0;
+
+            public function mkdir(string|iterable $dirs, int $mode = 0o777): void
+            {
+                if (2 === ++$this->made) {
+                    throw new LogicException('a bug while preparing the clone');
+                }
+
+                parent::mkdir($dirs, $mode);
+            }
+        };
+
+        try {
+            new HeadClones($filesystem, $this->root.'/clones')->cloneAt($this->root.'/source', $head);
+            self::fail('The unexpected exception did not pass through.');
+        } catch (LogicException) {
+            self::assertSame([], glob($this->root.'/clones/head-*'));
         }
     }
 

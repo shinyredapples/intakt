@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-use InvalidArgumentException;
 use IteratorAggregate;
 use Traversable;
 
@@ -29,11 +28,11 @@ final readonly class SameCause implements IteratorAggregate
     public function with(string $finding, string $cause): self
     {
         if ('' === $finding || '' === $cause) {
-            throw new InvalidArgumentException('A same-cause link needs a finding id and a cause id.');
+            throw new SameCauseLinkRefused('A same-cause link needs a finding id and a cause id.');
         }
 
         if ($finding === $cause) {
-            throw new InvalidArgumentException(sprintf('Finding "%s" cannot be its own cause.', $finding));
+            throw new SameCauseLinkRefused(sprintf('Finding "%s" cannot be its own cause.', $finding));
         }
 
         return $this->put($finding, $cause);
@@ -43,7 +42,7 @@ final readonly class SameCause implements IteratorAggregate
     public function withStored(string $finding, string $cause): self
     {
         if ('' === $finding || '' === $cause) {
-            throw new InvalidArgumentException('A same-cause link needs a finding id and a cause id.');
+            throw new SameCauseLinkRefused('A same-cause link needs a finding id and a cause id.');
         }
 
         return $this->put($finding, $cause);

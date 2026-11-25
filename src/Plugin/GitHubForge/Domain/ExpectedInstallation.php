@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Domain;
 
-use InvalidArgumentException;
 
 final readonly class ExpectedInstallation
 {
@@ -25,18 +24,18 @@ final readonly class ExpectedInstallation
         foreach (self::items($permissions) as $item) {
             [$name, $level] = [...explode(':', $item, 2), ''];
             if ('' === $name || '' === $level) {
-                throw new InvalidArgumentException('GITHUB_APP_PERMISSIONS must list name:level pairs, such as contents:write.');
+                throw new InstallationSettingsRefused('GITHUB_APP_PERMISSIONS must list name:level pairs, such as contents:write.');
             }
             // The comparison is exact, so a second level for one name would silently replace the first.
             if (array_key_exists($name, $levels)) {
-                throw new InvalidArgumentException(sprintf('GITHUB_APP_PERMISSIONS names %s more than once.', $name));
+                throw new InstallationSettingsRefused(sprintf('GITHUB_APP_PERMISSIONS names %s more than once.', $name));
             }
             $levels[$name] = $level;
         }
 
         $names = self::items($repositories);
         if ([] === $levels || [] === $names) {
-            throw new InvalidArgumentException('GITHUB_APP_PERMISSIONS and GITHUB_APP_REPOSITORIES must each name at least one entry.');
+            throw new InstallationSettingsRefused('GITHUB_APP_PERMISSIONS and GITHUB_APP_REPOSITORIES must each name at least one entry.');
         }
 
         return new self($levels, $names);

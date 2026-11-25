@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Contract;
 
-use InvalidArgumentException;
 
 // A task is its resolved repository path and its branch, as in the hand-back round, so one task's lines match however its path was written.
 final readonly class PullRequestTextTask
@@ -17,7 +16,7 @@ final readonly class PullRequestTextTask
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws PullRequestTextTaskRefused
      */
     public static function resolved(string $repository, string $branch): self
     {
@@ -25,11 +24,11 @@ final readonly class PullRequestTextTask
         $path = '' === $repository ? false : realpath($repository);
 
         if (false === $path) {
-            throw new InvalidArgumentException(sprintf('the repository "%s" cannot be found', $repository));
+            throw new PullRequestTextTaskRefused(sprintf('the repository "%s" cannot be found', $repository));
         }
 
         if ('' === trim($branch)) {
-            throw new InvalidArgumentException('the branch is empty');
+            throw new PullRequestTextTaskRefused('the branch is empty');
         }
 
         // Length-prefixed parts, because a path or a branch may hold any separator, and plain bytes, because Git takes a branch name that is not UTF-8.

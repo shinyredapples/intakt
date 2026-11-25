@@ -12,11 +12,15 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
+use LogicException;
+use RuntimeException;
+use UnexpectedValueException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
+use Throwable;
 
 #[CoversClass(HeldCredentials::class)]
 #[UsesClass(ProviderKey::class)]
@@ -94,6 +98,25 @@ final class HeldCredentialsTest extends TestCase
         self::assertSame([], new HeldCredentials([self::NAME], new SodiumVault($this->vaultDirectory, 'too-short'))->values());
     }
 
+    public function testAVaultWhoseRevealThrowsABareRuntimeExceptionHoldsNothingInsteadOfFailing(): void
+    {
+        self::assertSame([], new HeldCredentials([self::NAME], $this->vaultRevealThrowing(new RuntimeException('no key')))->values());
+    }
+
+    public function testAVaultWhoseRevealThrowsASubclassOfRuntimeExceptionLetsItPassThrough(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+
+        new HeldCredentials([self::NAME], $this->vaultRevealThrowing(new UnexpectedValueException('a bug')))->values();
+    }
+
+    public function testAVaultWhoseRevealThrowsALogicExceptionLetsItPassThrough(): void
+    {
+        $this->expectException(LogicException::class);
+
+        new HeldCredentials([self::NAME], $this->vaultRevealThrowing(new LogicException('a bug')))->values();
+    }
+
     public function testAKeyKeptFromTheBrowserIsHeld(): void
     {
         $kept = self::createStub(KeptProviderKeys::class);
@@ -120,6 +143,15 @@ final class HeldCredentialsTest extends TestCase
         unset($_SERVER[self::NAME], $_SERVER[self::NAME.'_TEAM'], $_SERVER['OTHER_'.self::NAME], $_SERVER[self::NAME.'S'], $_ENV[self::NAME]);
         putenv(self::NAME);
         new Filesystem()->remove($this->vaultDirectory);
+    }
+
+    private function vaultRevealThrowing(Throwable $failure): SodiumVault
+    {
+        $vault = $this->createStub(SodiumVault::class);
+        $vault->method('list')->willReturn([self::NAME => null]);
+        $vault->method('reveal')->willThrowException($failure);
+
+        return $vault;
     }
 
     /**

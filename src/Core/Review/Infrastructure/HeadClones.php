@@ -8,7 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\CommitId;
-use RuntimeException;
+use Throwable;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -32,7 +32,6 @@ final readonly class HeadClones
     /**
      * @throws ProcessFailedException
      * @throws RepositoryAttributesRefused
-     * @throws RuntimeException
      */
     public function cloneAt(string $checkout, CommitId $head): string
     {
@@ -48,7 +47,8 @@ final readonly class HeadClones
             // Only for the fetch, because HardenedGit allows no protocol at all and the fetch reads the round's checkout by its path.
             $this->run(new GitCall($fetch->command, $fetch->directory, $fetch->environment->with(GIT_ALLOW_PROTOCOL: 'file')));
             $this->run($this->hardened->call($clone, '-c', 'core.autocrlf=false', '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $head->hash));
-        } catch (RuntimeException $failed) {
+        // Boundary: any failure, also an unexpected one, must remove the partial clone before it ends the job
+        } catch (Throwable $failed) {
             $this->remove($clone);
 
             throw $failed;
@@ -66,7 +66,6 @@ final readonly class HeadClones
     /**
      * @throws ProcessFailedException
      * @throws RepositoryAttributesRefused
-     * @throws RuntimeException
      */
     private function objectFormatOf(string $checkout): string
     {
@@ -75,7 +74,6 @@ final readonly class HeadClones
 
     /**
      * @throws ProcessFailedException
-     * @throws RuntimeException
      */
     private function run(GitCall $call): string
     {

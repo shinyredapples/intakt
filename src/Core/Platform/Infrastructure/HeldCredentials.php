@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use RuntimeException;
 use SodiumException;
+use Throwable;
 use Symfony\Bundle\FrameworkBundle\Secrets\AbstractVault;
 
 // Read when asked, so no secret enters the compiled container, from the sources Symfony's env processor reads: the environment, then the secrets vault, then the key kept from the browser.
@@ -76,7 +77,14 @@ final readonly class HeldCredentials
     {
         try {
             return $this->vault?->reveal($name);
-        } catch (SodiumException|RuntimeException) {
+        } catch (SodiumException) {
+            return null;
+        // Boundary: Symfony's vault throws a bare RuntimeException when it has no key
+        } catch (Throwable $failure) {
+            if (RuntimeException::class !== $failure::class) {
+                throw $failure;
+            }
+
             return null;
         }
     }
