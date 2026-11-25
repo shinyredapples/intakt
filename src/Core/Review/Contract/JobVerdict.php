@@ -17,7 +17,7 @@ final readonly class JobVerdict
      * @param list<TokenUsageInterface> $usage
      */
     public function __construct(
-        // The refusal of an answer that is no verdict, or the failure of a CLI that reported usage, is kept here instead of thrown, so the usage the job reported settles the call all the same.
+        // The refusal of an answer that is no verdict, or the failure of a CLI that ran, is kept here instead of thrown, so the usage the job reported, or that it reported none, is recorded all the same.
         private Verdict|RuntimeException $answer,
         // From the job CLI's own events and the head's tree, because the model's text could claim a read it never made and a link could lead out of the checkout.
         public bool $readTheCheckout,

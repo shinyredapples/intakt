@@ -153,6 +153,21 @@ final class JobReviewVendorTest extends TestCase
         self::assertSame('settled', $this->ledger->payloads()[1]['phase']);
     }
 
+    public function testAFailedJobWhoseCliRanAndReportedNoUsageLeavesTheCallUnsettledForThatReason(): void
+    {
+        $failure = new RuntimeException('The CLI failed.');
+
+        try {
+            $this->reviewed(new JobVerdict($failure, false, []));
+            self::fail('A failed job was taken as a verdict.');
+        } catch (RuntimeException $thrown) {
+            self::assertSame($failure, $thrown);
+        }
+
+        $unsettled = $this->ledger->payloads()[1];
+        self::assertSame(['unsettled', JobReportedNoUsage::class, []], [$unsettled['phase'], $unsettled['failure'], $unsettled['usages']]);
+    }
+
     public function testAJobThatThrowsWithoutUsageLeavesTheCallUnsettledAndFailsTyped(): void
     {
         $jobs = self::createStub(JobReviewer::class);

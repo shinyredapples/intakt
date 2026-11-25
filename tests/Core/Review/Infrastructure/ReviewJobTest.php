@@ -27,12 +27,15 @@ use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewJobFailure;
 use Intakt\Core\Review\Infrastructure\ReviewJobImages;
+use Intakt\Core\Review\Infrastructure\ReviewJobStage;
 use Intakt\Tests\Core\Job\OutputFiles;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ReviewJob::class)]
@@ -54,6 +57,8 @@ use Symfony\Component\Filesystem\Filesystem;
 final class ReviewJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../docker/job/review.sh';
+
+    private const string NOW = '2026-11-25 10:00:00';
 
     private const string HEAD = '0123456789abcdef0123456789abcdef01234567';
 
@@ -252,6 +257,43 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::TimedOut, 137), $this->answered(self::CLAUDE_ANSWER)->output))->run($this->request());
     }
 
+    /**
+     * @return iterable<string, array{JobEnd}>
+     */
+    public static function endsWithoutAnExitLine(): iterable
+    {
+        yield 'timed out' => [new JobEnd(JobCause::TimedOut, 137)];
+        yield 'out of memory' => [new JobEnd(JobCause::MemoryKilled, 137)];
+        yield 'exited without an exit line' => [new JobEnd(JobCause::Exited, 0)];
+    }
+
+    #[DataProvider('endsWithoutAnExitLine')]
+    public function testAJobCutOffAfterItsCliRanKeepsTheUsageItReported(JobEnd $end): void
+    {
+        $output = OutputFiles::of([ReviewJob::LOG => '', ReviewJob::ANSWER => '{"type":"result","is_error":false,"result":"ok","usage":{"input_tokens":100,"output_tokens":20}}']);
+
+        try {
+            (void) $this->reviews(new JobResult($end, $output))->run($this->request());
+            self::fail('A job that was cut off was taken as an answer.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame(ReviewJobStage::AfterTheCli, $failure->stage);
+            self::assertSame([100, 20], [$failure->usage[0]->getPromptTokens(), $failure->usage[0]->getCompletionTokens()]);
+        }
+    }
+
+    public function testInputFilesAKilledWorkerLeftBehindAreRemovedAndFreshOnesStay(): void
+    {
+        $files = new Filesystem();
+        foreach (['login-old' => 1870, 'review-old.md' => 1870, 'login-fresh' => 1700, 'review-fresh.md' => 1700, 'other-old' => 1870] as $name => $age) {
+            $files->dumpFile($this->folder.'/prompts/'.$name, 'PLANT');
+            $files->touch($this->folder.'/prompts/'.$name, new MockClock(self::NOW)->now()->getTimestamp() - $age);
+        }
+
+        (void) $this->reviewsAnswering('fine')->run($this->requestWithLogin());
+
+        self::assertSame(['login-fresh', 'other-old', 'review-fresh.md'], array_values(array_diff((array) scandir($this->folder.'/prompts'), ['.', '..'])));
+    }
+
     public function testAnOutputTheRunnerRefusesIsNoResult(): void
     {
         $runner = self::createStub(JobRunner::class);
@@ -401,6 +443,6 @@ final class ReviewJobTest extends TestCase
      */
     private function useCase(JobRunner $runner, array $images = ['demo' => 'intakt-job/demo:review']): ReviewJob
     {
-        return new ReviewJob(new ReviewJobImages($images), $runner, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new ReviewJob(new ReviewJobImages($images), $runner, new Filesystem(), new MockClock(self::NOW), self::SCRIPT, $this->folder.'/prompts');
     }
 }

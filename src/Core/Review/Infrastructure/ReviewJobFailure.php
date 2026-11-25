@@ -19,6 +19,7 @@ final class ReviewJobFailure extends RuntimeException implements ReportableFailu
         string $message,
         // What the CLI reported before it failed, because those tokens were spent all the same; empty when it reported none or never ran.
         public readonly array $usage = [],
+        public readonly ReviewJobStage $stage = ReviewJobStage::BeforeTheCli,
     ) {
         parent::__construct($message);
     }
@@ -38,14 +39,20 @@ final class ReviewJobFailure extends RuntimeException implements ReportableFailu
         return new self(sprintf('The review job refused to run the reviewer: %s.', $reason));
     }
 
-    public static function outOfMemory(): self
+    /**
+     * @param list<TokenUsageInterface> $usage
+     */
+    public static function outOfMemory(array $usage): self
     {
-        return new self('The review job ran out of memory.');
+        return new self('The review job ran out of memory.', $usage, ReviewJobStage::AfterTheCli);
     }
 
-    public static function outOfTime(): self
+    /**
+     * @param list<TokenUsageInterface> $usage
+     */
+    public static function outOfTime(array $usage): self
     {
-        return new self('The review job ran out of time.');
+        return new self('The review job ran out of time.', $usage, ReviewJobStage::AfterTheCli);
     }
 
     public static function withoutResult(): self
@@ -53,9 +60,12 @@ final class ReviewJobFailure extends RuntimeException implements ReportableFailu
         return new self('The review job left an output the runner refuses to read.');
     }
 
-    public static function withoutCliExit(Provider $provider): self
+    /**
+     * @param list<TokenUsageInterface> $usage
+     */
+    public static function withoutCliExit(Provider $provider, array $usage): self
     {
-        return new self(sprintf('The review job did not report how the reviewer\'s CLI %s exited.', $provider->value));
+        return new self(sprintf('The review job did not report how the reviewer\'s CLI %s exited.', $provider->value), $usage, ReviewJobStage::AfterTheCli);
     }
 
     /**
@@ -63,7 +73,7 @@ final class ReviewJobFailure extends RuntimeException implements ReportableFailu
      */
     public static function cliFailed(Provider $provider, int $status, array $usage): self
     {
-        return new self(sprintf('The reviewer\'s CLI %s exited with %d.', $provider->value, $status), $usage);
+        return new self(sprintf('The reviewer\'s CLI %s exited with %d.', $provider->value, $status), $usage, ReviewJobStage::AfterTheCli);
     }
 
     /**
@@ -71,6 +81,6 @@ final class ReviewJobFailure extends RuntimeException implements ReportableFailu
      */
     public static function unreadableAnswer(Provider $provider, array $usage): self
     {
-        return new self(sprintf('The reviewer\'s CLI %s gave no answer the review job can read.', $provider->value), $usage);
+        return new self(sprintf('The reviewer\'s CLI %s gave no answer the review job can read.', $provider->value), $usage, ReviewJobStage::AfterTheCli);
     }
 }

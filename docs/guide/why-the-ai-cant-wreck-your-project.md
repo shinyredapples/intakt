@@ -59,7 +59,7 @@ The same rule holds for unfinished work. A comment in the code that starts with 
 
 ### The review server
 
-A reviewer reads the change through its own **read-only review server**, not through a copy of your files it could change.
+A reviewer running inside Intakt reads the change through its own **read-only review server**, not through a copy of your files it could change.
 
 - The server shows the **head under review** (the exact version being judged) and nothing else. It can only read.
 - A **review credential**, made for one round, decides which round the reviewer sees. What the reviewer asks for does not: a request that names another round still gets only its own.
@@ -73,13 +73,15 @@ flowchart LR
     B --> C[Server shows only that round's head, read-only]
 ```
 
-This is built: the server and its credentials (task #578), and Intakt's reviewers reading the change through it, each request carrying the credential of its own round (task #580). If a reviewer cannot reach the server, its review ends as blocked, with the reason, instead of being judged without reading the change.
+This is built: the server and its credentials (task #578), and the reviewers inside Intakt reading the change through it, each request carrying the credential of its own round (task #580). If such a reviewer cannot reach the server, its review ends as blocked, with the reason, instead of being judged without reading the change.
 
 ### A reviewer on a Claude or Codex subscription
 
-A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). Neither tool gets a shell or web search. Both are connected to the same read-only server as the other reviewers, for their own round only, and allowed just its three reading tools (read a file, list a folder, search); the server still checks every request itself. Because they can read the change that way, their approval can count like any other reviewer's, but only when the tool reports that it actually read something through that server during the review (the Claude tool must also report that it connected to that server).
+A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). Neither tool gets a shell or web search. Inside Intakt, both are connected to the same read-only server as the other reviewers, for their own round only, and allowed just its three reading tools (read a file, list a folder, search); the server still checks every request itself. Because they can read the change that way, their approval can count like any other reviewer's, but only when the tool reports that it actually read something through that server during the review (the Claude tool must also report that it connected to that server).
 
-If one was started without that server, or read nothing through it, it **cannot vouch for a change**:
+A Claude reviewer in a review job has no review server: its tool may only read files of a read-only copy of the exact version under review, and its approval counts only when the tool's own report shows that it read a file of that version.
+
+If one was started without that server, or read nothing through it (in a review job: read no file of that version), it **cannot vouch for a change**:
 
 - if it answers **approve**, Intakt turns that into **blocked** (held for a person, not passed);
 - if it answers **changes**, that stays **changes**.

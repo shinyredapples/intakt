@@ -33,6 +33,7 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -150,7 +151,7 @@ final class ReviewJobInContainerTest extends TestCase
             return $container->run($spec);
         });
 
-        $review = new ReviewJob(new ReviewJobImages(['demo' => 'intakt-job/demo:review']), $runner, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        $review = new ReviewJob(new ReviewJobImages(['demo' => 'intakt-job/demo:review']), $runner, new Filesystem(), new MockClock('2026-11-25 10:00:00'), self::SCRIPT, $this->folder.'/prompts');
 
         return $review->run(new ReviewJobRequest('demo', $this->folder.'/checkout', self::HEAD, 'correctness', new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), 'PLANT-prompt'));
     }

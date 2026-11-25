@@ -52,6 +52,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
@@ -239,6 +240,44 @@ final class ReviewerInJobTest extends TestCase
         $answer->verdict();
     }
 
+    public function testAFailedCliWithoutReportedUsageIsHandedOnWithNone(): void
+    {
+        $answer = $this->jobVerdictOf($this->answering(''));
+
+        self::assertSame([], $answer->usage);
+        $this->expectException(ReviewJobFailure::class);
+        $answer->verdict();
+    }
+
+    public function testAJobThatRefusedBeforeItsCliRanThrowsItsOwnReason(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 1), new JobOutput(new JobOutputFile(ReviewJob::LOG, "refused: the checkout is a link\n"))));
+
+        $this->expectException(ReviewJobFailure::class);
+        $this->expectExceptionMessageIsOrContains('The review job refused to run the reviewer: the checkout is a link.');
+
+        $this->jobVerdictOf($runner);
+    }
+
+    public function testAReadThatCannotBeCheckedCountsAsNoReadAndKeepsTheUsage(): void
+    {
+        $answered = $this->answering("```json\n".self::APPROVE."\n```", $this->readOf(ReviewJob::CHECKOUT.'/src/Cart.php'), ['input_tokens' => 100, 'output_tokens' => 20]);
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use ($answered): JobResult {
+            $result = $answered->run($spec);
+            new Filesystem()->remove($spec->inputs[0]->hostPath.'/.git');
+
+            return $result;
+        });
+
+        $answer = $this->jobVerdictOf($runner);
+
+        self::assertSame(Decision::Approve, $answer->verdict()->verdict);
+        self::assertFalse($answer->readTheCheckout);
+        self::assertSame([100, 20], [$answer->usage[0]->getPromptTokens(), $answer->usage[0]->getCompletionTokens()]);
+    }
+
     public function testTheLoginReachesTheClisEnvironmentAndNotItsCommandLine(): void
     {
         $this->reviewInJob($this->answering("```json\n".self::APPROVE."\n```"));
@@ -420,7 +459,7 @@ final class ReviewerInJobTest extends TestCase
             RemembersNothing::prompt(),
             new JobPrompt(new ResponseFormatFactory()),
             new HeadClones(new Filesystem(), $this->folder.'/clones'),
-            new ReviewJob(new ReviewJobImages(['alpha' => 'intakt-job/alpha:review']), $runner, new Filesystem(), self::SCRIPT, $this->folder.'/prompts'),
+            new ReviewJob(new ReviewJobImages(['alpha' => 'intakt-job/alpha:review']), $runner, new Filesystem(), new MockClock('2026-11-25 10:00:00'), self::SCRIPT, $this->folder.'/prompts'),
             $this->loggedIn(),
             new VerdictParser(),
             Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator(),

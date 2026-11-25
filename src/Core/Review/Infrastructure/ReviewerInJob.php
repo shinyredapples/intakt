@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Override;
+use RuntimeException;
 use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -55,15 +56,25 @@ final readonly class ReviewerInJob implements JobReviewer
         // Removed also when the job throws, because a head must not stay on the host.
         try {
             $answer = $this->jobs->run(new ReviewJobRequest($request->brief->change->project, $clone, $job->head->hash, $job->reviewer, $model, $prompt, $login));
-            $read = $this->clones->holdsARegularFileOf($clone, $job->head, $answer->readFiles);
+            $read = $this->confirmedRead($clone, $job, $answer);
         } catch (ReviewJobFailure $failure) {
-            // Kept instead of thrown only when the CLI reported usage, because that usage has to settle the call.
-            return [] === $failure->usage ? throw $failure : new JobVerdict($failure, false, $failure->usage, $login?->account);
+            // Kept instead of thrown once the CLI ran, because what it reported, also when that is nothing, decides how the call is recorded.
+            return ReviewJobStage::BeforeTheCli === $failure->stage ? throw $failure : new JobVerdict($failure, false, $failure->usage, $login?->account);
         } finally {
             $this->clones->remove($clone);
         }
 
         return new JobVerdict($this->verdictOrRefusal($request, $answer), $read, $answer->usage, $login?->account);
+    }
+
+    // Caught here, because a check that fails confirms no read and the job's usage still has to settle the call.
+    private function confirmedRead(string $clone, JobReview $job, ReviewJobAnswer $answer): bool
+    {
+        try {
+            return $this->clones->holdsARegularFileOf($clone, $job->head, $answer->readFiles);
+        } catch (RuntimeException) {
+            return false;
+        }
     }
 
     private function verdictOrRefusal(ReviewRequest $request, ReviewJobAnswer $answer): Verdict|VerdictUnreadable
