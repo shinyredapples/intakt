@@ -181,12 +181,14 @@ final readonly class ContractArrayTypeRule implements Rule
     // a nullable or union type crosses the boundary in each of its members, and a conditional type in each of its branches, so each is judged on its own
     private function isRefused(Type $type): bool
     {
-        if ($type instanceof UnionType) {
-            return array_any($type->getTypes(), $this->isRefused(...));
-        }
+        $branches = match (true) {
+            $type instanceof UnionType => $type->getTypes(),
+            $type instanceof ConditionalType, $type instanceof ConditionalTypeForParameter => [$type->getIf(), $type->getElse()],
+            default => null,
+        };
 
-        if ($type instanceof ConditionalType || $type instanceof ConditionalTypeForParameter) {
-            return $this->isRefused($type->getIf()) || $this->isRefused($type->getElse());
+        if (null !== $branches) {
+            return array_any($branches, $this->isRefused(...));
         }
 
         return $type->isArray()->yes() && !$this->isListOrStringMapOfObjects($type);
