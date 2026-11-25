@@ -45,15 +45,21 @@ final readonly class ConsumerProcessesCheck
             return null;
         }
         $lines = [];
+        $read = 0;
         foreach ($files as $file) {
             // Quiet, because a process may end between the listing and the read.
             $line = @file_get_contents($file);
-            if (is_string($line) && '' !== $line) {
+            if (!is_string($line)) {
+                continue;
+            }
+            ++$read;
+            if ('' !== $line) {
                 $lines[] = explode("\0", rtrim($line, "\0"));
             }
         }
 
-        return $lines;
+        // Not a single readable command line means the list is hidden from the doctor, not that the workers are gone.
+        return 0 === $read ? null : $lines;
     }
 
     /**
@@ -61,10 +67,20 @@ final readonly class ConsumerProcessesCheck
      */
     private function runs(string $receiver, array $commandLines): bool
     {
-        return array_any($commandLines, static function (array $arguments) use ($receiver): bool {
-            $consume = array_search(self::CONSUME, $arguments, true);
+        return array_any($commandLines, static fn (array $arguments): bool => self::consumes($receiver, $arguments));
+    }
 
-            return false !== $consume && in_array($receiver, array_slice($arguments, $consume + 1), true);
-        });
+    /**
+     * @param list<string> $arguments
+     */
+    private static function consumes(string $receiver, array $arguments): bool
+    {
+        $consume = array_search(self::CONSUME, $arguments, true);
+
+        // Only PHP running bin/console counts, because a grep or ps that searches for the worker carries the same words.
+        return is_int($consume) && $consume >= 2
+            && str_contains(basename($arguments[0]), 'php')
+            && 'console' === basename($arguments[$consume - 1])
+            && in_array($receiver, array_slice($arguments, $consume + 1), true);
     }
 }

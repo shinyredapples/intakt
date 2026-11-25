@@ -67,6 +67,50 @@ final class ConsumerProcessesCheckTest extends TestCase
         self::assertSame('no async worker is running, so no review or build moves', $verdict->problem);
     }
 
+    public function testAGrepSearchingForTheWorkerDoesNotCountAsTheWorker(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['grep', '-e', 'messenger:consume', '-e', 'async'],
+            ['grep', 'bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ]));
+
+        self::assertSame('no async worker is running, so no review or build moves', $verdict->problem);
+    }
+
+    public function testAConsumerStartedWithAFullPhpPathAndIniOptionsCounts(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['/usr/local/bin/php', '-d', 'memory_limit=1G', '/app/bin/console', 'messenger:consume', 'async'],
+            ['php8.5', 'bin/console', 'messenger:consume', 'scheduler_watcher', 'scheduler_retention'],
+        ]));
+
+        self::assertTrue($verdict->passes());
+    }
+
+    public function testEveryCommandLineUnreadableFailsAsCannotRun(): void
+    {
+        $this->root = FakeProcessRoot::healthy();
+        foreach (glob($this->root->path.'/[0-9]*/cmdline') ?: [] as $file) {
+            chmod($file, 0o000);
+        }
+
+        $verdict = new ConsumerProcessesCheck($this->root->path)->run();
+
+        self::assertStringStartsWith('cannot run (the process list under ', (string) $verdict->problem);
+        self::assertSame(self::CANNOT_RUN_FIX, $verdict->fix);
+    }
+
+    public function testOneReadableEmptyCommandLineBesideUnreadableOnesReportsTheMissingWorkers(): void
+    {
+        $this->root = new FakeProcessRoot([[''], ['php', 'bin/console', 'messenger:consume', 'async']]);
+        chmod($this->root->path.'/101/cmdline', 0o000);
+
+        $verdict = new ConsumerProcessesCheck($this->root->path)->run();
+
+        self::assertSame('no async worker is running, so no review or build moves; the scheduler worker is not running, so pull requests are not watched', $verdict->problem);
+    }
+
     public function testAMissingProcessRootFailsAsCannotRun(): void
     {
         $verdict = new ConsumerProcessesCheck(sys_get_temp_dir().'/intakt-no-such-proc')->run();

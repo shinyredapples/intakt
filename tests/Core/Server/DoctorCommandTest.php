@@ -156,6 +156,20 @@ final class DoctorCommandTest extends TestCase
         );
     }
 
+    public function testANonNumericServerPortFailsOnlyTheWebServerLineAndTheOtherChecksStillRun(): void
+    {
+        $webServer = new WebServerCheck(new MockHttpClient(new MockResponse('{}')), 'invalid', '7781');
+
+        $tester = $this->runDoctor(new DoctorCommand(new RecordedAdminApi()->status(), $this->forge(), $webServer, $this->consumers(null)));
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(
+            "fail: web server: cannot run (SERVER_PORT or DASHBOARD_PORT is not a port number); fix: set SERVER_PORT and DASHBOARD_PORT in .env.local to port numbers between 1 and 65535\n"
+            ."pass: worker threads\npass: server metrics\npass: Mercure hub\n".self::WORKERS_AND_FORGE,
+            $tester->getDisplay(),
+        );
+    }
+
     public function testStoppedWorkersAloneFailTheWorkersLineAndExitOne(): void
     {
         $tester = $this->runDoctor(new DoctorCommand(new RecordedAdminApi()->status(), $this->forge(), $this->webServer(), $this->consumers(new FakeProcessRoot([['frankenphp', 'run']]))));
@@ -285,12 +299,12 @@ final class DoctorCommandTest extends TestCase
 
     private function webServer(): WebServerCheck
     {
-        return new WebServerCheck(new MockHttpClient(new MockResponse('{}')), 7781, 7781);
+        return new WebServerCheck(new MockHttpClient(new MockResponse('{}')), '7781', '7781');
     }
 
     private function stoppedWebServer(): WebServerCheck
     {
-        return new WebServerCheck(new MockHttpClient(new MockResponse('', ['error' => 'Failed to connect'])), 7781, 7781);
+        return new WebServerCheck(new MockHttpClient(new MockResponse('', ['error' => 'Failed to connect'])), '7781', '7781');
     }
 
     private function consumers(?FakeProcessRoot $processes): ConsumerProcessesCheck
