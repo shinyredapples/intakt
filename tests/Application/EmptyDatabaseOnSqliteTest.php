@@ -93,6 +93,31 @@ final class EmptyDatabaseOnSqliteTest extends KernelTestCase
         self::assertEquals(0, $this->connection()->fetchOne('SELECT COUNT(*) FROM budget_account_cooldown'));
     }
 
+    public function testAFileWhoseFingerprintAnOlderMappingWroteIsRebuiltToTheCurrentMapping(): void
+    {
+        EmptyDatabase::rowsIn(self::getContainer());
+        $connection = $this->connection();
+        $connection->executeStatement('ALTER TABLE watcher_boot_result DROP COLUMN alert_pending');
+        $definitions = $connection->fetchAllNumeric(
+            "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'index') AND tbl_name NOT IN ('sqlite_sequence', 'reviewer_conversation', 'messenger_messages') ORDER BY type, name",
+        );
+        $connection->executeStatement(sprintf('PRAGMA user_version = %d', max(1, crc32(json_encode($definitions, JSON_THROW_ON_ERROR)) & 0x7FFFFFFF)));
+
+        EmptyDatabase::rowsIn(self::getContainer());
+
+        self::assertContains('alert_pending', $connection->fetchFirstColumn("SELECT name FROM pragma_table_info('watcher_boot_result')"));
+    }
+
+    public function testAResetDropsATriggerWithAQuoteInItsName(): void
+    {
+        EmptyDatabase::rowsIn(self::getContainer());
+        $this->connection()->executeStatement('CREATE TRIGGER "keep""rows" BEFORE DELETE ON budget_account_cooldown BEGIN SELECT RAISE(ABORT, \'kept\'); END');
+
+        EmptyDatabase::rowsIn(self::getContainer());
+
+        self::assertEquals(0, $this->connection()->fetchOne("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger'"));
+    }
+
     private function connection(): Connection
     {
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
