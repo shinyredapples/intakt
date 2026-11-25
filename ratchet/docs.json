@@ -334,7 +334,9 @@
       "f3df73a54e0e7ebe": 111
     },
     "docs/architecture/doctor.md": {
-      "7686aa8e794f832b": 147,
+      "3dcceeb6073080c7": 261,
+      "a6c5978e311111c8": 370,
+      "b3ec4d89b6c1bd6d": 92,
       "db34807af7e21179": 259,
       "e177888ec2dae84c": 98
     },
@@ -1463,10 +1465,10 @@
     },
     "docs/guide/setting-up-intakt.md": {
       "56c77452647b529e": 205,
+      "6e418305ccf99b53": 95,
       "7e116ff873b141ff": 81,
       "934aeead49e7a3d2": 114,
-      "a9b140878968a3d1": 83,
-      "d9de1a287f3a3869": 89
+      "a9b140878968a3d1": 83
     },
     "docs/guide/steering-intakt.md": {
       "0e13fd132b0f67e9": 127,
@@ -1836,6 +1838,7 @@
       "46511b88a61d1ce4": 317,
       "48b75e3c848400d6": 89,
       "48c0d3474965cd74": 304,
+      "491dc8011becffaa": 117,
       "4a312a9ac75b65ef": 283,
       "4a8bc3f68aa99088": 290,
       "4bc84a081b5a027d": 83,
@@ -1913,7 +1916,6 @@
       "90ada6fb608e81d4": 171,
       "90b071370285f7e2": 216,
       "916b67640b3ffeeb": 96,
-      "9203c3b0a7bafb81": 98,
       "923f9e5c5a73bbae": 155,
       "92db7f4577439397": 385,
       "9388cad401dd6513": 241,
@@ -1931,6 +1933,7 @@
       "9f2b6d55d91555af": 82,
       "a0cdb9c0a02de023": 800,
       "a0d56cbb3b0fa59c": 252,
+      "a23ba222b457ceb9": 266,
       "a32c1731172de1f3": 906,
       "a38f476ce2d6efeb": 242,
       "a484124cd2b008ed": 206,
@@ -2058,9 +2061,9 @@
     "docs/user/08-when-something-goes-wrong.md": {
       "4ce0e1aa19a97046": 152,
       "525a6b2a2b6ef50d": 163,
+      "647c71ec8c7c930c": 91,
       "671d8530f4580cfa": 83,
-      "7611894d8201bb04": 83,
-      "db84ef491aab8f55": 85
+      "7611894d8201bb04": 83
     },
     "docs/user/README.md": {
       "001dc949b7820009": 104,
@@ -2088,6 +2091,6 @@
     "docs/guide/why-isnt-anything-happening.md": 2820,
     "docs/guide/why-the-ai-cant-wreck-your-project.md": 4957,
     "docs/guide/writing-a-good-task.md": 2345,
-    "docs/user/08-when-something-goes-wrong.md": 2040
+    "docs/user/08-when-something-goes-wrong.md": 2046
   }
 }
