@@ -6,5 +6,6 @@ set -eu
 php -r 'echo PHP_VERSION, PHP_EOL; exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
 cp -R /workspace "$HOME/intakt"
 cd "$HOME/intakt"
-composer install --no-interaction --no-progress --prefer-dist
+# Without GH_TOKEN, so install-time Composer plugins and scripts never see an issue-write token.
+env -u GH_TOKEN composer install --no-interaction --no-progress --prefer-dist
 exec "$@"
