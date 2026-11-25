@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Dom\HTMLDocument;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -44,7 +45,7 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
 
         $tester->execute(['bus' => 'command.bus']);
 
-        self::assertMatchesRegularExpression('#'.preg_quote(RoundOpened::class, '#').'\s+handled by '.preg_quote(PublishFirstReview::class, '#').'\b#', $tester->getDisplay());
+        self::assertMatchesRegularExpression('#'.preg_quote(RoundOpened::class, '#').'\s+(?:handled by \S+ \([^)]*\)\s+)*handled by '.preg_quote(PublishFirstReview::class, '#').'\b#', $tester->getDisplay());
     }
 
     public function testTheFirstRoundOfTheInstallPublishesAPrivateUpdateOnTheShellTopic(): void
@@ -72,6 +73,21 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($page->filter('#'.$target)->outerHtml(), $this->normalized($pushed->filter('template')->html()));
         self::assertSame('done', $pushed->filter('template #step-first-review')->attr('data-state'));
         self::assertSame('/reviews/round-1', $pushed->filter('template #step-first-review a.btn')->attr('href'));
+    }
+
+    public function testThePushedStreamTurnsTheFirstReviewOfAStepFivePageOpenedBeforeTheRoundIntoTheRound(): void
+    {
+        $page = HTMLDocument::createFromString($this->browser->request('GET', '/setup?step=5')->outerHtml(), LIBXML_NOERROR);
+        self::assertNotSame('done', $page->getElementById('step-first-review')?->getAttribute('data-state'));
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $this->publisher()(new RoundOpened('round-1', 'alpha'));
+        $this->applyStream($page, $this->published[0]->getData());
+
+        $section = $page->getElementById('step-first-review');
+        self::assertSame('done', $section?->getAttribute('data-state'));
+        self::assertSame('/reviews/round-1', $section->querySelector('a.btn')?->getAttribute('href'));
+        self::assertSame('Ready to start', trim((string) $page->getElementById('s5h')?->textContent));
     }
 
     public function testALaterRoundPublishesNothing(): void
@@ -139,6 +155,22 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
         });
 
         return new PublishFirstReview($pages, $demo, $twig, $updates ?? new MercureLiveUpdates($hub, new BufferingLogger()), $log ?? new BufferingLogger());
+    }
+
+    // Does what Turbo does with a stream on an open page, so the test sees the page change without loading it again; a target the page lacks fails here instead of being skipped as Turbo would.
+    private function applyStream(HTMLDocument $page, string $stream): void
+    {
+        $element = HTMLDocument::createFromString('<!DOCTYPE html>'.$stream, LIBXML_NOERROR)->querySelector('turbo-stream');
+        self::assertNotNull($element);
+        $target = $page->getElementById((string) $element->getAttribute('target'));
+        self::assertNotNull($target, 'The stream targets an element the page does not have.');
+        $content = (string) $element->querySelector('template')?->innerHTML;
+
+        match ($element->getAttribute('action')) {
+            'replace' => $target->outerHTML = $content,
+            'update' => $target->innerHTML = $content,
+            default => self::fail('The stream has an action this test does not apply.'),
+        };
     }
 
     private function normalized(string $html): string
