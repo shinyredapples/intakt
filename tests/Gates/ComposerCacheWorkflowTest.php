@@ -58,7 +58,7 @@ final class ComposerCacheWorkflowTest extends SandboxTestCase
     {
         $lines = array_filter(explode("\n", (string) file_get_contents(self::WORKFLOW)), static fn (string $line): bool => str_contains($line, 'actions/cache'));
 
-        self::assertCount(5, $lines);
+        self::assertCount(8, $lines);
         foreach ($lines as $line) {
             self::assertMatchesRegularExpression(self::PINNED_CACHE_ACTION, $line);
         }

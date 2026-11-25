@@ -918,6 +918,19 @@ final class LedgerRoundsTest extends TestCase
         self::assertNull($review->rounds[0]->severitiesByReviewer);
     }
 
+    public function testAReporterRowWithoutSeveritiesLeavesOutOnlyThatReviewersSeverities(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"x","findings":["F1"]}'),
+            $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"y","findings":["F6"],"severities":{"F6":"P2"}}'),
+        );
+
+        self::assertNotNull($review);
+        self::assertSame(['y' => ['F6' => 'P2']], $review->rounds[0]->severitiesByReviewer);
+    }
+
     /**
      * @param list<string> $findings
      */
