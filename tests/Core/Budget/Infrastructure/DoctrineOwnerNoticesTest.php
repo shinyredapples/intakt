@@ -47,6 +47,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Lock\BlockingStoreInterface;
+use Symfony\Component\Lock\Exception\LockConflictedException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -587,20 +588,27 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
-    // On a read-committed engine the notice writer could store its notice and look for a reading between the reading's update and its commit, see no recovery, and leave the notice without an end; the writer must wait, so its look runs after the commit and gives the notice the reading's moment.
+    // On a read-committed engine the notice writer could store its notice and look for a reading between the reading's update and its commit, see no recovery, and leave the notice without an end; the writer starts inside that window and is refused the shared lock, then runs after the commit and gives the notice the reading's moment.
     public function testTheOnlyRecoveryReadingHoldsTheAccountsLockUntilItCommitsAndThenGivesTheNoticeItsMomentAsTheEnd(): void
     {
-        $heldByTheReading = null;
-        $hook = $this->afterTheReadingsEndOfOutages(function () use (&$heldByTheReading): void {
-            $heldByTheReading = !$this->accountLock->of(new Account(Provider::ClaudeCode, 'main'))->acquire(false);
+        $shared = new AccountReadingLock(new LockFactory(new RefusingToWaitStore(new InMemoryStore())));
+        $outage = new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $notices = new DoctrineOutageNotices($this->entities, $this->locks, self::createStub(LoggerInterface::class), $shared);
+        $refused = false;
+        $hook = $this->afterTheReadingsEndOfOutages(function () use (&$refused, $notices, $outage): void {
+            try {
+                $notices->noticeOnce($outage);
+            } catch (LockConflictedException) {
+                $refused = true;
+            }
         });
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
-        $reading = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $this->accountLock);
+        $reading = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $shared);
 
         $reading->record($this->readingOf('main'));
-        $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+        $notices->noticeOnce($outage);
 
-        self::assertTrue($heldByTheReading);
+        self::assertTrue($refused);
         self::assertSame(['main'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
         self::assertSame('12:00', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
@@ -645,19 +653,17 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame(['budget-account-reading-'.new Account(Provider::ClaudeCode, 'main')->key()], $waited);
     }
 
-    public function testAReadingInsideACallersTransactionKeepsTheAccountsLockUntilThatTransactionEnds(): void
+    public function testAReadingInsideACallersTransactionLeavesNoAccountLockBehind(): void
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $connection = $this->entities->getConnection();
         $connection->beginTransaction();
         new DoctrineMeasuredUse($this->entities, new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher(), $this->accountLock)->record($this->readingOf('main'));
 
-        $heldBeforeTheCommit = !$this->accountLock->of($account)->acquire(false);
+        $takenInside = $this->accountLock->of($account)->acquire(false);
         $connection->rollBack();
-        $this->accountLock->around($account, static fn (): null => null);
 
-        self::assertTrue($heldBeforeTheCommit);
-        self::assertTrue($this->accountLock->of($account)->acquire(false));
+        self::assertTrue($takenInside);
     }
 
     public function testAReadingWhoseEndFailsGivesTheAccountsLockBack(): void

@@ -43,9 +43,8 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             return $refusal;
         }
 
-        // Inside a caller's transaction nothing is committed yet, and its rollback would erase an end a listener already heard of, so the caller that owns the commit announces; it also owns the commit, so the account lock is kept until that transaction has ended.
+        // Inside a caller's transaction nothing is committed yet, and its rollback would erase an end a listener already heard of, so the caller that owns the commit announces; the same caller owns the commit, so the account lock cannot span it and is not taken here.
         if ($this->entities->getConnection()->isTransactionActive()) {
-            $this->accountLock->holdUntilTheTransactionEnds($reading->account, $this->entities->getConnection());
             $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $this->latestReadingBefore($reading->account, $now));
 
             return ReadingOutcome::Recorded;
