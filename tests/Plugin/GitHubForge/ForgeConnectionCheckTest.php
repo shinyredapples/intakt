@@ -57,6 +57,12 @@ final class ForgeConnectionCheckTest extends TestCase
     private int $requests = 0;
     private int $installationStatus = 200;
     private bool $unreachable = false;
+    private string $appId = '12345';
+    private string $installationId = '678';
+    private ?string $privateKey = null;
+    private string $repositories = self::REPOSITORIES;
+    private ?ExpectedInstallation $expected = null;
+    private ?MockHttpClient $http = null;
 
     public function testAnInstallationThatMatchesTheConfigurationPasses(): void
     {
@@ -68,7 +74,8 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAnInstallationWhoseRepositoriesDifferFromTheConfigurationFailsWithTheMismatchFix(): void
     {
-        $verdict = $this->check(repositories: 'acme/widget')->run();
+        $this->repositories = 'acme/widget';
+        $verdict = $this->check()->run();
 
         self::assertFalse($verdict->passes());
         self::assertStringStartsWith('the installation does not match the configuration (', (string) $verdict->problem);
@@ -78,7 +85,8 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAPrivateKeyThatCannotSignFailsWithTheLocalKeyFixWithoutReachingGitHub(): void
     {
-        $verdict = $this->check(privateKey: 'not-a-key')->run();
+        $this->privateKey = 'not-a-key';
+        $verdict = $this->check()->run();
 
         self::assertSame('the private key cannot sign (it cannot be read or is not an RSA key)', $verdict->problem);
         self::assertSame('set GITHUB_APP_PRIVATE_KEY to the PEM private key of the App', $verdict->fix);
@@ -87,7 +95,8 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testSettingsThatCannotBeReadFailWithOneLineAndNoRequest(): void
     {
-        $verdict = $this->check(expected: $this->unreadableSettings())->run();
+        $this->expected = $this->unreadableSettings();
+        $verdict = $this->check()->run();
 
         self::assertSame('the App settings cannot be read (GITHUB_APP_PERMISSIONS must list name:level pairs, such as contents:write.)', $verdict->problem);
         self::assertStringContainsString('GITHUB_APP_PERMISSIONS', (string) $verdict->fix);
@@ -96,10 +105,9 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAnEmptyAppIdWithTheInstallationIdStillSetFails(): void
     {
-        $verdict = $this->check(
-            appId: '',
-            privateKey: '',
-        )->run();
+        $this->appId = '';
+        $this->privateKey = '';
+        $verdict = $this->check()->run();
 
         self::assertSame('GITHUB_APP_ID is empty while GITHUB_APP_INSTALLATION_ID or GITHUB_APP_PRIVATE_KEY is still set', $verdict->problem);
         self::assertSame(0, $this->requests);
@@ -107,10 +115,9 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAnEmptyAppIdWithThePrivateKeyStillSetFails(): void
     {
-        $verdict = $this->check(
-            appId: '',
-            installationId: '',
-        )->run();
+        $this->appId = '';
+        $this->installationId = '';
+        $verdict = $this->check()->run();
 
         self::assertFalse($verdict->passes());
         self::assertStringStartsWith('GITHUB_APP_ID is empty', (string) $verdict->problem);
@@ -118,18 +125,18 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAnInstallationIdThatIsEmptyWhileTheAppIdIsSetFails(): void
     {
-        $verdict = $this->check(installationId: '')->run();
+        $this->installationId = '';
+        $verdict = $this->check()->run();
 
         self::assertSame('GITHUB_APP_INSTALLATION_ID is empty', $verdict->problem);
     }
 
     public function testNoAppAtAllPassesWithoutARequest(): void
     {
-        $verdict = $this->check(
-            appId: '',
-            installationId: '',
-            privateKey: '',
-        )->run();
+        $this->appId = '';
+        $this->installationId = '';
+        $this->privateKey = '';
+        $verdict = $this->check()->run();
 
         self::assertTrue($verdict->passes());
         self::assertSame(0, $this->requests);
@@ -159,7 +166,8 @@ final class ForgeConnectionCheckTest extends TestCase
     {
         $limited = new MockHttpClient(static fn (): ResponseInterface => new MockResponse('{}', ['http_code' => 429, 'response_headers' => ['retry-after: 30']]));
 
-        $verdict = $this->check(http: $limited)->run();
+        $this->http = $limited;
+        $verdict = $this->check()->run();
 
         self::assertFalse($verdict->passes());
         self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
@@ -171,24 +179,18 @@ final class ForgeConnectionCheckTest extends TestCase
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
-    private function check(
-        string $appId = '12345',
-        string $installationId = '678',
-        ?string $privateKey = null,
-        string $repositories = self::REPOSITORIES,
-        ?ExpectedInstallation $expected = null,
-        ?MockHttpClient $http = null,
-    ): ForgeConnectionCheck {
-        $privateKey ??= $this->key->private;
+    private function check(): ForgeConnectionCheck
+    {
+        $privateKey = $this->privateKey ?? $this->key->private;
 
         return new ForgeConnectionCheck(
-            $http ?? $this->github(),
-            new AppJwt($appId, $privateKey, $this->clock),
-            $expected ?? ExpectedInstallation::fromSettings(self::PERMISSIONS, $repositories),
+            $this->http ?? $this->github(),
+            new AppJwt($this->appId, $privateKey, $this->clock),
+            $this->expected ?? ExpectedInstallation::fromSettings(self::PERMISSIONS, $this->repositories),
             $this->clock,
             new RecordingLogger(),
-            $appId,
-            $installationId,
+            $this->appId,
+            $this->installationId,
             $privateKey,
         );
     }

@@ -112,14 +112,6 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
         return ForgeConnectionVerdict::passed();
     }
 
-    private function cannotRun(string $reason): ForgeConnectionVerdict
-    {
-        return ForgeConnectionVerdict::failed(
-            'cannot run ('.$reason.')',
-            'check GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID and GITHUB_APP_PRIVATE_KEY, and that GitHub is reachable from this install',
-        );
-    }
-
     private function readBackOf(): InstallationReadBack
     {
         $readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
@@ -129,6 +121,14 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
             new InstallationReader($this->jwt, $tokens, new GitHubCalls($this->http, $readings, $tokens)),
             $this->expected,
             $this->logger,
+        );
+    }
+
+    private function cannotRun(string $reason): ForgeConnectionVerdict
+    {
+        return ForgeConnectionVerdict::failed(
+            'cannot run ('.$reason.')',
+            'check GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID and GITHUB_APP_PRIVATE_KEY, and that GitHub is reachable from this install',
         );
     }
 }
