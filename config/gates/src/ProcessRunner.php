@@ -268,7 +268,7 @@ final class ProcessRunner
             return null;
         }
 
-        return new ProcessGroup($leader, $process);
+        return ProcessGroup::ofLauncher($leader);
     }
 
     private function namespacesAreAvailable(): bool

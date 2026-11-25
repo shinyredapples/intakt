@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use Symfony\Component\Process\Process;
-
 // Because the launcher's PID names its group only once the launcher has run `setsid`, a signal to the group before then reaches no one.
 final readonly class ProcessGroup
 {
@@ -15,10 +13,18 @@ final readonly class ProcessGroup
 
     private const string ZOMBIE = 'Z';
 
+    private const int START_TIME_FIELD = 19;
+
     public function __construct(
         private int $id,
-        private Process $launcher,
+        private string $launcherStart,
     ) {
+    }
+
+    // Because the launcher is still bin/check's unreaped child right after its start, its start time read then names it apart from any later process given its number.
+    public static function ofLauncher(int $id): self
+    {
+        return new self($id, self::startTimeOf($id));
     }
 
     // Because only an unreaped child's PID is surely still the launcher's, the bare PID is signaled only then, and its zombie then holds the PID, so a session it created in the meantime is still its own.
@@ -70,10 +76,27 @@ final readonly class ProcessGroup
         }
     }
 
-    // Because Symfony reaps the launcher inside `isRunning()`, true there means its PID cannot have passed to another process yet.
+    // Because the stop runs inside a signal handler that may interrupt Symfony Process mid-call, ownership is asked of the kernel without touching the launcher's pipes: `WNOWAIT` reaps nothing, so the number stays the launcher's while this is true, and a failed call means it was reaped.
     private function isOursWithoutItsGroup(): bool
     {
-        return $this->launcher->isRunning() && posix_getpgid($this->id) !== $this->id;
+        $unreaped = pcntl_waitid(P_PID, $this->id, $status, WEXITED | WNOHANG | WNOWAIT);
+
+        return $unreaped && '' !== $this->launcherStart && self::startTimeOf($this->id) === $this->launcherStart && posix_getpgid($this->id) !== $this->id;
+    }
+
+    private static function startTimeOf(int $id): string
+    {
+        return self::fieldsOf((string) @file_get_contents('/proc/'.$id.'/stat'))[self::START_TIME_FIELD] ?? '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function fieldsOf(string $status): array
+    {
+        $end = strrpos($status, ')');
+
+        return false === $end ? [] : explode(' ', substr($status, $end + 2));
     }
 
     private function isAlive(): bool
@@ -93,14 +116,8 @@ final readonly class ProcessGroup
 
     private function isLiveMember(string $status): bool
     {
-        $end = strrpos($status, ')');
+        $fields = self::fieldsOf($status);
 
-        if (false === $end) {
-            return false;
-        }
-
-        $fields = explode(' ', substr($status, $end + 2));
-
-        return self::ZOMBIE !== $fields[0] && (string) $this->id === ($fields[2] ?? '');
+        return [] !== $fields && self::ZOMBIE !== $fields[0] && (string) $this->id === ($fields[2] ?? '');
     }
 }

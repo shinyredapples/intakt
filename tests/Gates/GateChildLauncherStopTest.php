@@ -31,13 +31,35 @@ final class GateChildLauncherStopTest extends TestCase
         exec "$INTAKT_TEST_REAL_SETSID" "$@"
         SH;
 
+    private const string SESSION_ON_GO_SETSID = <<<'SH'
+        #!/bin/sh
+        exec "$INTAKT_TEST_PHP" "$INTAKT_TEST_STAND_IN"
+        SH;
+
+    // Because a shell's own TERM trap is lost on exec, the stand-in is one PHP process: its handler exists before its session does, and it starts a separate program in that session only once the first signal has reached it.
+    private const string SESSION_ON_GO = <<<'PHP'
+        <?php
+        pcntl_async_signals(true);
+        pcntl_signal(SIGTERM, static function (): void {
+            exec('sh -c '.escapeshellarg('echo $$ > "$INTAKT_TEST_DESCENDANT"; exec sleep 30').' > /dev/null 2>&1 &');
+        });
+        touch((string) getenv('INTAKT_TEST_REACHED'));
+        while (!is_file((string) getenv('INTAKT_TEST_GO'))) {
+            usleep(10000);
+        }
+        posix_setsid();
+        while (true) {
+            usleep(10000);
+        }
+        PHP;
+
     private string $folder;
 
     private bool $ignoringTerm = false;
 
     public function testALauncherStoppedBeforeItsSetsidDoesNotRunItsGateAfterTheStop(): void
     {
-        $child = $this->heldBeforeItsSetsid(['touch', $this->folder.'/marker']);
+        $child = $this->heldBeforeItsSetsid(self::HOLDING_SETSID, ['touch', $this->folder.'/marker']);
 
         $child->group->stop();
         touch($this->folder.'/go');
@@ -48,7 +70,7 @@ final class GateChildLauncherStopTest extends TestCase
 
     public function testALauncherKilledBeforeItsSetsidDoesNotRunItsGateAfterTheKill(): void
     {
-        $child = $this->heldBeforeItsSetsid(['touch', $this->folder.'/marker']);
+        $child = $this->heldBeforeItsSetsid(self::HOLDING_SETSID, ['touch', $this->folder.'/marker']);
 
         $child->group->kill();
         touch($this->folder.'/go');
@@ -57,29 +79,59 @@ final class GateChildLauncherStopTest extends TestCase
         self::assertFileDoesNotExist($this->folder.'/marker');
     }
 
-    public function testALauncherThatCreatesItsSessionAndStartsAProgramDuringTheStopHasThatProgramStopped(): void
+    public function testALauncherThatCreatesItsSessionAsTheStopBeginsHasTheProgramItStartsOnTheFirstSignalStopped(): void
     {
-        // Because an ignored TERM survives exec, the program starts after the group was asked to stop and ends only by the group's KILL.
+        $child = $this->heldBeforeItsSetsid(self::SESSION_ON_GO_SETSID, ['true']);
+
+        touch($this->folder.'/go');
+        $child->group->stop();
+        $descendant = (int) @file_get_contents($this->folder.'/descendant');
+        $this->pollFor($child, 100_000);
+
+        self::assertGreaterThan(0, $descendant, 'the first signal reached the new session');
+        self::assertFalse($this->isLive($descendant), 'the program started after the first signal is stopped');
+        self::assertFalse($child->process->isRunning(), 'the launcher is stopped');
+    }
+
+    public function testAStopDoesNotHandALauncherHeldInItsSessionTheLineThatReleasesItsGate(): void
+    {
+        // Because an ignored TERM survives exec, the held launcher outlives the group's TERM, so only a release line the stop itself delivered could start the gate.
         $this->ignoringTerm = true;
-        $child = $this->heldBeforeItsSetsid([PHP_BINARY, '-r', 'touch('.var_export($this->folder.'/started', true).'); usleep(3000000); touch('.var_export($this->folder.'/marker', true).');']);
-        $release = new Process(['sh', '-c', 'sleep 0.3; touch "$0"', $this->folder.'/go']);
-        $release->start();
+        $child = $this->heldBeforeItsSetsid(self::HOLDING_SETSID, ['touch', $this->folder.'/marker']);
+        touch($this->folder.'/go');
+        $pid = (int) $child->process->getPid();
+
+        for ($tries = 0; posix_getpgid($pid) !== $pid && $tries < 500; ++$tries) {
+            usleep(10_000);
+        }
 
         $child->group->stop();
-        $release->wait();
-        $this->pollFor($child, 4_000_000);
+        $this->pollFor($child, 100_000);
 
-        self::assertFileExists($this->folder.'/started');
         self::assertFileDoesNotExist($this->folder.'/marker');
     }
 
-    public function testAProcessThatReusesTheNumberOfAReapedLauncherIsNotSignaled(): void
+    public function testANumberThatIsNoLongerBinCheckSChildIsNotSignaled(): void
     {
-        $launcher = new Process(['true']);
-        $launcher->run();
+        $orphan = new Process(['sh', '-c', 'sleep 30 > /dev/null 2>&1 & echo $!']);
+        $orphan->mustRun();
+        $pid = (int) trim($orphan->getOutput());
+        $group = ProcessGroup::ofLauncher($pid);
+
+        $group->askToStop();
+        $group->stop();
+        $group->kill();
+        $stillLive = $this->isLive($pid);
+        posix_kill($pid, 9);
+
+        self::assertTrue($stillLive);
+    }
+
+    public function testAChildOfBinCheckGivenTheNumberOfAReapedLauncherIsNotSignaled(): void
+    {
         $bystander = new Process(['sleep', '30']);
         $bystander->start();
-        $group = new ProcessGroup((int) $bystander->getPid(), $launcher);
+        $group = new ProcessGroup((int) $bystander->getPid(), 'the start time of a reaped launcher');
 
         $group->askToStop();
         $group->stop();
@@ -94,8 +146,7 @@ final class GateChildLauncherStopTest extends TestCase
     {
         $this->folder = sys_get_temp_dir().'/intakt-launcher-stop-'.bin2hex(random_bytes(6));
         mkdir($this->folder.'/tools', 0o700, true);
-        file_put_contents($this->folder.'/tools/setsid', self::HOLDING_SETSID);
-        chmod($this->folder.'/tools/setsid', 0o700);
+        file_put_contents($this->folder.'/stand-in.php', self::SESSION_ON_GO);
     }
 
     protected function tearDown(): void
@@ -106,13 +157,18 @@ final class GateChildLauncherStopTest extends TestCase
     /**
      * @param list<string> $gate
      */
-    private function heldBeforeItsSetsid(array $gate): RunningChild
+    private function heldBeforeItsSetsid(string $setsid, array $gate): RunningChild
     {
+        file_put_contents($this->folder.'/tools/setsid', $setsid);
+        chmod($this->folder.'/tools/setsid', 0o700);
         $environment = [
             'INTAKT_TEST_REACHED' => $this->folder.'/reached',
             'INTAKT_TEST_GO' => $this->folder.'/go',
             'INTAKT_TEST_REAL_SETSID' => trim((string) shell_exec('command -v setsid')),
             'INTAKT_TEST_IGNORE_TERM' => $this->ignoringTerm ? '1' : '',
+            'INTAKT_TEST_PHP' => PHP_BINARY,
+            'INTAKT_TEST_STAND_IN' => $this->folder.'/stand-in.php',
+            'INTAKT_TEST_DESCENDANT' => $this->folder.'/descendant',
         ];
         $path = (string) getenv('PATH');
         // Because PHP's proc_open() searches the launcher on the PATH of bin/check itself, not on the one it hands the child.
@@ -142,5 +198,13 @@ final class GateChildLauncherStopTest extends TestCase
             $child->process->isRunning();
             usleep(10_000);
         }
+    }
+
+    private function isLive(int $pid): bool
+    {
+        $status = (string) @file_get_contents('/proc/'.$pid.'/stat');
+        $end = strrpos($status, ')');
+
+        return false !== $end && 'Z' !== substr($status, $end + 2, 1);
     }
 }
