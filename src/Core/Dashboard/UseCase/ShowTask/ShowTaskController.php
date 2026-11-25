@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ShowTask;
 
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\ParkedQuestionTexts;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,6 +22,7 @@ final readonly class ShowTaskController
     public function __construct(
         private Ledger $ledger,
         private LedgerBuildSteps $buildSteps,
+        private ParkedQuestionTexts $questions,
         private Redactor $redactor,
         private LivePageRendering $pages,
     ) {
@@ -40,7 +43,19 @@ final readonly class ShowTaskController
             'steps' => array_map($this->redacted(...), $steps),
             'unreached' => $this->unreachedAfter($steps),
             'final' => array_last(BuildStep::cases())->value,
+            'question' => $this->parkedQuestionOf($steps, $project, $task),
         ]));
+    }
+
+    // Only for a run that ended asking, because a later build job that built clears the row, so an older question never shows beside a newer run.
+    /**
+     * @param non-empty-list<array{outcome: string}> $steps
+     *
+     * @return array{text: string, choices: list<string>, recommendation: string, parked_at: string}|null
+     */
+    private function parkedQuestionOf(array $steps, string $project, string $task): ?array
+    {
+        return BuildStepOutcome::Asked->value === array_last($steps)['outcome'] ? $this->questions->of($project, $task) : null;
     }
 
     // Redacted because a step's failure quotes a git or forge error, which can carry a credential, as the status report does.

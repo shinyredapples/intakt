@@ -19,7 +19,7 @@ use PDO;
 use PDOException;
 use Symfony\Component\Clock\ClockInterface;
 
-// The row and the asked step share one transaction, because a task shown as asked must have its question stored, and a stored question must have its step.
+// The row, the asked step and the task_parked event share one transaction, because a task shown as asked must have its question stored, and a stored question must have its step.
 final readonly class ParkedTasks
 {
     public function __construct(
@@ -53,6 +53,19 @@ final readonly class ParkedTasks
         throw TaskNotParked::for($run->project, $run->task);
     }
 
+    // A task that is not parked has no row, so clearing it is no failure.
+    /**
+     * @throws ParkedTaskNotCleared
+     */
+    public function clear(string $project, int $task): void
+    {
+        try {
+            $this->connection->delete(ParkedTaskRecord::TABLE, ['project' => $project, 'task' => $task], ['task' => 'integer']);
+        } catch (Exception) {
+            throw ParkedTaskNotCleared::for($project, $task);
+        }
+    }
+
     private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run): bool
     {
         try {
@@ -61,7 +74,11 @@ final readonly class ParkedTasks
             $this->connection->delete(ParkedTaskRecord::TABLE, $record->keyRow());
             $this->connection->insert(ParkedTaskRecord::TABLE, $record->row(), ParkedTaskRecord::rowTypes());
 
-            if (!$this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))->succeeded()) {
+            if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))) {
+                return false;
+            }
+
+            if (!$this->appended(new LedgerEvent(LedgerEventKind::TaskParked, $run->parkedPayload()))) {
                 return false;
             }
 
@@ -71,6 +88,11 @@ final readonly class ParkedTasks
         }
 
         return true;
+    }
+
+    private function appended(LedgerEvent $event): bool
+    {
+        return $this->ledger->append($event)->succeeded();
     }
 
     // Native, because DBAL counts a commit the database refused as ended while SQLite keeps the transaction open (upstream/dbal-failed-commit-leaves-transaction-open/).

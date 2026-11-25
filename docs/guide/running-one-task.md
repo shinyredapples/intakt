@@ -38,7 +38,7 @@ One check comes before every step: when the project has a `github` entry, `--rem
 
 ## Finding the steps in the ledger
 
-Every step writes one line to the **ledger**, Intakt's permanent record, with the project, the issue number, the step and whether it `passed`, `failed` (with the reason) or, for a parked task, `asked`. The issue's text is never in it. To read it, run:
+Every step writes one line to the **ledger**, Intakt's permanent record, with the project, the issue number, the step and whether it `passed`, `failed` (with the reason) or, for a parked task, `asked`. A parked task adds one more line, `task_parked`. The issue's text and the question are never in it. To read it, run:
 
 ```
 php bin/console intakt:ledger:events
@@ -46,4 +46,4 @@ php bin/console intakt:ledger:events
 
 Each line shows when it was written, its id, its kind and its details; the step lines are the ones of kind `build_step_ended`. The push writes a few lines of its own just before its step line (`push_intended`, `branch_pushed` or `push_refused`, `change_intended`, `change_opened`).
 
-You don't have to read the ledger to see where a task is: `php bin/console intakt:status` shows the last step of each task (for a task parked on a question it shows the previous step that passed, because it skips the `asked` line), and the dashboard's page for the task (`/tasks/<project>/<issue number>`) shows every step of its latest run, the run whose `task` step was recorded last, even while an older run of the same task is still writing steps ([a tour of the dashboard](a-tour-of-the-dashboard.md)). Steps recorded by an older Intakt carry no run id, so for those the page starts a new run at each `task` step, at a step that comes after a failed one and at a step that does not come later than the one before: it never shows a step twice or a step after a failed one, but two runs of that time that overlapped can still look like one.
+You don't have to read the ledger to see where a task is: `php bin/console intakt:status` shows the last step of each task (for a task parked on a question, `build_job` as `asked`), and the dashboard's page for the task (`/tasks/<project>/<issue number>`) shows every step of its latest run, the run whose `task` step was recorded last, even while an older run of the same task is still writing steps ([a tour of the dashboard](a-tour-of-the-dashboard.md)). Steps recorded by an older Intakt carry no run id, so for those the page starts a new run at each `task` step, at a step that comes after a failed one and at a step that does not come later than the one before: it never shows a step twice or a step after a failed one, but two runs of that time that overlapped can still look like one.

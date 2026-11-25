@@ -10,6 +10,8 @@ use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\Contract\ParkedQuestion;
+use Intakt\Core\Build\Contract\ParkedQuestions;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
@@ -28,6 +30,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
 use Intakt\Core\Dashboard\Infrastructure\MessageQueues;
+use Intakt\Core\Dashboard\Infrastructure\ParkedQuestionTexts;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\ProjectStatuses;
@@ -65,6 +68,8 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 #[CoversClass(LedgerWaitingHeads::class)]
 #[CoversClass(MessageQueues::class)]
 #[CoversClass(LedgerBuildSteps::class)]
+#[CoversClass(ParkedQuestionTexts::class)]
+#[UsesClass(ParkedQuestion::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(ReplayMarks::class)]
@@ -111,6 +116,8 @@ final class StatusReadModelTest extends TestCase
 
     private ?RoundEnding $ending = null;
 
+    private ?ParkedQuestion $parked = null;
+
     /** @var array<string, RoundEnding> */
     private array $endings = [];
 
@@ -139,14 +146,46 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([], $this->schemaErrorsOf($json));
     }
 
-    public function testAStoredAskedBuildStepIsLeftOutSoTheStatusStillValidatesAgainstTheSchema(): void
+    public function testATaskParkedAtTheBuildJobShowsTheAskedStepWithItsQuestionAndValidatesAgainstTheSchema(): void
     {
+        $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'));
         $this->ledger->passBuildStep('alpha', '12', 'task');
         $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
 
-        $json = $this->readModel()->json();
+        $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
-        self::assertSame([], $this->schemaErrorsOf($json));
+        self::assertSame([['task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00', 'question' => ['text' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20T10:00:00+00:00']]], $lane);
+        self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
+    }
+
+    public function testAnAskedStepWhoseQuestionIsNoLongerStoredShowsNoQuestion(): void
+    {
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+
+        $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
+
+        self::assertSame([['build_job', 'asked', null]], array_map(static fn (array $task): array => [$task['step'], $task['outcome'], $task['question']], $lane));
+        self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
+    }
+
+    public function testATaskBuiltAgainAfterItWasParkedShowsNoQuestion(): void
+    {
+        $this->parked = new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00'));
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+
+        self::assertSame([['task', 'passed', null]], array_map(static fn (array $task): array => [$task['step'], $task['outcome'], $task['question']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
+    }
+
+    public function testTheTextsOfAParkedQuestionAreRedactedBeforeTheyAreReported(): void
+    {
+        $this->parked = new ParkedQuestion('Use token-abc?', ['token-abc', 'no'], 'token-abc', new DateTimeImmutable('2026-11-20 10:00:00'));
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+
+        $json = $this->readModel(redacting: 'token-abc')->json();
+
+        self::assertStringNotContainsString('token-abc', $json);
+        self::assertStringContainsString('"text":"Use [redacted]?","choices":["[redacted]","no"],"recommendation":"[redacted]"', $json);
     }
 
     public function testAStoppedConsumerStillYieldsAStatusWithTheRoundWaitingForItsReviewers(): void
@@ -200,7 +239,7 @@ final class StatusReadModelTest extends TestCase
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
-        self::assertSame([['task' => '12', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'git fetch failed: remote not found', 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+        self::assertSame([['task' => '12', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'git fetch failed: remote not found', 'ended_at' => '2026-10-28T12:00:00+00:00', 'question' => null]], $lane);
     }
 
     public function testATaskThatStoppedAtTheCloneShowsTheCloneStepAndItsFailure(): void
@@ -211,7 +250,7 @@ final class StatusReadModelTest extends TestCase
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
-        self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'failed', 'failure' => 'the folder exists already', 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+        self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'failed', 'failure' => 'the folder exists already', 'ended_at' => '2026-10-28T12:00:00+00:00', 'question' => null]], $lane);
     }
 
     public function testATaskWhoseStepsAllPassedShowsItsCloneStepPassed(): void
@@ -222,7 +261,7 @@ final class StatusReadModelTest extends TestCase
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
-        self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+        self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00', 'question' => null]], $lane);
     }
 
     public function testATaskThatWentThroughThePushShowsItsPushStepPassed(): void
@@ -233,7 +272,7 @@ final class StatusReadModelTest extends TestCase
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
-        self::assertSame([['task' => '12', 'step' => 'push', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+        self::assertSame([['task' => '12', 'step' => 'push', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00', 'question' => null]], $lane);
     }
 
     public function testATaskThatStoppedAtThePushShowsThePushStepAndItsFailure(): void
@@ -245,7 +284,7 @@ final class StatusReadModelTest extends TestCase
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
-        self::assertSame([['task' => '12', 'step' => 'push', 'outcome' => 'failed', 'failure' => 'the remote refused the push of task-12 (git push exited with 1)', 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+        self::assertSame([['task' => '12', 'step' => 'push', 'outcome' => 'failed', 'failure' => 'the remote refused the push of task-12 (git push exited with 1)', 'ended_at' => '2026-10-28T12:00:00+00:00', 'question' => null]], $lane);
     }
 
     public function testAPushFailureIsRedactedBeforeItIsReported(): void
@@ -300,6 +339,8 @@ final class StatusReadModelTest extends TestCase
         yield 'a task that is no string' => [['project' => 'alpha', 'task' => 12, 'step' => 'mirror', 'outcome' => 'passed', 'failure' => null]];
         yield 'a step that is no string' => [['project' => 'alpha', 'task' => '12', 'step' => ['mirror'], 'outcome' => 'passed', 'failure' => null]];
         yield 'no project' => [['task' => '12', 'step' => 'mirror', 'outcome' => 'passed', 'failure' => null]];
+        yield 'an asked step other than the build job' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'asked', 'failure' => null]];
+        yield 'an asked step with a failure' => [['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => 'a question']];
     }
 
     /**
@@ -646,8 +687,7 @@ final class StatusReadModelTest extends TestCase
         $build = ['properties', 'projects', 'items', 'properties', 'lanes', 'properties', 'build', 'items', 'properties'];
 
         self::assertSame(array_column(BuildStep::cases(), 'value'), $this->schemaAt(...$build, ...['step', 'enum']));
-        // The schema is one case behind, because no step is written as asked yet and the published schema names it with the change that writes it.
-        self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), [...(array) $this->schemaAt(...$build, ...['outcome', 'enum']), BuildStepOutcome::Asked->value]);
+        self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), $this->schemaAt(...$build, ...['outcome', 'enum']));
     }
 
     protected function setUp(): void
@@ -714,7 +754,9 @@ final class StatusReadModelTest extends TestCase
         $endings = self::createStub(RoundEndings::class);
         $endings->method('lookup')->willReturn($lookup);
         $pages = new LedgerReviewPages(new MockClock('2026-10-28T12:30:00+00:00'), $ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
-        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
+        $questions = self::createStub(ParkedQuestions::class);
+        $questions->method('of')->willReturnCallback(fn (string $project, int $task): ?ParkedQuestion => 'alpha' === $project && 12 === $task ? $this->parked : null);
+        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), new ParkedQuestionTexts($questions, $redactor), $redactor, $marks, ['alpha' => [], 'beta' => []]);
 
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
     }

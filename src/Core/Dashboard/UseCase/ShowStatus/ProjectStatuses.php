@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ShowStatus;
 
 use DateTimeImmutable;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
@@ -15,6 +16,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
+use Intakt\Core\Dashboard\Infrastructure\ParkedQuestionTexts;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
@@ -36,6 +38,7 @@ final readonly class ProjectStatuses
         private LedgerFailingHeads $failingHeads,
         private LedgerWaitingHeads $waitingHeads,
         private LedgerBuildSteps $buildSteps,
+        private ParkedQuestionTexts $questions,
         private Redactor $redactor,
         private ReplayMarks $marks,
         #[Autowire(param: WatcherServices::PROJECTS)]
@@ -110,7 +113,15 @@ final readonly class ProjectStatuses
         $lane = [];
 
         foreach ($steps as $step) {
-            $lane[$step['project']][] = ['task' => $step['task'], 'step' => $step['step'], 'outcome' => $step['outcome'], 'failure' => null === $step['failure'] ? null : $this->redactor->redact($step['failure']), 'ended_at' => $step['ended_at']];
+            $lane[$step['project']][] = [
+                'task' => $step['task'],
+                'step' => $step['step'],
+                'outcome' => $step['outcome'],
+                'failure' => null === $step['failure'] ? null : $this->redactor->redact($step['failure']),
+                'ended_at' => $step['ended_at'],
+                // Read only for a task whose latest step asked, because a later build job that built clears the row and every other task has none.
+                'question' => BuildStepOutcome::Asked->value === $step['outcome'] ? $this->questions->of($step['project'], $step['task']) : null,
+            ];
         }
 
         return $lane;

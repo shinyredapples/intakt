@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DateTimeImmutable;
+use Intakt\Core\Build\Contract\ParkedQuestion;
+use Intakt\Core\Build\Contract\ParkedQuestions;
 use Intakt\Core\Dashboard\Infrastructure\LatestBuildRun;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
+use Intakt\Core\Dashboard\Infrastructure\ParkedQuestionTexts;
 use Intakt\Core\Dashboard\UseCase\ShowTask\ShowTaskController;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -17,7 +21,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ShowTaskController::class)]
 #[CoversClass(LedgerBuildSteps::class)]
 #[CoversClass(LatestBuildRun::class)]
+#[CoversClass(ParkedQuestionTexts::class)]
 #[UsesClass(PayloadFields::class)]
+#[UsesClass(ParkedQuestion::class)]
 final class ShowTaskControllerTest extends DashboardPageTestCase
 {
     // The newer run's id sorts first, so only the order of the rows can tell which run started last.
@@ -367,6 +373,71 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertCount(0, $page->filter('main b'));
     }
 
+    public function testATaskParkedAtTheBuildJobShowsItsQuestionChoicesAndRecommendation(): void
+    {
+        $this->parkWith(new ParkedQuestion('Keep the old flag?', ['keep it', 'drop it'], 'drop it', new DateTimeImmutable('2026-11-20 10:00:00')));
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Parked at build_job: the build asked a question.', $page->filter('#task-where')->text());
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Asked', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached'], $this->stepHeads($page));
+        self::assertSame('Keep the old flag?', $page->filter('#parked-question-text')->text());
+        self::assertSame(['keep it', 'drop it'], $page->filter('#parked-question-choices li')->each(static fn (Crawler $choice): string => $choice->text()));
+        self::assertSame('Recommended: drop it', $page->filter('#parked-question-recommendation')->text());
+        self::assertSame('Parked 2026-11-20 10:00:00 UTC', $page->filter('#parked-question .muted')->text());
+        self::assertCount(0, $page->filter('.step-failure'));
+    }
+
+    public function testACredentialAndMarkupInTheParkedQuestionAreRedactedAndShownAsText(): void
+    {
+        $token = 'ghp_'.str_repeat('c3', 18);
+        $this->parkWith(new ParkedQuestion('<b>Use</b> '.$token.'?', ['<i>yes</i>', 'no'], 'no', new DateTimeImmutable('2026-11-20 10:00:00')));
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('<b>Use</b> [redacted]?', $page->filter('#parked-question-text')->text());
+        self::assertSame('<i>yes</i>', $page->filter('#parked-question-choices li')->first()->text());
+        self::assertCount(0, $page->filter('main b, main i'));
+        self::assertStringNotContainsString($token, (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testAnAskedRunWhoseQuestionIsNoLongerStoredSaysItIsParkedWithoutAQuestion(): void
+    {
+        $this->parkWith(null);
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Parked at build_job: the build asked a question.', $page->filter('#task-where')->text());
+        self::assertCount(0, $page->filter('#parked-question'));
+    }
+
+    public function testALaterRunAfterAParkedOneShowsNoQuestionAndNeverReadsOne(): void
+    {
+        $questions = $this->createMock(ParkedQuestions::class);
+        $questions->expects($this->never())->method('of');
+        self::getContainer()->set(ParkedQuestions::class, $questions);
+        $this->passStepsBeforeTheBuildJob();
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+        $this->passStepsBeforeTheBuildJob();
+        $this->ledger->passBuildStep('alpha', '42', 'build_job');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Last recorded step: build_job passed.', $page->filter('#task-where')->text());
+        self::assertCount(0, $page->filter('#parked-question'));
+    }
+
+    public function testAnAskedRowOfAStepOtherThanTheBuildJobIsLeftOut(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'mirror', 'outcome' => 'asked', 'failure' => null]);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => 'a question']);
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached'], $this->stepHeads($page));
+    }
+
     public function testATaskTheLedgerHoldsNoStepOfIsNotFound(): void
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
@@ -388,6 +459,22 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
     private function stepOfRun(string $run, string $step, ?string $failure = null): void
     {
         $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => $run, 'step' => $step, 'outcome' => null === $failure ? 'passed' : 'failed', 'failure' => $failure]);
+    }
+
+    private function parkWith(?ParkedQuestion $question): void
+    {
+        $questions = self::createStub(ParkedQuestions::class);
+        $questions->method('of')->willReturnCallback(static fn (string $project, int $task): ?ParkedQuestion => 'alpha' === $project && 42 === $task ? $question : null);
+        self::getContainer()->set(ParkedQuestions::class, $questions);
+        $this->passStepsBeforeTheBuildJob();
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+    }
+
+    private function passStepsBeforeTheBuildJob(): void
+    {
+        foreach (['task', 'mirror', 'clone'] as $step) {
+            $this->ledger->passBuildStep('alpha', '42', $step);
+        }
     }
 
     private function passStepsBeforeThePush(): void

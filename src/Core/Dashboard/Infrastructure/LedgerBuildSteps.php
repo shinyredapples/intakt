@@ -132,20 +132,25 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        // The published status schema names no asked outcome yet, so a stored one is left out rather than reported outside the schema.
-        if (BuildStepOutcome::Asked === $outcome) {
-            return null;
-        }
-
         if (null === $failure && !$payload->lacks('failure')) {
             return null;
         }
 
-        if ((BuildStepOutcome::Failed === $outcome) !== (null !== $failure)) {
+        if (!$this->isWrittenByTheBuild($step, $outcome, $failure)) {
             return null;
         }
 
         return ['project' => $project, 'task' => $task, 'step' => $step->value, 'outcome' => $outcome->value, 'failure' => $failure, 'ended_at' => $recorded->recordedAt->format(DATE_ATOM)];
+    }
+
+    // Only a failed step has a failure text, and only the build job asks, so any other pairing is no row the build writes.
+    private function isWrittenByTheBuild(BuildStep $step, BuildStepOutcome $outcome, ?string $failure): bool
+    {
+        if ((BuildStepOutcome::Failed === $outcome) !== (null !== $failure)) {
+            return false;
+        }
+
+        return BuildStepOutcome::Asked !== $outcome || BuildStep::BuildJob === $step;
     }
 
     /**

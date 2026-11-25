@@ -219,8 +219,28 @@ final readonly class BuildTask
             return $failure->getMessage();
         }
 
+        if ($outcome->question instanceof BuildQuestion) {
+            return $outcome;
+        }
+
         // What the job hands back stays untrusted until the hand-back check, so only its verdict reaches the ledger.
-        return $outcome->built() || $outcome->question instanceof BuildQuestion ? $outcome : $outcome->verdict->reason();
+        if (!$outcome->built()) {
+            return $outcome->verdict->reason();
+        }
+
+        return $this->unpark($request) ?? $outcome;
+    }
+
+    // Cleared once a later build job built, because the question an earlier one asked no longer says where the task stands.
+    private function unpark(BuildTaskRequest $request): ?string
+    {
+        try {
+            $this->parkedTasks->clear($request->project, $request->issue);
+        } catch (ParkedTaskNotCleared $notCleared) {
+            return $notCleared->getMessage();
+        }
+
+        return null;
     }
 
     /**

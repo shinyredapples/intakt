@@ -13,6 +13,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -35,6 +36,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ParkedTaskRecord::class)]
 #[CoversClass(TaskNotParked::class)]
 #[UsesClass(AppendResult::class)]
+#[CoversClass(ParkedTaskNotCleared::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(BuildRun::class)]
 #[UsesClass(DoctrineLedger::class)]
@@ -56,9 +58,42 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
             $this->parkedRows(),
         );
         self::assertSame(
-            [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null}']],
+            [
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null}'],
+                ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"run-1"}'],
+            ],
             $this->ledgerRows(),
         );
+    }
+
+    public function testAClearedTaskLosesItsRowWhileAnotherTaskKeepsItsOwn(): void
+    {
+        $parked = $this->parkedTasks();
+        $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park('sample', 43, BuildQuestion::fromHandedBack(self::QUESTION));
+
+        $parked->clear('sample', 42);
+
+        self::assertSame([43], array_column($this->parkedRows(), 'task'));
+    }
+
+    public function testClearingATaskThatIsNotParkedIsNoFailure(): void
+    {
+        $this->parkedTasks()->clear('sample', 42);
+
+        self::assertSame([], $this->parkedRows());
+    }
+
+    public function testAClearingTheDatabaseRefusesFailsWithFixedWordsAndNoCause(): void
+    {
+        $unopenable = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->root.'/missing/folder/data.db']);
+
+        try {
+            new ParkedTasks($unopenable, $this->ledger(), $this->registry(), $this->clock())->clear('sample', 42);
+            self::fail('The parked row was cleared.');
+        } catch (ParkedTaskNotCleared $notCleared) {
+            self::assertSame(['Issue 42 of project "sample" is still parked: the database did not remove its question', null], [$notCleared->getMessage(), $notCleared->getPrevious()]);
+        }
     }
 
     public function testATaskParkedAgainKeepsOneRowWithTheNewerQuestion(): void
@@ -114,7 +149,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertInstanceOf(PDO::class, $native);
         self::assertSame([false, false], [$this->connection()->isTransactionActive(), $native->inTransaction()]);
         self::assertSame(['Keep the old flag?'], array_column($this->parkedRows(), 'question'));
-        self::assertCount(1, $this->ledgerRows());
+        self::assertCount(2, $this->ledgerRows());
     }
 
     public function testTheLedgerRecordsTheFailedStepAfterAParkingWhoseCommitAReaderRefusedTookItsAskedEventBack(): void
