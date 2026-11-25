@@ -118,7 +118,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private bool $published = false;
 
-    // E1 of #25: the steering labels a person with write access applied stay, and the one status label follows the stored round from queueing to publication.
+    // Evidence E1 of #25 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
     public function testAPullRequestKeepsItsSteeringLabelsAndShowsOneStatusLabelBeforeARoundAfterQueueingAndAfterPublication(): void
     {
         $pull = new RecordedPullRequestLabels('/repos/acme/widgets/issues/8', RecordedTrust::OWN_IDENTITY);

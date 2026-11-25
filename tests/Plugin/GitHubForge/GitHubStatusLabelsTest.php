@@ -396,50 +396,6 @@ final class GitHubStatusLabelsTest extends TestCase
         return new GitHubStatusLabels($this->storedRound(), new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens), $this->locks, $this->skipLog());
     }
 
-    private function storedRound(): LatestRoundStatus
-    {
-        return new readonly class($this->roundNow(...)) implements LatestRoundStatus {
-            public function __construct(private Closure $now)
-            {
-            }
-
-            public function of(string $project, string $change): ?RoundStatusLabel
-            {
-                $status = ($this->now)();
-
-                return $status instanceof RoundStatusLabel ? $status : null;
-            }
-        };
-    }
-
-    private function roundNow(): ?RoundStatusLabel
-    {
-        if ($this->whileReadingTheRound instanceof Closure) {
-            ($this->whileReadingTheRound)();
-        }
-
-        return $this->round;
-    }
-
-    private function skipLog(): AbstractLogger
-    {
-        return new class($this->skipped(...)) extends AbstractLogger {
-            public function __construct(private readonly Closure $skipped)
-            {
-            }
-
-            public function log(mixed $level, string|Stringable $message, array $context = []): void
-            {
-                ($this->skipped)((string) $message);
-            }
-        };
-    }
-
-    private function skipped(string $message): void
-    {
-        $this->skips[] = $message;
-    }
-
     /**
      * @param array<mixed> $options
      */
@@ -517,5 +473,49 @@ final class GitHubStatusLabelsTest extends TestCase
         foreach ($labels as $label) {
             $this->labeled(is_string($label) ? $label : '', self::OWN);
         }
+    }
+
+    private function storedRound(): LatestRoundStatus
+    {
+        return new readonly class($this->roundNow(...)) implements LatestRoundStatus {
+            public function __construct(private Closure $now)
+            {
+            }
+
+            public function of(string $project, string $change): ?RoundStatusLabel
+            {
+                $status = ($this->now)();
+
+                return $status instanceof RoundStatusLabel ? $status : null;
+            }
+        };
+    }
+
+    private function roundNow(): ?RoundStatusLabel
+    {
+        if ($this->whileReadingTheRound instanceof Closure) {
+            ($this->whileReadingTheRound)();
+        }
+
+        return $this->round;
+    }
+
+    private function skipLog(): AbstractLogger
+    {
+        return new class($this->skipped(...)) extends AbstractLogger {
+            public function __construct(private readonly Closure $skipped)
+            {
+            }
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                ($this->skipped)((string) $message);
+            }
+        };
+    }
+
+    private function skipped(string $message): void
+    {
+        $this->skips[] = $message;
     }
 }

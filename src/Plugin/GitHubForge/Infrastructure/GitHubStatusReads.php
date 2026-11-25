@@ -35,10 +35,7 @@ final readonly class GitHubStatusReads
         $labels = [];
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
             $listed = $this->page($address->issuePath().'/labels', $page);
-            foreach ($listed as $label) {
-                $name = $label['name'] ?? null;
-                $labels[] = is_string($name) && '' !== $name ? $name : throw new ForgeReadFailed('GitHub listed a label without its name.');
-            }
+            array_push($labels, ...array_map($this->labelName(...), $listed));
             if (count($listed) < self::PAGE_SIZE) {
                 return $labels;
             }
@@ -121,6 +118,18 @@ final readonly class GitHubStatusReads
     private function unreachable(string $failure): ForgeReadFailed
     {
         return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    /**
+     * @param array<mixed> $label
+     *
+     * @throws ForgeReadFailed
+     */
+    private function labelName(array $label): string
+    {
+        $name = $label['name'] ?? null;
+
+        return is_string($name) && '' !== $name ? $name : throw new ForgeReadFailed('GitHub listed a label without its name.');
     }
 
     /**
