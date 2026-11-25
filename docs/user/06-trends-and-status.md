@@ -64,7 +64,7 @@ When nobody works, the page says so: "No reviewer is working right now: reviewer
 Now shows what is moving. To see how each project is doing, open **Projects** in the menu. Every project you configured, and every project that has had a review, gets one card.
 
 1. Read the word under the name: **Running** while one of its reviews runs, **Quiet** when none does, **Failing** when the watcher keeps failing to start a review of one of its pull requests, followed by the reason.
-2. Check the middle of the card: what the project has used so far (cost and tokens) how many of its reviews are running and judged, and, under Failing, how many of its pull requests keep failing and are still retried. A pull request can fail before any review of it starts.
+2. Check the middle of the card: what the project has used so far (cost and tokens), how many of its reviews are running and judged, and, under Failing, how many of its pull requests keep failing and are still retried. A pull request can fail before any review of it starts.
 3. On the right, see which changes are being reviewed now and how the last three decided ones ended. Click one to open its review.
 4. An orange count means some of its reviews wait on you. Click it to open the board at its **Waiting on you** column, where those reviews are. A pull request handed over to the Maintainer waits on the Maintainer, so it is not counted there.
 5. Click the project's name to see all of its reviews. A long name is cut short on the card; point at it to read it whole.

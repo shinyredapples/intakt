@@ -22,6 +22,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
@@ -30,6 +31,11 @@ use Twig\Environment;
 #[CoversClass(ProjectCard::class)]
 #[CoversClass(ProjectOrder::class)]
 #[CoversClass(ProjectStatus::class)]
+#[UsesClass(ConfiguredPrices::class)]
+#[UsesClass(Cost::class)]
+#[UsesClass(TokenFigures::class)]
+#[UsesClass(ProjectNames::class)]
+#[UsesClass(ResolvedModel::class)]
 final class ListProjectsControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewsOfTwoChangesOfOneProjectShareOneCard(): void
