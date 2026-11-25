@@ -113,6 +113,33 @@ final class GitHubChangeLabelsTest extends TestCase
         self::assertSame([], $this->comments);
     }
 
+    public function testAnOutvotedLabelIsKeptWhenThePullRequestChangedAfterTheLabelsWereRead(): void
+    {
+        $histories = self::createStub(IssueHistories::class);
+        $histories->method('of')->willReturnOnConsecutiveCalls(
+            new IssueHistory('alice', [new LabelApplication('model:light', RecordedTrust::WRITER), new LabelApplication('model:strong', RecordedTrust::WRITER)], '', new IssueLabels('model:light', 'model:strong')),
+            self::throwException(new ForgeReadFailed('GitHub changed #7 after it was listed.')),
+        );
+
+        $labels = $this->labelsOver($histories, new NullLogger())->steeringOf('alpha', $this->open());
+
+        self::assertSame(['model:strong'], [...$labels]);
+        self::assertSame([], $this->writes);
+        self::assertSame([], $this->comments);
+    }
+
+    public function testAChangeIdThatIsNoPullRequestAddressSteersNothing(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning');
+        $other = new OpenChange(new ChangeId('feature/local-branch'), new CommitId(str_repeat('a', 40)), new DateTimeImmutable('2026-11-25 10:00:00'));
+
+        $labels = $this->labelsOver($this->history('model:light', 'model:strong'), $logger)->steeringOf('alpha', $other);
+
+        self::assertSame([], [...$labels]);
+        self::assertSame([], $this->writes);
+    }
+
     private function history(string ...$labels): IssueHistories
     {
         $histories = self::createStub(IssueHistories::class);

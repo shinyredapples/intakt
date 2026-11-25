@@ -52,6 +52,14 @@ final class LabelFamiliesTest extends TestCase
         self::assertSame(['class:core', 'plan:skip'], new LabelFamilies()->losers($applied));
     }
 
+    public function testAModelLabelThatNamesNoTierNeitherDisplacesNorRemovesAValidTier(): void
+    {
+        $applied = $this->applied('model:light', 'model:unknown');
+
+        self::assertSame(['model:light', 'model:unknown'], $this->names(new LabelFamilies()->winners($applied)));
+        self::assertSame([], new LabelFamilies()->losers($applied));
+    }
+
     public function testALabelWithoutAFamilyIsNeverRemoved(): void
     {
         $applied = $this->applied('hands-off', 'take-over', 'keep');

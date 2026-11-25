@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Git\Contract\Paths;
@@ -24,10 +25,13 @@ final readonly class ConfiguredPanels implements Panels
 {
     /**
      * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules?: list<array{min_lines?: positive-int, paths?: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
+     * @param array<string, array{tiers: array<string, array{provider: string}>}>                                                                                                                                                                                                                                   $projects
      */
     public function __construct(
         #[Autowire(param: ReviewServices::PANELS)]
         private array $panels,
+        #[Autowire(param: AiServices::PROJECTS)]
+        private array $projects,
     ) {
     }
 
@@ -51,7 +55,7 @@ final readonly class ConfiguredPanels implements Panels
         $quorum = QuorumPolicy::from($panel['quorum']);
 
         return new Panel(
-            array_map(fn (array $reviewer): PanelReviewer => $this->reviewer($reviewer, $this->tierOf($reviewer, $change, $quorum)), $reviewers),
+            array_map(fn (array $reviewer): PanelReviewer => $this->reviewer($reviewer, $this->tierOf($project, $reviewer, $change, $quorum)), $reviewers),
             $quorum,
         );
     }
@@ -80,7 +84,7 @@ final readonly class ConfiguredPanels implements Panels
     /**
      * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
      */
-    private function tierOf(array $reviewer, ChangeDescription $change, QuorumPolicy $quorum): Tier
+    private function tierOf(string $project, array $reviewer, ChangeDescription $change, QuorumPolicy $quorum): Tier
     {
         $configured = Tier::from($reviewer['tier']);
         $labelled = $change->startTier();
@@ -89,7 +93,10 @@ final readonly class ConfiguredPanels implements Panels
             return $configured;
         }
 
-        return $labelled;
+        // Only to a tier the project maps to the reviewer's own provider, because a call reaches the provider its tier maps to: another one would run the reviewer elsewhere than the panel says (two independent vendors could become one), and a tier without a model would refuse the round.
+        $mapped = $this->projects[$project]['tiers'][$labelled->value]['provider'] ?? null;
+
+        return $mapped === $reviewer['provider'] ? $labelled : $configured;
     }
 
     /**

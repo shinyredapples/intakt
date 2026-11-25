@@ -25,22 +25,42 @@ final readonly class GitHubChangeLabels implements ChangeLabels
 
     public function steeringOf(string $project, OpenChange $open): Labels
     {
-        $address = PullRequestAddress::of($open->id);
-        $trusted = $this->trustedOf($project, $address, $open);
-        $this->outvoted->removeFrom($project, $address, $trusted->outvoted);
+        $trusted = $this->trustedOf($project, $open);
+        if ([] !== $trusted->outvoted) {
+            $this->removeStillOutvoted($project, $open, $trusted->outvoted);
+        }
 
         return $trusted->steering;
     }
 
-    private function trustedOf(string $project, PullRequestAddress $address, OpenChange $open): TrustedLabels
+    private function trustedOf(string $project, OpenChange $open): TrustedLabels
     {
         try {
-            return $this->trusted->of($project, $address, $open->updatedAt);
+            return $this->trusted->of($project, PullRequestAddress::of($open->id), $open->updatedAt);
             // Boundary: a failed read counts no label, because a read that failed is never a decision; the round runs on the configured panel.
         } catch (ChangeNotFound|ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
             $this->logger->warning('The labels of {change} of {project} could not be read, so none steers: {reason}', ['change' => $open->id->value, 'project' => $project, 'reason' => $failure->getMessage()]);
 
             return new TrustedLabels(new Labels(), []);
         }
+    }
+
+    // Read again just before the removal, because GitHub removes a label by name only and the read fails once the pull request changed after its listing, so a value reapplied since the first read stays.
+    /**
+     * @param list<string> $outvoted
+     */
+    private function removeStillOutvoted(string $project, OpenChange $open, array $outvoted): void
+    {
+        try {
+            $address = PullRequestAddress::of($open->id);
+            $again = $this->trusted->of($project, $address, $open->updatedAt);
+            // Boundary: logged and dropped, because the round already steers by the first read, and the next round tries the removal again.
+        } catch (ChangeNotFound|ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+            $this->logger->warning('The outvoted labels of {change} of {project} were kept, because its labels could not be read again: {reason}', ['change' => $open->id->value, 'project' => $project, 'reason' => $failure->getMessage()]);
+
+            return;
+        }
+
+        $this->outvoted->removeFrom($project, $address, array_values(array_intersect($outvoted, $again->outvoted)));
     }
 }

@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Domain;
 
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 
 // The last applied wins, because the design gives each of its one-value families one value (docs/design/05-architecture/04-labels.md); any other prefix (`review:`, `status:`, a project's own `area:`) is no such family, so none of its labels is ever removed.
 final readonly class LabelFamilies
 {
     private const string SEPARATOR = ':';
-    private const array ONE_VALUE = ['priority', 'class', 'model', 'plan'];
+    private const string MODEL = 'model';
+    private const array ONE_VALUE = ['priority', 'class', self::MODEL, 'plan'];
 
     /**
      * @param list<LabelApplication> $applied
@@ -57,6 +59,10 @@ final readonly class LabelFamilies
         }
 
         $family = substr($label, 0, $at);
+        // A `model:` label that names no tier steers nothing, so it may neither displace a tier nor have a tier removed for it.
+        if (self::MODEL === $family && !Tier::fromLabel($label) instanceof Tier) {
+            return null;
+        }
 
         return in_array($family, self::ONE_VALUE, true) ? $family : null;
     }
