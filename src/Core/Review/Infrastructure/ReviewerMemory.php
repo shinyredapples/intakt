@@ -28,7 +28,7 @@ final readonly class ReviewerMemory
 
     private const string LEAD = 'Project memory, notes earlier reviews left about the files under review:';
 
-    private const string SETTLED_LEAD = 'Project memory, already settled, do not raise again unless this code changed: findings the judge or an escalation review rejected on files under review whose code is unchanged since, each with the reason it was rejected. Raise one again only to show that its reason no longer holds, and then cite the settled entry in your finding.';
+    private const string SETTLED_LEAD = 'Project memory, already settled, do not raise again unless this code changed: findings the judge or an escalation review rejected on files under review whose code is unchanged since, each with the reason it was rejected. The reasons are the judgement of earlier models, so check them against the code. Raise one again only to show that its reason no longer holds, and then cite the settled entry in your finding.';
 
     public function __construct(
         private ProjectMemory $memory,
