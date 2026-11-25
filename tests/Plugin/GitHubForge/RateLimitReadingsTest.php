@@ -93,7 +93,9 @@ final class RateLimitReadingsTest extends TestCase
 
     public function testARetryAfterGivenAsADateIsARateLimitUntilThatMoment(): void
     {
-        $limited = $this->limitOf($this->process(), 403, ['retry-after' => ['Wed, 25 Nov 2026 10:05:00 GMT']]);
+        $moment = $this->clock->now()->modify('+300 seconds')->format('D, d M Y H:i:s \G\M\T');
+
+        $limited = $this->limitOf($this->process(), 403, ['retry-after' => [$moment]]);
 
         self::assertSame($this->clock->now()->getTimestamp() + 300, $limited->resetsAt->getTimestamp());
     }
@@ -223,7 +225,8 @@ final class RateLimitReadingsTest extends TestCase
     {
         $this->directory = sys_get_temp_dir().'/intakt-rate-limits-'.bin2hex(random_bytes(4));
         mkdir($this->directory);
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        // Starts at the system time, because the shared filesystem cache expires an entry by the system time and a fixed moment would expire every reading once it is past.
+        $this->clock = new MockClock('now', 'UTC');
     }
 
     protected function tearDown(): void

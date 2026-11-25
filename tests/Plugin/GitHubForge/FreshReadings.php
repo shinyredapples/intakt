@@ -12,18 +12,19 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
-// A store of its own for each test, so no pause or reading leaks from one test into another.
+// A store of its own for each test, so no pause or reading leaks from one test into another. Its entries expire by the test
+// clock, because a reading expires at GitHub's reset and a fixed test moment would otherwise expire it once the system time passes it.
 final class FreshReadings
 {
     public const int RESERVE_PERCENT = 20;
 
     public static function at(ClockInterface $clock): RateLimitReadings
     {
-        return new RateLimitReadings(new ArrayAdapter(), $clock, new LockFactory(new InMemoryStore()));
+        return new RateLimitReadings(new ArrayAdapter(clock: $clock), $clock, new LockFactory(new InMemoryStore()));
     }
 
     public static function reserveOf(RateLimitReadings $readings, InstallationTokens $tokens, ClockInterface $clock): BudgetReserve
     {
-        return new BudgetReserve(new ArrayAdapter(), $readings, $tokens, $clock, new LockFactory(new InMemoryStore()), self::RESERVE_PERCENT);
+        return new BudgetReserve(new ArrayAdapter(clock: $clock), $readings, $tokens, $clock, new LockFactory(new InMemoryStore()), self::RESERVE_PERCENT);
     }
 }

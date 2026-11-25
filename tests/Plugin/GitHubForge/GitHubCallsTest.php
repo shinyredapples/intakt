@@ -91,7 +91,7 @@ final class GitHubCallsTest extends TestCase
         $http = new MockHttpClient($answer);
         $tokens = new InstallationTokens(new InstallationTokenMinter(new AppJwt('1', 'unused', $clock), $http, new NullLogger()), '678', $clock);
 
-        return new GitHubCalls($http, new RateLimitReadings(new ArrayAdapter(), $clock, new LockFactory(new InMemoryStore())), $tokens);
+        return new GitHubCalls($http, new RateLimitReadings(new ArrayAdapter(clock: $clock), $clock, new LockFactory(new InMemoryStore())), $tokens);
     }
 
     private function failureOf(callable $call): Throwable
