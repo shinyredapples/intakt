@@ -7,7 +7,7 @@ namespace Intakt\Core\Build\Domain;
 use NoDiscard;
 use Psr\Clock\ClockInterface;
 
-// Progress, not spend, ends a build (docs/design/05-architecture/06-budget-and-model-planner.md, "Allowance per task").
+// Spend alone never ends a build, because one still making progress is worth its tokens (docs/design/05-architecture/06-budget-and-model-planner.md, "Allowance per task").
 final readonly class BuildStopRule
 {
     public function __construct(private ClockInterface $clock)
@@ -26,7 +26,7 @@ final readonly class BuildStopRule
         return $watch->seeing($progress, $this->clock->now());
     }
 
-    // Null lets the build go on. The order decides which cause is recorded when several apply at once.
+    // In this order, because several causes can apply at once and only the first is recorded.
     #[NoDiscard]
     public function stopCause(BuildWatch $watch): ?BuildStopCause
     {

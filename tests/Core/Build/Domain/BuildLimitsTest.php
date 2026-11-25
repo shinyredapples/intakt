@@ -14,22 +14,25 @@ use PHPUnit\Framework\TestCase;
 final class BuildLimitsTest extends TestCase
 {
     /**
-     * @return iterable<string, array{int, int, int, int}>
+     * @return iterable<string, array{list<int>}>
      */
     public static function limitsWithANonPositiveValue(): iterable
     {
-        yield 'allowance' => [0, 600, 4_000, 10_000];
-        yield 'idle limit' => [1_000, 0, 4_000, 10_000];
-        yield 'ceiling' => [1_000, 600, -1, 10_000];
-        yield 'per-task total' => [1_000, 600, 4_000, 0];
+        yield 'allowance' => [[0, 600, 4_000, 10_000]];
+        yield 'idle limit' => [[1_000, 0, 4_000, 10_000]];
+        yield 'ceiling' => [[1_000, 600, -1, 10_000]];
+        yield 'per-task total' => [[1_000, 600, 4_000, 0]];
     }
 
+    /**
+     * @param list<int> $limits
+     */
     #[DataProvider('limitsWithANonPositiveValue')]
-    public function testLimitsWithAValueBelowOneAreRefused(int $allowance, int $idleSeconds, int $ceiling, int $taskTotal): void
+    public function testLimitsWithAValueBelowOneAreRefused(array $limits): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new BuildLimits($allowance, $idleSeconds, $ceiling, $taskTotal);
+        new BuildLimits(...$limits);
     }
 
     public function testLimitsWithACeilingBelowTheAllowanceAreRefused(): void

@@ -6,12 +6,12 @@ namespace Intakt\Core\Build\Domain;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// What the caller saw of a running build at one moment. The content fingerprint ignores whitespace, so an empty or whitespace-only commit leaves it as it was.
+// The caller computes the content fingerprint without whitespace, so that an empty or whitespace-only commit is no progress; failing tests are keyed by name because their output varies by a word for the same failure.
 #[Exclude]
 final readonly class BuildProgress
 {
     /**
-     * @param array<string, string> $failingTests failure output by test name; only the names count as progress
+     * @param array<string, string> $failingTests
      */
     public function __construct(
         public int $tokensUsed,
