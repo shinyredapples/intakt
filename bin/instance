@@ -345,8 +345,12 @@ final readonly class CommandWait
 {
     private const int TIMED_OUT = 124;
 
+    private bool $wakesOnExit;
+
     public function __construct(private float $seconds)
     {
+        // A php.ini may disable the signal functions; the command must still be timed and killed then, so the wait polls instead.
+        $this->wakesOnExit = function_exists('pcntl_sigprocmask') && function_exists('pcntl_sigtimedwait');
     }
 
     /**
@@ -357,16 +361,15 @@ final readonly class CommandWait
         // A float, because a large override times a billion nanoseconds is past the integer range.
         $deadline = hrtime(true) + $this->seconds * 1_000_000_000;
 
-        // A php.ini may disable the signal functions; the command must still be timed and killed then, so the wait polls instead.
-        if (!function_exists('pcntl_sigprocmask') || !function_exists('pcntl_sigtimedwait')) {
-            return $this->exitBefore($process, $deadline, false);
+        if (!$this->wakesOnExit) {
+            return $this->exitBefore($process, $deadline);
         }
 
         // Blocked, so the wait below wakes the moment the command ends instead of at its next poll; nothing else in the instance blocks it.
         pcntl_sigprocmask(SIG_BLOCK, [SIGCHLD]);
 
         try {
-            return $this->exitBefore($process, $deadline, true);
+            return $this->exitBefore($process, $deadline);
         } finally {
             pcntl_sigprocmask(SIG_UNBLOCK, [SIGCHLD]);
         }
@@ -375,7 +378,7 @@ final readonly class CommandWait
     /**
      * @param resource $process
      */
-    private function exitBefore($process, float|int $deadline, bool $wakesOnExit): int
+    private function exitBefore($process, float|int $deadline): int
     {
         while (true) {
             $state = proc_get_status($process);
@@ -395,19 +398,8 @@ final readonly class CommandWait
                 return $this->timedOut(' and was killed');
             }
 
-            $this->pause((int) min(50_000_000, ceil($left)), $wakesOnExit);
+            $this->pause((int) min(50_000_000, ceil($left)));
         }
-    }
-
-    private function pause(int $nanoseconds, bool $wakesOnExit): void
-    {
-        if ($wakesOnExit) {
-            pcntl_sigtimedwait([SIGCHLD], $information, 0, $nanoseconds);
-
-            return;
-        }
-
-        usleep(max(1, intdiv($nanoseconds, 1000)));
     }
 
     private function timedOut(string $outcome): int
@@ -415,6 +407,17 @@ final readonly class CommandWait
         fwrite(STDERR, 'the command ran longer than '.$this->seconds.' seconds'.$outcome."\n");
 
         return self::TIMED_OUT;
+    }
+
+    private function pause(int $nanoseconds): void
+    {
+        if ($this->wakesOnExit) {
+            pcntl_sigtimedwait([SIGCHLD], $information, 0, $nanoseconds);
+
+            return;
+        }
+
+        usleep(max(1, intdiv($nanoseconds, 1000)));
     }
 }
 

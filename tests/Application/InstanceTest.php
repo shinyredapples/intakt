@@ -209,7 +209,10 @@ final class InstanceTest extends InstanceTestCase
     // The first status read is held until the limit passed and the command ended, so only a time read after the status can tell that the command was late.
     public function testACommandFoundEndedByAStatusReadThatEndsPastTheLimitCountsAsTimedOut(): void
     {
-        preg_match('/^final readonly class CommandWait\b.*?^}$/ms', (string) file_get_contents(self::ROOT.'/bin/instance'), $class);
+        if (1 !== preg_match('/^final readonly class CommandWait\b.*?^}$/ms', (string) file_get_contents(self::ROOT.'/bin/instance'), $class)) {
+            self::fail('bin/instance declares no CommandWait class');
+        }
+
         $wait = $this->scratch.'/command-wait.php';
         file_put_contents($wait, "<?php\nnamespace HeldStatusRead;\n".$class[0]."\n");
         $code = <<<'PHP'
@@ -244,12 +247,14 @@ final class InstanceTest extends InstanceTestCase
     public function testACommandIsStillKilledAtItsLimitWhenPhpDisablesTheSignalFunctions(): void
     {
         $ran = $this->scratch.'/ran';
-        $instance = $this->startedInstance(self::stubProject(), ['sh', '-c', 'sleep 0.4; touch "$1"', 'sh', $ran], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2'], ['-d', 'disable_functions=pcntl_sigprocmask,pcntl_sigtimedwait']);
+        mkdir($this->scratch.'/ini');
+        file_put_contents($this->scratch.'/ini/disable.ini', "disable_functions=pcntl_sigprocmask,pcntl_sigtimedwait\n");
 
-        $instance->wait();
+        // The leading colon keeps the default scan folder, so the extensions it loads stay loaded.
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'sleep 0.4; touch "$1"', 'sh', $ran], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2', 'PHP_INI_SCAN_DIR' => ':'.$this->scratch.'/ini']);
 
-        self::assertSame(124, $instance->getExitCode(), $instance->getErrorOutput());
-        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $instance->getErrorOutput());
+        self::assertSame(124, $run['exit'], $run['errors']);
+        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $run['errors']);
         self::assertFileDoesNotExist($ran);
     }
 

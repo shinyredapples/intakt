@@ -54,13 +54,12 @@ abstract class InstanceTestCase extends TestCase
     /**
      * @param list<string>                $command
      * @param array<string, string|false> $environment
-     * @param list<string>                $phpOptions
      */
-    protected function startedInstance(string $project, array $command, array $environment, array $phpOptions = []): Process
+    protected function startedInstance(string $project, array $command, array $environment): Process
     {
         $arguments = [] === $command ? [] : ['--', ...$command];
         // Through exec, so the process's own id is the instance's.
-        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($this->scratch.'/status');
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($this->scratch.'/status');
         $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$environment]);
         $process->start();
 
