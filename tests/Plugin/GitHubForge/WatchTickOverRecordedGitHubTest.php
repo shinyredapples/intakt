@@ -271,7 +271,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
         $steering = $this->steering;
-        if (null === $steering) {
+        if (!$steering instanceof ChangeLabels) {
             $steering = self::createStub(ChangeLabels::class);
             $steering->method('steeringOf')->willReturn(new Labels());
         }
