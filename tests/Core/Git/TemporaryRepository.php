@@ -244,6 +244,25 @@ final readonly class TemporaryRepository
         $this->git('replace', $object, $replacement);
     }
 
+    public function commitFileAs(string $email, string $path, string $content): string
+    {
+        file_put_contents($this->path.'/'.$path, $content);
+        $this->git('add', '--all');
+        $this->git('-c', 'user.name=Someone', '-c', 'user.email='.$email, '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Change '.$path);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
+    public function aliasBranch(string $alias, string $target): void
+    {
+        $this->git('symbolic-ref', 'refs/heads/'.$alias, 'refs/heads/'.$target);
+    }
+
+    public function addWorktree(string $directory, string $branch): void
+    {
+        $this->git('worktree', 'add', '--quiet', $directory, $branch);
+    }
+
     public function remove(): void
     {
         new Filesystem()->remove($this->path);
