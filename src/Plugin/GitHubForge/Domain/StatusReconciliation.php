@@ -56,7 +56,7 @@ final readonly class StatusReconciliation
         return str_starts_with($label, RoundStatusLabel::FAMILY_PREFIX);
     }
 
-    // Applying the round's own status, or removing another one, is what the round wants too.
+    // A person who applied the round's own status or removed another one is not undone, because the round wants the same.
     private function disagreesWith(LabelEvent $event): bool
     {
         return $event->applied !== ($event->label === $this->wanted?->value);

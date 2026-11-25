@@ -12,7 +12,7 @@ use Intakt\Plugin\Forge\Contract\StatusLabels;
 use Intakt\Plugin\GitHubForge\Domain\LabelEvent;
 use Intakt\Plugin\GitHubForge\Domain\StatusReconciliation;
 
-// A recorded forge with one pull request: every read comes before the first write, as the contract asks, and each pass records the labels before and after it.
+// Reads everything before the first write, because the contract asks it of every forge; each pass records the labels before and after it so a test shows both.
 final class RecordingStatusLabels implements StatusLabels
 {
     public const string OWN = 'intakt[bot]';
@@ -40,7 +40,7 @@ final class RecordingStatusLabels implements StatusLabels
         $this->failing = $read;
     }
 
-    // Runs once in the middle of the next pass, between its reads, to force the order of two overlapping writers.
+    // Between the reads of the next pass, because that forces the order of two overlapping writers instead of hoping for it.
     public function whileReading(Closure $other): void
     {
         $this->whileReading = $other;
