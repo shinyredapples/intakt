@@ -65,6 +65,8 @@ final readonly class MirrorBranchArchive implements BranchArchive
 
     private function keep(MirroredHead $head, string $mirror, string $archive): ArchivedBranch
     {
+        // Every archive run asks the mirror through the hardened call, so a mirror with repository attributes is refused also after the archive exists.
+        $this->mustRun(['rev-parse', '--git-dir'], $mirror);
         $this->createArchiveLike($mirror, $archive);
         $this->copyObjects($head->head->commit, $mirror, $archive);
         $this->mustBeCommit($head->head->commit, $archive);
@@ -107,10 +109,13 @@ final readonly class MirrorBranchArchive implements BranchArchive
 
     private function mustBeCommit(string $commit, string $archive): void
     {
-        $this->mustRun(['rev-parse', '--verify', '--quiet', $commit.'^{commit}'], $archive);
+        // The object itself must be a commit: a rev-parse peel would let an annotated tag through.
+        if ('commit' !== trim($this->mustRun(['cat-file', '-t', $commit], $archive))) {
+            throw BranchNotArchived::because(sprintf('%s is not a commit', $commit));
+        }
     }
 
-    // Two heads of one branch archived in the same second would meet at one name, so the later one counts up.
+    // Two heads of one branch, or a branch and its child, archived in the same second would meet at one name, so the later one counts up.
     private function freeRef(DateTimeImmutable $moment, BranchHead $head, string $archive): string
     {
         $base = self::REF_PREFIX.$moment->format('Ymd\THis\Z');
@@ -119,10 +124,24 @@ final readonly class MirrorBranchArchive implements BranchArchive
             $ref = (1 === $count ? $base : $base.'-'.$count).'/'.$head->branch;
             $held = $this->heldBy($ref, $archive);
 
-            if (null === $held || $held === $head->commit) {
+            if ($held === $head->commit || (null === $held && !$this->overlaps($ref, $archive))) {
                 return $ref;
             }
         }
+    }
+
+    // Git cannot hold a ref and a ref below it, in either order.
+    private function overlaps(string $ref, string $archive): bool
+    {
+        $names = explode("\n", trim($this->mustRun(['for-each-ref', '--format=%(refname)', self::REF_PREFIX], $archive)));
+
+        foreach ($names as $name) {
+            if ('' !== $name && (str_starts_with($name, $ref.'/') || str_starts_with($ref, $name.'/'))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function heldBy(string $ref, string $archive): ?string

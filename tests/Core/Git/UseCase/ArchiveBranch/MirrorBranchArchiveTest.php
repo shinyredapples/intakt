@@ -77,6 +77,7 @@ final class MirrorBranchArchiveTest extends TestCase
 
         self::assertSame('', $this->git($this->root.'/mirrors/alpha.git', 'branch', '--list', 'topic'));
         self::assertSame($archived->ref, $this->git($this->archivePath(), 'for-each-ref', '--format=%(refname)', 'refs/intakt/archive/'));
+        self::assertSame($this->topicHead, $this->git($this->archivePath(), 'rev-parse', $archived->ref));
         self::assertSame('commit', $this->git($this->archivePath(), 'cat-file', '-t', $this->topicHead));
     }
 
@@ -159,6 +160,43 @@ final class MirrorBranchArchiveTest extends TestCase
         } catch (BranchNotArchived) {
             self::assertSame('', $this->git($this->archivePath(), 'for-each-ref'));
         }
+    }
+
+    public function testAnAnnotatedTagLeavesNoArchiveRef(): void
+    {
+        $this->git($this->remote->path, '-c', 'user.name=a', '-c', 'user.email=a@example.com', 'tag', '-a', 'v1', '-m', 'v1', $this->topicHead);
+        $tag = $this->git($this->remote->path, 'rev-parse', 'v1');
+        $this->mirror();
+
+        try {
+            $this->archiver()->archive($this->head('topic', $tag));
+            self::fail('A tag is not a branch head.');
+        } catch (BranchNotArchived) {
+            self::assertSame('', $this->git($this->archivePath(), 'for-each-ref', 'refs/intakt/'));
+        }
+    }
+
+    public function testANestedBranchArchivedInTheSameSecondIsKept(): void
+    {
+        $this->mirror();
+        $archiver = $this->archiver();
+        $archiver->archive($this->head('topic', $this->topicHead));
+
+        $child = $archiver->archive($this->head('topic/child', $this->remote->objectAt('main')));
+
+        self::assertSame($this->remote->objectAt('main'), $this->git($this->archivePath(), 'rev-parse', $child->ref));
+    }
+
+    public function testAMirrorWithRepositoryAttributesAddedLaterIsRefused(): void
+    {
+        $this->mirror();
+        $archiver = $this->archiver();
+        $archiver->archive($this->head('topic', $this->topicHead));
+        new Filesystem()->dumpFile($this->root.'/mirrors/alpha.git/info/attributes', "* text\n");
+
+        $this->expectException(BranchNotArchived::class);
+
+        $archiver->archive($this->head('other', $this->topicHead));
     }
 
     public function testAMirrorWithRepositoryAttributesIsReportedAsNotArchived(): void
