@@ -37,7 +37,7 @@ final readonly class RegressionEvidence
     /**
      * @param list<string> $lines
      *
-     * @return array{0: array<int, string>, 1: ?string}
+     * @return array{0: array<int, array{int, string}>, 1: ?string}
      */
     private function scanned(array $lines): array
     {
@@ -45,12 +45,14 @@ final readonly class RegressionEvidence
         $fence = null;
 
         foreach ($lines as $number => $line) {
+            // A body written with CRLF line ends still closes its fences and names its headings.
+            $line = rtrim($line, "\r");
             $inside = null !== $fence;
             $fence = $this->fenceAfter($line, $fence);
-            $text = $inside || null !== $fence ? null : $this->headingTextOf($line);
+            $heading = $inside || null !== $fence ? null : $this->headingOf($line);
 
-            if (null !== $text) {
-                $headings[$number] = $text;
+            if (null !== $heading) {
+                $headings[$number] = $heading;
             }
         }
 
@@ -82,18 +84,22 @@ final readonly class RegressionEvidence
         return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
     }
 
-    private function headingTextOf(string $line): ?string
+    /**
+     * @return ?array{int, string}
+     */
+    private function headingOf(string $line): ?array
     {
-        return 1 === preg_match('/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? ($heading[1] ?? '') : null;
+        return 1 === preg_match('/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? [strlen($heading[1]), $heading[2] ?? ''] : null;
     }
 
     /**
-     * @param array<int, string> $headings
+     * @param array<int, array{int, string}> $headings
      */
     private function evidenceIn(array $headings): ?int
     {
-        foreach ($headings as $number => $text) {
-            if (1 === preg_match('/^evidence(?:\s|$)/i', $text)) {
+        foreach ($headings as $number => [, $text]) {
+            // The colon form is the one the hand-back's Evidence reader also accepts, so it must not get a second section.
+            if (1 === preg_match('/^evidence(?::|\s|$)/i', $text)) {
                 return $number;
             }
         }
@@ -134,12 +140,13 @@ final readonly class RegressionEvidence
     }
 
     /**
-     * @param array<int, string> $headings
+     * @param array<int, array{int, string}> $headings
      */
     private function endOf(int $evidence, array $headings, int $lineCount): int
     {
-        foreach (array_keys($headings) as $number) {
-            if ($number > $evidence) {
+        // A subheading such as `### E1` belongs to the section, so only a heading of the same or a higher level ends it.
+        foreach ($headings as $number => [$level]) {
+            if ($number > $evidence && $level <= $headings[$evidence][0]) {
                 return $number;
             }
         }

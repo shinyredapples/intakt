@@ -97,6 +97,48 @@ final class RegressionEvidenceTest extends TestCase
         self::assertStringContainsString('- On the base: not run', $body);
     }
 
+    public function testASubheadingInsideEvidenceKeepsTheResultsAtTheEndOfTheSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n### E1\n\nShown.\n\n## Next");
+
+        self::assertSame("## Evidence\n\n### E1\n\nShown.\n\n".self::LINES."\n\n## Next", $body);
+    }
+
+    public function testAHigherLevelHeadingEndsTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\n# Appendix");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\n# Appendix", $body);
+    }
+
+    public function testAClosedFenceWithCrlfLineEndsGetsNoExtraFence(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("```\r\ncode\r\n```\r\n\r\nSummary.");
+
+        self::assertSame("```\r\ncode\r\n```\r\n\r\nSummary.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingWithCrlfLineEndsIsTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\r\n\r\nShown.\r\n");
+
+        self::assertSame("## Evidence\r\n\r\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingWithAColonIsTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence:\nShown.");
+
+        self::assertSame("## Evidence:\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAHeadingThatOnlyStartsWithTheWordIsNotTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidenced\nShown.");
+
+        self::assertSame("## Evidenced\nShown.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
     private function runs(): RegressionRuns
     {
         return new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed);
