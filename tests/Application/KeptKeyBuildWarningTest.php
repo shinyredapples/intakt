@@ -71,10 +71,10 @@ final class KeptKeyBuildWarningTest extends TestCase
         new Filesystem()->remove([$this->secretsDirectory(), $this->keptKeyDirectory()]);
     }
 
-    // Under the worker's own TMPDIR, so the run leaves the checkout as it found it (the quality check records a pass only for a tree nothing changed in) and none removes another worker's vault.
+    // Under the worker's own TMPDIR, so the run leaves the checkout as it found it (the quality check records a pass only for a tree nothing changed in) and none removes another worker's vault; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
     private function secretsDirectory(): string
     {
-        return sys_get_temp_dir().'/kept-key-build-warning-test-secrets';
+        return sys_get_temp_dir().'/kept-key-build-warning-test-secrets-'.hash('xxh128', dirname(__DIR__, 2));
     }
 
     private function vaultDirectory(): string
@@ -82,10 +82,10 @@ final class KeptKeyBuildWarningTest extends TestCase
         return $this->secretsDirectory().'/'.self::VAULT_ENVIRONMENT;
     }
 
-    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
     private function keptKeyDirectory(): string
     {
-        return sys_get_temp_dir().'/kept-key-build-warning-test';
+        return sys_get_temp_dir().'/kept-key-build-warning-test-'.hash('xxh128', dirname(__DIR__, 2));
     }
 
     // Every case builds through here, so none can read the operator's project file, vault or decryption key.

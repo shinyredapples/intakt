@@ -394,16 +394,16 @@ final class AiProvidersTest extends KernelTestCase
         new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise($key, $providers));
     }
 
-    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
     private function keptKeyDirectory(): string
     {
-        return sys_get_temp_dir().'/ai-providers-test-kept-key';
+        return sys_get_temp_dir().'/ai-providers-test-kept-key-'.hash('xxh128', dirname(__DIR__, 2));
     }
 
-    // Under the worker's own TMPDIR, so the run leaves the checkout as it found it (the quality check records a pass only for a tree nothing changed in) and none removes another worker's vault.
+    // Under the worker's own TMPDIR, so the run leaves the checkout as it found it (the quality check records a pass only for a tree nothing changed in) and none removes another worker's vault; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
     private function secretsDirectory(): string
     {
-        return sys_get_temp_dir().'/ai-providers-test-secrets';
+        return sys_get_temp_dir().'/ai-providers-test-secrets-'.hash('xxh128', dirname(__DIR__, 2));
     }
 
     private function vaultDirectory(): string
