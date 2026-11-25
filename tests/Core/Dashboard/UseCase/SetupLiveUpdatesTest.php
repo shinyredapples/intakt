@@ -140,6 +140,17 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
         self::assertGreaterThan(0, $crawler->filter('main.content .step-nav a[href]')->count());
     }
 
+    // The held-button note itself is written by the connection controller (#3521) and tested in connection.test.mjs; the page must carry what it acts on.
+    #[DataProvider('pages')]
+    public function testAWizardPageWithoutLiveUpdatesCarriesTheHooksOfTheHeldButtonRule(string $path): void
+    {
+        $crawler = $this->browser->request('GET', $path);
+
+        self::assertCount(1, $crawler->filter('.shell[data-controller="connection"]'));
+        self::assertCount(1, $crawler->filter('.shell [data-connection-target="line"][hidden]'));
+        self::assertCount(0, $crawler->filter('form[method="post"] button[type="submit"][disabled]'));
+    }
+
     // Assembled here from the container's page reading and Twig, because the container inlines its hub, so a recording one cannot be set there.
     private function publisher(?LiveUpdates $updates = null, ?BufferingLogger $log = null): PublishFirstReview
     {
