@@ -99,6 +99,21 @@ final class LedgerReviewPagesTest extends TestCase
         self::assertSame(1200, $review?->rounds[0]->tokens->total());
     }
 
+    public function testTheFirstRoundIsTheFirstRoundOfTheReviewStartedFirstReadFromTheStartsAlone(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->startRoundOf('feat/b', 'other', 1);
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        self::assertSame('r1', $this->pagesOn(new ReviewBoundLedger($ledger))->firstRound());
+    }
+
+    public function testAFreshInstallHasNoFirstRound(): void
+    {
+        self::assertNull($this->pagesOn(new ReviewBoundLedger(new DashboardLedger()))->firstRound());
+    }
+
     public function testAReviewOfARoundTheLedgerNeverStartedIsNotRead(): void
     {
         $ledger = new DashboardLedger();

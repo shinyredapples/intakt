@@ -22,6 +22,8 @@ use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
+use Intakt\Core\BranchCleanup\Contract\BranchCleanupServices;
+use Intakt\Core\BranchCleanup\Infrastructure\BranchCleanupConfiguration;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Infrastructure\BudgetConfiguration;
@@ -90,8 +92,18 @@ return static function (ContainerConfigurator $container): void {
     $watches = [];
     $builds = [];
     $protectedPaths = [];
+    $branchCleanups = [];
     if (is_array($contentProjects)) {
         foreach ($contentProjects as $name => $project) {
+            // Both spellings, because the design writes keep-branches and the cleanup tree normalizes either to the underscored key.
+            foreach (['clean_other_branches', 'clean-other-branches', 'keep_branches', 'keep-branches'] as $cleanupKey) {
+                if (is_array($project) && array_key_exists($cleanupKey, $project)) {
+                    $branchCleanups[$name][$cleanupKey] = $project[$cleanupKey];
+                    unset($project[$cleanupKey]);
+                    $contentProjects[$name] = $project;
+                }
+            }
+
             if (is_array($project) && array_key_exists('protected_paths', $project)) {
                 $protectedPaths[$name] = ['protected_paths' => $project['protected_paths']];
                 unset($project['protected_paths']);
@@ -162,6 +174,8 @@ return static function (ContainerConfigurator $container): void {
     $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     /** @var array<string, array{protected_paths: list<string>}> $projectProtectedPaths */
     $projectProtectedPaths = new Processor()->processConfiguration(new ProtectedPathsConfiguration(), [['projects' => $protectedPaths]])['projects'];
+    /** @var array<string, array{clean_other_branches: bool, keep_branches: list<string>}> $projectBranchCleanups */
+    $projectBranchCleanups = new Processor()->processConfiguration(new BranchCleanupConfiguration(), [['projects' => $branchCleanups]])['projects'];
     // A project without a build section routes by the defaults, so every configured project has rules.
     $builds = array_replace(array_fill_keys(array_keys($projects), []), $builds);
     /** @var array<string, array{build: array{tier: string, sensitive_paths: list<string>, escalate_on: list<string>}}> $projectBuilds */
@@ -337,6 +351,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(ReviewServices::JOB_IMAGES, ReviewJobConfiguration::imagesOf($projectReviewJobs));
     $container->parameters()->set(BuildServices::ROUTING, array_map(static fn (array $project): array => $project['build'], $projectBuilds));
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
+    $container->parameters()->set(BranchCleanupServices::PROJECTS, $projectBranchCleanups);
     $container->parameters()->set(GitServices::PROTECTED_PATHS, array_map(static fn (array $project): array => $project['protected_paths'], $projectProtectedPaths));
     $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);

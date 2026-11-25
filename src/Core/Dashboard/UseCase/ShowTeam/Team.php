@@ -17,7 +17,7 @@ final readonly class Team
     }
 
     /**
-     * @return array<string, list<array{account: Account, role: TeamRole}>>
+     * @return array<string, list<array{label: string, role: TeamRole}>>
      */
     // Keyed by the role's name, so a role that runs on several accounts shows once with all of them.
     public function byRole(): array
@@ -30,6 +30,21 @@ final readonly class Team
             }
         }
 
-        return $holders;
+        return array_map(
+            static function (array $ofRole): array {
+                $names = array_count_values(array_map(static fn (array $holder): string => $holder['account']->name, $ofRole));
+
+                return array_map(
+                    static fn (array $holder): array => ['label' => self::label($holder['account'], $names[$holder['account']->name] ?? 1), 'role' => $holder['role']],
+                    $ofRole,
+                );
+            },
+            $holders,
+        );
+    }
+
+    private static function label(Account $account, int $holdersWithItsName): string
+    {
+        return 1 < $holdersWithItsName ? sprintf('%s (%s)', $account->name, $account->provider->value) : $account->name;
     }
 }

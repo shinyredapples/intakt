@@ -33,6 +33,8 @@ final class StandingQueryBus implements MessageBusInterface
     public array $asked = [];
     /** @var list<BootHarnessAtMain> */
     public array $bootedHeads = [];
+    /** @var list<IdentityAtHead> */
+    public array $identitiesAsked = [];
     public HeadMove $move;
     public bool $fetched = true;
     public BootOutcome $mainBoot;
@@ -65,6 +67,8 @@ final class StandingQueryBus implements MessageBusInterface
     // Fails when not fetched, because the local repository throws for a commit it lacks.
     private function identityAt(IdentityAtHead $query): HeadIdentity
     {
+        $this->identitiesAsked[] = $query;
+
         if (!$this->fetched) {
             throw new ForgeReadFailed('The commit is not in the repository.');
         }

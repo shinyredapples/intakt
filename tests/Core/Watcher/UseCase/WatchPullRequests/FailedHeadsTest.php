@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Budget\Contract\SharedHold;
@@ -283,8 +282,7 @@ final class FailedHeadsTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
         $this->entities = $entities;
         $this->pending = new PendingHeads($entities, $this->clock);

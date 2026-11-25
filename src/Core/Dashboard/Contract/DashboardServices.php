@@ -8,6 +8,7 @@ namespace Intakt\Core\Dashboard\Contract;
 final readonly class DashboardServices
 {
     public const string BOARD_HEADLINES = 'intakt.dashboard.board_headlines';
+    public const string FORGE_VERDICTS = 'intakt.dashboard.forge_verdicts';
     public const string SAMPLE_REPOSITORY = 'intakt.dashboard.sample_repository';
     public const string STATUS_PAGES = 'intakt.dashboard.status_pages';
 }

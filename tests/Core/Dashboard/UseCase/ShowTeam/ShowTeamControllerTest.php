@@ -75,6 +75,16 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
         );
     }
 
+    public function testRoleHoldersThatShareANameAreToldApartByTheirProvider(): void
+    {
+        $this->givenAccounts([Provider::ClaudeCode->value => ['default'], Provider::Anthropic->value => ['default']]);
+
+        self::assertSame(
+            ['default (anthropic) (the build runtime cannot run it)', 'default (claude_code)'],
+            $this->browser->request('GET', '/team')->filter('.side .role .meta span')->each(static fn (Crawler $account): string => $account->text()),
+        );
+    }
+
     public function testAnAccountNoRoleUsesSaysItServesNoRole(): void
     {
         $this->givenAccounts([Provider::Codex->value => ['default']]);

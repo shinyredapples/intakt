@@ -32,6 +32,18 @@ final readonly class AppKey
         return new self($private, $public);
     }
 
+    // Elliptic curve, because OpenSSL signs with such a key while GitHub refuses its signature under RS256.
+    public static function ellipticCurvePem(): string
+    {
+        $pair = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        $private = null;
+        if (false === $pair || !openssl_pkey_export($pair, $private) || !is_string($private)) {
+            throw new RuntimeException('OpenSSL cannot generate a key.');
+        }
+
+        return $private;
+    }
+
     public function body(): string
     {
         return explode('-----', $this->private)[2];

@@ -15,6 +15,7 @@ use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
 use Intakt\Core\Server\Contract\WorkerThreads;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(HubVerdict::class)]
 #[UsesClass(InfrastructureChecks::class)]
 #[UsesClass(InfrastructureCheck::class)]
+#[UsesClass(ForgeConnectionVerdict::class)]
 final class InfrastructureRowTest extends TestCase
 {
     public function testAReadingWithEverySourceUpShowsThreadsBusyAndIdleQueueDepthRestartsAndHubHealth(): void
@@ -86,6 +88,34 @@ final class InfrastructureRowTest extends TestCase
             ['Server metrics', 'down', 'down', 'FRANKENPHP_ADMIN_URL is not a URL.'],
             ['Hub', 'down', 'down', 'FRANKENPHP_ADMIN_URL is not a URL.'],
         ], $this->shown($row));
+    }
+
+    public function testAForgeCheckThatPassesShowsTheForgeConnectedAfterTheServerFigures(): void
+    {
+        $row = InfrastructureRow::refused('not read')->withForge(ForgeConnectionVerdict::passed());
+
+        self::assertSame(['Forge', 'connected', 'fine', null], array_last($this->shown($row)));
+    }
+
+    public function testAnInstallWithoutAnAppShowsTheForgeAsNotConfiguredInsteadOfConnected(): void
+    {
+        $row = InfrastructureRow::refused('not read')->withForge(ForgeConnectionVerdict::withoutAnApp());
+
+        self::assertSame(['Forge', 'not configured', 'fine', null], array_last($this->shown($row)));
+    }
+
+    public function testAForgeCheckThatFailsShowsTheForgeDownWithItsProblem(): void
+    {
+        $row = InfrastructureRow::refused('not read')->withForge(ForgeConnectionVerdict::failed('GITHUB_APP_INSTALLATION_ID is empty', 'set it'));
+
+        self::assertSame(['Forge', 'down', 'down', 'GITHUB_APP_INSTALLATION_ID is empty'], array_last($this->shown($row)));
+    }
+
+    public function testAForgeCheckRunningInAnotherBoardLoadShowsTheForgeAsChecking(): void
+    {
+        $row = InfrastructureRow::refused('not read')->withForge(null);
+
+        self::assertSame(['Forge', 'checking', 'fine', null], array_last($this->shown($row)));
     }
 
     private function unchanged(string $reason): string
