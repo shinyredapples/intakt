@@ -102,10 +102,10 @@ final readonly class RunBuildJob
         }
         $this->toolTimeLimitSeconds = $toolTimeLimitSeconds;
         $this->limits = new BuildLimits(
-            self::wholeNumber('allowance', $allowanceTokens),
-            self::wholeNumber('idle time', $idleSeconds),
-            self::wholeNumber('runaway ceiling', $ceilingTokens),
-            self::wholeNumber('per-task total', $taskTotalTokens),
+            $this->wholeNumber('allowance', $allowanceTokens),
+            $this->wholeNumber('idle time', $idleSeconds),
+            $this->wholeNumber('runaway ceiling', $ceilingTokens),
+            $this->wholeNumber('per-task total', $taskTotalTokens),
         );
     }
 
@@ -133,7 +133,7 @@ final readonly class RunBuildJob
     }
 
     // Checked as given, because the compiled container would turn a YAML true into a limit of 1 before a typed parameter saw it.
-    private static function wholeNumber(string $limit, mixed $given): int
+    private function wholeNumber(string $limit, mixed $given): int
     {
         if (!is_int($given)) {
             throw new InvalidArgumentException(sprintf('The build\'s %s must be a whole number, not %s.', $limit, get_debug_type($given)));
