@@ -32,7 +32,7 @@ flowchart LR
 
 To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add the project's eligibility label (`intakt` unless the project names another).
 
-Intakt also writes `status:` labels, so the list shows where each item stands. These are for reading only. On a pull request it reviews, this part is built: `status:in-review` while the review runs, then `status:waiting-on-you` once its verdict is on the pull request. Change or remove one, and Intakt puts it back the next time its look at the pull requests (one every minute) reaches GitHub. When your change left the label different from the review, it also leaves one comment saying so; if GitHub does not take that comment, Intakt does not post it later. The labels for tasks (`queued`, `building`, ...) are still planned.
+Intakt also writes `status:` labels, so the list shows where each item stands. These are for reading only. On a pull request it reviews, this part is built: `status:in-review` while the review runs, then `status:waiting-on-you` once its verdict is on the pull request. Change or remove one, and Intakt puts it back the next time its look at the pull requests (one every minute) writes it successfully. When your change left the label different from the review, it also leaves one comment saying so; if GitHub does not take that comment, Intakt does not post it later. The labels for tasks (`queued`, `building`, ...) are still planned.
 
 ## Taking an item over by hand and giving it back
 
