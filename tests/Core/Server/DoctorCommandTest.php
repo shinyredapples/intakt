@@ -74,13 +74,6 @@ final class DoctorCommandTest extends TestCase
     /** @var list<FakeProcessRoot> */
     private array $roots = [];
 
-    protected function tearDown(): void
-    {
-        foreach ($this->roots as $root) {
-            $root->remove();
-        }
-    }
-
     public function testAHealthyInstallPassesEveryCheckAndExitsZero(): void
     {
         $tester = $this->execute(new RecordedAdminApi()->status());
@@ -263,6 +256,13 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString("fail: forge: the private key cannot sign (it cannot be read or is not an RSA key); fix: set GITHUB_APP_PRIVATE_KEY to the PEM private key of the App\n", $tester->getDisplay());
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->roots as $root) {
+            $root->remove();
+        }
     }
 
     private function forge(string $appId = '', string $installationId = '', string $privateKey = ''): ForgeConnectionCheck

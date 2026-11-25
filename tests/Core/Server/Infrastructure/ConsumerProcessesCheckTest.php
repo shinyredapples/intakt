@@ -21,11 +21,6 @@ final class ConsumerProcessesCheckTest extends TestCase
 
     private ?FakeProcessRoot $root = null;
 
-    protected function tearDown(): void
-    {
-        $this->root?->remove();
-    }
-
     public function testRunningAsyncAndSchedulerConsumersPass(): void
     {
         $verdict = $this->check(FakeProcessRoot::healthy());
@@ -96,6 +91,11 @@ final class ConsumerProcessesCheckTest extends TestCase
 
         self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
         self::assertSame(self::CANNOT_RUN_FIX, $verdict->fix);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->root?->remove();
     }
 
     private function check(FakeProcessRoot $root): CheckVerdict
