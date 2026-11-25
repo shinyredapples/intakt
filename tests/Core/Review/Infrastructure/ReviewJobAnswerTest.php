@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 
 #[CoversClass(ReviewJobAnswer::class)]
 #[CoversClass(ClaudeCodeJobEvents::class)]
@@ -41,6 +42,26 @@ final class ReviewJobAnswerTest extends TestCase
         ]));
 
         self::assertSame('last', $answer->text);
+    }
+
+    #[DataProvider('failedAnswersWithUsage')]
+    public function testAFailedAnswerKeepsTheUsageTheCliReported(string $output): void
+    {
+        try {
+            ReviewJobAnswer::read(Provider::ClaudeCode, $output);
+            self::fail('A failed answer was taken as one.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame([[100, 20]], array_map(static fn (TokenUsageInterface $part): array => [$part->getPromptTokens(), $part->getCompletionTokens()], $failure->usage));
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function failedAnswersWithUsage(): iterable
+    {
+        yield 'an empty result' => ['{"type":"result","is_error":false,"result":"","usage":{"input_tokens":100,"output_tokens":20}}'];
+        yield 'an error' => ['{"type":"result","is_error":true,"result":"rate limited","usage":{"input_tokens":100,"output_tokens":20}}'];
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -35,12 +36,14 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
@@ -134,6 +137,34 @@ final class JobReviewVendorTest extends TestCase
         $row = $usages[0];
         self::assertIsArray($row);
         self::assertSame(['claude_code.team', 100, 20], [$row['account'], $row['prompt'], $row['completion']]);
+    }
+
+    public function testAFailedJobWithReportedUsageSettlesTheCallWithItAndFails(): void
+    {
+        $failure = new RuntimeException('The CLI failed.');
+
+        try {
+            $this->reviewed(new JobVerdict($failure, false, [$this->spent()]));
+            self::fail('A failed job was taken as a verdict.');
+        } catch (RuntimeException $thrown) {
+            self::assertSame($failure, $thrown);
+        }
+
+        self::assertSame('settled', $this->ledger->payloads()[1]['phase']);
+    }
+
+    public function testAJobThatThrowsWithoutUsageLeavesTheCallUnsettledAndFailsTyped(): void
+    {
+        $jobs = self::createStub(JobReviewer::class);
+        $jobs->method('review')->willThrowException(new EveryAccountCoolingDown(Provider::ClaudeCode, 60));
+
+        try {
+            $this->reviewedOn(Provider::ClaudeCode, $jobs, self::createStub(Reviewer::class));
+            self::fail('A job that threw was taken as a verdict.');
+        } catch (ProviderRateLimited) {
+        }
+
+        self::assertSame(['unsettled', EveryAccountCoolingDown::class], [$this->ledger->payloads()[1]['phase'], $this->ledger->payloads()[1]['failure']]);
     }
 
     /**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\SystemMessage;
 use Symfony\AI\Platform\Message\UserMessage;
