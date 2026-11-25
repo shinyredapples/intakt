@@ -55,7 +55,7 @@ final readonly class ConfiguredPanels implements Panels
         $quorum = QuorumPolicy::from($panel['quorum']);
 
         return new Panel(
-            array_map(fn (array $reviewer): PanelReviewer => $this->reviewer($reviewer, $this->tierOf($project, $reviewer, $change, $quorum)), $reviewers),
+            array_map(fn (array $reviewer): PanelReviewer => $this->reviewer($reviewer, $this->tierOf($reviewer, $this->onOwnProvider($project, $reviewer, $change->startTier()), $quorum)), $reviewers),
             $quorum,
         );
     }
@@ -84,19 +84,30 @@ final readonly class ConfiguredPanels implements Panels
     /**
      * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
      */
-    private function tierOf(string $project, array $reviewer, ChangeDescription $change, QuorumPolicy $quorum): Tier
+    private function tierOf(array $reviewer, ?Tier $labelled, QuorumPolicy $quorum): Tier
     {
         $configured = Tier::from($reviewer['tier']);
-        $labelled = $change->startTier();
 
         if (!$labelled instanceof Tier || ($quorum->needsStrongVote() && Tier::Strong === $configured)) {
             return $configured;
         }
 
-        // Only to a tier the project maps to the reviewer's own provider, because a call reaches the provider its tier maps to: another one would run the reviewer elsewhere than the panel says (two independent vendors could become one), and a tier without a model would refuse the round.
+        return $labelled;
+    }
+
+    // Only a tier the project maps to the reviewer's own provider, because a call reaches the provider its tier maps to: another one would run the reviewer elsewhere than the panel says (two independent vendors could become one), and a tier without a model would refuse the round.
+    /**
+     * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
+     */
+    private function onOwnProvider(string $project, array $reviewer, ?Tier $labelled): ?Tier
+    {
+        if (!$labelled instanceof Tier) {
+            return null;
+        }
+
         $mapped = $this->projects[$project]['tiers'][$labelled->value]['provider'] ?? null;
 
-        return $mapped === $reviewer['provider'] ? $labelled : $configured;
+        return $mapped === $reviewer['provider'] ? $labelled : null;
     }
 
     /**
