@@ -98,7 +98,7 @@ final readonly class ProcessGroup
     /**
      * @param list<self> $groups
      *
-     * @return list<self> the groups still held before their session
+     * @return list<self>
      */
     private static function askedOnceTheyLeadTheirGroup(array $groups): array
     {
@@ -119,31 +119,30 @@ final readonly class ProcessGroup
 
     private function isHeldBeforeItsSession(): bool
     {
-        $info = $this->unreapedState();
-
-        return null !== $info && 0 === ($info['pid'] ?? 0) && $this->isTheLauncherWithoutItsGroup();
+        return false === $this->hasTheUnreapedChildEnded() && $this->isTheLauncherWithoutItsGroup();
     }
 
     // Because the stop runs inside a signal handler that may interrupt Symfony Process mid-call, ownership is asked of the kernel without touching the launcher's pipes: `WNOWAIT` reaps nothing, so the number stays the launcher's while this is true, and a failed call means it was reaped.
     private function isOursWithoutItsGroup(): bool
     {
-        return null !== $this->unreapedState() && $this->isTheLauncherWithoutItsGroup();
+        return null !== $this->hasTheUnreapedChildEnded() && $this->isTheLauncherWithoutItsGroup();
+    }
+
+    // Because `WNOHANG` leaves the reported PID at 0 while the child still runs, a nonzero one means it has ended and waits as a zombie; null means the number is no longer an unreaped child of bin/check.
+    private function hasTheUnreapedChildEnded(): ?bool
+    {
+        $info = [];
+
+        if (!pcntl_waitid(P_PID, $this->id, $info, WEXITED | WNOHANG | WNOWAIT)) {
+            return null;
+        }
+
+        return is_array($info) && 0 !== ($info['pid'] ?? 0);
     }
 
     private function isTheLauncherWithoutItsGroup(): bool
     {
         return '' !== $this->launcherStart && self::startTimeOf($this->id) === $this->launcherStart && posix_getpgid($this->id) !== $this->id;
-    }
-
-    // Because `WNOHANG` leaves the reported PID at 0 while the child still runs, a nonzero one means it has ended and waits as a zombie.
-    /**
-     * @return array<string, mixed>|null null once the number is no longer an unreaped child of bin/check
-     */
-    private function unreapedState(): ?array
-    {
-        $info = [];
-
-        return pcntl_waitid(P_PID, $this->id, $info, WEXITED | WNOHANG | WNOWAIT) ? $info : null;
     }
 
     private static function startTimeOf(int $id): string

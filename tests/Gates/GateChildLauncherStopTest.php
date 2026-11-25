@@ -230,18 +230,17 @@ final class GateChildLauncherStopTest extends TestCase
      */
     private function releasedInsideTheStop(int $launcher, callable $stop): ?array
     {
-        $returned = false;
         $release = null;
         $asynchronous = pcntl_async_signals(true);
-        pcntl_signal(SIGALRM, function () use (&$returned, &$release, $launcher): void {
-            $release = ['stop under way' => !$returned, 'outside its session' => posix_getpgid($launcher) !== $launcher, 'signaled before' => is_file($this->folder.'/descendant')];
+        pcntl_signal(SIGALRM, function () use (&$release, $launcher): void {
+            $release = ['stop under way' => !is_file($this->folder.'/returned'), 'outside its session' => posix_getpgid($launcher) !== $launcher, 'signaled before' => is_file($this->folder.'/descendant')];
             touch($this->folder.'/go');
         });
 
         try {
             pcntl_alarm(1);
             $stop();
-            $returned = true;
+            touch($this->folder.'/returned');
 
             for ($waited = 0; null === $release && $waited < 2_000_000; $waited += 10_000) {
                 usleep(10_000);
@@ -274,7 +273,11 @@ final class GateChildLauncherStopTest extends TestCase
     {
         pcntl_waitpid($pid, $status);
 
-        return pcntl_wifsignaled($status) ? pcntl_wtermsig($status) : 0;
+        if (!is_int($status) || !pcntl_wifsignaled($status)) {
+            return 0;
+        }
+
+        return (int) pcntl_wtermsig($status);
     }
 
     // Because Symfony Process hands the launcher its release line only while the process is polled, the test polls as bin/check does instead of only sleeping.
