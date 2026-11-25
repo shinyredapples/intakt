@@ -111,10 +111,17 @@ final readonly class RoundFinding
         return clone ($this, ['call' => $call]);
     }
 
+    // Null for a text that is missing, blank or not valid UTF-8, because the Unicode-aware pattern fails on invalid UTF-8 and the card then says the text is not recorded.
+    private function trimmedText(): ?string
+    {
+        $trimmed = preg_replace('/^[\s\p{Z}]+|[\s\p{Z}]+$/u', '', (string) $this->text);
+
+        return '' === $trimmed ? null : $trimmed;
+    }
+
+    // Scanned with string functions instead of a lazy pattern, because a pattern runs out of PCRE's backtracking limit on a long span and then finds no span at all; the spans stay those FindingText finds (a run of backticks closed by the next run of the same length, an unclosed run is plain text).
     /**
-     * Spans as FindingText finds them: a run of backticks closed by the next run of the same length, across lines too; an unclosed run is plain text. Scanned with string functions instead of a lazy pattern, which runs out of PCRE's backtracking limit on a long span and then finds no span at all.
-     *
-     * @return list<array{int, string, string}> the offset, the whole span and the code inside it
+     * @return list<array{int, string, string}>
      */
     private function codeSpansOf(string $text): array
     {
@@ -148,13 +155,5 @@ final readonly class RoundFinding
         }
 
         return null;
-    }
-
-    // Null for a text that is missing, blank or not valid UTF-8, because the Unicode-aware pattern fails on invalid UTF-8 and the card then says the text is not recorded.
-    private function trimmedText(): ?string
-    {
-        $trimmed = preg_replace('/^[\s\p{Z}]+|[\s\p{Z}]+$/u', '', (string) $this->text);
-
-        return '' === $trimmed ? null : $trimmed;
     }
 }
