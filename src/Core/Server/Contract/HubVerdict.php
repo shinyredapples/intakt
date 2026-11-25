@@ -10,22 +10,22 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class HubVerdict
 {
-    private function __construct(
-        public ?string $problem,
-    ) {
+    private const string DOWN_FIX = "check that FrankenPHP runs with the Caddyfile's mercure block and that FRANKENPHP_ADMIN_URL points at its admin API";
+    private const string UNHEALTHY_FIX = "check the FrankenPHP log for the Mercure hub's error, for example a transport file under MERCURE_BOLT_PATH it cannot write";
+
+    private function __construct()
+    {
     }
 
-    public static function of(HubHealth|EndpointDown $hub): self
+    /**
+     * @return InfrastructureCheck<HubHealth>
+     */
+    public static function of(HubHealth|EndpointDown $hub): InfrastructureCheck
     {
-        return new self(match (true) {
-            $hub instanceof EndpointDown => 'hub down ('.$hub->reason.')',
-            HubHealth::Unhealthy === $hub => 'the hub reports unhealthy',
-            HubHealth::Healthy === $hub => null,
-        });
-    }
-
-    public function passes(): bool
-    {
-        return null === $this->problem;
+        return match (true) {
+            $hub instanceof EndpointDown => InfrastructureCheck::unreadable($hub, 'hub down ('.$hub->reason.')', self::DOWN_FIX),
+            HubHealth::Unhealthy === $hub => InfrastructureCheck::failed($hub, 'the hub reports unhealthy', self::UNHEALTHY_FIX),
+            HubHealth::Healthy === $hub => InfrastructureCheck::passed($hub),
+        };
     }
 }

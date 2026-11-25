@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Server;
 use Intakt\Core\Server\Contract\EndpointDown;
 use Intakt\Core\Server\Contract\HubHealth;
 use Intakt\Core\Server\Contract\HubVerdict;
+use Intakt\Core\Server\Contract\InfrastructureCheck;
 use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerReading;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(InfrastructureChecks::class)]
+#[UsesClass(InfrastructureCheck::class)]
 #[UsesClass(HubVerdict::class)]
 #[UsesClass(ServerReading::class)]
 #[UsesClass(WorkerThreads::class)]
@@ -28,47 +30,48 @@ final class InfrastructureChecksTest extends TestCase
         $checks = InfrastructureChecks::of($this->reading());
 
         self::assertSame([], $checks->problems);
+        self::assertTrue($checks->threads->passes());
+        self::assertTrue($checks->metrics->passes());
+        self::assertTrue($checks->hub->passes());
     }
 
-    public function testTheWorkerThreadsCheckFailsWithItsReasonWhenTheThreadsEndpointIsDown(): void
+    public function testTheWorkerThreadsCheckFailsWithItsReasonAndFixWhenTheThreadsEndpointIsDown(): void
     {
         $checks = InfrastructureChecks::of($this->reading(threads: new EndpointDown('/frankenphp/threads did not answer')));
 
         self::assertSame(['worker threads down (/frankenphp/threads did not answer)'], $checks->problems);
+        self::assertSame('check that FrankenPHP is running and that FRANKENPHP_ADMIN_URL points at its admin API', $checks->threads->fix);
     }
 
-    public function testTheWorkerThreadsCheckFailsWhenNoThreadIsBusyOrIdle(): void
+    public function testTheWorkerThreadsCheckFailsWithItsFixWhenNoThreadIsBusyOrIdle(): void
     {
         $checks = InfrastructureChecks::of($this->reading(threads: new WorkerThreads(0, 0)));
 
         self::assertSame(['no worker thread is ready'], $checks->problems);
+        self::assertSame('check the FrankenPHP log for a worker that fails to boot or keeps restarting', $checks->threads->fix);
     }
 
     public function testABusyThreadCountsAsReadySoTheWorkerThreadsCheckPassesWithNoIdleThread(): void
     {
         $checks = InfrastructureChecks::of($this->reading(threads: new WorkerThreads(1, 0)));
 
-        self::assertSame([], $checks->problems);
+        self::assertTrue($checks->threads->passes());
+        self::assertNull($checks->threads->fix);
     }
 
-    public function testTheServerMetricsCheckFailsWithItsReasonWhenTheMetricsEndpointIsDown(): void
+    public function testTheServerMetricsCheckFailsWithItsReasonAndFixWhenTheMetricsEndpointIsDown(): void
     {
-        $checks = InfrastructureChecks::of($this->reading(metrics: new EndpointDown('/metrics answered with status 500')));
+        $checks = InfrastructureChecks::of($this->reading(metrics: new EndpointDown('/metrics answered in an unusable shape')));
 
-        self::assertSame(['server metrics down (/metrics answered with status 500)'], $checks->problems);
+        self::assertSame(['server metrics down (/metrics answered in an unusable shape)'], $checks->problems);
+        self::assertSame("check that the Caddyfile's global options turn on metrics and that FRANKENPHP_ADMIN_URL points at the admin API", $checks->metrics->fix);
     }
 
-    public function testTheHubCheckFailsWithItsReasonWhenTheHubEndpointIsDown(): void
-    {
-        $checks = InfrastructureChecks::of($this->reading(hub: new EndpointDown('/mercure/health/ready did not answer')));
-
-        self::assertSame(['hub down (/mercure/health/ready did not answer)'], $checks->problems);
-    }
-
-    public function testTheHubCheckFailsWhenTheHubReportsUnhealthy(): void
+    public function testTheHubCheckIsTheHubVerdict(): void
     {
         $checks = InfrastructureChecks::of($this->reading(hub: HubHealth::Unhealthy));
 
+        self::assertEquals(HubVerdict::of(HubHealth::Unhealthy), $checks->hub);
         self::assertSame(['the hub reports unhealthy'], $checks->problems);
     }
 
