@@ -64,14 +64,14 @@ final readonly class GitHubStatusLabels implements StatusLabels
     public function restore(string $project, ChangeId $change): void
     {
         $address = $this->addressOf($project, $change);
-        $this->whileHeld($this->lockOf($address), 1, fn () => $this->write($project, $address, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...)), self::givingWay(...)));
+        $this->whileHeld($this->lockOf($address), 1, fn () => $this->write($project, $address, fn (array $events): ?StatusLabelPlan => StatusLabelPlan::restoring($events, $this->isOwn(...)), $this->givingWay(...)));
     }
 
     // A restoration gives way to a status another writer set meanwhile, because it only puts back an older one.
     /**
      * @param list<LabelEvent> $others
      */
-    private static function givingWay(array $others, RoundStatusLabel $restored): RoundStatusLabel
+    private function givingWay(array $others, RoundStatusLabel $restored): RoundStatusLabel
     {
         $set = array_last(array_filter($others, static fn (LabelEvent $event): bool => $event->applied && RoundStatusLabel::tryFrom($event->label) instanceof RoundStatusLabel));
 
