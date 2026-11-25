@@ -23,6 +23,16 @@ final class RoundFindingTest extends TestCase
         self::assertSame('The total in src/A.php is off by 1.5.', new RoundFinding('F1', 'P1', 'The total in src/A.php is off by 1.5. It drops the last item.')->headline());
     }
 
+    public function testTheQuotedCodeIsEveryCodeSpanAsTheReviewerWroteIt(): void
+    {
+        self::assertSame(['0', 'a`b', "x\ny"], new RoundFinding('F1', 'P2', "It returns `0`, quotes ``a`b`` and `x\ny`, and leaves `open.")->quotedCode());
+    }
+
+    public function testAFindingWithoutTextQuotesNoCode(): void
+    {
+        self::assertSame([], new RoundFinding('F1', 'P2', null)->quotedCode());
+    }
+
     public function testAFindingsHeadlineNeverEndsInsideAnInlineCodeSpan(): void
     {
         self::assertSame('Keep `Ready? yes` as the prompt.', new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt. The answer is required.')->headline());

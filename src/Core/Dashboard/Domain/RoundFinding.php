@@ -72,6 +72,17 @@ final readonly class RoundFinding
         return $text;
     }
 
+    /**
+     * @return list<string>
+     */
+    public function quotedCode(): array
+    {
+        // The reviewer's own code spans, found as the headline finds them, and not the quote check's counted list, which leaves out a quote it cannot check (a lone `0`) that the reviewer still gave.
+        preg_match_all('/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/s', $this->text ?? '', $spans);
+
+        return $spans[2];
+    }
+
     public function goesOnAfterItsHeadline(): bool
     {
         $headline = $this->headline();
