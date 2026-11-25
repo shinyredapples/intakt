@@ -44,7 +44,7 @@ Release names are matched with their letter case: `Release/1.0` is not a release
 
 ### The local forge
 
-`Plugin/LocalGitForge/Infrastructure/LocalForgeBranches` implements it for a `LocalRepository` (path and base branch). It runs git as `LocalGitForge` does: through `HardenedGit`, with an argument list and a 60-second timeout; a NUL byte in an argument, a git that does not start and a repository whose `info/attributes` exists are a `ForgeReadFailed` (see [Forge contract](forge-contract.md) and [Requirements](requirements.md#the-hardened-git-call)).
+`Plugin/LocalGitForge/Infrastructure/LocalForgeBranches` implements it for a `LocalRepository` (path and base branch). It runs git as `LocalGitForge` does: through `HardenedGit`, with an argument list and a 60-second timeout; a NUL byte in an argument, a git that does not start and a repository whose `info/attributes` exists are a `ForgeReadFailed`, and in a restore (`LocalBranchRestore`, which runs git the same way) a `ForgeWriteFailed` (see [Forge contract](forge-contract.md) and [Requirements](requirements.md#the-hardened-git-call)).
 
 The repository must keep its refs in files (`git rev-parse --show-ref-format` prints `files`); a reftable repository is a `ForgeReadFailed` for the listing and the delete, because both rely on the ref files.
 
