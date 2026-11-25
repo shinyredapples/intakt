@@ -27,6 +27,8 @@ final class EntrypointProcessesTest extends TestCase
     // The same 8 seconds as the entrypoint's grace period between SIGTERM and SIGKILL, because a stop that takes longer is cut off by Docker's 10 second stop timeout.
     private const int GRACE_SECONDS = 8;
 
+    private const string ZOMBIE = 'Z';
+
     private const string CADDYFILE_REJECTED = 'parsing caddyfile tokens: wrong argument count, at Caddyfile:19';
 
     private Process $entrypoint;
@@ -74,7 +76,7 @@ final class EntrypointProcessesTest extends TestCase
         foreach ($killed as $pid) {
             posix_kill($pid, self::KILL);
         }
-        usleep(200_000);
+        $this->waitUntilEnded($killed);
         $this->entrypoint->signal(self::CONTINUE);
 
         $after = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], $killed);
@@ -94,7 +96,7 @@ final class EntrypointProcessesTest extends TestCase
         foreach ($killedFirst as $pid) {
             posix_kill($pid, self::KILL);
         }
-        usleep(200_000);
+        $this->waitUntilEnded($killedFirst);
         $this->entrypoint->signal(self::CONTINUE);
         $this->waitForErrorOutput('starting it again', 2);
 
@@ -296,10 +298,38 @@ final class EntrypointProcessesTest extends TestCase
                 return $processes;
             }
 
-            usleep(200_000);
+            usleep(10_000);
         }
 
         self::fail('The entrypoint did not start every process: '.$this->entrypoint->getOutput().$this->entrypoint->getErrorOutput());
+    }
+
+    /**
+     * @param list<int> $pids
+     */
+    private function waitUntilEnded(array $pids): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && [] !== array_filter($pids, $this->hasNotEnded(...))) {
+            usleep(10_000);
+        }
+
+        self::assertSame([], array_values(array_filter($pids, $this->hasNotEnded(...))), 'A killed consumer still runs.');
+    }
+
+    // A child of the stopped entrypoint stays a zombie until the entrypoint waits for it, so a zombie has ended and its exit is waiting there.
+    private function hasNotEnded(int $pid): bool
+    {
+        $status = @file_get_contents('/proc/'.$pid.'/stat');
+
+        if (!is_string($status)) {
+            return false;
+        }
+
+        $end = strrpos($status, ')');
+
+        return false !== $end && self::ZOMBIE !== substr($status, $end + 2, 1);
     }
 
     /**
