@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\FlockStore;
 
@@ -93,9 +95,7 @@ final class RateLimitReadingsTest extends TestCase
 
     public function testARetryAfterGivenAsADateIsARateLimitUntilThatMoment(): void
     {
-        $moment = $this->clock->now()->modify('+300 seconds')->format('D, d M Y H:i:s \G\M\T');
-
-        $limited = $this->limitOf($this->process(), 403, ['retry-after' => [$moment]]);
+        $limited = $this->limitOf($this->process(), 403, ['retry-after' => [$this->clock->now()->modify('+5 minutes')->setTimezone(new DateTimeZone('UTC'))->format('D, d M Y H:i:s \G\M\T')]]);
 
         self::assertSame($this->clock->now()->getTimestamp() + 300, $limited->resetsAt->getTimestamp());
     }
@@ -225,8 +225,8 @@ final class RateLimitReadingsTest extends TestCase
     {
         $this->directory = sys_get_temp_dir().'/intakt-rate-limits-'.bin2hex(random_bytes(4));
         mkdir($this->directory);
-        // Starts at the system time, because the shared filesystem cache expires an entry by the system time and a fixed moment would expire every reading once it is past.
-        $this->clock = new MockClock('now', 'UTC');
+        // The files expire on the wall clock, which no test clock reaches, so the test clock starts at the wall clock's current second.
+        $this->clock = new MockClock('@'.new NativeClock()->now()->getTimestamp());
     }
 
     protected function tearDown(): void
