@@ -267,6 +267,27 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("## Evidence\n<pre>\ncode\n</pre>\n\n".self::LINES, $body);
     }
 
+    public function testAnOpenScriptBlockWithAnAttributeIsClosedWithItsOwnEndTagBeforeTheResultsAreAdded(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n<script type=\"text/plain\">\nExample.");
+
+        self::assertSame("## Evidence\n<script type=\"text/plain\">\nExample.\n</script>\n\n".self::LINES, $body);
+    }
+
+    public function testAnOpenStyleBlockIsClosedWithItsOwnEndTagBeforeTheResultsAreAdded(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n<style>\nExample.");
+
+        self::assertSame("## Evidence\n<style>\nExample.\n</style>\n\n".self::LINES, $body);
+    }
+
+    public function testAnOpenUppercaseTextareaBlockOutsideTheEvidenceSectionIsClosedWithItsOwnEndTagBeforeTheResultsAreAdded(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Text.\n\n<TEXTAREA>\nExample.");
+
+        self::assertSame("Text.\n\n<TEXTAREA>\nExample.\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
     public function testAnOpenProcessingInstructionAtTheEndIsClosedBeforeTheResultsAreAdded(): void
     {
         $body = new RegressionEvidence($this->runs())->addedTo('<?php');

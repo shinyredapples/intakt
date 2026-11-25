@@ -10,14 +10,6 @@ final readonly class ReadableLines
     private const string BLOCK_TAGS = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
     private const string ATTRIBUTE = '\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"\'=<>`]+|\'[^\']*\'|"[^"]*"))?';
     private const string BLANK = 'blank';
-    // The text that ends a block of kinds 1 to 5, keyed by its end pattern, so a block left open at the end can be closed.
-    private const array CLOSERS = [
-        '#</(?:pre|script|style|textarea)>#i' => '</pre>',
-        '/-->/' => '-->',
-        '/\?>/' => '?>',
-        '/>/' => '>',
-        '/\]\]>/' => ']]>',
-    ];
 
     // The closing text of a block left open is returned because the caller must add its lines outside that block, so they render.
     /**
@@ -38,13 +30,13 @@ final readonly class ReadableLines
             }
         }
 
-        return [$headings, $state['fence'] ?? (null === $state['html'] ? null : (self::CLOSERS[$state['html']] ?? null))];
+        return [$headings, $state['fence'] ?? $state['html'][1] ?? null];
     }
 
     /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
      *
-     * @return array{0: array{fence: ?string, html: ?string, paragraph: ?array{int, string}}, 1: ?array{int, int, string}}
+     * @return array{0: array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}, 1: ?array{int, int, string}}
      */
     private function step(string $line, int $number, array $state): array
     {
@@ -78,13 +70,14 @@ final readonly class ReadableLines
     }
 
     /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
      *
-     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}
      */
     private function htmlAfter(string $line, array $state): array
     {
-        $ends = self::BLANK === $state['html'] ? $this->blank($line) : 1 === preg_match($state['html'] ?? '', $line);
+        $end = $state['html'][0] ?? self::BLANK;
+        $ends = self::BLANK === $end ? $this->blank($line) : 1 === preg_match($end, $line);
 
         return $this->withParagraph($state, null, $ends ? null : $state['html']);
     }
@@ -96,20 +89,21 @@ final readonly class ReadableLines
     }
 
     /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
-     * @param ?array{int, string}                                                  $paragraph
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
+     * @param ?array{int, string}                                                                  $paragraph
+     * @param ?array{string, ?string}                                                              $html
      *
-     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}
      */
-    private function withParagraph(array $state, ?array $paragraph, ?string $html = null): array
+    private function withParagraph(array $state, ?array $paragraph, ?array $html = null): array
     {
         return ['fence' => $state['fence'], 'html' => $html, 'paragraph' => $paragraph];
     }
 
     /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
      *
-     * @return array{fence: ?string, html: ?string, paragraph: ?array{int, string}}
+     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}
      */
     private function continued(array $state, string $line): array
     {
@@ -123,9 +117,9 @@ final readonly class ReadableLines
     }
 
     /**
-     * @param array{fence: ?string, html: ?string, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
      *
-     * @return array{0: array{fence: ?string, html: ?string, paragraph: ?array{int, string}}, 1: ?array{int, int, string}}
+     * @return array{0: array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}, 1: ?array{int, int, string}}
      */
     private function blockAt(string $line, int $number, array $state): array
     {
@@ -190,19 +184,25 @@ final readonly class ReadableLines
         return 1 === preg_match('/^ {0,3}-+[ \t]*$/', $line) ? 2 : null;
     }
 
-    // Kinds 6 and 7 end at a blank line, which is not part of the block, so the pattern for them is the marker word.
+    // The end pattern comes with the text that closes a block left open; kinds 6 and 7 end at a blank line, which is not part of the block, so they have the marker word and no closing text.
     /**
      * @param ?array{int, string} $paragraph
+     *
+     * @return ?array{string, ?string}
      */
-    private function htmlEnd(string $line, ?array $paragraph): ?string
+    private function htmlEnd(string $line, ?array $paragraph): ?array
     {
+        // Any of the four end tags ends the Markdown block, but the HTML element stays open until its own end tag, so the opening name is kept for the closing text.
+        if (1 === preg_match('#^ {0,3}<(pre|script|style|textarea)(?:[ \t>]|$)#i', $line, $opened)) {
+            return ['#</(?:pre|script|style|textarea)>#i', '</'.strtolower($opened[1]).'>'];
+        }
+
         $kinds = [
-            '#^ {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)#i' => '#</(?:pre|script|style|textarea)>#i',
-            '/^ {0,3}<!--/' => '/-->/',
-            '/^ {0,3}<\?/' => '/\?>/',
-            '/^ {0,3}<![A-Za-z]/' => '/>/',
-            '/^ {0,3}<!\[CDATA\[/' => '/\]\]>/',
-            '#^ {0,3}</?(?:'.self::BLOCK_TAGS.')(?:[ \t]|/?>|$)#i' => self::BLANK,
+            '/^ {0,3}<!--/' => ['/-->/', '-->'],
+            '/^ {0,3}<\?/' => ['/\?>/', '?>'],
+            '/^ {0,3}<![A-Za-z]/' => ['/>/', '>'],
+            '/^ {0,3}<!\[CDATA\[/' => ['/\]\]>/', ']]>'],
+            '#^ {0,3}</?(?:'.self::BLOCK_TAGS.')(?:[ \t]|/?>|$)#i' => [self::BLANK, null],
         ];
 
         foreach ($kinds as $start => $end) {
@@ -212,6 +212,6 @@ final readonly class ReadableLines
         }
 
         // A lone tag cannot interrupt a paragraph, because it is then inline HTML of that paragraph.
-        return null === $paragraph && 1 === preg_match('#^ {0,3}(?:<[A-Za-z][A-Za-z0-9-]*(?:'.self::ATTRIBUTE.')*\s*/?>|</[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*$#', $line) ? self::BLANK : null;
+        return null === $paragraph && 1 === preg_match('#^ {0,3}(?:<[A-Za-z][A-Za-z0-9-]*(?:'.self::ATTRIBUTE.')*\s*/?>|</[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*$#', $line) ? [self::BLANK, null] : null;
     }
 }
