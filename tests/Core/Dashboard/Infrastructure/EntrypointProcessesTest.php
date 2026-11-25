@@ -243,19 +243,6 @@ final class EntrypointProcessesTest extends TestCase
         new Filesystem()->remove($this->directory);
     }
 
-    // Only a running process whose environment names this test's folder, because a saved PID of a child that ended may already name an unrelated process.
-    /**
-     * @param list<int> $pids
-     */
-    private function killStandInsStillRunning(array $pids): void
-    {
-        foreach ($pids as $pid) {
-            if ($this->hasNotEnded($pid) && str_contains((string) @file_get_contents('/proc/'.$pid.'/environ'), $this->directory)) {
-                posix_kill($pid, self::KILL);
-            }
-        }
-    }
-
     private function stopTheEntrypoint(): void
     {
         $pid = $this->entrypoint->getPid();
@@ -386,6 +373,19 @@ final class EntrypointProcessesTest extends TestCase
         $end = strrpos($status, ')');
 
         return false !== $end && self::ZOMBIE !== substr($status, $end + 2, 1);
+    }
+
+    // Only a running process whose environment names this test's folder, because a saved PID of a child that ended may already name an unrelated process.
+    /**
+     * @param list<int> $pids
+     */
+    private function killStandInsStillRunning(array $pids): void
+    {
+        foreach ($pids as $pid) {
+            if ($this->hasNotEnded($pid) && str_contains((string) @file_get_contents('/proc/'.$pid.'/environ'), $this->directory)) {
+                posix_kill($pid, self::KILL);
+            }
+        }
     }
 
     /**

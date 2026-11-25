@@ -152,11 +152,6 @@ final class GateChildTreeTest extends TestCase
         return 'touch('.var_export($this->started(), true).'); '.$before.'file_put_contents('.$writing.', (string) posix_getpgrp()); rename('.$writing.', '.var_export($this->group, true).'); '.$then.' sleep(10); file_put_contents('.var_export($this->marker, true).', "still running");';
     }
 
-    private function waitingFor(string $file): string
-    {
-        return '$deadline = hrtime(true) + '.self::SECONDS_TO_WAIT.' * 1000000000; while (!is_file('.var_export($file, true).') && hrtime(true) < $deadline) { usleep(1000); } ';
-    }
-
     private function started(): string
     {
         return $this->marker.'-started';
@@ -165,6 +160,11 @@ final class GateChildTreeTest extends TestCase
     private function stopReceived(): string
     {
         return $this->marker.'-stop-received';
+    }
+
+    private function waitingFor(string $file): string
+    {
+        return '$deadline = hrtime(true) + '.self::SECONDS_TO_WAIT.' * 1000000000; while (!is_file('.var_export($file, true).') && hrtime(true) < $deadline) { usleep(1000); } ';
     }
 
     /**
