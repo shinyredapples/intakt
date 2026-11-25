@@ -38,6 +38,7 @@ use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\VerdictForTheLoop;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Core\Review\UseCase\RunReviewRound\MirrorOpenedRoundStatusHandler;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
@@ -219,16 +220,19 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame([['status:in-review'], ['status:waiting-on-you'], [], 1], [$judged, $this->status->labels, $this->status->comments, count($commands->started)]);
     }
 
-    // Evidence E1 of #3945: the real publication handler over a scripted GitHub moves the label on itself, with no pass in between, so the owner's live check after merge has a recorded counterpart.
+    // Evidence E1 of #3945: the queued RoundOpened and the real publication handler over a scripted GitHub move the label on themselves, with no watcher pass at all, so the owner's live check after merge has a recorded counterpart.
     public function testAPullRequestsLabelsBeforeARoundAfterQueueingAndAfterThePublicationHandlerPublishedTheStoredRoundFollowTheRound(): void
     {
         $this->status->applied('review:full', RecordedTrust::WRITER);
         $fixture = new RoundFixture(self::getContainer());
-        $this->latest = new StoredLatestRoundStatus($fixture->transactions());
-        $roundId = $this->judgedRound($fixture);
         $before = $this->status->labels;
-        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+        $roundId = $fixture->startFor(self::GREEN_PULL, $fixture->bus, 2);
+        $opened = new MirrorOpenedRoundStatusHandler($fixture->transactions(), $this->recordedMirror($fixture));
+        foreach ($fixture->bus->announced as $announced) {
+            $opened($announced);
+        }
         $queued = $this->status->labels;
+        $this->judge($fixture);
 
         $this->publicationHandler($fixture)(new PublishVerdict($roundId));
 
@@ -459,24 +463,34 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $protected = self::createStub(ProtectedHeads::class);
         $protected->method('of')->willReturn(ProtectedChanges::touching(new Paths()));
         $locks = new LockFactory(new InMemoryStore());
-        $mirror = new RoundStatusMirror(new StoredLatestRoundStatus($fixture->transactions()), $locks, new NullLogger(), $this->statusLabels());
+        $mirror = $this->recordedMirror($fixture);
         $verdicts = new VerdictForTheLoop(new StoredVerdicts(self::getContainer()->get('serializer.stored')), $fixture->findingStore(), new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads(), new ConfiguredPrices([])), new ChangeDecision());
 
         return new PublishVerdictHandler($fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $handed, $verdicts, new OwnerAsks($handed, $protected, $fixture->ledger()), new ScriptedGitHub()->forge(), new ChangePublications($locks), $mirror, new NullLogger());
     }
 
+    private function recordedMirror(RoundFixture $fixture): RoundStatusMirror
+    {
+        return new RoundStatusMirror(new StoredLatestRoundStatus($fixture->transactions()), new LockFactory(new InMemoryStore()), new NullLogger(), $this->statusLabels());
+    }
+
     private function judgedRound(RoundFixture $fixture): string
     {
-        $vendor = new VerdictPerRole([]);
         $roundId = $fixture->startFor(self::GREEN_PULL, $fixture->bus, 2);
+        $this->judge($fixture);
+
+        return $roundId;
+    }
+
+    private function judge(RoundFixture $fixture): void
+    {
+        $vendor = new VerdictPerRole([]);
         foreach ($fixture->bus->messages as $message) {
             $fixture->deliver($message, $vendor);
         }
         foreach ($fixture->judgings() as $judging) {
             $fixture->judge($vendor)($judging);
         }
-
-        return $roundId;
     }
 
     private function fixture(string $name): string
