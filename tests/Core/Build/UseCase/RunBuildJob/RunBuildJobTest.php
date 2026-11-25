@@ -87,7 +87,7 @@ final class RunBuildJobTest extends TestCase
 
     private mixed $toolTimeLimit = 1500;
 
-    /** @var array{mixed, mixed, mixed, mixed} */
+    /** @var array<int, mixed> */
     private array $limits = [2_000_000, 900, 6_000_000, 12_000_000];
 
     #[TestWith([0, 'allowance'])]

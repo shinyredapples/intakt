@@ -110,7 +110,7 @@ final class BuildJobOutcomesTest extends TestCase
         return new BuildProgress($tokens, $taskTokens ?? $tokens, $content, [], false);
     }
 
-    // What the job runner returns for a session the script cut: it still bundled the commits and the pull request text.
+    // An ordinary exit with the bundle, because the script still bundles the commits and the text of a session it cut.
     private function cutSession(): JobResult
     {
         return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunBuildJob::BUNDLE => 'BUNDLE', RunBuildJob::PULL_REQUEST_TEXT => "feat: x\n", RunBuildJob::LOG => "log\n"]));
