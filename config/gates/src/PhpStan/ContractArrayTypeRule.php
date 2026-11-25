@@ -11,6 +11,7 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Analyser\Scope;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionClass;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
+use PHPStan\BetterReflection\Reflection\Adapter\ReflectionParameter;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionProperty;
 use PHPStan\Node\InClassNode;
 use PHPStan\PhpDoc\Tag\ParamTag;
@@ -62,7 +63,7 @@ final readonly class ContractArrayTypeRule implements Rule
             $findings = [...$findings, ...$this->findingsOf($this->signatureTypes($method, $class, $skipped), $this->lineOf($method, $declaration))];
         }
 
-        return [...$findings, ...$this->promotedInputFindings($promoted, $class, $declaration), ...$this->propertyFindings($promoted, $class, $declaration)];
+        return [...$findings, ...$this->promotedInputFindings($class, $declaration),...$this->propertyFindings($promoted, $class, $declaration)];
     }
 
     private function isContract(string $file): bool
@@ -100,7 +101,7 @@ final readonly class ContractArrayTypeRule implements Rule
         return array_values(array_filter(array_map(static fn (ReflectionMethod $method): string => $method->getName(), $exposed), fn (string $method): bool => !$this->isFixedByBuiltInInterface($method, $class)));
     }
 
-    // PHP itself declares such a method's signature (JsonSerializable::jsonSerialize() returns array), so a contract cannot type it otherwise
+    // PHP itself declares such a method's signature (JsonSerializable::jsonSerialize() returns mixed), so a contract cannot narrow it to a typed object
     private function isFixedByBuiltInInterface(string $method, ClassReflection $class): bool
     {
         return array_any($class->getInterfaces(), static fn (ClassReflection $interface): bool => $interface->isBuiltin() && $interface->hasNativeMethod($method));
@@ -192,42 +193,45 @@ final readonly class ContractArrayTypeRule implements Rule
         return RuleErrorBuilder::message($what.self::HOW_TO_COMPLY)->identifier('intakt.contractArrayType')->line($line)->build();
     }
 
-    // a public constructor may take a promoted property in another shape (@param) than it keeps (@var), and callers pass the @param shape; a private one is reached only through the class's own typed factories
+    // callers of a public constructor pass a promoted parameter in its @param shape, whatever the property keeps (@var) and whatever its visibility; a private constructor is reached only through the class's own typed factories
     /**
-     * @param list<string> $promoted
-     *
      * @return list<IdentifierRuleError>
      */
-    private function promotedInputFindings(array $promoted, ClassReflection $class, ClassLike $declaration): array
+    private function promotedInputFindings(ClassReflection $class, ClassLike $declaration): array
     {
-        $tags = $this->promotedParamTagsOf($class);
+        $constructor = $class->getNativeReflection()->getConstructor();
+
+        if (!$constructor instanceof ReflectionMethod || !$constructor->isPublic() || !$this->isJudgedHere($constructor->getDeclaringClass(), $class)) {
+            return [];
+        }
+
         $findings = [];
 
-        foreach (array_intersect_key($tags, array_flip($promoted)) as $name => $input) {
+        foreach ($this->promotedParamTagsOf($constructor) as $name => $input) {
             if (!$input->equals($class->getNativeProperty($name)->getReadableType()) && $this->isRefused($input)) {
-                $findings[] = $this->finding(sprintf('Method %s::__construct() parameter $%s is typed %s', $class->getDisplayName(), $name, $this->described($input)), $this->lineOf('__construct', $declaration));
+                $findings[] = $this->finding(sprintf('Method %s::%s() parameter $%s is typed %s', $class->getDisplayName(), $constructor->getName(), $name, $this->described($input)), $this->lineOf($constructor->getName(), $declaration));
             }
         }
 
         return $findings;
     }
 
+    // the PHPDoc is resolved under the constructor's declared name, since PHP accepts it in any case
     /**
      * @return array<string, Type>
      */
-    private function promotedParamTagsOf(ClassReflection $class): array
+    private function promotedParamTagsOf(ReflectionMethod $constructor): array
     {
-        $constructor = $class->getNativeReflection()->getConstructor();
-
-        if (!$constructor instanceof ReflectionMethod || !$constructor->isPublic() || !is_string($comment = $constructor->getDocComment()) || !is_string($file = $constructor->getFileName())) {
+        if (!is_string($comment = $constructor->getDocComment()) || !is_string($file = $constructor->getFileName())) {
             return [];
         }
 
         $declaring = $constructor->getBetterReflection()->getDeclaringClass();
         $trait = $declaring->isTrait() ? $declaring->getName() : null;
-        $tags = $this->typeMapper->getResolvedPhpDoc($file, $constructor->getDeclaringClass()->getName(), $trait, '__construct', $comment)->getParamTags();
+        $tags = $this->typeMapper->getResolvedPhpDoc($file, $constructor->getDeclaringClass()->getName(), $trait, $constructor->getName(), $comment)->getParamTags();
+        $promoted = array_map(static fn (ReflectionParameter $parameter): string => $parameter->getName(), array_filter($constructor->getParameters(), static fn (ReflectionParameter $parameter): bool => $parameter->isPromoted()));
 
-        return array_map(static fn (ParamTag $tag): Type => $tag->getType(), $tags);
+        return array_map(static fn (ParamTag $tag): Type => $tag->getType(), array_intersect_key($tags, array_flip($promoted)));
     }
 
     /**

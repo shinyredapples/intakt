@@ -119,6 +119,16 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('contract-array-private-normalized');
     }
 
+    public function testADifferingParameterOfAPublicConstructorFillingAPrivatePropertyFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('contract-array-private-promoted-input', 'src/Core/Sample/Contract/Kept.php:14 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Kept::__construct() parameter $items is typed array<int, stdClass>');
+    }
+
+    public function testAConstructorSpelledInUpperCaseIsJudgedLikeALowerCaseOne(): void
+    {
+        $this->assertRuleRejects('contract-array-upper-case-constructor', 'src/Core/Sample/Contract/Shouted.php:14 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Shouted::__CONSTRUCT() parameter $items is typed array<int, stdClass>');
+    }
+
     public function testAPromotedPublicPropertyATraitBringsFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('contract-array-trait-promoted', 'src/Core/Sample/Contract/Carried.php:18 intakt.contractArrayType Property Intakt\Core\Sample\Contract\Carried::$items is typed array<int, DateTimeImmutable>');

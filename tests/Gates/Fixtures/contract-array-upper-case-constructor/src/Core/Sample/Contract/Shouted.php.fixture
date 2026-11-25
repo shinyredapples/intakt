@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use stdClass;
+
+final class Shouted
+{
+    /**
+     * @param array<int, stdClass> $items
+     */
+    public function __CONSTRUCT(
+        /** @var list<stdClass> */
+        public array $items,
+    ) {
+        $this->items = array_values($items);
+    }
+}

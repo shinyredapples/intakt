@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use stdClass;
+
+final readonly class Kept
+{
+    /**
+     * @param array<int, stdClass> $items
+     */
+    public function __construct(
+        /** @var list<stdClass> */
+        private array $items,
+    ) {
+    }
+
+    /**
+     * @return list<stdClass>
+     */
+    public function items(): array
+    {
+        return $this->items;
+    }
+}
