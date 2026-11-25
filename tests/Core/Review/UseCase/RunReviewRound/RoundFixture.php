@@ -374,6 +374,12 @@ final readonly class RoundFixture
         return $this->rounds($this->entities);
     }
 
+    // On its own connection and entity manager, because a round another messenger:consume process writes is not in this fixture's identity map.
+    public function anotherWorkersRounds(): ReviewRounds
+    {
+        return $this->rounds(new EntityManager(DriverManager::getConnection($this->entities->getConnection()->getParams()), $this->entities->getConfiguration()), new InMemoryLedger());
+    }
+
     public function transactionsOn(EntityManagerInterface $entities): ReviewRounds
     {
         return $this->rounds($entities);
