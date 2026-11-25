@@ -60,9 +60,8 @@ final class EmptyDatabase
         $connection->executeStatement('DROP TABLE IF EXISTS messenger_messages');
     }
 
+    // user_version holds a signed 32-bit number and starts at 0, so the hash is cut to 31 bits and never 0.
     /**
-     * user_version holds a signed 32-bit number and starts at 0, so the hash is cut to 31 bits and never 0.
-     *
      * @param list<string> $mapping
      */
     private static function fingerprint(array $mapping, Connection $connection): int
