@@ -76,6 +76,11 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+    Intakt\Plugin\GitHubForge\Contract\ForgeConnectionCheck:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
     Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'

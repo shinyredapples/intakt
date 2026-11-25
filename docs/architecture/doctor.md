@@ -4,10 +4,18 @@
 
 - Same checks, same code (decision D1): it reads `Contract/ServerStatus::read()` once and judges the reading with `Contract/InfrastructureChecks::of()`, whose hub check is the shared `Contract/HubVerdict`. It has no judgement of its own; the checks and their fix texts are described in [Server status](server-status.md).
 - Read-only (D3): the reading is three `GET` requests to FrankenPHP's admin API (`/frankenphp/threads`, `/metrics`, `/mercure/health/ready`). It writes nothing, dispatches no message, starts nothing and calls no model.
-- The checks, in this order, each with its display name: `worker threads` (`InfrastructureChecks->threads`), `server metrics` (`->metrics`) and `Mercure hub` (`->hub`).
+- The checks, in this order, each with its display name: `worker threads` (`InfrastructureChecks->threads`), `server metrics` (`->metrics`), `Mercure hub` (`->hub`) and `forge` (`GitHubForge/Contract/ForgeConnectionCheck::run()`, #3866, part 3 of #3826).
 - Output (D4): one line per check, `pass: <name>`, or `fail: <name>: <problem>; fix: <fix>`. Every line goes through one helper that turns each control character (`\p{Cc}`, so line breaks, tabs, escape and C1 codes) and each Unicode line or paragraph separator into a space, after `mb_scrub()` replaces bytes that are not UTF-8 with `?`. Lines are written raw, so a reason that looks like console markup is printed as it is.
 - Exit code: 0 only when every check passes, otherwise 1.
 - A piece that is down (D5): each admin API call has the 2-second timeout and limit of `Infrastructure/AdminApi`, so a stopped or hanging web server makes each check fail with `<source> down (<path> did not answer)` within a few seconds instead of hanging. A `FRANKENPHP_ADMIN_URL` that `AdminApi` refuses (not plain `http` on `localhost`, `127.0.0.1` or `[::1]`) sends nothing; every check then fails as `cannot run (<message>)` with the fix `set FRANKENPHP_ADMIN_URL to plain http on localhost, for example http://localhost:2019`.
+
+The forge check is one class that the board can call as well (D1). Its `Contract/ForgeConnectionVerdict` is a pass or a problem with a fix. It reads the App installation back with `InstallationReadBack` and compares it with `GITHUB_APP_PERMISSIONS` and `GITHUB_APP_REPOSITORIES`. It is read-only (D3): it builds its own rate-limit readings over an in-memory cache and lock store and its own installation token, so the live readings and pauses stay untouched, and it writes nothing. Its GitHub client has a 5-second timeout, a 15-second limit and no retries (D5). Failure texts (the `<problem>` part; the fix follows `fix:`):
+
+- Half-cleared App: `GITHUB_APP_ID is empty while GITHUB_APP_INSTALLATION_ID or GITHUB_APP_PRIVATE_KEY is still set`. An empty App ID fails when either the installation ID or the private key is still set; with all three empty (the demo) the check passes without a request. An App ID with an empty installation ID fails as `GITHUB_APP_INSTALLATION_ID is empty`.
+- Unreadable settings: `the App settings cannot be read (<message>)` when `GITHUB_APP_PERMISSIONS` or `GITHUB_APP_REPOSITORIES` is not `name:level` pairs or `owner/repo` names. No request is sent.
+- Local key error: `the private key cannot sign (it cannot be read or is not an RSA key)`. The JWT is signed before any request, so this needs no GitHub.
+- Installation mismatch: `the installation does not match the configuration (<differences>)`, naming the permissions and repositories that differ.
+- Cannot run: `cannot run (<reason>)` when GitHub refuses the read-back, does not answer in time, answers in an unusable shape or is rate limited. It counts as a failure.
 
 A stopped web server prints:
 
@@ -17,4 +25,4 @@ fail: server metrics: server metrics down (/metrics did not answer); fix: check 
 fail: Mercure hub: hub down (/mercure/health/ready did not answer); fix: check that FrankenPHP runs with the Caddyfile's mercure block and that FRANKENPHP_ADMIN_URL points at its admin API
 ```
 
-Tests: `tests/Core/Server/DoctorCommandTest` replays the recorded admin API answers (`RecordedAdminApi`): a healthy install, each check failing with its fix text, a stopped web server, a refused URL, a reason with line breaks and escape codes, bytes that are not UTF-8, and a reason that looks like console markup.
+Tests: `tests/Plugin/GitHubForge/ForgeConnectionCheckTest` covers each forge failure text; `tests/Core/Server/DoctorCommandTest` replays the recorded admin API answers (`RecordedAdminApi`): a healthy install, each check failing with its fix text, a stopped web server, a refused URL, a reason with line breaks and escape codes, bytes that are not UTF-8, and a reason that looks like console markup.
