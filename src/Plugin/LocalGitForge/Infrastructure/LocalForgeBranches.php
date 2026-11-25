@@ -28,7 +28,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     private const int NOT_AN_ANCESTOR = 1;
     private const int NOT_SYMBOLIC = 1;
     private const string BEING_ADDED = 'locked initializing';
-    private const string LISTING_FORMAT ='%(refname)%00%(objectname)%00%(objecttype)%00%(symref)';
+    private const string LISTING_FORMAT = '%(refname)%00%(objectname)%00%(objecttype)%00%(symref)';
 
     public function __construct(
         private LocalRepository $repository,
