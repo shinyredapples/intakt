@@ -32,9 +32,8 @@ final class EmptyDatabase
         $manager->clear();
         $metadata = $manager->getMetadataFactory()->getAllMetadata();
         $connection = $container->get('doctrine.dbal.default_connection');
-        assert($connection instanceof Connection);
 
-        $present = $connection->fetchFirstColumn("SELECT name FROM sqlite_master WHERE type = 'table'");
+        $present = self::names($connection, 'table');
         $mapped = array_map(static fn ($class): string => $class->getTableName(), $metadata);
         if ([] !== array_diff($mapped, $present)) {
             self::in($container);
@@ -44,7 +43,7 @@ final class EmptyDatabase
         }
 
         // A migration test leaves the append-only triggers of the ledger behind; a schema the tool creates has none, so they go to make this reset equal to one.
-        foreach ($connection->fetchFirstColumn("SELECT name FROM sqlite_master WHERE type = 'trigger'") as $trigger) {
+        foreach (self::names($connection, 'trigger') as $trigger) {
             $connection->executeStatement(sprintf('DROP TRIGGER "%s"', $trigger));
         }
 
@@ -56,5 +55,16 @@ final class EmptyDatabase
         $connection->executeStatement('DROP TABLE IF EXISTS reviewer_conversation');
         $connection->executeStatement('DROP TABLE IF EXISTS messenger_messages');
         $connection->executeStatement('PRAGMA foreign_keys = ON');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function names(Connection $connection, string $type): array
+    {
+        /** @var list<string> $names */
+        $names = $connection->fetchFirstColumn('SELECT name FROM sqlite_master WHERE type = ?', [$type]);
+
+        return $names;
     }
 }

@@ -37,7 +37,7 @@ final class EmptyDatabaseTest extends KernelTestCase
         EmptyDatabase::rowsIn(self::getContainer());
         $this->writeCooldown();
 
-        self::assertSame(1, (int) $this->connection()->fetchOne('SELECT MIN(position) FROM budget_account_cooldown'));
+        self::assertEquals(1, $this->connection()->fetchOne('SELECT MIN(position) FROM budget_account_cooldown'));
     }
 
     public function testAResetOnADatabaseWithoutTablesCreatesTheMappedSchema(): void
@@ -84,7 +84,10 @@ final class EmptyDatabaseTest extends KernelTestCase
 
     private function rows(): int
     {
-        return (int) $this->connection()->fetchOne('SELECT COUNT(*) FROM budget_account_cooldown');
+        $count = $this->connection()->fetchOne('SELECT COUNT(*) FROM budget_account_cooldown');
+        self::assertIsNumeric($count);
+
+        return (int) $count;
     }
 
     /**
@@ -92,7 +95,10 @@ final class EmptyDatabaseTest extends KernelTestCase
      */
     private function tables(): array
     {
-        return $this->connection()->fetchFirstColumn("SELECT name FROM sqlite_master WHERE type = 'table'");
+        /** @var list<string> $tables */
+        $tables = $this->connection()->fetchFirstColumn("SELECT name FROM sqlite_master WHERE type = 'table'");
+
+        return $tables;
     }
 
     private function connection(): Connection
