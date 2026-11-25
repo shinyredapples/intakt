@@ -82,7 +82,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `bash`, `git`, `mktemp`, `rm` | `image-needed.sh` (the `image` job, and the `journeys` job's decision step, which also runs `git diff --quiet` on the journeys' test code) | deciding from the pull request's diff whether the app image is needed | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `upgrade-needed.sh` (the `image` job) | deciding from the pull request's diff whether the upgrade check is needed | yes |
 
-Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
+Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp`, `env` and `composer` (above); it runs `composer install` without `GH_TOKEN` in its environment, so only the command it then runs gets the token.
 
 ## To smoke-test the container image
 
