@@ -45,15 +45,9 @@ final readonly class RegressionEvidence
         $fence = null;
 
         foreach ($lines as $number => $line) {
-            if (null !== $fence) {
-                $fence = $this->closes($line, $fence) ? null : $fence;
-
-                continue;
-            }
-
-            $fence = $this->opening($line);
-
-            $text = null === $fence ? $this->headingTextOf($line) : null;
+            $inside = null !== $fence;
+            $fence = $this->fenceAfter($line, $fence);
+            $text = $inside || null !== $fence ? null : $this->headingTextOf($line);
 
             if (null !== $text) {
                 $headings[$number] = $text;
@@ -63,15 +57,13 @@ final readonly class RegressionEvidence
         return [$headings, $fence];
     }
 
-    private function headingTextOf(string $line): ?string
+    private function fenceAfter(string $line, ?string $fence): ?string
     {
-        return 1 === preg_match('/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? ($heading[1] ?? '') : null;
-    }
+        if (null === $fence) {
+            return $this->opening($line);
+        }
 
-    // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
-    private function closes(string $line, string $fence): bool
-    {
-        return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
+        return $this->closes($line, $fence) ? null : $fence;
     }
 
     private function opening(string $line): ?string
@@ -82,6 +74,17 @@ final readonly class RegressionEvidence
 
         // A backtick fence's info string holds no backtick, because such a line is an inline code span.
         return '`' === $match[1][0] && str_contains($match[2], '`') ? null : $match[1];
+    }
+
+    // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
+    private function closes(string $line, string $fence): bool
+    {
+        return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
+    }
+
+    private function headingTextOf(string $line): ?string
+    {
+        return 1 === preg_match('/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? ($heading[1] ?? '') : null;
     }
 
     /**
@@ -98,14 +101,6 @@ final readonly class RegressionEvidence
         return null;
     }
 
-
-
-    private function joined(string $head, string $added, string $rest): string
-    {
-        $text = '' === $head ? $added : $head."\n\n".$added;
-
-        return '' === trim($rest) ? $text : $text."\n\n".ltrim($rest, "\n");
-    }
     private function resultLines(): string
     {
         return implode("\n", [
@@ -113,6 +108,13 @@ final readonly class RegressionEvidence
             '- On the base: '.$this->resultText($this->runs->base),
             '- On the head: '.$this->resultText($this->runs->head),
         ]);
+    }
+
+    private function joined(string $head, string $added, string $rest): string
+    {
+        $text = '' === $head ? $added : $head."\n\n".$added;
+
+        return '' === trim($rest) ? $text : $text."\n\n".ltrim($rest, "\n");
     }
 
     private function testsText(): string
