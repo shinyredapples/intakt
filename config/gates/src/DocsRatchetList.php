@@ -47,11 +47,6 @@ final readonly class DocsRatchetList
         return null === $paragraphs || null === $pages ? null : new self($paragraphs, $pages);
     }
 
-    public function isEmpty(): bool
-    {
-        return [] === $this->paragraphs && [] === $this->pages;
-    }
-
     public function paragraphCeiling(string $page, string $key): ?int
     {
         return $this->paragraphs[$page][$key] ?? null;

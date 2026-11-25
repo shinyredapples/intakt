@@ -33,10 +33,6 @@ final readonly class DocsGate implements Gate
             return GateResult::failedBecause($this->name(), DocsRatchetList::PATH.': malformed, expected '.DocsRatchetList::SHAPE.' with each page a path ending in .md and each count a positive whole number');
         }
 
-        if ($list->isEmpty()) {
-            return GateResult::failedBecause($this->name(), DocsRatchetList::PATH.': empty'.self::SHRINK_ONLY);
-        }
-
         return $this->checked($workspace, $list);
     }
 

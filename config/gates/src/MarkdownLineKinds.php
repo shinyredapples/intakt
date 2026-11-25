@@ -14,6 +14,9 @@ final readonly class MarkdownLineKinds
 
     public const string INDENTED_CODE = '/^(?: {4}| {0,3}\t)/';
 
+    // Because CommonMark 5.2 lets only an item with text, numbered 1 when ordered, interrupt a paragraph, other markers continue it.
+    private const string INTERRUPTING_ITEM = '/^[ \t]*(?:[-*+]|0{0,8}1[.)])[ \t]+\S/';
+
     public function __construct(private MarkdownListIndents $indents)
     {
     }
@@ -66,7 +69,7 @@ final readonly class MarkdownLineKinds
             $this->startsIndentedCode($content, $previous, $lists) => MarkdownLineKind::Code,
             1 === preg_match(self::HEADING, $content) => MarkdownLineKind::Heading,
             1 === preg_match(self::THEMATIC_BREAK, $content) => MarkdownLineKind::Break,
-            1 === preg_match(self::LIST_ITEM, $content) => $this->indents->opensWithCode($content) ? MarkdownLineKind::CodeItem : MarkdownLineKind::ListItem,
+            $this->startsListItem($content, $previous, $lists) => $this->indents->opensWithCode($content) ? MarkdownLineKind::CodeItem : MarkdownLineKind::ListItem,
             default => MarkdownLineKind::Prose,
         };
     }
@@ -79,6 +82,21 @@ final readonly class MarkdownLineKinds
         // CommonMark: indented code cannot interrupt a paragraph, and inside a list item it starts four columns past the item's content.
         return $this->indents->indent($content) >= $this->indents->innermost($lists) + 4
             && !in_array($previous, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true);
+    }
+
+    /**
+     * @param list<int> $lists
+     */
+    private function startsListItem(string $content, MarkdownLineKind $previous, array $lists): bool
+    {
+        if (1 !== preg_match(self::LIST_ITEM, $content)) {
+            return false;
+        }
+
+        // A marker left of the open item's content is the next item of a list, so it interrupts no paragraph.
+        return !in_array($previous, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true)
+            || $this->indents->indent($content) < $this->indents->innermost($lists)
+            || 1 === preg_match(self::INTERRUPTING_ITEM, $content);
     }
 
     private function continuesAParagraph(MarkdownLineKind $kind, MarkdownLineKind $previous): bool

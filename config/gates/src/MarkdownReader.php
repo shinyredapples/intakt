@@ -35,6 +35,11 @@ final readonly class MarkdownReader
             throw new MarkdownReadFailure('cannot read '.$path);
         }
 
+        // The word patterns match nothing in invalid UTF-8, so its paragraphs would count no words.
+        if (!mb_check_encoding($contents, 'UTF-8')) {
+            throw new MarkdownReadFailure($path.' is not valid UTF-8');
+        }
+
         $lines = explode("\n", $contents);
         $blanked = $this->codeBlocks->blanked($lines);
 

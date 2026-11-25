@@ -178,12 +178,41 @@ final class DocsGateTest extends SandboxTestCase
         self::assertSame(['ratchet/docs.json: missing; this list of oversized paragraphs and pages may only shrink, restore it from the target branch'], $sandbox->gateResult($this->gate())->findings);
     }
 
-    public function testEmptyingTheListFails(): void
+    public function testAnEmptyListPassesOnDocumentationWithinTheLimits(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('README.md', "Short documentation.\n");
+        $sandbox->write('ratchet/docs.json', '{"paragraphs": {}, "pages": {}}');
+
+        self::assertSame([], $sandbox->gateResult($this->gate())->findings);
+    }
+
+    public function testAnEmptyListFailsOnAnOversizedParagraph(): void
     {
         $sandbox = $this->listedTree();
         $sandbox->write('ratchet/docs.json', '{"paragraphs": {}, "pages": {}}');
 
-        self::assertSame(['ratchet/docs.json: empty; this list of oversized paragraphs and pages may only shrink, restore it from the target branch'], $sandbox->gateResult($this->gate())->findings);
+        $findings = $sandbox->gateResult($this->gate())->findings;
+
+        self::assertCount(1, $findings);
+        self::assertStringStartsWith(self::LISTED_PAGE.':', $findings[0]);
+        self::assertStringContainsString('paragraph of 90 words, over the limit of 80 words', $findings[0]);
+    }
+
+    public function testAWrappedLineThatStartsWithALaterNumberStaysInItsParagraph(): void
+    {
+        $sandbox = $this->listedTree();
+        $sandbox->write('README.md', $this->words(44, 'Words')." before\n2. ".$this->words(44, 'words')." after.\n");
+
+        self::assertSame(['README.md:1: paragraph of 91 words, over the limit of 80 words per paragraph; split it or cut words'], $sandbox->gateResult($this->gate())->findings);
+    }
+
+    public function testAPageThatIsNotValidUtf8Fails(): void
+    {
+        $sandbox = $this->listedTree();
+        $sandbox->write('README.md', $this->words(81, 'extra')."\xff\n");
+
+        self::assertSame(['README.md is not valid UTF-8'], $sandbox->gateResult($this->gate())->findings);
     }
 
     public function testANumericPageKeyMakesTheListMalformed(): void
