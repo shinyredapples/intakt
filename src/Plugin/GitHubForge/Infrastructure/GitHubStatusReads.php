@@ -105,7 +105,8 @@ final readonly class GitHubStatusReads
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of %s.', $status, $path));
         }
 
-        return array_map(static fn (mixed $entry): array => is_array($entry) && [] !== $entry ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path)), $this->entries($path, $body));
+        // A JSON object decodes to a non-empty array with string keys, so an empty array or a list is anything but an object.
+        return array_map(static fn (mixed $entry): array => is_array($entry) && [] !== $entry && !array_is_list($entry) ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path)), $this->entries($path, $body));
     }
 
     /**
