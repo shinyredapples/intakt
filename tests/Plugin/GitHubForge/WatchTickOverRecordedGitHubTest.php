@@ -16,6 +16,7 @@ use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -24,6 +25,7 @@ use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
+use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Core\Watcher\UseCase\AdmitHeads\AdmitHeads;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
@@ -51,6 +53,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
@@ -61,13 +64,18 @@ use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubChangeLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCiRuns;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubLabelWrites;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubWatchReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\OutvotedLabels;
+use Intakt\Plugin\GitHubForge\Infrastructure\TrustedPullRequestLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
@@ -95,9 +103,34 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 {
     private const string GREEN = '2222222222222222222222222222222222222222';
 
+    private const string GREEN_PULL = 'https://github.com/acme/widgets/pull/8';
+
     private EntityManagerInterface $entities;
 
     private string $firstHeadRuns = 'runs_in_progress.json';
+
+    private ?ChangeLabels $steering = null;
+
+    // Evidence E1 of #3878 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
+    public function testAPullRequestsTrustedSteeringLabelsReachTheQueuedRoundWithTheValueAppliedLast(): void
+    {
+        $pull = new RecordedPullRequestLabels('/repos/acme/widgets/issues/8', RecordedTrust::OWN_IDENTITY);
+        $pull->applied('review:full', RecordedTrust::WRITER);
+        $pull->applied('model:light', RecordedTrust::WRITER);
+        $pull->applied('model:strong', RecordedTrust::WRITER);
+        $pull->applied('model:standard', RecordedTrust::TRIAGE);
+        $this->steering = $this->changeLabelsOver($pull);
+        $commands = new RecordingCommandBus();
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+
+        $stored = $this->entities->getRepository(StartedRound::class)->findOneBy(['change' => self::GREEN_PULL]);
+        self::assertInstanceOf(StartedRound::class, $stored);
+        self::assertSame(
+            [['review:full', 'model:strong'], ['review:full', 'model:strong'], ['review:full', 'model:strong', 'model:standard'], ['Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`.']],
+            [[...$commands->started[0]->start->labels], [...$stored->labels()], $pull->labels, $pull->comments],
+        );
+    }
 
     public function testATickOverTwoRecordedPullRequestsRecordsOnePendingHeadAndQueuesOneRound(): void
     {
@@ -199,6 +232,20 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
+    // The real read of the labels over the recorded pull request, so the permission answer and the family rule decide what reaches the round; the permissions are the ones recorded for `acme/widget`, because the listing's fixtures name `acme/widgets`.
+    private function changeLabelsOver(RecordedPullRequestLabels $pull): GitHubChangeLabels
+    {
+        $identity = new RecordedTrust()->client();
+        $http = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => $pull->answers((string) parse_url($url, PHP_URL_PATH))
+            ? $pull->answer($method, (string) parse_url($url, PHP_URL_PATH), is_string($options['body'] ?? null) ? $options['body'] : '')
+            : $identity->request($method, str_replace('/repos/acme/widgets/', '/repos/acme/widget/', $url), $options), 'https://api.github.com');
+        $wiring = TrustChecks::wiring($http);
+        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
+        $outvoted = new OutvotedLabels(new GitHubLabelWrites($wiring->calls, $wiring->tokens), new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), new NullLogger());
+
+        return new GitHubChangeLabels(new TrustedPullRequestLabels($pull, $wiring->check, $repositories), $outvoted, new NullLogger());
+    }
+
     private function pushOf(string $branch, string $head): BranchPushRequest
     {
         return new BranchPushRequest('alpha', 'repo', 'origin', $branch, new AcceptedHandBack(null, str_repeat($head, 40), 0), new ChangeText('Title', 'E1'));
@@ -223,7 +270,12 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $installWide = new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $clock), $clock, $logger);
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
-        $starts = new RoundStarts($commands, $rounds, $ledger);
+        $steering = $this->steering;
+        if (null === $steering) {
+            $steering = self::createStub(ChangeLabels::class);
+            $steering->method('steeringOf')->willReturn(new Labels());
+        }
+        $starts = new RoundStarts($commands, $rounds, $ledger, $steering);
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $queries = new StandingQueryBus($recorded, $this->entities);
         // Main's boot line goes to a ledger of its own, because the test counts only the lines of the two heads.
