@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Closure;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
@@ -41,6 +42,28 @@ final class PassedBaseSurvivesHeadFailureTest extends TestCase
 {
     public function testAPassedBaseStillBlocksWhenTheHeadRunnerThrows(): void
     {
+        $this->assertThePassedBaseBlocks(static function (string $script, string $bundles): void {});
+    }
+
+    public function testAPassedBaseStillBlocksWhenTheScriptIsGoneBeforeTheHeadRun(): void
+    {
+        $this->assertThePassedBaseBlocks(static function (string $script, string $bundles): void {
+            new Filesystem()->remove($script);
+        });
+    }
+
+    public function testAPassedBaseStillBlocksWhenTheBundleIsGoneBeforeTheHeadRun(): void
+    {
+        $this->assertThePassedBaseBlocks(static function (string $script, string $bundles): void {
+            new Filesystem()->remove($bundles);
+        });
+    }
+
+    /**
+     * @param Closure(string, string): void $afterTheBaseRun
+     */
+    private function assertThePassedBaseBlocks(Closure $afterTheBaseRun): void
+    {
         $history = new BuildHistory();
 
         try {
@@ -50,12 +73,18 @@ final class PassedBaseSurvivesHeadFailureTest extends TestCase
             $checkout->method('mirrorOf')->willReturn($history->mirror);
             $checks = self::createStub(CheckJobs::class);
             $checks->method('run')->willReturn(new CheckJobOutcome(CheckVerdict::Passed));
+            $fs = new Filesystem();
+            $script = $history->folder.'/regression.sh';
+            $bundles = $history->folder.'/bundles';
+            $fs->copy(dirname(__DIR__, 5).'/docker/job/regression.sh', $script);
             $runner = self::createStub(JobRunner::class);
             $runner->method('run')->willReturnCallback(
-                static function (JobSpec $spec): JobResult {
+                static function (JobSpec $spec) use ($afterTheBaseRun, $script, $bundles): JobResult {
                     if (str_starts_with($spec->id->value, 'regression-head-')) {
                         throw JobRefused::alreadyRunning($spec->id);
                     }
+
+                    $afterTheBaseRun($script, $bundles);
 
                     return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['regression-result' => "passed\n"]));
                 },
@@ -63,10 +92,9 @@ final class PassedBaseSurvivesHeadFailureTest extends TestCase
 
             $git = new RepositoryGit(new HardenedGit());
             $gate = new PhpGate();
-            $fs = new Filesystem();
             $handBacks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks'));
-            $regression = new RunRegressionTests($handBacks, new RegressionTestFiles($git, $gate), $runner, $gate, $fs, dirname(__DIR__, 5).'/docker/job/regression.sh');
-            $check = new PrePushCheck($checks, new HandBackFile($checkout, $fs, $history->folder.'/bundles'), $regression, new NullLogger());
+            $regression = new RunRegressionTests($handBacks, new RegressionTestFiles($git, $gate), $runner, $gate, $fs, $script);
+            $check = new PrePushCheck($checks, new HandBackFile($checkout, $fs, $bundles), $regression, new NullLogger());
             $request = new BuildTaskRequest('alpha', 7, $history->mirror, 'task', $history->work, 'job-image');
 
             self::assertSame(

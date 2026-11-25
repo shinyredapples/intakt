@@ -31,6 +31,7 @@ use NoDiscard;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
+use Throwable;
 
 final readonly class RunRegressionTests implements RegressionTests
 {
@@ -94,8 +95,8 @@ final readonly class RunRegressionTests implements RegressionTests
 
         try {
             $headRun = $this->ranOn($job, $repository, RegressionCheckout::head($accepted->head, $tests));
-        } catch (JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
-            // A base that passed already shows the test proves nothing, so the failed head run must not discard it.
+        } catch (Throwable $failure) {
+            // A base that passed already shows the test proves nothing, so a head run that cannot be prepared or run must not discard it.
             if (RegressionRun::Passed !== $baseRun) {
                 throw $failure;
             }
