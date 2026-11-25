@@ -41,7 +41,7 @@ final class GateChildLauncherStopTest extends TestCase
 
         $child->group->stop();
         touch($this->folder.'/go');
-        self::pollFor($child, 1_000_000);
+        $this->pollFor($child, 1_000_000);
 
         self::assertFileDoesNotExist($this->folder.'/marker');
     }
@@ -52,7 +52,7 @@ final class GateChildLauncherStopTest extends TestCase
 
         $child->group->kill();
         touch($this->folder.'/go');
-        self::pollFor($child, 1_000_000);
+        $this->pollFor($child, 1_000_000);
 
         self::assertFileDoesNotExist($this->folder.'/marker');
     }
@@ -67,7 +67,7 @@ final class GateChildLauncherStopTest extends TestCase
 
         $child->group->stop();
         $release->wait();
-        self::pollFor($child, 4_000_000);
+        $this->pollFor($child, 4_000_000);
 
         self::assertFileExists($this->folder.'/started');
         self::assertFileDoesNotExist($this->folder.'/marker');
@@ -136,7 +136,7 @@ final class GateChildLauncherStopTest extends TestCase
     }
 
     // Because Symfony Process hands the launcher its release line only while the process is polled, the test polls as bin/check does instead of only sleeping.
-    private static function pollFor(RunningChild $child, int $microseconds): void
+    private function pollFor(RunningChild $child, int $microseconds): void
     {
         for ($waited = 0; $waited < $microseconds; $waited += 10_000) {
             $child->process->isRunning();
