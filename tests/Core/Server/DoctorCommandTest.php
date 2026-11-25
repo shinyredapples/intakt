@@ -21,6 +21,7 @@ use Intakt\Core\Server\UseCase\Doctor\DoctorCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -132,9 +133,9 @@ final class DoctorCommandTest extends TestCase
     public function testAFixTextWithALineBreakPrintsAsOneLine(): void
     {
         $check = InfrastructureCheck::unreadable(new EndpointDown('x'), "the problem\nin two lines", "first step\nsecond step\r\x1B[31m");
-        $line = new \ReflectionMethod(DoctorCommand::class, 'line');
+        $line = new ReflectionMethod(DoctorCommand::class, 'line');
 
-        $printed = $line->invoke(new DoctorCommand($this->createStub(ServerStatus::class)), 'worker threads', $check);
+        $printed = $line->invoke(new DoctorCommand(self::createStub(ServerStatus::class)), 'worker threads', $check);
 
         self::assertSame('fail: worker threads: the problem in two lines; fix: first step second step  [31m', $printed);
     }
