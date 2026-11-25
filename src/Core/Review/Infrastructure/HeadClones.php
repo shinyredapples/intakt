@@ -57,6 +57,11 @@ final readonly class HeadClones
         return $clone;
     }
 
+    public function remove(string $clone): void
+    {
+        $this->filesystem->remove($clone);
+    }
+
     // The failure that ended the clone is rethrown even when the removal fails too, because it is the cause the job must report.
     private function removeAfter(string $clone, Throwable $failed): never
     {
@@ -67,11 +72,6 @@ final readonly class HeadClones
         }
 
         throw $failed;
-    }
-
-    public function remove(string $clone): void
-    {
-        $this->filesystem->remove($clone);
     }
 
     // The source's own format, because a head of a SHA-256 repository cannot be fetched into a SHA-1 one; git init refuses a format it does not know.

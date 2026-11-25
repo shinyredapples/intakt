@@ -189,7 +189,7 @@ final class HeadClonesTest extends TestCase
              */
             public function remove(string|iterable $files): void
             {
-                if (null !== $this->removal) {
+                if ($this->removal instanceof IOException) {
                     throw $this->removal;
                 }
 
