@@ -20,7 +20,7 @@ final class ReviewSizeLimitConfiguration implements ConfigurationInterface
             ->arrayPrototype()->children()
             ->variableNode(self::KEY)->defaultValue(ReviewSizeLimit::DEFAULT_CHARACTERS)
             ->validate()
-                ->ifTrue(static fn (mixed $value): bool => !\is_int($value) || $value < 1)
+                ->ifTrue(static fn (mixed $value): bool => !is_int($value) || $value < 1)
                 ->thenInvalid('The review size limit of this project (review_size_limit) must be a positive whole number of characters of diff, for example 200000.');
 
         return $tree;

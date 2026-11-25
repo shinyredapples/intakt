@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\ReviewSizeLimit;
 use Intakt\Core\Review\Contract\ReviewSizeLimits;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -27,7 +28,7 @@ final class ReviewSizeLimitsTest extends TestCase
 
     public function testALimitBelowOneCharacterIsRefused(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
 
         new ReviewSizeLimit(0);
     }
