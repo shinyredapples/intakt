@@ -41,7 +41,7 @@ final class StoredP1KeysNormalizer implements NormalizerInterface, DenormalizerI
     /**
      * @param array<string, mixed> $context
      */
-    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): P1Keys
+    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): mixed
     {
         if (!is_array($data)) {
             throw $this->notKeys();
