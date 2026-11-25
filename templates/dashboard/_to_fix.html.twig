@@ -1,4 +1,4 @@
-{#- The last judged pass's findings to fix in one group per urgency, side by side on a desktop and stacked on a phone, and one row per finding: its headline and its place, no explanation and nothing folded, so the overview reads at a glance (owner decision of 2026-11-22, #3573). An urgency without findings keeps its group, so the three groups always stand in the same place; a finding whose urgency was not recorded gets a fourth group, as it gets its own line in the verdict card's legend, so none is hidden. A row carries no kind symbol, because no kind is recorded yet. Each row opens the finding in the Full record. The newest round's judged live update replaces it by its id. -#}
+{#- The last judged pass's findings to fix in one group per urgency, side by side on a desktop and stacked on a phone, and one row per finding: its headline and its place, no explanation and nothing folded, so the overview reads at a glance (owner decision of 2026-11-22, #3573). An urgency without findings keeps its group, so the three groups always stand in the same place; a finding whose urgency was not recorded gets a fourth group, as it gets its own line in the verdict card's legend, so none is hidden. A row carries no kind symbol, because no kind is recorded yet. Each row opens the finding's own page. The newest round's judged live update replaces it by its id. -#}
 {%- set unranked = open|filter(f => f.urgency is null) -%}
 <section class="to-fix" id="review-to-fix" aria-label="To fix">
     {% for urgency in enum_cases('Intakt\\Core\\Dashboard\\Domain\\FindingUrgency') %}
@@ -17,7 +17,7 @@
     {% else %}
     <ul class="fix-rows">
         {% for finding in findings %}
-        <li><a class="fix-row" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW_RECORD'), {round: judged}) }}#round-{{ judged }}-finding-{{ finding.id }}"{% if finding.severity is not null %} title="{{ finding.severity }}"{% endif %}>
+        <li><a class="fix-row" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_FINDING'), {round: judged, finding: finding.id}) }}"{% if finding.severity is not null %} title="{{ finding.severity }}"{% endif %}>
             {% set headline = finding.headline %}
             <span class="fix-title">{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span>
             {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'fix-chev'}, with_context = false) }}
