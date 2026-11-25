@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use PhpParser\Comment\Doc;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Param;
@@ -207,7 +208,7 @@ final readonly class ContractArrayTypeRule implements Rule
     {
         $comment = $constructor->getDocComment();
 
-        if (null === $comment) {
+        if (!$comment instanceof Doc) {
             return [];
         }
 
