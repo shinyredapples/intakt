@@ -159,21 +159,6 @@ final class GateChildTreeTest extends TestCase
         self::assertFileDoesNotExist($this->marker);
     }
 
-    private function aProcessNamingTheMarkerOutlives(float $deadline): bool
-    {
-        while ($this->aProcessNamesTheMarker() && hrtime(true) / 1_000_000_000 < $deadline) {
-            usleep(10_000);
-        }
-
-        return $this->aProcessNamesTheMarker();
-    }
-
-    // Because a zombie's command line is empty, only a process that can still run matches.
-    private function aProcessNamesTheMarker(): bool
-    {
-        return array_any(glob('/proc/[0-9]*/cmdline') ?: [], fn ($commandLine) => str_contains((string) @file_get_contents($commandLine), $this->marker));
-    }
-
     private function descendantGroup(): int
     {
         $deadline = $this->deadline();
@@ -190,5 +175,23 @@ final class GateChildTreeTest extends TestCase
     private function deadline(): float
     {
         return hrtime(true) / 1_000_000_000 + self::SECONDS_TO_WAIT;
+    }
+
+    private function aProcessNamingTheMarkerOutlives(float $deadline): bool
+    {
+        while ($this->aProcessNamesTheMarker() && hrtime(true) / 1_000_000_000 < $deadline) {
+            usleep(10_000);
+        }
+
+        return $this->aProcessNamesTheMarker();
+    }
+
+    // Because a zombie's command line is empty, only a process that can still run matches.
+    private function aProcessNamesTheMarker(): bool
+    {
+        $commandLines = glob('/proc/[0-9]*/cmdline');
+        self::assertIsArray($commandLines, 'The process list could not be read.');
+
+        return array_any($commandLines, fn (string $commandLine): bool => str_contains((string) @file_get_contents($commandLine), $this->marker));
     }
 }
