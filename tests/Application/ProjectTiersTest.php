@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\BranchCleanup\Contract\BranchCleanupServices;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
@@ -144,6 +145,20 @@ final class ProjectTiersTest extends KernelTestCase
         file_put_contents($this->file, "projects:\n    beta:\n        review_job: { image: 'intakt-job/beta:review' }\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
         self::assertSame(['beta' => 'intakt-job/beta:review'], $this->bootedContainer()->getParameter(ReviewServices::JOB_IMAGES));
+    }
+
+    public function testTheBranchCleanupKeysOfAProjectReachTheCleanupSettings(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        clean_other_branches: true\n        keep_branches: [experiments]\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['beta' => ['clean_other_branches' => true, 'keep_branches' => ['experiments']]], $this->bootedContainer()->getParameter(BranchCleanupServices::PROJECTS));
+    }
+
+    public function testTheHyphenatedBranchCleanupKeysOfTheDesignReachTheCleanupSettings(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        clean-other-branches: true\n        keep-branches: [feature/keep-me]\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['beta' => ['clean_other_branches' => true, 'keep_branches' => ['feature/keep-me']]], $this->bootedContainer()->getParameter(BranchCleanupServices::PROJECTS));
     }
 
     public function testAReviewJobSectionWithoutItsImageStopsTheBoot(): void
