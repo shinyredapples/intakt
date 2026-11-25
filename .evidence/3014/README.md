@@ -2,7 +2,7 @@
 
 ## Running install
 
-A scratch install on SQLite (`APP_ENV=test`, `DASHBOARD_PORT=7791`, `INTAKT_COMPOSE_SERVICE=intakt` so the demo commands run), served by `php -S localhost:7791 -t public public/index.php`:
+A scratch install on SQLite (`APP_ENV=test`, `DASHBOARD_PORT=7791`, `INTAKT_COMPOSE_SERVICE=intakt` so the demo commands run), served by `php -d variables_order=EGPCS -S localhost:7791 -t public public/index.php`:
 
 ```
 bin/console doctrine:migrations:migrate -n
@@ -13,9 +13,17 @@ bin/console intakt:demo:replay fixtures/demo/sample-change-review.json --factor=
       the demo project demo-replay, 1000 times as fast as recorded.
 ```
 
-The replayed rows are the ledger rows of a real review that `intakt:demo:record` captured, so `/trends` reads rows the application wrote, not rows appended by hand. Playwright's Chromium then opened `/trends` (HTTP 200 in all four runs) and saved:
+The replayed rows are the ledger rows of a real review that `intakt:demo:record` captured, so `/trends` reads rows the application wrote, not rows appended by hand. Playwright's Chromium then opened `/trends` (HTTP 200 in all four runs), clicked the demo tour caption's Close button, reloaded the page and saved:
 
-- `trends-dark-1440.png`, `trends-light-1440.png`, `trends-dark-390.png`, `trends-light-390.png` (full page; the bar across the middle is the demo tour caption, fixed to the viewport).
+- `trends-dark-1440.png`, `trends-light-1440.png`, `trends-dark-390.png`, `trends-light-390.png` (full page, caption closed). The script's own log of each run:
+
+```
+trends-dark-1440 HTTP 200 caption shown before Close: true caption visible after: false theme: dark
+trends-light-1440 HTTP 200 caption shown before Close: true caption visible after: false theme: light
+trends-dark-390 HTTP 200 caption shown before Close: true caption visible after: false theme: dark
+trends-light-390 HTTP 200 caption shown before Close: true caption visible after: false theme: light
+```
+
 - `trends-dark-1440-judge-keyboard-tooltip.png`: the first bar of "Checked findings" focused with the keyboard; the tooltip reads "5 findings / Kept to fix".
 - `trends-tables.txt`: the heading, takeaway and table of each chart as the page renders them.
 - `ui-check.txt`: `node bin/ui-check http://localhost:7791` on the same install (exit 0).
