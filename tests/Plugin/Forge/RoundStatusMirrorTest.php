@@ -38,11 +38,6 @@ final class RoundStatusMirrorTest extends TestCase
 
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testAReconcileLeavesOnlyTheStatusOfTheStoredRound(): void
     {
         $forge = new RecordingStatusLabels(['status:in-review', 'review:full']);
@@ -138,6 +133,11 @@ final class RoundStatusMirrorTest extends TestCase
         $rounds->expects(self::never())->method('of');
 
         new RoundStatusMirror($rounds, $this->locks, $this->logger())->reconcile('alpha', new ChangeId(self::CHANGE));
+    }
+
+    protected function setUp(): void
+    {
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function mirror(?ReviewStatus $stored, RecordingStatusLabels $forge): RoundStatusMirror
