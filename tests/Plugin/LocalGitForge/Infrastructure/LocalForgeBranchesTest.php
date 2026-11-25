@@ -779,7 +779,7 @@ final class LocalForgeBranchesTest extends TestCase
             $this->branches()->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($archived)));
             self::fail('An existing branch must not be restored over.');
         } catch (ForgeWriteFailed $refused) {
-            self::assertSame('The branch "intakt/feature" was not restored: it exists, and a restore never overwrites a branch.', $refused->getMessage());
+            self::assertSame('The branch "intakt/feature" was not restored: it exists or cannot be read, and a restore never overwrites a branch.', $refused->getMessage());
         }
 
         self::assertSame($current, $this->repository->objectAt('refs/heads/intakt/feature'));
@@ -797,7 +797,7 @@ final class LocalForgeBranchesTest extends TestCase
             $this->branches()->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($archived)));
             self::fail('A dangling symbolic branch must not be restored over.');
         } catch (ForgeWriteFailed $refused) {
-            self::assertSame('The branch "intakt/feature" was not restored: it exists, and a restore never overwrites a branch.', $refused->getMessage());
+            self::assertSame('The branch "intakt/feature" was not restored: it exists or cannot be read, and a restore never overwrites a branch.', $refused->getMessage());
         }
 
         self::assertFileDoesNotExist($this->repository->path.'/.git/refs/heads/intakt/other');

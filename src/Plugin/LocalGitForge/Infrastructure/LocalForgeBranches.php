@@ -99,16 +99,12 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
     }
 
-    // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch.
+    // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch. A ref that cannot be read is refused alike, because only a missing one may be created.
     private function refuseExisting(string $name): void
     {
-        $process = $this->git(['show-ref', '--exists', self::HEADS.$name]);
-
-        match ($process->getExitCode()) {
-            self::MISSING => null,
-            0 => throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: it exists, and a restore never overwrites a branch.', $name)),
-            default => throw new ForgeReadFailed(sprintf('git show-ref failed: %s', trim($process->getErrorOutput()))),
-        };
+        if (self::MISSING !== $this->git(['show-ref', '--exists', self::HEADS.$name])->getExitCode()) {
+            throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: it exists or cannot be read, and a restore never overwrites a branch.', $name));
+        }
     }
 
     // Only a files repository, because both the listing check and the delete's HEAD locks read the ref files.

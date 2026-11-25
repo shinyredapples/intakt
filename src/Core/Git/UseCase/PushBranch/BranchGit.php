@@ -21,7 +21,14 @@ final readonly class BranchGit
         private HardenedGit $hardened,
         private GuardedRun $guardedRun,
         private float $timeoutSeconds = 600,
+        private ?RemoteCredential $credential = null,
     ) {
+    }
+
+    // A copy whose calls to a remote log in with the credential, so the calls that need none stay as they are.
+    public function authenticatedBy(?RemoteCredential $credential): self
+    {
+        return new self($this->hardened, $this->guardedRun, $this->timeoutSeconds, $credential);
     }
 
     /**
@@ -52,9 +59,9 @@ final readonly class BranchGit
      *
      * @throws BranchNotPushed
      */
-    public function outputFromRemote(string $repository, #[SensitiveParameter] array $arguments, ?RemoteCredential $credential = null): string
+    public function outputFromRemote(string $repository, #[SensitiveParameter] array $arguments): string
     {
-        $process = $this->finished($this->process($repository, $arguments, self::NETWORK, $credential), $arguments);
+        $process = $this->finished($this->atRemote($repository, $arguments), $arguments);
 
         // Not the error output, because git may repeat the remote's address, and a credential can be part of it.
         return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed with exit code %d', $arguments[0] ?? '', $process->getExitCode() ?? -1));
@@ -68,7 +75,7 @@ final readonly class BranchGit
      */
     public function exitCodeAtRemote(string $repository, #[SensitiveParameter] array $arguments): int
     {
-        return $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments)->getExitCode() ?? -1;
+        return $this->finished($this->atRemote($repository, $arguments), $arguments)->getExitCode() ?? -1;
     }
 
     // The exit code and the standard output, for a push run with --porcelain whose caller reads each ref's status; never the error output, because git may repeat the remote's address there.
@@ -79,9 +86,9 @@ final readonly class BranchGit
      *
      * @throws BranchNotPushed
      */
-    public function outcomeAtRemote(string $repository, #[SensitiveParameter] array $arguments, ?RemoteCredential $credential = null): array
+    public function outcomeAtRemote(string $repository, #[SensitiveParameter] array $arguments): array
     {
-        $process = $this->finished($this->process($repository, $arguments, self::NETWORK, $credential), $arguments);
+        $process = $this->finished($this->atRemote($repository, $arguments), $arguments);
 
         return [$process->getExitCode() ?? -1, $process->getOutput()];
     }
@@ -134,10 +141,10 @@ final readonly class BranchGit
      *
      * @phpstan-impure
      */
-    public function remoteTip(string $repository, #[SensitiveParameter] string $remote, string $branch, ?RemoteCredential $credential = null): ?string
+    public function remoteTip(string $repository, #[SensitiveParameter] string $remote, string $branch): ?string
     {
         $ref = 'refs/heads/'.$branch;
-        $listed = $this->outputFromRemote($repository, ['ls-remote', '--', $remote, $ref], $credential);
+        $listed = $this->outputFromRemote($repository, ['ls-remote', '--', $remote, $ref]);
 
         // Git matches the pattern against the tail of every ref, so "refs/heads/a/refs/heads/task" is listed too and may come first: only the exact ref is the branch.
         foreach (explode("\n", $listed) as $line) {
@@ -170,13 +177,32 @@ final readonly class BranchGit
         };
     }
 
+    // One more config entry in the environment when the copy holds a credential, never on the command line or in the address, because every user of the machine can read a command line and git repeats the address in its messages.
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws BranchNotPushed
+     */
+    private function atRemote(string $repository, #[SensitiveParameter] array $arguments): Process
+    {
+        $process = $this->process($repository, $arguments, self::NETWORK);
+        if (!$this->credential instanceof RemoteCredential) {
+            return $process;
+        }
+
+        $environment = $process->getEnv();
+        $index = (int) ($environment['GIT_CONFIG_COUNT'] ?? 0);
+
+        return $process->setEnv([...$environment, 'GIT_CONFIG_COUNT' => (string) ($index + 1), 'GIT_CONFIG_KEY_'.$index => 'http.extraHeader', 'GIT_CONFIG_VALUE_'.$index => $this->credential->authorizationHeader()]);
+    }
+
     /**
      * @param list<string>          $arguments
      * @param array<string, string> $environment
      *
      * @throws BranchNotPushed
      */
-    private function process(string $repository, #[SensitiveParameter] array $arguments, array $environment, ?RemoteCredential $credential = null): Process
+    private function process(string $repository, #[SensitiveParameter] array $arguments, array $environment): Process
     {
         try {
             $call = $this->hardened->callInBareRepository($repository, ...$arguments);
@@ -187,24 +213,7 @@ final readonly class BranchGit
             throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped or found no bare repository', $arguments[0] ?? ''));
         }
 
-        return new Process([...$call->command], $call->directory, $this->withCredential([...$call->environment, ...$environment], $credential), null, $this->timeoutSeconds);
-    }
-
-    // One more config entry in the environment, never on the command line or in the address, because every user of the machine can read a command line and git repeats the address in its messages.
-    /**
-     * @param array<string, string|false> $environment
-     *
-     * @return array<string, string|false>
-     */
-    private function withCredential(#[SensitiveParameter] array $environment, ?RemoteCredential $credential): array
-    {
-        if (!$credential instanceof RemoteCredential) {
-            return $environment;
-        }
-
-        $index = (int) ($environment['GIT_CONFIG_COUNT'] ?? 0);
-
-        return [...$environment, 'GIT_CONFIG_COUNT' => (string) ($index + 1), 'GIT_CONFIG_KEY_'.$index => 'http.extraHeader', 'GIT_CONFIG_VALUE_'.$index => $credential->authorizationHeader()];
+        return new Process([...$call->command], $call->directory, [...$call->environment, ...$environment], null, $this->timeoutSeconds);
     }
 
     // Every call goes through this one step, so none leaves the push as a Process exception.

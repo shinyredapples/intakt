@@ -34,12 +34,11 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
     #[Override]
     public function push(ArchivedHead $head, #[SensitiveParameter] string $remote, ?RemoteCredential $credential = null): void
     {
-        $archive = $this->archiveOf($head);
-        $this->refuseMalformedHead($head, $archive);
+        $this->refuseMalformedHead($head, $this->archiveOf($head));
         $lock = $this->lockedBranch($head);
 
         try {
-            $this->restore($head, $archive, $remote, $credential);
+            $this->restore($this->git->authenticatedBy($credential), $head, $remote);
         } finally {
             $this->release($lock);
         }
@@ -84,18 +83,19 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
     }
 
     // The remote lists no dangling symbolic branch, so a forge that can have one checks for it before this push.
-    private function restore(ArchivedHead $head, string $archive, #[SensitiveParameter] string $remote, ?RemoteCredential $credential): void
+    private function restore(BranchGit $git, ArchivedHead $head, #[SensitiveParameter] string $remote): void
     {
+        $archive = $this->archiveOf($head);
         $branch = $head->head->branch;
         $ref = self::BRANCHES.$branch;
-        $this->git->refuseRewrittenRemote($archive, $remote);
+        $git->refuseRewrittenRemote($archive, $remote);
 
-        if (null !== $this->git->remoteTip($archive, $remote, $branch, $credential)) {
+        if (null !== $git->remoteTip($archive, $remote, $branch)) {
             throw BranchNotPushed::because(sprintf('the branch %s exists on the remote, and a restore never overwrites a branch', $branch));
         }
 
         // A lease on an empty value lets the push only create the branch: one made since the read above is refused by git and by the remote's ref update, also when the archived head would fast-forward it.
-        [$exitCode, $statuses] = $this->git->outcomeAtRemote($archive, ['push', '--porcelain', '--force-with-lease='.$ref.':', '--', $remote, $head->head->commit.':'.$ref], $credential);
+        [$exitCode, $statuses] = $git->outcomeAtRemote($archive, ['push', '--porcelain', '--force-with-lease='.$ref.':', '--', $remote, $head->head->commit.':'.$ref]);
 
         if (0 !== $exitCode) {
             throw BranchNotPushed::because(sprintf('the remote refused the restore of %s (git push exited with %d)', $branch, $exitCode));
@@ -106,7 +106,7 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
             throw BranchNotPushed::because(sprintf('the push did not create the branch %s, so another writer made it during the restore', $branch));
         }
 
-        if ($this->git->remoteTip($archive, $remote, $branch, $credential) !== $head->head->commit) {
+        if ($git->remoteTip($archive, $remote, $branch) !== $head->head->commit) {
             throw BranchNotPushed::because(sprintf('the remote branch %s is not at the archived head after the push', $branch));
         }
     }
