@@ -134,7 +134,7 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer());
         $this->configuration = sys_get_temp_dir().'/intakt-sample-'.bin2hex(random_bytes(6)).'.yaml';
         $this->seeded = $this->seedTheSampleProject();
-        $this->fixture->startOnPanel(new ConfiguredPanels(['alpha' => $this->seeded['review']])->panelFor('alpha'));
+        $this->fixture->startOnPanel(new ConfiguredPanels(['alpha' => $this->seeded['review']], [])->panelFor('alpha'));
     }
 
     protected function tearDown(): void

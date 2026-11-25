@@ -42,6 +42,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Decision::class)]
 final class ConfiguredPanelsTest extends TestCase
 {
+    private const array TIERS = ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic'], 'standard' => ['provider' => 'anthropic'], 'light' => ['provider' => 'anthropic']]]];
+
     public function testThePanelOfAProjectCarriesItsReviewersInConfigOrderAndItsPolicy(): void
     {
         $panels = new ConfiguredPanels(['alpha' => [
@@ -50,7 +52,7 @@ final class ConfiguredPanelsTest extends TestCase
                 ['role' => 'correctness', 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Logic.', 'budget' => 5],
                 ['role' => 'style', 'tier' => 'light', 'provider' => 'openai', 'prompt' => 'Style.', 'budget' => 2],
             ],
-        ]]);
+        ]], self::TIERS);
 
         $panel = $panels->panelFor('alpha');
 
@@ -67,7 +69,7 @@ final class ConfiguredPanelsTest extends TestCase
         $this->expectException(PanelNotConfigured::class);
         $this->expectExceptionObject(new PanelNotConfigured('beta'));
 
-        new ConfiguredPanels([])->panelFor('beta');
+        new ConfiguredPanels([], [])->panelFor('beta');
     }
 
     public function testAChangeBelowTheLineThresholdKeepsTheCorePanel(): void
@@ -113,6 +115,75 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness'], $this->roles($panel));
     }
 
+    public function testAModelLabelSetsTheTierOfEveryReviewer(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([Tier::Light], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testTheLastModelLabelWins(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light', 'model:standard')));
+
+        self::assertSame([Tier::Standard], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testAModelLabelThatNamesNoTierKeepsTheConfiguredTier(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:gpt-9')));
+
+        self::assertSame([Tier::Strong], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testALowerModelLabelKeepsTheStrongReviewerAQuorumThatNeedsOneRequires(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'one-strong-plus-one',
+            'reviewers' => [[...$this->reviewer('correctness'), 'tier' => 'strong'], [...$this->reviewer('design'), 'tier' => 'standard']],
+        ]], self::TIERS);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([Tier::Strong, Tier::Light], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testALowerModelLabelLowersAStrongReviewerUnderAQuorumThatNeedsNoStrongVote(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'majority',
+            'reviewers' => [[...$this->reviewer('correctness'), 'tier' => 'strong']],
+        ]], self::TIERS);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([Tier::Light], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testAModelLabelKeepsAReviewerOnItsTierWhenTheProjectMapsTheLabelledTierToAnotherProvider(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [[...$this->reviewer('correctness'), 'tier' => 'strong', 'provider' => 'anthropic'], [...$this->reviewer('design'), 'tier' => 'standard', 'provider' => 'openai']],
+        ]], ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic'], 'standard' => ['provider' => 'openai'], 'light' => ['provider' => 'openai']]]]);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([[Tier::Strong, Provider::Anthropic], [Tier::Light, Provider::OpenAi]], array_map(static fn (PanelReviewer $reviewer): array => [$reviewer->model->tier, $reviewer->model->provider], $panel->reviewers));
+    }
+
+    public function testAModelLabelKeepsTheConfiguredTierWhenTheProjectMapsNoModelToTheLabelledTier(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [$this->reviewer('correctness')],
+        ]], ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic'], 'light' => ['provider' => 'anthropic']]]]);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:standard')));
+
+        self::assertSame([Tier::Strong], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
     private function ruled(): ConfiguredPanels
     {
         return new ConfiguredPanels(['alpha' => [
@@ -122,7 +193,7 @@ final class ConfiguredPanelsTest extends TestCase
                 ['min_lines' => 100, 'reviewers' => [$this->reviewer('big')]],
                 ['paths' => ['config/security/**', 'docs/*.md'], 'reviewers' => [$this->reviewer('security')]],
             ],
-        ]]);
+        ]], self::TIERS);
     }
 
     /**
