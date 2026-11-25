@@ -771,6 +771,19 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertEquals([new MarkVerdictsStale($round)], $this->fixture->reviewStarts->withdrawals);
     }
 
+    public function testARedeliveryAfterAWithdrawalMarksTheRoundAnEarlierDeliveryStarted(): void
+    {
+        $this->recurredFromARepository();
+        $round = $this->fixture->escalations->messages[0]->round;
+        $this->escalateQueued($this->rejecting());
+        $this->fixture->transactions()->withLockedRound(Uuid::fromString($round), static fn (ReviewRound $locked) => $locked->markVerdictsStale());
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertCount(1, $this->fixture->reviewStarts->starts);
+        self::assertEquals([new MarkVerdictsStale($round)], $this->fixture->reviewStarts->withdrawals);
+    }
+
     public function testTheReReviewKeepsTheLabelsThatSteeredTheRejectedRoundsPanel(): void
     {
         $this->judged($this->readFromARepositoryAt(self::HEAD_A, $this->keyedP1()));

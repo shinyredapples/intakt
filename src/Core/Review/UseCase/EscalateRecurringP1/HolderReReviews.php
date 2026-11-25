@@ -36,22 +36,37 @@ final readonly class HolderReReviews
     public function startAfterRejectionIn(string $roundId): void
     {
         $round = $this->rounds->stored($roundId);
-        $head = $this->headOf($round);
-        $start = $this->startOf($roundId);
-
-        // Nothing to start without a head or a source, because the round is then read from no repository; none on a head whose verdicts were withdrawn, because the new round's approval would stand in for the withdrawn one; and none after an earlier round on this head, because that round's holder has re-reviewed with the reasons already and holding the finding again is its answer.
-        if (!$head instanceof CommitId || !$start instanceof ReviewStarted || $round->hasStaleVerdicts() || $this->reReviewed($round)) {
-            return;
-        }
 
         try {
-            $this->commands->dispatch(new StartReviewAtHead($this->nextRoundAfter($round, $start), $head));
+            $this->startNextRoundAfter($round);
         } catch (RoundNotNext) {
             // Nothing more, because a newer round of the change, opened by another rejection or a new head, reviews it with the reasons in its brief.
-            return;
         }
 
-        $this->withdrawWhenMarkedMeanwhile($roundId);
+        // Also when nothing was started, because an earlier delivery may have started the round and stopped before it saw a withdrawal that came meanwhile.
+        $this->withdrawWhenMarked($roundId);
+    }
+
+    private function startNextRoundAfter(ReviewRound $round): void
+    {
+        $next = $this->nextRoundAfter($round);
+
+        if ($next instanceof StartReviewAtHead) {
+            $this->commands->dispatch($next);
+        }
+    }
+
+    // Null without a head or a source, because the round is then read from no repository; on a head whose verdicts were withdrawn, because the new round's approval would stand in for the withdrawn one; and after an earlier round on this head, because that round's holder has re-reviewed with the reasons already and holding the finding again is its answer.
+    private function nextRoundAfter(ReviewRound $round): ?StartReviewAtHead
+    {
+        $head = $this->headOf($round);
+        $started = $this->startOf($round->id()->toRfc4122());
+
+        if (!$head instanceof CommitId || !$started instanceof ReviewStarted || $round->hasStaleVerdicts() || $this->reReviewed($round)) {
+            return null;
+        }
+
+        return new StartReviewAtHead($this->commandAfter($round, $started), $head);
     }
 
     private function headOf(ReviewRound $round): ?CommitId
@@ -83,15 +98,15 @@ final readonly class HolderReReviews
     }
 
     // With the labels of the rejected round, because they steer its panel and a re-review must not get a weaker one.
-    private function nextRoundAfter(ReviewRound $round, ReviewStarted $start): StartReview
+    private function commandAfter(ReviewRound $round, ReviewStarted $start): StartReview
     {
         $source = new ChangeSource((string) $start->repository, (string) $start->base);
 
         return new StartReview($round->project(), $round->task(), new RequestedRound($round->change(), $round->number() + 1, $source), new Labels(...$start->labels ?? []));
     }
 
-    // Marked again after the start, because a withdrawal that came between the check and the start did not see the new round.
-    private function withdrawWhenMarkedMeanwhile(string $roundId): void
+    // Marked again, because a withdrawal that came between the check and the start did not see the new round.
+    private function withdrawWhenMarked(string $roundId): void
     {
         if ($this->rounds->stored($roundId)->hasStaleVerdicts()) {
             $this->commands->dispatch(new MarkVerdictsStale($roundId));
