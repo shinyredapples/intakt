@@ -207,6 +207,16 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         self::assertSame('tests/RowsTestCase.php:13 intakt.testMethodSentence Test method Intakt\Sample\RowsTestCase::testRows() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-overridden-base-provider'));
     }
 
+    public function testAnInheritedProviderThatOneConcreteClassDoesNotNameFailsStaticAnalysis(): void
+    {
+        self::assertSame('tests/RowsTestCase.php:12 intakt.testMethodSentence Test method Intakt\Sample\RowsTestCase::testRows() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-unnamed-inherited-provider'));
+    }
+
+    public function testAnInheritedProviderThatEachConcreteClassNamesPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('test-method-provider-named-in-each-class');
+    }
+
     public function testEachShortTestMethodOnOneLineIsReported(): void
     {
         $finding = ' is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().';

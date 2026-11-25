@@ -17,7 +17,7 @@ use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<InClassNode, list<array{string, string}>>
+ * @implements Collector<InClassNode, array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}>
  */
 final readonly class TestProviderCollector implements Collector
 {
@@ -31,7 +31,7 @@ final readonly class TestProviderCollector implements Collector
     }
 
     /**
-     * @return list<array{string, string}>|null
+     * @return array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -43,20 +43,16 @@ final readonly class TestProviderCollector implements Collector
         }
 
         $native = $class->getNativeReflection();
-        $providers = [];
+        // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
+        $tests = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isRun(...)));
+        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)], $tests));
+        $runs = $this->staticRuns($tests, $class->getName());
 
-        foreach ($native->getMethods() as $method) {
-            // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
-            if (PhpUnitTestMethod::isRun($method)) {
-                $providers = [...$providers, ...$this->providersInTheClass($method, $native), ...$this->externalProviders($method)];
-            }
-        }
-
-        return [] === $providers ? null : $providers;
+        return [] === $references && [] === $runs ? null : ['references' => $references, 'runs' => $runs];
     }
 
     /**
-     * @return list<array{string, string}>
+     * @return list<array{string, string, string}>
      */
     private function providersInTheClass(ReflectionMethod $method, ReflectionClass|ReflectionEnum $class): array
     {
@@ -75,7 +71,7 @@ final readonly class TestProviderCollector implements Collector
     }
 
     /**
-     * @return list<array{string, string}>
+     * @return list<array{string, string, string}>
      */
     private function externalProviders(ReflectionMethod $method): array
     {
@@ -87,27 +83,40 @@ final readonly class TestProviderCollector implements Collector
             $methodName = $arguments['methodName'] ?? $arguments[1] ?? null;
 
             if (is_string($className) && is_string($methodName)) {
-                $providers = [...$providers, ...($this->reflections->hasClass($className) ? $this->declarations($this->reflections->getClass($className)->getNativeReflection(), $methodName) : [[ltrim($className, '\\'), $methodName]])];
+                $providers = [...$providers, ...($this->reflections->hasClass($className) ? $this->declarations($this->reflections->getClass($className)->getNativeReflection(), $methodName) : [[ltrim($className, '\\'), $methodName, ltrim($className, '\\')]])];
             }
         }
 
         return $providers;
     }
 
-    // the class that declares the method PHPUnit calls, because a provider a parent class or a trait declares is one declaration however many subclasses name it, and each abstract declaration it implements, which PHPUnit never runs
     /**
-     * @return list<array{string, string}>
+     * @return list<array{string, string, string}>
      */
+    // the class that declares the method PHPUnit calls, because a provider a parent class or a trait declares is one declaration however many subclasses name it, and each abstract declaration it implements, which PHPUnit never runs
     private function declarations(ReflectionClass|ReflectionEnum $class, string $methodName): array
     {
-        $declarations = [[$class->hasMethod($methodName) ? $class->getMethod($methodName)->getDeclaringClass()->getName() : $class->getName(), $methodName]];
+        $declarations = [[$class->hasMethod($methodName) ? $class->getMethod($methodName)->getDeclaringClass()->getName() : $class->getName(), $methodName, $class->getName()]];
 
         for ($parent = $class->getParentClass(); false !== $parent; $parent = $parent->getParentClass()) {
             if ($parent->hasMethod($methodName) && $parent->getMethod($methodName)->isAbstract()) {
-                $declarations[] = [$parent->getMethod($methodName)->getDeclaringClass()->getName(), $methodName];
+                $declarations[] = [$parent->getMethod($methodName)->getDeclaringClass()->getName(), $methodName, $class->getName()];
             }
         }
 
         return $declarations;
+    }
+
+    /**
+     * @param list<ReflectionMethod> $tests
+     *
+     * @return list<array{string, string, string}>
+     */
+    private function staticRuns(array $tests, string $class): array
+    {
+        // because only a static method can be exempt as a provider
+        $static = array_values(array_filter($tests, static fn (ReflectionMethod $test): bool => $test->isStatic()));
+
+        return array_map(static fn (ReflectionMethod $test): array => [$test->getDeclaringClass()->getName(), $test->getName(), $class], $static);
     }
 }
