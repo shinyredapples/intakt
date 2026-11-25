@@ -4,10 +4,28 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge\Infrastructure;
 
+use DateTimeImmutable;
+use DateTimeZone;
+use Intakt\Core\Git\Contract\ArchivedBranch;
+use Intakt\Core\Git\Contract\ArchivedHead;
+use Intakt\Core\Git\Contract\ArchivedHeadPush;
+use Intakt\Core\Git\Contract\BranchHead;
+use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\MirroredHead;
+use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\UseCase\ArchiveBranch\DeleteBranchAfterArchive;
+use Intakt\Core\Git\UseCase\ArchiveBranch\MirrorBranchArchive;
+use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
+use Intakt\Core\Git\UseCase\PushBranch\PushArchivedHead;
+use Intakt\Core\Git\UseCase\PushBranch\PushLockName;
+use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
+use Intakt\Plugin\Forge\Contract\BranchRestore;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -17,15 +35,35 @@ use Intakt\Plugin\LocalGitForge\Infrastructure\LocalForgeBranches;
 use Intakt\Plugin\LocalGitForge\Infrastructure\RebasesAndBisects;
 use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeGitDirectories;
 use Intakt\Plugin\LocalGitForge\Infrastructure\WorktreeLocks;
+use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(LocalForgeBranches::class)]
+#[UsesClass(ArchivedBranch::class)]
+#[UsesClass(ArchivedHead::class)]
+#[UsesClass(BranchGit::class)]
+#[UsesClass(BranchHead::class)]
+#[UsesClass(BranchNotPushed::class)]
+#[UsesClass(BranchRestore::class)]
+#[UsesClass(DeleteBranchAfterArchive::class)]
+#[UsesClass(GuardedRun::class)]
+#[UsesClass(MirroredHead::class)]
+#[UsesClass(MirrorBranchArchive::class)]
+#[UsesClass(Mirrors::class)]
+#[UsesClass(NetworkGit::class)]
+#[UsesClass(PushArchivedHead::class)]
+#[UsesClass(PushLockName::class)]
+#[UsesClass(UpdateMirror::class)]
 #[UsesClass(BranchChange::class)]
 #[UsesClass(BranchChangeState::class)]
 #[UsesClass(CommitId::class)]
@@ -44,6 +82,8 @@ final class LocalForgeBranchesTest extends TestCase
     private const string INTAKT = 'test@example.invalid';
 
     private TemporaryRepository $repository;
+
+    private LockFactory $locks;
 
     public function testItListsEachBranchWithItsHead(): void
     {
@@ -160,7 +200,7 @@ final class LocalForgeBranchesTest extends TestCase
         $bare = $this->worktree();
         new Process(['git', 'clone', '--quiet', '--bare', $this->repository->path, $bare])->mustRun();
         new Process(['git', 'symbolic-ref', 'HEAD', 'refs/heads/intakt/feature'], $bare)->mustRun();
-        $branches = new LocalForgeBranches(new LocalRepository($bare, 'main'));
+        $branches = $this->forgeAt(new LocalRepository($bare, 'main'));
         $listed = array_find($branches->branches(), static fn (ForgeBranch $branch): bool => 'intakt/feature' === $branch->name);
         self::assertInstanceOf(ForgeBranch::class, $listed);
 
@@ -305,7 +345,7 @@ final class LocalForgeBranchesTest extends TestCase
         new Process(['git', 'clone', '--quiet', '--bare', $this->repository->path, $bare])->mustRun();
         new Process(['git', 'symbolic-ref', 'HEAD', 'refs/heads/intakt/feature'], $bare)->mustRun();
         new Process(['git', 'worktree', 'add', '--quiet', $this->linked(), 'main'], $bare)->mustRun();
-        $branches = new LocalForgeBranches(new LocalRepository($this->linked(), 'main'));
+        $branches = $this->forgeAt(new LocalRepository($this->linked(), 'main'));
         $listed = array_find($branches->branches(), static fn (ForgeBranch $branch): bool => 'intakt/feature' === $branch->name);
         self::assertInstanceOf(ForgeBranch::class, $listed);
 
@@ -584,7 +624,7 @@ final class LocalForgeBranchesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        new LocalForgeBranches(new LocalRepository($this->repository->path, 'missing'))->changeOf($listed);
+        $this->forgeAt(new LocalRepository($this->repository->path, 'missing'))->changeOf($listed);
     }
 
     public function testAShallowHistoryThrowsInsteadOfCountingAsNoCommitByAPerson(): void
@@ -710,21 +750,105 @@ final class LocalForgeBranchesTest extends TestCase
         $this->branches()->branches();
     }
 
+    public function testABranchDeletedAndCollectedOnTheForgeIsRestoredFromTheArchive(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $this->archiveAndDeleteFeature($head);
+        $this->collectUnreferencedCommits();
+        self::assertFalse($this->holds($head));
+
+        $this->branches()->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($head)));
+
+        self::assertSame($head, $this->branch('intakt/feature')->head->hash);
+        self::assertTrue($this->holds($head));
+    }
+
+    public function testItRefusesToRestoreABranchThatExistsAndPushesNothing(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $current = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $push = $this->createMock(ArchivedHeadPush::class);
+        $push->expects($this->never())->method('push');
+
+        try {
+            new LocalForgeBranches(new LocalRepository($this->repository->path, 'main'), $push)->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId(str_repeat('a', 40))));
+            self::fail('An existing branch must not be restored over.');
+        } catch (ForgeWriteFailed $refused) {
+            self::assertSame('The branch "intakt/feature" was not restored: it exists, and a restore never overwrites a branch.', $refused->getMessage());
+        }
+
+        self::assertSame($current, $this->repository->objectAt('refs/heads/intakt/feature'));
+    }
+
+    public function testARestoreThePushRefusesFailsAsAWrite(): void
+    {
+        $push = $this->createStub(ArchivedHeadPush::class);
+        $push->method('push')->willThrowException(BranchNotPushed::because('another push of this branch is running'));
+
+        $this->expectException(ForgeWriteFailed::class);
+        $this->expectExceptionMessage('The branch "intakt/feature" was not restored: The branch was not pushed: another push of this branch is running');
+
+        new LocalForgeBranches(new LocalRepository($this->repository->path, 'main'), $push)->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId(str_repeat('a', 40))));
+    }
+
     protected function setUp(): void
     {
         $this->repository = new TemporaryRepository();
         $this->repository->commitFile('README.md', "base\n");
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     protected function tearDown(): void
     {
         $this->repository->remove();
-        new Filesystem()->remove([$this->worktree(), $this->linked()]);
+        new Filesystem()->remove([$this->worktree(), $this->linked(), $this->archive(), $this->mirrors()]);
     }
 
     private function branches(): LocalForgeBranches
     {
-        return new LocalForgeBranches(new LocalRepository($this->repository->path, 'main'));
+        return $this->forgeAt(new LocalRepository($this->repository->path, 'main'));
+    }
+
+    // The archive's real push, so a restore reaches the repository as a git push.
+    private function forgeAt(LocalRepository $repository): LocalForgeBranches
+    {
+        return new LocalForgeBranches($repository, new PushArchivedHead(new BranchGit(new HardenedGit(), new GuardedRun()), $this->locks, new Mirrors($this->archive())));
+    }
+
+    private function archiveAndDeleteFeature(string $head): void
+    {
+        new UpdateMirror(new HardenedGit(), new NetworkGit(new RecordingClock(), new NullLogger()), new Filesystem(), $this->locks, new Mirrors($this->mirrors()))->update('alpha', $this->repository->path);
+        $clock = new MockClock(new DateTimeImmutable('2026-11-24 09:30:05', new DateTimeZone('UTC')));
+        new DeleteBranchAfterArchive(new MirrorBranchArchive(new HardenedGit(), new Filesystem(), $this->locks, $clock, new Mirrors($this->mirrors()), new Mirrors($this->archive())), $this->branches())
+            ->delete('alpha', $this->branch('intakt/feature'));
+        $archived = new Process(['git', 'rev-parse', 'refs/intakt/archive/20261124T093005Z/intakt/feature'], $this->archive().'/alpha.git', ['GIT_DIR' => false, 'GIT_WORK_TREE' => false]);
+        self::assertSame($head, trim($archived->mustRun()->getOutput()));
+    }
+
+    // The reflogs too, because HEAD's reflog still names the commit and would keep it from being collected.
+    private function collectUnreferencedCommits(): void
+    {
+        foreach ([['reflog', 'expire', '--expire=now', '--all'], ['gc', '--quiet', '--prune=now']] as $arguments) {
+            new Process(['git', ...$arguments], $this->repository->path, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->mustRun();
+        }
+    }
+
+    private function holds(string $commit): bool
+    {
+        return 0 === new Process(['git', 'cat-file', '-e', $commit], $this->repository->path, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->run();
+    }
+
+    private function archive(): string
+    {
+        return $this->repository->path.'-archive';
+    }
+
+    private function mirrors(): string
+    {
+        return $this->repository->path.'-mirrors';
     }
 
     private function branch(string $name): ForgeBranch

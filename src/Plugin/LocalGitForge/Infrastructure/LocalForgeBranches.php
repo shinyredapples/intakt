@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
+use Intakt\Core\Git\Contract\ArchivedHead;
+use Intakt\Core\Git\Contract\ArchivedHeadPush;
+use Intakt\Core\Git\Contract\BranchHead;
+use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
+use Intakt\Plugin\Forge\Contract\BranchRestore;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
@@ -32,6 +37,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
 
     public function __construct(
         private LocalRepository $repository,
+        private ArchivedHeadPush $archivedHeads,
         private HardenedGit $hardened = new HardenedGit(),
         private WorktreeLocks $locks = new WorktreeLocks(),
         private RebasesAndBisects $rebases = new RebasesAndBisects(),
@@ -78,6 +84,17 @@ final readonly class LocalForgeBranches implements ForgeBranches
             $this->deleteAtHead($branch);
         } catch (ForgeReadFailed $failed) {
             throw new ForgeWriteFailed(sprintf('The branch "%s" was not deleted: %s', $branch->name, $failed->getMessage()), $failed->getCode(), $failed);
+        }
+    }
+
+    public function restore(BranchRestore $restore): void
+    {
+        try {
+            $this->refuseExisting($restore->name);
+            // The repository's own path as the remote, so the push reaches this forge and brings the commit's objects with it.
+            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $this->repository->path);
+        } catch (ForgeReadFailed|BranchNotPushed $failed) {
+            throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: %s', $restore->name, $failed->getMessage()), $failed->getCode(), $failed);
         }
     }
 
@@ -337,5 +354,17 @@ final readonly class LocalForgeBranches implements ForgeBranches
         } catch (CommitIdMalformed $invalid) {
             throw new ForgeReadFailed('git printed something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
+    }
+
+    // show-ref --exists, because it tells a missing branch from a read that failed; the push checks the branch once more under its lock.
+    private function refuseExisting(string $name): void
+    {
+        $exists = $this->git(['show-ref', '--exists', self::HEADS.$name]);
+
+        match ($exists->getExitCode()) {
+            0 => throw new ForgeReadFailed('it exists, and a restore never overwrites a branch.'),
+            self::MISSING => null,
+            default => throw new ForgeReadFailed(sprintf('git show-ref failed: %s', trim($exists->getErrorOutput()))),
+        };
     }
 }
