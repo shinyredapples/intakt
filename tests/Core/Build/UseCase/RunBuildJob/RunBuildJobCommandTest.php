@@ -20,6 +20,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcomes;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
@@ -297,9 +298,14 @@ final class RunBuildJobCommandTest extends TestCase
             $tiers ?? $this->tiers(),
             new BuilderPrompt(new Fence(), new PromptCut(new Fence())),
             $this->runner ?? $runner,
+            new BuildJobOutcomes(),
             new PhpGate(),
             new GatesAtOnce(12, 1),
             1500,
+            2_000_000,
+            900,
+            6_000_000,
+            12_000_000,
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',

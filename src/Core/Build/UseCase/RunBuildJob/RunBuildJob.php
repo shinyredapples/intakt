@@ -9,19 +9,16 @@ use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
-use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\GatesAtOnce;
-use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\EgressHosts;
-use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
-use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
@@ -68,14 +65,26 @@ final readonly class RunBuildJob
 
     private int $toolTimeLimitSeconds;
 
+    // Public for the watch that stops a running build (#3965); built here, so a wrong setting is refused when the container builds this job.
+    public BuildLimits $limits;
+
     public function __construct(
         private TierResolver $tiers,
         private BuilderPrompt $prompts,
         private JobRunner $jobs,
+        private BuildJobOutcomes $outcomes,
         private Gate $gate,
         private GatesAtOnce $gatesAtOnce,
         #[Autowire(param: BuildServices::TOOL_TIME_LIMIT)]
         mixed $toolTimeLimitSeconds,
+        #[Autowire(param: BuildServices::ALLOWANCE_TOKENS)]
+        mixed $allowanceTokens,
+        #[Autowire(param: BuildServices::IDLE_SECONDS)]
+        mixed $idleSeconds,
+        #[Autowire(param: BuildServices::CEILING_TOKENS)]
+        mixed $ceilingTokens,
+        #[Autowire(param: BuildServices::TASK_TOTAL_TOKENS)]
+        mixed $taskTotalTokens,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
@@ -92,6 +101,12 @@ final readonly class RunBuildJob
             throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of %d seconds, not %d.', self::ALLOWANCE_SECONDS, $toolTimeLimitSeconds));
         }
         $this->toolTimeLimitSeconds = $toolTimeLimitSeconds;
+        $this->limits = new BuildLimits(
+            self::wholeNumber('allowance', $allowanceTokens),
+            self::wholeNumber('idle time', $idleSeconds),
+            self::wholeNumber('runaway ceiling', $ceilingTokens),
+            self::wholeNumber('per-task total', $taskTotalTokens),
+        );
     }
 
     /**
@@ -110,10 +125,21 @@ final readonly class RunBuildJob
         $prompt = $this->promptFileFor($job);
 
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
+            // TODO(#3965): pass the cause the watch of the running build names; nothing watches a build yet, so no job is stopped.
+            return $this->outcomes->of($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])), null);
         } finally {
             $this->filesystem->remove($prompt);
         }
+    }
+
+    // Checked as given, because the compiled container would turn a YAML true into a limit of 1 before a typed parameter saw it.
+    private static function wholeNumber(string $limit, mixed $given): int
+    {
+        if (!is_int($given)) {
+            throw new InvalidArgumentException(sprintf('The build\'s %s must be a whole number, not %s.', $limit, get_debug_type($given)));
+        }
+
+        return $given;
     }
 
     private function modelFor(BuildJob $job): string
@@ -177,62 +203,5 @@ final readonly class RunBuildJob
     private function idOf(BuildJob $job): JobId
     {
         return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
-    }
-
-    private function outcomeOf(?JobResult $result): BuildJobOutcome
-    {
-        if (!$result instanceof JobResult) {
-            return new BuildJobOutcome(BuildVerdict::NoResult);
-        }
-
-        $log = $result->output->contents(self::LOG) ?? '';
-
-        return match ($result->end->cause) {
-            JobCause::MemoryKilled => new BuildJobOutcome(BuildVerdict::MemoryKilled, log: $log),
-            JobCause::TimedOut => new BuildJobOutcome(BuildVerdict::TimedOut, log: $log),
-            // The builder cannot set the script's exit code, so the one code that says its files may still be in the output is trusted; what a build hands back is read from the output only.
-            JobCause::Exited => self::OUTPUT_NOT_CLEARED === $result->end->exitCode
-                ? new BuildJobOutcome(BuildVerdict::NoResult, log: $log)
-                : $this->handedBack($result->output, $log),
-        };
-    }
-
-    private function handedBack(JobOutput $output, string $log): BuildJobOutcome
-    {
-        $question = $output->contents(self::QUESTION);
-
-        if (null !== $question) {
-            return $this->asked($question, $log);
-        }
-
-        $bundle = $output->contents(self::BUNDLE);
-        $text = $output->contents(self::PULL_REQUEST_TEXT);
-
-        if (null === $bundle) {
-            return new BuildJobOutcome(
-                BuildVerdict::NoCommits,
-                pullRequestText: $text,
-                log: $log,
-            );
-        }
-
-        if (null === $text) {
-            return new BuildJobOutcome(BuildVerdict::NoPullRequestText, $bundle, log: $log);
-        }
-
-        return new BuildJobOutcome(BuildVerdict::Built, $bundle, $text, $log);
-    }
-
-    private function asked(string $text, string $log): BuildJobOutcome
-    {
-        try {
-            return new BuildJobOutcome(
-                BuildVerdict::Asked,
-                log: $log,
-                question: BuildQuestion::fromHandedBack($text),
-            );
-        } catch (QuestionRefused $refusal) {
-            return new BuildJobOutcome(BuildVerdict::QuestionRefused, log: $log.'question refused: '.$refusal->getMessage()."\n");
-        }
     }
 }

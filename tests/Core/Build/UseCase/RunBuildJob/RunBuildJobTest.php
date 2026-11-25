@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
@@ -19,6 +20,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcomes;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Job\Contract\JobCause;
@@ -50,6 +52,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuildVerdict::class)]
 #[CoversClass(BuilderNotOnClaudeCode::class)]
 #[CoversClass(BuildCloneIsNoFolder::class)]
+#[CoversClass(BuildJobOutcomes::class)]
+#[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -82,6 +86,45 @@ final class RunBuildJobTest extends TestCase
     private GatesAtOnce $gatesAtOnce;
 
     private mixed $toolTimeLimit = 1500;
+
+    /** @var array{mixed, mixed, mixed, mixed} */
+    private array $limits = [2_000_000, 900, 6_000_000, 12_000_000];
+
+    #[TestWith([0, 'allowance'])]
+    #[TestWith([1, 'idle time'])]
+    #[TestWith([2, 'runaway ceiling'])]
+    #[TestWith([3, 'per-task total'])]
+    public function testABuildLimitThatIsNotAWholeNumberIsRefusedAsGiven(int $position, string $limit): void
+    {
+        $this->limits[$position] = true;
+
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf('The build\'s %s must be a whole number, not bool.', $limit)));
+
+        $this->runBuilds(OutputFiles::of([]));
+    }
+
+    public function testARunawayCeilingBelowTheAllowanceIsRefused(): void
+    {
+        $this->limits = [2_000_000, 900, 1_999_999, 12_000_000];
+
+        $this->expectExceptionObject(new InvalidArgumentException('The runaway ceiling of 1999999 tokens is below the allowance of 2000000 tokens.'));
+
+        $this->runBuilds(OutputFiles::of([]));
+    }
+
+    public function testTheBuildJobKeepsTheLimitsItIsGiven(): void
+    {
+        $this->limits = [1, 1, 1, 1];
+
+        self::assertEquals(new BuildLimits(1, 1, 1, 1), $this->runBuilds(OutputFiles::of([]))->limits);
+    }
+
+    public function testAJobThatRanToItsEndCarriesNoStopCause(): void
+    {
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertNull($outcome->stopCause);
+    }
 
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
     {
@@ -362,6 +405,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits[0], $this->limits[1], $this->limits[2], $this->limits[3], new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }
