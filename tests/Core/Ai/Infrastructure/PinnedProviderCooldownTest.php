@@ -305,6 +305,18 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([1, 1, 1], [$requests, $out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT))]);
     }
 
+    // Forced order: no pin is asked for and the store saves nothing, so a one-second wait would undercut the 120 seconds the provider named; the failover's own error stays.
+    public function testAnUnpinnedLimitWhoseWindowIsNotSavedKeepsTheFailoversErrorInsteadOfAOneSecondWait(): void
+    {
+        $limited = $this->answering(static fn (): never => throw new RateLimitExceededException(120));
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke('model', 'Review.'));
+
+        self::assertNotInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertInstanceOf(RuntimeException::class, $out);
+    }
+
     public function testAZeroResetCoolsThePinForASecondLikeARetryAfterHeaderOfZero(): void
     {
         $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException(0)), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();

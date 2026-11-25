@@ -182,8 +182,18 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return $this->outOfAccounts($waits, $failures);
         }
 
-        // A wait of a second instead of the failover's error whenever every account sent to was limited, because the vendor counts that error as a failure while the free account can take the retry: one that freed up during the call and was never sent to (issue #2860), one whose window was not saved, or one whose pin ended between its save and this read (issue #3975).
-        return $failures->isEveryTriedLimited() ? new EveryAccountCoolingDown($this->provider, 1) : $everyAccountFailed;
+        // A wait of a second instead of the failover's error, because the vendor counts that error as a failure while a free account can take the retry: one that freed up during the call and was never sent to (issue #2860), or, for a pinned call only, any account whose pin ended between its save and this read (issue #3975). An unpinned account whose window was not saved keeps the failover's error, because a second would undercut the reset the provider named.
+        $retryable = null !== $routerProvider || $this->freedUntried($waits, $failures);
+
+        return $retryable && $failures->isEveryTriedLimited() ? new EveryAccountCoolingDown($this->provider, 1) : $everyAccountFailed;
+    }
+
+    /**
+     * @param array<string, int> $waits
+     */
+    private function freedUntried(array $waits, SendFailures $failures): bool
+    {
+        return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
     }
 
     // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
