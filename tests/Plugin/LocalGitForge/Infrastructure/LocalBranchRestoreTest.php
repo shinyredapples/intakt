@@ -1,0 +1,232 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\LocalGitForge\Infrastructure;
+
+use Intakt\Core\Git\Contract\ArchivedHead;
+use Intakt\Core\Git\Contract\ArchivedHeadPush;
+use Intakt\Core\Git\Contract\BranchHead;
+use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RemoteWrite;
+use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
+use Intakt\Core\Git\UseCase\PushBranch\PushArchivedHead;
+use Intakt\Core\Git\UseCase\PushBranch\PushLockName;
+use Intakt\Plugin\Forge\Contract\BranchRestore;
+use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Infrastructure\LocalBranchRestore;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\ExecutableFinder;
+use Symfony\Component\Process\Process;
+
+// The refs a restore's push may leave behind, apart from LocalForgeBranchesTest, which covers the restore itself.
+#[CoversClass(LocalBranchRestore::class)]
+#[UsesClass(ArchivedHead::class)]
+#[UsesClass(BranchGit::class)]
+#[UsesClass(BranchHead::class)]
+#[UsesClass(BranchNotPushed::class)]
+#[UsesClass(BranchRestore::class)]
+#[UsesClass(CommitId::class)]
+#[UsesClass(ForgeWriteFailed::class)]
+#[UsesClass(GitCall::class)]
+#[UsesClass(GuardedRun::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(LocalRepository::class)]
+#[UsesClass(Mirrors::class)]
+#[UsesClass(PushArchivedHead::class)]
+#[UsesClass(PushLockName::class)]
+final class LocalBranchRestoreTest extends TestCase
+{
+    private const string LINK = 'symbolic-ref refs/heads/intakt/feature refs/heads/intakt/';
+
+    private TemporaryRepository $forge;
+
+    private string $head;
+
+    private ProgramOnPath $programs;
+
+    public function testARestoreRefusedBeforeItsPushNeverDeletesABranchThatExistedBefore(): void
+    {
+        $push = $this->aPushThat(['symbolic-ref', 'refs/heads/intakt/feature', 'refs/heads/main'], BranchNotPushed::because('the remote refused'));
+
+        self::assertSame('The branch "intakt/feature" was not restored: The branch was not pushed: the remote refused', $this->refusalOf($push));
+        self::assertSame($this->head, $this->forge->objectAt('refs/heads/main'));
+    }
+
+    public function testABranchAtTheArchivedHeadSurvivesWhenTheBranchIsPointedAtItBeforeThePushReadsTheRemote(): void
+    {
+        $archived = $this->anArchivedHeadThatABranchOfTheForgeKeeps();
+        $this->programs->runFirstOn('git', 'ls-remote', $this->inTheForge(self::LINK.'keep'));
+
+        self::assertSame('The branch "intakt/feature" was not restored: The branch was not pushed: the branch intakt/feature exists on the remote, and a restore never overwrites a branch', $this->refusalOf($this->theRealPush(), $archived));
+        self::assertSame($archived, $this->forge->objectAt('refs/heads/intakt/keep'));
+    }
+
+    public function testABranchAtTheArchivedHeadSurvivesWhenTheBranchIsPointedAtItAfterThePushAndThePushedRefIsRemoved(): void
+    {
+        $archived = $this->anArchivedHeadThatABranchOfTheForgeKeeps();
+        $this->programs->runFirstOn('git', 'push', sprintf('%s; %s "$@"; status=$?; %s; exit $status', $this->inTheForge(self::LINK.'other'), $this->realGit(), $this->inTheForge(self::LINK.'keep')));
+
+        self::assertSame('The branch "intakt/feature" was not restored: another writer made it a symbolic branch during the restore, so the push wrote refs/heads/intakt/other, which was removed again.', $this->refusalOf($this->theRealPush(), $archived));
+        self::assertSame($archived, $this->forge->objectAt('refs/heads/intakt/keep'));
+        self::assertFileDoesNotExist($this->forge->path.'/.git/refs/heads/intakt/other');
+    }
+
+    public function testABranchMadeWhileAPushFailedWithoutReportingANewBranchIsNamedAndNotRemoved(): void
+    {
+        $push = $this->aPushThat(['branch', 'intakt/other', $this->head], BranchNotPushed::because('git push failed', write: RemoteWrite::Unknown));
+
+        self::assertSame('The branch "intakt/feature" was not restored: another writer changed it during the restore, the push may have written one of refs/heads/intakt/other, and nothing was removed, because none is proven to be the push\'s own.', $this->refusalOf($push));
+        self::assertSame($this->head, $this->forge->objectAt('refs/heads/intakt/other'));
+    }
+
+    public function testTheOneBranchMadeDuringAPushThatReportedItsNewBranchAndThenFailedIsRemoved(): void
+    {
+        $push = $this->aPushThat(['branch', 'intakt/other', $this->head], BranchNotPushed::because('the remote branch is not at the archived head', write: RemoteWrite::Created));
+
+        self::assertSame('The branch "intakt/feature" was not restored: another writer made it a symbolic branch during the restore, so the push wrote refs/heads/intakt/other, which was removed again.', $this->refusalOf($push));
+        self::assertFileDoesNotExist($this->forge->path.'/.git/refs/heads/intakt/other');
+    }
+
+    public function testTwoBranchesMadeAtTheArchivedHeadDuringAPushThatCreatedOneAreNamedAndNotRemoved(): void
+    {
+        $push = $this->aPushThat(['fetch', '--quiet', '.', $this->head.':refs/heads/intakt/other', $this->head.':refs/heads/intakt/second'], BranchNotPushed::because('the remote branch is not at the archived head', write: RemoteWrite::Created));
+
+        self::assertSame('The branch "intakt/feature" was not restored: another writer changed it during the restore, the push may have written one of refs/heads/intakt/other, refs/heads/intakt/second, and nothing was removed, because none is proven to be the push\'s own.', $this->refusalOf($push));
+        self::assertSame($this->head, $this->forge->objectAt('refs/heads/intakt/other'));
+        self::assertSame($this->head, $this->forge->objectAt('refs/heads/intakt/second'));
+    }
+
+    public function testAPushThatFailedAfterItCreatedTheBranchItselfKeepsItsOwnReasonAndTheBranch(): void
+    {
+        $push = $this->aPushThat(['branch', 'intakt/feature', $this->head], BranchNotPushed::because('git ls-remote failed with exit code 128', write: RemoteWrite::Created));
+
+        self::assertSame('The branch "intakt/feature" was not restored: The branch was not pushed: git ls-remote failed with exit code 128', $this->refusalOf($push));
+        self::assertSame($this->head, $this->forge->objectAt('refs/heads/intakt/feature'));
+    }
+
+    public function testAPushThatFailedAndLeftNoNewBranchKeepsItsOwnReason(): void
+    {
+        $push = $this->aPushThat(['branch', 'intakt/unrelated', $this->head], BranchNotPushed::because('git push failed', write: RemoteWrite::Unknown));
+
+        self::assertSame('The branch "intakt/feature" was not restored: The branch was not pushed: git push failed', $this->refusalOf($push, str_repeat('a', 40)));
+    }
+
+    public function testAPushThatReportsSuccessWithoutABranchAtTheArchivedHeadIsNoRestore(): void
+    {
+        self::assertSame('The branch "intakt/feature" was not restored: it is no branch at the archived head after the push, so another writer changed it during the restore.', $this->refusalOf(self::createStub(ArchivedHeadPush::class)));
+    }
+
+    public function testNothingIsPushedWhenTheBranchesCannotBeListedBeforeThePush(): void
+    {
+        $push = $this->createMock(ArchivedHeadPush::class);
+        $push->expects(self::never())->method('push');
+        $this->programs->runFirstOn('git', 'for-each-ref', 'echo broken >&2; exit 128');
+
+        self::assertSame('The branch "intakt/feature" was not restored: git for-each-ref failed before the push: broken', $this->refusalOf($push));
+    }
+
+    public function testARestoreWhoseBranchesCannotBeListedAfterThePushIsRefusedAndSaysABranchMayBeLeft(): void
+    {
+        $mark = escapeshellarg($this->archives().'-listed');
+        $this->programs->runFirstOn('git', 'for-each-ref', sprintf('test ! -e %s || { echo broken >&2; exit 128; }; touch %s', $mark, $mark));
+
+        try {
+            self::assertSame('The branch "intakt/feature" was not restored: git for-each-ref failed after the push, so a branch the push wrote through a symbolic branch may be left: broken', $this->refusalOf(self::createStub(ArchivedHeadPush::class)));
+        } finally {
+            new Filesystem()->remove($this->archives().'-listed');
+        }
+    }
+
+    protected function setUp(): void
+    {
+        $this->forge = new TemporaryRepository();
+        $this->head = $this->forge->commitFile('README.md', "base\n");
+        $this->programs = new ProgramOnPath();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->programs->remove();
+        $this->forge->remove();
+        new Filesystem()->remove($this->archives());
+    }
+
+    private function refusalOf(ArchivedHeadPush $push, ?string $head = null): string
+    {
+        try {
+            new LocalBranchRestore(new LocalRepository($this->forge->path, 'main'), $push, new HardenedGit())->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($head ?? $this->head)));
+        } catch (ForgeWriteFailed $refused) {
+            return $refused->getMessage();
+        }
+
+        self::fail('The restore was not refused.');
+    }
+
+    // A push that runs one git command in the forge, as another writer would during it, and then fails.
+    /**
+     * @param list<string> $command
+     */
+    private function aPushThat(array $command, BranchNotPushed $failure): ArchivedHeadPush
+    {
+        $push = self::createStub(ArchivedHeadPush::class);
+        $push->method('push')->willReturnCallback(function () use ($command, $failure): never {
+            $this->git(...$command);
+
+            throw $failure;
+        });
+
+        return $push;
+    }
+
+    private function theRealPush(): PushArchivedHead
+    {
+        return new PushArchivedHead(new BranchGit(new HardenedGit(), new GuardedRun()), new LockFactory(new InMemoryStore()), new Mirrors($this->archives()));
+    }
+
+    // A commit only the archive made, which the forge's branch intakt/keep holds too, so a restore that removes a ref at the archived head could remove that branch.
+    private function anArchivedHeadThatABranchOfTheForgeKeeps(): string
+    {
+        $archive = $this->archives().'/alpha.git';
+        $this->git('init', '--quiet', '--bare', $archive);
+        $archived = $this->forge->commitFile('src/New.php', "<?php\n");
+        $this->git('push', '--quiet', $archive, $archived.':refs/intakt/archive/feature');
+        $this->git('branch', 'intakt/keep', $archived);
+        $this->git('reset', '--quiet', '--hard', $this->head);
+
+        return $archived;
+    }
+
+    private function inTheForge(string $command): string
+    {
+        return sprintf('%s -C %s %s', $this->realGit(), escapeshellarg($this->forge->path), $command);
+    }
+
+    private function realGit(): string
+    {
+        return escapeshellarg(new ExecutableFinder()->find('git') ?? self::fail('git is not on PATH.'));
+    }
+
+    private function archives(): string
+    {
+        return $this->forge->path.'-archives';
+    }
+
+    private function git(string ...$command): void
+    {
+        new Process(['git', ...$command], $this->forge->path, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->mustRun();
+    }
+}

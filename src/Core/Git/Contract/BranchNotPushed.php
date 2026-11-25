@@ -20,7 +20,7 @@ final class BranchNotPushed extends RuntimeException implements ReportableFailur
         return $failure;
     }
 
-    // The same failure, met once git push had run.
+    // A copy and not a change of this failure, because a git call's failure knows nothing of the push it is part of, and only the push knows whether git push had run by then.
     public function after(RemoteWrite $write): self
     {
         $failure = new self($this->getMessage(), 0, $this);
