@@ -6,8 +6,10 @@ namespace Intakt\Core\Git\Contract;
 
 use SensitiveParameter;
 use SensitiveParameterValue;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// The password sits in a SensitiveParameterValue, so print_r, var_dump and an exception's trace show an empty object instead of it.
+// The password sits in a SensitiveParameterValue, so print_r, var_dump and an exception's trace show an empty object instead of it. No service, because BranchGit holds one only on a copy made for a push.
+#[Exclude]
 final readonly class RemoteCredential
 {
     private SensitiveParameterValue $password;
