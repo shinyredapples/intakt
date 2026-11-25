@@ -19,6 +19,8 @@ final readonly class RegressionEvidence
 
     public function addedTo(string $body): string
     {
+        // CRLF and bare CR end lines in Markdown too, so a fence or heading split only on LF would be missed.
+        $body = str_replace(["\r\n", "\r"], "\n", $body);
         $lines = explode("\n", $body);
         [$headings, $open] = $this->scanned($lines);
         $evidence = $this->evidenceIn($headings);
@@ -45,8 +47,6 @@ final readonly class RegressionEvidence
         $fence = null;
 
         foreach ($lines as $number => $line) {
-            // Because a body written with CRLF line ends would otherwise leave a closing fence open and hide the results in code.
-            $line = rtrim($line, "\r");
             $inside = null !== $fence;
             $fence = $this->fenceAfter($line, $fence);
             $heading = $inside || null !== $fence ? null : $this->headingOf($line);

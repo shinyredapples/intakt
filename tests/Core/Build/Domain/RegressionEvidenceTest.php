@@ -115,14 +115,35 @@ final class RegressionEvidenceTest extends TestCase
     {
         $body = new RegressionEvidence($this->runs())->addedTo("```\r\ncode\r\n```\r\n\r\nSummary.");
 
-        self::assertSame("```\r\ncode\r\n```\r\n\r\nSummary.\n\n## Evidence\n\n".self::LINES, $body);
+        self::assertSame("```\ncode\n```\n\nSummary.\n\n## Evidence\n\n".self::LINES, $body);
     }
 
     public function testAnEvidenceHeadingWithCrlfLineEndsIsTheEvidenceSection(): void
     {
         $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\r\n\r\nShown.\r\n");
 
-        self::assertSame("## Evidence\r\n\r\nShown.\n\n".self::LINES, $body);
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAnUnclosedFenceWithBareCrLineEndsIsClosedBeforeANewEvidenceHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Summary.\r\r```text\rsample");
+
+        self::assertSame("Summary.\n\n```text\nsample\n```\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingWithBareCrLineEndsGetsNoSecondSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\r\rShown.\r");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testACrDelimitedOpenFenceInsideAnLfBodyIsClosedBeforeTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n```\routput");
+
+        self::assertSame("## Evidence\n\nShown.\n```\noutput\n```\n\n".self::LINES, $body);
     }
 
     public function testAnEvidenceHeadingWithAColonIsTheEvidenceSection(): void
