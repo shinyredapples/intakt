@@ -48,6 +48,27 @@ final class TokenUsageRowTest extends TestCase
         self::assertEquals(new TokenFigures(39504, 0, 0, 39500, 700), $figures);
     }
 
+    public function testAnAnthropicRowWithCachedAndOnlyACacheReadCountsTheRemainderAsUnsplitAndInThePrompt(): void
+    {
+        $row = new TokenUsageRow('anthropic.default', null, 4, 700, null, null, 39500, null, 38000, null, null, null, null);
+
+        self::assertEquals(new TokenFigures(39504, 38000, 0, 1500, 700), $row->figures());
+    }
+
+    public function testAClaudeCodeRowWithCachedAndOnlyACacheWriteCountsTheRemainderAsUnsplitAndInThePrompt(): void
+    {
+        $row = new TokenUsageRow('claude_code.work', null, 4, 700, null, null, 39500, 1500, null, null, null, null, null);
+
+        self::assertEquals(new TokenFigures(39504, 0, 1500, 38000, 700), $row->figures());
+    }
+
+    public function testARowWhoseSplitFiguresExceedCachedCountsNoNegativeUnsplitFigure(): void
+    {
+        $row = new TokenUsageRow('anthropic.default', null, 4, 700, null, null, 100, null, 200, null, null, null, null);
+
+        self::assertEquals(new TokenFigures(204, 200, 0, 0, 700), $row->figures());
+    }
+
     public function testAnOpenAiFormPromptAlreadyHoldsItsCachedReadsSoTheyAreNotAddedAgain(): void
     {
         $usage = ['prompt_tokens' => 40000, 'prompt_tokens_details' => ['cached_tokens' => 38000], 'completion_tokens' => 700, 'total_tokens' => 40700];

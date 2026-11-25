@@ -41,7 +41,7 @@ final class DuplicateDeliveryTest extends KernelTestCase
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $second = $this->fixture->secondWorker(new ScriptedVendor());
+        $second = $this->fixture->secondWorker(new VerdictPerRole());
         $seenMeanwhile = [];
 
         $this->fixture->deliver($message, new RedeliveredDuringTheCall(function () use ($second, $message, $round, &$seenMeanwhile): void {
@@ -65,7 +65,7 @@ final class DuplicateDeliveryTest extends KernelTestCase
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $second = $this->fixture->secondWorker(new ScriptedVendor());
+        $second = $this->fixture->secondWorker(new VerdictPerRole());
         $seenMeanwhile = [];
 
         $this->fixture->deliver($message, new RedeliveredDuringTheCall(function () use ($second, $message, $round, &$seenMeanwhile): void {
