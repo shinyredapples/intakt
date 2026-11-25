@@ -45,7 +45,7 @@ final readonly class RegressionEvidence
         $fence = null;
 
         foreach ($lines as $number => $line) {
-            // A body written with CRLF line ends still closes its fences and names its headings.
+            // Because a body written with CRLF line ends would otherwise leave a closing fence open and hide the results in code.
             $line = rtrim($line, "\r");
             $inside = null !== $fence;
             $fence = $this->fenceAfter($line, $fence);
