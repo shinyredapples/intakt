@@ -6,9 +6,11 @@
 
 It is Friday afternoon. You started a review half an hour ago, and the page still says one reviewer is running. Nothing looks broken, but nothing moves either. Most surprises in Intakt have a reason written on the screen. This chapter lists the common ones: what you see, why, and what to do.
 
-## First, look at Waiting on you
+## First steps
 
-Open **You** in the menu. Anything only you can decide shows up there, oldest first. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
+1. In the folder with Intakt's `compose.yaml`, run `docker compose exec intakt php bin/console intakt:doctor`. It works even when the dashboard does not start, and it changes nothing.
+2. Read its three lines: the worker threads (a worker is ready to take a request), the server metrics (the server's figures can be read) and the Mercure hub (live updates work). Each says `pass`, or `fail` with the problem and, after `fix:`, what to do. Fix those first.
+3. Open **You** in the menu. Anything only you can decide shows up there, oldest first. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
 
 ![The Waiting on you page: the octopus above "Nothing needs you, Intakt keeps building and reviewing. When it needs a decision, it shows up here", then the sections Meanwhile, "No review is running now", and You handled today](../assets/guide/waiting-on-you.webp)
 
@@ -77,7 +79,7 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 
 - **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
 - **Why:** the health check failed three times in a row: the dashboard did not answer, the live-update hub reported a problem, no worker was ready to take a request, or the server's figures could not be read.
-- **What to do:** run `docker exec intakt php bin/console intakt:server:health`. Each `unhealthy:` line names one problem and why.
+- **What to do:** run `docker compose exec intakt php bin/console intakt:doctor`; each `fail:` line names one problem and what to do. `docker compose exec intakt php bin/console intakt:server:health` shows what the health check itself sees: each `unhealthy:` line names one problem and why.
 
 ## The dashboard says "Open the dashboard on localhost"
 
