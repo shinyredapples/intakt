@@ -16,6 +16,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Psr\Log\LoggerInterface;
 
 // The mode and the hand-over are read here and not when the round is queued, so a project switched to or from reviewer-for-loop after its judge publishes by its mode at publication; a failed write is left to Messenger's retries.
@@ -31,6 +32,7 @@ final readonly class PublishVerdictHandler
         private ForgeWrites $forge,
         private ChangePublications $publications,
         private LoggerInterface $logger,
+        private RoundStatusMirror $mirror,
     ) {
     }
 
@@ -95,12 +97,18 @@ final readonly class PublishVerdictHandler
     // Recorded only after a write the forge took, so a round whose publication was refused, skipped or is still queued stays in review; never for an error status (a replay, a head Intakt could not review), because it is still published but carries no verdict for the people on the pull request to act on.
     private function publish(ReviewRound $round, PublishedVerdict $verdict): bool
     {
-        $published = $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $verdict);
+        $change = new ChangeId($round->change());
+        if (!$this->forge->publishVerdict($round->project(), $change, $verdict)) {
+            return false;
+        }
 
-        if ($published && HeadStatus::Error !== $verdict->status) {
+        if (HeadStatus::Error !== $verdict->status) {
             $this->rounds->recordPublication($round);
         }
 
-        return $published;
+        // After the record, because the status label is read from the stored round; an error status reconciles too and leaves the round in review.
+        $this->mirror->reconcile($round->project(), $change);
+
+        return true;
     }
 }

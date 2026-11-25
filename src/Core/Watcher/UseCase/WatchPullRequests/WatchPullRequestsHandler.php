@@ -16,6 +16,7 @@ final readonly class WatchPullRequestsHandler
         private WatchedProjects $projects,
         private ChangedHeads $changed,
         private LookAtHeads $heads,
+        private StatusMirrors $mirrors,
     ) {
     }
 
@@ -37,5 +38,6 @@ final readonly class WatchPullRequestsHandler
         }
 
         $this->heads->lookAtDue($project);
+        $this->mirrors->reconcileEveryOpenWithRound($project->name);
     }
 }

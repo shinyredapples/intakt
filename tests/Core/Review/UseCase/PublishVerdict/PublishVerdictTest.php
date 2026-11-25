@@ -62,6 +62,7 @@ use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Tests\Core\Dashboard\UseCase\AppendRefusingLedger;
@@ -1113,7 +1114,7 @@ final class PublishVerdictTest extends KernelTestCase
         $handed = new HandedOverChanges($this->fixture->ledger());
         $asks = new OwnerAsks($handed, $this->protectedHeads(), $askLedger ?? $this->fixture->ledger());
 
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log);
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log, new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), $this->locks, $this->fixture->log));
     }
 
     private function protectedHeads(): ProtectedHeads

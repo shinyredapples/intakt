@@ -34,6 +34,7 @@ use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Panel;
@@ -74,6 +75,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\VerdictsWithdrawalRefused;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
@@ -89,6 +91,7 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\AdmitHeads\RecordedChecks;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
@@ -133,7 +136,9 @@ use Symfony\Component\Messenger\Exception\HandlerFailedException;
 #[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
+#[CoversClass(StatusMirrors::class)]
 #[UsesClass(WatchPullRequests::class)]
+#[UsesClass(RoundStatusMirror::class)]
 #[UsesClass(DoctrineInstallWideFailures::class)]
 #[UsesClass(ItemFailureRecord::class)]
 #[UsesClass(FullDisk::class)]
@@ -1682,7 +1687,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
         $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        // No round in Review's store, so the status pass has nothing to reconcile and these tests read only the heads.
+        $statuses = new StatusMirrors($find, self::createStub(LatestRoundStatus::class), new RoundStatusMirror(self::createStub(LatestRoundStatus::class), $locks, $logger));
+
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
     }
 
     private function panel(): Panel
