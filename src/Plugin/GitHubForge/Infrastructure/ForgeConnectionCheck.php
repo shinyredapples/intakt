@@ -129,7 +129,7 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
     private function readBackOf(): InstallationReadBack
     {
         $http = new DeadlineHttpClient($this->http, $this->elapsed, self::MAX_DURATION_SECONDS);
-        $readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
+        $readings = new RateLimitReadings(new ArrayAdapter(clock: $this->clock), $this->clock, new LockFactory(new InMemoryStore()));
         $tokens = new InstallationTokens(new InstallationTokenMinter($this->jwt, $http, $this->logger), $this->installationId, $this->clock);
 
         return new InstallationReadBack(

@@ -228,7 +228,7 @@ final class DoctorCommandTest extends TestCase
             new ExpectedInstallation(['contents' => 'write'], ['acme/widget']),
             $clock,
             $clock,
-            new RateLimitReadings(new ArrayAdapter(), $clock, new LockFactory(new InMemoryStore())),
+            new RateLimitReadings(new ArrayAdapter(clock: $clock), $clock, new LockFactory(new InMemoryStore())),
             new NullLogger(),
             $appId,
             $installationId,

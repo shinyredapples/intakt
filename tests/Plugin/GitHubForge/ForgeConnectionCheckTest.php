@@ -280,7 +280,7 @@ final class ForgeConnectionCheckTest extends TestCase
     {
         $this->key = AppKey::generate();
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->live = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
+        $this->live = new RateLimitReadings(new ArrayAdapter(clock: $this->clock), $this->clock, new LockFactory(new InMemoryStore()));
     }
 
     private function check(): ForgeConnectionCheck
