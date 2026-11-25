@@ -25,7 +25,7 @@ You do not hand your code to a stranger on their word. So before Intakt reads an
 
 2. Open <http://localhost:7781> in your browser.
 
-Until a review has run, the dashboard opens on its first-run page, **See a real review**.
+Until a review has run, the dashboard opens on the last step of its setup wizard, **Ready to start**, which leads with **See a real review**. The row of numbered steps above it is for your own project later; you can skip it for now.
 
 ![The first-run page in dark mode: the octopus with its baton above "See a real review, 1 minute, no key", a large Play the demo run button, the line "Two AI labs read a change, then the owl decides what to fix", and three steps: Read by two AI labs (the meerkat), Check by the owl, To fix, only what matters (the beaver); below starts "Use your own project"](../assets/guide/first-run.webp)
 

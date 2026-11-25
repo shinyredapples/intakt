@@ -22,8 +22,8 @@ use PHPUnit\Framework\Attributes\Group;
 final class ConcurrentVerdictStoreTest extends KernelTestCase
 {
     private RoundFixture $fixture;
-    private ScriptedVendor $first;
-    private ScriptedVendor $second;
+    private VerdictPerRole $first;
+    private VerdictPerRole $second;
     private SecondWorker $other;
     private BeforeFirstAppendOf $ledger;
 
@@ -54,8 +54,8 @@ final class ConcurrentVerdictStoreTest extends KernelTestCase
     {
         $this->fixture = new RoundFixture(self::getContainer());
         $this->fixture->useWalOnSqlite();
-        $this->first = new ScriptedVendor();
-        $this->second = new ScriptedVendor();
+        $this->first = new VerdictPerRole();
+        $this->second = new VerdictPerRole();
     }
 
     private function storeBothVerdictsAtOnce(): string

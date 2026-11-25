@@ -1,10 +1,10 @@
 # Checking a provider key
 
-Intakt needs a key from an AI company (a provider) before its reviewers can work. On a new install you can paste one on the **See a real review** page (`/setup`, which the board's **Set up Intakt** button opens) instead of editing a file, and Intakt checks it before it keeps it.
+Intakt needs a key from an AI company (a provider) before its reviewers can work. On a new install you can paste one in the setup wizard (`/setup`, which the board's **Set up Intakt** button opens) instead of editing a file, and Intakt checks it before it keeps it.
 
 ## Where the field is
 
-The first step of the setup page, the AI providers, has a field "A key or token for" followed by the providers Intakt knows, and a **Keep the key** button. The field is there only while no key is set: once a key is in `.env.local`, in the secrets vault, or kept from this page, the step is Done and the field goes away. The field hides what you type.
+Step 3 of the setup wizard, **Add an AI account** (`/setup?step=3`), has a field "A key or token for" followed by the providers Intakt knows, and a **Keep the key** button. The field is there only while no key is set: once a key is in `.env.local`, in the secrets vault, or kept from this page, the step names the provider that has it and the field goes away. The field hides what you type.
 
 ## What the check does
 
@@ -12,7 +12,7 @@ When you press **Keep the key**, Intakt first works out from the key's shape whi
 
 ## What the page tells you
 
-The page comes back with one line:
+The page comes back to step 3 with one line:
 
 | The line says | What it means | What to do |
 |---|---|---|
