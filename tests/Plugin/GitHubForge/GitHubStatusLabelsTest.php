@@ -157,6 +157,84 @@ final class GitHubStatusLabelsTest extends TestCase
         self::assertSame(['POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}'], $this->writes);
     }
 
+    public function testAVerdictStatusWrittenPastTheWaitAfterARestorationConfirmedItsReadEndsAsTheOnlyStatus(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', RecordedTrust::WRITER);
+        $this->writesShowInEvents = true;
+        $reads = 0;
+        $this->whileReading = function () use (&$reads): void {
+            if (2 === ++$reads) {
+                $this->whileReading = null;
+                $this->mirror(RoundStatusLabel::WaitingOnYou);
+            }
+        };
+
+        $this->restore();
+
+        self::assertSame(['status:waiting-on-you'], $this->statusesNow());
+    }
+
+    public function testARestorationThatLandsBetweenAVerdictsLastReadAndItsWriteEndsWithOnlyTheVerdictStatus(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', RecordedTrust::WRITER);
+        $this->writesShowInEvents = true;
+        $this->locks = new LockFactory(new BusyForAWhileStore(20));
+        $reads = 0;
+        $this->whileReading = function () use (&$reads): void {
+            if (2 === ++$reads) {
+                $this->whileReading = null;
+                $this->restore();
+            }
+        };
+
+        $this->mirror(RoundStatusLabel::WaitingOnYou);
+
+        self::assertSame(['status:waiting-on-you'], $this->statusesNow());
+    }
+
+    public function testAWriterSpellingThePullRequestInOtherCaseWaitsForTheSameLock(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', RecordedTrust::WRITER);
+        $this->whileReading = function (): void {
+            $this->whileReading = null;
+            $this->labelsOf()->mirror('alpha', new ChangeId('https://github.com/Acme/Widget/pull/1'), RoundStatusLabel::WaitingOnYou);
+        };
+
+        $this->restore();
+
+        self::assertSame('2026-11-25T10:00:09.500', $this->clock->now()->format('Y-m-d\TH:i:s.v'));
+    }
+
+    public function testAnotherPullRequestDoesNotWaitForTheLockOfThisOne(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $this->unlabeled('status:in-review', RecordedTrust::WRITER);
+        $this->whileReading = function (): void {
+            $this->whileReading = null;
+            $this->labelsOf()->mirror('alpha', new ChangeId('https://github.com/acme/widget/pull/2'), RoundStatusLabel::WaitingOnYou);
+        };
+
+        $this->restore();
+
+        self::assertSame(self::MOMENT, $this->clock->now()->format('Y-m-d\TH:i:s\Z'));
+    }
+
+    public function testOtherLabelsChangingBetweenTheReadsDoNotHoldBackTheStatus(): void
+    {
+        $this->labeled('status:in-review', self::OWN);
+        $number = 0;
+        $this->whileReading = function () use (&$number): void {
+            $this->labeled('area:'.++$number, RecordedTrust::WRITER);
+        };
+
+        $this->mirror(RoundStatusLabel::WaitingOnYou);
+
+        self::assertContains('POST /repos/acme/widget/issues/1/labels {"labels":["status:waiting-on-you"]}', $this->writes);
+    }
+
     public function testALabelListThatKeepsChangingFailsTheWriteWithoutWriting(): void
     {
         $this->labeled('status:in-review', self::OWN);
@@ -331,6 +409,22 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->events[] = ['event' => 'unlabeled', 'label' => ['name' => $label], 'actor' => ['login' => $actor], 'created_at' => self::MOMENT];
     }
 
+    /**
+     * @return list<string>
+     */
+    private function statusesNow(): array
+    {
+        $applied = [];
+        foreach ($this->events as $event) {
+            $label = (array) $event['label'];
+            if (is_string($label['name'] ?? null) && str_starts_with($label['name'], 'status:')) {
+                $applied[$label['name']] = 'labeled' === $event['event'];
+            }
+        }
+
+        return array_keys(array_filter($applied));
+    }
+
     private function labelsOf(): GitHubStatusLabels
     {
         $trust = new RecordedTrust();
@@ -349,7 +443,7 @@ final class GitHubStatusLabelsTest extends TestCase
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
         $path = (string) parse_url($url, PHP_URL_PATH);
-        if (str_ends_with($path, '/issues/1/events')) {
+        if (1 === preg_match('#/issues/[0-9]+/events$#', $path)) {
             $listed = json_encode(200 === $this->eventsStatus ? $this->events : ['message' => 'no'], JSON_THROW_ON_ERROR);
             if ($this->whileReading instanceof Closure) {
                 ($this->whileReading)();
@@ -357,7 +451,7 @@ final class GitHubStatusLabelsTest extends TestCase
 
             return new MockResponse($listed, ['http_code' => $this->eventsStatus]);
         }
-        if (str_contains($path, '/issues/1/')) {
+        if (1 === preg_match('#/issues/[0-9]+/#', $path)) {
             return $this->write($method, $path, $options);
         }
 
