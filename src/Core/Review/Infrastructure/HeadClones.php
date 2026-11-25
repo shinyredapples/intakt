@@ -8,11 +8,11 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\CommitId;
-use Throwable;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 // A clone of its own for each review job, because the round's checkout is a git worktree, whose .git file the job's script refuses.
 final readonly class HeadClones
@@ -47,7 +47,7 @@ final readonly class HeadClones
             // Only for the fetch, because HardenedGit allows no protocol at all and the fetch reads the round's checkout by its path.
             $this->run(new GitCall($fetch->command, $fetch->directory, $fetch->environment->with(GIT_ALLOW_PROTOCOL: 'file')));
             $this->run($this->hardened->call($clone, '-c', 'core.autocrlf=false', '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $head->hash));
-        // Boundary: any failure, also an unexpected one, must remove the partial clone before it ends the job
+            // Boundary: any failure, also an unexpected one, must remove the partial clone before it ends the job
         } catch (Throwable $failed) {
             $this->remove($clone);
 

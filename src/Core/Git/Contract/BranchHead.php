@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Contract;
 
-
 final readonly class BranchHead
 {
     private const string OBJECT_ID = '/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/D';

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Contract;
 
-
 // A task is its resolved repository path and its branch, as in the hand-back round, so one task's lines match however its path was written.
 final readonly class PullRequestTextTask
 {

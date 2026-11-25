@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Domain;
 
-
 final readonly class ExpectedInstallation
 {
     /**
