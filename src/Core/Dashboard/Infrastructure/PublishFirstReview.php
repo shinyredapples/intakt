@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -45,7 +46,7 @@ final readonly class PublishFirstReview
     {
         $review = $this->pages->firstReview();
 
-        if (null === $review || $review->rounds[0]->round !== $opened->round) {
+        if (!$review instanceof Review || $review->rounds[0]->round !== $opened->round) {
             return;
         }
 
