@@ -6,6 +6,8 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 final readonly class RoundOpening
@@ -14,20 +16,26 @@ final readonly class RoundOpening
         private ReviewRounds $rounds,
         private RoundLedger $ledger,
         private MessageBusInterface $commands,
+        private RoundStatusMirror $mirror,
     ) {
     }
 
     // One transaction with the Doctrine queue, because a round stored without its messages would never be resumed by any worker.
     public function open(RunReviewRound $command): string
     {
-        return $this->rounds->inOneTransaction(function () use ($command): string {
+        $opened = $this->rounds->inOneTransaction(function () use ($command): array {
             $round = $this->rounds->open($command);
             $this->ledger->reviewStarted($round, $command->panel->quorum, $command->round->source);
             $this->announce($round);
             $this->dispatchOneMessagePerReviewer($round);
 
-            return $round->id()->toRfc4122();
+            return [$round->id()->toRfc4122(), $round->project(), $round->change()];
         });
+
+        // After the commit, because the step reads the stored round and an uncommitted one is not there; it never throws, so a label costs the round nothing.
+        $this->mirror->reconcile($opened[1], new ChangeId($opened[2]));
+
+        return $opened[0];
     }
 
     // Queued with the round rather than dispatched after it, because a caller's enclosing transaction may still roll the round back, and only the queue row goes with it; ahead of the reviewer messages, so that with fewer workers than reviewers it does not wait behind whole reviews.

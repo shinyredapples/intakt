@@ -49,6 +49,7 @@ use Intakt\Core\Review\Infrastructure\EscalationPrompt;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\Infrastructure\StopRequests;
+use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
@@ -79,6 +80,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\Vendor\Contract\EscalationReviews;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
@@ -87,6 +89,7 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\QueuedEscalations;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
@@ -189,9 +192,9 @@ final readonly class RoundFixture
         return $this->commandAt($change, SampleIdentity::HEAD, $reviewers);
     }
 
-    public function startHandlerOn(MessageBusInterface $queue): RunReviewRoundHandler
+    public function startHandlerOn(MessageBusInterface $queue, ?RoundStatusMirror $mirror = null): RunReviewRoundHandler
     {
-        return new RunReviewRoundHandler(new RoundOpening($this->rounds($this->entities), $this->roundLedger($this->ledger), $queue));
+        return new RunReviewRoundHandler(new RoundOpening($this->rounds($this->entities), $this->roundLedger($this->ledger), $queue, $mirror ?? $this->mirrorWithoutLabels()));
     }
 
     public function startFromSource(ChangeSource $source): string
@@ -361,7 +364,12 @@ final readonly class RoundFixture
 
         $ledger = $this->roundLedger(new InMemoryLedger());
 
-        return new RunReviewRoundHandler(new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
+        return new RunReviewRoundHandler(new RoundOpening($this->rounds($entities), $ledger, $this->bus, $this->mirrorWithoutLabels()))($command);
+    }
+
+    public function mirrorWithoutLabels(): RoundStatusMirror
+    {
+        return new RoundStatusMirror(new StoredLatestRoundStatus($this->transactions()), new LockFactory(new InMemoryStore()), new NullLogger());
     }
 
     public function findingStore(): StoredFindings

@@ -62,6 +62,8 @@ use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Tests\Core\Dashboard\UseCase\AppendRefusingLedger;
@@ -69,12 +71,14 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\DeferringJudge;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Tests\Plugin\GitHubForge\ScriptedGitHub;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
+use Psr\Log\NullLogger;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
@@ -118,6 +122,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ReplayMark::class)]
 #[UsesClass(CountedVote::class)]
 #[UsesClass(StoredLatestRoundStatus::class)]
+#[UsesClass(RoundStatusMirror::class)]
+#[UsesClass(RoundStatusLabel::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -132,6 +138,8 @@ final class PublishVerdictTest extends KernelTestCase
     private LockFactory $locks;
 
     private ProtectedChanges $protectedChanges;
+
+    private RecordingStatusLabels $labels;
 
     public function testAPullRequestHandedToIntaktInALiveProjectGetsTheReviewPostedWithTheRoundsToken(): void
     {
@@ -411,6 +419,56 @@ final class PublishVerdictTest extends KernelTestCase
         } catch (ForgeWriteFailed) {
             self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
         }
+    }
+
+    public function testAPublishedVerdictReconcilesTheStatusLabelToWaitingOnYou(): void
+    {
+        $this->publishRoundJudgedOn([]);
+
+        self::assertSame(['status:waiting-on-you'], $this->labels->labels);
+    }
+
+    public function testAPublicationTheForgeRefusedDoesNotReconcileTheStatusLabel(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 422);
+
+        try {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+            self::fail('The refused write was not reported.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame([], $this->labels->passes);
+        }
+    }
+
+    // The order is forced from inside the queue writer's reads: the publication commits while the writer holds the lock, so its own reconcile is skipped and the writer puts back the round state it read before.
+    public function testAPublicationWhileTheQueueWriterHoldsTheLockLeavesOnlyTheStoredRoundsStatusAfterTheNextReconcile(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $handler = $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $this->labels->whileReading(function () use ($handler, $roundId): void {
+            foreach ($this->publicationsOf($roundId) as $publication) {
+                $handler($publication);
+            }
+        });
+        $change = new ChangeId(self::PULL);
+
+        $this->mirror()->reconcile('alpha', $change);
+        $afterTheQueueWriter = $this->labels->labels;
+        $this->mirror()->reconcile('alpha', $change);
+
+        self::assertSame([['status:in-review'], ['status:waiting-on-you']], [$afterTheQueueWriter, $this->labels->labels]);
+        self::assertLessThanOrEqual(1, $this->labels->comments);
+    }
+
+    public function testAPublicationThatCommitsBeforeTheQueueWritersReconcileLeavesTheStoredRoundsStatus(): void
+    {
+        $this->publishRoundJudgedOn([]);
+
+        $this->mirror()->reconcile('alpha', new ChangeId(self::PULL));
+
+        self::assertSame(['status:waiting-on-you'], $this->labels->labels);
+        self::assertLessThanOrEqual(1, $this->labels->comments);
     }
 
     public function testAnOwnerAskTheForgeDidNotPublishIsNotRecorded(): void
@@ -985,6 +1043,7 @@ final class PublishVerdictTest extends KernelTestCase
         $this->github = new ScriptedGitHub();
         $this->locks = new LockFactory(new InMemoryStore());
         $this->protectedChanges = ProtectedChanges::touching(new Paths());
+        $this->labels = new RecordingStatusLabels(['status:in-review']);
     }
 
     // The application's command bus, so the publication the mark queues lands on the application's queue.
@@ -1113,7 +1172,12 @@ final class PublishVerdictTest extends KernelTestCase
         $handed = new HandedOverChanges($this->fixture->ledger());
         $asks = new OwnerAsks($handed, $this->protectedHeads(), $askLedger ?? $this->fixture->ledger());
 
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log);
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->mirror(), $this->fixture->log);
+    }
+
+    private function mirror(): RoundStatusMirror
+    {
+        return new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), $this->locks, new NullLogger(), $this->labels);
     }
 
     private function protectedHeads(): ProtectedHeads
