@@ -192,7 +192,8 @@ final class InstanceTest extends InstanceTestCase
     public function testWhileTheCommandRunsTheInstanceSleepsUntilTheCommandEndsInsteadOfPolling(): void
     {
         // Because a polling wait also finds a quick exit, only the parent's wakes tell it apart: a 50 millisecond poll wakes many times in 0.9 seconds, the signal wait at most once a second.
-        $count = 'grep voluntary_ctxt_switches /proc/$PPID/status | tr -dc 0-9';
+        // Only the voluntary line counts, because the status also holds nonvoluntary_ctxt_switches, whose digits must not join it.
+        $count = 'awk \'$1 == "voluntary_ctxt_switches:" { print $2 }\' /proc/$PPID/status';
         $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'before=$('.$count.'); sleep 0.9; after=$('.$count.'); echo "wakes: $((after - before))"'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '5']);
 
         self::assertSame(0, $run['exit']);

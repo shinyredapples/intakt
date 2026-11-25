@@ -91,14 +91,18 @@ final readonly class ProcessQueue
         // Because a pass starts a moment before its first job, a job limit equal to the pass limit is still the job's own reason; the process still stops at the time left.
         $ownTimeout = $this->job->seconds <= $left || (float) $this->job->seconds === (float) $this->pass->seconds;
         $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->job->seconds, $left));
+        $reason = $ownTimeout ? 'timed out after '.$this->job->label() : $this->overallLimit();
 
+        // Because Symfony checks the limit as the start ends, a limit shorter than the start itself times out there.
         try {
             $process->start();
+        } catch (ProcessTimedOutException) {
+            return [$this->timedOut($process, $reason), ''];
         } catch (ExceptionInterface) {
             return [new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$command[0]), ''];
         }
 
-        return [$process, $ownTimeout ? 'timed out after '.$this->job->label() : $this->overallLimit()];
+        return [$process, $reason];
     }
 
     /**

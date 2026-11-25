@@ -177,6 +177,14 @@ final class ProcessQueueTest extends SandboxTestCase
         self::assertSame('timed out: the test pass reached its overall limit of 1 seconds', $results['late']->firstErrorLine());
     }
 
+    public function testAJobLimitShorterThanTheStartItselfTimesOutAndNamesTheLimit(): void
+    {
+        $results = new ProcessQueue(1.0E-6, 60)->run(['quick' => $this->php('sleep(2);')], 1, $this->emptySandbox()->root);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['quick']->exitCode);
+        self::assertSame('timed out after 1.0E-6 seconds', $results['quick']->firstErrorLine());
+    }
+
     public function testAQueueWithAJobLimitThatIsNotFiniteInNanosecondsIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);
