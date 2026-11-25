@@ -1,10 +1,30 @@
 ## Branch cleanup
 
-Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far only the forge side exists: the `ForgeBranches` contract, its local implementation and its GitHub implementation. No command, job or rule calls it yet, and nothing in the container builds either implementation; the archive refs and restore, the cleanup rules and the weekly run come in later parts of #24.
+Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), plan task T30, #24) deletes the branches Intakt no longer needs. So far the forge side exists (the `ForgeBranches` contract, its local implementation and its GitHub implementation) and the cleanup rules, a pure rule chain that decides on facts it is given. No command, job or rule calls the forge yet, and nothing in the container builds either implementation; the archive refs and restore, and the weekly run that applies the verdicts, come in later parts of #24.
 
 ### In short
 
 `ForgeBranches` lists a repository's branches, reads each branch's pull request, tells whether a person committed to it, and deletes it only at the head it was listed with. A read that fails throws, so a failure never reads as "no pull request" or "no commit by a person". The local forge runs git and deletes with `update-ref` at the expected head while holding every worktree's locks. The GitHub forge reads every page of the REST answers and checks each field; GitHub's delete takes no expected head, so it reads the branch right before deleting and refuses one that moved, accepting the short window between the two.
+
+### Cleanup rules
+
+`Core/BranchCleanup/Domain/BranchRules::verdictOf(BranchFacts, DateTimeImmutable $now, ?BranchWarning)` returns a `Verdict`. It does no I/O and reads no clock: the facts and the moment are passed in. The rules are a chain of steps joined with the pipe operator; each step passes a `Judgement` on, and the first step that decides wins, so a later rule never overrules an earlier one.
+
+`BranchFacts` holds the `ForgeBranch`, its `BranchChange` (or `null`), the time of the last commit, when the pull request was closed, and whether a person committed to the branch (`null` when that check could not answer).
+
+In order:
+
+1. **Out of bounds:** a branch without Intakt's prefix (`intakt/`) is `out-of-bounds`, unless the project sets `clean_other_branches: true`.
+2. **Kept:** the default branch, a protected branch and a release branch are `keep`, opt-in or not.
+3. **Merged pull request:** `deletable` at once, with no warning.
+4. **Closed, unmerged pull request:** `keep` for 30 days after the close, and always with the `keep` label; after that the branch is due (see below).
+5. **Open pull request:** `keep`.
+6. **Claimed branch with no pull request:** never due. It is `stale` after 30 days without commits and `keep` before. A branch is claimed when a person committed to it, when its name is in the project's `keep_branches`, or when the claim check could not answer (it fails closed). `keep_branches` applies only here: it claims no branch that has a pull request, so a merged or closed one is still handled by rules 3 and 4.
+7. **Unclaimed branch with no pull request:** due 60 days after its last commit, `stale` from 30 days, `keep` before.
+
+A due branch is `warn` until the week's warning has passed. `BranchWarning` names the branch, the head it warned about and the moment; `allowsDeletionAt(head, now)` is true only when the head is the same and a full 7 x 24 hours have passed since the warning, never rounded to whole days. A moved head needs a new warning. The 30 and 60 days are counted from the moment given (`P30D`, `P60D`).
+
+The project file takes two keys per project, read by `BranchCleanupConfiguration` and `CleanupPolicies` into the `intakt.branch_cleanup.projects` parameter: `clean_other_branches` (boolean, default false) and `keep_branches` (a list of branch names, default empty).
 
 ### The contract
 
@@ -80,4 +100,4 @@ A branch whose `isDeletable()` is false is refused before any call. Then the for
 
 ### Tests
 
-The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` and `tests/Plugin/Forge/Contract/ForgeBranchTest.php`.
+The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` `tests/Plugin/Forge/Contract/ForgeBranchTest.php`, and for the rules `tests/Core/BranchCleanup/Domain/BranchRulesTest.php`, `BranchWarningTest.php` and `tests/Core/BranchCleanup/Infrastructure/BranchCleanupConfigurationTest.php`.
