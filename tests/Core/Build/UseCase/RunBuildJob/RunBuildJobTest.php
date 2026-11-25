@@ -382,6 +382,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits ?? new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000),new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits ?? new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }
