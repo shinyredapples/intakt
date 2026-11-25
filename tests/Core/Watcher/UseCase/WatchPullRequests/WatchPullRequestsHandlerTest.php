@@ -34,6 +34,7 @@ use Intakt\Core\Review\Contract\BootHarness;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Panel;
@@ -83,6 +84,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -155,6 +157,7 @@ use Symfony\Component\Messenger\Exception\HandlerFailedException;
 #[UsesClass(BootOutcome::class)]
 #[UsesClass(MainCommit::class)]
 #[UsesClass(MarkVerdictsStale::class)]
+#[UsesClass(Labels::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
@@ -183,6 +186,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private WatchPullRequestsHandler $handler;
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
+    private Labels $steering;
     // Read from its own ledger, because the in-memory one reads nothing back.
     private ?Ledger $openings = null;
     private ?ChangeAuthorship $authorship = null;
@@ -434,6 +438,27 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $start = new StartReview('alpha', 'Review it.', new RequestedRound('7', null, new ChangeSource('repo', 'main')));
         self::assertEquals([new StartReviewAtHead($start, new CommitId(str_repeat(self::GREEN, 40)))], $this->commands->started);
         self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+    }
+
+    public function testTheSteeringLabelsOfThePullRequestReachTheRoundItStarts(): void
+    {
+        $this->steering = new Labels('review:full', 'model:strong');
+
+        $this->startRoundOnGreenHead();
+
+        self::assertSame(['review:full', 'model:strong'], [...$this->commands->started[0]->start->labels]);
+    }
+
+    public function testTheStaleCheckJudgesAnEarlierRoundByTheLabelsItStartedWithNotByTheLabelsReadAgain(): void
+    {
+        $this->steering = new Labels('review:full');
+        $this->startRoundOnGreenHead();
+        $this->steering = new Labels();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['review:full'], [...$this->queries->identitiesAsked[0]->round->start->labels]);
     }
 
     public function testAGreenHeadSeenAgainOnASecondTickStartsNoSecondRound(): void
@@ -692,7 +717,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
                     'round_id' => 'other',
                     'stale' => false,
                     'queued_recorded' => false,
-                ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
+                    'labels' => [],
+                ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN, 'labels' => Types::JSON]);
             }
         };
 
@@ -1502,6 +1528,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->queries = new StandingQueryBus($recorded, $entities);
         $this->locks = new BeforeChangeLockStore();
         $this->logger = new RecordingLogger();
+        $this->steering = new Labels();
         $this->handler = $this->handler();
     }
 
@@ -1645,7 +1672,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
         $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
-        $starts = new RoundStarts($this->commands, $rounds, $ledger);
+        $steering = self::createStub(ChangeLabels::class);
+        $steering->method('steeringOf')->willReturnCallback(fn (): Labels => $this->steering);
+        $starts = new RoundStarts($this->commands, $rounds, $ledger, $steering);
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
         $authors = self::createStub(AuthorTrust::class);
         $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);

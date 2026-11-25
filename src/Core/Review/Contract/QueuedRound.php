@@ -10,6 +10,8 @@ final readonly class QueuedRound
     public function __construct(
         public string $roundId,
         public string $checkoutRoot,
+        // Answered with the round, because a later check of its verdicts must judge them by the labels it started with, not by labels read again.
+        public Labels $labels = new Labels(),
     ) {
     }
 }

@@ -12,8 +12,6 @@ use Intakt\Core\Review\Contract\Labels;
 // Only facts the loop knows about the build; nothing here comes from the builder's output, so a job cannot pick its own model.
 final readonly class BuildFacts
 {
-    private const string TIER_LABEL_PREFIX = 'model:';
-
     public function __construct(
         public ?Tier $labelledTier,
         public Paths $paths,
@@ -28,14 +26,9 @@ final readonly class BuildFacts
         $tiers = [];
 
         foreach ($labels as $label) {
-            if (!str_starts_with($label, self::TIER_LABEL_PREFIX)) {
-                continue;
-            }
+            $tier = Tier::fromLabel($label);
 
-            // Ignored, never guessed at, because a value that names no tier (a model, a vendor) must not pick one.
-            $tier = Tier::tryFrom(substr($label, strlen(self::TIER_LABEL_PREFIX)));
-
-            if (null !== $tier) {
+            if ($tier instanceof Tier) {
                 $tiers[] = $tier;
             }
         }

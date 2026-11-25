@@ -10,6 +10,14 @@ enum Tier: string
     case Standard = 'standard';
     case Light = 'light';
 
+    public const string LABEL_PREFIX = 'model:';
+
+    // Ignored, never guessed at, because a value that names no tier (a model, a vendor) must not pick one.
+    public static function fromLabel(string $label): ?self
+    {
+        return str_starts_with($label, self::LABEL_PREFIX) ? self::tryFrom(substr($label, strlen(self::LABEL_PREFIX))) : null;
+    }
+
     // Because a full verdict with its findings must fit, and the strong tier writes the longest reviews.
     /**
      * @return positive-int
