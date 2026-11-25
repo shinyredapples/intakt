@@ -256,7 +256,7 @@ final class AddProjectControllerTest extends DashboardPageTestCase
     public function testTheCheckStepShowsTheBootReasonRedacted(): void
     {
         $this->ledger->failMainBoot('billing-api', 'key held-value refused');
-        $redactor = $this->createStub(Redactor::class);
+        $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnCallback(static fn (string $text): string => str_replace('held-value', '[redacted]', $text));
         self::getContainer()->set(Redactor::class, $redactor);
 
