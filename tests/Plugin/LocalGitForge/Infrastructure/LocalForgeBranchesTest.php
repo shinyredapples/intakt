@@ -206,6 +206,45 @@ final class LocalForgeBranchesTest extends TestCase
         }
     }
 
+    public function testABranchMadeAgainBeforeThePutBackIsReportedAsDeletedAndExistingAgainAtItsNewCommit(): void
+    {
+        $main = $this->repository->objectAt('HEAD');
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        $madeAgain = sprintf("  *' update-ref --no-deref '*) %s; exec %s \"\$@\" ;;\n", $this->inTheRepository(['update-ref', 'refs/heads/intakt/feature', $main]), $this->realGit());
+
+        try {
+            $this->withGit($madeAgain.$this->aWorktreeAddAfterTheFirstListingAndNoSecondListing(), function () use ($listed): void {
+                $this->branches()->delete($listed);
+            });
+            self::fail('The delete did not report the branch made again.');
+        } catch (ForgeWriteFailed $lost) {
+            self::assertStringContainsString(sprintf('The branch "intakt/feature" was deleted at %s and exists again at %s', $head, $main), $lost->getMessage());
+            self::assertSame($main, $this->repository->objectAt('refs/heads/intakt/feature'));
+        }
+    }
+
+    public function testABranchWhoseStateCannotBeReadAfterAFailedPutBackIsReportedAsDeletedWithAnUnreadableState(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+        $noPutBackNorRead = "  *' update-ref --no-deref '*) echo 'put-back refused' >&2; exit 128 ;;\n  *' show-ref '*) echo 'read refused' >&2; exit 128 ;;\n";
+
+        try {
+            $this->withGit($noPutBackNorRead.$this->aWorktreeAddAfterTheFirstListingAndNoSecondListing(), function () use ($listed): void {
+                $this->branches()->delete($listed);
+            });
+            self::fail('The delete did not report the branch it could not put back.');
+        } catch (ForgeWriteFailed $lost) {
+            self::assertStringContainsString(sprintf('The branch "intakt/feature" was deleted at %s and its current state could not be read', $head), $lost->getMessage());
+            self::assertStringNotContainsString('was not deleted', $lost->getMessage());
+        }
+    }
+
     public function testItRefusesToDeleteWhileAWorktreeIsStillBeingAdded(): void
     {
         $this->repository->checkoutNewBranch('intakt/feature');

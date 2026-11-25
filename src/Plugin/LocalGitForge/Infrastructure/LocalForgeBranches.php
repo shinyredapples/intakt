@@ -26,6 +26,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     private const int TIMEOUT_SECONDS = 60;
     private const int NOT_AN_ANCESTOR = 1;
     private const int NOT_SYMBOLIC = 1;
+    private const int MISSING = 2;
     private const string BEING_ADDED = 'locked initializing';
     private const string LISTING_FORMAT = '%(refname)%00%(objectname)%00%(objecttype)%00%(symref)';
 
@@ -289,10 +290,29 @@ final readonly class LocalForgeBranches implements ForgeBranches
             // The empty old value creates the branch only while it is still missing, so a branch made again meanwhile is never moved.
             $this->read(['update-ref', '--no-deref', $reference, $branch->head->hash, '']);
         } catch (ForgeReadFailed $lost) {
-            throw new ForgeWriteFailed(sprintf('The branch "%s" is deleted at %s and could not be put back (%s): %s', $branch->name, $branch->head->hash, $lost->getMessage(), $reason), $lost->getCode(), $lost);
+            throw new ForgeWriteFailed(sprintf('The branch "%s" %s (%s): %s', $branch->name, $this->stateAfterAFailedPutBack($reference, $branch->head), $lost->getMessage(), $reason), $lost->getCode(), $lost);
         }
 
         throw new ForgeReadFailed($reason.', so it was put back at its head.');
+    }
+
+    // Read once more, because another writer may have made the branch again before the put-back; show-ref --exists tells a missing branch from a read that failed, which --verify reports alike.
+    private function stateAfterAFailedPutBack(string $reference, CommitId $head): string
+    {
+        $unreadable = sprintf('was deleted at %s and its current state could not be read', $head->hash);
+
+        try {
+            $current = $this->git(['show-ref', '--verify', '--hash', $reference]);
+            if ($current->isSuccessful()) {
+                return sprintf('was deleted at %s and exists again at %s', $head->hash, $this->commitFrom(trim($current->getOutput()))->hash);
+            }
+
+            return self::MISSING === $this->git(['show-ref', '--exists', $reference])->getExitCode()
+                ? sprintf('is deleted at %s and could not be put back', $head->hash)
+                : $unreadable;
+        } catch (ForgeReadFailed) {
+            return $unreadable;
+        }
     }
 
     private function commitFrom(string $hash): CommitId
