@@ -20,9 +20,9 @@ Run both install commands on the host first: the override mounts the checkout ov
 
 ## What is watched
 
-`docker/dev/Caddyfile` is the shipped `Caddyfile` plus four things, and `DevelopmentCaddyfileTest` fails if the two differ in anything else:
+`docker/dev/Caddyfile` is the shipped `Caddyfile` plus four things, and `DevelopmentCaddyfileTest` fails if their lines differ in anything else (it compares lines without braces, so it does not check nesting):
 
-- a `watch` in both workers (`app` and `mcp`) for `src/**/*.php`, `templates/**/*.twig`, `config/**/*.{php,yaml}` and `.env*`: a change restarts that worker's threads, so the next request serves it without a manual restart;
+- a `watch` in both workers (`app` and `mcp`) for `src/**/*.php`, `templates/**/*.twig`, `config/**/*.{php,yaml}` and `.env*`: a change restarts that worker's threads, so the next request serves it without a manual restart. A change to `.env*` only restarts the workers, it reloads no browser, and a value that Compose passes into the container (such as those in `.env.local`) changes only when the container is created again;
 - `hot_reload` on the `php_server`, which publishes a change to the Mercure hub, for the same folders plus CSS and JavaScript under `assets/`;
 - `anonymous` in the `mercure` block, because the browser subscribes to that update without a token; private updates still need one;
 - the `mercure` block no longer sits in a `route` block, because FrankenPHP 1.13.4 finds the hub for `hot_reload` only outside one. The hub is served as before.
