@@ -62,10 +62,11 @@ final readonly class InfrastructureRow
         ]);
     }
 
-    // Last, because it is the one figure judged by a call to the forge rather than by the admin API reading.
-    public function withForge(ForgeConnectionVerdict $forge): self
+    // Last, because it is the one figure judged by a call to the forge rather than by the admin API reading; null while another board load runs the check.
+    public function withForge(?ForgeConnectionVerdict $forge): self
     {
         return new self([...$this->figures, match (true) {
+            null === $forge => new InfrastructureFigure(self::FORGE, 'checking'),
             null !== $forge->problem => InfrastructureFigure::down(self::FORGE, $forge->problem),
             // Not "connected", because without an App nothing was asked of the forge.
             !$forge->configured => new InfrastructureFigure(self::FORGE, 'not configured'),

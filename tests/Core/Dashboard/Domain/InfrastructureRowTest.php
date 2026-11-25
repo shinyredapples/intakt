@@ -111,6 +111,13 @@ final class InfrastructureRowTest extends TestCase
         self::assertSame(['Forge', 'down', 'down', 'GITHUB_APP_INSTALLATION_ID is empty'], array_last($this->shown($row)));
     }
 
+    public function testAForgeCheckRunningInAnotherBoardLoadShowsTheForgeAsChecking(): void
+    {
+        $row = InfrastructureRow::refused('not read')->withForge(null);
+
+        self::assertSame(['Forge', 'checking', 'fine', null], array_last($this->shown($row)));
+    }
+
     private function unchanged(string $reason): string
     {
         return $reason;

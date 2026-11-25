@@ -10,32 +10,60 @@ use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
 use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Lock\LockFactory;
 
 // The board's last forge verdict, kept for a minute, because the check calls GitHub and a board load must not wait on it, or spend forge calls, on every render.
 final readonly class RememberedForgeVerdict
 {
     private const string KEY = 'forge-connection';
+    private const string LOCK = 'dashboard.forge-verdict';
     private const int SECONDS = 60;
+    // Longer than the check's own 15 s deadline, so the lock outlives a check that runs to it.
+    private const float LOCK_SECONDS = 30.0;
 
     public function __construct(
         private ForgeConnection $forge,
         #[Autowire(service: DashboardServices::FORGE_VERDICTS)]
         private CacheItemPoolInterface $verdicts,
         private Redactor $redactor,
+        private LockFactory $locks,
     ) {
     }
 
-    public function latest(): ForgeConnectionVerdict
+    // Null while another board load runs the check, because only one load may call the forge for an expired verdict and the others must not wait on it.
+    public function latest(): ?ForgeConnectionVerdict
     {
-        $item = $this->verdicts->getItem(self::KEY);
-        $kept = $item->get();
-        // Only a verdict counts, because the cache is a store outside this class and may hold another shape after an upgrade.
-        if ($item->isHit() && $kept instanceof ForgeConnectionVerdict) {
+        $kept = $this->kept();
+        if (null !== $kept) {
             return $kept;
         }
 
+        $lock = $this->locks->createLock(self::LOCK, self::LOCK_SECONDS);
+        if (!$lock->acquire(false)) {
+            return null;
+        }
+
+        try {
+            // Read again under the lock, because the load that held it before may have just kept a verdict.
+            return $this->kept() ?? $this->checkedAndKept();
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function kept(): ?ForgeConnectionVerdict
+    {
+        $item = $this->verdicts->getItem(self::KEY);
+        $kept = $item->get();
+
+        // Only a verdict counts, because the cache is a store outside this class and may hold another shape after an upgrade.
+        return $item->isHit() && $kept instanceof ForgeConnectionVerdict ? $kept : null;
+    }
+
+    private function checkedAndKept(): ForgeConnectionVerdict
+    {
         $verdict = $this->checked();
-        $this->verdicts->save($item->set($verdict)->expiresAfter(self::SECONDS));
+        $this->verdicts->save($this->verdicts->getItem(self::KEY)->set($verdict)->expiresAfter(self::SECONDS));
 
         return $verdict;
     }

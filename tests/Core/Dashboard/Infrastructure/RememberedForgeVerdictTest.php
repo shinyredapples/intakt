@@ -13,6 +13,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Fiber;
 
 #[CoversClass(RememberedForgeVerdict::class)]
 #[UsesClass(ForgeConnectionVerdict::class)]
@@ -22,6 +25,8 @@ final class RememberedForgeVerdictTest extends TestCase
     private ArrayAdapter $cache;
     private int $runs = 0;
     private ForgeConnectionVerdict $verdict;
+    private LockFactory $locks;
+    private bool $pauseFirstRun = false;
 
     public function testAVerdictOfTheLastMinuteIsShownWithoutRunningTheCheckAgain(): void
     {
@@ -39,7 +44,7 @@ final class RememberedForgeVerdictTest extends TestCase
         $this->clock->sleep(61);
         $this->verdict = ForgeConnectionVerdict::failed('GITHUB_APP_INSTALLATION_ID is empty', 'set it');
 
-        self::assertSame('GITHUB_APP_INSTALLATION_ID is empty', $this->remembered()->latest()->problem);
+        self::assertSame('GITHUB_APP_INSTALLATION_ID is empty', $this->remembered()->latest()?->problem);
         self::assertSame(2, $this->runs);
     }
 
@@ -49,8 +54,8 @@ final class RememberedForgeVerdictTest extends TestCase
 
         $shown = $this->remembered()->latest();
 
-        self::assertSame('refused for token [redacted]', $shown->problem);
-        self::assertSame('set it', $shown->fix);
+        self::assertSame('refused for token [redacted]', $shown?->problem);
+        self::assertSame('set it', $shown?->fix);
         self::assertStringNotContainsString('synthetic-marker', serialize($this->cache->getValues()));
     }
 
@@ -59,15 +64,49 @@ final class RememberedForgeVerdictTest extends TestCase
         $this->verdict = ForgeConnectionVerdict::withoutAnApp();
         $this->remembered()->latest();
 
-        self::assertFalse($this->remembered()->latest()->configured);
+        self::assertFalse($this->remembered()->latest()?->configured);
     }
 
     public function testAStoredValueThatIsNoVerdictIsCheckedAgain(): void
     {
         $this->cache->save($this->cache->getItem('forge-connection')->set('not a verdict'));
 
-        self::assertTrue($this->remembered()->latest()->passes());
+        self::assertTrue($this->remembered()->latest()?->passes());
         self::assertSame(1, $this->runs);
+    }
+
+    public function testTwoOverlappingLoadsOfAnExpiredVerdictRunTheCheckOnce(): void
+    {
+        $this->pauseFirstRun = true;
+        $first = new Fiber($this->remembered()->latest(...));
+        $second = new Fiber($this->remembered()->latest(...));
+
+        $first->start();
+        $second->start();
+        $first->resume();
+
+        self::assertSame(1, $this->runs);
+        self::assertTrue($first->getReturn()?->passes());
+        self::assertNull($second->getReturn());
+    }
+
+    public function testALoadThatFindsTheCheckRunningElsewhereShowsTheKeptVerdictOnceItIsKept(): void
+    {
+        $lock = $this->locks->createLock('dashboard.forge-verdict');
+        $lock->acquire();
+
+        self::assertNull($this->remembered()->latest());
+
+        $lock->release();
+        self::assertTrue($this->remembered()->latest()?->passes());
+        self::assertSame(1, $this->runs);
+    }
+
+    public function testTheCheckLeavesTheLockFreeForTheNextExpiredVerdict(): void
+    {
+        $this->remembered()->latest();
+
+        self::assertTrue($this->locks->createLock('dashboard.forge-verdict')->acquire());
     }
 
     protected function setUp(): void
@@ -75,19 +114,23 @@ final class RememberedForgeVerdictTest extends TestCase
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
         $this->cache = new ArrayAdapter(clock: $this->clock);
         $this->verdict = ForgeConnectionVerdict::passed();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function remembered(): RememberedForgeVerdict
     {
         $forge = self::createStub(ForgeConnection::class);
         $forge->method('run')->willReturnCallback(function (): ForgeConnectionVerdict {
-            ++$this->runs;
+            // Paused inside the first run, so a second load arrives while the check is still out at the forge.
+            if (1 === ++$this->runs && $this->pauseFirstRun) {
+                Fiber::suspend();
+            }
 
             return $this->verdict;
         });
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnCallback(static fn (string $text): string => str_replace('synthetic-marker', '[redacted]', $text));
 
-        return new RememberedForgeVerdict($forge, $this->cache, $redactor);
+        return new RememberedForgeVerdict($forge, $this->cache, $redactor, $this->locks);
     }
 }
