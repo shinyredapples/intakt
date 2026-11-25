@@ -19,6 +19,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(LocalForgeBranches::class)]
 #[UsesClass(BranchChange::class)]
@@ -103,10 +104,65 @@ final class LocalForgeBranchesTest extends TestCase
         $listed = $this->branch('intakt/feature');
         $this->repository->deleteBranch('intakt/feature');
         $this->repository->aliasBranch('intakt/feature', 'main');
+        $main = $this->repository->objectAt('refs/heads/main');
 
-        $this->expectException(ForgeWriteFailed::class);
+        try {
+            $this->branches()->delete($listed);
+            self::fail('The branch that became symbolic was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame($main, $this->repository->objectAt('refs/heads/main'));
+        }
+    }
 
-        $this->branches()->delete($listed);
+    public function testACheckoutDuringTheDeleteIsHeldOffSoHeadNeverNamesADeletedBranch(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $main = $this->repository->objectAt('HEAD');
+        $listed = $this->branch('intakt/feature');
+
+        $this->withGitThatRunsAfterTheWorktreeListing(['switch', '--quiet', 'intakt/feature'], function () use ($listed): void {
+            $this->branches()->delete($listed);
+        });
+
+        self::assertSame($main, $this->repository->objectAt('HEAD'));
+        self::assertNotContains('intakt/feature', $this->names());
+    }
+
+    public function testABranchAWorktreeChecksOutDuringTheDeleteIsPutBackAtItsHead(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $listed = $this->branch('intakt/feature');
+
+        try {
+            $this->withGitThatRunsAfterTheWorktreeListing(['worktree', 'add', '--quiet', $this->worktree(), 'intakt/feature'], function () use ($listed): void {
+                $this->branches()->delete($listed);
+            });
+            self::fail('The delete did not report the checkout.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame($head, $this->repository->objectAt('refs/heads/intakt/feature'));
+        }
+    }
+
+    public function testItRefusesToDeleteTheBranchTheHeadOfABareRepositoryNames(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->checkout('main');
+        $bare = $this->worktree();
+        new Process(['git', 'clone', '--quiet', '--bare', $this->repository->path, $bare])->mustRun();
+        new Process(['git', 'symbolic-ref', 'HEAD', 'refs/heads/intakt/feature'], $bare)->mustRun();
+        $branches = new LocalForgeBranches(new LocalRepository($bare, 'main'));
+        $listed = array_find($branches->branches(), static fn (ForgeBranch $branch): bool => 'intakt/feature' === $branch->name);
+        self::assertInstanceOf(ForgeBranch::class, $listed);
+
+        try {
+            $branches->delete($listed);
+            self::fail('The branch HEAD names was deleted.');
+        } catch (ForgeWriteFailed) {
+            self::assertTrue(new Process(['git', 'show-ref', '--verify', '--quiet', 'refs/heads/intakt/feature'], $bare)->run() === 0);
+        }
     }
 
     public function testItRefusesToDeleteTheBaseBranchEvenWhenTheCallerSaysItIsNotTheDefault(): void
@@ -209,6 +265,67 @@ final class LocalForgeBranchesTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $this->branches()->changeOf($listed);
+    }
+
+    public function testATagNamedLikeAMissingBaseBranchDoesNotStandInForIt(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->tag('refs/heads/missing');
+        $listed = $this->branch('intakt/feature');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        new LocalForgeBranches(new LocalRepository($this->repository->path, 'missing'))->changeOf($listed);
+    }
+
+    public function testAShallowHistoryThrowsInsteadOfCountingAsNoCommitByAPerson(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $this->repository->commitFileAs('person@example.invalid', 'OTHER.md', "other\n");
+        $tip =$this->repository->commitFile('src/New.php', "<?php\n");
+        $listed = $this->branch('intakt/feature');
+        $this->repository->cutHistoryBelow($tip);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->branches()->hasCommitByAPerson($listed, self::INTAKT);
+    }
+
+    public function testAShallowHistoryThrowsInsteadOfReadingAChangeAsOpen(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $tip = $this->repository->commitFile('src/New.php', "<?php\n");
+        $listed = $this->branch('intakt/feature');
+        $this->repository->cutHistoryBelow($tip);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->branches()->changeOf($listed);
+    }
+
+    public function testAListingWithADanglingSymbolicBranchThrowsInsteadOfLeavingItOut(): void
+    {
+        $this->repository->aliasBranch('intakt/dangling', 'missing');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->branches()->branches();
+    }
+
+    public function testAListingWithABrokenBranchThrowsInsteadOfLeavingItOut(): void
+    {
+        file_put_contents($this->repository->path.'/.git/refs/heads/intakt-broken', "not a hash\n");
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->branches()->branches();
+    }
+
+    public function testAListingIgnoresALockGitHoldsOnABranch(): void
+    {
+        file_put_contents($this->repository->path.'/.git/refs/heads/main.lock', '');
+
+        self::assertSame(['main'], $this->names());
     }
 
     public function testABranchWithOnlyIntaktsCommitsHasNoCommitByAPerson(): void
@@ -323,5 +440,40 @@ final class LocalForgeBranchesTest extends TestCase
     private function worktree(): string
     {
         return $this->repository->path.'-worktree';
+    }
+
+    /**
+     * @param list<string> $injected
+     * @param callable(): void $action
+     */
+    // A git first on the path that runs another git command right after each worktree listing, so the test forces the interleaving a concurrent checkout would need: after the checked-out check, before the delete.
+    private function withGitThatRunsAfterTheWorktreeListing(array $injected, callable $action): void
+    {
+        $real = escapeshellarg(trim(new Process(['sh', '-c', 'command -v git'])->mustRun()->getOutput()));
+        $bin = $this->repository->path.'-bin';
+        new Filesystem()->dumpFile($bin.'/git', sprintf(
+            "#!/bin/sh\n%s \"\$@\"\nstatus=\$?\ncase \" \$* \" in\n  *' worktree list '*) env -i PATH=\"\$PATH\" %s -C %s %s >/dev/null 2>&1 ;;\nesac\nexit \$status\n",
+            $real,
+            $real,
+            escapeshellarg($this->repository->path),
+            implode(' ', array_map(escapeshellarg(...), $injected)),
+        ));
+        chmod($bin.'/git', 0o755);
+        $path = (string) getenv('PATH');
+        $this->usePath($bin.':'.$path);
+
+        try {
+            $action();
+        } finally {
+            $this->usePath($path);
+            new Filesystem()->remove($bin);
+        }
+    }
+
+    private function usePath(string $path): void
+    {
+        putenv('PATH='.$path);
+        $_SERVER['PATH'] = $path;
+        $_ENV['PATH'] = $path;
     }
 }

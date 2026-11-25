@@ -15,6 +15,8 @@ use Intakt\Plugin\Forge\Contract\ForgeBranches;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 
@@ -35,9 +37,13 @@ final readonly class LocalForgeBranches implements ForgeBranches
 
     public function branches(): array
     {
+        $common = $this->commonDirectory();
         $lines = array_filter(explode("\n", $this->read(['for-each-ref', '--format='.self::LISTING_FORMAT, self::HEADS])), static fn (string $line): bool => '' !== $line);
+        $branches = array_values(array_map($this->branchFrom(...), $lines));
 
-        return array_values(array_map($this->branchFrom(...), $lines));
+        $this->refuseLeftOutBranches($common, $branches);
+
+        return $branches;
     }
 
     public function changeOf(ForgeBranch $branch): ?BranchChange
@@ -46,7 +52,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
             return null;
         }
 
-        $merged = $this->isAncestor($branch->head, self::HEADS.$this->repository->baseBranch);
+        $merged = $this->isAncestor($branch->head, $this->baseHead());
 
         // A local repository has no closed changes and no labels, so the change is open until the base branch holds its head.
         return new BranchChange($merged ? BranchChangeState::Merged : BranchChangeState::Open);
@@ -123,9 +129,50 @@ final readonly class LocalForgeBranches implements ForgeBranches
         return new ForgeBranch($name, $this->commitFrom($fields[1]), $name === $this->repository->baseBranch, false, '' !== $fields[3]);
     }
 
-    private function isAncestor(CommitId $ancestor, string $descendant): bool
+    /**
+     * @param list<ForgeBranch> $branches
+     */
+    // A files repository keeps every symbolic branch as a loose file, and for-each-ref leaves out one that dangles or does not parse without failing, so a loose branch missing from the listing makes the listing incomplete.
+    private function refuseLeftOutBranches(string $common, array $branches): void
     {
-        $process = $this->git(['merge-base', '--is-ancestor', $ancestor->hash, $descendant]);
+        $directory = $common.'/'.self::HEADS;
+        if (!is_dir($directory)) {
+            return;
+        }
+
+        $listed = array_map(static fn (ForgeBranch $branch): string => $branch->name, $branches);
+        foreach (Finder::create()->files()->ignoreDotFiles(false)->ignoreVCS(false)->in($directory) as $file) {
+            $name = str_replace(DIRECTORY_SEPARATOR, '/', $file->getRelativePathname());
+            // A .lock file is git holding a branch while it writes it, and git allows no branch name that ends in .lock.
+            if (!str_ends_with($name, '.lock') && !in_array($name, $listed, true)) {
+                throw new ForgeReadFailed(sprintf('git for-each-ref left out the branch "%s", which dangles or cannot be read.', $name));
+            }
+        }
+    }
+
+    // The refs live in files, which both the listing check and the delete's HEAD locks rely on.
+    private function commonDirectory(): string
+    {
+        if ('files' !== trim($this->read(['rev-parse', '--show-ref-format']))) {
+            throw new ForgeReadFailed('the repository does not keep its refs in files, so its branches cannot be read completely nor deleted safely.');
+        }
+
+        return rtrim($this->read(['rev-parse', '--path-format=absolute', '--git-common-dir']), "\n");
+    }
+
+    // The exact branch, because a revision such as refs/heads/<base> falls back to a tag of that name when the branch is missing; and the whole history, because a shallow boundary hides commits and ancestry.
+    private function baseHead(): CommitId
+    {
+        if ('false' !== trim($this->read(['rev-parse', '--is-shallow-repository']))) {
+            throw new ForgeReadFailed('the repository\'s history is shallow, so the commits of a branch cannot all be read.');
+        }
+
+        return $this->commitFrom(trim($this->read(['show-ref', '--verify', '--hash', self::HEADS.$this->repository->baseBranch])));
+    }
+
+    private function isAncestor(CommitId $ancestor, CommitId $descendant): bool
+    {
+        $process = $this->git(['merge-base', '--is-ancestor', $ancestor->hash, $descendant->hash]);
 
         return match ($process->getExitCode()) {
             0 => true,
@@ -140,7 +187,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     // The author and the committer of every commit the base branch does not hold, because either one being a person claims the branch.
     private function committersOnlyOn(ForgeBranch $branch): array
     {
-        $output = $this->read(['log', '-z', '--format=%ae%x00%ce', $branch->head->hash, '--not', self::HEADS.$this->repository->baseBranch, '--']);
+        $output = $this->read(['log', '-z', '--format=%ae%x00%ce', $branch->head->hash, '--not', $this->baseHead()->hash, '--']);
         if ('' === $output) {
             return [];
         }
@@ -164,16 +211,64 @@ final readonly class LocalForgeBranches implements ForgeBranches
             throw new ForgeReadFailed('it is the default, a protected, a release or a symbolic branch.');
         }
 
-        if ($this->isSymbolic($reference)) {
-            throw new ForgeReadFailed('it is a symbolic branch now.');
+        $locks = $this->lockEveryHead($this->commonDirectory());
+        try {
+            if ($this->isSymbolic($reference)) {
+                throw new ForgeReadFailed('it is a symbolic branch now.');
+            }
+
+            if (in_array($reference, $this->checkedOut(), true)) {
+                throw new ForgeReadFailed('it is checked out.');
+            }
+
+            // --no-deref, so a branch that became symbolic since the check above loses only its own ref, never the branch it names.
+            $this->read(['update-ref', '-d', '--no-deref', $reference, $branch->head->hash]);
+        } finally {
+            $this->unlock($locks);
         }
 
+        // A worktree added meanwhile takes no lock this delete holds, so the check is read again and the branch put back if one names it now.
         if (in_array($reference, $this->checkedOut(), true)) {
-            throw new ForgeReadFailed('it is checked out.');
+            $this->read(['update-ref', '--no-deref', $reference, $branch->head->hash, '']);
+
+            throw new ForgeReadFailed('a worktree checked it out while it was deleted, so it was put back at its head.');
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    // git switch and checkout write HEAD through HEAD.lock and give up while it exists, so holding every worktree's HEAD.lock keeps a checkout from naming the branch between the check and the delete.
+    private function lockEveryHead(string $common): array
+    {
+        $heads = [$common.'/HEAD'];
+        if (is_dir($common.'/worktrees')) {
+            foreach (Finder::create()->directories()->depth(0)->ignoreDotFiles(false)->ignoreVCS(false)->in($common.'/worktrees') as $worktree) {
+                $heads[] = $worktree->getPathname().'/HEAD';
+            }
         }
 
-        // --no-deref, so a branch that became symbolic since the check above loses only its own ref, never the branch it names.
-        $this->read(['update-ref', '-d', '--no-deref', $reference, $branch->head->hash]);
+        $locks = [];
+        foreach ($heads as $head) {
+            $lock = @fopen($head.'.lock', 'x');
+            if (false === $lock) {
+                $this->unlock($locks);
+
+                throw new ForgeReadFailed(sprintf('%s.lock exists, so a checkout or another git command is under way.', $head));
+            }
+            fclose($lock);
+            $locks[] = $head.'.lock';
+        }
+
+        return $locks;
+    }
+
+    /**
+     * @param list<string> $locks
+     */
+    private function unlock(array $locks): void
+    {
+        new Filesystem()->remove($locks);
     }
 
     private function isSymbolic(string $reference): bool
@@ -190,15 +285,22 @@ final readonly class LocalForgeBranches implements ForgeBranches
     /**
      * @return list<string>
      */
-    // Every worktree's HEAD, because update-ref deletes a branch another worktree has checked out as readily as the repository's own.
+    // Every worktree's HEAD, because update-ref deletes a branch another worktree has checked out as readily as the repository's own; and the repository's own HEAD, because a bare repository lists it without a branch line.
     private function checkedOut(): array
     {
         $lines = explode("\0", $this->read(['worktree', 'list', '--porcelain', '-z']));
-
-        return array_values(array_map(
+        $branches = array_values(array_map(
             static fn (string $line): string => substr($line, strlen('branch ')),
             array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'branch ')),
         ));
+
+        $head = $this->git(['symbolic-ref', '--quiet', 'HEAD']);
+
+        return match ($head->getExitCode()) {
+            0 => [...$branches, trim($head->getOutput())],
+            self::NOT_SYMBOLIC => $branches,
+            default => throw new ForgeReadFailed(sprintf('git symbolic-ref failed: %s', trim($head->getErrorOutput()))),
+        };
     }
 
     private function commitFrom(string $hash): CommitId
