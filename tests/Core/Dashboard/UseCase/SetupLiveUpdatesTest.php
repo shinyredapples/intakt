@@ -121,9 +121,10 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
      */
     public static function pages(): iterable
     {
-        yield 'setup, last step' => ['/setup?step=5'];
-        yield 'setup, check' => ['/setup?step=4'];
-        yield 'add project, check' => ['/projects/new?step=3'];
+        foreach ([1, 2, 3, 4, 5] as $step) {
+            yield 'setup, step '.$step => ['/setup?step='.$step];
+            yield 'add project, step '.$step => ['/projects/new?step='.$step];
+        }
     }
 
     #[DataProvider('pages')]
@@ -135,7 +136,8 @@ final class SetupLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
-        self::assertGreaterThan(0, $crawler->filter('main.content .step')->count());
+        self::assertCount(1, $crawler->filter('main.content .step h1'));
+        self::assertGreaterThan(0, $crawler->filter('main.content .step-nav a[href]')->count());
     }
 
     // Assembled here from the container's page reading and Twig, because the container inlines its hub, so a recording one cannot be set there.
