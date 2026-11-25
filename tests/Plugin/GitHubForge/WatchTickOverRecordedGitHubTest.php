@@ -113,7 +113,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private ?ChangeLabels $steering = null;
 
-
     // Evidence E1 of #3878 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
     public function testAPullRequestsTrustedSteeringLabelsReachTheQueuedRoundWithTheValueAppliedLast(): void
     {

@@ -125,9 +125,14 @@ final class StatusLabelOverRecordedGitHubTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $this->locks = new LockFactory(new InMemoryStore());
         $forge = new RecordedForge();
-        $forge->opens('alpha', RecordedForge::change(self::PULL, 'a','2026-11-02T09:00:00Z'));
+        $forge->opens('alpha', RecordedForge::change(self::PULL, 'a', '2026-11-02T09:00:00Z'));
         $this->listing = new FindChangedPullRequests($forge, new SeenListings($this->fixture->entities, $this->locks), $this->fixture->log);
         self::assertCount(1, ($this->listing)('alpha'));
+    }
+
+    private function handOver(): void
+    {
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeHandedToIntakt, json_encode(['project' => 'alpha', 'change' => self::PULL, 'head' => SampleIdentity::HEAD], JSON_THROW_ON_ERROR)))->succeeded());
     }
 
     private function watcherPass(): void
@@ -138,6 +143,80 @@ final class StatusLabelOverRecordedGitHubTest extends KernelTestCase
     private function mirror(): RoundStatusMirror
     {
         return new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), $this->locks, $this->fixture->log, $this->statusLabels());
+    }
+
+    private function statusLabels(): GitHubStatusLabels
+    {
+        $this->identity = new RecordedTrust(TrustChecks::clock())->client();
+        $wiring = TrustChecks::wiring(new MockHttpClient($this->answer(...), 'https://api.github.com'));
+        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
+        $comments = new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345');
+
+        return new GitHubStatusLabels(new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens));
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function answer(string $method, string $url, array $options): ResponseInterface
+    {
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if ('GET' === $method && str_ends_with($path, '/issues/7/labels')) {
+            return $this->labelListing();
+        }
+        if ('GET' === $method && str_ends_with($path, '/issues/7/events')) {
+            return new MockResponse(json_encode($this->events, JSON_THROW_ON_ERROR));
+        }
+        if (str_contains($path, '/issues/7/')) {
+            return $this->write($method, $path, is_string($options['body'] ?? null) ? $options['body'] : '');
+        }
+
+        return ($this->identity ?? throw new LogicException('No identity client.'))->request($method, $url, $options);
+    }
+
+    // The labels as listed before the hook runs, so another writer that lands meanwhile is seen only by a later read.
+    private function labelListing(): MockResponse
+    {
+        $listed = json_encode(array_map(static fn (string $label): array => ['name' => $label], $this->labels), JSON_THROW_ON_ERROR);
+        if ($this->whileReadingLabels instanceof Closure) {
+            ($this->whileReadingLabels)();
+        }
+
+        return new MockResponse($listed);
+    }
+
+    // As GitHub does, so a later read sees the label and its event under Intakt's own identity.
+    private function write(string $method, string $path, string $body): MockResponse
+    {
+        $payload = '' === $body ? [] : (array) json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        if (str_ends_with($path, '/comments')) {
+            return $this->comment($payload);
+        }
+        if ('DELETE' === $method) {
+            $this->show(rawurldecode(basename($path)), false);
+        }
+        foreach ('POST' === $method ? (array) $payload['labels'] : [] as $label) {
+            $this->show(is_string($label) ? $label : '', true);
+        }
+
+        return new MockResponse('[]');
+    }
+
+    /**
+     * @param array<mixed> $payload
+     */
+    private function comment(array $payload): MockResponse
+    {
+        $this->comments[] = is_string($payload['body'] ?? null) ? $payload['body'] : '';
+        $stored = [...$payload, 'user' => ['login' => RecordedTrust::OWN_IDENTITY, 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => 12345]];
+
+        return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
+    }
+
+    private function show(string $label, bool $added): void
+    {
+        $this->labels = $added ? [...$this->labels, $label] : array_values(array_diff($this->labels, [$label]));
+        $this->events[] = ['event' => $added ? 'labeled' : 'unlabeled', 'label' => ['name' => $label], 'actor' => ['login' => RecordedTrust::OWN_IDENTITY], 'created_at' => self::MOMENT];
     }
 
     private function judge(): void
@@ -169,11 +248,6 @@ final class StatusLabelOverRecordedGitHubTest extends KernelTestCase
         return new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes([]), $handed, $verdicts, new OwnerAsks($handed, $heads, $this->fixture->ledger()), new ScriptedGitHub()->forge(), new ChangePublications($this->locks), $this->mirror(), $this->fixture->log);
     }
 
-    private function handOver(): void
-    {
-        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeHandedToIntakt, json_encode(['project' => 'alpha', 'change' => self::PULL, 'head' => SampleIdentity::HEAD], JSON_THROW_ON_ERROR)))->succeeded());
-    }
-
     /**
      * @return list<PublishVerdict>
      */
@@ -184,65 +258,5 @@ final class StatusLabelOverRecordedGitHubTest extends KernelTestCase
         $sent = array_map(static fn (Envelope $envelope): object => $envelope->getMessage(), $queue->getSent());
 
         return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishVerdict && $roundId === $message->roundId));
-    }
-
-    private function statusLabels(): GitHubStatusLabels
-    {
-        $this->identity = new RecordedTrust(TrustChecks::clock())->client();
-        $wiring = TrustChecks::wiring(new MockHttpClient($this->answer(...), 'https://api.github.com'));
-        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
-        $comments = new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345');
-
-        return new GitHubStatusLabels(new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, $comments, new GitHubLabelWrites($wiring->calls, $wiring->tokens));
-    }
-
-    /**
-     * @param array<mixed> $options
-     */
-    private function answer(string $method, string $url, array $options): ResponseInterface
-    {
-        $path = (string) parse_url($url, PHP_URL_PATH);
-        if ('GET' === $method && str_ends_with($path, '/issues/7/labels')) {
-            $listed = json_encode(array_map(static fn (string $label): array => ['name' => $label], $this->labels), JSON_THROW_ON_ERROR);
-            if ($this->whileReadingLabels instanceof Closure) {
-                ($this->whileReadingLabels)();
-            }
-
-            return new MockResponse($listed);
-        }
-        if ('GET' === $method && str_ends_with($path, '/issues/7/events')) {
-            return new MockResponse(json_encode($this->events, JSON_THROW_ON_ERROR));
-        }
-        if (str_contains($path, '/issues/7/')) {
-            return $this->write($method, $path, is_string($options['body'] ?? null) ? $options['body'] : '');
-        }
-
-        return ($this->identity ?? throw new LogicException('No identity client.'))->request($method, $url, $options);
-    }
-
-    // As GitHub does, so a later read sees the label and its event under Intakt's own identity.
-    private function write(string $method, string $path, string $body): ResponseInterface
-    {
-        $payload = '' === $body ? [] : (array) json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        if (str_ends_with($path, '/comments')) {
-            $this->comments[] = is_string($payload['body'] ?? null) ? $payload['body'] : '';
-            $stored = [...$payload, 'user' => ['login' => RecordedTrust::OWN_IDENTITY, 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => 12345]];
-
-            return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
-        }
-        if ('DELETE' === $method) {
-            $this->show(rawurldecode(basename($path)), false);
-        }
-        foreach ('POST' === $method ? (array) $payload['labels'] : [] as $label) {
-            $this->show(is_string($label) ? $label : '', true);
-        }
-
-        return new MockResponse('[]');
-    }
-
-    private function show(string $label, bool $added): void
-    {
-        $this->labels = $added ? [...$this->labels, $label] : array_values(array_diff($this->labels, [$label]));
-        $this->events[] = ['event' => $added ? 'labeled' : 'unlabeled', 'label' => ['name' => $label], 'actor' => ['login' => RecordedTrust::OWN_IDENTITY], 'created_at' => self::MOMENT];
     }
 }
