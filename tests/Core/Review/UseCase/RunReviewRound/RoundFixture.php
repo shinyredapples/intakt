@@ -22,6 +22,7 @@ use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -189,12 +190,12 @@ final readonly class RoundFixture
     }
 
     // As startAtHead(), read from a repository, so the ledger holds the source a next round of the change starts from.
-    public function startFromRepositoryAtHead(string $change, string $head, string $diff): string
+    public function startFromRepositoryAtHead(string $change, string $head, Labels $labels = new Labels()): string
     {
         $command = $this->commandAt($change, $head, 2);
-        $target = new ReviewTarget(new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, $diff), $command->target->identity);
+        $target = new ReviewTarget(new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF_OF_RECORDING_BUS), $command->target->identity);
 
-        return $this->startWith(new RunReviewRound($target, $command->panel, new RequestedRound($change, null, new ChangeSource('/repos/alpha', 'main'))), $this->bus);
+        return $this->startWith(new RunReviewRound($target, $command->panel, new RequestedRound($change, null, new ChangeSource('/repos/alpha', 'main'), $labels)), $this->bus);
     }
 
     public function commandFor(string $change, int $reviewers): RunReviewRound

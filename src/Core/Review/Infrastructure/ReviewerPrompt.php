@@ -56,7 +56,7 @@ final readonly class ReviewerPrompt
 
     public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review gave no approval but its "findings" list was empty. A changes verdict must put every problem that must change into "findings", one object per problem with its file, line and rule, for example: '.self::EXAMPLE_FINDING.'. If nothing must change, answer approve.';
 
-    public const string ESCALATIONS_INTRO = 'An escalation review on the strong tier judged these open findings after they came back on another head: each entry names the finding id, the outcome (confirmed or rejected) and its reasons. Weigh the reasons before you hold or resolve the finding; hold a rejected finding again only when the reasons are wrong for the code you read.';
+    public const string ESCALATIONS_INTRO = 'An escalation review on the strong tier judged these open findings after they came back on another head: each entry names the finding id, the outcome (confirmed or rejected) and its indented reasons. The code may have changed since, so check the reasons against it. Weigh them before you hold or resolve the finding; hold a rejected finding again only when the reasons are wrong for the code you read.';
 
     public function __construct(
         private Fence $fence,
@@ -133,13 +133,14 @@ final readonly class ReviewerPrompt
         return implode("\n\n", array_map(static fn (Finding $finding): string => $finding->listEntry(), $open));
     }
 
+    // Reasons are indented, because a line of them must never read as another finding's entry.
     /**
      * @param array<string, EscalationVerdict> $escalations
      */
     private function escalationsOf(array $escalations): string
     {
         return implode("\n\n", array_map(
-            static fn (string $id, EscalationVerdict $verdict): string => sprintf("%s %s\n%s", $id, $verdict->outcome->value, $verdict->reasons),
+            static fn (string $id, EscalationVerdict $verdict): string => sprintf("%s %s\n  %s", $id, $verdict->outcome->value, preg_replace('/\R/u', "\n  ", $verdict->reasons)),
             array_keys($escalations),
             $escalations,
         ));

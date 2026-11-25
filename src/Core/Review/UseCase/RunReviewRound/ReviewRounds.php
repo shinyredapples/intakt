@@ -179,6 +179,17 @@ final readonly class ReviewRounds
         return $rounds;
     }
 
+    // The round and every later round of the change on its head, because a re-review of a rejected escalation is a round no watcher started, and its approval must fall with the head's.
+    /**
+     * @return list<Uuid>
+     */
+    public function fromRoundOnItsHead(ReviewRound $round): array
+    {
+        $later = array_filter($this->ofChange($round), static fn (ReviewRound $other): bool => $other->number() > $round->number() && $other->sharesHeadWith($round));
+
+        return [$round->id(), ...array_map(static fn (ReviewRound $other): Uuid => $other->id(), array_values($later))];
+    }
+
     // Under the round's row lock, because a stale mark or a judging delivered again writes the same row meanwhile.
     public function recordPublication(ReviewRound $round): void
     {

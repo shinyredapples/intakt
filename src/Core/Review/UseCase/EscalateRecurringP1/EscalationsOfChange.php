@@ -222,7 +222,7 @@ final readonly class EscalationsOfChange implements ChangeEscalations
         return array_fill_keys(array_map(static fn (ReviewRound $other): string => $other->id()->toRfc4122(), array_values($earlier)), true);
     }
 
-    // The latest escalation of each finding wins, because a finding whose files changed recurs under a new key with a verdict of its own.
+    // The finding's latest recurrence decides, because a finding whose files changed recurs under a new key, and a verdict on the old code must not stand for the new one while its own escalation is queued or failed.
     /**
      * @param array<string, true> $rounds
      * @param list<string>        $open
@@ -233,9 +233,9 @@ final readonly class EscalationsOfChange implements ChangeEscalations
     {
         $keys = [];
 
-        foreach ($this->verdictsIn($this->eventsOf($rounds)) as $escalation) {
-            if (in_array($escalation->finding, $open, true)) {
-                $keys[$escalation->finding] = $escalation->key;
+        foreach ($this->eventsOf($rounds) as $event) {
+            if ($event instanceof RecurringP1Found && in_array($event->finding, $open, true)) {
+                $keys[$event->finding] = $event->key;
             }
         }
 

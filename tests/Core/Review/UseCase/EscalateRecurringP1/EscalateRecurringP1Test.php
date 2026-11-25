@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1;
 
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -21,6 +22,8 @@ use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\RequestedRound;
@@ -30,6 +33,7 @@ use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
+use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\CitedCodeNotShown;
 use Intakt\Core\Review\Infrastructure\EscalationAgent;
 use Intakt\Core\Review\Infrastructure\EscalationPrompt;
@@ -87,6 +91,7 @@ use Symfony\Component\Messenger\Stamp\StampInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 use Symfony\Component\Messenger\Worker;
+use Symfony\Component\Uid\Uuid;
 use Throwable;
 
 #[Group('persistence')]
@@ -733,6 +738,50 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertEquals(['F1' => new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')], $this->fixture->escalationsOfChange()->ofOpenFindings($next));
     }
 
+    public function testAVerdictOfOldCodeIsNotShownOnceTheFindingRecursUnderANewKey(): void
+    {
+        $this->recurredFromARepository();
+        $this->escalateQueued($this->rejecting());
+        (void) $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::RecurringP1Found, json_encode(['round' => $this->fixture->escalations->messages[0]->round, 'finding' => 'F1', 'key' => str_repeat('0', 64), 'first_round' => $this->fixture->escalations->messages[0]->round], JSON_THROW_ON_ERROR)));
+
+        $next = $this->fixture->round($this->fixture->startAtHead(self::CHANGE, self::HEAD_C));
+
+        self::assertSame([], $this->fixture->escalationsOfChange()->ofOpenFindings($next));
+    }
+
+    public function testARejectionOnAHeadWhoseVerdictsWereWithdrawnStartsNoRound(): void
+    {
+        $this->recurredFromARepository();
+        $rounds = $this->fixture->transactions();
+        $rounds->withLockedRound(Uuid::fromString($this->fixture->escalations->messages[0]->round), static fn (ReviewRound $round) => $round->markVerdictsStale());
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertSame([], $this->fixture->reviewStarts->starts);
+    }
+
+    public function testAWithdrawalThatCameDuringTheStartIsMarkedAgainForTheNewRound(): void
+    {
+        $this->recurredFromARepository();
+        $round = $this->fixture->escalations->messages[0]->round;
+        $this->fixture->reviewStarts->duringTheStart = fn () => $this->fixture->transactions()->withLockedRound(Uuid::fromString($round), static fn (ReviewRound $locked) => $locked->markVerdictsStale());
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertEquals([new MarkVerdictsStale($round)], $this->fixture->reviewStarts->withdrawals);
+    }
+
+    public function testTheReReviewKeepsTheLabelsThatSteeredTheRejectedRoundsPanel(): void
+    {
+        $this->judged($this->readFromARepositoryAt(self::HEAD_A, $this->keyedP1()));
+        $labelled = $this->fixture->startFromRepositoryAtHead(self::CHANGE, self::HEAD_B, new Labels('review:full'));
+        $this->judged($this->delivered($labelled, new Verdict(Decision::Changes, [$this->repeated($this->keyedP1())], [], [])));
+
+        $this->escalateQueued($this->rejecting());
+
+        self::assertEquals(new Labels('review:full'), $this->fixture->reviewStarts->starts[0]->start->labels);
+    }
+
     public function testAResolvedFindingCarriesNoEscalationIntoTheNextRound(): void
     {
         $this->recurredFromARepository();
@@ -798,7 +847,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
     private function readFromARepositoryAt(string $head, Finding ...$findings): string
     {
-        $round = $this->fixture->startFromRepositoryAtHead(self::CHANGE, $head, self::DIFF);
+        $round = $this->fixture->startFromRepositoryAtHead(self::CHANGE, $head);
 
         return $this->delivered($round, new Verdict(Decision::Changes, array_values($findings), [], []));
     }

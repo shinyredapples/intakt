@@ -9,6 +9,8 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\RecordedIdentityMalformed;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -35,19 +37,21 @@ final readonly class HolderReReviews
     {
         $round = $this->rounds->stored($roundId);
         $head = $this->headOf($round);
-        $source = $this->sourceOf($roundId);
+        $start = $this->startOf($roundId);
 
-        // Nothing to start without a head or a source, because the round is then read from no repository, and none after an earlier round on this head, because that round's holder has re-reviewed with the reasons already and holding the finding again is its answer.
-        if (!$head instanceof CommitId || !$source instanceof ChangeSource || $this->reReviewedAt($round, $head)) {
+        // Nothing to start without a head or a source, because the round is then read from no repository; none on a head whose verdicts were withdrawn, because the new round's approval would stand in for the withdrawn one; and none after an earlier round on this head, because that round's holder has re-reviewed with the reasons already and holding the finding again is its answer.
+        if (!$head instanceof CommitId || !$start instanceof ReviewStarted || $round->hasStaleVerdicts() || $this->reReviewed($round)) {
             return;
         }
 
         try {
-            $this->commands->dispatch(new StartReviewAtHead(new StartReview($round->project(), $round->task(), new RequestedRound($round->change(), $round->number() + 1, $source)), $head));
+            $this->commands->dispatch(new StartReviewAtHead($this->nextRoundAfter($round, $start), $head));
         } catch (RoundNotNext) {
             // Nothing more, because a newer round of the change, opened by another rejection or a new head, reviews it with the reasons in its brief.
             return;
         }
+
+        $this->withdrawWhenMarkedMeanwhile($roundId);
     }
 
     private function headOf(ReviewRound $round): ?CommitId
@@ -59,22 +63,38 @@ final readonly class HolderReReviews
         }
     }
 
-    // Read from the round's review_started, because the stored round keeps no repository and the dashboard starts a next round from the same record.
-    private function sourceOf(string $roundId): ?ChangeSource
+    // Read from the round's review_started, because the stored round keeps no repository and no labels and the dashboard starts a next round from the same record.
+    private function startOf(string $roundId): ?ReviewStarted
     {
         foreach ($this->ledger->readMentioning(new Mentions($roundId)) as $recorded) {
             $started = LedgerEventKind::ReviewStarted === $recorded->event->kind ? $this->payloads->of($recorded, ReviewStarted::class) : null;
 
             if ($started instanceof ReviewStarted && $roundId === $started->round && null !== $started->repository && null !== $started->base) {
-                return new ChangeSource($started->repository, $started->base);
+                return $started;
             }
         }
 
         return null;
     }
 
-    private function reReviewedAt(ReviewRound $round, CommitId $head): bool
+    private function reReviewed(ReviewRound $round): bool
     {
-        return array_any($this->rounds->ofChange($round), fn (ReviewRound $other): bool => $other->number() < $round->number() && $this->headOf($other)?->hash === $head->hash);
+        return array_any($this->rounds->ofChange($round), static fn (ReviewRound $other): bool => $other->number() < $round->number() && $other->sharesHeadWith($round));
+    }
+
+    // With the labels of the rejected round, because they steer its panel and a re-review must not get a weaker one.
+    private function nextRoundAfter(ReviewRound $round, ReviewStarted $start): StartReview
+    {
+        $source = new ChangeSource((string) $start->repository, (string) $start->base);
+
+        return new StartReview($round->project(), $round->task(), new RequestedRound($round->change(), $round->number() + 1, $source), new Labels(...$start->labels ?? []));
+    }
+
+    // Marked again after the start, because a withdrawal that came between the check and the start did not see the new round.
+    private function withdrawWhenMarkedMeanwhile(string $roundId): void
+    {
+        if ($this->rounds->stored($roundId)->hasStaleVerdicts()) {
+            $this->commands->dispatch(new MarkVerdictsStale($roundId));
+        }
     }
 }

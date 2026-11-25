@@ -24,6 +24,10 @@ final readonly class ReviewStarted
         // Null only on rows written before it was recorded, because the dashboard decides a round's outcome from the ledger alone.
         #[Context(normalizationContext: [AbstractObjectNormalizer::SKIP_NULL_VALUES => true])]
         public ?QuorumPolicy $quorum = null,
+        // Left out when null, because a start without labels has nothing that steered its panel.
+        /** @var ?list<string> */
+        #[Context(normalizationContext: [AbstractObjectNormalizer::SKIP_NULL_VALUES => true])]
+        public ?array $labels = null,
     ) {
     }
 }
