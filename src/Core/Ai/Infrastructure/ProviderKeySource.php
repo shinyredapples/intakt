@@ -86,13 +86,13 @@ final readonly class ProviderKeySource
         } catch (SodiumException) {
             // A decryption key of the wrong length throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
             return false;
-            // Boundary: Symfony's vault throws a bare RuntimeException when it has no key
+            // Boundary: Symfony's vault throws a bare RuntimeException when it has no key, because it names no exception of its own to catch.
         } catch (Throwable $failure) {
             if (RuntimeException::class !== $failure::class) {
                 throw $failure;
             }
 
-            // No key at all throws as well, and the secret is unusable then too.
+            // The same result as a key of the wrong length, because with no key the secret is as unusable.
             return false;
         }
     }

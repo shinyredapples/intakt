@@ -23,14 +23,14 @@ final class PullRequestTextCheckTest extends TestCase
 {
     public function testARepositoryThatCannotBeFoundIsTheFailureOfTheStep(): void
     {
-        $failure = $this->check('/nonexistent/mirror', $this->createStub(PullRequestTextRound::class))->failureOf($this->request(), 'task', 'body');
+        $failure = $this->check('/nonexistent/mirror', self::createStub(PullRequestTextRound::class))->failureOf($this->request(), 'task', 'body');
 
         self::assertSame('the repository "/nonexistent/mirror" cannot be found', $failure);
     }
 
     public function testABareInvalidArgumentExceptionFromTheRoundPassesThrough(): void
     {
-        $round = $this->createStub(PullRequestTextRound::class);
+        $round = self::createStub(PullRequestTextRound::class);
         $round->method('route')->willThrowException(new InvalidArgumentException('a bug in the round'));
 
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the round'));
@@ -40,7 +40,7 @@ final class PullRequestTextCheckTest extends TestCase
 
     private function check(string $mirror, PullRequestTextRound $round): PullRequestTextCheck
     {
-        $checkout = $this->createStub(BuildCheckout::class);
+        $checkout = self::createStub(BuildCheckout::class);
         $checkout->method('mirrorOf')->willReturn($mirror);
 
         return new PullRequestTextCheck($checkout, $round);

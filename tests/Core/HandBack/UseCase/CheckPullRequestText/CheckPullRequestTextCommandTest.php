@@ -212,7 +212,7 @@ final class CheckPullRequestTextCommandTest extends TestCase
     {
         new Filesystem()->dumpFile($this->folder.'/task.md', self::TASK);
         new Filesystem()->dumpFile($this->folder.'/PR.md', "feat: check it\n\n- E1: red\n");
-        $round = $this->createStub(PullRequestTextRound::class);
+        $round = self::createStub(PullRequestTextRound::class);
         $round->method('route')->willThrowException(new LogicException('a bug in the round'));
         $application = new Application();
         $application->addCommand(new CheckPullRequestTextCommand(new Filesystem(), $round));

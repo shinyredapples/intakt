@@ -28,7 +28,7 @@ final class HandBackCheckTest extends TestCase
 {
     public function testAHeadThatIsNoObjectIdIsTheFailureOfTheStep(): void
     {
-        $checks = $this->createStub(HandBackChecks::class);
+        $checks = self::createStub(HandBackChecks::class);
         $checks->method('check')->willReturn(new AcceptedHandBack(null, 'not-an-id', 1));
 
         self::assertSame('"not-an-id" is no object id', $this->check($checks)->check($this->request(), 'BUNDLE'));
@@ -36,7 +36,7 @@ final class HandBackCheckTest extends TestCase
 
     public function testABareInvalidArgumentExceptionFromTheChecksPassesThrough(): void
     {
-        $checks = $this->createStub(HandBackChecks::class);
+        $checks = self::createStub(HandBackChecks::class);
         $checks->method('check')->willThrowException(new InvalidArgumentException('a bug in the checks'));
 
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the checks'));
@@ -46,12 +46,12 @@ final class HandBackCheckTest extends TestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove(glob(sys_get_temp_dir().'/intakt-hand-back-check-*') ?: []);
+        new Filesystem()->remove(glob(sys_get_temp_dir().'/intakt-hand-back-check-*') ?? []);
     }
 
     private function check(HandBackChecks $checks): HandBackCheck
     {
-        $checkout = $this->createStub(BuildCheckout::class);
+        $checkout = self::createStub(BuildCheckout::class);
         $checkout->method('mirrorOf')->willReturn('/mirror');
 
         return new HandBackCheck($checkout, $checks, new HandBackFile($checkout, new Filesystem(), sys_get_temp_dir().'/intakt-hand-back-check-'.bin2hex(random_bytes(4))));

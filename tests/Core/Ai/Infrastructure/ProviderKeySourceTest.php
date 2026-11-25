@@ -159,7 +159,7 @@ final class ProviderKeySourceTest extends TestCase
 
     private function vaultRevealThrowing(Throwable $failure): SodiumVault
     {
-        $vault = $this->createStub(SodiumVault::class);
+        $vault = self::createStub(SodiumVault::class);
         $vault->method('list')->willReturn([self::NAME => null]);
         $vault->method('reveal')->willThrowException($failure);
 
