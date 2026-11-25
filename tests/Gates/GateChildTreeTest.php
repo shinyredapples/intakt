@@ -145,13 +145,39 @@ final class GateChildTreeTest extends TestCase
         return [PHP_BINARY, '-r', $gate];
     }
 
-    // Once no process of the descendant's group is left, none can write the marker later, so its absence now proves it is never written.
+    // Once no process of the descendant is left, none can write the marker later, so its absence now proves it is never written.
     private function assertTheDescendantIsGoneWithoutWritingItsMarker(): void
     {
         $group = $this->descendantGroup();
 
-        self::assertFalse(new ProcessGroup($group)->outlives($this->deadline()), sprintf('Process group %d still runs %d seconds after its gate child ended.', $group, self::SECONDS_TO_WAIT));
+        // Because in a PID namespace the group leader lies outside it, the descendant reads group 0 there, and only its command line finds it.
+        if ($group > 0) {
+            self::assertFalse(new ProcessGroup($group)->outlives($this->deadline()), sprintf('Process group %d still runs %d seconds after its gate child ended.', $group, self::SECONDS_TO_WAIT));
+        }
+
+        self::assertFalse($this->aProcessNamingTheMarkerOutlives($this->deadline()), sprintf('A process naming %s still runs %d seconds after its gate child ended.', $this->marker, self::SECONDS_TO_WAIT));
         self::assertFileDoesNotExist($this->marker);
+    }
+
+    private function aProcessNamingTheMarkerOutlives(float $deadline): bool
+    {
+        while ($this->aProcessNamesTheMarker() && hrtime(true) / 1_000_000_000 < $deadline) {
+            usleep(10_000);
+        }
+
+        return $this->aProcessNamesTheMarker();
+    }
+
+    // Because a zombie's command line is empty, only a process that can still run matches.
+    private function aProcessNamesTheMarker(): bool
+    {
+        foreach (glob('/proc/[0-9]*/cmdline') ?: [] as $commandLine) {
+            if (str_contains((string) @file_get_contents($commandLine), $this->marker)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function descendantGroup(): int

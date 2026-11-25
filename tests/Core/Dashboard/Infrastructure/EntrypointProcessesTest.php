@@ -262,7 +262,7 @@ final class EntrypointProcessesTest extends TestCase
         $deadline = hrtime(true) + $seconds * 1_000_000_000;
 
         while (hrtime(true) < $deadline && $this->entrypoint->isRunning()) {
-            usleep(50_000);
+            usleep(10_000);
         }
 
         self::assertFalse($this->entrypoint->isRunning(), sprintf('The entrypoint still runs %d seconds after SIGTERM, with %d children left.', $seconds, count(array_filter($this->childrenStartedBeforeTheStop(), static fn (int $pid): bool => file_exists('/proc/'.$pid)))));
