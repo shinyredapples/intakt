@@ -615,6 +615,23 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
+    // A reading inside a caller's transaction takes no account lock, so it can commit between the notice writer's look and its update, where its own update skips the notice that still has no end.
+    public function testAReadingCommittedInsideACallersTransactionDuringTheNoticesEndStillGivesTheNoticeItsMoment(): void
+    {
+        $this->record('main', '2026-11-02 12:00:00');
+        $hook = $this->afterTheReadingsEndOfOutages(function (): void {
+            $this->entities->getConnection()->beginTransaction();
+            $this->measuredUseAt('2026-11-02 11:59:00')->record($this->readingOf('main'));
+            $this->entities->getConnection()->commit();
+        });
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
+        $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), $this->locks, self::createStub(LoggerInterface::class), $this->accountLock);
+
+        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
     // The caller's rollback would erase the end, so a reading recorded inside its transaction tells nobody.
     public function testAReadingRecordedInsideACallersTransactionTellsNoListener(): void
     {

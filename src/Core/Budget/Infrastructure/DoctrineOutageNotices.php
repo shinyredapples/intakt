@@ -73,12 +73,13 @@ final readonly class DoctrineOutageNotices
         ]);
     }
 
-    // A reading committed before this row was stored found no row to end, so the notice is ended by it here; one look is enough, because the account lock held here keeps any other reading of the account from committing until this end is saved, and a reading stored later finds the row itself.
+    // A reading committed before this row was stored found no row to end, so the notice is ended by it here; the look repeats until no earlier reading appears, because a reading inside a caller's transaction takes no account lock and may commit between the look and the update, while one stored after the last look finds the ended row itself.
     private function endIfReadSince(OutageNoticeRecord $notice): void
     {
-        $earliest = $this->earliestReadingSince($notice);
-        if ($earliest instanceof DateTimeImmutable) {
+        $ended = null;
+        while (($earliest = $this->earliestReadingSince($notice)) instanceof DateTimeImmutable && (!$ended instanceof DateTimeImmutable || $earliest < $ended)) {
             $this->endWith($notice, $earliest);
+            $ended = $earliest;
         }
     }
 
