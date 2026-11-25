@@ -93,6 +93,11 @@ final class TechnicalWriterLaneTest extends KernelTestCase
         $this->startRound();
     }
 
+    private function blockingAt(string $file): Finding
+    {
+        return new Finding('X', Severity::P1, $file, 1, null, 'Wrong.', FixableBy::Builder, false, 'SOLID', null);
+    }
+
     private function startRound(): void
     {
         $model = new ReviewerModel(Tier::Standard, Provider::Anthropic);
@@ -100,11 +105,6 @@ final class TechnicalWriterLaneTest extends KernelTestCase
             new PanelReviewer(new ReviewerRole('correctness', 'Check the change.'), $model, 4),
             new PanelReviewer(new ReviewerRole(ReviewerRole::TECHNICAL_WRITER, 'Check the docs.'), $model, 4),
         ], QuorumPolicy::All));
-    }
-
-    private function blockingAt(string $file): Finding
-    {
-        return new Finding('X', Severity::P1, $file, 1, null, 'Wrong.', FixableBy::Builder, false, 'SOLID', null);
     }
 
     /**
