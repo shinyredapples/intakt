@@ -77,9 +77,7 @@ final readonly class LocalBranchRestore
         $target = trim($symbolic->getOutput());
         $undo = $this->git($name, ['update-ref', '--no-deref', '-d', $target, $head]);
 
-        throw $this->notRestored($name, $undo->isSuccessful()
-            ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target)
-            : sprintf('another writer made it a symbolic branch during the restore, so the push may have written %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())));
+        throw $this->notRestored($name, $undo->isSuccessful() ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target) : sprintf('another writer made it a symbolic branch during the restore, so the push may have written %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())));
     }
 
     // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch. A ref that cannot be read is refused alike, because only a missing one may be created.
