@@ -6,7 +6,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
 use Intakt\Core\Build\Domain\BuildStopCause;
 
-// TODO(#3965): replaced by the watch that feeds the progress rule while the build runs; until then no build is stopped.
+// Null for every job, because nothing feeds the progress rule while a build runs until the watch of #3965 replaces this.
 final readonly class UnwatchedBuilds implements BuildStops
 {
     public function causeFor(BuildJob $job): ?BuildStopCause

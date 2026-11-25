@@ -1575,11 +1575,6 @@ final class BuildTaskTest extends TestCase
         return new BuildTask($issues, $checkout, $this->routing, $this->builds(), new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
-    private function builds(): RunBuildJob
-    {
-        return new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops ?? new UnwatchedBuilds());
-    }
-
     private function handBackChecks(): CheckHandBack
     {
         return new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
@@ -1588,6 +1583,11 @@ final class BuildTaskTest extends TestCase
     private function handBackFile(GitBuildCheckout $checkout): HandBackFile
     {
         return new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
+    }
+
+    private function builds(): RunBuildJob
+    {
+        return new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops ?? new UnwatchedBuilds());
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
