@@ -17,15 +17,12 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\LatestRoundStatus;
-use Intakt\Core\Review\Contract\ReviewStatus;
-use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
-use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
-use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
@@ -50,6 +47,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
@@ -64,6 +62,7 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
@@ -85,6 +84,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\RecordingCommandBus;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\StandingQueryBus;
+use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
@@ -115,7 +115,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private ?ChangeLabels $steering = null;
 
-    private ?ReviewStatus $storedStatus = ReviewStatus::InReview;
+    private ReviewStatus $storedStatus = ReviewStatus::InReview;
 
     private RecordingStatusLabels $statusLabels;
 
@@ -140,7 +140,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         );
     }
 
-    // E1 of #3901 over recorded reads: the labels before a round, after the queueing and once the stored round is published; the publication handler itself runs in PublishVerdictTest.
+    // The publication handler itself runs in PublishVerdictTest, because it needs a stored round this tick does not build.
     public function testTheLabelsGoFromNoneToInReviewAfterQueueingAndToWaitingOnYouOncePublished(): void
     {
         self::assertSame([], $this->statusLabels->labels);
@@ -297,7 +297,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
             $steering->method('steeringOf')->willReturn(new Labels());
         }
         $stored = self::createStub(LatestRoundStatus::class);
-        $stored->method('of')->willReturnCallback(fn (): ?ReviewStatus => $this->storedStatus);
+        $stored->method('of')->willReturnCallback(fn (): ReviewStatus => $this->storedStatus);
         $mirror = new RoundStatusMirror($stored, $locks, $logger, $this->statusLabels);
         $starts = new RoundStarts($commands, $rounds, $ledger, $steering, $mirror);
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
