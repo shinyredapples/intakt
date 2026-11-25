@@ -134,6 +134,18 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         return $this->commitOf($this->calls->text($branch, 'commit', 'sha'));
     }
 
+    // Each commit by its id, because a commit listed twice would make up the comparison's total while another commit stays unread.
+    /**
+     * @param list<mixed> $commits
+     */
+    private function refuseRepeatedCommits(array $commits): void
+    {
+        $ids = array_map(fn (mixed $commit): string => $this->commitOf($this->calls->text(is_array($commit) ? $commit : [], 'sha'))->hash, $commits);
+        if (count(array_unique($ids)) !== count($ids)) {
+            throw new ForgeReadFailed('GitHub answered a comparison that lists a commit more than once.');
+        }
+    }
+
     /**
      * @return list<string>
      */
@@ -178,18 +190,6 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         $moment = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s\Z', $value, new DateTimeZone('UTC'));
 
         return false !== $moment && $moment->format('Y-m-d\TH:i:s\Z') === $value;
-    }
-
-    // Each commit by its id, because a commit listed twice would make up the comparison's total while another commit stays unread.
-    /**
-     * @param list<mixed> $commits
-     */
-    private function refuseRepeatedCommits(array $commits): void
-    {
-        $ids = array_map(fn (mixed $commit): string => $this->commitOf($this->calls->text(is_array($commit) ? $commit : [], 'sha'))->hash, $commits);
-        if (count(array_unique($ids)) !== count($ids)) {
-            throw new ForgeReadFailed('GitHub answered a comparison that lists a commit more than once.');
-        }
     }
 
     private function commitOf(string $sha): CommitId
