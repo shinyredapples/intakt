@@ -34,6 +34,13 @@ final class InstanceWorkerModeTest extends InstanceTestCase
                 if (hexdec($hexPort) === $port) { $addresses[] = $address; }
             }
         }
+        foreach (glob("/proc/[0-9]*/cmdline") ?: [] as $file) {
+            $arguments = explode("\0", (string) @file_get_contents($file));
+            if (!str_ends_with($arguments[0], "frankenphp") || !str_starts_with($arguments[3] ?? "", $argv[1])) { continue; }
+            foreach (explode("\0", (string) @file_get_contents(dirname($file)."/environ")) as $entry) {
+                if (str_starts_with($entry, "FRANKENPHP_ADMIN_URL=")) { echo "server admin url: ", "FRANKENPHP_ADMIN_URL=".getenv("INTAKT_INSTANCE_ADMIN_URL") === $entry ? "own" : "other", "\n"; }
+            }
+        }
         echo "listeners: ", implode(",", array_unique($addresses)), "\n";
         for ($i = 0; $i < 100; ++$i) {
             $states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? [];
@@ -45,12 +52,15 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         exit(3);
         PHP_WRAP;
 
-        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()], [PHP_BINARY, '-r', $command]);
+        // The scratch folder, because another FrankenPHP on the machine must neither satisfy the assertion nor leak its environment into the failure output.
+        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp(), 'FRANKENPHP_ADMIN_URL' => 'http://localhost:2019'], [PHP_BINARY, '-r', $command, $this->scratch.'/tmp/']);
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame(0, $run['exit']);
         self::assertMatchesRegularExpression('#^Worker PHP Thread - '.preg_quote((string) realpath(self::ROOT), '#').'/public/index\.php served [1-9]\d*$#m', $run['output']);
         self::assertMatchesRegularExpression('/^listeners: 0100007F$/m', $run['output']);
+        self::assertSame(1, preg_match_all('/^server admin url: /m', $run['output']));
+        self::assertMatchesRegularExpression('/^server admin url: own$/m', $run['output']);
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
     }
@@ -72,6 +82,24 @@ final class InstanceWorkerModeTest extends InstanceTestCase
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame("HTTP/1.1 200 OK\nempty projects page\n", $run['output']);
+    }
+
+    public function testInWorkerModeTheBoardShowsTheThreadsAndTheQueueDepthOfTheInstancesOwnServer(): void
+    {
+        $dashboardPort = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env.test'))['DASHBOARD_PORT'] ?? null;
+        self::assertIsString($dashboardPort);
+        $request = <<<'PHP_WRAP'
+            $context = stream_context_create(["http" => ["header" => "Host: ".$argv[1], "ignore_errors" => true]]);
+            $body = (string) file_get_contents(getenv("INTAKT_INSTANCE_URL")."/", false, $context);
+            foreach (["Threads busy", "Queue depth"] as $label) { echo $label, ": ", str_contains($body, "<dt>".$label."</dt>") ? "shown" : "missing", "\n"; }
+            PHP_WRAP;
+        // Migrated first, because the board reads the ledger and bin/instance starts on an empty database.
+        $command = ['sh', '-c', '"$0" bin/console --no-interaction --quiet doctrine:migrations:migrate && "$0" -r "$1" "$2"', PHP_BINARY, $request, 'localhost:'.$dashboardPort];
+
+        $run = $this->runInstance(self::ROOT, $command, $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame("Threads busy: shown\nQueue depth: shown\n", $run['output']);
     }
 
     public function testInWorkerModeFrankenphpRunsThreePhpThreadsWhateverTheNumberOfCpus(): void

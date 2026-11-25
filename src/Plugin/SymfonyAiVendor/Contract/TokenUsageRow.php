@@ -46,7 +46,8 @@ final readonly class TokenUsageRow
     {
         $read = $this->cacheRead ?? 0;
         $write = $this->cacheCreation ?? 0;
-        $unsplit = null === $this->cacheRead && null === $this->cacheCreation ? $this->cached ?? 0 : 0;
+        // Floored at zero, because a vendor whose split figures exceed its combined figure must not shrink the prompt.
+        $unsplit = max(0, ($this->cached ?? 0) - $read - $write);
 
         return new TokenFigures(($this->prompt ?? 0) + $read + $write + $unsplit, $read, $write, $unsplit, $this->completion ?? 0);
     }

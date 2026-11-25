@@ -4,6 +4,8 @@ const SOURCE = 'turbo-mercure-stream-source';
 // As in DESIGN.md ("Awkward data and states"): a fixed wait the line can count down, and red after two minutes.
 const RETRY_EVERY_S = 5;
 const UNREACHABLE_AFTER_MS = 120000;
+// Three countdowns give a slow hub time to answer, while a try whose packets are silently dropped (it never fails) is still replaced, so DESIGN.md's next try keeps coming.
+const GIVE_UP_ON_A_TRY_AFTER_S = RETRY_EVERY_S * 3;
 // Everything that changes Intakt's state is a POST form, so its submit button is what waits while offline.
 const ACTIONS = 'form[method="post"] button[type="submit"]';
 // Marked in the page rather than remembered by the controller, because Turbo caches the page with the marks and a new controller restores it.
@@ -20,6 +22,8 @@ export default class extends Controller {
     async connect() {
         this.dropped = new Set();
         this.lastEventIds = new Map();
+        this.triedAt = new Map();
+        this.secondsCounted = 0;
         this.settle();
         const visit = (this.visit = {});
         await customElements.whenDefined(SOURCE);
@@ -33,6 +37,7 @@ export default class extends Controller {
     disconnect() {
         this.visit = null;
         clearInterval(this.ticker);
+        this.stopHoldingNewActions();
         this.settle();
     }
 
@@ -68,6 +73,7 @@ export default class extends Controller {
             this.countdown = RETRY_EVERY_S;
             this.ticker = setInterval(() => this.tick(), 1000);
             this.holdActions();
+            this.holdNewActions();
             this.freezeElapsedTimes();
         }
         this.dropped.add(source);
@@ -80,6 +86,7 @@ export default class extends Controller {
             return;
         }
         clearInterval(this.ticker);
+        this.stopHoldingNewActions();
         this.lineTarget.hidden = true;
         this.markerTarget.hidden = true;
         this.settle();
@@ -104,6 +111,17 @@ export default class extends Controller {
         note.textContent = CONNECTING;
 
         return note;
+    }
+
+    // A source that is open or back can stream in a new form while another is still down, so its button waits too; holdActions() skips every disabled one, so a pass never repeats itself.
+    holdNewActions() {
+        this.newActions = new MutationObserver(() => this.holdActions());
+        this.newActions.observe(this.element, { childList: true, subtree: true });
+    }
+
+    stopHoldingNewActions() {
+        this.newActions?.disconnect();
+        this.newActions = null;
     }
 
     releaseActions() {
@@ -137,6 +155,7 @@ export default class extends Controller {
     }
 
     tick() {
+        this.secondsCounted += 1;
         this.countdown -= 1;
         if (this.countdown === 0) {
             this.retryDropped();
@@ -144,14 +163,23 @@ export default class extends Controller {
         this.show();
     }
 
-    // Only a failed try is replaced: a slow hub still answering would otherwise never get to open.
+    // A failed try is replaced at once, a pending one only after three countdowns, so a slow hub still gets to open but a hung try does not stall reconnecting.
     retryDropped() {
         this.countdown = RETRY_EVERY_S;
         this.dropped.forEach((source) => {
-            if (source.es.readyState === EventSource.CLOSED) {
+            if (this.isWorthReplacing(source)) {
                 this.reconnect(source);
             }
         });
+    }
+
+    // Seconds counted by the ticker rather than the clock, because a clock correction must not stretch or shorten the wait, and not a count of countdowns, so clicking Try now does not bring the replacement of a pending try closer.
+    isWorthReplacing(source) {
+        if (source.es.readyState === EventSource.CLOSED) {
+            return true;
+        }
+
+        return this.secondsCounted - this.triedAt.get(source) >= GIVE_UP_ON_A_TRY_AFTER_S;
     }
 
     // A new EventSource sends no Last-Event-ID header, so the hub is asked in the address for what the page missed.
@@ -161,6 +189,7 @@ export default class extends Controller {
             address.searchParams.set('last_event_id', this.lastEventIds.get(source));
         }
         source.setAttribute('src', address.toString());
+        this.triedAt.set(source, this.secondsCounted);
         this.watch(source);
     }
 

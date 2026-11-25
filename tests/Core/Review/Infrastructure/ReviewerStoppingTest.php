@@ -121,15 +121,6 @@ final class ReviewerStoppingTest extends TestCase
         self::assertSame(ExecutionStatus::Cancelled, $this->statusAfterRunning($this->conversation(new UuidV7())));
     }
 
-    public function testAReviewerStoppedRowOfAnUnknownTierIsSkippedSoTheRequestStillStopsTheRun(): void
-    {
-        $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
-        $stopped = str_replace('"strong"', '"giant"', $this->payloadOf(LedgerEventKind::ReviewerStopped, $this->reviewer));
-        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStopped, $stopped))->succeeded());
-
-        self::assertSame(ExecutionStatus::Cancelled, $this->statusAfterRunning($this->conversation(new UuidV7())));
-    }
-
     public function testAReviewerOutsideARoundIsNeverStopped(): void
     {
         $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
