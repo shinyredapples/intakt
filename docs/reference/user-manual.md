@@ -826,7 +826,7 @@ It prints each line with its outcome (`recorded`, `cooling-down`, `start` and so
 
 ## Checking whether a verdict still counts
 
-A reviewer's verdict counts only for what it reviewed: the branch's latest commit, the commit it was compared with, the task, the check command and the project's Code reviewers. `php bin/console intakt:verdict:identity <project> <branch> <task> <check-command> [--repository=.] [--base=main]` prints that identity as one line, `identity` followed by five parts separated by dots (the two commits, then fingerprints of the task text, the check command and the panel). The task text and the command are not shown, only their fingerprints.
+A reviewer's verdict counts only for what it reviewed: the branch's latest commit, the commit it was compared with, the task, the check command and the project's panel configuration, including its quorum policy. `php bin/console intakt:verdict:identity <project> <branch> <task> <check-command> [--repository=.] [--base=main]` prints that identity as one line, `identity` followed by five parts separated by dots (the two commits, then fingerprints of the task text, the check command and the panel). The task text and the command are not shown, only their fingerprints.
 
 Pass a printed identity back with `--reviewed=<identity>` to see whether a verdict given on it still counts:
 
