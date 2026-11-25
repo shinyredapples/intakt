@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -30,7 +31,7 @@ final readonly class RejectingJudge implements Vendor
     #[Override]
     public function judge(string $project, JudgeRequest $request): Judgement
     {
-        return new Judgement(array_map(static fn ($finding): JudgedFinding => new JudgedFinding($finding->id, Mark::Reject), $request->findings));
+        return new Judgement(array_map(static fn (Finding $finding): JudgedFinding => new JudgedFinding($finding->id, Mark::Reject), $request->findings));
     }
 
     #[Override]

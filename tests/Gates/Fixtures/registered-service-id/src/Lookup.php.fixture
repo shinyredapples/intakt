@@ -12,8 +12,8 @@ final readonly class Lookup
      * Takes the container per call, because a container in the constructor is
      * a service locator that intakt.noServiceLocator refuses in src/.
      */
-    public function kernel(ContainerInterface $container): object
+    public function mailer(ContainerInterface $container): object
     {
-        return $container->get('kernel');
+        return $container->get('fixture.mailer');
     }
 }

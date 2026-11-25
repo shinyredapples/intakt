@@ -135,6 +135,7 @@ final class InstanceTest extends InstanceTestCase
             $lines = [
                 (string) getenv("INTAKT_INSTANCE_URL"),
                 "admin url: ".var_export(getenv("INTAKT_INSTANCE_ADMIN_URL"), true),
+                "server admin url: ".file_get_contents(getenv("INTAKT_INSTANCE_URL")."/?admin"),
                 "descriptor 3: ".(@readlink("/proc/self/fd/3") === realpath($argv[2]) ? "status" : "other"),
             ];
             foreach (getenv() as $name => $value) { $lines[] = $name."=".$value; }
@@ -145,7 +146,7 @@ final class InstanceTest extends InstanceTestCase
             PHP;
         $printed = $this->scratch.'/printed';
 
-        $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', $command, $printed, $this->scratch.'/status'], ['INTAKT_TEST_CANARY' => 'visible']);
+        $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', $command, $printed, $this->scratch.'/status'], ['INTAKT_TEST_CANARY' => 'visible', 'FRANKENPHP_ADMIN_URL' => 'http://localhost:2019']);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertSame(5, $run['exit']);
@@ -158,6 +159,8 @@ final class InstanceTest extends InstanceTestCase
         // PHP itself may take the free descriptor 3 (OPcache does for its lock), so the target tells, not whether it is open.
         self::assertStringContainsString("\ndescriptor 3: other\n", $run['output']);
         self::assertStringContainsString("\nadmin url: false\n", $run['output']);
+        self::assertStringContainsString("\nserver admin url: ok http://admin-api.invalid\n", $run['output']);
+        self::assertStringNotContainsString('localhost:2019', $run['output']);
     }
 
     public function testACommandThatOverrunsItsTimeIsKilledWithExitCode124(): void
@@ -167,6 +170,58 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame(124, $run['exit']);
         self::assertStringContainsString('ran longer than 1 seconds and was killed', $run['errors']);
         self::assertSame('{"status":"ready"}', $run['status']);
+    }
+
+    public function testACommandThatOverrunsAFractionalLimitIsKilledWithExitCode124AndTheLimitNamed(): void
+    {
+        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
+
+        self::assertSame(124, $run['exit']);
+        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $run['errors']);
+    }
+
+    public function testACommandThatEndsDuringTheLastWaitBeforeAFractionalLimitIsNotKilled(): void
+    {
+        // Ends well inside the 0.2 second limit, because a loaded runner may start the command late and only its end may wake the wait; because this also passes with polling, the wake-count test (testWhileTheCommandRunsTheInstanceSleepsUntilTheCommandEndsInsteadOfPolling) is the one that pins the signal wait.
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'sleep 0.05; exit 3'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2']);
+
+        self::assertSame(3, $run['exit']);
+        self::assertStringNotContainsString('was killed', $run['errors']);
+    }
+
+    public function testWhileTheCommandRunsTheInstanceSleepsUntilTheCommandEndsInsteadOfPolling(): void
+    {
+        // Because a polling wait also finds a quick exit, only the parent's voluntary wakes (not the nonvoluntary line) tell it apart: a 50 millisecond poll wakes many times in 0.9 seconds, the signal wait at most once a second.
+        $count = 'awk \'$1 == "voluntary_ctxt_switches:" { print $2 }\' /proc/$PPID/status';
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'before=$('.$count.'); sleep 0.9; after=$('.$count.'); echo "wakes: $((after - before))"'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '5']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertMatchesRegularExpression('/^wakes: [0-3]$/m', $run['output']);
+    }
+
+    public function testWithoutTheSignalFunctionsAnOverrunningCommandIsStillKilledByThePollingWait(): void
+    {
+        $settings = $this->scratch.'/ini';
+        mkdir($settings);
+        file_put_contents($settings.'/no-signals.ini', "disable_functions = pcntl_sigprocmask,pcntl_sigtimedwait\n");
+
+        // A leading separator keeps the default scan folder, so the extensions stay loaded.
+        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '0.2', 'PHP_INI_SCAN_DIR' => ':'.$settings]);
+
+        self::assertSame(124, $run['exit']);
+        self::assertStringContainsString('ran longer than 0.2 seconds and was killed', $run['errors']);
+    }
+
+    public function testACommandLimitThatIsNotFiniteInNanosecondsIsRefusedBeforeTheCommandRuns(): void
+    {
+        $marker = $this->scratch.'/ran';
+
+        $run = $this->runInstance(self::stubProject(), ['touch', $marker], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1e300']);
+
+        self::assertSame(1, $run['exit']);
+        self::assertSame('failed', $this->decoded($run['status'])['status']);
+        self::assertStringContainsString('must be a finite number of nanoseconds', $this->decoded($run['status'])['reason']);
+        self::assertFileDoesNotExist($marker);
     }
 
     #[DataProvider('signals')]

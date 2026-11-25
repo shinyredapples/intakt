@@ -16,7 +16,7 @@ Your first live review ran on one key. Now you want the real setup: two labs on 
 | `claude_code` | a reviewer or the judge on a Claude subscription | `CLAUDE_CODE_OAUTH_TOKEN` |
 | `codex` | a reviewer on a Codex subscription | a login file, see the reference |
 
-A provider without its key is switched off, and Intakt still starts. The setup page lists each one, for example: Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
+A provider without its key is switched off, and Intakt still starts. Step 3 of the setup wizard, **Add an AI account**, lists each one, for example: Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
 
 ![Step 1 of the setup page, "Add a key here", marked Done: "openai_compatible has a key", then three lines saying the anthropic, openai and claude_code providers are disabled and which variable enables each, and the tiers of the project sample: strong and light on Kimi K3.1 Pro, standard on DeepSeek V4 Pro 0813, all through openai_compatible](../assets/guide/add-a-key.webp)
 
@@ -24,11 +24,11 @@ A provider without its key is switched off, and Intakt still starts. The setup p
 
 Keys never go into a committed file. Put them in one of these places:
 
-1. **The setup page,** for your first key: paste it in **Add a key here**. It is checked with the provider before it is kept.
+1. **The setup wizard,** for your first key: paste it on step 3, **Add an AI account**. It is checked with the provider before it is kept.
 2. **`.env.local`,** for everything else: copy `.env.dist` to `.env.local` and fill in the variables above.
 3. **Symfony secrets,** for example `php bin/console secrets:set ANTHROPIC_API_KEY`.
 
-A key in `.env.local` or in the secrets always wins over one kept from the setup page. After you add or change a key, restart Intakt so it reads it.
+A key in `.env.local` or in the secrets always wins over one kept from the setup wizard. After you add or change a key, restart Intakt so it reads it.
 
 ## Two labs, one Hugging Face token
 
@@ -58,6 +58,8 @@ Every review page shows the tokens and the cost of each round. The cost is an es
 2. Under `budget.prices`, add each model with its `input` and `output` price.
 3. Optionally set `budget.price_date`, the day you read the prices, in quotes. If you read them on different days, use the earliest.
 4. Run `php bin/console cache:clear`.
+
+The tokens table splits the prompt's cache tokens. **Cache read** and **Cache write** are the ones the provider named as such; **Cached** is the rest it did not tell apart, so a round can show a cache read and a cached figure side by side. Optional `cache_read` and `cache_write` prices apply to the first two, and the cached figure costs the `input` price.
 
 The page then shows a figure, an **estimated** label and the price date. A model without a price makes the cost read "unknown, no price for" that model, never a partial sum. This holds for a call that has not recorded its end yet (still running, or cut off) too: if its model has no price, the round's cost is unknown; if the model has a price, such a call adds nothing. The demo brings its own list prices, dated 2026-11-13, the earliest day any of them was read.
 

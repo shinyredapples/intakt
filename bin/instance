@@ -42,6 +42,80 @@ final readonly class InstanceStatus
     }
 }
 
+final readonly class CommandWait
+{
+    private const int NANOSECONDS = 1_000_000_000;
+    private const int POLL_NANOSECONDS = 50_000_000;
+
+    private bool $signals;
+
+    public function __construct(public int|float $seconds)
+    {
+        // Because a limit such as 1e300 is finite in seconds but infinite in nanoseconds, which would turn the deadline off.
+        if (!is_finite($seconds * self::NANOSECONDS)) {
+            throw new InvalidArgumentException('the command time limit must be a finite number of nanoseconds, not '.$seconds.' seconds');
+        }
+
+        $this->signals = function_exists('pcntl_sigprocmask') && function_exists('pcntl_sigtimedwait');
+    }
+
+    /**
+     * @param resource $process
+     */
+    public function exitBefore($process): ?int
+    {
+        $deadline = hrtime(true) + $this->seconds * self::NANOSECONDS;
+
+        // Blocked only once the command runs, so it does not inherit the mask; an exit before the block is found by the first status read.
+        if ($this->signals) {
+            pcntl_sigprocmask(SIG_BLOCK, [SIGCHLD]);
+        }
+
+        try {
+            return $this->exitCodeBefore($process, $deadline);
+        } finally {
+            if ($this->signals) {
+                pcntl_sigprocmask(SIG_UNBLOCK, [SIGCHLD]);
+            }
+        }
+    }
+
+    /**
+     * @param resource $process
+     */
+    private function exitCodeBefore($process, float $deadline): ?int
+    {
+        // The status is read before the clock, because a status read after the deadline cannot tell when the command ended, so such an exit fails closed.
+        $state = proc_get_status($process);
+        $now = hrtime(true);
+
+        while ($state['running'] && $now < $deadline) {
+            $this->pause((int) min($this->longestPause(), $deadline - $now));
+            $state = proc_get_status($process);
+            $now = hrtime(true);
+        }
+
+        return !$state['running'] && $now < $deadline ? $state['exitcode'] : null;
+    }
+
+    private function longestPause(): int
+    {
+        return $this->signals ? self::NANOSECONDS : self::POLL_NANOSECONDS;
+    }
+
+    private function pause(int $nanoseconds): void
+    {
+        if (!$this->signals) {
+            usleep(max(1, intdiv($nanoseconds, 1_000)));
+
+            return;
+        }
+
+        // The command's end wakes the wait at once, so a command that ends in the last wait before the limit is not killed.
+        pcntl_sigtimedwait([SIGCHLD], $info, intdiv($nanoseconds, self::NANOSECONDS), $nanoseconds % self::NANOSECONDS);
+    }
+}
+
 final class Instance
 {
     private const array INHERITED_VARIABLES = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR'];
@@ -70,7 +144,7 @@ final class Instance
         private readonly string $root,
         private readonly Server $web,
         private readonly array $command,
-        private readonly int $commandSeconds,
+        private readonly int|float $commandSeconds,
         private readonly DirectoryRemoval $directoryRemoval,
     ) {
     }
@@ -107,13 +181,14 @@ final class Instance
             return InstanceStatus::failed('vendor/autoload_runtime.php is missing, run composer install');
         }
 
+        $wait = new CommandWait($this->commandSeconds);
         $this->scratch = $this->createScratch();
         $this->start();
 
         $status = $this->awaitAnswer();
 
         if ($status->ready && [] !== $this->command) {
-            $this->commandExit = $this->runCommand();
+            $this->commandExit = $this->runCommand($wait);
         }
 
         return $status;
@@ -176,7 +251,7 @@ final class Instance
         return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
     }
 
-    private function runCommand(): int
+    private function runCommand(CommandWait $wait): int
     {
         // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
         $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
@@ -189,7 +264,7 @@ final class Instance
             throw new RuntimeException('cannot start the command');
         }
 
-        return $this->awaitExit($process);
+        return $this->awaitExit($process, $wait);
     }
 
     /**
@@ -273,25 +348,19 @@ final class Instance
     /**
      * @param resource $process
      */
-    private function awaitExit($process): int
+    private function awaitExit($process, CommandWait $wait): int
     {
-        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
+        $exitCode = $wait->exitBefore($process);
 
-        while (hrtime(true) < $deadline) {
-            $state = proc_get_status($process);
+        if (null !== $exitCode) {
+            proc_close($process);
 
-            if (!$state['running']) {
-                proc_close($process);
-
-                return $state['exitcode'];
-            }
-
-            usleep(50_000);
+            return $exitCode;
         }
 
         proc_terminate($process, 9);
         proc_close($process);
-        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
+        fwrite(STDERR, 'the command ran longer than '.$wait->seconds." seconds and was killed\n");
 
         return self::COMMAND_TIMED_OUT;
     }
@@ -399,7 +468,8 @@ final readonly class BuiltInServer implements Server
 
     public function environment(string $scratch): array
     {
-        return [];
+        // This server has no admin API; a non-loopback host makes AdminApi refuse before any request, so the board never reaches a stray listener on the default port.
+        return ['FRANKENPHP_ADMIN_URL' => 'http://admin-api.invalid'];
     }
 
     public function port(string $log): ?int
@@ -441,7 +511,7 @@ final class WorkerServer implements Server
     public function environment(string $scratch): array
     {
         // Caddy keeps its autosaved config and data under these, so it writes nothing outside the scratch directory.
-        return ['XDG_DATA_HOME' => $scratch.'/xdg-data', 'XDG_CONFIG_HOME' => $scratch.'/xdg-config'];
+        return ['XDG_DATA_HOME' => $scratch.'/xdg-data', 'XDG_CONFIG_HOME' => $scratch.'/xdg-config', 'FRANKENPHP_ADMIN_URL' => $this->adminUrl()];
     }
 
     public function port(string $log): ?int
@@ -452,12 +522,17 @@ final class WorkerServer implements Server
 
     public function commandEnvironment(): array
     {
-        return ['INTAKT_INSTANCE_ADMIN_URL' => 'http://127.0.0.1:'.$this->adminPort];
+        return ['INTAKT_INSTANCE_ADMIN_URL' => $this->adminUrl()];
     }
 
     public function labeled(InstanceStatus $status): InstanceStatus
     {
         return $status->inMode('worker');
+    }
+
+    private function adminUrl(): string
+    {
+        return 'http://127.0.0.1:'.$this->adminPort;
     }
 
     /**
@@ -487,7 +562,7 @@ final class WorkerServer implements Server
         return $socket;
     }
 
-    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; num_threads is fixed because FrankenPHP's default of two threads per CPU makes the memory a boot needs grow with the host, and on a host with many CPUs under an address-space limit PHP then exits with a bare "Out of memory" before it serves; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from; the site names no host because a Caddy site address also matches the Host header and Caddy answers a request no site matches with an empty 200, so bind alone keeps it on loopback.
+    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; num_threads is fixed because FrankenPHP's default of two threads per CPU makes the memory a boot needs grow with the host, and on a host with many CPUs under an address-space limit PHP then exits with a bare "Out of memory" before it serves; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from; the site names no host because a Caddy site address also matches the Host header and Caddy answers a request no site matches with an empty 200, so bind alone keeps it on loopback; metrics is on because FrankenPHP adds its queue series to the admin API's /metrics only then, and the instance's board reads them there.
     private function caddyfile(): string
     {
         $public = $this->root.'/public';
@@ -495,6 +570,7 @@ final class WorkerServer implements Server
         return <<<CADDYFILE
             {
             	admin 127.0.0.1:{$this->adminPort}
+            	metrics
             	frankenphp {
             		num_threads 2
             		php_ini log_errors 1
@@ -625,7 +701,7 @@ $argv ??= [];
 $command = array_slice($argv, 1);
 $command = '--' === array_first($command) ? array_slice($command, 1) : [];
 // Needed so a test can prove the cap without waiting for the full minute.
-$commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
+$commandSeconds = (float) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
 $root = dirname(__DIR__);
 // The image ships frankenphp, so there the instance runs the app the way the image serves it.

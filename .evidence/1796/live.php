@@ -62,10 +62,6 @@ $environment = $_SERVER['APP_ENV'] ?? 'dev';
 $kernel = new EvidenceKernel(is_string($environment) ? $environment : 'dev', false);
 $kernel->boot();
 [$updates, $recorded, $rounds] = array_map($kernel->getContainer()->get(...), EvidenceKernel::SERVICES);
-if (!$updates instanceof RoundUpdates || !$recorded instanceof RoundToolCalls || !$rounds instanceof ReviewRounds) {
-    fwrite(STDERR, "the container did not hand out the round's services\n");
-    exit(1);
-}
 $round = $rounds->stored($roundId);
 
 $script = [

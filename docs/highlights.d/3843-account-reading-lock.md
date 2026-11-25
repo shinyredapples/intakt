@@ -1,0 +1,2 @@
+## Symfony components
+| Lock | one reading of an account's usage and one outage notice of that account at a time around the reading's commit and the notice's last look, waited for (`LockFactory`, `AccountReadingLock`), so an outage notice gets the moment of its first recovery reading as its end on a read-committed engine | in progress | #3843 (part of #3293), `src/Core/Budget/Infrastructure/AccountReadingLock.php` |

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Fixture;
 
-use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final readonly class Lookup
@@ -15,7 +14,7 @@ final readonly class Lookup
 
     public function service(int $choice): object
     {
-        $id = 0 === $choice ? 'kernel' : ReviewerPrompt::class;
+        $id = 0 === $choice ? 'fixture.mailer' : 'fixture.signature';
 
         return $this->container->get($id);
     }
