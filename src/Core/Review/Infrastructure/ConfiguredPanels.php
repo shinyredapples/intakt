@@ -80,21 +80,6 @@ final readonly class ConfiguredPanels implements Panels
         return false;
     }
 
-    // A strong reviewer keeps its tier under a quorum that needs a strong vote, because that quorum is a safety rule and safety rules beat labels.
-    /**
-     * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
-     */
-    private function tierOf(array $reviewer, ?Tier $labelled, QuorumPolicy $quorum): Tier
-    {
-        $configured = Tier::from($reviewer['tier']);
-
-        if (!$labelled instanceof Tier || ($quorum->needsStrongVote() && Tier::Strong === $configured)) {
-            return $configured;
-        }
-
-        return $labelled;
-    }
-
     // Only a tier the project maps to the reviewer's own provider, because a call reaches the provider its tier maps to: another one would run the reviewer elsewhere than the panel says (two independent vendors could become one), and a tier without a model would refuse the round.
     /**
      * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
@@ -108,6 +93,21 @@ final readonly class ConfiguredPanels implements Panels
         $mapped = $this->projects[$project]['tiers'][$labelled->value]['provider'] ?? null;
 
         return $mapped === $reviewer['provider'] ? $labelled : null;
+    }
+
+    // A strong reviewer keeps its tier under a quorum that needs a strong vote, because that quorum is a safety rule and safety rules beat labels.
+    /**
+     * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
+     */
+    private function tierOf(array $reviewer, ?Tier $labelled, QuorumPolicy $quorum): Tier
+    {
+        $configured = Tier::from($reviewer['tier']);
+
+        if (!$labelled instanceof Tier || ($quorum->needsStrongVote() && Tier::Strong === $configured)) {
+            return $configured;
+        }
+
+        return $labelled;
     }
 
     /**
