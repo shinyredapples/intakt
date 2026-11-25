@@ -59,15 +59,15 @@ final readonly class ContractArrayTypeRule implements Rule
         return [...$findings, ...$this->propertyFindings($declaration, $class)];
     }
 
+    private function isContract(string $file): bool
+    {
+        return str_starts_with($file, $this->root.'/') && 1 === preg_match(self::CONTRACT_FOLDER, substr($file, strlen($this->root) + 1));
+    }
+
     // PHP itself declares such a method's signature (JsonSerializable::jsonSerialize() returns array), so a contract cannot type it otherwise
     private function isFixedByBuiltInInterface(ClassMethod $method, ClassReflection $class): bool
     {
         return array_any($class->getInterfaces(), static fn (ClassReflection $interface): bool => $interface->isBuiltin() && $interface->hasNativeMethod($method->name->toString()));
-    }
-
-    private function isContract(string $file): bool
-    {
-        return str_starts_with($file, $this->root.'/') && 1 === preg_match(self::CONTRACT_FOLDER, substr($file, strlen($this->root) + 1));
     }
 
     /**
