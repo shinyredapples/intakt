@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Infrastructure\LiveBoardHeadline;
 use Intakt\Core\Dashboard\Infrastructure\LiveProjectCards;
+use Intakt\Core\Dashboard\Infrastructure\PublishFirstReview;
 use Intakt\Core\Dashboard\Infrastructure\PublishProjectFilter;
 use Intakt\Core\Dashboard\Infrastructure\RoundStream;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -24,7 +25,7 @@ final class RoundStreamTest extends TestCase
 
     public function testEveryTemplateFileBelongsToARoundStreamOrAShellPublisher(): void
     {
-        $streams = [...array_map(static fn (RoundStream $stream): string => $stream->template(), RoundStream::cases()), PublishProjectFilter::TEMPLATE, LiveBoardHeadline::TEMPLATE, TourCaptionUpdates::TEMPLATE, TourCaptionUpdates::REFUSAL_TEMPLATE, LiveProjectCards::TEMPLATE];
+        $streams = [...array_map(static fn (RoundStream $stream): string => $stream->template(), RoundStream::cases()), PublishProjectFilter::TEMPLATE, PublishFirstReview::TEMPLATE, LiveBoardHeadline::TEMPLATE, TourCaptionUpdates::TEMPLATE, TourCaptionUpdates::REFUSAL_TEMPLATE, LiveProjectCards::TEMPLATE];
         $files = glob(dirname(__DIR__, 4).'/templates/dashboard/stream/[!_]*.stream.html.twig');
         self::assertIsArray($files);
 

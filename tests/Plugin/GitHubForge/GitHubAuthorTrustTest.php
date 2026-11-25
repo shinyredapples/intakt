@@ -139,7 +139,7 @@ final class GitHubAuthorTrustTest extends TestCase
 
     public function testAFailedTokenExchangeLeavesTheAuthorUntrusted(): void
     {
-        $this->github = new RecordedTrust(401);
+        $this->github = new RecordedTrust($this->clock, 401);
 
         self::assertFalse($this->isTrusted(RecordedTrust::PULL_BY_WRITER));
         self::assertSame([], array_filter($this->github->requested, static fn (string $url): bool => str_contains($url, '/pulls/')));
@@ -174,10 +174,10 @@ final class GitHubAuthorTrustTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->github = new RecordedTrust();
         $this->logger = new RecordingLogger();
         $this->key = AppKey::generate();
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->github = new RecordedTrust($this->clock);
         $this->readings = FreshReadings::at($this->clock);
     }
 
