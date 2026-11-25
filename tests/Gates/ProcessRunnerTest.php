@@ -114,6 +114,23 @@ final class ProcessRunnerTest extends TestCase
         self::assertSame('done', $results['quick']->output);
     }
 
+    public function testALimitShorterThanTheStartItselfTimesOutAndNamesTheLimit(): void
+    {
+        // A microsecond is always shorter than starting a process, so the limit has passed when the start ends.
+        $result = new ProcessRunner()->runWithin(['php', '-r', 'echo "ran";'], sys_get_temp_dir(), 1.0E-6);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
+        self::assertSame('php timed out after 1.0E-6 seconds', $result->errors);
+    }
+
+    public function testAConcurrentRunWithALimitShorterThanTheStartItselfTimesOutAndNamesTheLimit(): void
+    {
+        $results = new ProcessRunner()->runConcurrently(['command' => [['php', '-r', 'echo "ran";'], []]], sys_get_temp_dir(), 1.0E-6);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['command']->exitCode);
+        self::assertSame('php timed out after 1.0E-6 seconds', $results['command']->errors);
+    }
+
     public function testALimitThatIsNotFiniteInNanosecondsIsRefusedBeforeTheCommandRuns(): void
     {
         $this->expectException(InvalidArgumentException::class);

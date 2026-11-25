@@ -88,7 +88,7 @@ final class ProcessRunner
         $group = $this->startHeld($process, $release);
 
         if (!$group instanceof ProcessGroup) {
-            return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
+            return $this->resultOf($process, $group, $command[0]);
         }
 
         $forwarding = StopSignalForwarding::through($group->kill(...));
@@ -201,7 +201,7 @@ final class ProcessRunner
         $group = $this->startHeld($process, $release);
 
         if (!$group instanceof ProcessGroup) {
-            return $this->resultOf($process, self::CANNOT_RUN, $program);
+            return $this->resultOf($process, $group, $program);
         }
 
         return new RunningChild($process, $group, $deadline, $program, $seconds);
@@ -244,7 +244,7 @@ final class ProcessRunner
         return $endsAtOnce ? $this->timedOut($program, $seconds) : null;
     }
 
-    // Because a limit that is not finite in nanoseconds would turn the deadline off, it is refused before anything starts.
+    // Because a limit that is not finite in nanoseconds would turn the deadline off, TimeLimit refuses it here, before anything starts.
     private function endsAtOnce(int|float $seconds): bool
     {
         return new TimeLimit($seconds)->seconds <= 0;
@@ -264,16 +264,17 @@ final class ProcessRunner
         return $this->held($command);
     }
 
-    private function startHeld(Process $process, InputStream $release): ?ProcessGroup
+    private function startHeld(Process $process, InputStream $release): ProcessGroup|int
     {
-        $leader = [] === $this->startAll([$process]) ? $process->getPid() : null;
+        $failure = $this->startAll([$process])[0] ?? null;
+        $leader = null === $failure ? $process->getPid() : null;
         $release->write("\n");
         $release->close();
 
         if (null === $leader) {
             $process->stop(0);
 
-            return null;
+            return $failure ?? self::CANNOT_RUN;
         }
 
         return new ProcessGroup($leader);
@@ -419,8 +420,11 @@ final class ProcessRunner
         $failures = [];
 
         foreach ($processes as $name => $process) {
+            // Because Symfony checks the limit as the start ends, a limit shorter than the start itself times out there.
             try {
                 $process->start();
+            } catch (ProcessTimedOutException) {
+                $failures[$name] = self::TIMED_OUT;
             } catch (ExceptionInterface) {
                 $failures[$name] = self::CANNOT_RUN;
             }

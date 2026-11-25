@@ -189,6 +189,16 @@ final class InstanceTest extends InstanceTestCase
         self::assertStringNotContainsString('was killed', $run['errors']);
     }
 
+    public function testWhileTheCommandRunsTheInstanceSleepsUntilTheCommandEndsInsteadOfPolling(): void
+    {
+        // The command counts its parent's wakes over 0.9 seconds: a 50 millisecond poll wakes about 18 times, the signal wait at most once a second.
+        $count = 'grep voluntary_ctxt_switches /proc/$PPID/status | tr -dc 0-9';
+        $run = $this->runInstance(self::stubProject(), ['sh', '-c', 'before=$('.$count.'); sleep 0.9; after=$('.$count.'); echo "wakes: $((after - before))"'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '5']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertMatchesRegularExpression('/^wakes: [0-3]$/m', $run['output']);
+    }
+
     public function testWithoutTheSignalFunctionsAnOverrunningCommandIsStillKilledByThePollingWait(): void
     {
         $settings = $this->scratch.'/ini';
