@@ -231,7 +231,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/projects');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(array_map(static fn (Tier $tier): string => ucfirst($tier->value).' '.'Project "unmapped" is not configured.', Tier::cases()), $crawler->filter('[data-project="unmapped"] .tiers li')->each(static fn (Crawler $line): string => $line->text()));
+        self::assertSame(array_map(static fn (Tier $tier): string => ucfirst($tier->value).' Project "unmapped" is not configured.', Tier::cases()), $crawler->filter('[data-project="unmapped"] .tiers li')->each(static fn (Crawler $line): string => $line->text()));
     }
 
     public function testACredentialInATierProblemIsRedactedOnTheCard(): void
