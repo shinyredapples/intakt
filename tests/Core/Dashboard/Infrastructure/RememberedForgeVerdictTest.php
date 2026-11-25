@@ -54,8 +54,9 @@ final class RememberedForgeVerdictTest extends TestCase
 
         $shown = $this->remembered()->latest();
 
-        self::assertSame('refused for token [redacted]', $shown?->problem);
-        self::assertSame('set it', $shown?->fix);
+        self::assertInstanceOf(ForgeConnectionVerdict::class, $shown);
+        self::assertSame('refused for token [redacted]', $shown->problem);
+        self::assertSame('set it', $shown->fix);
         self::assertStringNotContainsString('synthetic-marker', serialize($this->cache->getValues()));
     }
 
@@ -85,20 +86,24 @@ final class RememberedForgeVerdictTest extends TestCase
         $second->start();
         $first->resume();
 
+        $checked = $first->getReturn();
         self::assertSame(1, $this->runs);
-        self::assertTrue($first->getReturn()?->passes());
+        self::assertInstanceOf(ForgeConnectionVerdict::class, $checked);
+        self::assertTrue($checked->passes());
         self::assertNull($second->getReturn());
     }
 
-    public function testALoadThatFindsTheCheckRunningElsewhereShowsTheKeptVerdictOnceItIsKept(): void
+    public function testALoadThatFindsTheLockHeldGetsNoVerdictAndTheNextLoadRunsTheCheck(): void
     {
         $lock = $this->locks->createLock('dashboard.forge-verdict');
         $lock->acquire();
 
-        self::assertNull($this->remembered()->latest());
-
+        $whileHeld = $this->remembered()->latest();
         $lock->release();
-        self::assertTrue($this->remembered()->latest()?->passes());
+        $afterwards = $this->remembered()->latest();
+
+        self::assertNull($whileHeld);
+        self::assertTrue($afterwards?->passes());
         self::assertSame(1, $this->runs);
     }
 
