@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Dashboard\Infrastructure\FindingPaths;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Symfony\Component\HttpFoundation\Request;
@@ -21,16 +22,17 @@ final readonly class ShowFindingController
     public function __construct(
         private LedgerReviewPages $reviews,
         private LivePageRendering $pages,
+        private FindingPaths $paths,
     ) {
     }
 
-    // Any finding id, because a reviewer names its own ids and one may hold a slash.
+    // Any finding id, encoded by FindingPaths, because a reviewer names its own ids and one may hold a slash.
     #[Route('/reviews/{round}/findings/{finding}', name: DashboardRoutes::SHOW_FINDING, requirements: ['finding' => '.+'], methods: ['GET'])]
     public function __invoke(Request $request, string $round, string $finding): Response
     {
         $review = $this->reviews->reviewOf($round);
         $reviewed = $review instanceof Review ? $review->judgedRound($round) : null;
-        $found = $reviewed instanceof ReviewedRound ? $reviewed->finding($finding) : null;
+        $found = $reviewed instanceof ReviewedRound ? $reviewed->finding($this->paths->findingIn($finding)) : null;
 
         if (!$review instanceof Review || !$reviewed instanceof ReviewedRound || !$found instanceof RoundFinding) {
             throw new NotFoundHttpException('The ledger holds no judged finding with this id in this round.');

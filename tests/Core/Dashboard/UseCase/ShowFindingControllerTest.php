@@ -8,12 +8,16 @@ use Intakt\Core\Dashboard\Domain\FindingUrgency;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Dashboard\Infrastructure\FindingPaths;
 use Intakt\Core\Dashboard\UseCase\ShowFinding\ShowFindingController;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
+use Uri\WhatWg\Url;
 
 #[CoversClass(ShowFindingController::class)]
+#[CoversClass(FindingPaths::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(RoundFinding::class)]
@@ -108,6 +112,55 @@ final class ShowFindingControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', (string) $row->attr('href'));
 
         self::assertSame('Text of php/F 1?.', $crawler->filter('.finding-head h1')->text());
+    }
+
+    #[DataProvider('pathLikeIds')]
+    public function testAPathLikeFindingIdOpensFromItsRowAfterTheBrowserResolvesTheLink(string $id): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeRatedFindings('round-1', [$id => 'P1']);
+        $this->browser->disableReboot();
+
+        $href = (string) $this->browser->request('GET', '/reviews/round-1')->filter('#review-to-fix a.fix-row')->attr('href');
+        $crawler = $this->browser->request('GET', new Url($href, new Url('http://localhost/'))->getPath());
+
+        self::assertSame('Text of '.$id.'.', $crawler->filter('.finding-head h1')->text());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function pathLikeIds(): iterable
+    {
+        yield 'a parent segment inside' => ['checks/../F1'];
+        yield 'a current segment inside' => ['checks/./F1'];
+        yield 'only a parent segment' => ['..'];
+        yield 'only a current segment' => ['.'];
+        yield 'an encoded parent segment' => ['checks/%2e%2e/F1'];
+        yield 'an encoded slash' => ['checks%2FF1'];
+    }
+
+    public function testARatedReportKeepsItsSeverityAlongsideAnUnratedReport(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->reportFindings('round-1', 'correctness', ['F1', 'F1', 'F9']);
+        $this->ledger->reportRatedFindings('round-1', 'security', ['F6' => 'P2']);
+        $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F6');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertStringContainsString('kept once for 2 reports', $crawler->filter('.finding-judge')->text());
+        self::assertStringEndsWith('reported as P2', $crawler->filter('.finding-reporters li')->last()->text());
+    }
+
+    public function testTheSameSeverityUnderTwoIdsShowsOnceButCountsAsTwoReports(): void
+    {
+        $this->givenTwoReportsJudgedAsOneEntry(['F1' => 'P2', 'F2' => 'P2']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertStringEndsWith('· reported as P2', $crawler->filter('.finding-reporters li')->last()->text());
+        self::assertStringContainsString('kept once for 3 reports', $crawler->filter('.finding-judge')->text());
     }
 
     public function testAPassCheckedBeforeIntaktKeptWhoReportedWhatSaysSo(): void

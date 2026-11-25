@@ -17,7 +17,7 @@
     {% else %}
     <ul class="fix-rows">
         {% for finding in findings %}
-        <li><a class="fix-row" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_FINDING'), {round: judged, finding: finding.id}) }}"{% if finding.severity is not null %} title="{{ finding.severity }}"{% endif %}>
+        <li><a class="fix-row" href="{{ finding_path(judged, finding.id) }}"{% if finding.severity is not null %} title="{{ finding.severity }}"{% endif %}>
             {% set headline = finding.headline %}
             <span class="fix-title">{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span>
             {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'fix-chev'}, with_context = false) }}

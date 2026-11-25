@@ -50,7 +50,7 @@ final readonly class ReviewedRound
     /** @var array<string, list<string>>|null */
     public ?array $findingsByReviewer;
 
-    // Keyed by reviewer id, then finding id, with the severity that reviewer gave, because two reviewers may repeat one tracked finding at different severities; null unless every reporter row recorded them.
+    // Keyed by reviewer id, then finding id, with the severity that reviewer gave, because two reviewers may repeat one tracked finding at different severities; a reviewer whose reporter row recorded none is left out, and the whole map is null when no reporter row recorded them.
     /** @var array<string, array<string, string>>|null */
     public ?array $severitiesByReviewer;
 
