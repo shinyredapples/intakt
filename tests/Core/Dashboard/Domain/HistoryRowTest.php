@@ -70,6 +70,14 @@ final class HistoryRowTest extends TestCase
         self::assertNull($unreadable->expires);
     }
 
+    public function testARowShowsTheRecordedEndOfAnAccountCooldownAsItsExpiry(): void
+    {
+        $row = HistoryRow::of(new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::AccountCooledDown, '{"account":"sample","until":"2026-12-01T10:00:00+00:00"}'), new DateTimeImmutable('2026-12-01T09:00:00+00:00')));
+
+        self::assertSame('2026-12-01 10:00:00', $row->expires?->format('Y-m-d H:i:s'));
+        self::assertContains(HistoryTopic::Limits, $row->topics());
+    }
+
     public function testASecretValueAppearsInARowOnlyAsItsFingerprint(): void
     {
         $row = HistoryRow::of($this->recorded(['fingerprint' => 'ab12cd', 'before' => 'sk-old-secret', 'after' => 'sk-new-secret']));
@@ -109,6 +117,7 @@ final class HistoryRowTest extends TestCase
     #[TestWith(["\f"])]
     #[TestWith(["\u{00A0}"])]
     #[TestWith(["\u{2003}\u{3000}\n"])]
+    #[TestWith(["\u{200B}\u{FEFF}"])]
     public function testAnActorOrProjectOfOnlyUnicodeWhitespaceReadsAsUnset(string $blank): void
     {
         $row = HistoryRow::of($this->recorded(['actor' => $blank, 'project' => $blank]));
