@@ -10,7 +10,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class CleanupPolicy
 {
-    // The prefix of the branches Intakt creates (docs/design/05-architecture/08-merge.md#branch-cleanup).
+    // Spelled once, so the branch names and the cleanup agree (docs/design/05-architecture/08-merge.md#branch-cleanup).
     public const string INTAKT_PREFIX = 'intakt/';
 
     /**

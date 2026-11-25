@@ -31,14 +31,14 @@ final class BranchRulesTest extends TestCase
 {
     public function testABranchWithoutIntaktsPrefixIsOutOfBoundsUnlessTheProjectOptsIn(): void
     {
-        $facts = $this->facts('feature/someone', null, '-90 days', false);
+        $facts = $this->factsOf($this->namedBranch('feature/someone'), '-90 days', false);
 
         self::assertSame(Verdict::OutOfBounds, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testABranchWithoutIntaktsPrefixIsJudgedOnceTheProjectOptsIn(): void
     {
-        $facts = $this->facts('feature/someone', null, '-90 days', false);
+        $facts = $this->factsOf($this->namedBranch('feature/someone'), '-90 days', false);
 
         self::assertSame(Verdict::Warn, new BranchRules(new CleanupPolicy(true, []))->verdictOf($facts, $this->now()));
     }
@@ -63,7 +63,7 @@ final class BranchRulesTest extends TestCase
 
     public function testAMergedBranchIsDeletableAtOnceWithoutAWarning(): void
     {
-        $facts = $this->facts('intakt/7', new BranchChange(BranchChangeState::Merged), '-1 hour', true);
+        $facts = $this->facts('-1 hour', true, new BranchChange(BranchChangeState::Merged));
 
         self::assertSame(Verdict::Deletable, $this->rules()->verdictOf($facts, $this->now()));
     }
@@ -96,63 +96,63 @@ final class BranchRulesTest extends TestCase
 
     public function testABranchWithAnOpenPullRequestIsKeptHoweverOld(): void
     {
-        $facts = $this->facts('intakt/7', new BranchChange(BranchChangeState::Open), '-400 days', false);
+        $facts = $this->facts('-400 days', false, new BranchChange(BranchChangeState::Open));
 
         self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsKeptForTwentyNineDays(): void
     {
-        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($this->facts('intakt/7', null, '-29 days', false), $this->now()));
+        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($this->facts('-29 days', false), $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsStaleAtThirtyDays(): void
     {
-        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('intakt/7', null, '-30 days', false), $this->now()));
+        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('-30 days', false), $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsStillStaleJustBeforeSixtyDays(): void
     {
-        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('intakt/7', null, '-59 days', false), $this->now()));
+        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('-59 days', false), $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsToBeWarnedAtSixtyDays(): void
     {
-        self::assertSame(Verdict::Warn, $this->rules()->verdictOf($this->facts('intakt/7', null, '-60 days', false), $this->now()));
+        self::assertSame(Verdict::Warn, $this->rules()->verdictOf($this->facts('-60 days', false), $this->now()));
     }
 
     public function testABranchWithoutAPullRequestIsDeletableAWeekAfterItsWarning(): void
     {
         $warning = new BranchWarning('intakt/7', $this->head(), $this->now()->modify('-7 days'));
 
-        self::assertSame(Verdict::Deletable, $this->rules()->verdictOf($this->facts('intakt/7', null, '-67 days', false), $this->now(), $warning));
+        self::assertSame(Verdict::Deletable, $this->rules()->verdictOf($this->facts('-67 days', false), $this->now(), $warning));
     }
 
     public function testABranchWithoutAPullRequestIsToBeWarnedAgainWhenItsHeadMovedAfterTheWarning(): void
     {
         $warning = new BranchWarning('intakt/7', new CommitId(str_repeat('b', 40)), $this->now()->modify('-8 days'));
 
-        self::assertSame(Verdict::Warn, $this->rules()->verdictOf($this->facts('intakt/7', null, '-68 days', false), $this->now(), $warning));
+        self::assertSame(Verdict::Warn, $this->rules()->verdictOf($this->facts('-68 days', false), $this->now(), $warning));
     }
 
     public function testABranchAPersonCommittedToIsOnlyStaleNeverDeletable(): void
     {
         $warning = new BranchWarning('intakt/7', $this->head(), $this->now()->modify('-30 days'));
 
-        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('intakt/7', null, '-90 days', true), $this->now(), $warning));
+        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('-90 days', true), $this->now(), $warning));
     }
 
     public function testABranchNamedInKeepBranchesWithoutAPullRequestIsOnlyStale(): void
     {
         $rules = new BranchRules(new CleanupPolicy(false, ['intakt/7']));
 
-        self::assertSame(Verdict::Stale, $rules->verdictOf($this->facts('intakt/7', null, '-90 days', false), $this->now()));
+        self::assertSame(Verdict::Stale, $rules->verdictOf($this->facts('-90 days', false), $this->now()));
     }
 
     public function testKeepBranchesDoesNotClaimABranchWithAMergedPullRequest(): void
     {
         $rules = new BranchRules(new CleanupPolicy(false, ['intakt/7']));
-        $facts = $this->facts('intakt/7', new BranchChange(BranchChangeState::Merged), '-1 day', false);
+        $facts = $this->facts('-1 day', false, new BranchChange(BranchChangeState::Merged));
 
         self::assertSame(Verdict::Deletable, $rules->verdictOf($facts, $this->now()));
     }
@@ -168,7 +168,22 @@ final class BranchRulesTest extends TestCase
     {
         $warning = new BranchWarning('intakt/7', $this->head(), $this->now()->modify('-30 days'));
 
-        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('intakt/7', null, '-90 days', null), $this->now(), $warning));
+        self::assertSame(Verdict::Stale, $this->rules()->verdictOf($this->facts('-90 days', null), $this->now(), $warning));
+    }
+
+    private function namedBranch(string $name): ForgeBranch
+    {
+        return new ForgeBranch($name, $this->head(), false, false, false);
+    }
+
+    private function factsOf(ForgeBranch $branch, string $lastCommit, ?bool $byAPerson): BranchFacts
+    {
+        return new BranchFacts($branch, null, $this->now()->modify($lastCommit), $byAPerson);
+    }
+
+    private function rules(): BranchRules
+    {
+        return new BranchRules(new CleanupPolicy(false, []));
     }
 
     private function now(): DateTimeImmutable
@@ -176,9 +191,14 @@ final class BranchRulesTest extends TestCase
         return new DateTimeImmutable('2026-11-24T03:00:00Z');
     }
 
-    private function facts(string $name, ?BranchChange $change, string $lastCommit, ?bool $byAPerson): BranchFacts
+    private function head(): CommitId
     {
-        return new BranchFacts(new ForgeBranch($name, $this->head(), false, false, false), $change, $this->now()->modify($lastCommit), $byAPerson);
+        return new CommitId(str_repeat('a', 40));
+    }
+
+    private function facts(string $lastCommit, ?bool $byAPerson, ?BranchChange $change = null): BranchFacts
+    {
+        return new BranchFacts($this->namedBranch('intakt/7'), $change, $this->now()->modify($lastCommit), $byAPerson);
     }
 
     /**
@@ -187,21 +207,11 @@ final class BranchRulesTest extends TestCase
     private function closed(string $closedAt, array $labels): BranchFacts
     {
         return new BranchFacts(
-            new ForgeBranch('intakt/7', $this->head(), false, false, false),
+            $this->namedBranch('intakt/7'),
             new BranchChange(BranchChangeState::ClosedUnmerged, ...$labels),
             $this->now()->modify('-400 days'),
             false,
             $this->now()->modify($closedAt),
         );
-    }
-
-    private function rules(): BranchRules
-    {
-        return new BranchRules(new CleanupPolicy(false, []));
-    }
-
-    private function head(): CommitId
-    {
-        return new CommitId(str_repeat('a', 40));
     }
 }

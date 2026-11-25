@@ -17,35 +17,35 @@ final class BranchWarningTest extends TestCase
 {
     public function testAWarningAtTwentyThreeFiftyNineDoesNotAllowDeletionSixDaysAndTwoMinutesLater(): void
     {
-        $warning = $this->warningAt('2026-11-01T23:59:00Z');
+        $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T23:59:00Z'));
 
         self::assertFalse($warning->allowsDeletionAt($this->head('a'), new DateTimeImmutable('2026-11-08T00:01:00Z')));
     }
 
     public function testAWarningAllowsDeletionAtExactlySevenDays(): void
     {
-        $warning = $this->warningAt('2026-11-01T23:59:00Z');
+        $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T23:59:00Z'));
 
         self::assertTrue($warning->allowsDeletionAt($this->head('a'), new DateTimeImmutable('2026-11-08T23:59:00Z')));
     }
 
     public function testAWarningDoesNotAllowDeletionOneSecondBeforeSevenDays(): void
     {
-        $warning = $this->warningAt('2026-11-01T23:59:00Z');
+        $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T23:59:00Z'));
 
         self::assertFalse($warning->allowsDeletionAt($this->head('a'), new DateTimeImmutable('2026-11-08T23:58:59Z')));
     }
 
     public function testAWarningDoesNotAllowDeletionAfterTheHeadMoved(): void
     {
-        $warning = $this->warningAt('2026-11-01T00:00:00Z');
+        $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T00:00:00Z'));
 
         self::assertFalse($warning->allowsDeletionAt($this->head('b'), new DateTimeImmutable('2026-12-01T00:00:00Z')));
     }
 
-    private function warningAt(string $moment): BranchWarning
+    private function warningAt(DateTimeImmutable $moment): BranchWarning
     {
-        return new BranchWarning('intakt/7', $this->head('a'), new DateTimeImmutable($moment));
+        return new BranchWarning('intakt/7', $this->head('a'), $moment);
     }
 
     private function head(string $digit): CommitId

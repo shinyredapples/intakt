@@ -13,10 +13,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class BranchFacts
 {
-    /**
-     * @param ?bool $committedByAPerson null when the check could not answer, which claims the branch (it fails closed)
-     * @param ?DateTimeImmutable $closedAt when the branch's pull request was closed, if it is closed and unmerged
-     */
+    // A null $committedByAPerson means the check could not answer, and that claims the branch, because a failed read must not delete.
     public function __construct(
         public ForgeBranch $branch,
         public ?BranchChange $change,
