@@ -46,14 +46,26 @@ final readonly class GitHubStatusLabels implements StatusLabels
             $removed = $this->writes->remove($address->issuePath(), $label) || $removed;
         }
 
-        $adds = $reconciliation->add instanceof RoundStatusLabel;
-        // Before the add, because a failed add leaves Intakt's own removal as the latest event and the retry owes none; a removal that found the label gone changed nothing.
-        if ($comment && ($removed || $adds)) {
-            $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
+        // The comment follows the first write that changed the labels, so the latest event is Intakt's own and a retry posts no second one.
+        // After a removal that is before the add: an add that fails then still leaves the one comment.
+        if ($comment && $removed) {
+            $this->restored($project, $address);
         }
-        if ($reconciliation->add instanceof RoundStatusLabel) {
-            $this->writes->add($address->issuePath(), $reconciliation->add->value);
+        if (!$reconciliation->add instanceof RoundStatusLabel) {
+            return;
         }
+
+        $this->writes->add($address->issuePath(), $reconciliation->add->value);
+        // A removal that found the label gone changed nothing, so the add is the first write and a failed add posts nothing.
+        if ($comment && !$removed) {
+            $this->restored($project, $address);
+        }
+    }
+
+    // A post that fails is not retried, because the next pass finds Intakt's own write as the latest event: the comment is lost, never doubled, and the labels are still repaired.
+    private function restored(string $project, PullRequestAddress $address): void
+    {
+        $this->comments->post(new TaskIssue($project, $address->number), self::RESTORED);
     }
 
     /**

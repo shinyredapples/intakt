@@ -87,6 +87,8 @@ final class GitHubStatusLabelsTest extends TestCase
 
     private bool $refuseAdds = false;
 
+    private bool $refuseComments = false;
+
     private ?string $unlabeledByDelete = null;
 
     private ?Closure $whileReadingLabels = null;
@@ -291,6 +293,65 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->reconcile();
 
         self::assertSame([['status:waiting-on-you'], 1], [$this->statusesNow(), count($this->comments)]);
+    }
+
+    public function testAnAddThatFailsWithoutARemovalPostsNoCommentAndTheRetryAddsWithOneComment(): void
+    {
+        $this->round = RoundStatusLabel::WaitingOnYou;
+        $this->unlabeled('status:waiting-on-you', self::PERSON);
+        $this->refuseAdds = true;
+        try {
+            $this->matching();
+        } catch (ForgeWriteFailed) {
+        }
+        $commentsAfterTheFailedAdd = $this->comments;
+        $this->refuseAdds = false;
+
+        $this->reconcile();
+        $this->reconcile();
+
+        self::assertSame([[], ['status:waiting-on-you'], 1], [$commentsAfterTheFailedAdd, $this->statusesNow(), count($this->comments)]);
+    }
+
+    public function testACommentEndpointThatKeepsFailingStillPutsBackTheLabelAPersonRemoved(): void
+    {
+        $this->round = RoundStatusLabel::WaitingOnYou;
+        $this->unlabeled('status:waiting-on-you', self::PERSON);
+        $this->refuseComments = true;
+
+        try {
+            $this->matching();
+        } catch (ForgeWriteFailed) {
+        }
+
+        self::assertSame([[self::ADD_WAITING], ['status:waiting-on-you'], []], [$this->writes, $this->statusesNow(), $this->comments]);
+    }
+
+    public function testAnAddAfterARemovalThatFoundTheLabelGoneIsFollowedByTheOneComment(): void
+    {
+        $this->round = RoundStatusLabel::WaitingOnYou;
+        $this->labeled('status:in-review', self::PERSON);
+        $this->unlabeledByDelete = 'status:in-review';
+
+        $this->reconcile();
+        $this->reconcile();
+
+        self::assertSame([[self::ADD_WAITING], ['status:waiting-on-you'], 1], [$this->writes, $this->statusesNow(), count($this->comments)]);
+    }
+
+    public function testAnAddThatFailsAfterARemovalThatFoundTheLabelGonePostsNoComment(): void
+    {
+        $this->round = RoundStatusLabel::WaitingOnYou;
+        $this->labeled('status:in-review', self::PERSON);
+        $this->unlabeledByDelete = 'status:in-review';
+        $this->refuseAdds = true;
+
+        try {
+            $this->matching();
+        } catch (ForgeWriteFailed) {
+        }
+
+        self::assertSame([[], []], [$this->writes, $this->comments]);
     }
 
     public function testTheQueueWriterLeavesInReviewWhileTheBusyPassWritesNothingBeforeTheNextPassRepairs(): void
@@ -499,7 +560,7 @@ final class GitHubStatusLabelsTest extends TestCase
 
         $body = is_string($options['body'] ?? null) ? $options['body'] : '';
         if (str_ends_with($path, '/comments')) {
-            return $this->comment($body);
+            return $this->refuseComments ? new MockResponse('{"message":"Unavailable"}', ['http_code' => 503]) : $this->comment($body);
         }
 
         if ('POST' === $method && $this->refuseAdds) {

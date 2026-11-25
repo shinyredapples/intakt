@@ -180,6 +180,6 @@ final readonly class GitHubStatusReads
      */
     private function objectOf(mixed $entry, mixed $kind, string $path): array
     {
-        return $kind instanceof stdClass && is_array($entry) && [] !== $entry ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path));
+        return $kind instanceof stdClass && is_array($entry) && [] !== $entry && !array_is_list($entry) ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path));
     }
 }
