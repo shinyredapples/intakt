@@ -69,7 +69,7 @@ A build that keeps making progress is worth its tokens, so spend alone will not 
 
 1. Open `config/services.yaml`.
 2. Under `parameters:`, set any of `intakt.build.allowance_tokens`, `intakt.build.idle_seconds`, `intakt.build.ceiling_tokens` and `intakt.build.task_total_tokens`: whole numbers of at least 1, the ceiling not below the allowance.
-3. Run `php bin/console cache:clear`.
+3. Run `php bin/console cache:clear`. A value that breaks these rules stops this command with a message that names the rule, and Intakt does not start until you fix it.
 
 A stopped build will keep its commits. The [complete reference](../reference/user-manual.md#running-a-build) has the defaults.
 

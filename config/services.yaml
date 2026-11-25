@@ -22,7 +22,7 @@ parameters:
     !php/const Intakt\Core\Build\Contract\BuildServices::SLOTS: 1
     # The seconds one tool call of the builder's session may run (at least 1, below the session's 3000-second allowance), above the slowest bin/check --fast, because checks of 7 to 9 minutes on a shared host ran past the CLI's 10-minute default and went to the background (docs/reference/user-manual.md#running-a-build).
     !php/const Intakt\Core\Build\Contract\BuildServices::TOOL_TIME_LIMIT: 1500
-    # The limits of the progress rule, whole numbers of at least 1 with the ceiling not below the allowance: past the allowance a build without progress for the idle seconds stops, and the ceiling and the per-task total (tokens of every continuation of the task) stop it whatever its progress (docs/architecture/build-allowance.md).
+    # The limits of the progress rule, whole numbers of at least 1 with the ceiling not below the allowance: at or above the allowance a build without progress for the idle seconds stops, and the ceiling and the per-task total (tokens of every continuation of the task) stop it whatever its progress (docs/architecture/build-allowance.md).
     !php/const Intakt\Core\Build\Contract\BuildServices::ALLOWANCE_TOKENS: 2000000
     !php/const Intakt\Core\Build\Contract\BuildServices::IDLE_SECONDS: 900
     !php/const Intakt\Core\Build\Contract\BuildServices::CEILING_TOKENS: 6000000

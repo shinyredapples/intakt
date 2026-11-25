@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
@@ -20,7 +21,9 @@ use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
@@ -161,6 +164,7 @@ use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -269,6 +273,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
+#[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildVerdict::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(TaskKind::class)]
@@ -378,6 +383,26 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
         self::assertSame(['task'], array_column($this->stepsIn($ledger), 'step'));
+    }
+
+    // Stopped through stoppedBy(), as the watch of #3965 will stop it, because nothing feeds the progress rule into a running job yet.
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAStoppedBuildJobHandsItsBundleToTheHandBackCheckWithItsPullRequestText(BuildStopCause $cause): void
+    {
+        $this->runner = $this->committingRunner();
+        $checkout = $this->checkout();
+        $checkout->updateMirror('alpha', $this->remote->path);
+        $checkout->makeClone('alpha', 'feat/task', $this->clone);
+
+        $stopped = $this->builds()->run(new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief("Task 7\n\nBuild it.", new Decisions(), null, TaskKind::Task), Tier::Standard, self::IMAGE))->stoppedBy($cause);
+        $checked = new HandBackCheck($checkout, $this->handBackChecks(), $this->handBackFile($checkout))->check($this->request(7, $this->remote->path), $stopped->bundle ?? '');
+
+        self::assertTrue($stopped->built());
+        self::assertSame($cause, $stopped->stopCause);
+        self::assertSame("feat: task 7\n", $stopped->pullRequestText);
+        self::assertInstanceOf(AcceptedHandBack::class, $checked);
     }
 
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
@@ -1534,10 +1559,9 @@ final class BuildTaskTest extends TestCase
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, 2_000_000, 900, 6_000_000, 12_000_000, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
         $git = new RepositoryGit(new HardenedGit());
-        $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
-        $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
+        $checks = $this->handBackChecks();
+        $files = $this->handBackFile($checkout);
         $dependencies = new CheckJobsFor($this->mirrors.'-checks')->dependencies($this->checkRunner, new PhpGate());
         $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $dependencies, $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
@@ -1546,7 +1570,22 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        return new BuildTask($issues, $checkout, $this->routing, $this->builds(), new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+    }
+
+    private function builds(): RunBuildJob
+    {
+        return new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+    }
+
+    private function handBackChecks(): CheckHandBack
+    {
+        return new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
+    }
+
+    private function handBackFile(GitBuildCheckout $checkout): HandBackFile
+    {
+        return new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

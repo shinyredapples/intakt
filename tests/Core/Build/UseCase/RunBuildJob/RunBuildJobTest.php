@@ -87,34 +87,11 @@ final class RunBuildJobTest extends TestCase
 
     private mixed $toolTimeLimit = 1500;
 
-    /** @var array<int, mixed> */
-    private array $limits = [2_000_000, 900, 6_000_000, 12_000_000];
-
-    #[TestWith([0, 'allowance'])]
-    #[TestWith([1, 'idle time'])]
-    #[TestWith([2, 'runaway ceiling'])]
-    #[TestWith([3, 'per-task total'])]
-    public function testABuildLimitThatIsNotAWholeNumberIsRefusedAsGiven(int $position, string $limit): void
-    {
-        $this->limits[$position] = true;
-
-        $this->expectExceptionObject(new InvalidArgumentException(sprintf('The build\'s %s must be a whole number, not bool.', $limit)));
-
-        $this->runBuilds(OutputFiles::of([]));
-    }
-
-    public function testARunawayCeilingBelowTheAllowanceIsRefused(): void
-    {
-        $this->limits = [2_000_000, 900, 1_999_999, 12_000_000];
-
-        $this->expectExceptionObject(new InvalidArgumentException('The runaway ceiling of 1999999 tokens is below the allowance of 2000000 tokens.'));
-
-        $this->runBuilds(OutputFiles::of([]));
-    }
+    private ?BuildLimits $limits = null;
 
     public function testTheBuildJobKeepsTheLimitsItIsGiven(): void
     {
-        $this->limits = [1, 1, 1, 1];
+        $this->limits = new BuildLimits(1, 1, 1, 1);
 
         self::assertEquals(new BuildLimits(1, 1, 1, 1), $this->runBuilds(OutputFiles::of([]))->limits);
     }
@@ -405,6 +382,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits[0], $this->limits[1], $this->limits[2], $this->limits[3], new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits ?? new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000),new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }

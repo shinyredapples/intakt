@@ -65,9 +65,6 @@ final readonly class RunBuildJob
 
     private int $toolTimeLimitSeconds;
 
-    // Public for the watch that stops a running build (#3965); built here, so a wrong setting is refused when the container builds this job.
-    public BuildLimits $limits;
-
     public function __construct(
         private TierResolver $tiers,
         private BuilderPrompt $prompts,
@@ -77,14 +74,8 @@ final readonly class RunBuildJob
         private GatesAtOnce $gatesAtOnce,
         #[Autowire(param: BuildServices::TOOL_TIME_LIMIT)]
         mixed $toolTimeLimitSeconds,
-        #[Autowire(param: BuildServices::ALLOWANCE_TOKENS)]
-        mixed $allowanceTokens,
-        #[Autowire(param: BuildServices::IDLE_SECONDS)]
-        mixed $idleSeconds,
-        #[Autowire(param: BuildServices::CEILING_TOKENS)]
-        mixed $ceilingTokens,
-        #[Autowire(param: BuildServices::TASK_TOTAL_TOKENS)]
-        mixed $taskTotalTokens,
+        // Injected for D4 of #1737 and public for the watch that stops a running build (#3965), the one reader; BuildLimitsPass refuses a wrong setting when the container compiles.
+        public BuildLimits $limits,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
@@ -101,12 +92,6 @@ final readonly class RunBuildJob
             throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of %d seconds, not %d.', self::ALLOWANCE_SECONDS, $toolTimeLimitSeconds));
         }
         $this->toolTimeLimitSeconds = $toolTimeLimitSeconds;
-        $this->limits = new BuildLimits(
-            $this->wholeNumber('allowance', $allowanceTokens),
-            $this->wholeNumber('idle time', $idleSeconds),
-            $this->wholeNumber('runaway ceiling', $ceilingTokens),
-            $this->wholeNumber('per-task total', $taskTotalTokens),
-        );
     }
 
     /**
@@ -130,16 +115,6 @@ final readonly class RunBuildJob
         } finally {
             $this->filesystem->remove($prompt);
         }
-    }
-
-    // Checked as given, because the compiled container would turn a YAML true into a limit of 1 before a typed parameter saw it.
-    private function wholeNumber(string $limit, mixed $given): int
-    {
-        if (!is_int($given)) {
-            throw new InvalidArgumentException(sprintf('The build\'s %s must be a whole number, not %s.', $limit, get_debug_type($given)));
-        }
-
-        return $given;
     }
 
     private function modelFor(BuildJob $job): string

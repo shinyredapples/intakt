@@ -4,21 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\RunBuildJob;
 
-use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Build\Infrastructure\BuildLimitsPass;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 
-#[CoversClass(RunBuildJob::class)]
+#[CoversClass(BuildLimitsPass::class)]
 final class RefusedBuildLimitsConfigTest extends KernelTestCase
 {
-    public function testABuildLimitThatIsNotAWholeNumberInTheConfigurationIsRefusedWhenTheBuildJobIsBuilt(): void
+    public function testABuildLimitThatIsNotAWholeNumberInTheConfigurationIsRefusedWhenTheContainerIsBuilt(): void
     {
-        self::bootKernel();
-
         $this->expectExceptionObject(new InvalidArgumentException('The build\'s idle time must be a whole number, not bool.'));
 
-        self::getContainer()->get(RunBuildJob::class);
+        self::bootKernel();
     }
 
     protected static function getKernelClass(): string

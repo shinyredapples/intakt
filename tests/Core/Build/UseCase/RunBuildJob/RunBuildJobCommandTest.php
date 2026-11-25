@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
@@ -302,10 +303,7 @@ final class RunBuildJobCommandTest extends TestCase
             new PhpGate(),
             new GatesAtOnce(12, 1),
             1500,
-            2_000_000,
-            900,
-            6_000_000,
-            12_000_000,
+            new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000),
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',
