@@ -79,6 +79,7 @@ final readonly class HeldCredentials
             return $this->vault?->reveal($name);
         } catch (SodiumException) {
             return null;
+
             // Boundary: Symfony's vault throws a bare RuntimeException when it has no key, because it names no exception of its own to catch.
         } catch (Throwable $failure) {
             if (RuntimeException::class !== $failure::class) {

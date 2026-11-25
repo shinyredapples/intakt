@@ -27,7 +27,7 @@ use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
-use LogicException;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -213,11 +213,11 @@ final class CheckPullRequestTextCommandTest extends TestCase
         new Filesystem()->dumpFile($this->folder.'/task.md', self::TASK);
         new Filesystem()->dumpFile($this->folder.'/PR.md', "feat: check it\n\n- E1: red\n");
         $round = self::createStub(PullRequestTextRound::class);
-        $round->method('route')->willThrowException(new LogicException('a bug in the round'));
+        $round->method('route')->willThrowException(new InvalidArgumentException('a bug in the round'));
         $application = new Application();
         $application->addCommand(new CheckPullRequestTextCommand(new Filesystem(), $round));
 
-        $this->expectException(LogicException::class);
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the round'));
 
         new CommandTester($application->find('intakt:check:pull-request-text'))->execute(['task' => $this->folder.'/task.md', 'pull-request-text' => $this->folder.'/PR.md', 'repository' => $this->folder, 'branch' => 'task']);
     }

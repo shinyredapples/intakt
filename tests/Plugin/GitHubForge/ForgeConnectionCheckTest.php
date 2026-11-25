@@ -22,7 +22,6 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use InvalidArgumentException;
-use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -117,10 +116,10 @@ final class ForgeConnectionCheckTest extends TestCase
     public function testAnUnexpectedExceptionWhileReadingTheSettingsPassesThrough(): void
     {
         $this->expected = new ReflectionClass(ExpectedInstallation::class)->newLazyGhost(static function (): never {
-            throw new LogicException('a bug in the settings');
+            throw new InvalidArgumentException('a bug in the settings');
         });
 
-        $this->expectException(LogicException::class);
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the settings'));
 
         $this->check()->run();
     }

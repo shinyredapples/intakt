@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
@@ -47,14 +48,25 @@ final readonly class HeadClones
             // Only for the fetch, because HardenedGit allows no protocol at all and the fetch reads the round's checkout by its path.
             $this->run(new GitCall($fetch->command, $fetch->directory, $fetch->environment->with(GIT_ALLOW_PROTOCOL: 'file')));
             $this->run($this->hardened->call($clone, '-c', 'core.autocrlf=false', '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $head->hash));
-            // Boundary: any failure, also an unexpected one, must remove the partial clone before it ends the job
-        } catch (Throwable $failed) {
-            $this->remove($clone);
 
-            throw $failed;
+            // Boundary: any failure, also an unexpected one, must remove the partial clone before it ends the job.
+        } catch (Throwable $failed) {
+            $this->removeAfter($clone, $failed);
         }
 
         return $clone;
+    }
+
+    // The failure that ended the clone is rethrown even when the removal fails too, because it is the cause the job must report.
+    private function removeAfter(string $clone, Throwable $failed): never
+    {
+        try {
+            $this->remove($clone);
+        } catch (IOException) {
+            throw $failed;
+        }
+
+        throw $failed;
     }
 
     public function remove(string $clone): void
