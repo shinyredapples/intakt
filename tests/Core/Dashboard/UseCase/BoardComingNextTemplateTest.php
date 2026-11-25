@@ -50,7 +50,7 @@ final class BoardComingNextTemplateTest extends DashboardPageTestCase
         );
 
         $waiting = strpos($html, 'id="col-waiting-on-you"');
-        $planned = strpos($html, '<section class="col" id="col-planned" aria-label="Planned">');
+        $planned = strpos($html, '<section class="col" id="col-planned" aria-label="Planned" tabindex="-1">');
         $review = strpos($html, 'id="col-in-review"');
         self::assertIsInt($waiting);
         self::assertIsInt($planned);

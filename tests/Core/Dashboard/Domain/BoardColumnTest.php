@@ -47,4 +47,13 @@ final class BoardColumnTest extends TestCase
         self::assertSame($lines, array_values(array_unique($lines)));
         self::assertSame([], array_filter($lines, static fn (string $line): bool => !str_contains($line, ' here ')));
     }
+
+    // The id of a column, the stage map's segment and the phone switcher's button all name it by this, so a jump finds its column.
+    public function testEveryColumnHasALowercaseHyphenatedSlug(): void
+    {
+        self::assertSame(
+            ['waiting-on-you', 'backlog', 'ready', 'planned', 'building', 'checking', 'in-review', 'merging', 'done'],
+            array_map(static fn (BoardColumn $column): string => $column->slug(), BoardColumn::cases()),
+        );
+    }
 }

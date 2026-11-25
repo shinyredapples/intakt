@@ -154,6 +154,16 @@ test('opening a folded column that widens the board past its area marks the righ
     assert.deepEqual(page.wrap.fades(), ['more-right']);
 });
 
+// Folding Backlog with Escape (assets/column-fold.js) can make the board fit without moving its scroll position, so no scroll event marks it.
+test('a key such as Escape that folds the board until it fits takes the fade away', () => {
+    const { page, wrap, board } = boardOnAPage();
+    board.scrollWidth = 1136;
+
+    page.dispatch('keydown', { key: 'Escape' });
+
+    assert.deepEqual(wrap.fades(), []);
+});
+
 test('a pushed column marks the edges again once the layout has put the filter back', () => {
     const { page, wrap, board } = boardOnAPage();
     board.scrollWidth = 1136;

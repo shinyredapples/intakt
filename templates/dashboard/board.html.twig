@@ -40,6 +40,18 @@
     <p class="coming-next">{{ include('dashboard/components/chip.html.twig', {label: 'Coming next', on_page: true}, with_context = false) }} <span>{{ coming_next|map(column => column.value)|join(', ', ' and ') }}{% if coming_next|length == 1 %} shows here once it holds a task{% else %} show here once a task is in one of them{% endif %}</span></p>
     {% endif %}
     {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
+    {# The phone's switcher (DESIGN.md, Phone patterns): every column with its true total, Waiting on you first; assets/board-map.js presses the column a swipe settles on, and the push that replaces In review and Done updates their buttons' words by id. Shown below 761 px only. #}
+    <nav class="colswitch" aria-label="Board columns">
+    {% for column in columns %}
+        <button type="button" id="switch-{{ column.slug }}" data-column="{{ column.value }}" aria-controls="col-{{ column.slug }}" aria-pressed="{{ loop.first ? 'true' : 'false' }}">{{ include('dashboard/_board_switch.html.twig', {board: board, column: column}, with_context = false) }}</button>
+    {% endfor %}
+    </nav>
+    {# The column map (DESIGN.md, Board edge and stage map): hidden until assets/board-map.js measures a board wider than its space, which marks the columns in view and names them; never on a phone. #}
+    <div class="stagemap" hidden><span class="sm-text"></span><span class="sm-bar">
+    {%- for column in columns -%}
+        <button type="button" class="sm-seg" aria-controls="col-{{ column.slug }}" title="{{ column.value }}"><span class="sr-only">{{ column.value }}</span></button>
+    {%- endfor -%}
+    </span></div>
     <div class="board-wrap"{% if board.startsScrolledToDone %} data-scroll-to-end{% endif %}>
     {# Focusable, because a board with no card (a fresh install, or a phone that hides the column buttons) scrolls sideways with nothing in it the keyboard could reach. #}
     <div class="board" tabindex="0">
