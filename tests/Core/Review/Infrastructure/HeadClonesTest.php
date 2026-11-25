@@ -96,6 +96,9 @@ final class HeadClonesTest extends TestCase
         $filesystem = new class extends Filesystem {
             private int $made = 0;
 
+            /**
+             * @param iterable<mixed, mixed>|string $dirs
+             */
             public function mkdir(string|iterable $dirs, int $mode = 0o777): void
             {
                 if (2 === ++$this->made) {

@@ -26,6 +26,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildTaskRequest::class)]
 final class HandBackCheckTest extends TestCase
 {
+    private string $folder = '';
+
     public function testAHeadThatIsNoObjectIdIsTheFailureOfTheStep(): void
     {
         $checks = self::createStub(HandBackChecks::class);
@@ -44,9 +46,14 @@ final class HandBackCheckTest extends TestCase
         $this->check($checks)->check($this->request(), 'BUNDLE');
     }
 
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-hand-back-check-'.bin2hex(random_bytes(4));
+    }
+
     protected function tearDown(): void
     {
-        new Filesystem()->remove(glob(sys_get_temp_dir().'/intakt-hand-back-check-*') ?? []);
+        new Filesystem()->remove($this->folder);
     }
 
     private function check(HandBackChecks $checks): HandBackCheck
@@ -54,7 +61,7 @@ final class HandBackCheckTest extends TestCase
         $checkout = self::createStub(BuildCheckout::class);
         $checkout->method('mirrorOf')->willReturn('/mirror');
 
-        return new HandBackCheck($checkout, $checks, new HandBackFile($checkout, new Filesystem(), sys_get_temp_dir().'/intakt-hand-back-check-'.bin2hex(random_bytes(4))));
+        return new HandBackCheck($checkout, $checks, new HandBackFile($checkout, new Filesystem(), $this->folder));
     }
 
     private function request(): BuildTaskRequest
