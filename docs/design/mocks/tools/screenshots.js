@@ -37,7 +37,7 @@ function jobsFor(theme) {
   const add = (page, size, extra = {}) => jobs.push({ page, theme, ...size, ...extra });
 
   for (const page of Object.keys(PAGES)) add(page, DESKTOP, { full: true });
-  for (const page of ['index', 'waiting', 'task']) for (const size of WIDE) add(page, size, { full: true });
+  for (const page of ['index', 'waiting', 'task', 'team']) for (const size of WIDE) add(page, size, { full: true });
   for (const page of Object.keys(PAGES)) add(page, PHONE);
 
   for (const s of STEPS) {

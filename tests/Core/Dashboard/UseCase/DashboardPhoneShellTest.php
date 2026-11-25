@@ -28,13 +28,57 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertSame('Search', $search->filter('.ph-short')->text());
     }
 
-    // A phone's bar holds Now, You and Trends, so Projects and Team are reached through More.
-    public function testTheMoreItemOpensTheSheetWithProjectsAndTeam(): void
+    // A phone's bar holds Now, You, Trends and Team, as DESIGN.md's bar holds Team, so only Projects is reached through More.
+    public function testTheMoreItemOpensTheSheetWithProjects(): void
     {
         $page = $this->browser->request('GET', '/projects');
 
         self::assertCount(1, $page->filter('.rail-in button.nav.more[data-more-toggle]'));
-        self::assertSame(['Projects', 'Team'], $page->filter('#more.menu[data-more-sheet] nav a')->each(static fn (Crawler $link): string => trim($link->text())));
+        self::assertSame(['Projects'], $page->filter('#more.menu[data-more-sheet] nav a')->each(static fn (Crawler $link): string => trim($link->text())));
+    }
+
+    public function testTheTeamItemStaysInThePhoneBarAndLeavesMoreNotCurrentOnItsPage(): void
+    {
+        $rail = $this->browser->request('GET', '/team')->filter('.rail');
+
+        self::assertSame('nav', $rail->filter('a.nav[data-k="team"]')->attr('class'));
+        self::assertSame('page', $rail->filter('a.nav[data-k="team"]')->attr('aria-current'));
+        self::assertNull($rail->filter('[data-more-toggle]')->attr('aria-current'));
+    }
+
+    public function testAnItemUnderMoreMarkedForThePhoneBarLeavesTheSheetAndAnUnmarkedOneStays(): void
+    {
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+
+        $rail = new Crawler($twig->render('dashboard/_rail.html.twig', [
+            'rail_items' => [],
+            'more_items' => [
+                ['key' => 'history', 'label' => 'History', 'icon' => 'clock', 'route' => DashboardRoutes::LIST_REVIEWS],
+                ['key' => 'team', 'label' => 'Team', 'icon' => 'team', 'route' => DashboardRoutes::SHOW_TEAM, 'phone_bar' => true],
+            ],
+            'current_route' => DashboardRoutes::LIST_PROJECTS,
+            'current_section' => null,
+        ]));
+
+        self::assertSame(['nav in-more', 'nav'], $rail->filter('.rail-in a.nav')->each(static fn (Crawler $item): string => (string) $item->attr('class')));
+        self::assertSame(['History'], $rail->filter('[data-more-sheet] nav a')->each(static fn (Crawler $link): string => trim($link->text())));
+    }
+
+    public function testNoMoreItemOrSheetIsShownWhenEveryItemUnderMoreIsInThePhoneBar(): void
+    {
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+
+        $rail = new Crawler($twig->render('dashboard/_rail.html.twig', [
+            'rail_items' => [],
+            'more_items' => [['key' => 'team', 'label' => 'Team', 'icon' => 'team', 'route' => DashboardRoutes::SHOW_TEAM, 'phone_bar' => true]],
+            'current_route' => DashboardRoutes::LIST_PROJECTS,
+            'current_section' => null,
+        ]));
+
+        self::assertCount(0, $rail->filter('[data-more-toggle]'));
+        self::assertCount(0, $rail->filter('[data-more-sheet]'));
     }
 
     public function testTheMoreItemOpensTheSheetOfThePagesUnderIt(): void

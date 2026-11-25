@@ -62,7 +62,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
         );
     }
 
-    public function testTheRolesBesideTheAccountsNameTheAccountsEachRoleRunsOn(): void
+    public function testTheRolesBesideTheAccountsNameTheAccountsEachRoleRunsOnByTheirOwnNames(): void
     {
         $this->givenAccounts([Provider::ClaudeCode->value => ['default', 'home'], Provider::Anthropic->value => ['overflow']]);
 
@@ -70,7 +70,7 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
         self::assertSame(['Developer'], $roles->filter('h3')->each(static fn (Crawler $name): string => $name->text()));
         self::assertSame(
-            ['anthropic.overflow (the build runtime cannot run it)', 'claude_code.default', 'claude_code.home'],
+            ['overflow (the build runtime cannot run it)', 'default', 'home'],
             $roles->filter('.meta span')->each(static fn (Crawler $account): string => $account->text()),
         );
     }
@@ -125,8 +125,8 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/team');
 
-        self::assertSame(['team', 'more'], $page->filter('.rail .nav[aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
-        self::assertSame('Team', trim($page->filter('#more a[aria-current="page"]')->text()));
+        self::assertSame(['team'], $page->filter('.rail .nav[aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+        self::assertCount(0, $page->filter('#more a[aria-current="page"]'));
     }
 
     /**

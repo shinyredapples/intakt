@@ -43,7 +43,7 @@
         {% for name, holders in by_role %}
         <div class="role">
             <h3>{{ name }}</h3>
-            <p class="meta">{% for holder in holders %}<span>{{ holder.account.key }}{% if holder.role.buildRuntime is same as(enum('Intakt\\Core\\Dashboard\\UseCase\\ShowTeam\\BuildRuntime').CannotRun) %} {{ constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTeam\\TeamRole::BUILD_RUNTIME_MARK') }}{% endif %}</span>{% endfor %}</p>
+            <p class="meta">{% for holder in holders %}<span>{{ holder.account.name }}{% if holder.role.buildRuntime is same as(enum('Intakt\\Core\\Dashboard\\UseCase\\ShowTeam\\BuildRuntime').CannotRun) %} {{ constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTeam\\TeamRole::BUILD_RUNTIME_MARK') }}{% endif %}</span>{% endfor %}</p>
         </div>
         {% endfor %}
     </div>

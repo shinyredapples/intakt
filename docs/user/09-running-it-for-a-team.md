@@ -62,7 +62,7 @@ accounts:
 
 The `team` account reads `ANTHROPIC_API_KEY_TEAM`. When one account hits a rate limit, the reviewer moves to the next.
 
-Open **Team** in the dashboard's menu (under **More** on a phone) to see each account once with its state and the roles it serves, as Developer or reviewer. `php bin/console intakt:team` prints the same list.
+Open **Team** in the dashboard's menu (in the bottom bar on a phone) to see each account once with its state and the roles it serves, as Developer or reviewer. `php bin/console intakt:team` prints the same list.
 
 ## Who can open the dashboard
 

@@ -52,13 +52,13 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertSame('', $marker->attr('hidden'));
     }
 
-    public function testTheRailHoldsNowYouAndTrendsWithProjectsAndTeamUnderMore(): void
+    public function testTheRailHoldsNowYouAndTrendsThenProjectsUnderMoreAndTeam(): void
     {
         $rail = $this->browser->request('GET', '/reviews')->filter('.rail a.nav');
 
         self::assertSame(['Now', 'You', 'Trends', 'Projects', 'Team'], $rail->each(static fn (Crawler $item): string => trim($item->text())));
         self::assertSame(['/?board=1', '/waiting', '/trends', '/projects', '/team'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('href')));
-        self::assertSame(['nav', 'nav', 'nav', 'nav in-more', 'nav in-more'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('class')));
+        self::assertSame(['nav', 'nav', 'nav', 'nav in-more', 'nav'],$rail->each(static fn (Crawler $item): string => (string) $item->attr('class')));
         self::assertCount(0, $rail->filter('.count'));
     }
 
