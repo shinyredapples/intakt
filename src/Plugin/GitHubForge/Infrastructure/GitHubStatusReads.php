@@ -105,7 +105,7 @@ final readonly class GitHubStatusReads
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of %s.', $status, $path));
         }
 
-        return array_map(static fn (mixed $entry): array => is_array($entry) ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path)), $this->entries($path, $body));
+        return array_map(static fn (mixed $entry): array => is_array($entry) && [] !== $entry ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path)), $this->entries($path, $body));
     }
 
     /**
@@ -139,8 +139,8 @@ final readonly class GitHubStatusReads
             throw new ForgeReadFailed(sprintf('GitHub listed %s as something other than JSON.', $path), $invalid->getCode(), previous: $invalid);
         }
 
-        // Because an empty object decodes to the same empty array as an empty list, the body decides.
-        $isList = is_array($entries) && array_is_list($entries) && ([] !== $entries || str_starts_with(ltrim($body), '['));
+        // Because an empty or numeric-keyed object decodes like a list, the body decides.
+        $isList = is_array($entries) && array_is_list($entries) && str_starts_with(ltrim($body), '[');
 
         return $isList ? $entries : throw new ForgeReadFailed(sprintf('GitHub answered a listing of %s that is not a list.', $path));
     }
@@ -167,7 +167,7 @@ final readonly class GitHubStatusReads
         $kind = $event['event'] ?? null;
         $label = $event['label'] ?? null;
         $name = is_array($label) ? ($label['name'] ?? null) : null;
-        if (('labeled' !== $kind && 'unlabeled' !== $kind) || (is_string($name) && !RoundStatusLabel::isStatus($name))) {
+        if (('labeled' !== $kind && 'unlabeled' !== $kind) || (is_string($name) && '' !== $name && !RoundStatusLabel::isStatus($name))) {
             return null;
         }
 

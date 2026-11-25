@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -51,6 +52,25 @@ final class GitHubStatusReadsTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $this->readerOfEvents(static fn (int $page): string => '{}')->of($this->address());
+    }
+
+    #[DataProvider('malformedEventListings')]
+    public function testAMalformedEventListingFailsTheRead(string $payload): void
+    {
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->readerOfEvents(static fn (int $page): string => $payload)->of($this->address());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function malformedEventListings(): iterable
+    {
+        yield 'an object with numeric keys' => ['{"0":{"event":"referenced"}}'];
+        yield 'an entry that is an empty array' => ['[[]]'];
+        yield 'an entry that is an empty object' => ['[{}]'];
+        yield 'a label event with an empty label name' => ['[{"event":"labeled","label":{"name":""},"actor":null}]'];
     }
 
     /**
