@@ -92,6 +92,46 @@ final readonly class BranchGit
         };
     }
 
+    // Checked by each push itself and not once when the task starts, because git reads the repository's config at the push, and a rewrite can have been written since. An empty prefix matches every remote, as git applies it to every URL. The remote is not named, because it can hold a credential.
+    /**
+     * @throws BranchNotPushed
+     */
+    public function refuseRewrittenRemote(string $repository, string $remote): void
+    {
+        $section = 'remote.'.$remote.'.';
+
+        foreach ($this->addressEntries($repository) as [$key, $value]) {
+            // A remote section named exactly like the remote string, because git push takes the string as that remote's name and pushes to its url or pushurl. Git keeps the section's name as written and the key after it has no dot, so a longer name that only starts with the remote is another section.
+            if (str_starts_with($key, $section) && !str_contains(substr($key, strlen($section)), '.')) {
+                throw BranchNotPushed::because('the repository\'s config has a remote section named like the remote, so git would push to that section\'s address instead of the one the forge checks');
+            }
+
+            if (str_starts_with($key, 'url.') && str_starts_with($remote, $value)) {
+                throw BranchNotPushed::because('the repository\'s config rewrites the remote\'s address (url.<base>.insteadOf or pushInsteadOf), so git would read and push another repository than the one the forge checks');
+            }
+        }
+    }
+
+    /**
+     * @throws BranchNotPushed
+     */
+    public function remoteTip(string $repository, string $remote, string $branch): ?string
+    {
+        $ref = 'refs/heads/'.$branch;
+        $listed = $this->outputFromRemote($repository, ['ls-remote', '--', $remote, $ref]);
+
+        // Git matches the pattern against the tail of every ref, so "refs/heads/a/refs/heads/task" is listed too and may come first: only the exact ref is the branch.
+        foreach (explode("\n", $listed) as $line) {
+            $fields = explode("\t", $line, 2);
+
+            if ($ref === ($fields[1] ?? null)) {
+                return $fields[0];
+            }
+        }
+
+        return null;
+    }
+
     // Null when the two merge cleanly, else the paths that conflict, because the caller needs both; the merge writes objects only, never a ref or a work tree.
     /**
      * @return list<string>|null

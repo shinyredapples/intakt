@@ -58,7 +58,7 @@ final readonly class PushBranch implements BranchPush
     private function lockedBranch(BranchPushRequest $request): LockInterface
     {
         // Released here only, never on destruct: Symfony's destructor would release a lock whose release failed once more and throw past BranchNotPushed.
-        $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)), autoRelease: false);
+        $lock = $this->locks->createLock(PushLockName::of($request->project, $request->branch), autoRelease: false);
 
         try {
             // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
@@ -72,7 +72,7 @@ final readonly class PushBranch implements BranchPush
 
     private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
-        $this->refuseRewrittenRemote($request);
+        $this->git->refuseRewrittenRemote($request->repository, $request->remote);
         $main = $this->mainOf($request->repository);
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
@@ -116,23 +116,6 @@ final readonly class PushBranch implements BranchPush
         }
     }
 
-    // Checked by the push itself and not once when the task starts, because git reads the repository's config at the push, and a rewrite can have been written since. An empty prefix matches every remote, as git applies it to every URL. The remote is not named, because it can hold a credential.
-    private function refuseRewrittenRemote(BranchPushRequest $request): void
-    {
-        $section = 'remote.'.$request->remote.'.';
-
-        foreach ($this->git->addressEntries($request->repository) as [$key, $value]) {
-            // A remote section named exactly like the remote string, because git push takes the string as that remote's name and pushes to its url or pushurl. Git keeps the section's name as written and the key after it has no dot, so a longer name that only starts with the remote is another section.
-            if (str_starts_with($key, $section) && !str_contains(substr($key, strlen($section)), '.')) {
-                throw BranchNotPushed::because('the repository\'s config has a remote section named like the remote, so git would push to that section\'s address instead of the one the forge checks');
-            }
-
-            if (str_starts_with($key, 'url.') && str_starts_with($request->remote, $value)) {
-                throw BranchNotPushed::because('the repository\'s config rewrites the remote\'s address (url.<base>.insteadOf or pushInsteadOf), so git would read and push another repository than the one the forge checks');
-            }
-        }
-    }
-
     private function mainOf(string $repository): string
     {
         $main = $this->git->lines($repository, ['symbolic-ref', '--quiet', 'HEAD']);
@@ -144,7 +127,7 @@ final readonly class PushBranch implements BranchPush
     private function notLanded(BranchPushRequest $request, string $head, string $main): MainConflicts|RefusedPush|null
     {
         // Read on every call, also for a recorded push, because the ledger knows nothing of a later head or of another writer that moved the branch since.
-        $remoteTip = $this->remoteTip($request);
+        $remoteTip = $this->git->remoteTip($request->repository, $request->remote, $request->branch);
 
         if ($this->records->hasPushed($request, $head)) {
             // Refused before the pull request step, because a late retry of an earlier head must not overwrite the text of the head that replaced it.
@@ -162,23 +145,6 @@ final readonly class PushBranch implements BranchPush
         $this->changes->refuseForeignChange($this->proposedChange($request, $main));
 
         return $this->pushOnce($request, $head, $remoteTip);
-    }
-
-    private function remoteTip(BranchPushRequest $request): ?string
-    {
-        $ref = self::BRANCHES.$request->branch;
-        $listed = $this->git->outputFromRemote($request->repository, ['ls-remote', '--', $request->remote, $ref]);
-
-        // Git matches the pattern against the tail of every ref, so "refs/heads/a/refs/heads/task" is listed too and may come first: only the exact ref is the branch.
-        foreach (explode("\n", $listed) as $line) {
-            $fields = explode("\t", $line, 2);
-
-            if ($ref === ($fields[1] ?? null)) {
-                return $fields[0];
-            }
-        }
-
-        return null;
     }
 
     // The merge is tried in the repository's object store only, so a conflict leaves nothing on the remote and no ref anywhere.
