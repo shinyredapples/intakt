@@ -23,11 +23,13 @@ use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\PublishHandedOverChange;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\ChangePublications;
@@ -115,6 +117,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ReplayProject::class)]
 #[UsesClass(ReplayMark::class)]
 #[UsesClass(CountedVote::class)]
+#[UsesClass(StoredLatestRoundStatus::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -360,6 +363,24 @@ final class PublishVerdictTest extends KernelTestCase
         $roundId = $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P1, 'The fixture holds a key: sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)))]);
 
         self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
+    }
+
+    public function testAnErrorStatusWithoutAVerdictLeavesABlockedRoundInReview(): void
+    {
+        $blocked = new Verdict(Decision::Blocked, [], [], []);
+
+        $roundId = $this->publishRoundJudgedOn(['Look at part 1.' => $blocked, 'Look at part 2.' => $blocked]);
+
+        $this->assertStaysInReviewAfterItsErrorStatus($roundId);
+    }
+
+    public function testAReplayErrorWithoutAVerdictLeavesTheRoundInReview(): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay('alpha'));
+
+        $roundId = $this->publishedApprovalAt(SampleIdentity::HEAD);
+
+        $this->assertStaysInReviewAfterItsErrorStatus($roundId);
     }
 
     public function testAJudgedRoundWhosePublicationIsSkippedStaysUnpublished(): void
@@ -973,6 +994,16 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertInstanceOf(MessageBusInterface::class, $commands);
 
         new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($roundId));
+    }
+
+    // The error status is asserted too, so the round is known to be unpublished although the forge took a write for it.
+    private function assertStaysInReviewAfterItsErrorStatus(string $roundId): void
+    {
+        $round = $this->fixture->transactions()->stored($roundId);
+
+        self::assertSame(['error'], array_slice(array_column(array_column($this->github->writes, 1), 'state'), -1));
+        self::assertNull($round->publishedAt());
+        self::assertSame(ReviewStatus::InReview, new StoredLatestRoundStatus($this->fixture->transactions())->of($round->project(), $round->change()));
     }
 
     private function publishedApprovalAt(string $head): string

@@ -13,6 +13,7 @@ use Intakt\Core\Watcher\Contract\HandedOverChanges;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
+use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Psr\Log\LoggerInterface;
@@ -91,12 +92,12 @@ final readonly class PublishVerdictHandler
         }
     }
 
-    // Recorded only after a write the forge took, so a round whose publication was refused, skipped or is still queued stays in review.
+    // Recorded only after a write the forge took, so a round whose publication was refused, skipped or is still queued stays in review; never for an error status (a replay, a head Intakt could not review), because it is still published but carries no verdict for the people on the pull request to act on.
     private function publish(ReviewRound $round, PublishedVerdict $verdict): bool
     {
         $published = $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $verdict);
 
-        if ($published) {
+        if ($published && HeadStatus::Error !== $verdict->status) {
             $this->rounds->recordPublication($round);
         }
 

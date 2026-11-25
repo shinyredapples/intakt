@@ -150,8 +150,8 @@ final readonly class ReviewRounds
     {
         $canonical = ChangeAddress::canonical($change);
 
-        /** @var list<ReviewRound> $rounds */
         // Refreshed, because a worker keeps its entity manager between messages, and a round it loaded earlier would hide the state and the publication other workers committed since.
+        /** @var list<ReviewRound> $rounds */
         $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project ORDER BY r.change.number DESC', ReviewRound::class))
             ->setParameter('project', $project)
             ->setHint(Query::HINT_REFRESH, true)
