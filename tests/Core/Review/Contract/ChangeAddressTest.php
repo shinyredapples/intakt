@@ -87,4 +87,19 @@ final class ChangeAddressTest extends TestCase
             [ChangeAddress::sameChange('https://github.com/Acme/Widgets/pull/7', 'https://github.com/acme/widgets/pull/7'), ChangeAddress::sameChange('feat/Widget', 'feat/widget')],
         );
     }
+
+    #[DataProvider('otherFormsOfOnePullRequest')]
+    public function testEveryFormOfOnePullRequestHoldsThePullRequestPathOfItsCanonicalForm(string $address): void
+    {
+        $path = ChangeAddress::pullRequestPathOf(ChangeAddress::canonical($address));
+
+        self::assertSame('/pull/7', $path);
+        self::assertStringContainsString($path, $address);
+    }
+
+    #[DataProvider('notPullRequests')]
+    public function testAnAddressThatIsNoGitHubPullRequestHasNoPullRequestPath(string $address): void
+    {
+        self::assertNull(ChangeAddress::pullRequestPathOf($address));
+    }
 }

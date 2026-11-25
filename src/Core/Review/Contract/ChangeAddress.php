@@ -14,21 +14,43 @@ final readonly class ChangeAddress
     // Reduced to owner, repository and number, because the forge reads only those, so a fragment, a query, a trailing slash or surrounding white space names the same pull request.
     public static function canonical(string $address): string
     {
-        $uri = Uri::parse(trim($address));
+        $parts = self::pullRequestParts($address);
 
-        if (!$uri instanceof Uri || 'https' !== $uri->getScheme() || 'github.com' !== $uri->getHost() || null !== $uri->getUserInfo() || null !== $uri->getPort()) {
+        if (null === $parts) {
             return $address;
         }
 
-        if (1 !== preg_match(self::PULL_REQUEST_PATH, $uri->getRawPath(), $match)) {
-            return $address;
-        }
+        return sprintf('https://github.com/%s/%s/pull/%s', strtolower($parts[1]), strtolower($parts[2]), $parts[3]);
+    }
 
-        return sprintf('https://github.com/%s/%s/pull/%s', strtolower($match[1]), strtolower($match[2]), $match[3]);
+    // Every spelling that canonicalizes to a pull request holds this text literally in its raw path, because the path is matched unencoded, so a store can narrow its search to the addresses that hold it.
+    public static function pullRequestPathOf(string $address): ?string
+    {
+        $parts = self::pullRequestParts($address);
+
+        return null === $parts ? null : '/pull/'.$parts[3];
     }
 
     public static function sameChange(string $one, string $other): bool
     {
         return self::canonical($one) === self::canonical($other);
+    }
+
+    /**
+     * @return ?array<int, string>
+     */
+    private static function pullRequestParts(string $address): ?array
+    {
+        $uri = Uri::parse(trim($address));
+
+        if (!$uri instanceof Uri || 'https' !== $uri->getScheme() || 'github.com' !== $uri->getHost() || null !== $uri->getUserInfo() || null !== $uri->getPort()) {
+            return null;
+        }
+
+        if (1 !== preg_match(self::PULL_REQUEST_PATH, $uri->getRawPath(), $match)) {
+            return null;
+        }
+
+        return $match;
     }
 }

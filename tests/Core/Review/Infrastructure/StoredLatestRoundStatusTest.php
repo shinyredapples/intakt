@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Doctrine\DBAL\Configuration;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Logging\Middleware;
+use Doctrine\ORM\EntityManager;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
@@ -14,6 +18,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 
 #[Group('persistence')]
 #[CoversClass(StoredLatestRoundStatus::class)]
@@ -115,6 +120,30 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         self::assertNull($this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/8'));
     }
 
+    public function testARoundOfPullRequest123GivesPullRequest12NoStatus(): void
+    {
+        $this->fixture->startFor('https://github.com/acme/widgets/pull/123', $this->fixture->bus, 2);
+
+        self::assertNull($this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/12'));
+    }
+
+    public function testTheStatusReadOfAChangeWithoutRoundsReadsNoChangeAddressBeyondItsOwnSpellings(): void
+    {
+        foreach (range(1, 3) as $number) {
+            $this->fixture->startFor('https://github.com/acme/widgets/pull/'.$number, $this->fixture->bus, 2);
+            $this->fixture->startFor('feat/closed-'.$number, $this->fixture->bus, 2);
+        }
+        $log = new BufferingLogger();
+        $status = new StoredLatestRoundStatus($this->fixture->transactionsOn($this->loggedEntities($log)));
+
+        self::assertNull($status->of('alpha', 'https://github.com/acme/widgets/pull/99'));
+        self::assertNull($status->of('alpha', 'feat/open'));
+        self::assertSame([], array_values(array_filter(
+            array_map(static fn (array $entry): string => (string) ($entry[2]['sql'] ?? ''), $log->cleanLogs()),
+            static fn (string $sql): bool => str_contains($sql, 'FROM review_round') && !str_contains(substr($sql, (int) strpos($sql, 'WHERE')), 'change_ref'),
+        )));
+    }
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
@@ -123,6 +152,15 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
     private function latestStatus(): StoredLatestRoundStatus
     {
         return new StoredLatestRoundStatus($this->fixture->transactions());
+    }
+
+    // On the fixture's database through a connection that logs every statement, so the test sees the SQL the read sends.
+    private function loggedEntities(BufferingLogger $log): EntityManager
+    {
+        $original = $this->fixture->entities;
+        $connection = DriverManager::getConnection($original->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($log)]));
+
+        return new EntityManager($connection, $original->getConfiguration());
     }
 
     private function publishedRound(): void

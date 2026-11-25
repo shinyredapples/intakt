@@ -216,15 +216,22 @@ final readonly class ReviewRounds
         return $this->findings->openFor($round);
     }
 
-    // Read as a column, because the watcher asks on every pass for each open pull request, and hydrating the project's rounds to compare their addresses would cost every round the project ever stored; the canonical form cannot be compared in SQL, so the project's distinct addresses are compared here.
+    // Scoped to the change, because the watcher asks on every pass for each open pull request and a read of the project's addresses would grow with its whole history. Only a pull request has other spellings, and each holds its path, so SQL narrows by that and the canonical form, which SQL cannot compute, drops the rest here, such as pull 123 for pull 12.
     /**
      * @return list<string>
      */
     private function storedSpellingsOf(string $project, string $canonical): array
     {
+        $path = ChangeAddress::pullRequestPathOf($canonical);
+
+        if (null === $path) {
+            return [$canonical];
+        }
+
         /** @var list<string> $stored */
-        $stored = $this->entities->createQuery(sprintf('SELECT DISTINCT r.change.change FROM %s r WHERE r.subject.project = :project', ReviewRound::class))
+        $stored = $this->entities->createQuery(sprintf('SELECT DISTINCT r.change.change FROM %s r WHERE r.subject.project = :project AND r.change.change LIKE :path', ReviewRound::class))
             ->setParameter('project', $project)
+            ->setParameter('path', '%'.$path.'%')
             ->getSingleColumnResult();
 
         return array_values(array_filter($stored, static fn (string $spelling): bool => ChangeAddress::canonical($spelling) === $canonical));
