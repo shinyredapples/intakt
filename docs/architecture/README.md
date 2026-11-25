@@ -81,6 +81,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 ### Forges and identity
 
 - [Forge contract and the local git forge](forge-contract.md): how Intakt reads and writes changes on a forge.
+- [Branch cleanup](branch-cleanup.md): how a forge lists, judges and deletes branches for branch cleanup.
 - [GitHub App identity](github-app-identity.md): how Intakt acts on GitHub as its App.
 - [Pull requests handed to Intakt](handed-to-intakt.md): how Intakt decides which pull requests are its own to review and publish on.
 - [Work intake from GitHub issues](work-intake.md): how labeled issues become tasks, and how `GitHubWorkSource` picks the next one.
