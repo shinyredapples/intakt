@@ -913,8 +913,9 @@ final class LedgerRoundsTest extends TestCase
     {
         $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"x","findings":["F1"],"severities":{"F1":"P9"}}'));
 
-        self::assertSame(['x' => ['F1']], $review?->rounds[0]->findingsByReviewer);
-        self::assertNull($review?->rounds[0]->severitiesByReviewer);
+        self::assertNotNull($review);
+        self::assertSame(['x' => ['F1']], $review->rounds[0]->findingsByReviewer);
+        self::assertNull($review->rounds[0]->severitiesByReviewer);
     }
 
     /**
