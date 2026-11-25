@@ -1,0 +1,16 @@
+# Development only: docker compose -f compose.yaml -f compose.dev.yaml up --wait --build. Nothing here is in the image or in compose.yaml.
+services:
+    intakt:
+        environment:
+            APP_ENV: dev
+            APP_DEBUG: "1"
+        volumes:
+            # The checkout, so an edit on the host is what the workers see; it hides the image's vendor/ and assets/vendor/, so install both on the host first.
+            - .:/app
+            # The Caddyfile with watch and hot reload; mounted over the shipped one, so the entrypoint and the image stay as they are.
+            - ./docker/dev/Caddyfile:/app/Caddyfile:ro
+            # All of var/ on a named volume, which Docker fills from the image's var/ and so gives to the image's user: the entrypoint writes there (the cache, the log, the seed's mark), and the host's var/ may belong to another user id. var/data stays on the demo's volume.
+            - intakt-dev-var:/app/var
+
+volumes:
+    intakt-dev-var:

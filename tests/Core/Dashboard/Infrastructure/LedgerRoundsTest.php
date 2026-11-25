@@ -909,12 +909,21 @@ final class LedgerRoundsTest extends TestCase
         self::assertNull($review?->rounds[0]->findingsByReviewer);
     }
 
+    public function testARecordOfWhoReportedWhatWithASeverityOutsideTheEnumKeepsTheFindingsButNotTheSeverities(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"x","findings":["F1"],"severities":{"F1":"P9"}}'));
+
+        self::assertNotNull($review);
+        self::assertSame(['x' => ['F1']], $review->rounds[0]->findingsByReviewer);
+        self::assertNull($review->rounds[0]->severitiesByReviewer);
+    }
+
     /**
      * @param list<string> $findings
      */
     private function reported(string $reviewer, array $findings): RecordedEvent
     {
-        return $this->row(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded('r1', $reviewer, $findings));
+        return $this->row(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded('r1', $reviewer, new FindingIds(...$findings)));
     }
 
     private function quorumStart(int $reviewers, QuorumPolicy $quorum): RecordedEvent

@@ -65,7 +65,11 @@ final readonly class SearchIndex
      */
     private function actions(): array
     {
-        return array_map(static fn (SearchAction $action): SearchResult => $action->result(), self::ACTIONS);
+        return [
+            // A link and no script action, because the flow is a page of its own (DESIGN.md, Information architecture).
+            new SearchResult(SearchGroup::Actions, 'Add a project', 'All projects', $this->urls->generate(DashboardRoutes::ADD_PROJECT)),
+            ...array_map(static fn (SearchAction $action): SearchResult => $action->result(), self::ACTIONS),
+        ];
     }
 
     /**
