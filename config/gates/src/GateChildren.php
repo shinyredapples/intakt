@@ -133,21 +133,12 @@ final readonly class GateChildren
         return false === $kept ? $report : $report->keeping($kept);
     }
 
-    // Because each group gets its grace in turn, all of them are asked first, so none waits for the grace of another.
     /**
      * @param array<string, RunningChild|ProcessResult> $running
      */
     private static function stopAll(array $running): void
     {
-        $groups = array_map(static fn (RunningChild $child): ProcessGroup => $child->group, array_filter($running, static fn (RunningChild|ProcessResult $child): bool => $child instanceof RunningChild));
-
-        foreach ($groups as $group) {
-            $group->askToStop();
-        }
-
-        foreach ($groups as $group) {
-            $group->stop();
-        }
+        ProcessGroup::stopTogether(array_values(array_map(static fn (RunningChild $child): ProcessGroup => $child->group, array_filter($running, static fn (RunningChild|ProcessResult $child): bool => $child instanceof RunningChild))));
     }
 
     // Because the stop handler reads the same set, each child joins it the moment it starts, not once the whole round has started, and a stop waits until it has joined.
