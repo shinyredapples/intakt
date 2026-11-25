@@ -62,18 +62,6 @@ final readonly class HeadClones
         $this->filesystem->remove($clone);
     }
 
-    // The failure that ended the clone is rethrown even when the removal fails too, because it is the cause the job must report.
-    private function removeAfter(string $clone, Throwable $failed): never
-    {
-        try {
-            $this->remove($clone);
-        } catch (IOException) {
-            throw $failed;
-        }
-
-        throw $failed;
-    }
-
     // The source's own format, because a head of a SHA-256 repository cannot be fetched into a SHA-1 one; git init refuses a format it does not know.
     /**
      * @throws ProcessFailedException
@@ -90,5 +78,17 @@ final readonly class HeadClones
     private function run(GitCall $call): string
     {
         return new Process([...$call->command], $call->directory, [...$call->environment], null, self::GIT_SECONDS)->mustRun()->getOutput();
+    }
+
+    // The failure that ended the clone is rethrown even when the removal fails too, because it is the cause the job must report.
+    private function removeAfter(string $clone, Throwable $failed): never
+    {
+        try {
+            $this->remove($clone);
+        } catch (IOException) {
+            throw $failed;
+        }
+
+        throw $failed;
     }
 }

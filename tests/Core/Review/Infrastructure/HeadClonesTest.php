@@ -10,6 +10,7 @@ use Intakt\Core\Review\Infrastructure\HeadClones;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Exception\IOException;
@@ -101,7 +102,6 @@ final class HeadClonesTest extends TestCase
             new HeadClones($filesystem, $this->root.'/clones')->cloneAt($this->root.'/source', $head);
             self::fail('The unexpected exception did not pass through.');
         } catch (LogicException) {
-            self::assertCount(1, $filesystem->made);
             self::assertSame([], glob($this->root.'/clones/head-*'));
         }
     }
@@ -163,9 +163,6 @@ final class HeadClonesTest extends TestCase
     private function failingAfterTheCloneFolder(LogicException $failure, ?IOException $removal): Filesystem
     {
         return new class($failure, $removal) extends Filesystem {
-            /** @var list<string> */
-            public array $made = [];
-
             public function __construct(private readonly LogicException $failure, private readonly ?IOException $removal)
             {
             }
@@ -178,7 +175,7 @@ final class HeadClonesTest extends TestCase
                 parent::mkdir($dirs, $mode);
 
                 if (is_string($dirs) && str_starts_with(basename($dirs), 'head-')) {
-                    $this->made[] = $dirs;
+                    Assert::assertDirectoryExists($dirs);
 
                     throw $this->failure;
                 }
