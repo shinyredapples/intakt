@@ -24,6 +24,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(JourneyAlarmTask::class)]
 final class InstallCheckTest extends TestCase
 {
+    private const string KEYED_COMMAND = '--wait && docker compose exec -T intakt php bin/console intakt:demo';
     private const string CLONE_COMMAND = 'git clone https://github.com/shinyredapples/intakt.git && cd intakt';
     private const string ACCOUNT = 'alarm[bot]';
     private const string INTEGRATION_REFUSAL = 'gh api user failed: gh: Resource not accessible by integration (HTTP 403)';
@@ -316,6 +317,29 @@ final class InstallCheckTest extends TestCase
         self::assertSame('node bin/journey-check '.escapeshellarg(InstallCheck::ADDRESS), $this->callOf('bin/journey-check')['command']);
     }
 
+    public function testTheDemoRunIsRemovedBetweenTheUiCheckAndTheJourneyCheck(): void
+    {
+        $this->withJourneyCheck = true;
+
+        $report = $this->check([], ['ANTHROPIC_API_KEY' => 'stand-in-'.bin2hex(random_bytes(8))])->run('/some/repository');
+
+        $walk = array_values(array_filter(array_keys($this->statuses($report)), static fn (string $name): bool => !str_starts_with($name, 'install: ') && !str_starts_with($name, 'teardown: ')));
+        self::assertSame(['demo: play the demo run to its verdict', 'ui-check: every page', 'demo-removal: remove the played demo run', 'journey-check', 'keyed: review the sample with a provider key'], $walk);
+        self::assertSame('docker compose exec -T intakt php bin/console intakt:demo:remove', $this->callOf('intakt:demo:remove')['command']);
+    }
+
+    public function testAFailedRemovalOfTheDemoRunSkipsTheJourneyCheck(): void
+    {
+        $this->withJourneyCheck = true;
+
+        $report = $this->check(['intakt:demo:remove' => [1, 'the demo run is playing']])->run('/some/repository');
+
+        self::assertSame('failed', $this->statuses($report)['demo-removal: remove the played demo run']);
+        self::assertSame('skipped', $this->statuses($report)['journey-check']);
+        self::assertStringContainsString('the played demo run was not removed', $report->toJson());
+        self::assertSame([], array_filter($this->calls, static fn (array $call): bool => str_contains($call['command'], 'bin/journey-check')));
+    }
+
     public function testJourneyAndUiScreenshotsAreKeptWithTheLogs(): void
     {
         $this->withJourneyCheck = true;
@@ -379,7 +403,7 @@ final class InstallCheckTest extends TestCase
         $report = $this->check()->run('/some/repository');
 
         self::assertSame('skipped', $this->statuses($report)['keyed: review the sample with a provider key']);
-        self::assertSame([], array_filter($this->calls, static fn (array $call): bool => str_contains($call['command'], 'intakt:demo')));
+        self::assertSame([], array_filter($this->calls, static fn (array $call): bool => str_contains($call['command'], self::KEYED_COMMAND)));
     }
 
     public function testTheKeyGoesToTheCloneEnvLocalAndTheContainerStartsAgainBeforeTheReview(): void
@@ -389,7 +413,7 @@ final class InstallCheckTest extends TestCase
         $report = $this->check([], ['ANTHROPIC_API_KEY' => $key])->run('/some/repository');
 
         self::assertSame('passed', $this->statuses($report)['keyed: review the sample with a provider key']);
-        self::assertSame('docker compose up -d --wait && docker compose exec -T intakt php bin/console intakt:demo', $this->callOf('intakt:demo')['command']);
+        self::assertSame('docker compose up -d --wait && docker compose exec -T intakt php bin/console intakt:demo', $this->callOf(self::KEYED_COMMAND)['command']);
         self::assertSame('ANTHROPIC_API_KEY='.$key."\n", $this->keptEnvironmentFile);
     }
 
@@ -397,7 +421,7 @@ final class InstallCheckTest extends TestCase
     {
         $key = 'stand-in-'.bin2hex(random_bytes(8));
 
-        $report = $this->check(['intakt:demo' => [1, 'the provider refused '.$key]], ['OPENAI_API_KEY' => $key])->run('/some/repository');
+        $report = $this->check([self::KEYED_COMMAND => [1, 'the provider refused '.$key]], ['OPENAI_API_KEY' => $key])->run('/some/repository');
 
         $everything = $report->toJson().json_encode($this->calls, JSON_THROW_ON_ERROR).$this->logs();
 
@@ -410,7 +434,7 @@ final class InstallCheckTest extends TestCase
         $token = 'stand-in-'.bin2hex(random_bytes(8));
         $line = 'Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer '.$token.'"';
 
-        $report = $this->check(['intakt:demo' => [10, $line]], ['OPENAI_API_KEY' => 'stand-in-'.bin2hex(random_bytes(8))])->run('/some/repository');
+        $report = $this->check([self::KEYED_COMMAND => [10, $line]], ['OPENAI_API_KEY' => 'stand-in-'.bin2hex(random_bytes(8))])->run('/some/repository');
 
         self::assertStringNotContainsString($token, $report->toJson().$this->logs());
         self::assertSame('passed', $this->statuses($report)['keyed: review the sample with a provider key']);
@@ -544,7 +568,7 @@ final class InstallCheckTest extends TestCase
             new Filesystem()->dumpFile(...$made);
         }
 
-        if (str_contains($command, 'intakt:demo')) {
+        if (str_contains($command, self::KEYED_COMMAND)) {
             $this->keptEnvironmentFile = (string) file_get_contents($directory.'/.env.local');
         }
 

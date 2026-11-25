@@ -26,7 +26,8 @@ const JOURNEYS = [
   {
     name: 'First run without a key',
     steps: [
-      named('open /setup and see the start', open('/setup'), seeRole('heading', 'See a real review')),
+      // The wizard's last step, where a fresh dashboard sends its visitor and where the demo run is offered.
+      named('open /setup and see the start', open('/setup?step=5'), seeRole('heading', 'See a real review')),
       press('button', 'Play the demo run'),
       // The demo page follows the run to its review as soon as the queue worker started it, which can be before the page is looked at, so its heading is asked for only while the page is still there.
       named('reach /demo and see the demo run', arrive('/demo'), seeRoleWhileAt('/demo', 'heading', 'The demo run')),
@@ -228,7 +229,7 @@ function watch(page) {
   };
   const answered = (response) => {
     if (!isOfMainFrame(page, response)) return;
-    trail.statuses.set(withoutFragment(response.url()), response.status());
+    recordStatus(trail.statuses, withoutFragment(response.url()), response.status());
     trail.changed();
   };
   trail.stop = () => {
@@ -238,6 +239,11 @@ function watch(page) {
   page.on('framenavigated', visited);
   page.on('response', answered);
   TRAILS.set(page, trail);
+}
+
+// The page's own fetches answer for the main frame too, so a later success must not hide that the address failed before.
+function recordStatus(statuses, address, code) {
+  if (!((statuses.get(address) ?? 0) >= 400)) statuses.set(address, code);
 }
 
 function withoutFragment(address) {
@@ -290,26 +296,32 @@ function seeRoleWhileAt(pathOnSite, role, name) {
   };
 }
 
-// For what a later page of the same journey shows: the wait alone would pass on any page with the same text, so the addresses are judged once it ends.
+// For what the review page shows: the wait alone would pass on any page with the same text, the demo page included, so the addresses and where the page ended are judged once it ends.
 function seeRoleSince(pathOnSite, role, name, timeout = STEP_TIMEOUT_MS) {
   const seen = seeRole(role, name, timeout);
 
   return {
-    name: `${seen.name} on ${pathOnSite} or a review page`,
+    name: `${seen.name} on the review page reached from ${pathOnSite}`,
     run: async (page, address) => {
       await seen.run(page);
       expectReviewPagesSince(page, address, pathOnSite);
+      if (!isReviewPage(page.url(), address)) throw new Error(`the page shows it at ${originAndPath(page.url())}, not on a review page`);
     },
   };
 }
 
-// A page may have passed a review page and moved on to a wrong one, or the other way round, so every address it has been at since the arrival must be a review page, not only the first or the last.
+// A page may have passed a review page and moved on to a wrong one, or the other way round, so every address it has been at since the arrival must be a review page, not only the first or the last, and all of them the same round, as the next one could show another run's verdict.
 function expectReviewPagesSince(page, address, pathOnSite, departure) {
   const expected = new URL(address + pathOnSite);
   const visited = [...addressesSince(TRAILS.get(page), expected), departure, page.url()].filter((where) => where !== undefined);
   const wrong = visited.find((where) => !isAt(where, expected) && !isReviewPage(where, address));
   if (wrong !== undefined) {
     throw new Error(`the page left ${pathOnSite} for ${originAndPath(wrong)}, not for a review page on ${new URL(address).origin}`);
+  }
+  const rounds = visited.filter((where) => !isAt(where, expected));
+  const other = rounds.find((where) => roundOf(where, address) !== roundOf(rounds[0], address));
+  if (other !== undefined) {
+    throw new Error(`the page went from the review page ${originAndPath(rounds[0])} to the review page ${originAndPath(other)} of another round`);
   }
 }
 
@@ -322,12 +334,17 @@ function addressesSince(trail, expected) {
 
 // Only the review page shows the run's own verdict, so a page below it or on another install could pass the later steps by accident.
 function isReviewPage(where, address) {
+  return roundOf(where, address) !== null;
+}
+
+// The round a review page shows, as the router reads it; null for any other page.
+function roundOf(where, address) {
   const url = new URL(where);
   const reviews = new URL(address + '/reviews/');
-  if (url.origin !== reviews.origin || !url.pathname.startsWith(reviews.pathname)) return false;
+  if (url.origin !== reviews.origin || !url.pathname.startsWith(reviews.pathname)) return null;
   const round = decoded(url.pathname.slice(reviews.pathname.length));
 
-  return round !== null && round !== '' && !round.includes('/');
+  return round === null || round === '' || round.includes('/') ? null : round;
 }
 
 // The dashboard's router decodes the path before it matches, so %2F in the address is a slash to it; a segment that cannot be decoded is no review page.

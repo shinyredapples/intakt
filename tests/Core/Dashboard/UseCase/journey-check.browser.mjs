@@ -58,15 +58,16 @@ function demoSite({ playLabel = 'Play the demo run', playTarget = '/demo?play=p1
     };
 }
 
-// Every origin answers with the same pages, so a button that leads to another install finds a working demo there.
-function routedSite(pages) {
+// Every origin answers with the same pages, so a button that leads to another install finds a working demo there. A path's first answers may have other statuses, in order, before it answers 200.
+function routedSite(pages, statuses = {}) {
     return {
         newContext: async () => {
             const context = await browser.newContext();
             await context.route('**/*', (route) => {
-                const body = pages[new URL(route.request().url()).pathname];
+                const path = new URL(route.request().url()).pathname;
+                const body = pages[path];
 
-                return body === undefined ? route.fulfill({ status: 404, body: 'Not found' }) : route.fulfill({ contentType: 'text/html', body });
+                return body === undefined ? route.fulfill({ status: 404, body: 'Not found' }) : route.fulfill({ status: statuses[path]?.shift() ?? 200, contentType: 'text/html', body });
             });
 
             return context;
@@ -276,13 +277,13 @@ test('a demo page that went to a review page and from there to /elsewhere before
 });
 
 // Forces the order: the review page leaves only once the step before has passed, so the wrong address can only be met by the step under test.
-function leaveAfter(position) {
+function leaveAfter(position, target = '/elsewhere') {
     const step = FIRST_RUN.steps[position];
     const stepThenLeave = { name: step.name, run: async (page, address) => {
         await step.run(page, address);
         await page.waitForURL(`${ORIGIN}/reviews/r1`);
-        await page.evaluate(() => { setTimeout(() => location.assign('/elsewhere'), 100); });
-        await page.waitForURL(`${ORIGIN}/elsewhere`);
+        await page.evaluate((path) => { setTimeout(() => location.assign(path), 100); }, target);
+        await page.waitForURL(ORIGIN + target);
     } };
 
     return { name: FIRST_RUN.name, steps: FIRST_RUN.steps.with(position, stepThenLeave) };
@@ -308,6 +309,35 @@ test('a review page that shows the verdict and then leaves for /elsewhere, which
 
     assert.equal(result.failure.step, 'see the recorded finding on the review page');
     assert.equal(result.failure.error, 'the page left /demo for http://localhost/elsewhere, not for a review page on http://localhost');
+});
+
+test('a review page that leaves for another round, which shows the verdict and the finding, after step 3 passed fails the first journey at step 4', async () => {
+    const pages = demoSite({ delayMs: 0 });
+    pages['/reviews/r2'] = pages['/reviews/r1'];
+    pages['/reviews/r1'] = '<!doctype html><html lang="en"><head><title>Review</title></head><body><h1>Review of sample-change in sample</h1></body></html>';
+
+    const result = await runJourney(routedSite(pages), ORIGIN, leaveAfter(2, '/reviews/r2'), scratch(), 1);
+
+    assert.equal(result.failure.step, 'wait for the verdict of the demo run');
+    assert.equal(result.failure.error, 'the page went from the review page http://localhost/reviews/r1 to the review page http://localhost/reviews/r2 of another round');
+});
+
+test('a demo page that shows the verdict and the finding itself and never follows to the review fails the first journey at step 4', async () => {
+    const shown = '<h1>The demo run</h1><h2>Changes needed</h2><a href="/reviews/r1/record#f1">The check changed from <code>amount &gt;= 100</code> to <code>amount &gt; 100</code>.</a>';
+
+    const result = await runJourney(routedSite(demoSite({ demo: shown })), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'wait for the verdict of the demo run');
+    assert.equal(result.failure.error, 'the page shows it at http://localhost/demo, not on a review page');
+});
+
+test('a demo page that answers HTTP 500 and then fetches its own address with a success fails the first journey at step 3', async () => {
+    const pages = demoSite({ demo: '<h1>The demo run</h1><script>fetch(location.href).then(() => location.assign(\'/reviews/r1\'));</script>' });
+    // Forces the order: the success is answered only after the page that failed to load has asked for it.
+    const result = await runJourney(routedSite(pages, { '/demo': [500] }), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.match(result.failure.error, /it led to http:\/\/localhost\/demo \(HTTP 500\), then /);
 });
 
 test('a demo page that stays and does not show its heading fails the first journey at step 3', async () => {
