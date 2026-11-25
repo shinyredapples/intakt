@@ -374,6 +374,12 @@ final readonly class RoundFixture
         return $this->rounds($this->entities);
     }
 
+    // Another worker's rounds on its own connection and entity manager, as secondWorker() opens them.
+    public function anotherWorkersRounds(): ReviewRounds
+    {
+        return $this->rounds(new EntityManager(DriverManager::getConnection($this->entities->getConnection()->getParams()), $this->entities->getConfiguration()), new InMemoryLedger());
+    }
+
     public function transactionsOn(EntityManagerInterface $entities): ReviewRounds
     {
         return $this->rounds($entities);

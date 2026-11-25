@@ -355,6 +355,13 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
     }
 
+    public function testAnErrorStatusPublishedInPlaceOfAVerdictThatHoldsASecretLeavesTheRoundUnpublished(): void
+    {
+        $roundId = $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P1, 'The fixture holds a key: sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)))]);
+
+        self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
+    }
+
     public function testAJudgedRoundWhosePublicationIsSkippedStaysUnpublished(): void
     {
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));

@@ -8,6 +8,7 @@ use Closure;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query;
 use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
@@ -150,8 +151,10 @@ final readonly class ReviewRounds
         $canonical = ChangeAddress::canonical($change);
 
         /** @var list<ReviewRound> $rounds */
+        // Refreshed, because a worker keeps its entity manager between messages, and a round it loaded earlier would hide the state and the publication other workers committed since.
         $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project ORDER BY r.change.number DESC', ReviewRound::class))
             ->setParameter('project', $project)
+            ->setHint(Query::HINT_REFRESH, true)
             ->getResult();
         $ofChange = array_values(array_filter($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical));
 

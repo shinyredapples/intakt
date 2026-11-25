@@ -48,6 +48,18 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         self::assertSame(ReviewStatus::WaitingOnYou, $this->latestStatus()->of('alpha', RoundFixture::CHANGE));
     }
 
+    public function testAPublicationAnotherWorkerRecordsAfterThisReaderReadTheRoundIsSeen(): void
+    {
+        $roundId = $this->judgedRound();
+        $status = $this->latestStatus();
+        self::assertSame(ReviewStatus::InReview, $status->of('alpha', RoundFixture::CHANGE));
+
+        $writer = $this->fixture->anotherWorkersRounds();
+        $writer->recordPublication($writer->stored($roundId));
+
+        self::assertSame(ReviewStatus::WaitingOnYou, $status->of('alpha', RoundFixture::CHANGE));
+    }
+
     public function testANewRoundAfterAPublishedVerdictIsInReviewAgain(): void
     {
         $this->publishedRound();

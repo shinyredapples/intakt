@@ -64,7 +64,8 @@ final readonly class PublishVerdictHandler
         try {
             $this->publishReviewOf($round);
         } catch (ReviewTextHoldsSecret) {
-            $this->publish($round, $this->verdicts->unpublishable($round));
+            // Not recorded as published, because the error status carries no verdict for the people on the pull request to act on.
+            $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $this->verdicts->unpublishable($round));
         } catch (ChangeNotFound) {
             // Logged and dropped, because a round of a local branch has no pull request to publish on, and retrying cannot give it one.
             $this->logger->warning('The round {round} of {project} names no pull request the forge knows, so its verdict is not published.', ['round' => $roundId, 'project' => $round->project()]);
