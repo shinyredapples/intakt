@@ -2,17 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Plugin\GitHubForge\Contract;
+namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
+use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
+use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
+use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
-use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
-use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
-use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
-use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
-use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
-use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
-use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use SensitiveParameter;
@@ -24,7 +22,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 // Read-only on purpose (decision D3 of #3826): it reads the installation with its own scratch rate-limit store and its own token, so it leaves the live readings and pauses untouched.
-final readonly class ForgeConnectionCheck
+final readonly class ForgeConnectionCheck implements ForgeConnection
 {
     // Short, because a check that waits on GitHub would hang the owner's terminal (decision D5 of #3826).
     private const int TIMEOUT_SECONDS = 5;
@@ -60,7 +58,7 @@ final readonly class ForgeConnectionCheck
         return $this->readBack();
     }
 
-    // An empty App ID with an installation ID or a key still set is a half-cleared App, not a demo: the demo has none of the three.
+    // Judged apart from the call, because an empty App ID with an installation ID or a key still set is a half-cleared App and not a demo, which has none of the three.
     private function settingProblem(): ?ForgeConnectionVerdict
     {
         $appEmpty = '' === trim($this->appId);

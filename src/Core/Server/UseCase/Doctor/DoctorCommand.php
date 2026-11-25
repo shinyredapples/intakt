@@ -12,7 +12,7 @@ use Intakt\Core\Server\Contract\InfrastructureChecks;
 use Intakt\Core\Server\Contract\ServerMetrics;
 use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Server\Contract\WorkerThreads;
-use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionCheck;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -29,7 +29,7 @@ final readonly class DoctorCommand
 
     public function __construct(
         private ServerStatus $status,
-        private ForgeConnectionCheck $forge,
+        private ForgeConnection $forge,
     ) {
     }
 

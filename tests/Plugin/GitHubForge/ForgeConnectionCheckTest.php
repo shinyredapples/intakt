@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
-use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionCheck;
 use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
@@ -14,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\ForgeConnectionCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
