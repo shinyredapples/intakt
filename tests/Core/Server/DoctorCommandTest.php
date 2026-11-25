@@ -22,16 +22,20 @@ use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\ForgeConnectionCheck;
+use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use ReflectionMethod;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(DoctorCommand::class)]
 #[UsesClass(AdminApi::class)]
@@ -49,6 +53,7 @@ use Symfony\Component\HttpClient\MockHttpClient;
 #[UsesClass(ForgeConnectionVerdict::class)]
 #[UsesClass(ExpectedInstallation::class)]
 #[UsesClass(AppJwt::class)]
+#[UsesClass(RateLimitReadings::class)]
 final class DoctorCommandTest extends TestCase
 {
     private const string THREADS_FIX = 'check that FrankenPHP is running and that FRANKENPHP_ADMIN_URL points at its admin API';
@@ -222,6 +227,8 @@ final class DoctorCommandTest extends TestCase
             new AppJwt($appId, $privateKey, $clock),
             new ExpectedInstallation(['contents' => 'write'], ['acme/widget']),
             $clock,
+            $clock,
+            new RateLimitReadings(new ArrayAdapter(), $clock, new LockFactory(new InMemoryStore())),
             new NullLogger(),
             $appId,
             $installationId,

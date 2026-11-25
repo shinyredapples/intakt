@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Domain\SetupStep;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\RememberedForgeVerdict;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
@@ -22,7 +23,6 @@ use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
 use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
-use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -46,7 +46,7 @@ final readonly class ShowBoardController
         private WaitingCount $waiting,
         private ClockInterface $clock,
         private ServerStatus $server,
-        private ForgeConnection $forge,
+        private RememberedForgeVerdict $forge,
     ) {
     }
 
@@ -133,9 +133,7 @@ final readonly class ShowBoardController
     // The forge figure comes from the check the doctor runs, so the board and the doctor cannot judge the forge apart (decision D1 of #3826).
     private function infrastructureRow(): InfrastructureRow
     {
-        $problem = $this->forge->run()->problem;
-
-        return $this->serverRow()->withForge(null === $problem ? null : $this->redactor->redact($problem));
+        return $this->serverRow()->withForge($this->forge->latest());
     }
 
     // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.

@@ -32,6 +32,13 @@ final class AppJwtTest extends TestCase
         self::assertSame(1, openssl_verify($header.'.'.$claims, $this->bytes($signature), $key->public, OPENSSL_ALGO_SHA256));
     }
 
+    public function testAnAppIdWithSurroundingSpacesIsSignedAsTheNumberAlone(): void
+    {
+        $claims = explode('.', new AppJwt(' 12345 ', AppKey::generate()->private, new MockClock())->sign())[1];
+
+        self::assertSame('12345', $this->decode($claims)['iss']);
+    }
+
     public function testAKeyThatCannotSignFailsWithoutNamingTheKey(): void
     {
         $unreadable = 'not a key '.AppKey::generate()->body();

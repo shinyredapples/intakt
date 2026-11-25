@@ -32,6 +32,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
+use Intakt\Core\Dashboard\Infrastructure\RememberedForgeVerdict;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
@@ -95,6 +96,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(ServerMetrics::class)]
 #[UsesClass(EndpointDown::class)]
 #[UsesClass(ForgeConnectionVerdict::class)]
+#[UsesClass(RememberedForgeVerdict::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     /**
@@ -108,7 +110,6 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     private array $readings = [];
 
     private ?ForgeConnectionVerdict $forge = null;
-
     public function testTheRootAddressShowsTheBoard(): void
     {
         $page = $this->browser->request('GET', '/');
@@ -1133,6 +1134,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame(['Forge', 'down (GITHUB_APP_ID is not a number)'], [$forge->filter('dt')->text(), $forge->filter('dd')->text()]);
     }
 
+    public function testTheBoardShowsTheForgeAsNotConfiguredOnAnInstallWithoutAnApp(): void
+    {
+        $this->forge = ForgeConnectionVerdict::withoutAnApp();
+
+        self::assertContains(['Forge', 'not configured'], $this->infrastructureIn($this->browser->request('GET', '/')));
+    }
+
     public function testTheBoardShowsTheInfrastructureRowAsDownWhenTheAdminApiIsUnreachable(): void
     {
         $this->server = new RecordedAdminApi()->unreachable()->status();
@@ -1198,7 +1206,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
             return $reading instanceof RuntimeException ? throw $reading : $reading;
         });
         self::getContainer()->set(OwnerNotices::class, $stub);
-        // Stubbed, because the board runs the forge check on every load and no test may reach GitHub.
+        // Stubbed, because the board runs the forge check when it has no verdict of the last minute and no test may reach GitHub.
         $forge = self::createStub(ForgeConnection::class);
         $forge->method('run')->willReturnCallback(fn (): ForgeConnectionVerdict => $this->forge ?? ForgeConnectionVerdict::passed());
         self::getContainer()->set(ForgeConnection::class, $forge);

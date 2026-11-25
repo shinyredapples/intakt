@@ -16,12 +16,14 @@ use Psr\Log\LoggerInterface;
 use SensitiveParameter;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Clock\MonotonicClock;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-// Read-only on purpose (decision D3 of #3826): it reads the installation with its own scratch rate-limit store and its own token, so it leaves the live readings and pauses untouched.
+// Read-only on purpose (decision D3 of #3826): it reads the installation with its own scratch rate-limit store and its own token, so it leaves the live readings and pauses untouched; the live pause is only read, so the check sends nothing while GitHub asked the forge to wait.
 final readonly class ForgeConnectionCheck implements ForgeConnection
 {
     // Short, because a check that waits on GitHub would hang the owner's terminal (decision D5 of #3826).
@@ -36,6 +38,10 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
         private AppJwt $jwt,
         private ExpectedInstallation $expected,
         private ClockInterface $clock,
+        // Monotonic, because a wall clock set back during the run would lengthen the deadline.
+        #[Autowire(service: MonotonicClock::class)]
+        private ClockInterface $elapsed,
+        private RateLimitReadings $live,
         private LoggerInterface $logger,
         private string $appId,
         private string $installationId,
@@ -52,7 +58,7 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
             return $setting;
         }
         if ('' === trim($this->appId)) {
-            return ForgeConnectionVerdict::passed();
+            return ForgeConnectionVerdict::withoutAnApp();
         }
 
         return $this->readBack();
@@ -104,6 +110,7 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
         }
 
         try {
+            $this->live->refuseWhileLimited($this->installationId, RateLimitReadings::CORE);
             (void) $this->readBackOf()->check();
         } catch (InstallationDoesNotMatchConfiguration $mismatch) {
             return ForgeConnectionVerdict::failed(
@@ -121,7 +128,7 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
 
     private function readBackOf(): InstallationReadBack
     {
-        $http = new DeadlineHttpClient($this->http, $this->clock, $this->clock->now()->modify('+'.self::MAX_DURATION_SECONDS.' seconds'));
+        $http = new DeadlineHttpClient($this->http, $this->elapsed, self::MAX_DURATION_SECONDS);
         $readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
         $tokens = new InstallationTokens(new InstallationTokenMinter($this->jwt, $http, $this->logger), $this->installationId, $this->clock);
 

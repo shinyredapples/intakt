@@ -34,7 +34,8 @@ final readonly class AppJwt
         $payload = $this->encode(['alg' => 'RS256', 'typ' => 'JWT']).'.'.$this->encode([
             'iat' => $now - self::DRIFT_SECONDS,
             'exp' => $now + self::LIFETIME_SECONDS,
-            'iss' => $this->appId,
+            // Trimmed, because the forge check judges the trimmed ID and GitHub refuses an issuer with a space around it.
+            'iss' => trim($this->appId),
         ]);
 
         return $payload.'.'.$this->base64Url($this->signature($payload));

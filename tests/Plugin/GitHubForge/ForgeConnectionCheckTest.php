@@ -26,10 +26,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(ForgeConnectionCheck::class)]
@@ -56,7 +59,11 @@ final class ForgeConnectionCheckTest extends TestCase
 
     private AppKey $key;
     private MockClock $clock;
+    private RateLimitReadings $live;
     private int $requests = 0;
+
+    /** @var list<mixed> */
+    private array $issuers = [];
     private int $installationStatus = 200;
     private int $tokenStatus = 201;
     private bool $unreachable = false;
@@ -185,11 +192,12 @@ final class ForgeConnectionCheckTest extends TestCase
         self::assertSame(0, $this->requests);
     }
 
-    public function testAnAppIdThatIsANumberWithSurroundingSpacesIsAccepted(): void
+    public function testAnAppIdWithSurroundingSpacesPassesAndSignsItsTokensAsTheNumberAlone(): void
     {
         $this->appId = ' 12345 ';
 
         self::assertTrue($this->check()->run()->passes());
+        self::assertSame(['12345', '12345'], $this->issuers);
     }
 
     public function testATokenExchangeThatGitHubRefusesFailsAsNotRun(): void
@@ -232,10 +240,47 @@ final class ForgeConnectionCheckTest extends TestCase
         self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
     }
 
+    public function testAnInstallWithoutAnAppPassesAsNotConfigured(): void
+    {
+        $this->appId = '';
+        $this->installationId = '';
+        $this->privateKey = '';
+
+        self::assertFalse($this->check()->run()->configured);
+    }
+
+    public function testAnInstallationThatMatchesPassesAsConfigured(): void
+    {
+        self::assertTrue($this->check()->run()->configured);
+    }
+
+    public function testAForgePausedForARateLimitFailsAsNotRunWithoutARequest(): void
+    {
+        try {
+            $this->live->observe($this->installationId, 429, ['retry-after' => ['30']]);
+        } catch (ForgeRateLimited) {
+        }
+
+        $verdict = $this->check()->run();
+
+        self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
+        self::assertSame(0, $this->requests);
+    }
+
+    public function testARateLimitedCheckLeavesTheLiveForgeUnpaused(): void
+    {
+        $this->http = new MockHttpClient(static fn (): ResponseInterface => new MockResponse('{}', ['http_code' => 429, 'response_headers' => ['retry-after: 30']]));
+        $this->check()->run();
+        $this->http = null;
+
+        self::assertTrue($this->check()->run()->passes());
+    }
+
     protected function setUp(): void
     {
         $this->key = AppKey::generate();
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->live = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
     }
 
     private function check(): ForgeConnectionCheck
@@ -247,6 +292,8 @@ final class ForgeConnectionCheckTest extends TestCase
             new AppJwt($this->appId, $privateKey, $this->clock),
             $this->expected ?? ExpectedInstallation::fromSettings(self::PERMISSIONS, $this->repositories),
             $this->clock,
+            $this->clock,
+            $this->live,
             new RecordingLogger(),
             $this->appId,
             $this->installationId,
@@ -256,8 +303,9 @@ final class ForgeConnectionCheckTest extends TestCase
 
     private function github(): MockHttpClient
     {
-        return new MockHttpClient(function (string $method, string $url): ResponseInterface {
+        return new MockHttpClient(function (string $method, string $url, array $options): ResponseInterface {
             ++$this->requests;
+            $this->noteTheIssuerOf($options['headers'] ?? []);
             if ($this->unreachable) {
                 throw new TransportException('connection reset');
             }
@@ -268,6 +316,17 @@ final class ForgeConnectionCheckTest extends TestCase
 
             return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.$fixture), ['http_code' => str_contains($url, '/installation/repositories') ? 200 : $this->installationStatus]);
         });
+    }
+
+    // Only a request that carries the App JWT has an issuer; the installation token is no JWT.
+    private function noteTheIssuerOf(mixed $headers): void
+    {
+        foreach (is_array($headers) ? $headers : [] as $header) {
+            if (is_string($header) && 1 === preg_match('/^authorization: bearer [\w-]+\.([\w-]+)\.[\w-]+$/i', $header, $match)) {
+                $claims = json_decode((string) base64_decode(strtr($match[1], '-_', '+/'), true), true);
+                $this->issuers[] = is_array($claims) ? $claims['iss'] ?? null : null;
+            }
+        }
     }
 
     // Each request takes the given seconds on the clock and is cut off when its time limit is shorter, as a real transfer would be.
