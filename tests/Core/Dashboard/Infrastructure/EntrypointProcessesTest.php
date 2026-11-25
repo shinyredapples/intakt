@@ -184,6 +184,24 @@ final class EntrypointProcessesTest extends TestCase
         self::assertStringNotContainsString('started:', $this->entrypoint->getErrorOutput());
     }
 
+    public function testAnEntrypointATestLeftStoppedStillStopsEveryProcessWhenTheTestEnds(): void
+    {
+        $this->startEntrypoint();
+        $children = array_keys($this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]));
+        // Left stopped as a test that fails between its SIGSTOP and its SIGCONT leaves it.
+        $this->entrypoint->signal(self::STOP);
+
+        try {
+            $this->stopTheEntrypoint();
+
+            self::assertSame([], array_values(array_filter($children, $this->hasNotEnded(...))));
+        } finally {
+            foreach ($children as $pid) {
+                posix_kill($pid, self::KILL);
+            }
+        }
+    }
+
     protected function setUp(): void
     {
         // The entrypoint is started per test, not per class, because each test kills, stops or restarts its processes and so cannot share them.
@@ -204,13 +222,25 @@ final class EntrypointProcessesTest extends TestCase
 
     protected function tearDown(): void
     {
-        // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
-        $this->entrypoint->stop(15);
+        $this->stopTheEntrypoint();
         // Killed here because an entrypoint with the defect the forced-order test proves absent ends without stopping this child, which would otherwise outlive the test.
         foreach ($this->childrenStartedBeforeTheStop() as $pid) {
             posix_kill($pid, self::KILL);
         }
         new Filesystem()->remove($this->directory);
+    }
+
+    private function stopTheEntrypoint(): void
+    {
+        $pid = $this->entrypoint->getPid();
+
+        // Resumed first, because a test that failed while holding it stopped would leave it unable to act on SIGTERM, so the kill below would end it before it stops its children.
+        if (null !== $pid) {
+            posix_kill($pid, self::CONTINUE);
+        }
+
+        // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
+        $this->entrypoint->stop(15);
     }
 
     /**
