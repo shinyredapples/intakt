@@ -161,7 +161,7 @@ final class LocalForgeBranchesTest extends TestCase
             $branches->delete($listed);
             self::fail('The branch HEAD names was deleted.');
         } catch (ForgeWriteFailed) {
-            self::assertTrue(new Process(['git', 'show-ref', '--verify', '--quiet', 'refs/heads/intakt/feature'], $bare)->run() === 0);
+            self::assertTrue(0 === new Process(['git', 'show-ref', '--verify', '--quiet', 'refs/heads/intakt/feature'], $bare)->run());
         }
     }
 
@@ -282,7 +282,7 @@ final class LocalForgeBranchesTest extends TestCase
     {
         $this->repository->checkoutNewBranch('intakt/feature');
         $this->repository->commitFileAs('person@example.invalid', 'OTHER.md', "other\n");
-        $tip =$this->repository->commitFile('src/New.php', "<?php\n");
+        $tip = $this->repository->commitFile('src/New.php', "<?php\n");
         $listed = $this->branch('intakt/feature');
         $this->repository->cutHistoryBelow($tip);
 
@@ -443,7 +443,7 @@ final class LocalForgeBranchesTest extends TestCase
     }
 
     /**
-     * @param list<string> $injected
+     * @param list<string>     $injected
      * @param callable(): void $action
      */
     // A git first on the path that runs another git command right after each worktree listing, so the test forces the interleaving a concurrent checkout would need: after the checked-out check, before the delete.
