@@ -26,6 +26,7 @@ use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
@@ -37,6 +38,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PrePushResult;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
@@ -270,6 +272,8 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(TaskKind::class)]
 #[UsesClass(BugReport::class)]
+#[UsesClass(RegressionEvidence::class)]
+#[UsesClass(PrePushResult::class)]
 #[UsesClass(BugPart::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
@@ -992,6 +996,19 @@ final class BuildTaskTest extends TestCase
         self::assertContains(BuildStep::PrePushCheck, $outcome->passedSteps());
         self::assertNotSame(BuildStep::PrePushCheck, $outcome->last);
         self::assertNotNull($this->remoteTip());
+        self::assertSame("## Evidence\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed", $this->changes->text?->body);
+    }
+
+    public function testAFeatureHeadIsPushedWithItsBodyUnchanged(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'feature'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Push, $outcome->last);
+        self::assertSame('', $this->changes->text?->body);
     }
 
     public function testABugHeadWhoseTestPassesOnTheBaseEndsAtThePrePushCheckWithTheReasonAndPushesNothing(): void

@@ -15,18 +15,18 @@ A reviewer that failed for a reason that has nothing to do with it (the AI compa
 ```mermaid
 flowchart LR
   base[The base: the sample project as it was] --> change[A bench change on top,<br/>with its planted mistakes, or none]
-  change --> panel[The review panel:<br/>each reviewer reads the change on its own]
+  change --> panel[The Code reviewers:<br/>each reviewer reads the change on its own]
   panel --> judge[When they found something, the judge<br/>merges it into one list of what to fix]
   panel --> score[Intakt compares each reviewer's findings<br/>with the list of planted mistakes]
   judge --> report[The figures: caught, missed,<br/>false alarms, tokens and time]
   score --> report
 ```
 
-Each bench change is a pair: the **base**, the sample project before the change, and the **change** itself, the edit a pull request would bring. The review panel reads the change exactly as it would read a real pull request. The judge only sorts what the reviewers found; the score comes from comparing each reviewer's own findings with the planted mistakes, so every reviewer is measured on its own.
+Each bench change is a pair: the **base**, the sample project before the change, and the **change** itself, the edit a pull request would bring. The Code reviewers read the change exactly as they would read a real pull request. The judge only sorts what the reviewers found; the score comes from comparing each reviewer's own findings with the planted mistakes, so every reviewer is measured on its own.
 
 ## Both commands call your paid models
 
-Each review of a bench change is a real review by your project's review panel: every reviewer reads the change once, and the judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
+Each review of a bench change is a real review by your project's Code reviewers: every reviewer reads the change once, and their judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
 
 ## Two commands
 
@@ -37,13 +37,13 @@ Each review of a bench change is a real review by your project's review panel: e
 
 `intakt:bench:review` is the quick look: it names one change (for example `free-shipping`) and prints, for each reviewer, what it caught and missed, its false alarms, its tokens and time, and the judge's list of what to fix. It writes no file.
 
-`intakt:bench` is the full run. Add `--repeat=3` to review every change three times, each time from a fresh copy of the code, to see whether the answers vary: the same reviewer can catch a mistake once and miss it the next time. More repeats tell you more and cost more: on the demo panel of two reviewers, `--repeat=3` makes 24 rounds (eight changes, three times each), so 48 reviews by a reviewer and up to 24 calls of the judge.
+`intakt:bench` is the full run. Add `--repeat=3` to review every change three times, each time from a fresh copy of the code, to see whether the answers vary: the same reviewer can catch a mistake once and miss it the next time. More repeats tell you more and cost more: with the demo's two Code reviewers, `--repeat=3` makes 24 rounds (eight changes, three times each), so 48 reviews by a reviewer and up to 24 calls of the judge.
 
 ```mermaid
 flowchart TD
   s[You start intakt:bench] --> c[Take the next bench change]
   c --> f[Make a fresh copy of its code]
-  f --> r[The review panel reviews it:<br/>paid model calls]
+  f --> r[The Code reviewers review it:<br/>paid model calls]
   r --> k[Compare the findings with<br/>the planted mistakes]
   k --> d[Delete the copy]
   d -- more changes or repeats --> c
@@ -55,7 +55,7 @@ flowchart TD
 
 1. Start Intakt's workers, as for any review: `php bin/console messenger:consume async` (the container already runs them).
 2. Pick a change: each folder under `fixtures/sample-repository/bench/` is one, for example `free-shipping`.
-3. Run `php bin/console intakt:bench:review free-shipping --project=<project>`, with the project whose review panel you want to measure.
+3. Run `php bin/console intakt:bench:review free-shipping --project=<project>`, with the project whose Code reviewers you want to measure.
 4. Read what it prints for each reviewer: the planted mistakes it caught and missed, its false alarms, its tokens and time, and then the judge's list of what to fix.
 
 ## A miss or a harness failure?
