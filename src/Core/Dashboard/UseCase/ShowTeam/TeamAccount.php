@@ -14,7 +14,7 @@ final readonly class TeamAccount
     public function __construct(
         public Account $account,
         public AccountState $state,
-        public array $roles = [],
+        public array $roles,
     ) {
     }
 }

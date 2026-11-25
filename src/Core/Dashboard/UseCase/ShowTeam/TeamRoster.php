@@ -72,20 +72,52 @@ final readonly class TeamRoster
         return $roles;
     }
 
-    // The default tier and the strong tier, because a sensitive path, a confirmed escalation or a setback all route to the strong one and the routing keeps its rules to itself; a project the routing or the tiers cannot answer for adds no role, because the build refuses it too.
+    // Each tier resolved on its own, because one unmapped tier fails only the builds routed to it, never the builds of the project's other tiers; a project the routing cannot answer for adds no role, because the build refuses it too.
     /**
      * @return list<Provider>
      */
     private function developerProvidersOf(string $project): array
     {
         try {
-            $plain = $this->routing->tierFor($project, new BuildFacts(null, new Paths()))->tier;
-            $escalated = $this->routing->tierFor($project, new BuildFacts(null, new Paths(), null, EscalationOutcome::Confirmed))->tier;
-
-            return array_map(fn (Tier $tier): Provider => $this->tiers->configured($project, $tier)->provider, [$plain, $escalated]);
-        } catch (BuildRoutingNotConfigured|TierResolutionFailure) {
+            $tiers = $this->reachableTiersOf($project);
+        } catch (BuildRoutingNotConfigured) {
             return [];
         }
+
+        $providers = [];
+
+        foreach ($tiers as $tier) {
+            try {
+                $providers[] = $this->tiers->configured($project, $tier)->provider;
+            } catch (TierResolutionFailure) {
+                continue;
+            }
+        }
+
+        return $providers;
+    }
+
+    // The routing keeps its rules to itself, so it is asked for the default, for a confirmed escalation (where a sensitive path and a setback route too) and for each tier a label can name.
+    /**
+     * @return array<string, Tier>
+     *
+     * @throws BuildRoutingNotConfigured
+     */
+    private function reachableTiersOf(string $project): array
+    {
+        $facts = [
+            new BuildFacts(null, new Paths()),
+            new BuildFacts(null, new Paths(), null, EscalationOutcome::Confirmed),
+            ...array_map(static fn (Tier $labelled): BuildFacts => new BuildFacts($labelled, new Paths()), Tier::cases()),
+        ];
+        $tiers = [];
+
+        foreach ($facts as $fact) {
+            $tier = $this->routing->tierFor($project, $fact)->tier;
+            $tiers[$tier->value] = $tier;
+        }
+
+        return $tiers;
     }
 
     // Only the Claude Code CLI, because the build job runs its builder through that CLI alone, as ChooseBuildModel refuses any other provider.

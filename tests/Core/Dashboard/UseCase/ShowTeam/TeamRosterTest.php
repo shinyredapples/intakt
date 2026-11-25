@@ -15,10 +15,11 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildFacts;
-use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\TierChoice;
-use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Domain\ModelRouting;
+use Intakt\Core\Build\Domain\RoutingRules;
+use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\AccountState;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\Team;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamAccount;
@@ -26,9 +27,9 @@ use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRole;
 use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRoster;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
-use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
+use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -55,6 +56,11 @@ use ReflectionProperty;
 #[UsesClass(ReviewerRole::class)]
 #[UsesClass(ReviewerModel::class)]
 #[UsesClass(ProjectNames::class)]
+#[UsesClass(ConfiguredBuildRouting::class)]
+#[UsesClass(ModelRouting::class)]
+#[UsesClass(RoutingRules::class)]
+#[UsesClass(PathGlob::class)]
+#[UsesClass(BuildRoutingNotConfigured::class)]
 final class TeamRosterTest extends TestCase
 {
     public function testAnAccountIsListedOnceInTheOnePoolView(): void
@@ -132,12 +138,26 @@ final class TeamRosterTest extends TestCase
         self::assertSame(['Developer'], $this->roleNames($team->accounts[0]));
     }
 
-    public function testASensitivePathRoutedToAnotherVendorMakesThatVendorADeveloperToo(): void
+    public function testASensitivePathRoutedToTheStrongTierOnAnotherVendorMakesThatVendorADeveloperToo(): void
     {
-        $team = $this->teamOf(new GivenInstall()->accounts(Provider::ClaudeCode, 'default')->accounts(Provider::Anthropic, 'default')->project('alpha', Provider::ClaudeCode, Provider::Anthropic));
+        $team = $this->teamOf(new GivenInstall()->accounts(Provider::ClaudeCode, 'default')->accounts(Provider::Anthropic, 'default')->project('alpha', Provider::ClaudeCode, Provider::Anthropic)->sensitivePaths('alpha', 'config/**'));
 
         self::assertSame(['Developer'], $this->roleNames($team->accounts[0]));
         self::assertSame(['Developer'], $this->roleNames($team->accounts[1]));
+    }
+
+    public function testAProviderATierLabelRoutesToIsADeveloper(): void
+    {
+        $team = $this->teamOf(new GivenInstall()->accounts(Provider::OpenAi, 'default')->project('alpha', Provider::ClaudeCode)->tier('alpha', Tier::Light, Provider::OpenAi));
+
+        self::assertSame(['Developer'], $this->roleNames($team->accounts[0]));
+    }
+
+    public function testAnUnmappedStrongTierKeepsTheDefaultTiersDeveloper(): void
+    {
+        $team = $this->teamOf(new GivenInstall()->accounts(Provider::Anthropic, 'default')->project('alpha', Provider::Anthropic)->unmapped('alpha', Tier::Strong));
+
+        self::assertSame(['Developer'], $this->roleNames($team->accounts[0]));
     }
 
     public function testARoutedProviderTheBuildRuntimeCannotRunIsMarked(): void
@@ -194,7 +214,7 @@ final class TeamRosterTest extends TestCase
 
     public function testAProjectWhoseTierCannotBeResolvedAddsNoRole(): void
     {
-        $team = $this->teamOf(new GivenInstall()->accounts(Provider::ClaudeCode, 'default')->project('alpha', Provider::ClaudeCode)->unresolvable('alpha'));
+        $team = $this->teamOf(new GivenInstall()->accounts(Provider::ClaudeCode, 'default')->project('alpha', Provider::ClaudeCode)->unmapped('alpha', ...Tier::cases()));
 
         self::assertSame([], $team->accounts[0]->roles);
     }
@@ -217,24 +237,14 @@ final class TeamRosterTest extends TestCase
         $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->coolingDown, true));
         $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->rejected, true));
 
-        return new TeamRoster($listed, $credentials, $cooldowns, $this->routing($install), $this->tiers($install), $this->panels($install))->now();
-    }
-
-    private function routing(GivenInstall $install): BuildRouting
-    {
-        $routing = self::createStub(BuildRouting::class);
-        $routing->method('tierFor')->willReturnCallback(static fn (string $project, BuildFacts $facts): TierChoice => in_array($project, $install->unrouted, true)
-            ? throw new BuildRoutingNotConfigured($project) : (EscalationOutcome::Confirmed === $facts->escalation ? new TierChoice(Tier::Strong, TierReason::ConfirmedEscalation) : new TierChoice(Tier::Standard, TierReason::Default)));
-
-        return $routing;
+        return new TeamRoster($listed, $credentials, $cooldowns, new ConfiguredBuildRouting($install->routing, new ModelRouting()), $this->tiers($install), $this->panels($install))->now();
     }
 
     private function tiers(GivenInstall $install): TierResolver
     {
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(new ProjectNames(...array_keys($install->developers)));
-        $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => in_array($project, $install->unresolvable, true)
-            ? throw new TierNotMapped($project, $tier) : new ResolvedModel($install->developers[$project][Tier::Strong === $tier ? 'strong' : 'default'], 'model'));
+        $tiers->method('projects')->willReturn(new ProjectNames(...array_keys($install->tiers)));
+        $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel($install->tiers[$project][$tier->value] ?? throw new TierNotMapped($project, $tier), 'model'));
 
         return $tiers;
     }
