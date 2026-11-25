@@ -176,6 +176,12 @@ final readonly class ReviewRounds
         return $rounds;
     }
 
+    // Under the round's row lock, because a stale mark or a judging delivered again writes the same row meanwhile.
+    public function recordPublication(ReviewRound $round): void
+    {
+        $this->withLockedRound($round->id(), fn (ReviewRound $locked) => $locked->recordPublication($this->clock->now()));
+    }
+
     /**
      * @param Closure(ReviewRound): mixed $work
      */

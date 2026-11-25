@@ -90,8 +90,15 @@ final readonly class PublishVerdictHandler
         }
     }
 
+    // Recorded only after a write the forge took, so a round whose publication was refused, skipped or is still queued stays in review.
     private function publish(ReviewRound $round, PublishedVerdict $verdict): bool
     {
-        return $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $verdict);
+        $published = $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $verdict);
+
+        if ($published) {
+            $this->rounds->recordPublication($round);
+        }
+
+        return $published;
     }
 }
