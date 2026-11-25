@@ -1,0 +1,32 @@
+ok   open /setup?step=1: "Connect your repository"
+ok   search button: reached with Tab x7 (button "Search tasks, pull requests, settings… C"), focus ring shown
+ok   search dialog: Enter opens it (true), Esc closes it (true), focus back on "Search tasks, pull requests, settings… C"
+ok   step 1 address field: reached with Tab x8 (input "repo"), focus ring shown
+ok   step 1 Check the address: reached with Tab x1 (button "Check the address"), focus ring shown
+ok   submit the wrong address: Space -> step 1, "Connect your repository"
+ok   error shown: "This is not a repository address: use https://github.com/owner/name or owner/name.", aria-invalid=true
+ok   step 1 address field again: reached with Tab x15 (input "not an address"), focus ring shown
+ok   submit the fixed address: Enter -> step 1, "Connect your repository"
+ok   fixed: "GitHub, repository acme/widgets", no error (true)
+ok   step 1 Continue: reached with Tab x17 (a "Continue"), focus ring shown
+ok   step 1 forward: Enter -> step 2, "Create Intakt's GitHub App"
+ok   step 2 Continue: reached with Tab x16 (a "Continue"), focus ring shown
+ok   step 2 forward: Enter -> step 3, "Add an AI account"
+ok   step 3 Continue: reached with Tab x16 (a "Continue"), focus ring shown
+ok   step 3 forward: Enter -> step 4, "Check the project"
+ok   step 4 Continue: reached with Tab x17 (a "Continue"), focus ring shown
+ok   step 4 forward: Enter -> step 5, "Ready to start"
+ok   step 5 Back: reached with Tab x16 (a "Back"), focus ring shown
+ok   step 5 back: Enter -> step 4, "Check the project"
+ok   step 4 Back: reached with Tab x15 (a "Back"), focus ring shown
+ok   step 4 back: Enter -> step 3, "Add an AI account"
+ok   step 3 Back: reached with Tab x15 (a "Back"), focus ring shown
+ok   step 3 back: Enter -> step 2, "Create Intakt's GitHub App"
+ok   step 2 Back: reached with Tab x15 (a "Back"), focus ring shown
+ok   step 2 back: Enter -> step 1, "Connect your repository"
+ok   step marker 5: reached with Tab x14 (a "5 Done"), focus ring shown
+ok   jump to the last step: Enter -> step 5, "Ready to start"
+ok   step 5 finishing action: reached with Tab x15 (a "Open the review"), focus ring shown
+ok   finish with "Open the review": Enter -> step 1, "Review of sample-change in sample"
+ok   finished on /reviews/round-1
+keyboard walk-through: no failures
