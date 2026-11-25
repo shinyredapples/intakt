@@ -8,6 +8,7 @@ use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PrePushResult;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\CheckJob;
@@ -33,6 +34,7 @@ use Throwable;
 
 #[CoversClass(PrePushCheck::class)]
 #[UsesClass(HandBackFile::class)]
+#[UsesClass(PrePushResult::class)]
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(CheckJobOutcome::class)]
@@ -50,7 +52,7 @@ final class PrePushCheckTest extends TestCase
 
     public function testARefusedBranchBecomesTheFailureText(): void
     {
-        $failure = $this->checkThrowing(HandBackBranchRefused::isMain('main'))->failureOf($this->request(), 'BUNDLE', TaskKind::Task);
+        $failure = $this->checkThrowing(HandBackBranchRefused::isMain('main'))->resultOf($this->request(), 'BUNDLE', TaskKind::Task)->failure;
 
         self::assertSame('the task\'s branch "main" is main itself', $failure);
     }
@@ -59,7 +61,7 @@ final class PrePushCheckTest extends TestCase
     {
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the check job'));
 
-        $this->checkThrowing(new InvalidArgumentException('a bug in the check job'))->failureOf($this->request(), 'BUNDLE', TaskKind::Task);
+        $this->checkThrowing(new InvalidArgumentException('a bug in the check job'))->resultOf($this->request(), 'BUNDLE', TaskKind::Task)->failure;
     }
 
     public function testATaskThatIsNotABugRunsNoRegressionTests(): void
@@ -67,7 +69,7 @@ final class PrePushCheckTest extends TestCase
         $regressionTests = $this->createMock(RegressionTests::class);
         $regressionTests->expects(self::never())->method('run');
 
-        $failure = $this->passingCheck($regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Task);
+        $failure = $this->passingCheck($regressionTests, new NullLogger())->resultOf($this->request(), 'BUNDLE', TaskKind::Task)->failure;
 
         self::assertNull($failure);
     }
@@ -82,9 +84,27 @@ final class PrePushCheckTest extends TestCase
             ['project' => 'alpha', 'tests' => ['tests/FooTest.php'], 'base' => 'failed', 'head' => 'passed'],
         );
 
-        $failure = $this->passingCheck($regressionTests, $logger)->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+        $failure = $this->passingCheck($regressionTests, $logger)->resultOf($this->request(), 'BUNDLE', TaskKind::Bug)->failure;
 
         self::assertNull($failure);
+    }
+
+    public function testABugHeadWhoseTestProvesTheFixHandsBackItsRegressionRuns(): void
+    {
+        $runs = new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed);
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn($runs);
+
+        $result = $this->passingCheck($regressionTests, new NullLogger())->resultOf($this->request(), 'BUNDLE', TaskKind::Bug);
+
+        self::assertSame($runs, $result->runs);
+    }
+
+    public function testATaskThatIsNotABugHandsBackNoRuns(): void
+    {
+        $result = $this->passingCheck(self::createStub(RegressionTests::class), new NullLogger())->resultOf($this->request(), 'BUNDLE', TaskKind::Task);
+
+        self::assertNull($result->runs);
     }
 
     public function testABugHeadWhoseNewTestAlsoPassesOnTheBaseFailsThePrePushCheckWithTheReason(): void
@@ -92,7 +112,7 @@ final class PrePushCheckTest extends TestCase
         $regressionTests = self::createStub(RegressionTests::class);
         $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Passed, RegressionRun::Passed));
 
-        $failure = $this->passingCheck($regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+        $failure = $this->passingCheck($regressionTests, new NullLogger())->resultOf($this->request(), 'BUNDLE', TaskKind::Bug)->failure;
 
         self::assertSame('the new test of a bug also passes on the base, so it proves nothing', $failure);
     }
@@ -102,7 +122,7 @@ final class PrePushCheckTest extends TestCase
         $regressionTests = self::createStub(RegressionTests::class);
         $regressionTests->method('run')->willReturn(RegressionRuns::noTest());
 
-        $failure = $this->passingCheck($regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+        $failure = $this->passingCheck($regressionTests, new NullLogger())->resultOf($this->request(), 'BUNDLE', TaskKind::Bug)->failure;
 
         self::assertSame('the head of a bug adds no regression test', $failure);
     }
@@ -112,7 +132,7 @@ final class PrePushCheckTest extends TestCase
         $regressionTests = self::createStub(RegressionTests::class);
         $regressionTests->method('run')->willReturn(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Errored, RegressionRun::Passed));
 
-        $failure = $this->passingCheck($regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+        $failure = $this->passingCheck($regressionTests, new NullLogger())->resultOf($this->request(), 'BUNDLE', TaskKind::Bug)->failure;
 
         self::assertNull($failure);
     }
@@ -124,7 +144,7 @@ final class PrePushCheckTest extends TestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects(self::once())->method('warning');
 
-        $failure = $this->passingCheck($regressionTests, $logger)->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+        $failure = $this->passingCheck($regressionTests, $logger)->resultOf($this->request(), 'BUNDLE', TaskKind::Bug)->failure;
 
         self::assertNull($failure);
     }
@@ -136,7 +156,7 @@ final class PrePushCheckTest extends TestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects(self::once())->method('warning');
 
-        $failure = $this->passingCheck($regressionTests, $logger)->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+        $failure = $this->passingCheck($regressionTests, $logger)->resultOf($this->request(), 'BUNDLE', TaskKind::Bug)->failure;
 
         self::assertNull($failure);
     }
@@ -150,7 +170,7 @@ final class PrePushCheckTest extends TestCase
         $checkout = self::createStub(BuildCheckout::class);
         $checkout->method('mirrorOf')->willReturn($this->folder.'/mirror');
 
-        $failure = new PrePushCheck($jobs, new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs'), $regressionTests, new NullLogger())->failureOf($this->request(), 'BUNDLE', TaskKind::Bug);
+        $failure = new PrePushCheck($jobs, new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs'), $regressionTests, new NullLogger())->resultOf($this->request(), 'BUNDLE', TaskKind::Bug)->failure;
 
         self::assertSame('the check command failed (exit code 1)', $failure);
     }
