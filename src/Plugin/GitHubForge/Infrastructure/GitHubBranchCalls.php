@@ -33,7 +33,7 @@ final readonly class GitHubBranchCalls
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      *
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
@@ -109,14 +109,6 @@ final readonly class GitHubBranchCalls
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    private function objectOf(mixed $data): array
-    {
-        return is_array($data) && !array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered something other than an object with fields where one was expected.');
-    }
-
-    /**
      * @param array<string, string> $query
      *
      * @return array{body: string, links: list<string>}
@@ -176,6 +168,22 @@ final readonly class GitHubBranchCalls
         };
     }
 
+    /**
+     * @return array<mixed>
+     */
+    private function objectOf(mixed $data): array
+    {
+        return is_array($data) && !array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered something other than an object with fields where one was expected.');
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function listOf(mixed $data): array
+    {
+        return is_array($data) && array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered something other than a list where one was expected.');
+    }
+
     // Every page up to the cap, because a pull request on a later page may be the open or kept one; the page number is counted here, so a `next` link can only say whether to go on.
     /**
      * @param array<string, string> $query
@@ -197,15 +205,7 @@ final readonly class GitHubBranchCalls
         throw new ForgeReadFailed(sprintf('GitHub lists more than %d pages, more than this forge reads.', self::MAX_PAGES));
     }
 
-    /**
-     * @return list<mixed>
-     */
-    private function listOf(mixed $data): array
-    {
-        return is_array($data) && array_is_list($data) ? $data : throw new ForgeReadFailed('GitHub answered something other than a list where one was expected.');
-    }
-
-    // Not chained to the client's exception, for the same reason as a failed read.
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
     private function unsent(string $failure): ForgeWriteFailed
     {
         return new ForgeWriteFailed(sprintf('GitHub could not be reached (%s).', $failure));

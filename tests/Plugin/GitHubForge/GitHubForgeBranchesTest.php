@@ -135,7 +135,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testTheMergedPullRequestOfTheBranchsHeadIsItsChange(): void
     {
-        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', '"2026-11-20T10:00:00Z"', self::HEAD);
+        $this->answers['GET '.$this->pulls(1)] = $this->pull('merged', self::HEAD);
 
         self::assertEquals(new BranchChange(BranchChangeState::Merged), $this->forge()->changeOf($this->branch()));
         self::assertSame(['GET '.$this->pulls(1)], $this->requests);
@@ -143,32 +143,32 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testAClosedUnmergedPullRequestCarriesItsLabels(): void
     {
-        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', 'null', self::HEAD, 'keep');
+        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', self::HEAD, 'keep');
 
         self::assertEquals(new BranchChange(BranchChangeState::ClosedUnmerged, 'keep'), $this->forge()->changeOf($this->branch()));
     }
 
     public function testAnOpenPullRequestOnTheSecondPageWinsOverANewerClosedOne(): void
     {
-        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', 'null', self::HEAD);
+        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', self::HEAD);
         $this->links['GET '.$this->pulls(1)] = '<'.self::REPOSITORY.'/pulls?page=2>; rel="next"';
-        $this->answers['GET '.$this->pulls(2)] = $this->pull('open', 'null', self::HEAD);
+        $this->answers['GET '.$this->pulls(2)] = $this->pull('open', self::HEAD);
 
         self::assertSame(BranchChangeState::Open, $this->forge()->changeOf($this->branch())?->state);
     }
 
     public function testAKeepLabelOnAPullRequestOnTheSecondPageIsCarried(): void
     {
-        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', '"2026-11-20T10:00:00Z"', self::HEAD);
+        $this->answers['GET '.$this->pulls(1)] = $this->pull('merged', self::HEAD);
         $this->links['GET '.$this->pulls(1)] = '<'.self::REPOSITORY.'/pulls?page=2>; rel="next"';
-        $this->answers['GET '.$this->pulls(2)] = $this->pull('closed', 'null', self::OLDER, 'keep');
+        $this->answers['GET '.$this->pulls(2)] = $this->pull('closed', self::OLDER, 'keep');
 
         self::assertEquals(new BranchChange(BranchChangeState::Merged, 'keep'), $this->forge()->changeOf($this->branch()));
     }
 
     public function testAPullRequestClosedBeforeTheBranchsHeadIsNoChangeOfIt(): void
     {
-        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', '"2026-11-20T10:00:00Z"', self::OLDER);
+        $this->answers['GET '.$this->pulls(1)] = $this->pull('merged', self::OLDER);
 
         self::assertNull($this->forge()->changeOf($this->branch()));
     }
@@ -198,10 +198,12 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->links['GET '.$this->pulls(1)] = '<'.self::REPOSITORY.'/pulls?page=2>; rel="next"';
         $this->answers['GET '.$this->pulls(2)] = 'not json';
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('GitHub answered something other than JSON.');
-
-        $this->forge()->changeOf($this->branch());
+        try {
+            $this->forge()->changeOf($this->branch());
+            self::fail('A failed second page read as no pull request.');
+        } catch (ForgeReadFailed $failed) {
+            self::assertSame('GitHub answered something other than JSON.', $failed->getMessage());
+        }
     }
 
     public function testAPullRequestWithoutItsLabelsFailsTheRead(): void
@@ -233,7 +235,7 @@ final class GitHubForgeBranchesTest extends TestCase
 
     public function testAPullRequestWithAMalformedHeadFailsTheRead(): void
     {
-        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', 'null', 'not-a-commit');
+        $this->answers['GET '.$this->pulls(1)] = $this->pull('closed', 'not-a-commit');
 
         $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a commit that is not a commit id.'));
 
@@ -468,9 +470,12 @@ final class GitHubForgeBranchesTest extends TestCase
         return self::REPOSITORY.'/pulls?state=all&head=acme:intakt/7-old&sort=created&direction=desc&per_page=100&page='.$page;
     }
 
-    private function pull(string $state, string $mergedAt, string $head, string ...$labels): string
+    // A `merged` state is scripted as closed with a merge moment, because GitHub has no such state.
+    private function pull(string $state, string $head, string ...$labels): string
     {
-        return sprintf('[{"state":"%s","merged_at":%s,"labels":%s,"head":{"sha":"%s"}}]', $state, $mergedAt, json_encode(array_map(static fn (string $label): array => ['name' => $label], $labels)), $head);
+        $mergedAt = 'merged' === $state ? '"2026-11-20T10:00:00Z"' : 'null';
+
+        return sprintf('[{"state":"%s","merged_at":%s,"labels":%s,"head":{"sha":"%s"}}]', 'open' === $state ? 'open' : 'closed', $mergedAt, json_encode(array_map(static fn (string $label): array => ['name' => $label], $labels)), $head);
     }
 
     private function branch(): ForgeBranch
@@ -489,14 +494,14 @@ final class GitHubForgeBranchesTest extends TestCase
         return self::REPOSITORY.'/compare/'.self::BASE.'...'.self::HEAD.'?per_page=100&page='.$page;
     }
 
-    private function comparison(int $total, string ...$commits): string
-    {
-        return sprintf('{"total_commits":%d,"commits":[%s]}', $total, implode(',', $commits));
-    }
-
     private function commit(string $author, string $committer): string
     {
         return sprintf('{"commit":{"author":{"email":"%s"},"committer":{"email":"%s"}}}', $author, $committer);
+    }
+
+    private function comparison(int $total, string ...$commits): string
+    {
+        return sprintf('{"total_commits":%d,"commits":[%s]}', $total, implode(',', $commits));
     }
 
     private function current(string $name, string $head, string $protected): string

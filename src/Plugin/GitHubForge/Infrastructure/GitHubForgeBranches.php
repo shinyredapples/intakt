@@ -80,7 +80,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         $data = is_array($branch) ? $branch : throw new ForgeReadFailed('GitHub listed a branch that is not an object.');
         $name = $this->calls->text($data, 'name');
 
-        // GitHub has no symbolic branches, and a release branch is told by its name (`ForgeBranch::isRelease()`).
+        // Never symbolic, because GitHub lists no branch that names another.
         return new ForgeBranch($name, $this->headOf($data), $name === $default, $this->protectedOf($data), false);
     }
 
