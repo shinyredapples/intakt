@@ -97,7 +97,12 @@ final class ShowTeamControllerTest extends DashboardPageTestCase
 
     public function testEachStateShowsInWordsWithItsDot(): void
     {
-        $this->givenAccounts([Provider::Codex->value => ['ready', 'cooling', 'rejected', 'nokey']], withoutKey: 'codex.nokey', coolingDown: 'codex.cooling', rejected: 'codex.rejected');
+        $this->givenAccounts(
+            [Provider::Codex->value => ['ready', 'cooling', 'rejected', 'nokey']],
+            withoutKey: 'codex.nokey',
+            coolingDown: 'codex.cooling',
+            rejected: 'codex.rejected',
+        );
 
         $chips = $this->browser->request('GET', '/team')->filter('.acct .chip');
 
