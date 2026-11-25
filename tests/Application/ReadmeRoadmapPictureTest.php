@@ -109,10 +109,30 @@ final class ReadmeRoadmapPictureTest extends TestCase
         foreach (['light', 'dark'] as $theme) {
             $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
 
-            self::assertStringContainsString('Reviewer for the loop', $svg);
+            self::assertStringContainsString('<tspan class="id">M6</tspan> Reviewer</text>', $svg);
+            self::assertStringContainsString('>for the loop</text>', $svg);
             self::assertStringContainsString('reviews the build', $svg);
             self::assertStringNotContainsString('Runs alongside', $svg);
             self::assertStringNotContainsString('beside the build loop', $svg);
+        }
+    }
+
+    // Each row's label sits 6 units below its circle's center, so a shared center line ties a label to its circle.
+    public function testBothRoadmapImagesPutTheMarkerOnM6AndM5InTheDoneColumn(): void
+    {
+        foreach (['light', 'dark'] as $theme) {
+            $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
+
+            self::assertSame(1, preg_match('/<circle cx="(\d+)" cy="(\d+)" r="15"[^>]*stroke="#F2A541"/', $svg, $marker));
+            self::assertSame(1, preg_match('/<text x="(\d+)" y="(\d+)"><tspan class="id">M6<\/tspan>/', $svg, $m6));
+            self::assertSame((int) $m6[2], (int) $marker[2] + 6);
+            self::assertLessThan((int) $m6[1], (int) $marker[1]);
+
+            self::assertSame(1, preg_match('/<text x="(\d+)" y="(\d+)"><tspan class="id">M0<\/tspan>/', $svg, $m0));
+            self::assertSame(1, preg_match('/<text x="(\d+)" y="(\d+)"><tspan class="id">M5<\/tspan> Demo<\/text>/', $svg, $m5));
+            self::assertSame($m0[1], $m5[1]);
+            self::assertSame(1, preg_match('/<circle cx="(\d+)" cy="'.((int) $m0[2] - 6).'" r="8" fill="(#[0-9A-F]{6})"\/>/', $svg, $m0Circle));
+            self::assertStringContainsString('<circle cx="'.$m0Circle[1].'" cy="'.((int) $m5[2] - 6).'" r="8" fill="'.$m0Circle[2].'"/>', $svg);
         }
     }
 
