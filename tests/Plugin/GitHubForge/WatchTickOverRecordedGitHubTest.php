@@ -127,7 +127,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $stored = $this->entities->getRepository(StartedRound::class)->findOneBy(['change' => self::GREEN_PULL]);
         self::assertInstanceOf(StartedRound::class, $stored);
         self::assertSame(
-            [['review:full', 'model:strong'], ['review:full', 'model:strong'], ['review:full', 'model:strong', 'model:standard'], ['Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`.']],
+            [['review:full', 'model:strong'], ['review:full', 'model:strong'], ['review:full', 'model:strong', 'model:standard'], ['Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`. If you applied one of them again just now, apply it once more: the value applied last counts.']],
             [[...$commands->started[0]->start->labels], [...$stored->labels()], $pull->labels, $pull->comments],
         );
     }

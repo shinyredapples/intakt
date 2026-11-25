@@ -45,7 +45,7 @@ final readonly class GitHubChangeLabels implements ChangeLabels
         }
     }
 
-    // Read again just before the removal, because GitHub removes a label by name only and the read fails once the pull request changed after its listing, so a value reapplied since the first read stays.
+    // Read again just before the removal, because GitHub removes a label by name only and the read fails once the pull request changed after its listing, so a value reapplied since the first read stays; one reapplied after this read is removed, and the comment says how to apply it again.
     /**
      * @param list<string> $outvoted
      */

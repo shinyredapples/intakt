@@ -80,7 +80,8 @@ final class GitHubChangeLabelsTest extends TestCase
 
         self::assertSame(['model:strong'], [...$labels]);
         self::assertSame(['DELETE /repos/acme/widget/issues/7/labels/model%3Alight'], $this->writes);
-        self::assertSame(['Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`.'], $this->comments);
+        self::assertCount(1, $this->comments);
+        self::assertStringStartsWith('Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`.', $this->comments[0]);
     }
 
     public function testOneValuePerFamilyRemovesNothing(): void
@@ -126,6 +127,15 @@ final class GitHubChangeLabelsTest extends TestCase
         self::assertSame(['model:strong'], [...$labels]);
         self::assertSame([], $this->writes);
         self::assertSame([], $this->comments);
+    }
+
+    // GitHub removes a label by name only, so a value a writer applies again in the instant between the second read and the removal is removed too; the comment is what lets them take it back.
+    public function testTheRemovalCommentTellsAWriterWhoJustAppliedTheValueAgainToApplyItOnceMore(): void
+    {
+        $this->labelsOver($this->history('model:light', 'model:strong'), new NullLogger())->steeringOf('alpha', $this->open());
+
+        self::assertSame(['DELETE /repos/acme/widget/issues/7/labels/model%3Alight'], $this->writes);
+        self::assertSame(['Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`. If you applied one of them again just now, apply it once more: the value applied last counts.'], $this->comments);
     }
 
     public function testAChangeIdThatIsNoPullRequestAddressSteersNothing(): void
