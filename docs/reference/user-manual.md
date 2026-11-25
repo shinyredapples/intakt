@@ -209,6 +209,14 @@ The board shows the same reading in a row under its columns, read once each time
 unhealthy: the hub reports unhealthy
 ```
 
+`php bin/console intakt:doctor` runs the same checks for a person at the terminal (in the compose stack: `docker compose exec intakt php bin/console intakt:doctor`). It prints one line per check, `worker threads`, `server metrics` and `Mercure hub`: `pass: <check>`, or `fail: <check>: <problem>; fix: <what to do>`, with any line break or other control character in the text turned into a space. It exits with 0 only when every check passes. It changes nothing and calls no model. A refused `FRANKENPHP_ADMIN_URL` fails every check as `cannot run`, without a request. For example:
+
+```
+pass: worker threads
+pass: server metrics
+fail: Mercure hub: the hub reports unhealthy; fix: check the FrankenPHP log for the Mercure hub's error, for example a transport file under MERCURE_BOLT_PATH it cannot write
+```
+
 The Caddyfile turns on Caddy's `metrics` option, because FrankenPHP reports its queue depth and worker restarts only then.
 
 ## Background work
@@ -332,7 +340,7 @@ With any other argument beside it, `bin/check` runs no gate: it prints an `error
 
 ## When `bin/check` reports a missing tool
 
-Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. A Composer older than 2.11 is reported the same way, naming the version found, because it would ignore a release cooldown set in `composer.json`. It also needs PHP's `pcntl` and `posix` extensions, so that a Ctrl-C reaches the gates' processes; a missing one is named the same way (`PHP extension pcntl not found, ...`). Install the program or the extension (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
+Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. A Composer older than 2.11 is reported the same way, naming the version found, because it would ignore a release cooldown set in `composer.json`. It also needs PHP's `pcntl` and `posix` extensions, so that a Ctrl-C reaches the gates' processes; a missing one is named the same way (`PHP extension pcntl not found, ...`). The same message appears when a PHP function they need is disabled (`disable_functions`), and PHP must be able to read the process table under `/proc` (not shut out by `open_basedir`), else each gate fails with `cannot run ...: the stop cannot read /proc/<pid>/stat`. Install the program or the extension (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
 
 The `workflows` gate is the exception: it needs zizmor (the [requirements](../architecture/requirements.md) name the version), and without it only that gate fails, with `missing tool zizmor` in its own result line; `--skip=workflows` leaves it out.
 

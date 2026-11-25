@@ -103,13 +103,14 @@ final class TestsGateParallelTest extends SandboxTestCase
         putenv(TestWorkerCount::VARIABLE.'=2');
 
         try {
-            $result = new TestsGate(fileTimeoutSeconds: 2)->run(new Workspace($sandbox->root, dirname(__DIR__, 2), Mode::Full, null));
+            // Short enough to keep the test fast, since PHPUnit boots in about a tenth of it; a slower boot would fail the last-output assertion, not pass unnoticed.
+            $result = new TestsGate(fileTimeoutSeconds: 0.5)->run(new Workspace($sandbox->root, dirname(__DIR__, 2), Mode::Full, null));
         } finally {
             putenv(false === $workers ? TestWorkerCount::VARIABLE : TestWorkerCount::VARIABLE.'='.$workers);
         }
 
         self::assertFalse($result->isPassing());
-        self::assertContains('sqlite tests/HangingTest.php: phpunit exited with code 124: timed out after 2 seconds, last output: waiting for the server', $result->findings);
+        self::assertContains('sqlite tests/HangingTest.php: phpunit exited with code 124: timed out after 0.5 seconds, last output: waiting for the server', $result->findings);
     }
 
     public function testTwoFilesRunAtTheSameTimeInWorkersOfTheirOwn(): void
