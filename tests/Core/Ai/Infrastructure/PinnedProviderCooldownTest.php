@@ -317,6 +317,72 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertInstanceOf(RuntimeException::class, $out);
     }
 
+    // Forced order: the call is pinned and neither store saves a window, so nothing ended and no account freed up; the typed wait is the 120 seconds the provider named, not a second, and a caller that waits it out sends one request per wait.
+    public function testAPinnedLimitWhoseWindowsAreNotSavedGivesATypedWaitOfTheResetTheProviderNamed(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return false;
+            }
+        };
+        $requests = 0;
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $limited = $this->answering(static function () use (&$requests): never {
+            ++$requests;
+
+            throw new RateLimitExceededException(120);
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame([1, 120], [$requests, $out->secondsUntilAnAccountIsFree]);
+    }
+
+    // Forced order: two pinned accounts fail with limits of 300 and 45 seconds and no window is saved, so the wait is the shorter one, after which an account can take the retry.
+    public function testPinnedLimitsWhoseWindowsAreNotSavedWaitForTheShortestResetNamed(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return false;
+            }
+        };
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $first = $this->answering(static fn (): never => throw new RateLimitExceededException(300));
+        $second = $this->answering(static fn (): never => throw new RateLimitExceededException(45));
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame(45, $out->secondsUntilAnAccountIsFree);
+    }
+
+    // Forced order: a pinned 429 without a reset and no window saved, so the wait is the default minute the pin would have cooled for.
+    public function testAPinnedLimitWithoutAResetWhoseWindowsAreNotSavedWaitsTheDefaultMinute(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return false;
+            }
+        };
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $limited = $this->answering(static fn (): never => throw new RateLimitExceededException());
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame(AccountCooldowns::SECONDS_WITHOUT_RESET, $out->secondsUntilAnAccountIsFree);
+    }
+
     public function testAZeroResetCoolsThePinForASecondLikeARetryAfterHeaderOfZero(): void
     {
         $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException(0)), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();

@@ -32,6 +32,11 @@ final class SendFailures
     private array $unreachable = [];
 
     /**
+     * @var array<string, int>
+     */
+    private array $limitedSeconds = [];
+
+    /**
      * @var WeakMap<Throwable, array<string, true>>
      */
     private WeakMap $seen;
@@ -78,6 +83,18 @@ final class SendFailures
     public function isEveryTriedLimited(): bool
     {
         return array_all(array_keys($this->tried), fn ($key) => is_a($this->failures[$key] ?? '', RateLimitExceededException::class, true));
+    }
+
+    // A number only, never the provider's text: the wait the limit named for this account after the minimum, the default and the cap were applied, kept by the call because the stores can fail to save it.
+    public function limitedFor(Account $account, int $seconds): void
+    {
+        $this->limitedSeconds[$account->key()] = $seconds;
+    }
+
+    // Null when no account of the call recorded a limit's wait.
+    public function shortestLimitedWait(): ?int
+    {
+        return [] === $this->limitedSeconds ? null : min($this->limitedSeconds);
     }
 
     // Kept apart from the account errors, because a transport error cools no account down.

@@ -182,10 +182,19 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return $this->outOfAccounts($waits, $failures);
         }
 
-        // A wait of a second instead of the failover's error, because the vendor counts that error as a failure while a free account can take the retry: one that freed up during the call and was never sent to (issue #2860), or, for a pinned call only, any account whose pin ended between its save and this read (issue #3975). An unpinned account whose window was not saved keeps the failover's error, because a second would undercut the reset the provider named.
-        $retryable = null !== $routerProvider || $this->freedUntried($waits, $failures);
+        if (!$failures->isEveryTriedLimited()) {
+            return $everyAccountFailed;
+        }
 
-        return $retryable && $failures->isEveryTriedLimited() ? new EveryAccountCoolingDown($this->provider, 1) : $everyAccountFailed;
+        // A wait of a second instead of the failover's error, because the vendor counts that error as a failure while an account that freed up during the call and was never sent to can take the retry (issue #2860).
+        if ($this->freedUntried($waits, $failures)) {
+            return new EveryAccountCoolingDown($this->provider, 1);
+        }
+
+        // Every free account was sent to and limited, so no window stands: a pin ended between its save and this read, or a store saved none (issue #3975). A pinned call then waits the shortest time its limits named, never a flat second, because a store that keeps refusing saves would otherwise let the caller send again every second against a longer reset. An unpinned call keeps the failover's error.
+        $named = null === $routerProvider ? null : $failures->shortestLimitedWait();
+
+        return null === $named ? $everyAccountFailed : new EveryAccountCoolingDown($this->provider, $named);
     }
 
     /**
