@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
-use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Review\Contract\AwaitedReviewer;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\Contract\RoundProgress;
@@ -32,7 +30,6 @@ use RuntimeException;
 #[UsesClass(PublishJudgedRound::class)]
 #[UsesClass(ReviewRounds::class)]
 #[UsesClass(ReviewRound::class)]
-#[UsesClass(AwaitedReviewer::class)]
 #[UsesClass(ReviewerRateLimited::class)]
 #[UsesClass(ProviderRateLimited::class)]
 final class LiveRoundProgressTest extends KernelTestCase
@@ -80,22 +77,6 @@ final class LiveRoundProgressTest extends KernelTestCase
         self::assertSame([$this->state($round, '0/2'), $this->state($round, '1/2')], $this->fixture->updates->seen);
     }
 
-    public function testAPanelThatReportedNoFindingsLeavesNothingToJudge(): void
-    {
-        $this->fixture->start(1);
-
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
-
-        self::assertSame([true, false], array_map(static fn (RoundProgress $progress): bool => $progress->findingsToJudge, $this->fixture->updates->progress));
-    }
-
-    public function testAStoredRoundListsTheReviewersItAwaitsInPanelOrder(): void
-    {
-        $round = $this->fixture->start(5);
-
-        self::assertSame(['role-1', 'role-2', 'role-3', 'role-4', 'role-5'], array_map(static fn (AwaitedReviewer $awaited): string => $awaited->role, $round->progress()->awaited));
-    }
-
     public function testAReviewerAWorkerTakesIsPublishedAsStarted(): void
     {
         $this->fixture->start(2);
@@ -129,19 +110,6 @@ final class LiveRoundProgressTest extends KernelTestCase
     public function testAProgressThatDiffersOnlyInStartedReviewersIsNotTheSameProgress(): void
     {
         self::assertFalse(new RoundProgress(0, 2, false, [], 1)->isSameAs(new RoundProgress(0, 2, false, [], 0)));
-    }
-
-    public function testAProgressThatDiffersOnlyInTheFindingsToJudgeIsNotTheSameProgress(): void
-    {
-        self::assertFalse(new RoundProgress(2, 2, false)->isSameAs(new RoundProgress(2, 2, false)->withNothingToJudge()));
-    }
-
-    public function testAProgressIsTheSameOnlyWhenItAwaitsTheSameReviewers(): void
-    {
-        $awaiting = static fn (string $id): RoundProgress => new RoundProgress(1, 2, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong, $id)]);
-
-        self::assertFalse($awaiting('one')->isSameAs($awaiting('other')));
-        self::assertTrue($awaiting('one')->isSameAs($awaiting('one')));
     }
 
     public function testTheRoundsFirstProgressIsPublishedAtItsStartBeforeAnyReviewerRuns(): void

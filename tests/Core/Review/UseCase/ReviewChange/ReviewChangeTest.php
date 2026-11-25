@@ -11,7 +11,6 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Review\Contract\AwaitedReviewer;
 use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
@@ -88,7 +87,6 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(RoundProgress::class)]
-#[UsesClass(AwaitedReviewer::class)]
 #[UsesClass(IgnoredProgress::class)]
 #[UsesClass(ChangeReviewRequest::class)]
 #[UsesClass(BlockReasons::class)]
@@ -380,8 +378,7 @@ final class ReviewChangeTest extends KernelTestCase
 
         // The first read of the round reports too, because the caller should see the start before any wait.
         self::assertCount(4, $progress->reported);
-        $awaited = $progress->reported[3]->awaited;
-        self::assertEquals(new RoundProgress(0, 2, false, [], 0, [new AwaitedReviewer('role-1', Tier::Standard, $awaited[0]->id), new AwaitedReviewer('role-2', Tier::Standard, $awaited[1]->id)]), $progress->reported[3]);
+        self::assertEquals(new RoundProgress(0, 2, false), $progress->reported[3]);
     }
 
     public function testTheLastReportSaysTheRoundIsJudgedWhenTheWorkersFinishIt(): void
@@ -402,16 +399,6 @@ final class ReviewChangeTest extends KernelTestCase
         $last = array_last($progress->reported);
         self::assertInstanceOf(RoundProgress::class, $last);
         self::assertSame([2, 2, true, [FinishedState::Verdict, FinishedState::Verdict]], [$last->reviewersFinished, $last->reviewers, $last->judged, array_values($last->finished)]);
-    }
-
-    public function testACompleteRoundWhoseEveryFindingTheQuoteCheckDropsWaitsOnNoJudge(): void
-    {
-        self::assertSame([true, false], $this->findingsToJudgeOnceComplete($this->quotingMissingCode(Severity::P2)));
-    }
-
-    public function testACompleteRoundWithAFindingTheQuoteCheckKeepsWaitsOnTheJudge(): void
-    {
-        self::assertSame([true, true], $this->findingsToJudgeOnceComplete($this->finding('A', Severity::P2)));
     }
 
     public function testEveryProgressAChangeReviewReportsHasNoMoreFinishedThanStartedReviewers(): void
@@ -559,28 +546,6 @@ final class ReviewChangeTest extends KernelTestCase
         };
 
         return $this->reviewChange($work)->review($this->request($round));
-    }
-
-    // Every reviewer answers and no judge runs, so the round stays complete until the upper wait; the first report is before the round completes and the last one after.
-    /**
-     * @return array{bool, bool}
-     */
-    private function findingsToJudgeOnceComplete(Finding $finding): array
-    {
-        $progress = new RecordingProgress();
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$finding], [], [])]);
-        $work = function () use ($vendor): void {
-            foreach ($this->fixture->bus->messages as $message) {
-                $this->fixture->deliver($message, $vendor);
-            }
-        };
-
-        $this->reviewChange($work, sleepsFor: self::A_REVIEW_CEILING)->review($this->request(), $progress);
-
-        $last = array_last($progress->reported);
-        self::assertInstanceOf(RoundProgress::class, $last);
-
-        return [$progress->reported[0]->findingsToJudge, $last->findingsToJudge];
     }
 
     private function reviewChange(Closure $work, ?MessageBusInterface $bus = null, ?int $sleepsFor = null): ReviewChange

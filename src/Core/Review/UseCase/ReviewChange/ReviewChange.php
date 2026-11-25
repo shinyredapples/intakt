@@ -21,18 +21,14 @@ use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerOutcome;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundEnds;
-use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Verdict;
-use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
-use Intakt\Core\Review\Infrastructure\ChangeText;
-use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -61,7 +57,6 @@ final readonly class ReviewChange implements ChangeReviews
         private FailedJudgings $failedJudgings,
         private UpperWait $upperWait = new UpperWait(),
         private RoundEndReasons $reasons = new RoundEndReasons(),
-        private ChangeText $change = new ChangeText(new DiffPaths()),
     ) {
     }
 
@@ -109,29 +104,15 @@ final readonly class ReviewChange implements ChangeReviews
     {
         $deadline = $this->clock->now()->modify('+'.$seconds.' seconds');
         $round = $this->rounds->stored($roundId);
-        $progress->reached($this->progressOf($round));
+        $progress->reached($round->progress());
 
         while (!$this->hasEnded($round) && $this->clock->now() < $deadline) {
             $this->clock->sleep(self::POLL_SECONDS);
             $round = $this->rounds->stored($roundId);
-            $progress->reached($this->progressOf($round));
+            $progress->reached($round->progress());
         }
 
         return $round;
-    }
-
-    // The quote check runs before the judge asks a model (JudgeRoundHandler), so a complete round whose every finding it drops waits on no judge; it reads the change, which the round itself cannot.
-    private function progressOf(ReviewRound $round): RoundProgress
-    {
-        $progress = $round->progress();
-        if (!$progress->findingsToJudge || RoundState::Complete !== $round->state()) {
-            return $progress;
-        }
-
-        $change = $this->change->of($round->diff(), $round->checkoutRoot());
-        $quotes = new QuotesInChange();
-
-        return array_any($this->findings->reportedIn($round), static fn (Finding $finding): bool => null === $quotes->reasonToDrop($finding, $change)) ? $progress : $progress->withNothingToJudge();
     }
 
     private function hasEnded(ReviewRound $round): bool

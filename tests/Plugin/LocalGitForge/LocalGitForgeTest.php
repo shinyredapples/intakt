@@ -23,7 +23,6 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
-use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\KeptSnapshots;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Plugin\Forge\CommitIdCheckThatThrows;
 use InvalidArgumentException;
@@ -31,7 +30,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use RuntimeException;
 
 #[CoversClass(LocalGitForge::class)]
@@ -46,7 +44,6 @@ use RuntimeException;
 #[UsesClass(Diff::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
-#[UsesClass(KeptSnapshots::class)]
 #[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(FileStatus::class)]
@@ -243,46 +240,6 @@ final class LocalGitForgeTest extends TestCase
         self::assertDirectoryDoesNotExist($seen[0]);
         self::assertCount(1, $this->repository->worktrees());
         self::assertFileDoesNotExist($this->repository->path.'/src/New.php');
-    }
-
-    // Forced order, because the race is otherwise rare: the judged round's removal takes the kept snapshot right after the command's removal could have seen it present, which made the command fail with ForgeReadFailed and lose its verdict.
-    #[RunInSeparateProcess]
-    public function testAKeptSnapshotTheJudgedRoundRemovesMeanwhileIsNoFailureForTheCommand(): void
-    {
-        $forge = $this->forge();
-        $snapshot = $forge->keepSnapshotOf(new CommitId($this->repository->objectAt('main')));
-        IsDirThatLetsAnotherRemoverIn::define();
-
-        $forge->removeSnapshot($snapshot);
-
-        self::assertDirectoryDoesNotExist($snapshot);
-        self::assertCount(1, $this->repository->worktrees());
-    }
-
-    public function testAKeptSnapshotAlreadyGoneIsNoFailure(): void
-    {
-        $forge = $this->forge();
-        $snapshot = $forge->keepSnapshotOf(new CommitId($this->repository->objectAt('main')));
-        new KeptSnapshots(new NullLogger())->remove('judged-round', $snapshot);
-
-        $forge->removeSnapshot($snapshot);
-
-        self::assertDirectoryDoesNotExist($snapshot);
-    }
-
-    public function testASnapshotGitCannotRemoveWhileItIsStillThereFails(): void
-    {
-        $directory = sys_get_temp_dir().'/intakt-kept-review-'.bin2hex(random_bytes(8));
-        mkdir($directory);
-
-        try {
-            $this->forge()->removeSnapshot($directory);
-            self::fail('A directory git could not remove was reported removed.');
-        } catch (ForgeReadFailed $failure) {
-            self::assertStringContainsString('is not a working tree', $failure->getMessage());
-        } finally {
-            rmdir($directory);
-        }
     }
 
     public function testItRemovesTheSnapshotWhenTheWorkFails(): void

@@ -7,7 +7,6 @@ namespace Intakt\Core\Review\Domain;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use Intakt\Core\Review\Contract\AwaitedReviewer;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -207,7 +206,6 @@ final class ReviewRound implements HasPlace
     {
         $finished = [];
         $started = 0;
-        $awaited = [];
 
         foreach ($this->reviewers() as $reviewer) {
             $id = $reviewer->id()->toRfc4122();
@@ -218,16 +216,10 @@ final class ReviewRound implements HasPlace
 
             if ($reviewer->isFinished()) {
                 $finished[$id] = in_array($id, $stopped, true) ? FinishedState::Stopped : FinishedState::from($reviewer->state()->value);
-
-                continue;
             }
-
-            $awaited[] = $this->named($reviewer);
         }
 
-        $blocked = array_filter($this->reviewers(), static fn (RoundReviewer $reviewer): bool => FinishedState::Blocked === ($finished[$reviewer->id()->toRfc4122()] ?? null));
-
-        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started, $awaited, $this->hasFindingsToJudge(), array_values(array_map($this->named(...), $blocked)));
+        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started);
     }
 
     public function state(): RoundState
@@ -243,16 +235,5 @@ final class ReviewRound implements HasPlace
     public function moveTo(string $place): void
     {
         $this->state = RoundState::from($place);
-    }
-
-    private function named(RoundReviewer $reviewer): AwaitedReviewer
-    {
-        return new AwaitedReviewer($reviewer->roleName(), $reviewer->tier(), $reviewer->id()->toRfc4122());
-    }
-
-    // Unknown (true) until the round completed and kept what the panel reported, because only then does the judge read them.
-    private function hasFindingsToJudge(): bool
-    {
-        return null === $this->reportedFindings || [] !== json_decode($this->reportedFindings, true);
     }
 }
