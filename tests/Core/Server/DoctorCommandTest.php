@@ -25,13 +25,13 @@ use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use ReflectionMethod;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\HttpClient\MockHttpClient;
-use Psr\Log\NullLogger;
 
 #[CoversClass(DoctorCommand::class)]
 #[UsesClass(AdminApi::class)]
@@ -203,7 +203,11 @@ final class DoctorCommandTest extends TestCase
 
     public function testABadKeyFailsTheForgeCheckWhileTheOthersPass(): void
     {
-        $tester = $this->execute(new RecordedAdminApi()->status(), $this->forge(appId: '1', installationId: '2', privateKey: 'not-a-key'));
+        $tester = $this->execute(new RecordedAdminApi()->status(), $this->forge(
+            appId: '1',
+            installationId: '2',
+            privateKey: 'not-a-key',
+        ));
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString("fail: forge: the private key cannot sign (it cannot be read or is not an RSA key); fix: set GITHUB_APP_PRIVATE_KEY to the PEM private key of the App\n", $tester->getDisplay());

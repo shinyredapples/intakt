@@ -58,12 +58,6 @@ final class ForgeConnectionCheckTest extends TestCase
     private int $installationStatus = 200;
     private bool $unreachable = false;
 
-    protected function setUp(): void
-    {
-        $this->key = AppKey::generate();
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
-
     public function testAnInstallationThatMatchesTheConfigurationPasses(): void
     {
         $verdict = $this->check()->run();
@@ -102,7 +96,10 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAnEmptyAppIdWithTheInstallationIdStillSetFails(): void
     {
-        $verdict = $this->check(appId: '', privateKey: '')->run();
+        $verdict = $this->check(
+            appId: '',
+            privateKey: '',
+        )->run();
 
         self::assertSame('GITHUB_APP_ID is empty while GITHUB_APP_INSTALLATION_ID or GITHUB_APP_PRIVATE_KEY is still set', $verdict->problem);
         self::assertSame(0, $this->requests);
@@ -110,7 +107,10 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testAnEmptyAppIdWithThePrivateKeyStillSetFails(): void
     {
-        $verdict = $this->check(appId: '', installationId: '')->run();
+        $verdict = $this->check(
+            appId: '',
+            installationId: '',
+        )->run();
 
         self::assertFalse($verdict->passes());
         self::assertStringStartsWith('GITHUB_APP_ID is empty', (string) $verdict->problem);
@@ -125,7 +125,11 @@ final class ForgeConnectionCheckTest extends TestCase
 
     public function testNoAppAtAllPassesWithoutARequest(): void
     {
-        $verdict = $this->check(appId: '', installationId: '', privateKey: '')->run();
+        $verdict = $this->check(
+            appId: '',
+            installationId: '',
+            privateKey: '',
+        )->run();
 
         self::assertTrue($verdict->passes());
         self::assertSame(0, $this->requests);
@@ -159,6 +163,12 @@ final class ForgeConnectionCheckTest extends TestCase
 
         self::assertFalse($verdict->passes());
         self::assertStringStartsWith('cannot run (', (string) $verdict->problem);
+    }
+
+    protected function setUp(): void
+    {
+        $this->key = AppKey::generate();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
     private function check(
