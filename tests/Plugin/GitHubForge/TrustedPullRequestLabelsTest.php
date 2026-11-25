@@ -139,7 +139,7 @@ final class TrustedPullRequestLabelsTest extends TestCase
         $names = $current ?? array_map(static fn (LabelApplication $application): string => $application->label, $applied);
         $histories = self::createStub(IssueHistories::class);
         $histories->method('of')->willReturn(new IssueHistory('alice', $applied, '', new IssueLabels(...$names)));
-        $trust = new RecordedTrust();
+        $trust = new RecordedTrust(TrustChecks::clock());
 
         return new TrustedPullRequestLabels($histories, TrustChecks::over($trust), new WatchedRepositories(['alpha' => ['github' => 'acme/widget']]))->of('alpha', PullRequestAddress::of(new ChangeId($pull)), new DateTimeImmutable('2026-11-25 10:00:00'));
     }

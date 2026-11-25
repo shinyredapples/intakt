@@ -99,4 +99,30 @@ final class NextLinksTest extends TestCase
 
         new NextLinks()->namesNext(['<?page=2>; rel=next; anchor'], self::TARGET);
     }
+
+    public function testARelWithoutAValueFailsAsAnUnreadableLink(): void
+    {
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a Link header this forge cannot read.'));
+
+        new NextLinks()->namesNext(['</pulls?page=2>; rel'], '/pulls?page=1');
+    }
+
+    public function testAnEmptyQuotedRelFailsAsAnUnreadableLink(): void
+    {
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a Link header this forge cannot read.'));
+
+        new NextLinks()->namesNext(['</pulls?page=2>; rel=""'], '/pulls?page=1');
+    }
+
+    public function testAQuotedRelOfOnlyWhitespaceFailsAsAnUnreadableLink(): void
+    {
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a Link header this forge cannot read.'));
+
+        new NextLinks()->namesNext(['</pulls?page=2>; rel="  "'], '/pulls?page=1');
+    }
+
+    public function testALinkWithoutAnyRelIsReadAsNamingNoNextPage(): void
+    {
+        self::assertFalse(new NextLinks()->namesNext(['</pulls?page=2>; title="two"'], '/pulls?page=1'));
+    }
 }

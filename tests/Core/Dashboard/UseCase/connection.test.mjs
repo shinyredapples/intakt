@@ -470,6 +470,16 @@ test('a held action says it is connecting to live updates', async (t) => {
     assert.equal(action.note.className, 'held-note');
 });
 
+test('a dropped connection holds the Check button of the setup wizard\'s address check with the connecting note', async (t) => {
+    const check = new FakeButton();
+    const { source } = await connectedShell(t, undefined, { actions: [check], address: 'http://localhost:7781/setup?step=1' });
+
+    source.es.emit('error');
+
+    assert.equal(check.disabled, true);
+    assert.equal(check.note.textContent, 'Connecting to live updates…');
+});
+
 test('a held action still says it is connecting just before the first try ends', async (t) => {
     const action = new FakeButton();
     const { source } = await connectedShell(t, undefined, { actions: [action] });

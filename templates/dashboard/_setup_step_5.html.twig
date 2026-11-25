@@ -35,19 +35,7 @@
         <li>{{ include(character, {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Developer'), size: 48}, with_context = false) }}<strong>To fix</strong><span>Only what matters</span></li>
     </ol>
 
-    <section class="first-review" id="step-first-review" data-state="{{ first_review.state.value }}" aria-labelledby="first-review-h">
-        <h2 id="first-review-h">First review</h2>
-        <p class="lead">{{ first_review.sentence }}</p>
-        {%- if first_review.round is not null %}
-        <a class="btn {{ review_button }}" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: first_review.round}) }}">Open the review</a>
-        {%- elseif first_review.sampleCanStart %}
-        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
-            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
-            {{ include('dashboard/components/button.html.twig', {kind: review_button, type: 'submit', label: 'Start the first review'}, with_context = false) }}
-            <p class="next">Two reviewers read the sample change; its live page opens.</p>
-        </form>
-        {%- endif %}
-    </section>
+    {{ include('dashboard/_setup_first_review.html.twig', {first_review: first_review, review_button: review_button}, with_context = false) }}
 
     {#- No link to the board: a demo install without a review sends the board back here. -#}
     <div class="step-nav"><a class="btn quiet" href="{{ back }}">Back</a></div>

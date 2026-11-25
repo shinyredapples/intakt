@@ -23,6 +23,7 @@ use Intakt\Core\HandBack\UseCase\RunRegressionTests\RunRegressionTests;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobOutputRefused;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -216,6 +217,23 @@ final class RunRegressionTestsTest extends TestCase
 
         self::assertInstanceOf(RegressionRuns::class, $runs);
         self::assertSame(RegressionRun::NoResult, $runs->base);
+    }
+
+    public function testAFailedHeadJobAfterABaseThatDidNotPassStillRaisesItsException(): void
+    {
+        $this->history->commitFile('tests/FooTest.php', "<?php\n", 'Add a test');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec): JobResult {
+            if (str_starts_with($spec->id->value, 'regression-head-')) {
+                throw JobRefused::alreadyRunning($spec->id);
+            }
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['regression-result' => "failed\n"]));
+        });
+
+        $this->expectException(JobRefused::class);
+
+        $this->runWith($runner);
     }
 
     public function testARefusedHandBackStartsNoJob(): void

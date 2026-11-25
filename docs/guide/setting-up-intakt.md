@@ -31,7 +31,7 @@ A new project starts with the smallest team: the Tech lead, the Developer, the C
 
 ## When something does not work
 
-Start here, also when the dashboard does not open. In the folder with Intakt's `compose.yaml`, run `docker compose exec intakt php bin/console intakt:doctor`. It checks the web server's workers, its figures and the live-update hub, and prints one line for each: `pass`, or `fail` with what to do next. It changes nothing, and it ends with an error code when any check fails, so a script can use it too. [When something goes wrong](../user/08-when-something-goes-wrong.md) lists more cases.
+Start here, also when the dashboard does not open. In the folder with Intakt's `compose.yaml`, run `docker compose exec intakt php bin/console intakt:doctor`. It checks that the web server answers, its workers and figures, the live-update hub, the background workers and the GitHub App connection (read-only, with no GitHub App set it passes), and prints one line for each: `pass`, or `fail` with what to do next. It changes nothing, and it ends with an error code when any check fails, so a script can use it too. [When something goes wrong](../user/08-when-something-goes-wrong.md) lists more cases.
 
 ## Adding Intakt to a project you already have
 
