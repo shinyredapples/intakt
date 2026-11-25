@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
@@ -114,7 +115,10 @@ final class RecordedTrust
             return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/access_tokens_401.json'), ['http_code' => $this->tokenStatus]);
         }
 
-        return new MockResponse(json_encode(['token' => 'minted-value', 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+        // From the system time, because the container tests check the expiry against the real clock: a fixed date turns into an expired token once it passes.
+        $expiresAt = new NativeClock('UTC')->now()->modify('+1 hour')->format(DATE_ATOM);
+
+        return new MockResponse(json_encode(['token' => 'minted-value', 'expires_at' => $expiresAt], JSON_THROW_ON_ERROR), ['http_code' => 201]);
     }
 
     private function fixture(string $name): MockResponse
