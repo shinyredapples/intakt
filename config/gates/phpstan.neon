@@ -167,6 +167,10 @@ services:
         tags:
             - phpstan.collector
     -
+        class: Intakt\Gates\PhpStan\TestProviderCollector
+        tags:
+            - phpstan.collector
+    -
         class: Intakt\Gates\PhpStan\NoServiceLocatorRule
         arguments:
             root: %currentWorkingDirectory%

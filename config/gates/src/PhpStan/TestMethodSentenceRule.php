@@ -32,10 +32,10 @@ final readonly class TestMethodSentenceRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $collected = array_merge(...array_values($node->get(TestMethodCollector::class)));
-        $providers = array_merge(...array_column($collected, 'providers'));
+        $providers = array_merge(...array_merge(...array_values($node->get(TestProviderCollector::class))));
         $findings = [];
 
-        foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method, $mayBeProvider]) {
+        foreach ($collected as [$file, $line, $owner, $class, $method, $mayBeProvider]) {
             // keyed by place, owner and name because a trait's method is collected once for every test case that uses it, but is one name to fix, while one line may hold several methods or classes
             if (str_starts_with($file, $this->root.'/tests/') && (!$mayBeProvider || (!$this->isNamedProvider($class, $method, $providers) && !$this->isChangedFilesRun()))) {
                 $findings[$file.':'.$line.':'.$owner.':'.$method] = $this->finding($owner, $method)->file($file)->line($line)->build();

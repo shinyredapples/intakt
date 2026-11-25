@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\PhpStan\PhpUnitTestMethod;
 use Intakt\Gates\PhpStan\TestMethodCollector;
 use Intakt\Gates\PhpStan\TestMethodSentenceRule;
+use Intakt\Gates\PhpStan\TestProviderCollector;
 use Intakt\Gates\StaticAnalysisGate;
 use Override;
 use PhpParser\Node;
@@ -18,6 +20,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
  */
 #[CoversClass(TestMethodSentenceRule::class)]
 #[CoversClass(TestMethodCollector::class)]
+#[CoversClass(TestProviderCollector::class)]
+#[CoversClass(PhpUnitTestMethod::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
 {
@@ -193,6 +197,16 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         self::assertSame('tests/OverridingTest.php:12 intakt.testMethodSentence Test method Intakt\Sample\OverridingTest::testRows() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-overridden-test'));
     }
 
+    public function testAnExternalProviderOnlyAnOverriddenAbstractBaseTestNamesFailsStaticAnalysis(): void
+    {
+        self::assertSame('tests/RowsTest.php:12 intakt.testMethodSentence Test method Intakt\Sample\RowsTest::testRows() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-overridden-external'));
+    }
+
+    public function testAProviderOfAnAbstractBaseThatOnlyItsOverriddenTestNamesFailsStaticAnalysis(): void
+    {
+        self::assertSame('tests/RowsTestCase.php:13 intakt.testMethodSentence Test method Intakt\Sample\RowsTestCase::testRows() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-overridden-base-provider'));
+    }
+
     public function testEachShortTestMethodOnOneLineIsReported(): void
     {
         $finding = ' is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().';
@@ -246,7 +260,7 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
     #[Override]
     protected function getCollectors(): array
     {
-        return [new TestMethodCollector(self::createReflectionProvider())];
+        return [new TestMethodCollector(), new TestProviderCollector(self::createReflectionProvider())];
     }
 
     // because a changed-files run where only the provider changed does not analyze the test that names it

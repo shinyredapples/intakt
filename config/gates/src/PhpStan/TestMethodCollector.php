@@ -6,21 +6,13 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
-use PHPStan\BetterReflection\Reflection\Adapter\ReflectionAttribute;
-use PHPStan\BetterReflection\Reflection\Adapter\ReflectionClass;
-use PHPStan\BetterReflection\Reflection\Adapter\ReflectionEnum;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
 use PHPStan\Collectors\Collector;
 use PHPStan\Node\InClassMethodNode;
-use PHPStan\Reflection\ClassReflection;
-use PHPStan\Reflection\ReflectionProvider;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\DataProviderExternal;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<InClassMethodNode, array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}>
+ * @implements Collector<InClassMethodNode, array{string, int, string, string, string, bool}>
  */
 final readonly class TestMethodCollector implements Collector
 {
@@ -29,17 +21,13 @@ final readonly class TestMethodCollector implements Collector
 
     private const int SENTENCE_WORDS = 3;
 
-    public function __construct(private ReflectionProvider $reflections)
-    {
-    }
-
     public function getNodeType(): string
     {
         return InClassMethodNode::class;
     }
 
     /**
-     * @return array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}|null
+     * @return array{string, int, string, string, string, bool}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -51,68 +39,15 @@ final readonly class TestMethodCollector implements Collector
         }
 
         $method = $class->getNativeReflection()->getMethod($node->getOriginalNode()->name->toString());
-        $providers = $this->runsAsTest($method) ? [...$this->providersInTheClass($method, $class->getNativeReflection()), ...$this->externalProviders($method)] : [];
-        $misnamed = $this->isMisnamedTest($node, $method, $class) ? $this->location($node, $scope, $method) : null;
 
-        return null === $misnamed && [] === $providers ? null : ['misnamed' => $misnamed, 'providers' => $providers];
+        return $this->isMisnamedTest($method) ? $this->location($node, $scope, $method) : null;
     }
 
-    // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
-    private function runsAsTest(ReflectionMethod $method): bool
-    {
-        return $method->isPublic() && (str_starts_with($method->getName(), 'test') || $this->isMarkedTest($method));
-    }
-
-    // because PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
-    private function isMarkedTest(ReflectionMethod $method): bool
-    {
-        return [] !== $method->getAttributes(Test::class);
-    }
-
-    /**
-     * @return list<array{string, string}>
-     */
-    private function providersInTheClass(ReflectionMethod $method, ReflectionClass|ReflectionEnum $class): array
-    {
-        $providers = [];
-
-        foreach ($method->getAttributes(DataProvider::class) as $attribute) {
-            $arguments = $attribute->getArguments();
-            $methodName = $arguments['methodName'] ?? $arguments[0] ?? null;
-
-            if (is_string($methodName)) {
-                $providers[] = $this->declaration($class, $methodName);
-            }
-        }
-
-        return $providers;
-    }
-
-    /**
-     * @return list<array{string, string}>
-     */
-    private function externalProviders(ReflectionMethod $method): array
-    {
-        $providers = [];
-
-        foreach ($method->getAttributes(DataProviderExternal::class) as $attribute) {
-            $arguments = $attribute->getArguments();
-            $className = $arguments['className'] ?? $arguments[0] ?? null;
-            $methodName = $arguments['methodName'] ?? $arguments[1] ?? null;
-
-            if (is_string($className) && is_string($methodName)) {
-                $providers[] = $this->reflections->hasClass($className) ? $this->declaration($this->reflections->getClass($className)->getNativeReflection(), $methodName) : [ltrim($className, '\\'), $methodName];
-            }
-        }
-
-        return $providers;
-    }
-
-    private function isMisnamedTest(InClassMethodNode $node, ReflectionMethod $method, ClassReflection $class): bool
+    private function isMisnamedTest(ReflectionMethod $method): bool
     {
         $name = $method->getName();
 
-        return $this->runsAsTest($method) && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && (!$this->mayBeProvider($node, $method) || !$this->isNamedProvider($name, $class));
+        return PhpUnitTestMethod::isRun($method) && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4)));
     }
 
     /**
@@ -126,15 +61,6 @@ final readonly class TestMethodCollector implements Collector
         return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method)];
     }
 
-    // the class that declares the named method, because a provider a parent class or a trait declares is one declaration however many subclasses name it
-    /**
-     * @return array{string, string}
-     */
-    private function declaration(ReflectionClass|ReflectionEnum $class, string $methodName): array
-    {
-        return $class->hasMethod($methodName) ? [$class->getMethod($methodName)->getDeclaringClass()->getName(), $methodName] : [$class->getName(), $methodName];
-    }
-
     private function readsAsSentence(string $words): bool
     {
         return 1 === preg_match('~^(?:'.self::WORD.')+$~', $words) && self::SENTENCE_WORDS <= preg_match_all('~'.self::WORD.'~', $words);
@@ -143,22 +69,6 @@ final readonly class TestMethodCollector implements Collector
     private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool
     {
         // because PHPUnit calls only a static provider and iterates what it returns
-        return $method->isStatic() && !$this->isMarkedTest($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
-    }
-
-    // inherited tests count because an abstract test case may name a provider that only each subclass implements; an overridden one does not, since PHPUnit reads the attributes of the override
-    private function isNamedProvider(string $name, ClassReflection $class): bool
-    {
-        return array_any($class->getNativeReflection()->getMethods(), fn (ReflectionMethod $method): bool => $this->runsAsTest($method) && $this->namesProvider($method, $name));
-    }
-
-    private function namesProvider(ReflectionMethod $method, string $name): bool
-    {
-        return array_any($method->getAttributes(DataProvider::class), static function (ReflectionAttribute $attribute) use ($name): bool {
-            $arguments = $attribute->getArguments();
-            $provider = $arguments['methodName'] ?? $arguments[0] ?? null;
-
-            return is_string($provider) && 0 === strcasecmp($provider, $name);
-        });
+        return $method->isStatic() && !PhpUnitTestMethod::isMarked($method) && !$node->getMethodReflection()->getNativeReturnType()->isIterable()->no();
     }
 }
