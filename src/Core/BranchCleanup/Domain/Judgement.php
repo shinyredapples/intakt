@@ -30,10 +30,11 @@ final readonly class Judgement
         return $moment->add(new DateInterval(sprintf('P%dD', $days))) <= $this->now;
     }
 
-    // Due by time still needs the week's warning at the branch's current head.
+    // Due by time still needs the week's warning for this branch at its current head.
     public function decidedDue(): self
     {
-        $warned = $this->warning?->allowsDeletionAt($this->facts->branch->head, $this->now) ?? false;
+        $branch = $this->facts->branch;
+        $warned = $this->warning?->allowsDeletionAt($branch->name, $branch->head, $this->now) ?? false;
 
         return $this->decided($warned ? Verdict::Deletable : Verdict::Warn);
     }

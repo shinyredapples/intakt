@@ -27,7 +27,7 @@ final readonly class BranchRules
     {
         return new Judgement($facts, $now, $warning)
             |> $this->outOfBoundsWithoutIntaktsPrefix(...)
-            |> $this->keptWhenDefaultProtectedOrRelease(...)
+            |> $this->keptWhenTheForgeMayNotDeleteIt(...)
             |> $this->deletableWhenMerged(...)
             |> $this->dueWhenClosedLongAgo(...)
             |> $this->keptWithAnOpenChange(...)
@@ -42,11 +42,10 @@ final readonly class BranchRules
         return $this->policy->mayTouch($judgement->facts->branch->name) ? $judgement : $judgement->decided(Verdict::OutOfBounds);
     }
 
-    private function keptWhenDefaultProtectedOrRelease(Judgement $judgement): Judgement
+    // The forge contract's own test (default, protected, release or symbolic), so the rules never call deletable what the forge refuses to delete.
+    private function keptWhenTheForgeMayNotDeleteIt(Judgement $judgement): Judgement
     {
-        $branch = $judgement->facts->branch;
-
-        return $branch->isDefault || $branch->isProtected || $branch->isRelease() ? $judgement->decided(Verdict::Keep) : $judgement;
+        return $judgement->facts->branch->isDeletable() ? $judgement : $judgement->decided(Verdict::Keep);
     }
 
     private function deletableWhenMerged(Judgement $judgement): Judgement

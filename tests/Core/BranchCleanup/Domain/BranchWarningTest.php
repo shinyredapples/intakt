@@ -19,28 +19,35 @@ final class BranchWarningTest extends TestCase
     {
         $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T23:59:00Z'));
 
-        self::assertFalse($warning->allowsDeletionAt($this->head('a'), new DateTimeImmutable('2026-11-08T00:01:00Z')));
+        self::assertFalse($warning->allowsDeletionAt('intakt/7', $this->head('a'), new DateTimeImmutable('2026-11-08T00:01:00Z')));
     }
 
     public function testAWarningAllowsDeletionAtExactlySevenDays(): void
     {
         $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T23:59:00Z'));
 
-        self::assertTrue($warning->allowsDeletionAt($this->head('a'), new DateTimeImmutable('2026-11-08T23:59:00Z')));
+        self::assertTrue($warning->allowsDeletionAt('intakt/7', $this->head('a'), new DateTimeImmutable('2026-11-08T23:59:00Z')));
     }
 
     public function testAWarningDoesNotAllowDeletionOneSecondBeforeSevenDays(): void
     {
         $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T23:59:00Z'));
 
-        self::assertFalse($warning->allowsDeletionAt($this->head('a'), new DateTimeImmutable('2026-11-08T23:58:59Z')));
+        self::assertFalse($warning->allowsDeletionAt('intakt/7', $this->head('a'), new DateTimeImmutable('2026-11-08T23:58:59Z')));
     }
 
     public function testAWarningDoesNotAllowDeletionAfterTheHeadMoved(): void
     {
         $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T00:00:00Z'));
 
-        self::assertFalse($warning->allowsDeletionAt($this->head('b'), new DateTimeImmutable('2026-12-01T00:00:00Z')));
+        self::assertFalse($warning->allowsDeletionAt('intakt/7', $this->head('b'), new DateTimeImmutable('2026-12-01T00:00:00Z')));
+    }
+
+    public function testAWarningDoesNotAllowDeletionOfAnotherBranchAtTheSameHead(): void
+    {
+        $warning = $this->warningAt(new DateTimeImmutable('2026-11-01T00:00:00Z'));
+
+        self::assertFalse($warning->allowsDeletionAt('intakt/8', $this->head('a'), new DateTimeImmutable('2026-12-01T00:00:00Z')));
     }
 
     private function warningAt(DateTimeImmutable $moment): BranchWarning

@@ -95,7 +95,8 @@ return static function (ContainerConfigurator $container): void {
     $branchCleanups = [];
     if (is_array($contentProjects)) {
         foreach ($contentProjects as $name => $project) {
-            foreach (['clean_other_branches', 'keep_branches'] as $cleanupKey) {
+            // Both spellings, because the design writes keep-branches and the cleanup tree normalizes either to the underscored key.
+            foreach (['clean_other_branches', 'clean-other-branches', 'keep_branches', 'keep-branches'] as $cleanupKey) {
                 if (is_array($project) && array_key_exists($cleanupKey, $project)) {
                     $branchCleanups[$name][$cleanupKey] = $project[$cleanupKey];
                     unset($project[$cleanupKey]);

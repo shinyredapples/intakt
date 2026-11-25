@@ -87,6 +87,21 @@ final class BranchRulesTest extends TestCase
         self::assertSame(Verdict::Deletable, $this->rules()->verdictOf($this->closed('-37 days', []), $this->now(), $warning));
     }
 
+    public function testAMergedSymbolicBranchIsKept(): void
+    {
+        $branch = new ForgeBranch('intakt/alias', $this->head(), false, false, true);
+        $facts = new BranchFacts($branch, new BranchChange(BranchChangeState::Merged), $this->now(), false);
+
+        self::assertSame(Verdict::Keep, $this->rules()->verdictOf($facts, $this->now()));
+    }
+
+    public function testAWeekOldWarningForAnotherBranchAtTheSameHeadOnlyWarns(): void
+    {
+        $warning = new BranchWarning('intakt/8', $this->head(), $this->now()->modify('-8 days'));
+
+        self::assertSame(Verdict::Warn, $this->rules()->verdictOf($this->facts('-90 days', false), $this->now(), $warning));
+    }
+
     public function testAClosedUnmergedBranchLabeledKeepIsNeverDeletable(): void
     {
         $warning = new BranchWarning('intakt/7', $this->head(), $this->now()->modify('-30 days'));

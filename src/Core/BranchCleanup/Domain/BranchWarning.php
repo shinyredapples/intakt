@@ -23,8 +23,9 @@ final readonly class BranchWarning
     }
 
     // A full 7 x 24 hours, never rounded to whole days: a warning late in a day must not allow deletion a few minutes short of the week.
-    public function allowsDeletionAt(CommitId $head, DateTimeImmutable $now): bool
+    // Sibling branches often share a head, so the warning counts only for the branch it named.
+    public function allowsDeletionAt(string $branch, CommitId $head, DateTimeImmutable $now): bool
     {
-        return $this->head->equals($head) && $this->warnedAt->add(new DateInterval(self::NOTICE)) <= $now;
+        return $this->branch === $branch && $this->head->equals($head) && $this->warnedAt->add(new DateInterval(self::NOTICE)) <= $now;
     }
 }

@@ -15,16 +15,16 @@ Branch cleanup ([design](../design/05-architecture/08-merge.md#branch-cleanup), 
 In order:
 
 1. **Out of bounds:** a branch without Intakt's prefix (`intakt/`) is `out-of-bounds`, unless the project sets `clean_other_branches: true`.
-2. **Kept:** the default branch, a protected branch and a release branch are `keep`, opt-in or not.
+2. **Kept:** a branch whose `ForgeBranch::isDeletable()` is false (the default branch, a protected, a release or a symbolic branch) is `keep`, opt-in or not, so the rules never call deletable a branch the forge refuses to delete.
 3. **Merged pull request:** `deletable` at once, with no warning.
 4. **Closed, unmerged pull request:** `keep` for 30 days after the close, and always with the `keep` label; after that the branch is due (see below).
 5. **Open pull request:** `keep`.
 6. **Claimed branch with no pull request:** never due. It is `stale` after 30 days without commits and `keep` before. A branch is claimed when a person committed to it, when its name is in the project's `keep_branches`, or when the claim check could not answer (it fails closed). `keep_branches` applies only here: it claims no branch that has a pull request, so a merged or closed one is still handled by rules 3 and 4.
 7. **Unclaimed branch with no pull request:** due 60 days after its last commit, `stale` from 30 days, `keep` before.
 
-A due branch is `warn` until the week's warning has passed. `BranchWarning` names the branch, the head it warned about and the moment; `allowsDeletionAt(head, now)` is true only when the head is the same and a full 7 x 24 hours have passed since the warning, never rounded to whole days. A moved head needs a new warning. The 30 and 60 days are counted from the moment given (`P30D`, `P60D`).
+A due branch is `warn` until the week's warning has passed. `BranchWarning` names the branch, the head it warned about and the moment; `allowsDeletionAt(branch, head, now)` is true only when the branch and the head are the same (sibling branches often share a head, so one branch's warning never counts for another) and a full 7 x 24 hours have passed since the warning, never rounded to whole days. A moved head needs a new warning. The 30 and 60 days are counted from the moment given (`P30D`, `P60D`).
 
-The project file takes two keys per project, read by `BranchCleanupConfiguration` and `CleanupPolicies` into the `intakt.branch_cleanup.projects` parameter: `clean_other_branches` (boolean, default false) and `keep_branches` (a list of branch names, default empty).
+The project file takes two keys per project, read by `BranchCleanupConfiguration` and `CleanupPolicies` into the `intakt.branch_cleanup.projects` parameter: `clean_other_branches` (boolean, default false) and `keep_branches` (a list of branch names, default empty). Each may also be spelled with hyphens (`clean-other-branches`, `keep-branches`, as the design writes it); `config/packages/ai.php` takes both spellings out of the project before the AI projects tree sees it. A project that sets neither key gets the defaults from `CleanupPolicies::of()`.
 
 ### The contract
 
@@ -100,4 +100,4 @@ A branch whose `isDeletable()` is false is refused before any call. Then the for
 
 ### Tests
 
-The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` `tests/Plugin/Forge/Contract/ForgeBranchTest.php`, and for the rules `tests/Core/BranchCleanup/Domain/BranchRulesTest.php`, `BranchWarningTest.php` and `tests/Core/BranchCleanup/Infrastructure/BranchCleanupConfigurationTest.php`.
+The tests are in `tests/Plugin/GitHubForge/GitHubForgeBranchesTest.php` (against recorded GitHub answers), `tests/Plugin/LocalGitForge/Infrastructure/LocalForgeBranchesTest.php` (against a temporary repository), `tests/Plugin/LocalGitForge/Infrastructure/WorktreeLocksTest.php` `tests/Plugin/Forge/Contract/ForgeBranchTest.php`, and for the rules `tests/Core/BranchCleanup/Domain/BranchRulesTest.php`, `BranchWarningTest.php`, `tests/Core/BranchCleanup/Infrastructure/BranchCleanupConfigurationTest.php` and `CleanupPoliciesTest.php`, and for the project-file wiring `tests/Application/ProjectTiersTest.php`.
