@@ -8,6 +8,24 @@ final readonly class MarkdownListIndents
 {
     private const string LIST_MARKER = '/^( *)([-*+]|\d{1,9}[.)])([ \t]*)/';
 
+    // Because CommonMark 5.2 lets only an item with text, numbered 1 when ordered, interrupt a paragraph, other markers continue it.
+    private const string INTERRUPTING_ITEM = '/^[ \t]*(?:[-*+]|0{0,8}1[.)])[ \t]+\S/';
+
+    /**
+     * @param list<int> $lists
+     */
+    public function startsItem(string $line, MarkdownLineKind $previous, array $lists): bool
+    {
+        if (1 !== preg_match(MarkdownLineKinds::LIST_ITEM, $line)) {
+            return false;
+        }
+
+        // A marker left of the open item's content is the next item of a list, so it interrupts no paragraph.
+        return !$previous->isText()
+            || $this->indent($line) < $this->innermost($lists)
+            || $this->interruptsAParagraph($line, $lists);
+    }
+
     public function indent(string $line): int
     {
         $expanded = $this->expanded($line);
@@ -58,6 +76,15 @@ final readonly class MarkdownListIndents
     public function outdented(string $line, int $columns): string
     {
         return substr($this->expanded($line), min($columns, $this->indent($line)));
+    }
+
+    /**
+     * @param list<int> $lists
+     */
+    private function interruptsAParagraph(string $line, array $lists): bool
+    {
+        // Four columns past the open item's content is indented code, which cannot interrupt a paragraph, so the line continues it.
+        return $this->indent($line) < $this->innermost($lists) + 4 && 1 === preg_match(self::INTERRUPTING_ITEM, $line);
     }
 
     private function expanded(string $line): string

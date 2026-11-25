@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\MarkdownCodeBlocks;
 use Intakt\Gates\MarkdownDelimiterRow;
+use Intakt\Gates\MarkdownFencePosition;
 use Intakt\Gates\MarkdownLineKind;
 use Intakt\Gates\MarkdownLineKinds;
 use Intakt\Gates\MarkdownListIndents;
@@ -14,6 +15,7 @@ use Intakt\Gates\MarkdownPage;
 use Intakt\Gates\MarkdownParagraph;
 use Intakt\Gates\MarkdownReader;
 use Intakt\Gates\MarkdownReadFailure;
+use Intakt\Gates\MarkdownTextLines;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -22,6 +24,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(MarkdownReader::class)]
 #[CoversClass(MarkdownReadFailure::class)]
 #[CoversClass(MarkdownCodeBlocks::class)]
+#[CoversClass(MarkdownTextLines::class)]
+#[CoversClass(MarkdownFencePosition::class)]
 #[UsesClass(MarkdownListIndents::class)]
 #[UsesClass(MarkdownDelimiterRow::class)]
 #[UsesClass(FencedCodeBlocks::class)]
@@ -95,6 +99,43 @@ final class MarkdownReaderTest extends TestCase
 
         self::assertSame(['After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
         self::assertSame(1, $page->words());
+    }
+
+    public function testAFenceIndentedAfterAMarkerThatContinuesAParagraphIsText(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/continued.md', "prose words\n2. more words\n    ```\n    code inside fence\n    ```\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/continued.md'])[0];
+
+        self::assertSame(8, $page->words());
+        self::assertSame(['prose words 2. more words ``` code inside fence ```'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testAFenceAtTheStartOfALineAfterProseOpens(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/after.md', "Prose.\n```\ncode\n```\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/after.md'])[0];
+
+        self::assertSame(['Prose.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testAFirstItemAfterProseMayHoldAFence(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/first.md', "Prose.\n1. ~~~\n   code\n   ~~~\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/first.md'])[0];
+
+        self::assertSame(['Prose.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testALaterNumberAfterATableHeadingOrBlankLineMayHoldAFence(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/blocks.md', "| A |\n2. ~~~\n   code\n   ~~~\n\n# Title\n2. ~~~\n   code\n   ~~~\n\nText.\n\n2. ~~~\n   code\n   ~~~\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/blocks.md'])[0];
+
+        self::assertSame(['Text.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
     }
 
     public function testAFencedBlockBeforeTheInShortHeadingMeansTheSummaryDoesNotOpenThePage(): void

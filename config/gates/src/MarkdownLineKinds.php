@@ -48,12 +48,14 @@ final readonly class MarkdownLineKinds
     {
         $before = $index - 1;
 
-        // A line at another quote depth cannot continue the block above it, so it starts fresh as after a blank line.
-        if (!isset($kinds[$before], $depths[$before], $depths[$index]) || $depths[$before] !== $depths[$index]) {
+        if (!isset($kinds[$before], $depths[$before], $depths[$index])) {
             return MarkdownLineKind::Blank;
         }
 
-        return $kinds[$before];
+        // A line at another quote depth starts fresh, except that one after quoted prose may lazily continue that paragraph.
+        $continues = $depths[$before] === $depths[$index] || ($depths[$index] < $depths[$before] && MarkdownLineKind::Prose === $kinds[$before]);
+
+        return $continues ? $kinds[$before] : MarkdownLineKind::Blank;
     }
 
     /**
@@ -66,7 +68,7 @@ final readonly class MarkdownLineKinds
             $this->startsIndentedCode($content, $previous, $lists) => MarkdownLineKind::Code,
             1 === preg_match(self::HEADING, $content) => MarkdownLineKind::Heading,
             1 === preg_match(self::THEMATIC_BREAK, $content) => MarkdownLineKind::Break,
-            1 === preg_match(self::LIST_ITEM, $content) => $this->indents->opensWithCode($content) ? MarkdownLineKind::CodeItem : MarkdownLineKind::ListItem,
+            $this->indents->startsItem($content, $previous, $lists) => $this->indents->opensWithCode($content) ? MarkdownLineKind::CodeItem : MarkdownLineKind::ListItem,
             default => MarkdownLineKind::Prose,
         };
     }
@@ -78,7 +80,7 @@ final readonly class MarkdownLineKinds
     {
         // CommonMark: indented code cannot interrupt a paragraph, and inside a list item it starts four columns past the item's content.
         return $this->indents->indent($content) >= $this->indents->innermost($lists) + 4
-            && !in_array($previous, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true);
+            && !$previous->isText();
     }
 
     private function continuesAParagraph(MarkdownLineKind $kind, MarkdownLineKind $previous): bool
