@@ -36,9 +36,9 @@ final readonly class StatusMirrors
             if ($this->rounds->of($project, $change->id->value) instanceof ReviewStatus) {
                 $this->status->reconcile($project, $change->id);
             }
-            // Boundary: one pull request whose round cannot be read must not keep the others from their labels, nor hide the failure of the head step this pass runs after.
+            // Boundary: one pull request whose round cannot be read or whose label cannot be reconciled must not keep the others from their labels, nor hide the failure of the head step this pass runs after.
         } catch (Throwable $failure) {
-            $this->logger->warning('The status label of {change} of {project} was not reconciled, its round could not be read: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $failure->getMessage()]);
+            $this->logger->warning('The status label of {change} of {project} was not reconciled, reading its round or reconciling its label failed: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $failure->getMessage()]);
         }
     }
 }

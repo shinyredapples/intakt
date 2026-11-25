@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Closure;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -149,14 +150,19 @@ final readonly class ReviewRounds
     public function ofEverySpelling(string $project, string $change): array
     {
         $canonical = ChangeAddress::canonical($change);
+        $spellings = $this->storedSpellingsOf($project, $canonical);
+
+        if ([] === $spellings) {
+            return [];
+        }
 
         // Refreshed, because a worker keeps its entity manager between messages, and a round it loaded earlier would hide the state and the publication other workers committed since.
-        /** @var list<ReviewRound> $rounds */
-        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project ORDER BY r.change.number DESC', ReviewRound::class))
+        /** @var list<ReviewRound> $ofChange */
+        $ofChange = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change IN (:spellings) ORDER BY r.change.number DESC', ReviewRound::class))
             ->setParameter('project', $project)
+            ->setParameter('spellings', $spellings, ArrayParameterType::STRING)
             ->setHint(Query::HINT_REFRESH, true)
             ->getResult();
-        $ofChange = array_values(array_filter($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical));
 
         return [
             ...array_filter($ofChange, static fn (ReviewRound $round): bool => $round->change() === $canonical),
@@ -208,6 +214,20 @@ final readonly class ReviewRounds
     public function openFindingsOf(ReviewRound $round): array
     {
         return $this->findings->openFor($round);
+    }
+
+    // Read as a column, because the watcher asks on every pass for each open pull request, and hydrating the project's rounds to compare their addresses would cost every round the project ever stored; the canonical form cannot be compared in SQL, so the project's distinct addresses are compared here.
+    /**
+     * @return list<string>
+     */
+    private function storedSpellingsOf(string $project, string $canonical): array
+    {
+        /** @var list<string> $stored */
+        $stored = $this->entities->createQuery(sprintf('SELECT DISTINCT r.change.change FROM %s r WHERE r.subject.project = :project', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->getSingleColumnResult();
+
+        return array_values(array_filter($stored, static fn (string $spelling): bool => ChangeAddress::canonical($spelling) === $canonical));
     }
 
     // A round left under an old spelling predates every round of the canonical sequence, whose numbers do not compare with its own, so any judged canonical round of the same head supersedes it.

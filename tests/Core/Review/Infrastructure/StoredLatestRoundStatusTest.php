@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\ReviewStatus;
+use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
@@ -74,6 +75,44 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         $this->publishedRound();
 
         self::assertNull($this->latestStatus()->of('beta', RoundFixture::CHANGE));
+    }
+
+    public function testAPullRequestWithoutARoundLoadsNoRoundOfTheProjectsOtherPullRequests(): void
+    {
+        foreach (range(1, 5) as $number) {
+            $this->fixture->startFor('https://github.com/acme/widgets/pull/'.$number, $this->fixture->bus, 2);
+        }
+        $this->fixture->entities->clear();
+
+        $status = $this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/99');
+
+        self::assertNull($status);
+        self::assertCount(0, $this->fixture->entities->getUnitOfWork()->getIdentityMap()[ReviewRound::class] ?? []);
+    }
+
+    public function testAPullRequestWithARoundLoadsOnlyItsOwnRounds(): void
+    {
+        foreach (range(1, 3) as $number) {
+            $this->fixture->startFor('https://github.com/acme/widgets/pull/'.$number, $this->fixture->bus, 2);
+        }
+        $this->fixture->entities->clear();
+
+        $status = $this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/2');
+
+        self::assertSame(ReviewStatus::InReview, $status);
+        self::assertCount(1, $this->fixture->entities->getUnitOfWork()->getIdentityMap()[ReviewRound::class] ?? []);
+    }
+
+    public function testARoundLeftUnderAnOldSpellingStillGivesItsPullRequestAStatus(): void
+    {
+        $this->fixture->startFor('https://github.com/acme/widgets/pull/7', $this->fixture->bus, 2);
+        foreach (['change_findings', 'review_round'] as $table) {
+            $this->fixture->entities->getConnection()->executeStatement(sprintf('UPDATE %s SET change_ref = ? WHERE change_ref = ?', $table), ['https://github.com/Acme/Widgets/pull/7', 'https://github.com/acme/widgets/pull/7']);
+        }
+        $this->fixture->entities->clear();
+
+        self::assertSame(ReviewStatus::InReview, $this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/7'));
+        self::assertNull($this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/8'));
     }
 
     protected function setUp(): void
