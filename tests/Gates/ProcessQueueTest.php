@@ -145,13 +145,13 @@ final class ProcessQueueTest extends SandboxTestCase
     public function testAJobStartedLateInThePassWhoseOwnTimeoutIsLongerThanWhatIsLeftIsNamedByTheOverallLimit(): void
     {
         $late = static function (int $worker): array {
-            // Half of the pass is used up before the job starts, so the pass ends long before the job's own limit would.
-            usleep(250_000);
+            // The pass started before this build, so after the gap between both limits less than the job's own limit is left; a late scheduler only shrinks it further.
+            usleep(20_000);
 
             return [['php', '-r', 'echo "started\n"; sleep(30);'], []];
         };
 
-        $results = new ProcessQueue(0.45, 0.5)->run(['late' => $late], 1, $this->emptySandbox()->root);
+        $results = new ProcessQueue(0.48, 0.5)->run(['late' => $late], 1, $this->emptySandbox()->root);
 
         // The last output is required because a job the pass ended before its start gets the same reason without it.
         self::assertSame(ProcessRunner::TIMED_OUT, $results['late']->exitCode);
