@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -30,6 +31,6 @@ final readonly class StoredLatestRoundStatus implements LatestRoundStatus
 
     private function isPublishedVerdict(ReviewRound $round): bool
     {
-        return RoundState::Judged === $round->state() && null !== $round->publishedAt();
+        return RoundState::Judged === $round->state() && $round->publishedAt() instanceof DateTimeImmutable;
     }
 }
