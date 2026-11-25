@@ -54,24 +54,6 @@ final readonly class ReviewJobAnswer
             : new self($text, [], self::codexUsage($events));
     }
 
-    // After decoding, because JSON may escape any character of a value, and before anything else reads the events.
-    /**
-     * @param list<array<mixed>>             $events
-     * @param (Closure(string): string)|null $redacted
-     *
-     * @return list<array<mixed>>
-     */
-    private static function redacted(array $events, ?Closure $redacted): array
-    {
-        if ($redacted instanceof Closure) {
-            array_walk_recursive($events, static function (mixed &$value) use ($redacted): void {
-                $value = is_string($value) ? $redacted($value) : $value;
-            });
-        }
-
-        return $events;
-    }
-
     /**
      * @return list<array<mixed>>|null
      */
@@ -86,6 +68,24 @@ final readonly class ReviewJobAnswer
                 return null;
             }
             $events[] = $event;
+        }
+
+        return $events;
+    }
+
+    // After decoding, because JSON may escape any character of a value, and before anything else reads the events.
+    /**
+     * @param list<array<mixed>>             $events
+     * @param (Closure(string): string)|null $redacted
+     *
+     * @return list<array<mixed>>
+     */
+    private static function redacted(array $events, ?Closure $redacted): array
+    {
+        if ($redacted instanceof Closure) {
+            array_walk_recursive($events, static function (mixed &$value) use ($redacted): void {
+                $value = is_string($value) ? $redacted($value) : $value;
+            });
         }
 
         return $events;

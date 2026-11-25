@@ -116,7 +116,10 @@ final class JobReviewVendorTest extends TestCase
 
     public function testAnUnreadableVerdictWithReportedUsageSettlesTheCallWithIt(): void
     {
-        $spent = new TokenUsage(promptTokens: 100, completionTokens: 20);
+        $spent = new TokenUsage(
+            promptTokens: 100,
+            completionTokens: 20,
+        );
 
         try {
             $this->reviewed(new JobVerdict(VerdictUnreadable::because('no verdict'), false, [$spent], new Account(Provider::ClaudeCode, 'team')));

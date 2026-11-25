@@ -90,21 +90,21 @@ final readonly class ClaudeCodeJobEvents
     /**
      * @param array<mixed> $block
      */
+    private function succeeded(array $block): bool
+    {
+        // Only a missing or false error flag, because a flag of another type (null or the string "true") is no answer the CLI gives for a read that worked.
+        return 'tool_result' === ($block[self::TYPE] ?? null) && (!array_key_exists('is_error', $block) || false === $block['is_error']);
+    }
+
+    /**
+     * @param array<mixed> $block
+     */
     private function fileReadBy(array $block): ?string
     {
         $input = 'tool_use' === ($block[self::TYPE] ?? null) && self::READ_TOOL === ($block['name'] ?? null) ? $block['input'] ?? null : null;
         $path = is_array($input) ? $input['file_path'] ?? null : null;
 
         return is_string($path) && $this->inTheCheckout($path) ? substr($path, strlen(ReviewJob::CHECKOUT.'/')) : null;
-    }
-
-    /**
-     * @param array<mixed> $block
-     */
-    private function succeeded(array $block): bool
-    {
-        // Only a missing or false error flag, because a flag of another type (null or the string "true") is no answer the CLI gives for a read that worked.
-        return 'tool_result' === ($block[self::TYPE] ?? null) && (!array_key_exists('is_error', $block) || false === $block['is_error']);
     }
 
     /**

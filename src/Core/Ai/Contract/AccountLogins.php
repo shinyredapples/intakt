@@ -10,6 +10,6 @@ interface AccountLogins
      * @throws EveryAccountCoolingDown
      * @throws EveryKeyRejected
      */
-    // The first free account in the owner's order, as a call in the app's own process takes it.
+    // The first free account in the owner's order, because a call in the app's own process takes it too.
     public function claudeCode(): AccountLogin;
 }

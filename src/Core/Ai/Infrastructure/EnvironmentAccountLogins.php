@@ -39,9 +39,7 @@ final readonly class EnvironmentAccountLogins implements AccountLogins
             }
         }
 
-        // Nothing to wait for when every key was rejected, as for a call in the app's own process.
-        throw $this->cooldowns->isEveryAccountRejected(Provider::ClaudeCode)
-            ? new EveryKeyRejected(Provider::ClaudeCode)
-            : new EveryAccountCoolingDown(Provider::ClaudeCode, max(1, $this->cooldowns->secondsUntilAnAccountIsFree(Provider::ClaudeCode)));
+        // Typed apart, because a wait brings nothing back when every key was rejected.
+        throw $this->cooldowns->isEveryAccountRejected(Provider::ClaudeCode) ? new EveryKeyRejected(Provider::ClaudeCode) : new EveryAccountCoolingDown(Provider::ClaudeCode, max(1, $this->cooldowns->secondsUntilAnAccountIsFree(Provider::ClaudeCode)));
     }
 }

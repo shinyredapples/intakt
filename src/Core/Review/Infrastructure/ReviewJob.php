@@ -22,8 +22,8 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Platform\Contract\HeldCredentialSpans;
-use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Contract\RedactedSpans;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
 use InvalidArgumentException;
 use NoDiscard;
@@ -183,6 +183,15 @@ final readonly class ReviewJob
         return null === $last ? null : substr($last, strlen(self::REFUSAL));
     }
 
+    // The last such line, because the script writes it after the CLI ended, and the CLI's own errors in the log come before it.
+    private function cliStatusIn(Provider $provider, JobOutput $output): int
+    {
+        preg_match_all('/^'.preg_quote($provider->value, '/').' exited with (\d+)$/m', $output->contents(self::LOG) ?? '', $exits);
+        $status = array_last($exits[1]);
+
+        return null === $status ? throw ReviewJobFailure::withoutCliExit($provider) : (int) $status;
+    }
+
     // Only the login's value, not the other shapes of a log line, because a cut header in the answer could take the verdict with it; they are redacted where the verdict is stored.
     private function withoutLogin(ReviewJobRequest $request, string $text): string
     {
@@ -194,14 +203,5 @@ final readonly class ReviewJob
 
         // A failed match would leave the rest unredacted, so nothing of the text goes on.
         return $spans instanceof RedactedSpans ? $spans->replacedIn($text) : Redaction::MARKER;
-    }
-
-    // The last such line, because the script writes it after the CLI ended, and the CLI's own errors in the log come before it.
-    private function cliStatusIn(Provider $provider, JobOutput $output): int
-    {
-        preg_match_all('/^'.preg_quote($provider->value, '/').' exited with (\d+)$/m', $output->contents(self::LOG) ?? '', $exits);
-        $status = array_last($exits[1]);
-
-        return null === $status ? throw ReviewJobFailure::withoutCliExit($provider) : (int) $status;
     }
 }

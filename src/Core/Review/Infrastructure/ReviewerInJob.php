@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Ai\Contract\AccountLogin;
 use Intakt\Core\Ai\Contract\AccountLogins;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -48,26 +47,20 @@ final readonly class ReviewerInJob implements JobReviewer
     #[Override]
     public function review(ReviewRequest $request, JobReview $job, ResolvedModel $model): JobVerdict
     {
-        // The only provider whose CLI can read files in a job; any other is refused by the job itself.
+        // Only for Claude Code, because no other provider's CLI can read files in a job.
         $login = Provider::ClaudeCode === $model->provider ? $this->logins->claudeCode() : null;
+        $prompt = $this->jobPrompt->textOf($this->prompt->messagesFor($request->conversation, $request->brief));
         $clone = $this->clones->cloneAt($request->checkout->root(), $job->head);
 
-        // The clone is removed after the job, also when it throws, so no head is left on the host.
+        // Removed also when the job throws, because a head must not stay on the host.
         try {
-            $answer = $this->answerOf($request, $job, $model, $clone, $login);
+            $answer = $this->jobs->run(new ReviewJobRequest($request->brief->change->project, $clone, $job->head->hash, $job->reviewer, $model, $prompt, $login));
             $read = $this->clones->holdsARegularFileOf($clone, $job->head, $answer->readFiles);
         } finally {
             $this->clones->remove($clone);
         }
 
         return new JobVerdict($this->verdictOrRefusal($request, $answer), $read, $answer->usage, $login?->account);
-    }
-
-    private function answerOf(ReviewRequest $request, JobReview $job, ResolvedModel $model, string $clone, ?AccountLogin $login): ReviewJobAnswer
-    {
-        $prompt = $this->jobPrompt->textOf($this->prompt->messagesFor($request->conversation, $request->brief));
-
-        return $this->jobs->run(new ReviewJobRequest($request->brief->change->project, $clone, $job->head->hash, $job->reviewer, $model, $prompt, $login));
     }
 
     private function verdictOrRefusal(ReviewRequest $request, ReviewJobAnswer $answer): Verdict|VerdictUnreadable

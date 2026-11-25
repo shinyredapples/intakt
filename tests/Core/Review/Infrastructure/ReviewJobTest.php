@@ -320,9 +320,14 @@ final class ReviewJobTest extends TestCase
 
     public function testARefusalQuotingTheLoginComesOutRedacted(): void
     {
-        $this->expectExceptionMessage('refused to run the reviewer: no [redacted] here.');
+        $refused = '';
+        try {
+            (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 1), new JobOutput(new JobOutputFile(ReviewJob::LOG, "refused: no PLANT-login-token here\n"))))->run($this->requestWithLogin());
+        } catch (ReviewJobFailure $failure) {
+            $refused = $failure->getMessage();
+        }
 
-        (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 1), new JobOutput(new JobOutputFile(ReviewJob::LOG, "refused: no PLANT-login-token here\n"))))->run($this->requestWithLogin());
+        self::assertSame('The review job refused to run the reviewer: no [redacted] here.', $refused);
     }
 
     protected function setUp(): void

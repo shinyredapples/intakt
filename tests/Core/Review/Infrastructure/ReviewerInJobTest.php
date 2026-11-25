@@ -303,14 +303,6 @@ final class ReviewerInJobTest extends TestCase
         new Filesystem()->remove($this->folder);
     }
 
-    private function git(string $directory, string ...$arguments): string
-    {
-        $git = new Process(['git', ...$arguments], $directory);
-        $git->mustRun();
-
-        return $git->getOutput();
-    }
-
     private function commit(string $file, string $content): string
     {
         $source = $this->folder.'/source';
@@ -319,6 +311,14 @@ final class ReviewerInJobTest extends TestCase
         $this->git($source, ...[...self::IDENTITY, 'commit', '--quiet', '-m', 'Change '.$file]);
 
         return trim($this->git($source, 'rev-parse', 'HEAD'));
+    }
+
+    private function git(string $directory, string ...$arguments): string
+    {
+        $git = new Process(['git', ...$arguments], $directory);
+        $git->mustRun();
+
+        return $git->getOutput();
     }
 
     /**
