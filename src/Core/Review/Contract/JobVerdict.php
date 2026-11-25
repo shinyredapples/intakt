@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Ai\Contract\Account;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -15,11 +16,21 @@ final readonly class JobVerdict
      * @param list<TokenUsageInterface> $usage
      */
     public function __construct(
-        public Verdict $verdict,
-        // From the job CLI's own events, because the model's text could claim a read it never made.
+        // The refusal of an answer that is no verdict is kept here instead of thrown, so the usage the job reported settles the call all the same.
+        private Verdict|VerdictUnreadable $answer,
+        // From the job CLI's own events and the head's tree, because the model's text could claim a read it never made and a link could lead out of the checkout.
         public bool $readTheCheckout,
         // Empty when the CLI reported none, so the vendor can leave the call unsettled instead of settling zero.
         public array $usage,
+        public ?Account $account = null,
     ) {
+    }
+
+    /**
+     * @throws VerdictUnreadable
+     */
+    public function verdict(): Verdict
+    {
+        return $this->answer instanceof Verdict ? $this->answer : throw $this->answer;
     }
 }

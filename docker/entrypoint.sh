@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# The admin API can change the whole server, so the start stops on a listener off loopback: the Caddyfile hands CADDY_ADMIN to Caddy as it is, and a bare port such as :2019 binds every interface.
+if [[ ! ${CADDY_ADMIN:-localhost:2019} =~ ^(localhost|127\.0\.0\.1|\[::1\]):[0-9]+$ ]]; then
+    # The refused value stays out of the log: an operator may have pasted a URL that carries a password.
+    echo "intakt: CADDY_ADMIN must be a port on localhost, 127.0.0.1 or [::1] (for example localhost:2019); the value set was refused" >&2
+    exit 1
+fi
+
 # Each start writes its own draft (mode 0600 from mktemp) and links it into place; the link fails when another start linked first, so starts at once all read the one complete value.
 kept_secret() {
     local draft
@@ -173,7 +180,7 @@ async() {
 }
 
 scheduler_watcher() {
-    exec php bin/console messenger:consume scheduler_watcher --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
+    exec php bin/console messenger:consume scheduler_watcher scheduler_retention --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
 }
 
 declare -A running=()

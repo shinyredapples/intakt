@@ -143,6 +143,20 @@ services:
         tags:
             - phpstan.collector
     -
+        class: Intakt\Gates\PhpStan\RunTimeTraitConstructionCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\UsedTraitCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\UnusedTraitCarrierRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
         class: Intakt\Gates\PhpStan\NoServiceLocatorRule
         arguments:
             root: %currentWorkingDirectory%

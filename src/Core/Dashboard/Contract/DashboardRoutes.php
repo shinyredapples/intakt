@@ -9,11 +9,12 @@ final readonly class DashboardRoutes
 {
     public const string PREFIX = 'dashboard_';
     public const string SHOW_BOARD = self::PREFIX.'show_board';
-    public const string FIRST_RUN = self::PREFIX.'first_run';
+    public const string RUN_SETUP = self::PREFIX.'run_setup';
     public const string LIST_PROJECTS = self::PREFIX.'list_projects';
     public const string LIST_REVIEWS = self::PREFIX.'list_reviews';
     public const string LIST_WAITING = self::PREFIX.'list_waiting';
     public const string SHOW_TRENDS = self::PREFIX.'show_trends';
+    public const string SHOW_HISTORY = self::PREFIX.'show_history';
     public const string SEARCH = self::PREFIX.'search';
     public const string SHOW_COMPONENTS = self::PREFIX.'show_components';
     public const string SHOW_REVIEW = self::PREFIX.'show_review';

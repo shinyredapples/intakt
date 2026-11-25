@@ -105,13 +105,13 @@ final class ScriptedRound
             $this->consume($vendor);
 
             foreach ($this->fixture->judgings() as $judging) {
-                $this->fixture->judge(new ScriptedVendor())($judging);
+                $this->fixture->judge(new VerdictPerRole())($judging);
             }
         };
         $request = new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
 
         // Asked of the scripted judge's vendor, because the real stack here maps only the reviewers' tier and the judge is scripted.
-        return $this->reviewChange($work, new ScriptedVendor())->review($request);
+        return $this->reviewChange($work, new VerdictPerRole())->review($request);
     }
 
     // Each recoverable failure queues its message again at once, as Messenger's retry does once the delay has passed; the cooldowns run on real time, so an account a provider limited stays out for the whole run.

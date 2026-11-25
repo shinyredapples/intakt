@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class ReferenceLookup
+{
+    public function accounts(): string
+    {
+        return '%intakt.ai.accounts%';
+    }
+
+    public function platform(): string
+    {
+        return '@intakt.ai.platform';
+    }
+
+    public function platformOf(string $provider): string
+    {
+        return "@intakt.ai.platform.{$provider}";
+    }
+
+    public function escapedPercent(): string
+    {
+        return '%%intakt.ai.accounts%%';
+    }
+}

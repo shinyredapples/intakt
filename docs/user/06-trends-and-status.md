@@ -43,6 +43,10 @@ At the bottom of Trends, **Up next** lists the review rounds the board shows und
 
 Click a round to open its review page. A queued pull request has no link until its round starts, because its review page does not exist before that. When nothing is going on, Up next says "Nothing running or queued.". The list shows the moment you opened the page: reload it to see newer rounds.
 
+## History: what changed and who changed it
+
+Open `/history` to read the ledger as a list, newest first. Each row says who made the change, what it was, the project and the time. Where a value changed, the row shows it before and after; an expiry shows when the change has one. A secret never shows, only its fingerprint. The project filter at the top shows one project or all, and a reviewer's step counts for the project of its review; a row that belongs to no project shows under every project. Add `?project=` and a project name to the address to open the page with that project chosen; choose **All projects** to see every row again.
+
 ## Now: what is running right now
 
 Trends mostly looks back. For the present moment, open **Now** in the menu. The board's status line sums it up in one phrase, such as "Running smoothly · 1 reviewer working" or "Quiet · nobody working".
@@ -50,7 +54,7 @@ Trends mostly looks back. For the present moment, open **Now** in the menu. The 
 ![The board in dark mode: the sleeping octopus above the status line "Quiet, nobody working" with an arrow to the Status page, then the columns Waiting on you, In review and Done](../assets/guide/board.webp)
 
 1. Click the status line.
-2. The **Status** page lists every reviewer still at work, with its role, its change, its project and its round.
+2. The **Status** page lists every reviewer still at work, with its role, its change, its project and its round. A reviewer that started an hour ago or more is left out, since no review runs that long.
 3. Click a lane to open the review it is working on.
 
 When nobody works, the page says so: "No reviewer is working right now: reviewers appear here while they review a change".

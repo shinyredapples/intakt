@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuildQuestion;
@@ -21,12 +22,14 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -154,7 +157,7 @@ final readonly class BuildTask
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
                 // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back.
-                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
+                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels))) ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))),
                 BuildStep::Push => $this->push($request, $results),
             };
 
@@ -307,7 +310,7 @@ final readonly class BuildTask
     // Asked before the build job runs, because a bug without its four parts has no failing test to write first and the builder would guess it.
     private function incompleteBugQuestion(ListedIssue $task): ?BuildQuestion
     {
-        if (TaskKind::Bug !== TaskKind::fromLabels($task->labels)) {
+        if (TaskKind::Bug !== TaskKind::fromLabels(new Labels(...$task->labels))) {
             return null;
         }
 
@@ -319,8 +322,9 @@ final readonly class BuildTask
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
     {
         // No paths and no setback, because a first build has no file forecast and no earlier round.
-        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($task->labels, []));
-        $brief = new BuildBrief($task->title."\n\n".$task->body, [], null);
+        $labels = new Labels(...$task->labels);
+        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($labels, new Paths()));
+        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null, TaskKind::fromLabels($labels));
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }

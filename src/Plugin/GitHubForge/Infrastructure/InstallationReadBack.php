@@ -33,7 +33,7 @@ final readonly class InstallationReadBack
         if ([] !== $differences) {
             $this->logger->warning('The GitHub App installation does not match the configuration.', ['differences' => $differences]);
 
-            throw InstallationDoesNotMatchConfiguration::with($differences);
+            throw InstallationDoesNotMatchConfiguration::with(implode('; ', $differences));
         }
 
         return $installation;

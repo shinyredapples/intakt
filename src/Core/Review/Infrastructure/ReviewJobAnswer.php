@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Symfony\AI\Platform\Bridge\Codex\TokenUsageExtractor;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
@@ -16,23 +17,26 @@ final readonly class ReviewJobAnswer
     private const string TYPE = 'type';
 
     /**
+     * @param list<string>              $readFiles
      * @param list<TokenUsageInterface> $usage
      */
     private function __construct(
         public string $text,
-        // Read from the CLI's own events, never from the model's text, so the vendor counts an approve only when the job read a file of the checkout.
-        public bool $readTheCheckout,
+        // The checkout's paths the CLI's own events show as read, never the model's text; whether the head holds them as regular files is checked against the head, because a read follows a committed link.
+        public array $readFiles,
         // What the CLI reported it spent; empty when it reported nothing, so the vendor leaves the call unsettled instead of settling it as zero.
         public array $usage,
     ) {
     }
 
     /**
+     * @param (Closure(string): string)|null $redacted
+     *
      * @throws ReviewJobFailure
      */
-    public static function read(Provider $provider, string $output): self
+    public static function read(Provider $provider, string $output, ?Closure $redacted = null): self
     {
-        $events = self::events($output) ?? [];
+        $events = self::redacted(self::events($output) ?? [], $redacted);
         $claudeCode = new ClaudeCodeJobEvents($events);
         $text = match ($provider) {
             Provider::ClaudeCode => $claudeCode->answer(),
@@ -45,9 +49,27 @@ final readonly class ReviewJobAnswer
         }
 
         return Provider::ClaudeCode === $provider
-            ? new self($text, $claudeCode->readACheckoutFile(), $claudeCode->usage())
+            ? new self($text, $claudeCode->readFiles(), $claudeCode->usage())
             // No read counts, because the job's Codex has its shell and every other tool off, so its events can show no file it read.
-            : new self($text, false, self::codexUsage($events));
+            : new self($text, [], self::codexUsage($events));
+    }
+
+    // After decoding, because JSON may escape any character of a value, and before anything else reads the events.
+    /**
+     * @param list<array<mixed>>             $events
+     * @param (Closure(string): string)|null $redacted
+     *
+     * @return list<array<mixed>>
+     */
+    private static function redacted(array $events, ?Closure $redacted): array
+    {
+        if ($redacted instanceof Closure) {
+            array_walk_recursive($events, static function (mixed &$value) use ($redacted): void {
+                $value = is_string($value) ? $redacted($value) : $value;
+            });
+        }
+
+        return $events;
     }
 
     /**

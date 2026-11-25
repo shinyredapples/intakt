@@ -14,6 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\BranchPullRequest;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -34,6 +35,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemNotAsPlanned;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueueOrder;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskBranchName;
@@ -65,6 +67,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(BranchPullRequest::class)]
 #[UsesClass(CompleteListing::class)]
 #[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
 #[UsesClass(IntakeStore::class)]
 #[UsesClass(StoredIssue::class)]
 #[UsesClass(TaskFailure::class)]
@@ -77,6 +80,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(IntakeValidator::class)]
 #[UsesClass(ListingRows::class)]
 #[UsesClass(QueuedIssue::class)]
+#[UsesClass(QueueOrder::class)]
 #[UsesClass(SyncState::class)]
 #[UsesClass(Vouching::class)]
 #[UsesClass(IssueListing::class)]
@@ -146,7 +150,54 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $pick = $this->source()->nextWork('alpha', WorkerState::Free);
 
         self::assertEquals(new Task(7, 'Task 7', 12), $pick->task);
-        self::assertSame(1, $this->branches->reads);
+        self::assertSame(2, $this->branches->reads);
+    }
+
+    public function testAPullRequestOpenedOnTheBranchDuringTheSteeringCheckMakesTheTaskARework(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'No closing keyword here.')]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+        $this->duringHistory = function (): void {
+            $this->branches->branchOf = [12 => 'feat/7-add-intake'];
+        };
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertEquals(new Task(7, 'Task 7', 12), $pick->task);
+        self::assertNotSame([], $this->historiesRead);
+    }
+
+    public function testNoBranchIsReadWhenNoTaskIsReady(): void
+    {
+        $this->reads->lists([]);
+        $this->branches->failure = new ForgeReadFailed('GitHub answered 502 to a read.');
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::NoTaskReady, $pick->nothing);
+        self::assertSame(0, $this->branches->reads);
+    }
+
+    public function testATaskWhosePullRequestIsFoundOnlyByItsBranchIsPickedBeforeAFreshTaskOfHigherPriority(): void
+    {
+        $this->branches->branchOf = [12 => 'feat/7-add-intake'];
+        $this->reads->lists([Issues::task(7), Issues::task(8, ['intakt', 'priority:urgent']), Issues::pullRequest(12, 'No closing keyword here.')]);
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertEquals(new Task(7, 'Task 7', 12), $pick->task);
+    }
+
+    public function testATaskWhosePullRequestIsFoundOnlyByItsBranchIsQueuedBeforeAFreshTaskOfHigherPriority(): void
+    {
+        $this->branches->branchOf = [12 => 'feat/7-add-intake'];
+        $this->reads->lists([Issues::task(7), Issues::task(8, ['intakt', 'priority:urgent']), Issues::pullRequest(12, 'No closing keyword here.')]);
+
+        $queue = $this->source()->queue('alpha');
+
+        self::assertEquals([new Task(7, 'Task 7', 12), new Task(8, 'Task 8', null)], $queue->ready());
     }
 
     public function testATaskWhosePullRequestIsFoundOnlyByItsBranchIsQueuedAsAReworkOfIt(): void
@@ -450,7 +501,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $pick = $source->nextWork('alpha', WorkerState::Free);
 
         self::assertSame(NothingPicked::ListingIncomplete, $pick->nothing);
-        self::assertSame([7, 12], $this->historiesRead);
+        self::assertSame([12], $this->historiesRead);
         self::assertSame('GitHub updated #12 after it was listed.', $this->onlyLog()['context']['reason'] ?? null);
     }
 
@@ -944,7 +995,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             $listed = $this->reads->lastListed[$number];
 
-            return new IssueHistory($this->editorOf[$number] ?? $this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$number][$label] ?? $this->labelApplier), $this->appliedInOrder ?? $listed->labels), $this->editedBodies[$number] ?? $listed->body, $listed->labels);
+            return new IssueHistory($this->editorOf[$number] ?? $this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$number][$label] ?? $this->labelApplier), $this->appliedInOrder ?? [...$listed->labels]), $this->editedBodies[$number] ?? $listed->body, $listed->labels);
         });
 
         return $this->sourceOver($this->reads, $histories);
@@ -1038,7 +1089,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             return in_array($account, $this->writers, true);
         });
-        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(['alpha' => ['eligibility_label' => $this->eligibilityLabel]]), new IssueReferences(), $this->logger);
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), new IssueReferences(), $this->logger);
 
         return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, new PullRequestsOfTasks($this->branches, $histories, $accounts, new IssueReferences()), $this->logger);
     }

@@ -77,6 +77,14 @@ final class ProjectsConfigurationTest extends TestCase
         self::assertSame([], $this->process([])['projects']);
     }
 
+    public function testAProjectsValueThatIsNoMapIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/Invalid type for path "intakt\.projects"/');
+
+        $this->process(['projects' => 'broken']);
+    }
+
     public function testEveryProviderHasItsDefaultAccountWhenNoneIsListed(): void
     {
         $accounts = $this->process([])['accounts'];

@@ -1,0 +1,38 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Review\Infrastructure;
+
+use Symfony\Component\Config\Definition\Builder\TreeBuilder;
+use Symfony\Component\Config\Definition\ConfigurationInterface;
+
+// Its own tree because the projects tree refuses keys it does not know; retention is the owner's for the one installation.
+final class RetentionConfiguration implements ConfigurationInterface
+{
+    public const int DEFAULT_DAYS = 30;
+
+    // A larger count overflows the date arithmetic into a cutoff in the future, which would delete every conversation; "forever" covers longer wishes.
+    public const int MAX_DAYS = 36500;
+
+    public const string FOREVER = 'forever';
+
+    public function getConfigTreeBuilder(): TreeBuilder
+    {
+        $tree = new TreeBuilder('intakt');
+        $tree->getRootNode()->addDefaultsIfNotSet()->children()->arrayNode('retention')->addDefaultsIfNotSet()->children()
+            ->scalarNode('conversation_days')
+                ->defaultValue(self::DEFAULT_DAYS)
+                ->validate()
+                    ->ifTrue(static fn (mixed $value): bool => self::FOREVER !== $value && (!is_int($value) || $value < 1 || $value > self::MAX_DAYS))
+                    ->thenInvalid(sprintf('retention.conversation_days must be a whole number of days from 1 to %d, or "forever", got %%s.', self::MAX_DAYS));
+
+        return $tree;
+    }
+
+    // Null stands for keeping forever, because no number of days can mean never.
+    public static function daysOf(int|string $setting): ?int
+    {
+        return self::FOREVER === $setting ? null : (int) $setting;
+    }
+}

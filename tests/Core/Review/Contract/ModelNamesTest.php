@@ -25,4 +25,9 @@ final class ModelNamesTest extends TestCase
     {
         self::assertSame([], [...new ModelNames()]);
     }
+
+    public function testOnlyNoNamesAreEmpty(): void
+    {
+        self::assertSame([true, false], [new ModelNames()->isEmpty(), new ModelNames('small')->isEmpty()]);
+    }
 }

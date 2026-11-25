@@ -133,7 +133,8 @@ final readonly class SymfonyAiVendor implements Vendor
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
         $job = $request->job;
-        if ($job instanceof JobReview) {
+        // Only Claude Code, because the job's Codex has no tool that reads a file, so every approval of it would be unread, and an API-key provider has no CLI in the review image.
+        if ($job instanceof JobReview && Provider::ClaudeCode === $answering->provider) {
             return $this->jobVerdictOn($reservation, fn (): JobVerdict => $this->jobs->review($request, $job, $answering));
         }
 
@@ -243,10 +244,6 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         try {
             $answer = $review();
-        } catch (VerdictUnreadable $unreadable) {
-            $this->usage->leaveUnsettled($reservation, $unreadable);
-
-            throw $unreadable;
             // Boundary: leaves the call unsettled and rethrows it typed, because any job failure must reach the callers as a vendor failure.
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure);
@@ -257,10 +254,10 @@ final readonly class SymfonyAiVendor implements Vendor
         if ([] === $answer->usage) {
             $this->usage->leaveUnsettled($reservation, JobReportedNoUsage::inItsOutput());
         } else {
-            $this->usage->settleReported($reservation, $answer->usage);
+            $this->usage->settleReported($reservation, $answer->usage, $answer->account);
         }
 
-        return $this->jobReadOrRefused($answer, $this->namingAFinding($answer->verdict));
+        return $this->jobReadOrRefused($answer, $this->namingAFinding($answer->verdict()));
     }
 
     // Only a subscription CLI in the app's own process is given the review server, because every other provider reaches it through the reviewer's own toolbox and a review job's CLI reads its checkout directly; the judge reads no repository.

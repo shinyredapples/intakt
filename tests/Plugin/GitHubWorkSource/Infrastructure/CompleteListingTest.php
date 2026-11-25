@@ -13,6 +13,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
@@ -58,6 +59,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeStore::class)]
 #[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
 #[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(GitHubIssueReads::class)]
 #[UsesClass(IssueFields::class)]
@@ -325,7 +327,7 @@ final class CompleteListingTest extends KernelTestCase
     {
         $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['intakt'])]);
 
-        $plan = $this->listingWatching(['alpha' => ['eligibility_label' => 'intakt']])->planOf('alpha');
+        $plan = $this->listingWatching(new EligibilityLabels(new ProjectEligibilityLabel('alpha', 'intakt')))->planOf('alpha');
 
         self::assertInstanceOf(IntakePlan::class, $plan);
         self::assertSame([8], $this->numbersOf($plan->ready));
@@ -335,7 +337,7 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testEachProjectPlansOnlyTheTasksCarryingTheLabelItsWatchNames(): void
     {
-        $watches = ['alpha' => ['eligibility_label' => 'intakt'], 'beta' => ['eligibility_label' => 'ready']];
+        $watches = new EligibilityLabels(new ProjectEligibilityLabel('alpha', 'intakt'), new ProjectEligibilityLabel('beta', 'ready'));
         $issues = [Issues::task(7, ['ready']), Issues::task(8, ['intakt'])];
         $this->reads->lists($issues);
         $alpha = $this->listingWatching($watches)->planOf('alpha');
@@ -352,7 +354,7 @@ final class CompleteListingTest extends KernelTestCase
     {
         $this->reads->lists([Issues::task(8, ['intakt'])]);
 
-        $plan = $this->listingWatching(['beta' => ['eligibility_label' => 'intakt']])->planOf('alpha');
+        $plan = $this->listingWatching(new EligibilityLabels(new ProjectEligibilityLabel('beta', 'intakt')))->planOf('alpha');
 
         self::assertNull($plan);
         self::assertSame(0, $this->reads->listings);
@@ -597,7 +599,7 @@ final class CompleteListingTest extends KernelTestCase
     {
         $references = new IssueReferences();
         $row = StoredIssue::of('alpha', new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
-        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), [...$listed->labels]), $listed->body, $listed->labels);
         $row->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => 'ana' === $account));
 
         return $row;
@@ -698,17 +700,14 @@ final class CompleteListingTest extends KernelTestCase
 
     private function listingOver(IssueReads $reads, IssueHistories $histories, string $label = 'intakt'): CompleteListing
     {
-        return $this->listingWatching(['alpha' => ['eligibility_label' => $label]], $reads, $histories);
+        return $this->listingWatching(new EligibilityLabels(new ProjectEligibilityLabel('alpha', $label)), $reads, $histories);
     }
 
-    /**
-     * @param array<string, array{eligibility_label?: string}> $watches
-     */
-    private function listingWatching(array $watches, ?IssueReads $reads = null, ?IssueHistories $histories = null): CompleteListing
+    private function listingWatching(EligibilityLabels $labels, ?IssueReads $reads = null, ?IssueHistories $histories = null): CompleteListing
     {
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
 
-        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, new EligibilityLabels($watches), new IssueReferences(), $this->logger);
+        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, $labels, new IssueReferences(), $this->logger);
     }
 }

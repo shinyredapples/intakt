@@ -39,6 +39,16 @@ final class ReviewInJobOrInProcessTest extends KernelTestCase
         self::assertEquals([new JobReview($reviewer->round()->identity()->commits->head, $reviewer->roleName())], $vendor->jobs);
     }
 
+    public function testAnEngineIntaktDoesNotKnowRecordsTheReviewerAsFailed(): void
+    {
+        $fixture = new RoundFixture(self::getContainer(), engine: new ContainerEngine('podman'));
+
+        $vendor = $this->reviewedOn($fixture);
+
+        self::assertSame(0, $vendor->calls);
+        self::assertSame(ReviewerState::Failed, $fixture->reviewer($fixture->bus->messages[0]->reviewerId)->state());
+    }
+
     public function testAReviewInAJobEndsWithTheVerdictItsReviewerGave(): void
     {
         $fixture = new RoundFixture(self::getContainer(), engine: new ContainerEngine('docker'));
@@ -48,10 +58,10 @@ final class ReviewInJobOrInProcessTest extends KernelTestCase
         self::assertSame(ReviewerState::Verdict, $fixture->reviewer($fixture->bus->messages[0]->reviewerId)->state());
     }
 
-    private function reviewedOn(RoundFixture $fixture): ScriptedVendor
+    private function reviewedOn(RoundFixture $fixture): VerdictPerRole
     {
         $fixture->start(1);
-        $vendor = new ScriptedVendor();
+        $vendor = new VerdictPerRole();
         $fixture->deliver($fixture->bus->messages[0], $vendor);
 
         return $vendor;

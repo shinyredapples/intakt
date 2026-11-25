@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountLogin;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Job\Contract\JobCause;
@@ -13,6 +15,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
@@ -299,6 +302,29 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
     }
 
+    public function testTheLoginIsAReadOnlyInputOfItsOwnAndOnNoCommandLine(): void
+    {
+        (void) $this->reviewsAnswering('fine')->run($this->requestWithLogin());
+
+        self::assertSame(ReviewJob::LOGIN, $this->ran?->inputs[2]->containerPath);
+        self::assertStringNotContainsString('PLANT-login-token', implode(' ', [...$this->ran->command]));
+        self::assertFileDoesNotExist($this->ran->inputs[2]->hostPath);
+    }
+
+    public function testAnAnswerQuotingTheLoginComesOutRedacted(): void
+    {
+        $answer = $this->reviewsAnswering('it is PLANT-login-token and \u0050LANT-login-token')->run($this->requestWithLogin());
+
+        self::assertSame('it is [redacted] and [redacted]', $answer->text);
+    }
+
+    public function testARefusalQuotingTheLoginComesOutRedacted(): void
+    {
+        $this->expectExceptionMessage('refused to run the reviewer: no [redacted] here.');
+
+        (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 1), new JobOutput(new JobOutputFile(ReviewJob::LOG, "refused: no PLANT-login-token here\n"))))->run($this->requestWithLogin());
+    }
+
     protected function setUp(): void
     {
         $this->folder = sys_get_temp_dir().'/intakt-review-job-'.bin2hex(random_bytes(6));
@@ -341,6 +367,16 @@ final class ReviewJobTest extends TestCase
             $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'),
             'PLANT-prompt',
         );
+    }
+
+    private function reviewsAnswering(string $json): ReviewJob
+    {
+        return $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(new JobOutputFile(ReviewJob::ANSWER, '{"type":"result","is_error":false,"result":"'.$json.'"}'), new JobOutputFile(ReviewJob::LOG, "claude_code exited with 0\n"))));
+    }
+
+    private function requestWithLogin(): ReviewJobRequest
+    {
+        return new ReviewJobRequest('demo', $this->folder.'/checkout', self::HEAD, 'correctness', new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), 'PLANT-prompt', new AccountLogin(new Account(Provider::ClaudeCode, Account::DEFAULT), 'PLANT-login-token'));
     }
 
     /**

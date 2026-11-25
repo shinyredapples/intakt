@@ -44,7 +44,7 @@ flowchart TD
 | One pull request is skipped for a while | something went wrong with that one only, so Intakt tries it again after a short wait that grows each time; one broken item never stops the rest | nothing: the Reviews page shows a card with the reason; it is tried again at least every half hour, and after four failures in a row it goes to the Maintainer (planned) |
 | The log has an error saying the failure back-off started | something no single pull request causes went wrong: GitHub refused Intakt's credentials, the disk is full, the lock store failed while a pull request was being locked or unlocked, two different pull requests failed with the same error within an hour, or a hand-over could not be recorded; Intakt records a 15-minute hold, but today nothing checks it before a job, so work goes on (only the `intakt:budget:replay` command reads it; stopping new work and merges while it lasts is planned) | nothing: it ends by itself; if the cause stays, it starts again, and the log names the cause |
 | A red item on the board | a part of Intakt itself is failing (a sandbox, a package install, the boot gate); the Maintainer tries to fix it first | nothing, unless it also turns up in Waiting on you |
-| A red card in Waiting on you | a broken part only you can fix (an expired login, a credential, the host), or one the Maintainer could not fix | follow the card: it names the step and the cause |
+| A red card in Waiting on you | a broken part only you can fix (an expired login, a credential, the host), or one the Maintainer could not fix | follow the card: it names the step and the cause. A lost login or a rejected key is reported to you once, not again on every retry while it lasts; once that account answers a later request successfully, the matter is closed, so if the error comes back, you get a new report. A usage limit is not reported: it ends by itself |
 
 ## When work stops moving (planned)
 
@@ -64,7 +64,7 @@ None of this is built yet. Each rule in one sentence:
 
 ## Is the server itself busy?
 
-If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. The board shows the same numbers in a row under its columns each time it loads. Planned: a container health check built on them.
+If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. The board shows the same numbers in a row under its columns each time it loads. The container's health check uses them too: Docker calls the container unhealthy when the hub is unhealthy, no worker is ready to take a request, or the numbers cannot be read. `php bin/console intakt:server:health` shows what the check sees.
 
 ## What is Intakt doing right now?
 

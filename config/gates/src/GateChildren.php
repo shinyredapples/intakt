@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Closure;
+
 final readonly class GateChildren
 {
     public const string FULL_RESULT_VARIABLE = 'INTAKT_GATE_FULL_RESULT';
@@ -14,8 +16,10 @@ final readonly class GateChildren
 
     private const int POLL_MICROSECONDS = 10000;
 
+    // Because no outside timing can put a stop between two starts of one launch round, a test needs to act right after each start; `afterEachStart` is that test seam only, not an extension point, and bin/check never passes it.
     /**
-     * @param list<string> $runningTheChangesCode
+     * @param list<string>                              $runningTheChangesCode
+     * @param Closure(RunningChild|ProcessResult): void $afterEachStart
      */
     public function __construct(
         private string $home,
@@ -23,6 +27,8 @@ final readonly class GateChildren
         private GateSlots $slots,
         private array $runningTheChangesCode,
         private ProcessRunner $runner = new ProcessRunner(),
+        private Closure $afterEachStart = static function (RunningChild|ProcessResult $child): void {
+        },
     ) {
     }
 
@@ -84,13 +90,14 @@ final readonly class GateChildren
     }
 
     /**
-     * @param list<string>                $waiting
+     * @param list<string>                $order
      * @param array<string, ChildCommand> $children
      *
      * @return array<string, ProcessResult>
      */
-    private function resultsOf(array $waiting, array $children, ?ScratchDirectory $scratch): array
+    private function resultsOf(array $order, array $children, ?ScratchDirectory $scratch): array
     {
+        $waiting = array_combine($order, array_map(static fn (string $gate): ChildCommand => $children[$gate], $order));
         $running = [];
         $results = [];
         // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment, and bin/check then dies of that signal before any finally runs.
@@ -100,8 +107,7 @@ final readonly class GateChildren
         });
 
         while ([] !== $waiting || [] !== $running) {
-            [$waiting, $started] = $this->launched($waiting, $running, $children);
-            $running += $started;
+            $waiting = $this->launched($waiting, $running, $forwarding);
             $ended = $this->ended($running);
             $running = array_diff_key($running, $ended);
             $results += $ended;
@@ -144,23 +150,26 @@ final readonly class GateChildren
         }
     }
 
+    // Because the stop handler reads the same set, each child joins it the moment it starts, not once the whole round has started, and a stop waits until it has joined.
     /**
-     * @param list<string>                              $waiting
+     * @param array<string, ChildCommand>               $waiting
      * @param array<string, RunningChild|ProcessResult> $running
-     * @param array<string, ChildCommand>               $children
      *
-     * @return array{list<string>, array<string, RunningChild|ProcessResult>}
+     * @return array<string, ChildCommand>
      */
-    private function launched(array $waiting, array $running, array $children): array
+    private function launched(array $waiting, array &$running, StopSignalForwarding $forwarding): array
     {
-        $started = [];
-
-        while ([] !== $waiting && $this->mayStart($waiting, [...array_keys($running), ...array_keys($started)])) {
-            $gate = array_shift($waiting);
-            $started[$gate] = $this->started($children[$gate]);
+        while ([] !== $waiting && $this->mayStart(array_keys($waiting), array_keys($running))) {
+            $gate = array_key_first($waiting);
+            $child = $waiting[$gate];
+            unset($waiting[$gate]);
+            $forwarding->deferredAcross(function () use (&$running, $gate, $child): void {
+                $running[$gate] = $this->started($child);
+            });
+            ($this->afterEachStart)($running[$gate]);
         }
 
-        return [$waiting, $started];
+        return $waiting;
     }
 
     /**

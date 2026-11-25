@@ -38,12 +38,21 @@ final readonly class ClaudeCodeJobEvents
     }
 
     // A Read call of a file of the checkout that the CLI answered without a tool error, because a call that failed or read elsewhere (git's own metadata included) showed the reviewer nothing of the change.
-    public function readACheckoutFile(): bool
+    /**
+     * @return list<string>
+     */
+    public function readFiles(): array
     {
-        $reads = array_map(static fn (array $block): mixed => $block['id'] ?? null, array_filter($this->blocksOf('assistant'), $this->readsInTheCheckout(...)));
         $answered = array_map(static fn (array $block): mixed => $block['tool_use_id'] ?? null, array_filter($this->blocksOf('user'), $this->succeeded(...)));
+        $files = [];
+        foreach ($this->blocksOf('assistant') as $block) {
+            $file = $this->fileReadBy($block);
+            if (null !== $file && is_string($block['id'] ?? null) && in_array($block['id'], $answered, true)) {
+                $files[] = $file;
+            }
+        }
 
-        return [] !== array_intersect(array_filter($reads, is_string(...)), array_filter($answered, is_string(...)));
+        return $files;
     }
 
     // The usage of the final result, read by the same extractor as for the CLI in the app's own process, because that result covers every turn of the run.
@@ -81,12 +90,12 @@ final readonly class ClaudeCodeJobEvents
     /**
      * @param array<mixed> $block
      */
-    private function readsInTheCheckout(array $block): bool
+    private function fileReadBy(array $block): ?string
     {
         $input = 'tool_use' === ($block[self::TYPE] ?? null) && self::READ_TOOL === ($block['name'] ?? null) ? $block['input'] ?? null : null;
         $path = is_array($input) ? $input['file_path'] ?? null : null;
 
-        return is_string($path) && $this->inTheCheckout($path);
+        return is_string($path) && $this->inTheCheckout($path) ? substr($path, strlen(ReviewJob::CHECKOUT.'/')) : null;
     }
 
     /**
@@ -108,7 +117,7 @@ final readonly class ClaudeCodeJobEvents
         return is_array($content) ? array_values(array_filter($content, is_array(...))) : [];
     }
 
-    // Under the mount point with no step up, no "." segment and nothing of git's own folder, because the CLI resolves a dotted path itself and could leave the checkout, and .git holds no file of the change; a committed link is the head's own content, and the container holds nothing else to read through one.
+    // Under the mount point with no step up, no "." segment and nothing of git's own folder, because the CLI resolves a dotted path itself and could leave the checkout, and .git holds no file of the change; whether the head holds the path as a regular file is checked against the head (HeadClones).
     private function inTheCheckout(string $path): bool
     {
         $segments = explode('/', substr($path, strlen(ReviewJob::CHECKOUT.'/')));

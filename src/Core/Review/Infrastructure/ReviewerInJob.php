@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AccountLogin;
+use Intakt\Core\Ai\Contract\AccountLogins;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Review\Contract\JobReview;
 use Intakt\Core\Review\Contract\JobReviewer;
@@ -29,6 +32,7 @@ final readonly class ReviewerInJob implements JobReviewer
         private JobPrompt $jobPrompt,
         private HeadClones $clones,
         private ReviewJob $jobs,
+        private AccountLogins $logins,
         private VerdictParser $parser,
         private ValidatorInterface $validator,
         SerializerInterface $serializer,
@@ -39,27 +43,39 @@ final readonly class ReviewerInJob implements JobReviewer
     }
 
     /**
-     * @throws VerdictUnreadable
      * @throws ReviewJobFailure
      */
     #[Override]
     public function review(ReviewRequest $request, JobReview $job, ResolvedModel $model): JobVerdict
     {
-        $answer = $this->answerOf($request, $job, $model);
-
-        return new JobVerdict($this->verdictOf($request, $answer), $answer->readTheCheckout, $answer->usage);
-    }
-
-    // The clone is removed after the job, also when it throws, so no head is left on the host.
-    private function answerOf(ReviewRequest $request, JobReview $job, ResolvedModel $model): ReviewJobAnswer
-    {
-        $prompt = $this->jobPrompt->textOf($this->prompt->messagesFor($request->conversation, $request->brief));
+        // The only provider whose CLI can read files in a job; any other is refused by the job itself.
+        $login = Provider::ClaudeCode === $model->provider ? $this->logins->claudeCode() : null;
         $clone = $this->clones->cloneAt($request->checkout->root(), $job->head);
 
+        // The clone is removed after the job, also when it throws, so no head is left on the host.
         try {
-            return $this->jobs->run(new ReviewJobRequest($request->brief->change->project, $clone, $job->head->hash, $job->reviewer, $model, $prompt));
+            $answer = $this->answerOf($request, $job, $model, $clone, $login);
+            $read = $this->clones->holdsARegularFileOf($clone, $job->head, $answer->readFiles);
         } finally {
             $this->clones->remove($clone);
+        }
+
+        return new JobVerdict($this->verdictOrRefusal($request, $answer), $read, $answer->usage, $login?->account);
+    }
+
+    private function answerOf(ReviewRequest $request, JobReview $job, ResolvedModel $model, string $clone, ?AccountLogin $login): ReviewJobAnswer
+    {
+        $prompt = $this->jobPrompt->textOf($this->prompt->messagesFor($request->conversation, $request->brief));
+
+        return $this->jobs->run(new ReviewJobRequest($request->brief->change->project, $clone, $job->head->hash, $job->reviewer, $model, $prompt, $login));
+    }
+
+    private function verdictOrRefusal(ReviewRequest $request, ReviewJobAnswer $answer): Verdict|VerdictUnreadable
+    {
+        try {
+            return $this->verdictOf($request, $answer);
+        } catch (VerdictUnreadable $unreadable) {
+            return $unreadable;
         }
     }
 

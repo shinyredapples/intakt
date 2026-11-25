@@ -291,7 +291,7 @@ final readonly class RoundFixture
     // A new handler on every delivery, because a restarted worker has one too and a redelivery must find the kept verdict in the database, not in the handler; other locks stand for a key lock that expired.
     public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews, ?LockFactory $locks = null): void
     {
-        $agent = new EscalationAgent(new EscalationPrompt(new Fence()), new ScriptedVendor(), $reviews, $this->container->get(Redactor::class));
+        $agent = new EscalationAgent(new EscalationPrompt(new Fence()), new VerdictPerRole(), $reviews, $this->container->get(Redactor::class));
         $rounds = $this->rounds($this->entities);
 
         new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $locks ?? $this->locks)($message);

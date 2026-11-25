@@ -128,7 +128,13 @@ final readonly class ReSpelledNameRule implements Rule
 
     private function isServiceId(string $value): bool
     {
-        return str_starts_with($value, self::SERVICE_ID_PREFIX);
+        return str_starts_with($this->withoutReferenceSign($value), self::SERVICE_ID_PREFIX);
+    }
+
+    // one sign only, because '%%' is Symfony's escaped percent and stands for no parameter
+    private function withoutReferenceSign(string $value): string
+    {
+        return str_starts_with($value, '%') || str_starts_with($value, '@') ? substr($value, 1) : $value;
     }
 
     // only a class, because a trait, interface or enum with an ids class's name would let any class re-spell the ids through it

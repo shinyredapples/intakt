@@ -60,7 +60,7 @@ Intakt finds them in your project's config, your `compose.yaml`, the services yo
 
 ## Can reviewers use them?
 
-Planned, not built yet: today a reviewer reads the change and runs nothing. When you tell Intakt it may use Docker (`INTAKT_CONTAINER_ENGINE=docker`), each reviewer already works in a review job of its own: a box holding a read-only copy of exactly the commit under review, which can reach only that reviewer's AI company. Without that setting, as in the `docker compose` demo, reviewers read the change from inside Intakt. Once built, a review job gets the same sidecars as the check job, so a reviewer can:
+Planned, not built yet: today a reviewer reads the change and runs nothing. When you tell Intakt it may use Docker (`INTAKT_CONTAINER_ENGINE=docker`), each Claude Code reviewer already works in a review job of its own: a box holding a read-only copy of exactly the commit under review, which can reach only that reviewer's AI company. Without that setting, as in the `docker compose` demo, reviewers read the change from inside Intakt. Once built, a review job gets the same sidecars as the check job, so a reviewer can:
 - run the project's tests against a **real database**;
 - start **the changed application itself** in its box and call it, to see that it boots and answers;
 - (planned) write a small test of its own for an edge case and run it there.

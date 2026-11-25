@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 
 // One mapping for a listed issue and an issue read alone, so labels, title and body come out the same way from both reads.
@@ -63,16 +64,14 @@ final readonly class IssueFields
 
     /**
      * @param array<mixed> $issue
-     *
-     * @return list<string>
      */
-    private function labelsOf(array $issue): array
+    private function labelsOf(array $issue): IssueLabels
     {
         $labels = $issue['labels'] ?? [];
         if (!is_array($labels)) {
             throw new ForgeReadFailed('GitHub listed an issue with labels this forge cannot read.');
         }
 
-        return array_values(array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), $labels));
+        return new IssueLabels(...array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), array_values($labels)));
     }
 }

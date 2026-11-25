@@ -47,7 +47,7 @@ class Search {
         if (event.isComposing || event.keyCode === 229) {
             return;
         }
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        if ((event.metaKey || event.ctrlKey) && event.key?.toLowerCase() === 'k') {
             this.toggle(event);
             return;
         }

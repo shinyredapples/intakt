@@ -125,7 +125,7 @@ final class ReviewJobAnswerTest extends TestCase
     {
         $answer = ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), self::readResult('toolu_1', false)));
 
-        self::assertTrue($answer->readTheCheckout);
+        self::assertSame(['src/Cart.php'], $answer->readFiles);
         self::assertSame('looks fine', $answer->text);
     }
 
@@ -156,14 +156,14 @@ final class ReviewJobAnswerTest extends TestCase
     #[DataProvider('streamsWithoutARead')]
     public function testAClaudeCodeStreamWithoutASuccessfulReadOfACheckoutFileShowsNoRead(array $events): void
     {
-        self::assertFalse(ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(...$events))->readTheCheckout);
+        self::assertSame([], ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(...$events))->readFiles);
     }
 
     public function testTheModelsTextClaimingAReadShowsNoRead(): void
     {
         $output = (string) json_encode(['type' => 'result', 'is_error' => false, 'result' => 'I used Read on '.ReviewJob::CHECKOUT.'/src/Cart.php and it looks fine']);
 
-        self::assertFalse(ReviewJobAnswer::read(Provider::ClaudeCode, $output)->readTheCheckout);
+        self::assertSame([], ReviewJobAnswer::read(Provider::ClaudeCode, $output)->readFiles);
     }
 
     public function testClaudeCodesUsageIsReadFromItsFinalResult(): void
@@ -218,7 +218,7 @@ final class ReviewJobAnswerTest extends TestCase
         $answer = ReviewJobAnswer::read(Provider::Codex, $output);
 
         self::assertSame([[1200, 50, 800], [1300, 60, 0]], array_map(static fn ($usage): array => [$usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getCachedTokens()], $answer->usage));
-        self::assertFalse($answer->readTheCheckout);
+        self::assertSame([], $answer->readFiles);
     }
 
     /**

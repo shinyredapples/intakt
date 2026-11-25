@@ -106,6 +106,47 @@ test('choosing all projects shows every row again', () => {
     assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
 });
 
+test('choosing a project with no rows shows the empty line', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] }).open();
+
+    page.chooseProject('gamma');
+
+    assert.deepEqual(page.shownRows(), []);
+    assert.equal(page.emptyLineShown(), true);
+});
+
+test('choosing a project with rows keeps the empty line hidden', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] }).open();
+
+    page.chooseProject('alpha');
+
+    assert.equal(page.emptyLineShown(), false);
+});
+
+test('choosing all projects hides the empty line again', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] }).open();
+    page.chooseProject('gamma');
+
+    page.chooseProject('');
+
+    assert.equal(page.emptyLineShown(), false);
+});
+
+test('a phone shows no empty line, because it shows every project', () => {
+    const page = new Browser('light', { projects: ['alpha', 'beta', 'gamma'], phone: true }).open();
+
+    page.chooseProject('gamma');
+
+    assert.equal(page.emptyLineShown(), false);
+});
+
+test('a stored project with no rows shows the empty line after a reload', () => {
+    const browser = new Browser('light', { projects: ['alpha', 'beta', 'gamma'] });
+    browser.open().chooseProject('gamma');
+
+    assert.equal(browser.open().emptyLineShown(), true);
+});
+
 test('the chosen project stays chosen after a reload', () => {
     const browser = new Browser('light');
     browser.open().chooseProject('alpha');
@@ -338,6 +379,52 @@ test('after several visits a pushed project list keeps the project the current p
     assert.equal(page.projectFilter.value, 'beta');
     assert.deepEqual(page.shownRows(), ['beta', 'beta']);
     assert.equal(page.projectFilter.title, 'beta');
+});
+
+test('the history page keeps a project only its rows name, and its choice, when a pushed list lacks it', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['alpha', 'Beta10', 'beta2'], rows: ['beta2', 'alpha', 'Beta10'], pageProjects: ['beta2'] }).open();
+    page.chooseProject('beta2');
+
+    page.pushStream('projfilter', ['alpha', 'Beta10', 'gamma']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha', 'beta2', 'Beta10', 'gamma']);
+    assert.equal(page.projectFilter.value, 'beta2');
+    assert.deepEqual(page.shownRows(), ['beta2']);
+});
+
+test('a kept page project stays marked as the page own, so a second push keeps it too', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['alpha', 'zeta'], rows: ['zeta'], pageProjects: ['zeta'] }).open();
+    page.chooseProject('zeta');
+
+    page.pushStream('projfilter', ['alpha']);
+    page.pushStream('projfilter', ['alpha', 'beta']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha', 'beta', 'zeta']);
+    assert.equal(page.projectFilter.value, 'zeta');
+});
+
+test('a kept page project goes back where the server put it, also before a shared name a loose comparison calls equal', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['alpha', 'zeta-02', 'zeta-2'], rows: ['zeta-02'], pageProjects: ['zeta-02'] }).open();
+
+    page.pushStream('projfilter', ['alpha', 'zeta-2']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha', 'zeta-02', 'zeta-2']);
+});
+
+test('a kept page project that differs from shared ones only in case goes after them, which keep the pushed order', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['zeta', 'Zeta', 'ZETA'], rows: ['ZETA'], pageProjects: ['ZETA'] }).open();
+
+    page.pushStream('projfilter', ['zeta', 'Zeta']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'zeta', 'Zeta', 'ZETA']);
+});
+
+test('a kept page project that differs from a shared one only in case goes after it, as on the server', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['Zeta', 'zeta'], rows: ['zeta'], pageProjects: ['zeta'] }).open();
+
+    page.pushStream('projfilter', ['Zeta']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'Zeta', 'zeta']);
 });
 
 test('after several visits a pushed list without the chosen project falls back to all projects', () => {

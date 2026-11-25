@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\InfrastructureFigure;
@@ -81,7 +82,7 @@ final class BoardComingNextTemplateTest extends DashboardPageTestCase
         $requests->push(Request::create('/?board=1'));
         $twig = self::getContainer()->get('twig');
         self::assertInstanceOf(Environment::class, $twig);
-        $board = new Board([]);
+        $board = new Board(new DateTimeImmutable('2026-11-01T10:30:00+00:00'), []);
 
         return $twig->render('dashboard/board.html.twig', [
             'board' => $board,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Ai\Contract\AccountLogin;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 
 final readonly class ReviewJobRequest
@@ -18,6 +19,8 @@ final readonly class ReviewJobRequest
         public ResolvedModel $model,
         // Passed to the CLI as it is, so untrusted text in it is fenced by whoever writes it.
         public string $prompt,
+        // Null only for a run whose CLI needs none, because a job is given the login of the account it runs on and no other.
+        public ?AccountLogin $login = null,
     ) {
     }
 }

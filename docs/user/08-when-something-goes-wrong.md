@@ -18,13 +18,13 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 - **Why:** `INTAKT_LOG_LEVEL` holds something other than one of those levels in lower case, or is empty. The message does not repeat the value, so a key set there by mistake is not printed.
 - **What to do:** set `INTAKT_LOG_LEVEL` to one of the listed levels (`warning` is the usual one, `info` shows more), or remove it from `.env.local` and your environment to get `warning`, then start Intakt again.
 
-## The setup page says a step is Missing
+## The setup wizard says no provider has a key
 
-- **What you see:** **1. Add a key here** is not Done, and lines such as Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
+- **What you see:** step 3, **Add an AI account**, says "No provider has a key yet", with lines such as Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
 - **Why:** no provider has a key, so no reviewer can run.
 - **What to do:** add a key as in [chapter 3](03-your-first-real-review.md), then restart Intakt.
 
-## The setup page refuses your key
+## The setup wizard refuses your key
 
 - **What you see:** "The provider refused the key", or "The key has the form of no listed provider".
 - **Why:** the provider said no, or the text is not a whole key of a provider Intakt knows.
@@ -73,6 +73,12 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 - **Why:** the server is busy.
 - **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts and the hub. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the same.
 
+## Docker says the container is unhealthy
+
+- **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
+- **Why:** the health check failed three times in a row: the dashboard did not answer, the live-update hub reported a problem, no worker was ready to take a request, or the server's figures could not be read.
+- **What to do:** run `docker exec intakt php bin/console intakt:server:health`. Each `unhealthy:` line names one problem and why.
+
 ## The dashboard says "Open the dashboard on localhost"
 
 You set Intakt up on a small server in the hall and type its address into the laptop on your sofa. Instead of the board, a page tells you to open the dashboard on localhost. Nothing is broken: the dashboard has no login, so it answers only `http://localhost:7781` (7781 is the default; if you publish another port, use that port, the value of `DASHBOARD_PORT`) on the machine it runs on. Any other address could let a web page you visit act for you.
@@ -106,5 +112,20 @@ You press **Play the demo run**, the page comes back with "The demo run is start
 - **What to do:** do what it says: go back, reload, press again.
 
 More cases, and the exact wording of every reason, are in the [complete reference](../reference/user-manual.md).
+
+## Trying the install the way a stranger does
+
+`bin/install-check` runs, in a temporary folder, every command of the README's install block as written, including its `git clone` (pointed at the repository you name). Then it plays the demo run in a browser, checks every dashboard page and walks the journeys when the clone has `bin/journey-check`. A `cd` in one README line carries to the next. It never uses your own checkout, and the README's commands never see your keys or a GitHub token.
+
+When you have set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, it also runs one review with that key: it writes the key to the clone's `.env.local` and starts the container again, as the README's key path does.
+
+```
+bin/install-check                     # the GitHub repository's default branch
+bin/install-check .                   # the repository you are in, for trying a change
+```
+
+It prints one line per step (`passed`, `failed` or `skipped`) and, under a failed step, the last lines of its log, with keys and the MCP owner token shown as `[redacted]`. It exits 0 when every step passed, 1 when a step failed (also a step that ran longer than 30 minutes, which is stopped with everything it started, or containers that would not stop) and 2 when it could not run (no `docker compose`, a clone that fails, a README without the install block) or could not report. It needs Docker, Node.js 22, Playwright and `setsid` (part of util-linux on Linux), and port 7781 free. The logs, the screenshots and `report.json` are kept in `var/install-check/<date>-<time>-<6 hex digits>/`. The containers are stopped and the clone is removed at the end, also when a step failed. Each run has its own Docker Compose project, so it never stops or removes another install's containers.
+
+When `GITHUB_REPOSITORY=owner/name` and `GH_TOKEN` are set, the check reports itself through `bin/journey-alarm`: one urgent task per failing step, updated while the step keeps failing and closed when it passes again. An install command is known by its place in the README block, so fixing a broken command closes its task. After adding or removing a command, a task for a step the run no longer has is closed by the next run in which every install command passes. The check only updates or closes tasks that the account behind the token opened, so an issue someone else wrote with a copy of its marker is left alone. A token GitHub will not tell its own account name (a workflow's or a GitHub App's token) also needs `INSTALL_CHECK_ALARM_ACCOUNT` set to the account the issues are filed as, for example `github-actions[bot]`; without it the check files nothing and exits 2. Without `GITHUB_REPOSITORY` it only prints. A daily scheduled run is added by a later change.
 
 Next: [Running it for a team](09-running-it-for-a-team.md)

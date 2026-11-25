@@ -54,6 +54,27 @@ final class ReviewScriptTest extends TestCase
         self::assertSame("answered\n", $this->outputFile('answer'));
     }
 
+    public function testTheLoginReachesTheClisEnvironmentAloneAndWinsOverAnApiKeyOfTheImage(): void
+    {
+        $this->givenTheCli('claude', 'printf "%s\n" "$@" > "$RECORD/arguments"; printf "%s\n" "$CLAUDE_CODE_OAUTH_TOKEN" "${ANTHROPIC_API_KEY-unset}" > "$RECORD/environment"');
+        $login = $this->work.'-login';
+        new Filesystem()->dumpFile($login, 'PLANT-login-token');
+
+        $run = $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5', $login], ['ANTHROPIC_API_KEY' => 'PLANT-key']);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertSame(['PLANT-login-token', 'unset'], $this->recordedLines('environment'));
+        self::assertStringNotContainsString('PLANT-login-token', $this->recorded('arguments'));
+        new Filesystem()->remove($login);
+    }
+
+    public function testALoginThatCannotBeReadIsRefused(): void
+    {
+        $run = $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5', $this->work.'/no-login'], []);
+
+        $this->assertRefused($run, 'the login cannot be read');
+    }
+
     public function testACodexReviewSwitchesOffEveryToolTheInProcessCodexReviewerSwitchesOff(): void
     {
         $this->givenTheCli('codex', 'printf "%s\n" "$@" > "$RECORD/arguments"; pwd > "$RECORD/directory"; cat > "$RECORD/input"');

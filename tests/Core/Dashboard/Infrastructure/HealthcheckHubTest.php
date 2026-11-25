@@ -37,10 +37,12 @@ final class HealthcheckHubTest extends TestCase
     {
         $this->start();
 
-        $process = new Process([dirname(__DIR__, 4).'/docker/healthcheck.sh'], $this->directory, $this->environment());
+        // From the project root, as the image's working directory, because the script runs bin/console; the admin URL follows CADDY_ADMIN there.
+        $process = new Process([dirname(__DIR__, 4).'/docker/healthcheck.sh'], dirname(__DIR__, 4), [...$this->environment(), 'FRANKENPHP_ADMIN_URL' => false]);
         $process->run();
 
-        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        self::assertSame("healthy\n", $process->getOutput());
     }
 
     public function testTheServerAnswersARequestOnItsPortWithTheHostOfTheDashboardPort(): void

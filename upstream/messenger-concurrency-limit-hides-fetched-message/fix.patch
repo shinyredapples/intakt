@@ -1,167 +1,508 @@
-From 0db5829fc60d4ce51fc9249300e543305abb068b Mon Sep 17 00:00:00 2001
+From 2c984d308490ab2e8d2b2c45c02cda917eea0450 Mon Sep 17 00:00:00 2001
 From: Harald Ponce de Leon <haraldpdl@gmail.com>
-Date: Fri, 20 Nov 2026 19:45:28 +0100
-Subject: [PATCH 1/3] [Messenger][Doctrine] Make the fetched messages a stopped
- worker did not reach available again
+Date: Mon, 23 Nov 2026 19:12:29 +0000
+Subject: [PATCH] [Messenger] Release the fetched messages a stopped worker did
+ not start handling
 
 ---
- .../Transport/DoctrineIntegrationTest.php     | 75 +++++++++++++++++++
- .../Tests/Transport/DoctrineReceiverTest.php  | 10 +++
- .../Tests/Transport/DoctrineTransportTest.php | 12 +++
- .../Bridge/Doctrine/Transport/Connection.php  | 50 ++++++++++++-
- .../Doctrine/Transport/DoctrineReceiver.php   | 12 ++-
- .../Doctrine/Transport/DoctrineTransport.php  |  8 +-
- 6 files changed, 164 insertions(+), 3 deletions(-)
+ .../Messenger/Bridge/Doctrine/CHANGELOG.md    |   6 +
+ .../Transport/DoctrineIntegrationTest.php     | 235 ++++++++-
+ .../DoctrinePostgreSqlIntegrationTest.php     |  86 ++++
+ .../Tests/Transport/DoctrineReceiverTest.php  |  15 +
+ .../Tests/Transport/DoctrineTransportTest.php |  18 +
+ .../Bridge/Doctrine/Transport/Connection.php  |  70 ++-
+ .../Doctrine/Transport/DoctrineReceiver.php   |   8 +-
+ .../Doctrine/Transport/DoctrineTransport.php  |   8 +-
+ .../Messenger/Bridge/Doctrine/composer.json   |   2 +-
+ src/Symfony/Component/Messenger/CHANGELOG.md  |   5 +
+ .../Component/Messenger/Tests/WorkerTest.php  | 457 ++++++++++++++++++
+ .../Receiver/ReleasableReceiverInterface.php  |  34 ++
+ src/Symfony/Component/Messenger/Worker.php    |  56 ++-
+ 13 files changed, 976 insertions(+), 24 deletions(-)
+ create mode 100644 src/Symfony/Component/Messenger/Transport/Receiver/ReleasableReceiverInterface.php
 
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/CHANGELOG.md b/src/Symfony/Component/Messenger/Bridge/Doctrine/CHANGELOG.md
+index 197a3be02a457..aa9401dd574cf 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/CHANGELOG.md
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/CHANGELOG.md
+@@ -1,6 +1,12 @@
+ CHANGELOG
+ =========
+ 
++8.3
++---
++
++ * Make `DoctrineReceiver` and `DoctrineTransport` implement `ReleasableReceiverInterface`, so that the messages a worker fetched but did not start handling are available again as soon as it stops, instead of after `redeliver_timeout`
++ * Make `DoctrineReceiver::keepalive()` leave alone a message that another worker received in the meantime, after `redeliver_timeout`
++
+ 8.2
+ ---
+ 
 diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-index 95db7f946aa43..2286fb2b7bdd1 100644
+index f955f47450738..86ecba671eca1 100644
 --- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
 +++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-@@ -17,8 +17,17 @@
- use Doctrine\DBAL\Tools\DsnParser;
- use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+@@ -21,8 +21,17 @@
  use PHPUnit\Framework\TestCase;
+ use Psr\Log\AbstractLogger;
+ use Symfony\Bridge\PhpUnit\ClockMock;
 +use Symfony\Component\EventDispatcher\EventDispatcher;
  use Symfony\Component\Messenger\Bridge\Doctrine\Tests\Fixtures\DummyMessage;
  use Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection;
 +use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 +use Symfony\Component\Messenger\Envelope;
++use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 +use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
-+use Symfony\Component\Messenger\Handler\HandlersLocator;
++use Symfony\Component\Messenger\Exception\TransportException;
 +use Symfony\Component\Messenger\MessageBus;
-+use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 +use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 +use Symfony\Component\Messenger\Worker;
  
  #[RequiresPhpExtension('pdo_sqlite')]
  class DoctrineIntegrationTest extends TestCase
-@@ -74,6 +83,72 @@ public function testKeepaliveWhileTheConnectionIsInATransaction()
-         $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
+@@ -54,28 +63,241 @@ public function testConnectionSendAndGet()
+         $this->assertEquals(['type' => DummyMessage::class], $encoded[0]['headers']);
      }
  
-+    public function testReleaseMakesTheFetchedMessagesThatWereNotHandledAvailableAgain()
-+    {
-+        $this->connection->send('{"message": "acked"}', ['type' => DummyMessage::class]);
-+        $this->connection->send('{"message": "rejected"}', ['type' => DummyMessage::class]);
-+        $this->connection->send('{"message": "not reached"}', ['type' => DummyMessage::class]);
-+        $fetched = $this->connection->get(3);
-+        $this->connection->ack($fetched[0]['id']);
-+        $this->connection->reject($fetched[1]['id']);
-+
-+        $this->assertNull($this->connection->get());
-+
-+        $this->connection->release();
-+
-+        $next = $this->connection->get();
-+        $this->assertSame('{"message": "not reached"}', $next[0]['body']);
-+        $this->assertSame(1, (int) $this->driverConnection->fetchOne('SELECT COUNT(*) FROM messenger_messages'));
++    #[Group('time-sensitive')]
+     public function testKeepaliveRenewsTheLease()
+     {
+         $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
+         $encoded = $this->connection->get();
+-        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2000-01-01 00:00:00', $encoded[0]['id']]);
++        $deliveredAt = $this->getDeliveredAt($encoded[0]['id']);
+ 
++        sleep(1);
+         $this->connection->keepalive($encoded[0]['id']);
+ 
+-        $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
++        $this->assertGreaterThan($deliveredAt, $this->getDeliveredAt($encoded[0]['id']));
+     }
+ 
++    #[Group('time-sensitive')]
+     public function testKeepaliveWhileTheConnectionIsInATransaction()
+     {
+         $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
+         $encoded = $this->connection->get();
+-        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2000-01-01 00:00:00', $encoded[0]['id']]);
++        $deliveredAt = $this->getDeliveredAt($encoded[0]['id']);
+ 
++        sleep(1);
+         $this->driverConnection->beginTransaction();
+         $this->connection->keepalive($encoded[0]['id']);
+         $this->driverConnection->commit();
+ 
+-        $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
++        $this->assertGreaterThan($deliveredAt, $this->getDeliveredAt($encoded[0]['id']));
 +    }
 +
-+    public function testReleaseKeepsAMessageDeliveredAgainSinceItWasFetched()
++    #[Group('time-sensitive')]
++    public function testKeepaliveOfAMessageTheConnectionDidNotFetchRenewsTheLease()
++    {
++        $id = $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        (new Connection([], $this->driverConnection))->get();
++        $deliveredAt = $this->getDeliveredAt($id);
++
++        sleep(1);
++        $this->connection->keepalive($id);
++
++        $this->assertGreaterThan($deliveredAt, $this->getDeliveredAt($id));
++    }
++
++    #[Group('time-sensitive')]
++    public function testALateKeepaliveLeavesAMessageThatAnotherWorkerReceivedSince()
++    {
++        $connection = new Connection(['redeliver_timeout' => 10], $this->driverConnection);
++        $otherConnection = new Connection(['redeliver_timeout' => 10], $this->driverConnection);
++        $connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        $id = $connection->get()[0]['id'];
++
++        // the redeliver timeout passes without a keepalive: another worker receives the message
++        sleep(11);
++        $this->assertSame($id, $otherConnection->get()[0]['id']);
++        $deliveredAt = $this->getDeliveredAt($id);
++
++        sleep(1);
++        $connection->keepalive($id);
++        $this->assertSame($deliveredAt, $this->getDeliveredAt($id));
++
++        $connection->release($id);
++        $this->assertSame($deliveredAt, $this->getDeliveredAt($id));
++        $this->assertNull((new Connection(['redeliver_timeout' => 10], $this->driverConnection))->get());
++
++        // the message stays with the worker that received it last
++        $otherConnection->keepalive($id);
++        $this->assertGreaterThan($deliveredAt, $this->getDeliveredAt($id));
++        $otherConnection->release($id);
++        $this->assertNull($this->getDeliveredAt($id));
++    }
++
++    public function testReleaseMakesTheMessagesAvailableAgain()
++    {
++        foreach (['first', 'second', 'third'] as $message) {
++            $this->connection->send('{"message": "'.$message.'"}', ['type' => DummyMessage::class]);
++        }
++        $encoded = $this->connection->get(3);
++
++        $this->connection->release($encoded[1]['id']);
++        $this->connection->release($encoded[2]['id']);
++
++        $this->assertNotNull($this->getDeliveredAt($encoded[0]['id']));
++        $this->assertNull($this->getDeliveredAt($encoded[1]['id']));
++        $this->assertNull($this->getDeliveredAt($encoded[2]['id']));
++        // another worker gets them at once, without the message that was not released
++        $this->assertSame(['{"message": "second"}', '{"message": "third"}'], array_column((new Connection([], $this->driverConnection))->get(3), 'body'));
++    }
++
++    #[Group('time-sensitive')]
++    public function testReleaseLeavesAMessageThatAnotherWorkerReceivedSince()
++    {
++        $connection = new Connection(['redeliver_timeout' => 10], $this->driverConnection);
++        $otherConnection = new Connection(['redeliver_timeout' => 10], $this->driverConnection);
++        $connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        $id = $connection->get()[0]['id'];
++
++        sleep(11);
++        $this->assertSame($id, $otherConnection->get()[0]['id']);
++        $deliveredAt = $this->getDeliveredAt($id);
++
++        $connection->release($id);
++
++        $this->assertSame($deliveredAt, $this->getDeliveredAt($id));
++        $this->assertNull((new Connection(['redeliver_timeout' => 10], $this->driverConnection))->get());
++    }
++
++    #[Group('time-sensitive')]
++    public function testReleaseAfterAKeepalive()
 +    {
 +        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
-+        $fetched = $this->connection->get();
++        $id = $this->connection->get()[0]['id'];
++        $deliveredAt = $this->getDeliveredAt($id);
 +
-+        // the redeliver timeout passed and another worker received the message
-+        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2099-01-01 00:00:00', $fetched[0]['id']]);
++        sleep(1);
++        $this->connection->keepalive($id);
++        $this->assertGreaterThan($deliveredAt, $this->getDeliveredAt($id));
 +
-+        $this->connection->release();
++        $this->connection->release($id);
 +
-+        $this->assertSame('2099-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$fetched[0]['id']]));
++        $this->assertNull($this->getDeliveredAt($id));
 +    }
 +
-+    public function testReleaseMakesAMessageKeptAliveAvailableAgain()
++    #[Group('time-sensitive')]
++    public function testReleasingAMessageTwiceDoesNotReleaseItsNextDelivery()
++    {
++        $otherConnection = new Connection([], $this->driverConnection);
++        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        $id = $this->connection->get()[0]['id'];
++        $this->connection->release($id);
++
++        // another worker receives the message within the same second
++        $this->assertSame($id, $otherConnection->get()[0]['id']);
++        $deliveredAt = $this->getDeliveredAt($id);
++
++        $this->connection->release($id);
++
++        $this->assertSame($deliveredAt, $this->getDeliveredAt($id));
++    }
++
++    public function testReleaseDoesNothingForAMessageTheConnectionDidNotFetch()
++    {
++        $id = $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        (new Connection([], $this->driverConnection))->get();
++        $deliveredAt = $this->getDeliveredAt($id);
++
++        $this->connection->release($id);
++
++        $this->assertNotNull($deliveredAt);
++        $this->assertSame($deliveredAt, $this->getDeliveredAt($id));
++    }
++
++    public function testReleaseDoesNothingForAcknowledgedAndRejectedMessages()
++    {
++        foreach (['first', 'second', 'third'] as $message) {
++            $this->connection->send('{"message": "'.$message.'"}', ['type' => DummyMessage::class]);
++        }
++        $encoded = $this->connection->get(3);
++        $this->assertTrue($this->connection->ack($encoded[0]['id']));
++        $this->assertTrue($this->connection->reject($encoded[1]['id']));
++
++        foreach ($encoded as $doctrineEnvelope) {
++            $this->connection->release($doctrineEnvelope['id']);
++        }
++
++        $this->assertSame([['{"message": "third"}', null]], $this->driverConnection->fetchAllNumeric('SELECT body, delivered_at FROM messenger_messages'));
++    }
++
++    public function testAckAndRejectAfterARelease()
++    {
++        foreach (['first', 'second', 'third'] as $message) {
++            $this->connection->send('{"message": "'.$message.'"}', ['type' => DummyMessage::class]);
++        }
++        $encoded = $this->connection->get(3);
++        $this->connection->release($encoded[2]['id']);
++
++        $this->assertTrue($this->connection->ack($encoded[0]['id']));
++        $this->assertTrue($this->connection->reject($encoded[1]['id']));
++
++        $this->assertSame([['{"message": "third"}', null]], $this->driverConnection->fetchAllNumeric('SELECT body, delivered_at FROM messenger_messages'));
++    }
++
++    public function testReleaseThrowsATransportExceptionWhenTheDatabaseFails()
 +    {
 +        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
-+        $fetched = $this->connection->get();
++        $id = $this->connection->get()[0]['id'];
++        $this->driverConnection->executeStatement('DROP TABLE messenger_messages');
 +
-+        // the keepalive must write another delivery time than the fetch
-+        time_sleep_until(floor(microtime(true)) + 1.01);
-+        $this->connection->keepalive($fetched[0]['id']);
++        $this->expectException(TransportException::class);
 +
-+        $this->connection->release();
-+
-+        $this->assertSame('{"message": "Hi"}', $this->connection->get()[0]['body']);
++        $this->connection->release($id);
 +    }
 +
-+    public function testAWorkerStoppedByItsMessageLimitReleasesTheRestOfTheFetchedMessages()
++    public function testAWorkerThatStopsInTheMiddleOfABatchLeavesTheRestAvailable()
 +    {
 +        $transport = new DoctrineTransport($this->connection, new PhpSerializer());
-+        $transport->send(new Envelope(new DummyMessage('first')));
-+        $transport->send(new Envelope(new DummyMessage('second')));
-+
-+        $handled = [];
-+        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
-+            DummyMessage::class => [static function (DummyMessage $message) use (&$handled) { $handled[] = $message->getMessage(); }],
-+        ]))]);
++        foreach (['first', 'second', 'third'] as $message) {
++            $transport->send(new Envelope(new DummyMessage($message)));
++        }
 +        $dispatcher = new EventDispatcher();
 +        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
 +
-+        (new Worker(['transport' => $transport], $bus, $dispatcher))->run(['sleep' => 0, 'fetch_size' => 2]);
++        // what "messenger:consume --fetch-size=3 --limit=1" does
++        (new Worker(['doctrine' => $transport], new MessageBus(), $dispatcher))->run(['sleep' => 0, 'fetch_size' => 3]);
 +
-+        $this->assertSame(['first'], $handled);
-+        $next = $this->connection->get();
-+        $this->assertNotNull($next, 'The message the worker did not reach waits for the redeliver timeout.');
-+        $this->assertStringContainsString('second', $next[0]['body']);
++        $this->assertSame([null, null], $this->driverConnection->fetchFirstColumn('SELECT delivered_at FROM messenger_messages ORDER BY id'));
++        $envelopes = (new DoctrineTransport(new Connection([], $this->driverConnection), new PhpSerializer()))->get(3);
++        $this->assertSame(['second', 'third'], array_map(static fn (Envelope $envelope) => $envelope->getMessage()->getMessage(), $envelopes));
 +    }
 +
-     public function testSendWithDelay()
++    public function testAWorkerThatFailsInTheMiddleOfABatchKeepsTheMessageItFailedOnHidden()
++    {
++        $transport = new DoctrineTransport($this->connection, new PhpSerializer());
++        foreach (['first', 'second', 'third'] as $message) {
++            $transport->send(new Envelope(new DummyMessage($message)));
++        }
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addListener(WorkerMessageHandledEvent::class, static function (WorkerMessageHandledEvent $event) {
++            if ('second' === $event->getEnvelope()->getMessage()->getMessage()) {
++                throw new \LogicException('A listener failed.');
++            }
++        });
++
++        try {
++            (new Worker(['doctrine' => $transport], new MessageBus(), $dispatcher))->run(['sleep' => 0, 'fetch_size' => 3]);
++            $this->fail('The worker should fail.');
++        } catch (\LogicException) {
++        }
++
++        $rows = $this->driverConnection->fetchAllNumeric('SELECT body, delivered_at FROM messenger_messages ORDER BY id');
++        $this->assertCount(2, $rows);
++        $this->assertStringContainsString('second', $rows[0][0]);
++        $this->assertNotNull($rows[0][1]);
++        $this->assertStringContainsString('third', $rows[1][0]);
++        $this->assertNull($rows[1][1]);
++        // a restarted worker gets the message the first one did not reach, and not the one it failed on
++        $envelopes = (new DoctrineTransport(new Connection([], $this->driverConnection), new PhpSerializer()))->get(3);
++        $this->assertSame(['third'], array_map(static fn (Envelope $envelope) => $envelope->getMessage()->getMessage(), $envelopes));
+     }
+ 
+     #[Group('time-sensitive')]
+@@ -431,6 +653,11 @@ private function listIndexNames(): array
+         return $names;
+     }
+ 
++    private function getDeliveredAt(string $id): ?string
++    {
++        return $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$id]);
++    }
++
+     private function formatDateTime(\DateTimeImmutable $dateTime): string
      {
-         $this->connection->send('{"message": "Hi i am delayed"}', ['type' => DummyMessage::class], 600000);
+         return $dateTime->format($this->driverConnection->getDatabasePlatform()->getDateTimeFormatString());
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrinePostgreSqlIntegrationTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrinePostgreSqlIntegrationTest.php
+index 323c240691a73..7da83497c5382 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrinePostgreSqlIntegrationTest.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrinePostgreSqlIntegrationTest.php
+@@ -107,6 +107,87 @@ public function testWorkerWithACooldownStrategySurvivesALostConnection()
+         $this->assertSame(0, (int) $this->driverConnection->fetchOne('SELECT COUNT(*) FROM queue_table'));
+     }
+ 
++    public function testReleaseMakesTheMessagesAvailableAgain()
++    {
++        foreach (['first', 'second', 'third'] as $message) {
++            $this->connection->send('{"message": "'.$message.'"}', ['type' => DummyMessage::class]);
++        }
++        $encoded = $this->connection->get(3);
++
++        $this->connection->release($encoded[1]['id']);
++        $this->connection->release($encoded[2]['id']);
++
++        $this->assertNotNull($this->getDeliveredAt($encoded[0]['id']));
++        $this->assertNull($this->getDeliveredAt($encoded[1]['id']));
++        $this->assertNull($this->getDeliveredAt($encoded[2]['id']));
++        // another worker gets them at once, without the message that was not released
++        $otherConnection = new PostgreSqlConnection(['table_name' => 'queue_table'], $this->driverConnection);
++        $this->assertSame(['{"message": "second"}', '{"message": "third"}'], array_column($otherConnection->get(3), 'body'));
++    }
++
++    #[Group('time-sensitive')]
++    public function testReleaseAndALateKeepaliveLeaveAMessageThatAnotherWorkerReceivedSince()
++    {
++        $connection = new PostgreSqlConnection(['table_name' => 'queue_table', 'redeliver_timeout' => 10], $this->driverConnection);
++        $otherConnection = new PostgreSqlConnection(['table_name' => 'queue_table', 'redeliver_timeout' => 10], $this->driverConnection);
++        $connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        $id = $connection->get()[0]['id'];
++
++        // the redeliver timeout passes without a keepalive: another worker receives the message
++        sleep(11);
++        $this->assertSame($id, $otherConnection->get()[0]['id']);
++        $deliveredAt = $this->getDeliveredAt($id);
++
++        sleep(1);
++        $connection->keepalive($id);
++        $this->assertSame($deliveredAt, $this->getDeliveredAt($id));
++
++        $connection->release($id);
++        $this->assertSame($deliveredAt, $this->getDeliveredAt($id));
++        $this->assertNull((new PostgreSqlConnection(['table_name' => 'queue_table', 'redeliver_timeout' => 10], $this->driverConnection))->get());
++
++        // the message stays with the worker that received it last
++        $otherConnection->keepalive($id);
++        $this->assertGreaterThan($deliveredAt, $this->getDeliveredAt($id));
++        $otherConnection->release($id);
++        $this->assertNull($this->getDeliveredAt($id));
++    }
++
++    public function testReleaseNotifiesTheWorkersThatWaitForAMessage()
++    {
++        $waitingConnection = new PostgreSqlConnection(['table_name' => 'queue_table'], DriverManager::getConnection($this->driverConnection->getParams(), $this->driverConnection->getConfiguration()));
++        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        $id = $this->connection->get()[0]['id'];
++        $waitingConnection->listen();
++        $this->assertNull($waitingConnection->get());
++
++        // nothing is released: no worker is woken up
++        (new PostgreSqlConnection(['table_name' => 'queue_table'], $this->driverConnection))->release($id);
++        $this->assertFalse($waitingConnection->waitForNotify(200));
++
++        $this->connection->release($id);
++
++        $this->assertTrue($waitingConnection->waitForNotify(10000));
++        $this->assertSame($id, $waitingConnection->get()[0]['id']);
++    }
++
++    public function testAWorkerThatStopsInTheMiddleOfABatchLeavesTheRestAvailable()
++    {
++        $serializer = new PhpSerializer();
++        foreach (['first', 'second', 'third'] as $message) {
++            $this->connection->send($serializer->encode(new Envelope(new DummyMessage($message)))['body'], []);
++        }
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
++
++        // what "messenger:consume --fetch-size=3 --limit=1" does
++        (new Worker(['async' => new DoctrineReceiver($this->connection)], new MessageBus(), $dispatcher))->run(['sleep' => 0, 'fetch_size' => 3]);
++
++        $this->assertSame([null, null], $this->driverConnection->fetchFirstColumn('SELECT delivered_at FROM queue_table ORDER BY id'));
++        $envelopes = (new DoctrineReceiver(new PostgreSqlConnection(['table_name' => 'queue_table'], $this->driverConnection)))->get(3);
++        $this->assertSame(['second', 'third'], array_map(static fn (Envelope $envelope) => $envelope->getMessage()->getMessage(), $envelopes));
++    }
++
+     public function testSkipLocked()
+     {
+         $connection = new PostgreSqlConnection(['table_name' => 'queue_table', 'skip_locked' => true], $this->driverConnection);
+@@ -120,6 +201,11 @@ public function testSkipLocked()
+         $this->assertNull($connection->get());
+     }
+ 
++    private function getDeliveredAt(string $id): ?string
++    {
++        return $this->driverConnection->fetchOne('SELECT delivered_at FROM queue_table WHERE id = ?', [$id]);
++    }
++
+     private function terminateBackend(): void
+     {
+         $admin = DriverManager::getConnection($this->driverConnection->getParams(), $this->driverConnection->getConfiguration());
 diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php
-index 7ddbb7bcdc9fb..9a9039627ba1b 100644
+index 99dbe96716254..7eb0aaaf7e112 100644
 --- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php
 +++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php
-@@ -365,6 +365,16 @@ public function testKeepalive()
+@@ -416,6 +416,21 @@ public function testKeepalive()
          $receiver->keepalive($envelope);
      }
  
-+    public function testCloseReleasesTheFetchedMessages()
++    public function testRelease()
 +    {
 +        $connection = $this->createMock(Connection::class);
++
++        $envelope = new Envelope(new \stdClass(), [new DoctrineReceivedStamp('1')]);
 +        $receiver = new DoctrineReceiver($connection, $this->createSerializer());
 +
-+        $connection->expects($this->once())->method('release');
++        $connection
++            ->expects($this->once())
++            ->method('release')
++            ->with('1');
 +
-+        $receiver->close();
++        $receiver->release($envelope);
 +    }
 +
      public function testAckRetriesADeadlockReportedByTheConnection()
      {
          $driverConnection = $this->createMock(\Doctrine\DBAL\Connection::class);
 diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php
-index 901b9d77525ac..85e1cccfd8ee1 100644
+index 92775566da160..309732986d14f 100644
 --- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php
 +++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php
-@@ -117,6 +117,18 @@ public function testKeepalive()
+@@ -20,6 +20,7 @@
+ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
+ use Symfony\Component\Messenger\Envelope;
+ use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
++use Symfony\Component\Messenger\Transport\Receiver\ReleasableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Serialization\Serializer;
+ use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
+ use Symfony\Component\Messenger\Transport\TransportInterface;
+@@ -32,6 +33,7 @@ public function testItIsATransport()
+         $transport = $this->getTransport();
+ 
+         $this->assertInstanceOf(TransportInterface::class, $transport);
++        $this->assertInstanceOf(ReleasableReceiverInterface::class, $transport);
+     }
+ 
+     public function testReceivesMessages()
+@@ -118,6 +120,22 @@ public function testKeepalive()
          $transport->keepalive($envelope);
      }
  
-+    public function testCloseReleasesTheFetchedMessages()
++    public function testRelease()
 +    {
 +        $transport = $this->getTransport(
 +            null,
 +            $connection = $this->createMock(Connection::class)
 +        );
 +
-+        $connection->expects($this->once())->method('release');
++        $envelope = new Envelope(new \stdClass(), [new DoctrineReceivedStamp('1')]);
 +
-+        $transport->close();
++        $connection->expects($this->once())
++            ->method('release')
++            ->with('1');
++
++        $transport->release($envelope);
 +    }
 +
-     private function getTransport(?SerializerInterface $serializer = null, ?Connection $connection = null): DoctrineTransport
+     public function testSendBatch()
      {
-         $serializer ??= $this->createStub(SerializerInterface::class);
+         $serializer = $this->createStub(SerializerInterface::class);
 diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
-index a06801835a0fb..9d4f46212f160 100644
+index 3873533cdac10..b652ecd73865b 100644
 --- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
 +++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
-@@ -61,6 +61,13 @@ class Connection implements ResetInterface
+@@ -70,6 +70,15 @@ class Connection implements ResetInterface
  
      private bool $autoSetup;
  
 +    /**
-+     * The delivery time of the messages get() returned that were neither acknowledged nor rejected yet, by id.
++     * The "delivered_at" this connection wrote for the messages it delivered and that were not acknowledged, rejected nor released since, by id.
++     *
++     * A message whose "delivered_at" changed since was delivered again, e.g. to another worker after the redeliver timeout.
 +     *
 +     * @var array<string, \DateTimeImmutable>
 +     */
@@ -170,7 +511,7 @@ index a06801835a0fb..9d4f46212f160 100644
      /**
       * Constructor.
       *
-@@ -247,6 +254,10 @@ public function get(int $fetchSize = 1): ?array
+@@ -307,6 +316,10 @@ public function get(int $fetchSize = 1): ?array
  
              $this->driverConnection->commit();
  
@@ -181,7 +522,7 @@ index a06801835a0fb..9d4f46212f160 100644
              return $doctrineEnvelopes;
          } catch (\Throwable $e) {
              if ($this->driverConnection->isTransactionActive()) {
-@@ -264,6 +275,8 @@ public function get(int $fetchSize = 1): ?array
+@@ -324,6 +337,8 @@ public function get(int $fetchSize = 1): ?array
  
      public function ack(string $id): bool
      {
@@ -190,7 +531,7 @@ index a06801835a0fb..9d4f46212f160 100644
          try {
              return $this->driverConnection->delete($this->configuration['table_name'], ['id' => $id]) > 0;
          } catch (DBALException $exception) {
-@@ -273,6 +286,8 @@ public function ack(string $id): bool
+@@ -333,6 +348,8 @@ public function ack(string $id): bool
  
      public function reject(string $id): bool
      {
@@ -199,237 +540,12 @@ index a06801835a0fb..9d4f46212f160 100644
          try {
              return $this->driverConnection->delete($this->configuration['table_name'], ['id' => $id]) > 0;
          } catch (DBALException $exception) {
-@@ -296,7 +311,7 @@ public function keepalive(string $id, ?int $seconds = null): void
-                 ->set('delivered_at', '?')
-                 ->where('id = ?');
-             $this->executeStatement($queryBuilder->getSQL(), [
--                new \DateTimeImmutable('UTC'),
-+                $now = new \DateTimeImmutable('UTC'),
-                 $id,
-             ], [
-                 Types::DATETIME_IMMUTABLE,
-@@ -304,6 +319,39 @@ public function keepalive(string $id, ?int $seconds = null): void
-         } catch (\Throwable $e) {
-             throw new TransportException($e->getMessage(), 0, $e);
-         }
-+
-+        if (isset($this->deliveredAt[$id])) {
-+            $this->deliveredAt[$id] = $now;
-+        }
-+    }
-+
-+    /**
-+     * Makes the messages get() returned that were neither acknowledged nor rejected available again,
-+     * unless they were delivered again since, e.g. to another worker after the redeliver timeout.
-+     */
-+    public function release(): void
-+    {
-+        $deliveredAt = $this->deliveredAt;
-+        $this->deliveredAt = [];
-+
-+        try {
-+            $queryBuilder = $this->driverConnection->createQueryBuilder()
-+                ->update($this->configuration['table_name'])
-+                ->set('delivered_at', 'NULL')
-+                ->where('delivered_at = ?')
-+                ->andWhere('id = ?');
-+
-+            foreach ($deliveredAt as $id => $at) {
-+                $this->executeStatement($queryBuilder->getSQL(), [
-+                    $at,
-+                    $id,
-+                ], [
-+                    Types::DATETIME_IMMUTABLE,
-+                ]);
-+            }
-+        } catch (DBALException $exception) {
-+            throw new TransportException($exception->getMessage(), 0, $exception);
-+        }
-     }
- 
-     public function setup(): void
-diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
-index a44d922df7469..6b27ed74b273a 100644
---- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
-+++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
-@@ -18,6 +18,7 @@
- use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
- use Symfony\Component\Messenger\Exception\TransportException;
- use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
-+use Symfony\Component\Messenger\Transport\CloseableTransportInterface;
- use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
- use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
- use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
-@@ -27,7 +28,7 @@
- /**
-  * @author Vincent Touzet <vincent.touzet@gmail.com>
-  */
--class DoctrineReceiver implements ListableReceiverInterface, MessageCountAwareInterface, KeepaliveReceiverInterface
-+class DoctrineReceiver implements ListableReceiverInterface, MessageCountAwareInterface, KeepaliveReceiverInterface, CloseableTransportInterface
- {
-     private const MAX_RETRIES = 3;
-     private int $retryingSafetyCounter = 0;
-@@ -101,6 +102,15 @@ public function reject(Envelope $envelope): void
-         });
-     }
- 
-+    /**
-+     * Makes the fetched messages that were neither acknowledged nor rejected available again,
-+     * e.g. the rest of a batch fetched with --fetch-size when the worker stops.
-+     */
-+    public function close(): void
-+    {
-+        $this->connection->release();
-+    }
-+
-     public function getMessageCount(): int
-     {
-         try {
-diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
-index 710d2396defd2..1f9bef38cbe0c 100644
---- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
-+++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
-@@ -15,6 +15,7 @@
- use Doctrine\DBAL\Schema\Schema;
- use Doctrine\DBAL\Schema\Table;
- use Symfony\Component\Messenger\Envelope;
-+use Symfony\Component\Messenger\Transport\CloseableTransportInterface;
- use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
- use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
- use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
-@@ -25,7 +26,7 @@
- /**
-  * @author Vincent Touzet <vincent.touzet@gmail.com>
-  */
--class DoctrineTransport implements TransportInterface, SetupableTransportInterface, MessageCountAwareInterface, ListableReceiverInterface, KeepaliveReceiverInterface
-+class DoctrineTransport implements TransportInterface, SetupableTransportInterface, MessageCountAwareInterface, ListableReceiverInterface, KeepaliveReceiverInterface, CloseableTransportInterface
- {
-     private DoctrineReceiver $receiver;
-     private DoctrineSender $sender;
-@@ -61,6 +62,11 @@ public function keepalive(Envelope $envelope, ?int $seconds = null): void
-         $this->getReceiver()->keepalive($envelope, $seconds);
-     }
- 
-+    public function close(): void
-+    {
-+        $this->getReceiver()->close();
-+    }
-+
-     public function getMessageCount(): int
-     {
-         return $this->getReceiver()->getMessageCount();
-
-From 7279edca7c3428df715e28ea272951006f563772 Mon Sep 17 00:00:00 2001
-From: Harald Ponce de Leon <haraldpdl@gmail.com>
-Date: Fri, 20 Nov 2026 19:58:40 +0100
-Subject: [PATCH 2/3] [Messenger][Doctrine] Skip the worker test when the
- installed Worker does not close the transports
-
----
- .../Doctrine/Tests/Transport/DoctrineIntegrationTest.php      | 4 ++++
- 1 file changed, 4 insertions(+)
-
-diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-index 2286fb2b7bdd1..15520e1e0f889 100644
---- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-+++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-@@ -130,6 +130,10 @@ public function testReleaseMakesAMessageKeptAliveAvailableAgain()
- 
-     public function testAWorkerStoppedByItsMessageLimitReleasesTheRestOfTheFetchedMessages()
-     {
-+        if (!method_exists(Worker::class, 'closeReceivers')) {
-+            $this->markTestSkipped('The installed symfony/messenger does not close the transports when the worker stops.');
-+        }
-+
-         $transport = new DoctrineTransport($this->connection, new PhpSerializer());
-         $transport->send(new Envelope(new DummyMessage('first')));
-         $transport->send(new Envelope(new DummyMessage('second')));
-
-From a6a9522fb807745b8808a43a812e77f9eed3ecea Mon Sep 17 00:00:00 2001
-From: Harald Ponce de Leon <haraldpdl@gmail.com>
-Date: Sat, 21 Nov 2026 00:23:47 +0100
-Subject: [PATCH 3/3] [Messenger][Doctrine] Make the keepalive leave a message
- alone once another worker received it
-
-The keepalive and the release on close now both match the delivered_at the worker remembers, so a late keepalive after another worker took the message over no longer makes the release reset that worker's delivery.
----
- .../Transport/DoctrineIntegrationTest.php     | 32 ++++++++++++++++---
- .../Bridge/Doctrine/Transport/Connection.php  | 21 ++++++++----
- 2 files changed, 42 insertions(+), 11 deletions(-)
-
-diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-index 15520e1e0f889..5ea65a00ec203 100644
---- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-+++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
-@@ -63,24 +63,30 @@ public function testKeepaliveRenewsTheLease()
-     {
-         $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
-         $encoded = $this->connection->get();
--        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2000-01-01 00:00:00', $encoded[0]['id']]);
-+        $fetchedAt = $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]);
-+
-+        // the keepalive must write another delivery time than the fetch
-+        time_sleep_until(floor(microtime(true)) + 1.01);
- 
-         $this->connection->keepalive($encoded[0]['id']);
- 
--        $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
-+        $this->assertNotSame($fetchedAt, $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
-     }
- 
-     public function testKeepaliveWhileTheConnectionIsInATransaction()
-     {
-         $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
-         $encoded = $this->connection->get();
--        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2000-01-01 00:00:00', $encoded[0]['id']]);
-+        $fetchedAt = $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]);
-+
-+        // the keepalive must write another delivery time than the fetch
-+        time_sleep_until(floor(microtime(true)) + 1.01);
- 
-         $this->driverConnection->beginTransaction();
-         $this->connection->keepalive($encoded[0]['id']);
-         $this->driverConnection->commit();
- 
--        $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
-+        $this->assertNotSame($fetchedAt, $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
-     }
- 
-     public function testReleaseMakesTheFetchedMessagesThatWereNotHandledAvailableAgain()
-@@ -128,6 +134,24 @@ public function testReleaseMakesAMessageKeptAliveAvailableAgain()
-         $this->assertSame('{"message": "Hi"}', $this->connection->get()[0]['body']);
-     }
- 
-+    public function testAKeepaliveAfterAnotherWorkerTookTheMessageOverLeavesItWithThatWorker()
-+    {
-+        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
-+        $id = $this->connection->get()[0]['id'];
-+
-+        // the redeliver timeout (0 seconds here) passed and another worker received the message
-+        time_sleep_until(floor(microtime(true)) + 1.01);
-+        $this->assertSame($id, (new Connection(['redeliver_timeout' => 0], $this->driverConnection))->get()[0]['id']);
-+        $takenOverAt = $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$id]);
-+
-+        // the first worker sends a late keepalive, then stops
-+        $this->connection->keepalive($id);
-+        $this->connection->release();
-+
-+        $this->assertSame($takenOverAt, $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$id]));
-+        $this->assertNull((new Connection([], $this->driverConnection))->get(), 'A third worker received the message the second worker holds.');
-+    }
-+
-     public function testAWorkerStoppedByItsMessageLimitReleasesTheRestOfTheFetchedMessages()
-     {
-         if (!method_exists(Worker::class, 'closeReceivers')) {
-diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
-index 9d4f46212f160..60d1cb69adf0a 100644
---- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
-+++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
-@@ -305,22 +305,29 @@ public function keepalive(string $id, ?int $seconds = null): void
+@@ -350,20 +367,61 @@ public function keepalive(string $id, ?int $seconds = null): void
          // No transaction here: the keepalive runs from a SIGALRM handler that can interrupt the
          // connection between the driver call and the nesting-level update, where beginTransaction()
          // would issue a SAVEPOINT against an idle session and corrupt the nesting state.
 +        $deliveredAt = $this->deliveredAt[$id] ?? null;
++        $now = \DateTimeImmutable::createFromTimestamp(microtime(true));
 +
          try {
              $queryBuilder = $this->driverConnection->createQueryBuilder()
@@ -437,16 +553,16 @@ index 9d4f46212f160..60d1cb69adf0a 100644
                  ->set('delivered_at', '?')
                  ->where('id = ?');
 -            $this->executeStatement($queryBuilder->getSQL(), [
--                $now = new \DateTimeImmutable('UTC'),
+-                \DateTimeImmutable::createFromTimestamp(microtime(true)),
 -                $id,
 -            ], [
 -                Types::DATETIME_IMMUTABLE,
 -            ]);
-+            $parameters = [$now = new \DateTimeImmutable('UTC'), $id];
++            $parameters = [$now, $id];
 +            $types = [Types::DATETIME_IMMUTABLE];
 +
-+            // Leave the message alone when another worker received it since, after the redeliver timeout
 +            if (null !== $deliveredAt) {
++                // a late keepalive must not renew a message that was delivered again since, e.g. to another worker after the redeliver timeout
 +                $queryBuilder->andWhere('delivered_at = ?');
 +                $parameters[] = $deliveredAt;
 +                $types[2] = Types::DATETIME_IMMUTABLE;
@@ -456,9 +572,773 @@ index 9d4f46212f160..60d1cb69adf0a 100644
          } catch (\Throwable $e) {
              throw new TransportException($e->getMessage(), 0, $e);
          }
- 
--        if (isset($this->deliveredAt[$id])) {
-+        if (null !== $deliveredAt && $updated > 0) {
-             $this->deliveredAt[$id] = $now;
-         }
++
++        if (null !== $deliveredAt && 0 < $updated) {
++            $this->deliveredAt[$id] = $now;
++        }
++    }
++
++    /**
++     * Makes a message that get() returned available again, unless it was delivered again since, e.g. to another worker after the redeliver timeout.
++     */
++    public function release(string $id): void
++    {
++        if (null === $deliveredAt = $this->deliveredAt[$id] ?? null) {
++            return;
++        }
++
++        unset($this->deliveredAt[$id]);
++
++        try {
++            $queryBuilder = $this->driverConnection->createQueryBuilder()
++                ->update($this->configuration['table_name'])
++                ->set('delivered_at', 'NULL')
++                ->where('id = ?')
++                ->andWhere('delivered_at = ?');
++
++            $released = $this->driverConnection->executeStatement($queryBuilder->getSQL(), [$id, $deliveredAt], [1 => Types::DATETIME_IMMUTABLE]);
++
++            if ($released && $this->driverConnection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
++                // wake up the workers that wait for a message, as sending one does
++                $this->driverConnection->executeStatement('SELECT pg_notify(?, ?)', [$this->configuration['table_name'], $this->configuration['queue_name']]);
++            }
++        } catch (DBALException $exception) {
++            throw new TransportException($exception->getMessage(), 0, $exception);
++        }
      }
+ 
+     public function setup(): void
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
+index d36e7cf8a974f..fb3289721dff2 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
+@@ -22,13 +22,14 @@
+ use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
++use Symfony\Component\Messenger\Transport\Receiver\ReleasableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
+ use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
+ 
+ /**
+  * @author Vincent Touzet <vincent.touzet@gmail.com>
+  */
+-class DoctrineReceiver implements ListableReceiverInterface, MessageCountAwareInterface, KeepaliveReceiverInterface
++class DoctrineReceiver implements ListableReceiverInterface, MessageCountAwareInterface, KeepaliveReceiverInterface, ReleasableReceiverInterface
+ {
+     private const MAX_RETRIES = 3;
+     // How long, in seconds, ack() and reject() wait for a lost connection to come back: less than the 10 seconds supervisor gives a worker to stop by default
+@@ -100,6 +101,11 @@ public function keepalive(Envelope $envelope, ?int $seconds = null): void
+         $this->connection->keepalive($this->findDoctrineReceivedStampId($envelope), $seconds);
+     }
+ 
++    public function release(Envelope $envelope): void
++    {
++        $this->connection->release($this->findDoctrineReceivedStampId($envelope));
++    }
++
+     public function reject(Envelope $envelope): void
+     {
+         $this->withRetryableExceptionRetry(function () use ($envelope) {
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
+index f0b51997e865d..40ec9a7dca8a1 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
+@@ -18,6 +18,7 @@
+ use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
++use Symfony\Component\Messenger\Transport\Receiver\ReleasableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Sender\BatchSenderInterface;
+ use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
+ use Symfony\Component\Messenger\Transport\SetupableTransportInterface;
+@@ -26,7 +27,7 @@
+ /**
+  * @author Vincent Touzet <vincent.touzet@gmail.com>
+  */
+-class DoctrineTransport implements TransportInterface, BatchSenderInterface, SetupableTransportInterface, MessageCountAwareInterface, ListableReceiverInterface, KeepaliveReceiverInterface
++class DoctrineTransport implements TransportInterface, BatchSenderInterface, SetupableTransportInterface, MessageCountAwareInterface, ListableReceiverInterface, KeepaliveReceiverInterface, ReleasableReceiverInterface
+ {
+     private DoctrineReceiver $receiver;
+     private DoctrineSender $sender;
+@@ -62,6 +63,11 @@ public function keepalive(Envelope $envelope, ?int $seconds = null): void
+         $this->getReceiver()->keepalive($envelope, $seconds);
+     }
+ 
++    public function release(Envelope $envelope): void
++    {
++        $this->getReceiver()->release($envelope);
++    }
++
+     public function getMessageCount(): int
+     {
+         return $this->getReceiver()->getMessageCount();
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/composer.json b/src/Symfony/Component/Messenger/Bridge/Doctrine/composer.json
+index 1e874f64160e5..9a6868dc19704 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/composer.json
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/composer.json
+@@ -21,7 +21,7 @@
+         "doctrine/persistence": "^1.3|^2|^3|^4",
+         "symfony/deprecation-contracts": "^2.5|^3",
+         "symfony/event-dispatcher": "^7.4|^8.0",
+-        "symfony/messenger": "^8.2",
++        "symfony/messenger": "^8.3",
+         "symfony/service-contracts": "^2.5|^3"
+     },
+     "require-dev": {
+diff --git a/src/Symfony/Component/Messenger/CHANGELOG.md b/src/Symfony/Component/Messenger/CHANGELOG.md
+index 11989fcadc733..f9e8e49b3d172 100644
+--- a/src/Symfony/Component/Messenger/CHANGELOG.md
++++ b/src/Symfony/Component/Messenger/CHANGELOG.md
+@@ -1,6 +1,11 @@
+ CHANGELOG
+ =========
+ 
++8.3
++---
++
++ * Add `ReleasableReceiverInterface` to let the worker give back to the transport the messages it fetched but did not start handling when it stops
++
+ 8.2
+ ---
+ 
+diff --git a/src/Symfony/Component/Messenger/Tests/WorkerTest.php b/src/Symfony/Component/Messenger/Tests/WorkerTest.php
+index 9c8b209af8312..42729fb80300c 100644
+--- a/src/Symfony/Component/Messenger/Tests/WorkerTest.php
++++ b/src/Symfony/Component/Messenger/Tests/WorkerTest.php
+@@ -26,6 +26,7 @@
+ use Symfony\Component\DependencyInjection\ServiceLocator;
+ use Symfony\Component\DependencyInjection\ServicesResetter;
+ use Symfony\Component\EventDispatcher\EventDispatcher;
++use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+ use Symfony\Component\Messenger\Cooldown\CooldownStatus;
+ use Symfony\Component\Messenger\Cooldown\CooldownStrategyInterface;
+ use Symfony\Component\Messenger\Cooldown\MultiplierCooldownStrategy;
+@@ -41,7 +42,9 @@
+ use Symfony\Component\Messenger\EventListener\ResetMemoryUsageListener;
+ use Symfony\Component\Messenger\EventListener\ResetServicesListener;
+ use Symfony\Component\Messenger\EventListener\SendFailedMessageForRetryListener;
++use Symfony\Component\Messenger\EventListener\StopWorkerOnFailureLimitListener;
+ use Symfony\Component\Messenger\EventListener\StopWorkerOnIdleListener;
++use Symfony\Component\Messenger\EventListener\StopWorkerOnMemoryLimitListener;
+ use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
+ use Symfony\Component\Messenger\Exception\HandlerFailedException;
+ use Symfony\Component\Messenger\Exception\LogicException;
+@@ -91,9 +94,11 @@
+ use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\QueueReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
++use Symfony\Component\Messenger\Transport\Receiver\ReleasableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Sender\SenderInterface;
+ use Symfony\Component\Messenger\Worker;
+ use Symfony\Component\RateLimiter\RateLimiterFactory;
++use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
+ use Symfony\Component\RateLimiter\Reservation;
+ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
+ 
+@@ -1172,6 +1177,422 @@ public function testFailingToCloseAReceiverIsLoggedAndDoesNotPreventClosingTheOt
+         $this->assertSame(1, $receiver->closeCount);
+     }
+ 
++    #[DataProvider('provideReleasableReceivers')]
++    public function testWorkerReleasesTheFetchedMessagesItDidNotStartHandlingWhenItStops(\Closure $createReceiver)
++    {
++        $envelopes = [new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))];
++        $receiver = $createReceiver($envelopes);
++
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), $dispatcher, null, null, new MockClock());
++        $worker->run(['fetch_size' => 3]);
++
++        $this->assertSame([$envelopes[1], $envelopes[2]], $receiver->releasedEnvelopes);
++        $this->assertSame([$envelopes[0]->getMessage()], array_map(static fn (Envelope $envelope) => $envelope->getMessage(), $receiver->getAcknowledgedEnvelopes()));
++        $this->assertSame(0, $receiver->getRejectCount());
++    }
++
++    public static function provideReleasableReceivers(): iterable
++    {
++        yield 'a receiver that returns an array' => [static fn (array $envelopes) => new DummyReleasableReceiver([$envelopes])];
++        yield 'a receiver that returns a generator' => [static fn (array $envelopes) => new DummyReleasableReceiver([(static fn () => yield from $envelopes)()])];
++        yield 'a receiver that supports keepalive too' => [static fn (array $envelopes) => new DummyReleasableKeepaliveReceiver([$envelopes])];
++    }
++
++    #[DataProvider('provideStopsInTheMiddleOfABatch')]
++    public function testWorkerReleasesTheRestOfTheBatchWhateverStopsIt(?EventSubscriberInterface $listener, ?string $failing, ?string $stopping, array $expectedReleased)
++    {
++        $receiver = new DummyReleasableKeepaliveReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++
++        $worker = null;
++        $handler = static function (DummyMessage $message) use (&$worker, $failing, $stopping) {
++            if ($stopping === $message->getMessage()) {
++                // what a signal does
++                $worker->stop();
++            }
++
++            if ($failing === $message->getMessage()) {
++                throw new \RuntimeException('The handler failed.');
++            }
++        };
++        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
++            DummyMessage::class => [new HandlerDescriptor($handler)],
++        ]))]);
++        $dispatcher = new EventDispatcher();
++        if ($listener) {
++            $dispatcher->addSubscriber($listener);
++        }
++
++        $worker = new Worker(['transport' => $receiver], $bus, $dispatcher, null, null, new MockClock());
++        $worker->run(['fetch_size' => 3]);
++
++        $this->assertSame($expectedReleased, $receiver->getReleasedMessages());
++        $this->assertSame(3 - \count($expectedReleased), $receiver->getAcknowledgeCount() + $receiver->getRejectCount());
++        $this->assertSame(null === $failing ? 0 : 1, $receiver->getRejectCount());
++
++        $worker->keepalive(2);
++        $this->assertSame([], $receiver->keepaliveEnvelopes);
++    }
++
++    public static function provideStopsInTheMiddleOfABatch(): iterable
++    {
++        yield 'the message limit' => [new StopWorkerOnMessageLimitListener(2), null, null, ['third']];
++        yield 'the memory limit' => [new StopWorkerOnMemoryLimitListener(1, null, static fn () => 2), null, null, ['second', 'third']];
++        yield 'the failure limit' => [new StopWorkerOnFailureLimitListener(1), 'second', null, ['third']];
++        yield 'a signal while the first message is handled' => [null, null, 'first', ['second', 'third']];
++        yield 'a signal while the second message is handled' => [null, null, 'second', ['third']];
++        yield 'a limit reached with the last message of the batch' => [new StopWorkerOnMessageLimitListener(3), null, null, []];
++    }
++
++    public function testWorkerReleasesNothingWhenTheTimeLimitIsReachedInTheMiddleOfABatch()
++    {
++        $clock = new MockClock('2023-03-19 14:00:00+00:00');
++        $receiver = new DummyReleasableKeepaliveReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
++            DummyMessage::class => [new HandlerDescriptor(static function () use ($clock) {
++                $clock->sleep(100);
++            })],
++        ]))]);
++
++        $worker = new Worker(['transport' => $receiver], $bus, new EventDispatcher(), null, null, $clock);
++        $worker->run(['fetch_size' => 3, 'time_limit' => 60]);
++
++        // the worker checks the time limit before it fetches, not between the messages of a batch
++        $this->assertSame([], $receiver->getReleasedMessages());
++        $this->assertSame(3, $receiver->getAcknowledgeCount());
++    }
++
++    #[DataProvider('provideFailuresThatEndTheWorker')]
++    public function testWorkerReleasesTheMessagesThatFollowTheOneItFailedOn(string $failure, string $failing, array $expectedReleased)
++    {
++        $envelopes = [new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))];
++        $receiver = new class([$envelopes], 'ack' === $failure ? $failing : null) extends DummyReleasableKeepaliveReceiver {
++            public function __construct(
++                array $deliveriesOfEnvelopes,
++                private ?string $failingAck,
++            ) {
++                parent::__construct($deliveriesOfEnvelopes);
++            }
++
++            public function ack(Envelope $envelope): void
++            {
++                if ($this->failingAck === $envelope->getMessage()->getMessage()) {
++                    throw new TransportException('Could not acknowledge the message.');
++                }
++
++                parent::ack($envelope);
++            }
++        };
++        $handler = static function (DummyMessage $message) use ($failure, $failing) {
++            if (WorkerMessageFailedEvent::class === $failure && $failing === $message->getMessage()) {
++                throw new \RuntimeException('The handler failed.');
++            }
++        };
++        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
++            DummyMessage::class => [new HandlerDescriptor($handler)],
++        ]))]);
++        $dispatcher = new EventDispatcher();
++        if ('ack' !== $failure) {
++            $dispatcher->addListener($failure, static function ($event) use ($failing) {
++                if ($failing === $event->getEnvelope()->getMessage()->getMessage()) {
++                    throw new \LogicException('A listener failed.');
++                }
++            });
++        }
++
++        $worker = new Worker(['transport' => $receiver], $bus, $dispatcher, null, null, new MockClock());
++
++        try {
++            $worker->run(['fetch_size' => 3]);
++            $this->fail('The worker should fail.');
++        } catch (TransportException|\LogicException) {
++        }
++
++        $this->assertSame($expectedReleased, $receiver->getReleasedMessages());
++        // the message the worker failed on is neither acknowledged, rejected nor released
++        $this->assertSame(2 - \count($expectedReleased), $receiver->getAcknowledgeCount());
++        $this->assertSame(0, $receiver->getRejectCount());
++
++        $worker->keepalive(2);
++        foreach ($receiver->releasedEnvelopes as $envelope) {
++            $this->assertNotContains($envelope, $receiver->keepaliveEnvelopes);
++        }
++    }
++
++    public static function provideFailuresThatEndTheWorker(): iterable
++    {
++        $failures = [
++            'ack' => 'the acknowledgement',
++            WorkerMessageReceivedEvent::class => 'a listener of the received event',
++            WorkerMessageHandledEvent::class => 'a listener of the handled event',
++            WorkerMessageFailedEvent::class => 'a listener of the failed event',
++        ];
++
++        foreach ($failures as $failure => $description) {
++            yield $description.' of the first message' => [$failure, 'first', ['second', 'third']];
++            yield $description.' of the second message' => [$failure, 'second', ['third']];
++            yield $description.' of the third message' => [$failure, 'third', []];
++        }
++    }
++
++    public function testWorkerReleasesNothingWhenAHandlerFails()
++    {
++        $receiver = new DummyReleasableKeepaliveReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
++            DummyMessage::class => [new HandlerDescriptor(static function (DummyMessage $message) {
++                if ('second' === $message->getMessage()) {
++                    throw new \RuntimeException('The handler failed.');
++                }
++            })],
++        ]))]);
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(3));
++
++        $worker = new Worker(['transport' => $receiver], $bus, $dispatcher, null, null, new MockClock());
++        $worker->run(['fetch_size' => 3]);
++
++        // the failure of a handler does not stop the worker
++        $this->assertSame([], $receiver->getReleasedMessages());
++        $this->assertSame(2, $receiver->getAcknowledgeCount());
++        $this->assertSame(1, $receiver->getRejectCount());
++    }
++
++    public function testWorkerDoesNotReleaseAMessageThatIsNotHandled()
++    {
++        $receiver = new DummyReleasableKeepaliveReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addListener(WorkerMessageReceivedEvent::class, static function (WorkerMessageReceivedEvent $event) {
++            if ('first' === $event->getEnvelope()->getMessage()->getMessage()) {
++                $event->shouldHandle(false);
++            }
++        });
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(2));
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), $dispatcher, null, null, new MockClock());
++        $worker->run(['fetch_size' => 3]);
++
++        $this->assertSame(['third'], $receiver->getReleasedMessages());
++        $this->assertSame(['second'], array_map(static fn (Envelope $envelope) => $envelope->getMessage()->getMessage(), $receiver->getAcknowledgedEnvelopes()));
++        $this->assertSame(0, $receiver->getRejectCount());
++    }
++
++    public function testWorkerDoesNotReleaseTheMessagesOfABatchItFlushesWhenItStops()
++    {
++        $receiver = new DummyReleasableKeepaliveReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++        $handler = $this->createBatchHandler(static function (array $jobs) {
++            foreach ($jobs as [$job, $ack]) {
++                $ack->ack($job);
++            }
++        });
++        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
++            DummyMessage::class => [new HandlerDescriptor($handler)],
++        ]))]);
++
++        $worker = new Worker(['transport' => $receiver], $bus, $this->createStoppingDispatcher(2), null, null, new MockClock());
++        $worker->run(['fetch_size' => 3]);
++
++        $this->assertSame(['third'], $receiver->getReleasedMessages());
++        $this->assertSame(2, $receiver->getAcknowledgeCount());
++    }
++
++    public function testWorkerDoesNotReleaseTheMessagesABatchHandlerHoldsWhenItFails()
++    {
++        $receiver = new DummyReleasableKeepaliveReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++        $handler = $this->createBatchHandler(static function (array $jobs) {
++            foreach ($jobs as [$job, $ack]) {
++                $ack->ack($job);
++            }
++        });
++        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
++            DummyMessage::class => [new HandlerDescriptor($handler)],
++        ]))]);
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addListener(WorkerRunningEvent::class, static function () use (&$running) {
++            if (2 === ++$running) {
++                throw new \LogicException('A listener failed.');
++            }
++        });
++
++        $worker = new Worker(['transport' => $receiver], $bus, $dispatcher, null, null, new MockClock());
++
++        try {
++            $worker->run(['fetch_size' => 3]);
++            $this->fail('The worker should fail.');
++        } catch (\LogicException) {
++            $this->assertSame(['third'], $receiver->getReleasedMessages());
++            $this->assertSame(0, $receiver->getAcknowledgeCount() + $receiver->getRejectCount());
++        } finally {
++            // the acknowledgers of the batch complain when they are destroyed without an outcome
++            $handler->flush(true);
++        }
++    }
++
++    public function testWorkerDoesNotCallReleaseOnAReceiverThatIsNotReleasable()
++    {
++        $receiver = new class([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second'))]]) extends DummyKeepaliveReceiver {
++            public array $releasedEnvelopes = [];
++
++            public function release(Envelope $envelope): void
++            {
++                $this->releasedEnvelopes[] = $envelope;
++            }
++        };
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), $dispatcher, null, null, new MockClock());
++        $worker->run(['fetch_size' => 2]);
++
++        $this->assertSame([], $receiver->releasedEnvelopes);
++        $this->assertSame(1, $receiver->getAcknowledgeCount());
++    }
++
++    public function testWorkerReleasesNothingWhenItFetchesOneMessageAtATime()
++    {
++        $receiver = new DummyReleasableKeepaliveReceiver([
++            [new Envelope(new DummyMessage('first'))],
++            [new Envelope(new DummyMessage('second'))],
++        ]);
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), $dispatcher, null, null, new MockClock());
++        $worker->run();
++
++        $this->assertSame([1], $receiver->getFetchSizes());
++        $this->assertSame([], $receiver->getReleasedMessages());
++        $this->assertSame(1, $receiver->getAcknowledgeCount());
++    }
++
++    public function testWorkerReleasesOnlyTheMessagesOfTheBatchItStoppedIn()
++    {
++        $receiver = new DummyReleasableReceiver([
++            [new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second'))],
++            [new Envelope(new DummyMessage('third')), new Envelope(new DummyMessage('fourth'))],
++        ]);
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(3));
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), $dispatcher, null, null, new MockClock());
++        $worker->run(['fetch_size' => 2]);
++
++        $this->assertSame(['fourth'], $receiver->getReleasedMessages());
++        $this->assertSame(3, $receiver->getAcknowledgeCount());
++    }
++
++    public function testWorkerReleasesTheBufferedMessagesWhenItStopsWhileConsumptionIsPaused()
++    {
++        $receiver = new DummyReleasableReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++        $strategy = new PausingExecutionStrategy();
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), $this->createStoppingDispatcher(1), null, null, new MockClock(), $strategy);
++        $worker->run(['fetch_size' => 3]);
++
++        $this->assertSame(['first'], $strategy->executed);
++        $this->assertSame(['second', 'third'], $receiver->getReleasedMessages());
++        $this->assertSame(1, $receiver->getAcknowledgeCount());
++    }
++
++    public function testWorkerReleasesTheMessagesItReadBeforeFetchingFailed()
++    {
++        $envelopes = [new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second'))];
++        $receiver = new DummyReleasableKeepaliveReceiver([(static function () use ($envelopes) {
++            yield from $envelopes;
++
++            throw new TransportException('Connection lost.');
++        })()]);
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), new EventDispatcher(), null, null, new MockClock());
++
++        try {
++            $worker->run(['fetch_size' => 3]);
++            $this->fail('The worker should fail.');
++        } catch (TransportException) {
++        }
++
++        $this->assertSame($envelopes, $receiver->releasedEnvelopes);
++        $this->assertSame(0, $receiver->getAcknowledgeCount());
++
++        $worker->keepalive(2);
++        $this->assertSame([], $receiver->keepaliveEnvelopes);
++    }
++
++    public function testWorkerReleasesTheMessageAFailingRateLimiterHeldBack()
++    {
++        $receiver = new DummyReleasableKeepaliveReceiver([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))]]);
++        $limiter = (new RateLimiterFactory(['id' => 'transport', 'policy' => 'no_limit'], new InMemoryStorage()))->create();
++        $rateLimiterFactory = $this->createStub(RateLimiterFactoryInterface::class);
++        $rateLimiterFactory->method('create')->willReturnCallback(static function () use ($limiter, &$created) {
++            if (1 < ++$created) {
++                throw new \LogicException('The storage of the rate limiter failed.');
++            }
++
++            return $limiter;
++        });
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), new EventDispatcher(), null, ['transport' => $rateLimiterFactory], new MockClock());
++
++        try {
++            $worker->run(['fetch_size' => 3]);
++            $this->fail('The worker should fail.');
++        } catch (\LogicException) {
++        }
++
++        $this->assertSame(['second', 'third'], $receiver->getReleasedMessages());
++        $this->assertSame(1, $receiver->getAcknowledgeCount());
++    }
++
++    public function testWorkerReleasesTheMessagesBeforeItClosesTheReceivers()
++    {
++        $receiver = new class([[new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second'))]]) extends DummyReleasableReceiver implements CloseableTransportInterface {
++            public array $calls = [];
++
++            public function release(Envelope $envelope): void
++            {
++                $this->calls[] = 'release';
++            }
++
++            public function close(): void
++            {
++                $this->calls[] = 'close';
++            }
++        };
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
++
++        $worker = new Worker(['transport' => $receiver], new MessageBus(), $dispatcher, null, null, new MockClock());
++        $worker->run(['fetch_size' => 2]);
++
++        $this->assertSame(['release', 'close'], $receiver->calls);
++    }
++
++    public function testFailingToReleaseAMessageIsLoggedAndDoesNotPreventClosingTheReceivers()
++    {
++        $envelopes = [new Envelope(new DummyMessage('first')), new Envelope(new DummyMessage('second')), new Envelope(new DummyMessage('third'))];
++        $failingReceiver = new DummyReleasableReceiver([$envelopes], new TransportException('Connection lost.'));
++        $closeableReceiver = new DummyCloseableReceiver([[]]);
++
++        $logger = $this->createMock(LoggerInterface::class);
++        $logger->expects($this->once())->method('warning')
++            ->with('Releasing the messages of the transport "{transport}" failed: {error}', $this->callback(static fn (array $context) => 'failing' === $context['transport'] && 'Connection lost.' === $context['error']));
++
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
++        $dispatcher->addListener(WorkerStoppedEvent::class, static function () use (&$stopped) {
++            $stopped = true;
++        });
++
++        $worker = new Worker(['failing' => $failingReceiver, 'closeable' => $closeableReceiver], new MessageBus(), $dispatcher, $logger, null, new MockClock());
++        $worker->run(['fetch_size' => 3]);
++
++        // a transport that failed to release a message is not asked to release the next ones
++        $this->assertSame([$envelopes[1]], $failingReceiver->releasedEnvelopes);
++        $this->assertTrue($stopped);
++        $this->assertSame(1, $closeableReceiver->closeCount);
++    }
++
+     public function testWorkerReachesTheTimeLimitWhenOneMicrosecondRemains()
+     {
+         $clock = new MockClock('2023-03-19 14:00:00+00:00');
+@@ -4114,6 +4535,42 @@ public function close(): void
+     }
+ }
+ 
++class DummyReleasableReceiver extends DummyReceiver implements ReleasableReceiverInterface
++{
++    public array $releasedEnvelopes = [];
++
++    public function __construct(
++        array $deliveriesOfEnvelopes,
++        private ?\Throwable $releaseException = null,
++    ) {
++        parent::__construct($deliveriesOfEnvelopes);
++    }
++
++    public function release(Envelope $envelope): void
++    {
++        $this->releasedEnvelopes[] = $envelope;
++
++        if ($this->releaseException) {
++            throw $this->releaseException;
++        }
++    }
++
++    public function getReleasedMessages(): array
++    {
++        return array_map(static fn (Envelope $envelope) => $envelope->getMessage()->getMessage(), $this->releasedEnvelopes);
++    }
++}
++
++class DummyReleasableKeepaliveReceiver extends DummyReleasableReceiver implements KeepaliveReceiverInterface
++{
++    public array $keepaliveEnvelopes = [];
++
++    public function keepalive(Envelope $envelope, ?int $seconds = null): void
++    {
++        $this->keepaliveEnvelopes[] = $envelope;
++    }
++}
++
+ class DummyBatchHandler implements BatchHandlerInterface
+ {
+     use BatchHandlerTrait;
+diff --git a/src/Symfony/Component/Messenger/Transport/Receiver/ReleasableReceiverInterface.php b/src/Symfony/Component/Messenger/Transport/Receiver/ReleasableReceiverInterface.php
+new file mode 100644
+index 0000000000000..e03f70e5bd296
+--- /dev/null
++++ b/src/Symfony/Component/Messenger/Transport/Receiver/ReleasableReceiverInterface.php
+@@ -0,0 +1,34 @@
++<?php
++
++/*
++ * This file is part of the Symfony package.
++ *
++ * (c) Fabien Potencier <fabien@symfony.com>
++ *
++ * For the full copyright and license information, please view the LICENSE
++ * file that was distributed with this source code.
++ */
++
++namespace Symfony\Component\Messenger\Transport\Receiver;
++
++use Symfony\Component\Messenger\Envelope;
++use Symfony\Component\Messenger\Exception\TransportException;
++
++/**
++ * Used when a receiver can make a message it delivered available again
++ * without waiting for a timeout on the transport's side.
++ *
++ * The worker reads all the messages that a call to get() returns before it handles
++ * the first of them, so that it knows which ones to release when it stops.
++ */
++interface ReleasableReceiverInterface extends ReceiverInterface
++{
++    /**
++     * Makes a message returned by get() available to the receivers again, as if it had not been delivered.
++     *
++     * The worker calls this when it stops, for the messages it fetched but did not start handling.
++     *
++     * @throws TransportException If there is an issue communicating with the transport
++     */
++    public function release(Envelope $envelope): void;
++}
+diff --git a/src/Symfony/Component/Messenger/Worker.php b/src/Symfony/Component/Messenger/Worker.php
+index 79841f68e48bb..8e8f22d8c0032 100644
+--- a/src/Symfony/Component/Messenger/Worker.php
++++ b/src/Symfony/Component/Messenger/Worker.php
+@@ -47,6 +47,7 @@
+ use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\QueueReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
++use Symfony\Component\Messenger\Transport\Receiver\ReleasableReceiverInterface;
+ use Symfony\Component\RateLimiter\LimiterInterface;
+ 
+ /**
+@@ -186,14 +187,21 @@ public function run(array $options = []): void
+ 
+                             $envelopes = $this->fetch($transportName, $receiver, $queueNames, $fetchSize);
+ 
+-                            if ($receiver instanceof KeepaliveReceiverInterface) {
+-                                // the transport delivered the whole batch: keep alive the messages that wait for their turn too
+-                                $envelopes = new \ArrayIterator(iterator_to_array($envelopes, false));
++                            if (($keepalive = $receiver instanceof KeepaliveReceiverInterface) || $receiver instanceof ReleasableReceiverInterface) {
++                                // the transport delivered the whole batch: keep alive the messages that wait for their turn too,
++                                // and remember them to release the ones that are still waiting when the worker stops
++                                $batch = [];
+ 
+                                 foreach ($envelopes as $envelope) {
+-                                    $waitingReceipts[$transportName][] = $receipt = new \stdClass();
+-                                    $this->keepalives[$receipt] = [$transportName, $envelope];
++                                    $batch[] = $envelope;
++                                    $waitingReceipts[$transportName][] = [$receipt = new \stdClass(), $envelope];
++
++                                    if ($keepalive) {
++                                        $this->keepalives[$receipt] = [$transportName, $envelope];
++                                    }
+                                 }
++
++                                $envelopes = new \ArrayIterator($batch);
+                             }
+ 
+                             $envelopes->rewind();
+@@ -202,9 +210,10 @@ public function run(array $options = []): void
+                         for (; $envelopes->valid(); $envelopes->next()) {
+                             $envelope = $envelopes->current();
+                             $envelopeHandled = true;
+-                            $receipt = isset($waitingReceipts[$transportName][0]) ? array_shift($waitingReceipts[$transportName]) : new \stdClass();
+ 
+                             $this->rateLimit($transportName);
++                            // from here on, the message is not waiting anymore: it is not released when the worker stops or fails
++                            $receipt = isset($waitingReceipts[$transportName][0]) ? array_shift($waitingReceipts[$transportName])[0] : new \stdClass();
+                             $this->handleMessage($envelope, $transportName, $receipt, $options['bus_name'] ?? null);
+                             $this->eventDispatcher?->dispatch(new WorkerRunningEvent($this, false));
+ 
+@@ -281,11 +290,7 @@ public function run(array $options = []): void
+                 }
+             } finally {
+                 // the rest of the batches is not handled when the worker stops or fails
+-                foreach ($waitingReceipts as $receipts) {
+-                    foreach ($receipts as $receipt) {
+-                        unset($this->keepalives[$receipt]);
+-                    }
+-                }
++                $this->releaseWaitingMessages($waitingReceipts);
+             }
+ 
+             $this->flush(true);
+@@ -617,6 +622,35 @@ private function findReceipt(Envelope $envelope, string $transportName): object
+         return new \stdClass();
+     }
+ 
++    /**
++     * Stops keeping alive the fetched messages the worker did not start handling, and gives them back to the receivers that can make them available again.
++     *
++     * @param array<string, list<array{0: object, 1: Envelope}>> $waitingReceipts
++     */
++    private function releaseWaitingMessages(array $waitingReceipts): void
++    {
++        foreach ($waitingReceipts as $transportName => $receipts) {
++            $receiver = $this->receivers[$transportName];
++            $release = $receiver instanceof ReleasableReceiverInterface;
++
++            foreach ($receipts as [$receipt, $envelope]) {
++                unset($this->keepalives[$receipt]);
++
++                if (!$release) {
++                    continue;
++                }
++
++                try {
++                    $receiver->release($envelope);
++                } catch (\Throwable $e) {
++                    // the messages that are left come back when the transport gives up on their delivery, as they did before
++                    $release = false;
++                    $this->logger?->warning('Releasing the messages of the transport "{transport}" failed: {error}', ['transport' => $transportName, 'error' => $e->getMessage(), 'exception' => $e]);
++                }
++            }
++        }
++    }
++
+     private function closeReceivers(): void
+     {
+         foreach ($this->receivers as $transportName => $receiver) {

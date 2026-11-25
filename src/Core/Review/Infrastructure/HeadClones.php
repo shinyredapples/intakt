@@ -57,6 +57,31 @@ final readonly class HeadClones
         return $clone;
     }
 
+    /**
+     * @param list<string> $paths
+     *
+     * @throws ProcessFailedException
+     * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
+     */
+    // Against the head's own tree, because a path on the file system follows a committed link, which could lead out of the checkout; a link and a submodule have modes of their own.
+    public function holdsARegularFileOf(string $clone, CommitId $head, array $paths): bool
+    {
+        if ([] === $paths) {
+            return false;
+        }
+
+        $tree = $this->run($this->hardened->call($clone, 'ls-tree', '-r', '-z', '--full-tree', $head->hash));
+        $regular = [];
+        foreach (explode("\0", $tree) as $entry) {
+            if (1 === preg_match('/^(?:100644|100755) [^\t]*\t(?<path>.+)$/Ds', $entry, $match)) {
+                $regular[] = $match['path'];
+            }
+        }
+
+        return [] !== array_intersect($paths, $regular);
+    }
+
     public function remove(string $clone): void
     {
         $this->filesystem->remove($clone);

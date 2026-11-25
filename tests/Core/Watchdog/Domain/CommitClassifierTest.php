@@ -46,7 +46,7 @@ final class CommitClassifierTest extends TestCase
     {
         $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(true);
-        $history->method('firstParentsSince')->willReturn([self::MERGE]);
+        $history->method('firstParentsSince')->willReturn([new CommitName(self::MERGE)]);
         $history->method('signatureOf')->willThrowException(new LogicException('A recorded head is never read for its signature.'));
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
@@ -58,8 +58,8 @@ final class CommitClassifierTest extends TestCase
     {
         $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(true);
-        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
-        $history->method('broughtInBy')->willReturn([self::MERGE, self::OTHER]);
+        $history->method('firstParentsSince')->willReturn([new CommitName(self::OTHER), new CommitName(self::MERGE)]);
+        $history->method('broughtInBy')->willReturn([new CommitName(self::MERGE), new CommitName(self::OTHER)]);
         $history->method('signatureOf')->willThrowException(new LogicException('A brought-in commit is never read for its signature.'));
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
@@ -71,8 +71,8 @@ final class CommitClassifierTest extends TestCase
     {
         $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(true);
-        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
-        $history->method('broughtInBy')->willReturn([self::MERGE]);
+        $history->method('firstParentsSince')->willReturn([new CommitName(self::OTHER), new CommitName(self::MERGE)]);
+        $history->method('broughtInBy')->willReturn([new CommitName(self::MERGE)]);
         $history->method('signatureOf')->willReturn(SignatureStatus::Unsigned);
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
@@ -95,7 +95,7 @@ final class CommitClassifierTest extends TestCase
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
 
-        self::assertSame([self::OTHER], $classification->ownerPushes);
+        self::assertEquals([new CommitName(self::OTHER)], $classification->ownerPushes);
         self::assertEquals([new MainViolation(self::BASE, Violation::Unsigned)], $classification->violations);
     }
 
@@ -103,8 +103,8 @@ final class CommitClassifierTest extends TestCase
     {
         $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(true);
-        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
-        $history->method('broughtInBy')->willReturn([self::MERGE, self::OTHER]);
+        $history->method('firstParentsSince')->willReturn([new CommitName(self::OTHER), new CommitName(self::MERGE)]);
+        $history->method('broughtInBy')->willReturn([new CommitName(self::MERGE), new CommitName(self::OTHER)]);
         $history->method('signatureOf')->willReturn(SignatureStatus::OwnerSigned);
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
@@ -118,7 +118,7 @@ final class CommitClassifierTest extends TestCase
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
 
-        self::assertSame([self::OTHER], $classification->peerMerges);
+        self::assertEquals([new CommitName(self::OTHER)], $classification->peerMerges);
         self::assertEquals([new MainViolation(self::BASE, Violation::Unsigned)], $classification->violations);
     }
 
@@ -145,8 +145,8 @@ final class CommitClassifierTest extends TestCase
     {
         $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(true);
-        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
-        $history->method('broughtInBy')->willReturn([self::MERGE, self::OTHER]);
+        $history->method('firstParentsSince')->willReturn([new CommitName(self::OTHER), new CommitName(self::MERGE)]);
+        $history->method('broughtInBy')->willReturn([new CommitName(self::MERGE), new CommitName(self::OTHER)]);
         $history->method('signatureOf')->willReturn(SignatureStatus::PeerSigned);
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
@@ -203,7 +203,7 @@ final class CommitClassifierTest extends TestCase
     {
         $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(false);
-        $history->method('firstParentsSince')->willReturn([self::MERGE]);
+        $history->method('firstParentsSince')->willReturn([new CommitName(self::MERGE)]);
         $history->method('signatureOf')->willReturn(SignatureStatus::OwnerSigned);
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
@@ -237,7 +237,7 @@ final class CommitClassifierTest extends TestCase
     {
         $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(true);
-        $history->method('firstParentsSince')->willReturn(array_keys($signatures));
+        $history->method('firstParentsSince')->willReturn(array_map(static fn (string $commit): CommitName => new CommitName($commit), array_keys($signatures)));
         $history->method('signatureOf')->willReturnCallback(
             static fn (string $commit): SignatureStatus => $signatures[$commit],
         );

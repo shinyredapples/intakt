@@ -469,16 +469,6 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['F1', 'Text of A.']], $this->idsAndTexts($asked));
     }
 
-    public function testAnInvalidJudgeAnswerLeavesEveryBlockingFindingOnTheActListAndMakesNoFollowUp(): void
-    {
-        $round = $this->completedRound();
-        $vendor = new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P2), $this->finding('F3', Severity::P3)]));
-
-        $this->fixture->judge($vendor)($this->judgingOf($round));
-
-        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
-    }
-
     // Decision 5 of #2981: the dashboard leaves such a round out of the judge's chart, because its unmarked P3 is no rejection of the judge's.
     public function testAnInvalidJudgeAnswerIsRecordedAsTheFallback(): void
     {
@@ -486,6 +476,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P2), $this->finding('F3', Severity::P3)])))($this->judgingOf($fallback));
 
         self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
+        self::assertSame([['round' => $fallback->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
     // The fallback marks every finding when none is a P3, so only the place that chooses it can tell; the marks cannot (PR #2989, second review round).

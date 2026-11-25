@@ -265,13 +265,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(1, $page->filter('#projfilter option[value="build-only"]'));
     }
 
-    public function testADemoInstallWithoutAReviewOpensOnTheFirstRunPage(): void
+    public function testADemoInstallWithoutAReviewOpensOnTheSetupWizardsReadyStep(): void
     {
         $this->onADemoInstall();
 
         $this->browser->request('GET', '/');
 
-        self::assertResponseRedirects('/setup', Response::HTTP_SEE_OTHER);
+        self::assertResponseRedirects('/setup?step=5', Response::HTTP_SEE_OTHER);
     }
 
     public function testADemoInstallWithAReviewOpensOnTheBoard(): void

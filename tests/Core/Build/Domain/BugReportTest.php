@@ -8,14 +8,17 @@ use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Review\Contract\Labels;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(BugReport::class)]
 #[CoversClass(BugPart::class)]
 #[CoversClass(TaskKind::class)]
 #[CoversClass(BuildQuestion::class)]
+#[UsesClass(Labels::class)]
 final class BugReportTest extends TestCase
 {
     /**
@@ -323,9 +326,9 @@ final class BugReportTest extends TestCase
     public function testOnlyTheBugLabelMakesATaskABug(): void
     {
         self::assertSame([TaskKind::Bug, TaskKind::Task, TaskKind::Task], [
-            TaskKind::fromLabels(['intakt', 'bug']),
-            TaskKind::fromLabels(['intakt', 'bugfix']),
-            TaskKind::fromLabels([]),
+            TaskKind::fromLabels(new Labels('intakt', 'bug')),
+            TaskKind::fromLabels(new Labels('intakt', 'bugfix')),
+            TaskKind::fromLabels(new Labels()),
         ]);
     }
 

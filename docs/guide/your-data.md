@@ -8,7 +8,7 @@ Everything Intakt knows lives in one place, so it is easy to back up, move or re
 flowchart TD
   vol[(The intakt data volume)] --> db[The database<br/>SQLite: tasks, queue, the record,<br/>budgets, your AI accounts, project memory]
   vol --> cfg[The config file<br/>projects, panels, routing]
-  vol --> keys[Its keys and secrets<br/>the GitHub App key, its signing key, the secrets vault's key;<br/>the vault: AI tokens, logins and API keys, encrypted;<br/>the AI key typed on the setup page, not encrypted, readable by Intakt only]
+  vol --> keys[Its keys and secrets<br/>the GitHub App key, its signing key, the secrets vault's key;<br/>the vault: AI tokens, logins and API keys, encrypted;<br/>the AI key typed in the setup wizard, not encrypted, readable by Intakt only]
   vol --> mirror[A copy of each repository<br/>rebuilt from GitHub if lost]
   vol --> cache[Caches<br/>job images, package downloads]
 ```
@@ -17,11 +17,24 @@ flowchart TD
 |---|---|---|
 | **The database** | every task's state, the record of every decision, budgets, the AI accounts and controls you set in the admin area, project memory | Intakt forgets its history and you add your accounts again; your code and pull requests on GitHub are untouched |
 | **The config file** | your settings: projects, panels, routing | you redo the setup wizard |
-| **Its keys and secrets** | the App's private key, the signing key and the key of the secrets vault; the vault itself with the AI tokens, logins and API keys you saved, encrypted; the AI key you typed on the setup page, in a file of its own that is not encrypted but that only Intakt's own user can read | you reconnect the App and paste new tokens or log in again in the admin area |
+| **Its keys and secrets** | the App's private key, the signing key and the key of the secrets vault; the vault itself with the AI tokens, logins and API keys you saved, encrypted; the AI key you typed in the setup wizard, in a file of its own that is not encrypted but that only Intakt's own user can read | you reconnect the App and paste new tokens or log in again in the admin area |
 | **The repository copies** | a mirror of each project | nothing: rebuilt from GitHub |
 | **Caches** | images and downloads | nothing: rebuilt, just slower once |
 
 **What is not in Intakt:** your code, issues, pull requests, reviews and approvals all live on GitHub (or Gitea). Intakt never holds the only copy of anything of yours.
+
+## What Intakt keeps and for how long
+
+Say a pull request went red last week and you wonder what Intakt still remembers about it. It remembers that the head went red. It does not remember the CI output. Here is what stays, and for how long.
+
+| What | How long | Good to know |
+|---|---|---|
+| **The ledger** | kept, and only ever added to | The record of what Intakt did. You cannot edit it. Removing the demo project also removes the events it replayed. |
+| **Conversations** | 30 days after the last message, unless you change it | What a model was shown and said, so it holds your code. Set `retention.conversation_days` (1 to 36500, or `forever`) in the config file. Only reviewer conversations are stored today; builder conversations will follow the same setting once they are. |
+| **The log** | written to the service output (the journal, or `docker logs`), warnings and errors only unless you raise the level; how long it lasts is up to the journal or Docker, not Intakt | Set with `INTAKT_LOG_LEVEL`. Secrets Intakt knows about are written as `[redacted]`. |
+| **CI logs** | on GitHub, 90 days by default | Intakt stores none. Change the time in the repository's Actions settings on GitHub, not in Intakt. |
+
+Deleting a conversation never touches the ledger. For a red head, the ledger holds the head and when Intakt looks again, but no CI log text. One case differs: when a head, or main, fails Intakt's own start-up check, the ledger also keeps the reason for the failure, which can include output of the tools Intakt ran (with known secrets redacted), and it stays there for good. A CI excerpt that a builder receives lives only in that builder's conversation, so the 30 days apply to it too.
 
 In the container image, all of this lives in `/app/var/data`, which you must mount as a volume: the image declares none, so without one your data is lost with the container (see [Running the container image](../reference/user-manual.md#running-the-container-image)).
 
