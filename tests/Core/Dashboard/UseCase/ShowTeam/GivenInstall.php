@@ -9,14 +9,14 @@ use Intakt\Core\Ai\Contract\Provider;
 final readonly class GivenInstall
 {
     /**
-     * @param array<string, list<string>>                                $accounts
-     * @param list<string>                                               $withoutKey
-     * @param list<string>                                               $coolingDown
-     * @param list<string>                                               $rejected
-     * @param array<string, array{default: Provider, strong: Provider}>  $developers
-     * @param array<string, array<string, Provider>>                     $reviewers
-     * @param list<string>                                               $unrouted
-     * @param list<string>                                               $unresolvable
+     * @param array<string, list<string>>                               $accounts
+     * @param list<string>                                              $withoutKey
+     * @param list<string>                                              $coolingDown
+     * @param list<string>                                              $rejected
+     * @param array<string, array{default: Provider, strong: Provider}> $developers
+     * @param array<string, array<string, Provider>>                    $reviewers
+     * @param list<string>                                              $unrouted
+     * @param list<string>                                              $unresolvable
      */
     public function __construct(
         public array $accounts = [],

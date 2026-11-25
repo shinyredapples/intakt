@@ -19,6 +19,11 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\AccountState;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\Team;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamAccount;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRole;
+use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRoster;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\EscalationOutcome;
@@ -29,11 +34,6 @@ use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
-use Intakt\Core\Dashboard\UseCase\ShowTeam\AccountState;
-use Intakt\Core\Dashboard\UseCase\ShowTeam\Team;
-use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamAccount;
-use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRole;
-use Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRoster;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -203,8 +203,7 @@ final class TeamRosterTest extends TestCase
     {
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturnCallback(static fn (string $project, BuildFacts $facts): TierChoice => in_array($project, $install->unrouted, true)
-            ? throw new BuildRoutingNotConfigured($project)
-            : (EscalationOutcome::Confirmed === $facts->escalation ? new TierChoice(Tier::Strong, TierReason::ConfirmedEscalation) : new TierChoice(Tier::Standard, TierReason::Default)));
+            ? throw new BuildRoutingNotConfigured($project) : (EscalationOutcome::Confirmed === $facts->escalation ? new TierChoice(Tier::Strong, TierReason::ConfirmedEscalation) : new TierChoice(Tier::Standard, TierReason::Default)));
 
         return $routing;
     }
@@ -214,8 +213,7 @@ final class TeamRosterTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('projects')->willReturn(new ProjectNames(...array_keys($install->developers)));
         $tiers->method('configured')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => in_array($project, $install->unresolvable, true)
-            ? throw new TierNotMapped($project, $tier)
-            : new ResolvedModel($install->developers[$project][Tier::Strong === $tier ? 'strong' : 'default'], 'model'));
+            ? throw new TierNotMapped($project, $tier) : new ResolvedModel($install->developers[$project][Tier::Strong === $tier ? 'strong' : 'default'], 'model'));
 
         return $tiers;
     }
