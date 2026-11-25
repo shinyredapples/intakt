@@ -168,7 +168,7 @@ final class LocalBranchRestoreTest extends TestCase
         $this->programs->runFirstOn('git', 'for-each-ref', sprintf('test ! -e %s || { echo broken >&2; exit 128; }; touch %s', $mark, $mark));
 
         try {
-            self::assertSame('The branch "intakt/feature" was not restored: git for-each-ref failed after the push, so a ref the push wrote may be left: broken',$this->refusalOf(self::createStub(ArchivedHeadPush::class)));
+            self::assertSame('The branch "intakt/feature" was not restored: git for-each-ref failed after the push, so a ref the push wrote may be left: broken', $this->refusalOf(self::createStub(ArchivedHeadPush::class)));
         } finally {
             new Filesystem()->remove($this->archives().'-listed');
         }
