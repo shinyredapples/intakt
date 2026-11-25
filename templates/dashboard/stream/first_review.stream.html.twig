@@ -1,0 +1,2 @@
+{#- Replaces the first-review section of the setup wizard's last step; a page on another step has no such element, so Turbo ignores the update there. -#}
+<turbo-stream action="replace" target="step-first-review"><template>{{ include('dashboard/_setup_first_review.html.twig', {first_review: first_review, review_button: review_button}, with_context = false) }}</template></turbo-stream>
