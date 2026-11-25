@@ -19,11 +19,14 @@ final readonly class ConsumerProcessesCheck
     ];
     private const string MISSING_FIX = 'restart the container with docker compose restart intakt; outside the container, start them with messenger:consume async and messenger:consume scheduler_watcher scheduler_retention';
     private const string CANNOT_RUN_FIX = 'run the doctor inside the container: docker compose exec intakt php bin/console intakt:doctor';
+    private const string UNVERIFIED_FIX = 'run the doctor as the user that runs the workers, so it may read their working directory (in the compose stack: docker compose exec intakt php bin/console intakt:doctor)';
 
+    // The doctor's own PID is a parameter only so a test can place it in a fake process list; null means this process.
     public function __construct(
         #[Autowire('%kernel.project_dir%')]
         private string $projectDir,
         private string $processRoot = '/proc',
+        private ?int $ownProcessId = null,
     ) {
     }
 
@@ -33,11 +36,9 @@ final readonly class ConsumerProcessesCheck
         if (null === $commandLines) {
             return DoctorCheckVerdict::failed('cannot run (the process list under '.$this->processRoot.' cannot be read)', self::CANNOT_RUN_FIX);
         }
-        $missing = array_keys(array_filter(self::KINDS, fn (string $problem, string $receiver): bool => !$this->runs($receiver, $commandLines), ARRAY_FILTER_USE_BOTH));
+        $receivers = array_keys(self::KINDS);
 
-        return [] === $missing
-            ? DoctorCheckVerdict::passed()
-            : DoctorCheckVerdict::failed(implode('; ', array_map(static fn (string $receiver): string => self::KINDS[$receiver], $missing)), self::MISSING_FIX);
+        return $this->verdict(array_combine($receivers, array_map(fn (string $receiver): WorkerProcess => $this->found($receiver, $commandLines), $receivers)));
     }
 
     // Keyed by the process's folder, because a relative script is placed from the working directory that folder links to.
@@ -50,6 +51,8 @@ final readonly class ConsumerProcessesCheck
         if (false === $files || [] === $files) {
             return null;
         }
+        // The doctor's own command line is left out, because under hidepid it stays readable while every worker's is hidden (decision 2 of #3827).
+        $files = array_values(array_filter($files, fn (string $file): bool => basename(dirname($file)) !== (string) ($this->ownProcessId ?? getmypid())));
         $folders = array_map(dirname(...), $files);
         // Quiet, because a process may end between the listing and the read.
         $read = array_filter(array_combine($folders, array_map(static fn (string $file): string|false => @file_get_contents($file), $files)), is_string(...));
@@ -67,15 +70,21 @@ final readonly class ConsumerProcessesCheck
     /**
      * @param array<string, list<string>> $commandLines
      */
-    private function runs(string $receiver, array $commandLines): bool
+    private function found(string $receiver, array $commandLines): WorkerProcess
     {
-        return array_any($commandLines, fn (array $arguments, string $folder): bool => $this->consumes($receiver, $arguments, $folder));
+        $processes = array_map(fn (array $arguments, string $folder): WorkerProcess => $this->consumer($receiver, $arguments, $folder), $commandLines, array_keys($commandLines));
+
+        return match (true) {
+            in_array(WorkerProcess::ThisInstalls, $processes, true) => WorkerProcess::ThisInstalls,
+            in_array(WorkerProcess::Unverifiable, $processes, true) => WorkerProcess::Unverifiable,
+            default => WorkerProcess::Other,
+        };
     }
 
     /**
      * @param list<string> $arguments
      */
-    private function consumes(string $receiver, array $arguments, string $folder): bool
+    private function consumer(string $receiver, array $arguments, string $folder): WorkerProcess
     {
         $consume = array_search(self::CONSUME, $arguments, true);
 
@@ -83,22 +92,51 @@ final readonly class ConsumerProcessesCheck
         return is_int($consume) && $consume >= 2
             && str_contains(basename($arguments[0]), 'php')
             && in_array($receiver, array_slice($arguments, $consume + 1), true)
-            && $this->isThisInstallsConsole($arguments[$consume - 1], $folder);
+            ? $this->console($arguments[$consume - 1], $folder)
+            : WorkerProcess::Other;
     }
 
     // Compared as resolved paths, because another program's script named console, or another install's, is not one of this install's workers.
-    private function isThisInstallsConsole(string $script, string $folder): bool
+    private function console(string $script, string $folder): WorkerProcess
     {
         $own = realpath($this->projectDir.self::CONSOLE);
         if (false === $own) {
-            return false;
+            return WorkerProcess::Other;
         }
         if (str_starts_with($script, '/')) {
-            return realpath($script) === $own;
+            return realpath($script) === $own ? WorkerProcess::ThisInstalls : WorkerProcess::Other;
         }
-        // Quiet, because the working directory of another user's process cannot be read; such a script cannot be placed, so it does not count.
+        // Quiet, because the working directory of another user's process cannot be read.
         $workingDirectory = @readlink($folder.'/cwd');
+        if (false === $workingDirectory) {
+            // Not stopped, because a relative bin/console with an unreadable folder may be this install's worker (D5).
+            return str_ends_with('/'.$script, self::CONSOLE) ? WorkerProcess::Unverifiable : WorkerProcess::Other;
+        }
 
-        return false !== $workingDirectory && realpath($workingDirectory.'/'.$script) === $own;
+        return realpath($workingDirectory.'/'.$script) === $own ? WorkerProcess::ThisInstalls : WorkerProcess::Other;
+    }
+
+    /**
+     * @param array<string, WorkerProcess> $found
+     */
+    private function verdict(array $found): DoctorCheckVerdict
+    {
+        $failing = array_filter($found, static fn (WorkerProcess $process): bool => WorkerProcess::ThisInstalls !== $process);
+        if ([] === $failing) {
+            return DoctorCheckVerdict::passed();
+        }
+        $problems = array_map(
+            static fn (WorkerProcess $process, string $receiver): string => WorkerProcess::Unverifiable === $process
+                ? 'cannot run (the doctor may not read the working directory of a process that may be the '.$receiver.' worker)'
+                : self::KINDS[$receiver],
+            $failing,
+            array_keys($failing),
+        );
+        $fixes = array_filter([
+            in_array(WorkerProcess::Unverifiable, $failing, true) ? self::UNVERIFIED_FIX : '',
+            in_array(WorkerProcess::Other, $failing, true) ? self::MISSING_FIX : '',
+        ]);
+
+        return DoctorCheckVerdict::failed(implode('; ', $problems), implode('; ', $fixes));
     }
 }

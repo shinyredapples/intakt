@@ -20,6 +20,7 @@ use Intakt\Core\Server\Infrastructure\ConsumerProcessesCheck;
 use Intakt\Core\Server\Infrastructure\DoctorCheckVerdict;
 use Intakt\Core\Server\Infrastructure\PrometheusSamples;
 use Intakt\Core\Server\Infrastructure\WebServerCheck;
+use Intakt\Core\Server\Infrastructure\WorkerProcess;
 use Intakt\Core\Server\UseCase\Doctor\DoctorCommand;
 use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
@@ -61,6 +62,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(WebServerCheck::class)]
 #[UsesClass(ConsumerProcessesCheck::class)]
 #[UsesClass(DoctorCheckVerdict::class)]
+#[UsesClass(WorkerProcess::class)]
 #[UsesClass(FakeProcessRoot::class)]
 final class DoctorCommandTest extends TestCase
 {

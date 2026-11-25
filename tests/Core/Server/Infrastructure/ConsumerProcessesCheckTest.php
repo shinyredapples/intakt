@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Server\Infrastructure;
 
 use Intakt\Core\Server\Infrastructure\ConsumerProcessesCheck;
 use Intakt\Core\Server\Infrastructure\DoctorCheckVerdict;
+use Intakt\Core\Server\Infrastructure\WorkerProcess;
 use Intakt\Tests\Core\Server\FakeProcessRoot;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -13,11 +14,13 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ConsumerProcessesCheck::class)]
 #[CoversClass(DoctorCheckVerdict::class)]
+#[CoversClass(WorkerProcess::class)]
 #[UsesClass(FakeProcessRoot::class)]
 final class ConsumerProcessesCheckTest extends TestCase
 {
     private const string MISSING_FIX = 'restart the container with docker compose restart intakt; outside the container, start them with messenger:consume async and messenger:consume scheduler_watcher scheduler_retention';
     private const string CANNOT_RUN_FIX = 'run the doctor inside the container: docker compose exec intakt php bin/console intakt:doctor';
+    private const string UNVERIFIED_FIX = 'run the doctor as the user that runs the workers, so it may read their working directory (in the compose stack: docker compose exec intakt php bin/console intakt:doctor)';
 
     private ?FakeProcessRoot $root = null;
 
@@ -109,14 +112,59 @@ final class ConsumerProcessesCheckTest extends TestCase
         self::assertSame('no async worker is running, so no review or build moves', $verdict->problem);
     }
 
-    public function testAConsumerWhoseWorkingDirectoryCannotBeReadDoesNotCountAsAWorker(): void
+    public function testAConsumerWhoseWorkingDirectoryCannotBeReadFailsAsCannotRunInsteadOfStopped(): void
     {
         $verdict = $this->check(new FakeProcessRoot([
             ['php', 'bin/console', 'messenger:consume', 'async'],
             ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
         ], [1 => null]));
 
-        self::assertSame('the scheduler worker is not running, so pull requests are not watched', $verdict->problem);
+        self::assertSame('cannot run (the doctor may not read the working directory of a process that may be the scheduler_watcher worker)', $verdict->problem);
+        self::assertSame(self::UNVERIFIED_FIX, $verdict->fix);
+    }
+
+    public function testAnUnverifiableConsumerFailsOnlyItsOwnReceiver(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['php', FakeProcessRoot::INSTALL.'/bin/console', 'messenger:consume', 'scheduler_watcher'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+        ], [1 => null, 2 => null]));
+
+        self::assertSame('cannot run (the doctor may not read the working directory of a process that may be the async worker)', $verdict->problem);
+        self::assertSame(self::UNVERIFIED_FIX, $verdict->fix);
+    }
+
+    public function testAVerifiedConsumerPassesBesideAnUnverifiableOneForTheSameReceiver(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ], [0 => null]));
+
+        self::assertTrue($verdict->passes());
+    }
+
+    public function testAnUnverifiableConsumerAndAMissingOneAreBothNamed(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+        ], [0 => null]));
+
+        self::assertSame('cannot run (the doctor may not read the working directory of a process that may be the async worker); the scheduler worker is not running, so pull requests are not watched', $verdict->problem);
+        self::assertSame(self::UNVERIFIED_FIX.'; '.self::MISSING_FIX, $verdict->fix);
+    }
+
+    public function testAnUnreadableWorkingDirectoryOfAProcessThatIsNotAConsoleStillReportsTheWorkerStopped(): void
+    {
+        $verdict = $this->check(new FakeProcessRoot([
+            ['php', 'worker.php', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ], [0 => null]));
+
+        self::assertSame('no async worker is running, so no review or build moves', $verdict->problem);
+        self::assertSame(self::MISSING_FIX, $verdict->fix);
     }
 
     public function testAConsumerStartedThroughALinkToTheInstallCounts(): void
@@ -151,6 +199,22 @@ final class ConsumerProcessesCheckTest extends TestCase
         }
 
         $verdict = $this->root->check()->run();
+
+        self::assertStringStartsWith('cannot run (the process list under ', (string) $verdict->problem);
+        self::assertSame(self::CANNOT_RUN_FIX, $verdict->fix);
+    }
+
+    public function testTheDoctorsOwnReadableCommandLineBesideHiddenOnesStillFailsAsCannotRun(): void
+    {
+        $this->root = new FakeProcessRoot([
+            ['php', 'bin/console', 'intakt:doctor'],
+            ['php', 'bin/console', 'messenger:consume', 'async'],
+            ['php', 'bin/console', 'messenger:consume', 'scheduler_watcher'],
+        ]);
+        chmod($this->root->path.'/101/cmdline', 0o000);
+        chmod($this->root->path.'/102/cmdline', 0o000);
+
+        $verdict = new ConsumerProcessesCheck($this->root->install, $this->root->path, 100)->run();
 
         self::assertStringStartsWith('cannot run (the process list under ', (string) $verdict->problem);
         self::assertSame(self::CANNOT_RUN_FIX, $verdict->fix);
