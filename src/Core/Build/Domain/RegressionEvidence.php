@@ -53,12 +53,19 @@ final readonly class RegressionEvidence
 
             $fence = $this->opening($line);
 
-            if (null === $fence && 1 === preg_match('/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading)) {
-                $headings[$number] = $heading[1] ?? '';
+            $text = null === $fence ? $this->headingTextOf($line) : null;
+
+            if (null !== $text) {
+                $headings[$number] = $text;
             }
         }
 
         return [$headings, $fence];
+    }
+
+    private function headingTextOf(string $line): ?string
+    {
+        return 1 === preg_match('/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? ($heading[1] ?? '') : null;
     }
 
     // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
@@ -91,19 +98,7 @@ final readonly class RegressionEvidence
         return null;
     }
 
-    /**
-     * @param array<int, string> $headings
-     */
-    private function endOf(int $evidence, array $headings, int $lineCount): int
-    {
-        foreach (array_keys($headings) as $number) {
-            if ($number > $evidence) {
-                return $number;
-            }
-        }
 
-        return $lineCount;
-    }
 
     private function joined(string $head, string $added, string $rest): string
     {
@@ -111,7 +106,6 @@ final readonly class RegressionEvidence
 
         return '' === trim($rest) ? $text : $text."\n\n".ltrim($rest, "\n");
     }
-
     private function resultLines(): string
     {
         return implode("\n", [
@@ -135,5 +129,19 @@ final readonly class RegressionEvidence
     private function resultText(?RegressionRun $run): string
     {
         return $run->value ?? 'not run';
+    }
+
+    /**
+     * @param array<int, string> $headings
+     */
+    private function endOf(int $evidence, array $headings, int $lineCount): int
+    {
+        foreach (array_keys($headings) as $number) {
+            if ($number > $evidence) {
+                return $number;
+            }
+        }
+
+        return $lineCount;
     }
 }

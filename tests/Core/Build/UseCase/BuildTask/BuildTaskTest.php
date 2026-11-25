@@ -19,7 +19,6 @@ use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
-use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -27,6 +26,7 @@ use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
@@ -356,7 +356,7 @@ final class BuildTaskTest extends TestCase
         $this->changes->checking = static fn () => self::fail('the forge was asked about the change');
 
         try {
-            $this->buildTask($issues, $this->checkout(), $ledger)->run($this->request(7, 'https://github.com/acme/beta.git'));
+            (void) $this->buildTask($issues, $this->checkout(), $ledger)->run($this->request(7, 'https://github.com/acme/beta.git'));
             self::fail('the remote was not refused');
         } catch (PushRemoteRefused $refused) {
             self::assertStringContainsString('"https://github.com/acme/beta.git"', $refused->getMessage());
@@ -410,7 +410,7 @@ final class BuildTaskTest extends TestCase
     {
         $this->runner = $this->committingRunner(text: "feat: task 7\n\nThe body.\n\nEvidence: tests pass.\n");
 
-        $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
         self::assertSame(['feat: task 7', "The body.\n\nEvidence: tests pass."], [$this->changes->text?->title, $this->changes->text?->body]);
     }
@@ -550,7 +550,7 @@ final class BuildTaskTest extends TestCase
     {
         $this->runner = $this->committingRunner();
 
-        $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
         self::assertInstanceOf(JobSpec::class, $this->checked);
         self::assertSame(self::IMAGE, $this->checked->image);
@@ -957,7 +957,7 @@ final class BuildTaskTest extends TestCase
         });
         $this->runner = $runner;
 
-        $this->taskOf(new InMemoryLedger(), [Issues::task(7, with: ['body' => 'PLANT-body'])])->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7, with: ['body' => 'PLANT-body'])])->run($this->request(7, $this->remote->path));
 
         self::assertInstanceOf(JobSpec::class, $ran);
         self::assertSame([realpath($this->clone), RunBuildJob::CLONE], [$ran->inputs[0]->hostPath, $ran->inputs[0]->containerPath]);
@@ -1086,9 +1086,9 @@ final class BuildTaskTest extends TestCase
         $this->runner = $this->committingRunner();
         $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "failed 2\n", RunCheckJob::LOG => "tests failed\n"]);
         $ledger = new InMemoryLedger();
-        $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
-        $this->taskOf($ledger, [Issues::task(8)])->run($this->request(7, $this->remote->path));
+        (void) $this->taskOf($ledger, [Issues::task(8)])->run($this->request(7, $this->remote->path));
 
         $runs = array_values(array_filter(array_column($ledger->payloads(), 'run'), is_string(...)));
         self::assertCount(7, $runs);
@@ -1112,7 +1112,7 @@ final class BuildTaskTest extends TestCase
             return AppendResult::appended(Uuid::v4());
         });
 
-        $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+        (void) $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
 
         self::assertSame(['read' => true, 'row' => true], $held);
         self::assertTrue($this->startLockOf(7)->acquire(false));
@@ -1332,7 +1332,7 @@ final class BuildTaskTest extends TestCase
         $ledger = new InMemoryLedger(1);
 
         try {
-            $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+            (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
             self::fail('the run must stop');
         } catch (BuildStepNotRecorded $failure) {
             self::assertStringContainsString('did not record the mirror step of issue 7', $failure->getMessage());
