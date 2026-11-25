@@ -77,7 +77,7 @@ final class ProcessRunnerTest extends TestCase
     {
         $printed = $this->markerFile();
 
-        // Plain PHP starts in a few hundredths of a second; a slower start fails on the marker instead of passing on empty output.
+        // Enough, because plain PHP starts in a few hundredths of a second; a slower start would fail on the marker, not pass on empty output.
         $result = new ProcessRunner()->runWithin(['php', '-r', 'echo "partial"; fwrite(STDERR, "partial"); touch($argv[1]); sleep(30);', $printed], sys_get_temp_dir(), 0.3);
 
         self::assertFileExists($printed, 'The command was stopped before it printed');

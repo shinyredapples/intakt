@@ -103,7 +103,7 @@ final class TestsGateParallelTest extends SandboxTestCase
         putenv(TestWorkerCount::VARIABLE.'=2');
 
         try {
-            // PHPUnit boots in about a tenth of that, and a slower boot fails the last-output assertion instead of passing unnoticed.
+            // Short enough to keep the test fast, since PHPUnit boots in about a tenth of it; a slower boot would fail the last-output assertion, not pass unnoticed.
             $result = new TestsGate(fileTimeoutSeconds: 0.5)->run(new Workspace($sandbox->root, dirname(__DIR__, 2), Mode::Full, null));
         } finally {
             putenv(false === $workers ? TestWorkerCount::VARIABLE : TestWorkerCount::VARIABLE.'='.$workers);

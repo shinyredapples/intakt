@@ -65,7 +65,7 @@ final class ProcessQueueTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $started = hrtime(true);
 
-        // Plain PHP starts in a few hundredths of a second; a slower start fails the last-output assertion instead of passing unnoticed.
+        // Enough, because plain PHP starts in a few hundredths of a second; a slower start would fail the last-output assertion, not pass unnoticed.
         $results = new ProcessQueue(30, 0.3)->run(['hang' => $this->php('echo "waiting for the server\n"; sleep(30);'), 'waiting' => $this->appending('waiting')], 1, $sandbox->root);
 
         self::assertSame([ProcessRunner::TIMED_OUT, ProcessRunner::TIMED_OUT], [$results['hang']->exitCode, $results['waiting']->exitCode]);
@@ -153,7 +153,7 @@ final class ProcessQueueTest extends SandboxTestCase
 
         $results = new ProcessQueue(0.45, 0.5)->run(['late' => $late], 1, $this->emptySandbox()->root);
 
-        // The last output shows the job ran: a job the pass ended before its start gets the same reason without it.
+        // The last output is required because a job the pass ended before its start gets the same reason without it.
         self::assertSame(ProcessRunner::TIMED_OUT, $results['late']->exitCode);
         self::assertSame('timed out: the test pass reached its overall limit of 0.5 seconds, last output: started', $results['late']->firstErrorLine());
     }
