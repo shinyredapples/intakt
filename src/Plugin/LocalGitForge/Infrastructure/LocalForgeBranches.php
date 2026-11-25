@@ -276,7 +276,6 @@ final readonly class LocalForgeBranches implements ForgeBranches
         };
     }
 
-
     // A worktree added meanwhile takes no lock this delete holds, so the check is read again. A check that cannot answer counts as checked out, because the branch is already gone here and a refusal must leave it in place.
     private function putBackWhenCheckedOutMeanwhile(string $common, string $reference, ForgeBranch $branch): void
     {
