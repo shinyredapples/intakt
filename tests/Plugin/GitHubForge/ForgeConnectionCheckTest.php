@@ -113,6 +113,17 @@ final class ForgeConnectionCheckTest extends TestCase
         self::assertSame(0, $this->requests);
     }
 
+    public function testAnUnexpectedExceptionWhileReadingTheSettingsPassesThrough(): void
+    {
+        $this->expected = new ReflectionClass(ExpectedInstallation::class)->newLazyGhost(static function (): never {
+            throw new InvalidArgumentException('a bug in the settings');
+        });
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the settings'));
+
+        $this->check()->run();
+    }
+
     public function testAnEmptyAppIdWithTheInstallationIdStillSetFails(): void
     {
         $this->appId = '';
