@@ -199,6 +199,27 @@ final class TeamRosterTest extends TestCase
         self::assertSame([], $team->accounts[0]->roles);
     }
 
+    /**
+     * @return list<string>
+     */
+    private function roleNames(TeamAccount $account): array
+    {
+        return array_map(static fn (TeamRole $role): string => $role->name, $account->roles);
+    }
+
+    private function teamOf(GivenInstall $install): Team
+    {
+        $listed = self::createStub(ListedAccounts::class);
+        $listed->method('of')->willReturnCallback(static fn (Provider $provider): array => array_map(static fn (string $name): Account => new Account($provider, $name), $install->accounts[$provider->value] ?? []));
+        $credentials = self::createStub(AccountCredentials::class);
+        $credentials->method('areSet')->willReturnCallback(static fn (Account $account): bool => !in_array($account->key(), $install->withoutKey, true));
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->coolingDown, true));
+        $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->rejected, true));
+
+        return new TeamRoster($listed, $credentials, $cooldowns, $this->routing($install), $this->tiers($install), $this->panels($install))->now();
+    }
+
     private function routing(GivenInstall $install): BuildRouting
     {
         $routing = self::createStub(BuildRouting::class);
@@ -226,31 +247,10 @@ final class TeamRosterTest extends TestCase
                 throw new PanelNotConfigured($project);
             }
 
-            return new Panel(array_values(array_map(static fn (string $role, Provider $provider): PanelReviewer => new PanelReviewer(new ReviewerRole($role, 'Prompt.'), new ReviewerModel(Tier::Standard, $provider), 1), array_keys($install->reviewers[$project]), $install->reviewers[$project])), QuorumPolicy::Majority);
+            return new Panel(array_map(static fn (string $role, Provider $provider): PanelReviewer => new PanelReviewer(new ReviewerRole($role, 'Prompt.'), new ReviewerModel(Tier::Standard, $provider), 1), array_keys($install->reviewers[$project]), $install->reviewers[$project]), QuorumPolicy::Majority);
         });
 
         return $panels;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function roleNames(TeamAccount $account): array
-    {
-        return array_map(static fn (TeamRole $role): string => $role->name, $account->roles);
-    }
-
-    private function teamOf(GivenInstall $install): Team
-    {
-        $listed = self::createStub(ListedAccounts::class);
-        $listed->method('of')->willReturnCallback(static fn (Provider $provider): array => array_map(static fn (string $name): Account => new Account($provider, $name), $install->accounts[$provider->value] ?? []));
-        $credentials = self::createStub(AccountCredentials::class);
-        $credentials->method('areSet')->willReturnCallback(static fn (Account $account): bool => !in_array($account->key(), $install->withoutKey, true));
-        $cooldowns = self::createStub(AccountCooldowns::class);
-        $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->coolingDown, true));
-        $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->rejected, true));
-
-        return new TeamRoster($listed, $credentials, $cooldowns, $this->routing($install), $this->tiers($install), $this->panels($install))->now();
     }
 
     /**

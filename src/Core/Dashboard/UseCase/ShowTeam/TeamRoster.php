@@ -61,28 +61,12 @@ final readonly class TeamRoster
 
         foreach ($this->tiers->projects() as $project) {
             foreach ($this->developerProvidersOf($project) as $provider) {
-                $roles = $this->withRole($roles, $provider, new TeamRole(self::DEVELOPER, $this->buildRuntimeRuns($provider)));
+                $roles = $this->withRole($roles, $provider, new TeamRole(self::DEVELOPER, $this->buildRuntimeFor($provider)));
             }
 
             foreach ($this->reviewersOf($project) as $reviewer) {
                 $roles = $this->withRole($roles, $reviewer->model->provider, new TeamRole('Reviewer: '.$reviewer->role->name));
             }
-        }
-
-        return $roles;
-    }
-
-    /**
-     * @param array<string, list<TeamRole>> $roles
-     *
-     * @return array<string, list<TeamRole>>
-     */
-    private function withRole(array $roles, Provider $provider, TeamRole $role): array
-    {
-        $known = $roles[$provider->value] ?? [];
-
-        if (!array_any($known, static fn (TeamRole $held): bool => $held->name === $role->name)) {
-            $roles[$provider->value] = [...$known, $role];
         }
 
         return $roles;
@@ -104,6 +88,12 @@ final readonly class TeamRoster
         }
     }
 
+    // Only the Claude Code CLI, because the build job runs its builder through that CLI alone, as ChooseBuildModel refuses any other provider.
+    private function buildRuntimeFor(Provider $provider): BuildRuntime
+    {
+        return Provider::ClaudeCode === $provider ? BuildRuntime::Runs : BuildRuntime::CannotRun;
+    }
+
     // The change asks for a full review, because the panel then lists every reviewer a rule can add.
     /**
      * @return list<PanelReviewer>
@@ -117,10 +107,20 @@ final readonly class TeamRoster
         }
     }
 
-    // The same rule the build applies when it picks the model: the builder is the Claude Code CLI.
-    private function buildRuntimeRuns(Provider $provider): bool
+    /**
+     * @param array<string, list<TeamRole>> $roles
+     *
+     * @return array<string, list<TeamRole>>
+     */
+    private function withRole(array $roles, Provider $provider, TeamRole $role): array
     {
-        return Provider::ClaudeCode === $provider;
+        $known = $roles[$provider->value] ?? [];
+
+        if (!array_any($known, static fn (TeamRole $held): bool => $held->name === $role->name)) {
+            $roles[$provider->value] = [...$known, $role];
+        }
+
+        return $roles;
     }
 
     // A missing key first, because such an account never runs; then rejected, because a rejected key also cools down and only the owner can bring it back.

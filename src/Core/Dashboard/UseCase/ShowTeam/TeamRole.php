@@ -13,12 +13,12 @@ final readonly class TeamRole
      */
     public function __construct(
         public string $name,
-        public bool $buildRuntimeCanRun = true,
+        public BuildRuntime $buildRuntime = BuildRuntime::Runs,
     ) {
     }
 
     public function inWords(): string
     {
-        return $this->buildRuntimeCanRun ? $this->name : $this->name.' '.self::BUILD_RUNTIME_MARK;
+        return BuildRuntime::Runs === $this->buildRuntime ? $this->name : $this->name.' '.self::BUILD_RUNTIME_MARK;
     }
 }

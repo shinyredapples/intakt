@@ -14,7 +14,7 @@ final readonly class GivenInstall
      * @param list<string>                                              $coolingDown
      * @param list<string>                                              $rejected
      * @param array<string, array{default: Provider, strong: Provider}> $developers
-     * @param array<string, array<string, Provider>>                    $reviewers
+     * @param array<string, array<non-empty-string, Provider>>          $reviewers
      * @param list<string>                                              $unrouted
      * @param list<string>                                              $unresolvable
      */
@@ -55,6 +55,9 @@ final readonly class GivenInstall
         return clone ($this, ['developers' => [...$this->developers, $name => ['default' => $default, 'strong' => $strong ?? $default]]]);
     }
 
+    /**
+     * @param non-empty-string $role
+     */
     public function reviewer(string $project, string $role, Provider $provider): self
     {
         return clone ($this, ['reviewers' => [...$this->reviewers, $project => [...($this->reviewers[$project] ?? []), $role => $provider]]]);
