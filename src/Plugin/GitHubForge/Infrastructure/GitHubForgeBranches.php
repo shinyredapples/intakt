@@ -42,7 +42,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
 
         // The labels of every pull request of the branch, because a `keep` on an older one still asks to keep it.
         $labels = array_values(array_unique(array_merge([], ...array_column($pulls, 'labels'))));
-        // An open pull request always decides, and a closed one at the branch's head next.
+        // An open pull request decides first, because cleanup never deletes a branch under review; a closed one at the branch's head next, because it holds every commit.
         $deciding = array_find($pulls, static fn (array $pull): bool => BranchChangeState::Open === $pull['state'])
             ?? array_find($pulls, static fn (array $pull): bool => $pull['head'] === $branch->head->hash);
         if (null !== $deciding) {
