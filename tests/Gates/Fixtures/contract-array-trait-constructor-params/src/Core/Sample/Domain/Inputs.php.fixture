@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Domain;
+
+use stdClass;
+
+trait Inputs
+{
+    /**
+     * @param list<int>      $rejected
+     * @param list<stdClass> $accepted
+     */
+    public function __construct(
+        /** @var list<stdClass> */
+        protected array $rejected,
+        /** @var array<int, stdClass> */
+        private array $accepted,
+    ) {
+        $this->rejected = array_map(static fn (int $id): stdClass => (object) ['id' => $id], $rejected);
+    }
+}

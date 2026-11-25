@@ -237,19 +237,22 @@ final readonly class ContractArrayTypeRule implements Rule
         return $findings;
     }
 
-    // the PHPDoc is resolved under the constructor's declared name, since PHP accepts it in any case
+    // the PHPDoc is resolved under the constructor's declared name, since PHP accepts it in any case; PHPStan finds a trait's name scope through the file of the class that uses the trait, not the trait's own file
     /**
      * @return array<string, Type>
      */
     private function paramTagsOf(ReflectionMethod $constructor): array
     {
-        if (!is_string($comment = $constructor->getDocComment()) || !is_string($file = $constructor->getFileName())) {
+        $method = $constructor->getBetterReflection();
+        $declaring = $method->getDeclaringClass();
+        $using = $method->getImplementingClass();
+
+        if (!is_string($comment = $constructor->getDocComment()) || !is_string($file = $using->getFileName())) {
             return [];
         }
 
-        $declaring = $constructor->getBetterReflection()->getDeclaringClass();
         $trait = $declaring->isTrait() ? $declaring->getName() : null;
-        $tags = $this->typeMapper->getResolvedPhpDoc($file, $constructor->getDeclaringClass()->getName(), $trait, $constructor->getName(), $comment)->getParamTags();
+        $tags = $this->typeMapper->getResolvedPhpDoc($file, $using->getName(), $trait, $constructor->getName(), $comment)->getParamTags();
 
         return array_map(static fn (ParamTag $tag): Type => $tag->getType(), $tags);
     }

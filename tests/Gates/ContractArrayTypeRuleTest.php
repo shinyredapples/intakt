@@ -144,6 +144,16 @@ final class ContractArrayTypeRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('contract-array-trait-promoted', 'src/Core/Sample/Contract/Carried.php:18 intakt.contractArrayType Property Intakt\Core\Sample\Contract\Carried::$items is typed array<int, DateTimeImmutable>');
     }
 
+    public function testARefusedParameterOfAConstructorATraitFromAnotherFileBringsFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('contract-array-trait-constructor-params', 'src/Core/Sample/Contract/Batch.php:9 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Batch::__construct() parameter $rejected is typed list<int>');
+    }
+
+    public function testAnAllowedParameterOfAConstructorATraitFromAnotherFileBringsPassesWhateverItsPropertyKeeps(): void
+    {
+        self::assertStringNotContainsString('$accepted', $this->ruleFindingsOf('contract-array-trait-constructor-params'));
+    }
+
     public function testAContractInheritingAListOfStringsFromAParentOutsideContractFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('contract-array-inherited-method', 'src/Core/Sample/Contract/Named.php:9 intakt.contractArrayType Method Intakt\Core\Sample\Contract\Named::names() returns list<string>');
