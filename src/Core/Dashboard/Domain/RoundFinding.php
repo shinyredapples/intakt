@@ -57,7 +57,7 @@ final readonly class RoundFinding
 
         // Code spans are found on the whole text before any cut, so a line break or a mark inside one never ends the headline.
         $at = 0;
-        foreach ([...self::codeSpansOf($text), [strlen($text), '', '']] as [$start, $span]) {
+        foreach ([...$this->codeSpansOf($text), [strlen($text), '', '']] as [$start, $span]) {
             // A sentence ends at a mark followed by white space or the end, so a dot in a name (src/A.php, 1.5) never ends it. Searched gap by gap instead of in one pattern over the line, which runs out of PCRE's stack on a long first sentence.
             if (1 === preg_match('/\R|[.!?](?=[\s\p{Z}]|$)/u', $text, $end, PREG_OFFSET_CAPTURE, $at) && $end[0][1] < $start) {
                 $cut = $end[0][1] + (str_contains('.!?', $end[0][0]) ? 1 : 0);
@@ -77,7 +77,7 @@ final readonly class RoundFinding
     public function quotedCode(): array
     {
         // The reviewer's own code spans, found as the headline finds them, and not the quote check's counted list, which leaves out a quote it cannot check (a lone `0`) that the reviewer still gave.
-        return array_column(self::codeSpansOf($this->text ?? ''), 2);
+        return array_column($this->codeSpansOf($this->text ?? ''), 2);
     }
 
     public function goesOnAfterItsHeadline(): bool
@@ -116,13 +116,13 @@ final readonly class RoundFinding
      *
      * @return list<array{int, string, string}> the offset, the whole span and the code inside it
      */
-    private static function codeSpansOf(string $text): array
+    private function codeSpansOf(string $text): array
     {
         $spans = [];
         $at = 0;
         while (false !== $open = strpos($text, '`', $at)) {
             $fence = strspn($text, '`', $open);
-            $close = self::closingRunOf($text, $fence, $open + $fence);
+            $close = $this->closingRunOf($text, $fence, $open + $fence);
             if (null === $close) {
                 $at = $open + $fence;
 
@@ -136,7 +136,7 @@ final readonly class RoundFinding
         return $spans;
     }
 
-    private static function closingRunOf(string $text, int $fence, int $from): ?int
+    private function closingRunOf(string $text, int $fence, int $from): ?int
     {
         while (false !== $close = strpos($text, '`', $from)) {
             $run = strspn($text, '`', $close);
