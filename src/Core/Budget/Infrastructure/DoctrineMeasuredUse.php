@@ -22,7 +22,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
-// Readings are appended, never updated in place, so the cleanup of two workers recording one window at once needs no lock of its own (the account lock only serializes a reading with the notice writer): the later takenAt is the latest, and the higher position breaks a tie within one second.
+// Readings are appended, never updated in place, so the cleanup of two workers recording one window at once needs no lock of its own (the account lock, taken because of the notice writer, also serializes readings of one account outside a caller's transaction): the later takenAt is the latest, and the higher position breaks a tie within one second.
 #[AsAlias(MeasuredUse::class)]
 final readonly class DoctrineMeasuredUse implements MeasuredUse
 {

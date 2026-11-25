@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Budget\UseCase\ReplayDay;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Budget\Domain\BudgetGuard;
@@ -197,13 +196,10 @@ final class ReplayDayCommandTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $other = DriverManager::getConnection($entities->getConnection()->getParams());
-        $other->executeStatement('PRAGMA busy_timeout = 0');
         $waits = 0;
         $store = self::createStub(BlockingStoreInterface::class);
-        $store->method('waitAndSave')->willReturnCallback(static function () use ($other, &$waits): void {
+        $store->method('waitAndSave')->willReturnCallback(static function () use (&$waits): void {
             ++$waits;
-            $other->executeStatement('UPDATE budget_window_reading SET used_percent = used_percent');
         });
         $replay = new RolledBackReplay($entities, new LockFactory($store), ['five-hour' => 90.0, 'weekly' => 90.0], self::createStub(Halts::class));
 
