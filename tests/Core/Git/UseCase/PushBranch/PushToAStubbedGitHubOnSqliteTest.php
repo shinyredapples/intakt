@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
@@ -64,8 +63,7 @@ final class PushToAStubbedGitHubOnSqliteTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $ledger = self::getContainer()->get(Ledger::class);
         self::assertInstanceOf(Ledger::class, $ledger);
         $this->ledger = $ledger;

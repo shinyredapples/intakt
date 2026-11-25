@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Budget\UseCase\ReplayDay;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\OutageWatch;
@@ -215,8 +214,7 @@ final class ReplayDayCommandTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $kernel = self::$kernel;
         self::assertNotNull($kernel);
         $this->command = new CommandTester(new Application($kernel)->find('intakt:budget:replay'));
