@@ -72,6 +72,43 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
     }
 
+    /**
+     * @param list<string> $arguments
+     */
+    private function read(array $arguments): string
+    {
+        $process = $this->git($arguments);
+
+        if (!$process->isSuccessful()) {
+            throw new ForgeReadFailed(sprintf('git %s failed: %s', $arguments[0], trim($process->getErrorOutput())));
+        }
+
+        return $process->getOutput();
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function git(array $arguments): Process
+    {
+        // An argument with a NUL byte cannot reach git, because PHP refuses to start the process with it.
+        if (array_any($arguments, static fn (string $argument): bool => str_contains($argument, "\0"))) {
+            throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $arguments[0]));
+        }
+
+        try {
+            $call = $this->hardened->call($this->repository->path, ...$arguments);
+            $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
+            $process->run();
+        } catch (RepositoryAttributesRefused $refused) {
+            throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
+        } catch (ExceptionInterface $failure) {
+            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
+        }
+
+        return $process;
+    }
+
     private function branchFrom(string $line): ForgeBranch
     {
         $fields = explode("\0", $line);
@@ -108,7 +145,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
             return [];
         }
 
-        // -z ends each commit with a NUL, the last one too.
+        // The last NUL is cut, because -z ends the last commit with one too and it would read as an empty email.
         $emails = explode("\0", str_ends_with($output, "\0") ? substr($output, 0, -1) : $output);
 
         if (0 !== count($emails) % 2 || in_array('', $emails, true)) {
@@ -153,7 +190,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
     /**
      * @return list<string>
      */
-    // The branch every worktree's HEAD names, the repository's own among them.
+    // Every worktree's HEAD, because update-ref deletes a branch another worktree has checked out as readily as the repository's own.
     private function checkedOut(): array
     {
         $lines = explode("\0", $this->read(['worktree', 'list', '--porcelain', '-z']));
@@ -171,42 +208,5 @@ final readonly class LocalForgeBranches implements ForgeBranches
         } catch (CommitIdMalformed $invalid) {
             throw new ForgeReadFailed('git printed something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function read(array $arguments): string
-    {
-        $process = $this->git($arguments);
-
-        if (!$process->isSuccessful()) {
-            throw new ForgeReadFailed(sprintf('git %s failed: %s', $arguments[0], trim($process->getErrorOutput())));
-        }
-
-        return $process->getOutput();
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function git(array $arguments): Process
-    {
-        // An argument with a NUL byte cannot reach git, because PHP refuses to start the process with it.
-        if (array_any($arguments, static fn (string $argument): bool => str_contains($argument, "\0"))) {
-            throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $arguments[0]));
-        }
-
-        try {
-            $call = $this->hardened->call($this->repository->path, ...$arguments);
-            $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
-            $process->run();
-        } catch (RepositoryAttributesRefused $refused) {
-            throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
-        } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
-        }
-
-        return $process;
     }
 }

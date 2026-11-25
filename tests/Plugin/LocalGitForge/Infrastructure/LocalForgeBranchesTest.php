@@ -32,7 +32,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(LocalRepository::class)]
 final class LocalForgeBranchesTest extends TestCase
 {
-    // The email TemporaryRepository commits with, standing for Intakt's identity here.
+    // Stands for Intakt's identity, because TemporaryRepository commits with this email.
     private const string INTAKT = 'test@example.invalid';
 
     private TemporaryRepository $repository;

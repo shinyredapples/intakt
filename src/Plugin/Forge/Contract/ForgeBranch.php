@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
 final readonly class ForgeBranch
 {
     // Named by these, because neither forge marks a release branch otherwise and cleanup must never pick one.
