@@ -19,7 +19,8 @@ final class AddProjectStylesTest extends TestCase
         $reach = $this->pixels('/top:\s*-(\d+)px;/', $link);
         $crumbs = $this->rule('.crumbs', $sheet);
         $steps = $this->rule('.add-project .steps', $this->block('/* The progress links reach'));
-        $gap = $this->spacing('margin-bottom', $crumbs) + $this->spacing('margin-top', $steps);
+        // The larger of the two and not their sum, because the breadcrumb's bottom margin and the progress list's top margin collapse into one.
+        $gap = max($this->spacing('margin-bottom', $crumbs), $this->spacing('margin-top', $steps));
 
         self::assertGreaterThanOrEqual($reach, $gap);
     }

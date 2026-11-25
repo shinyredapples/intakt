@@ -51,6 +51,12 @@ final readonly class ShareAndLabelField
         return (int) trim($this->share);
     }
 
+    // In plain digits, because a range input drops a value with a sign or spaces and falls back to its midpoint; a refused share has no place on the slider, so it shows the default and the error names the problem.
+    public function sliderShare(): string
+    {
+        return null === $this->shareError ? (string) $this->percent() : self::DEFAULT_SHARE;
+    }
+
     private static function shareErrorOf(string $share): ?string
     {
         if ('' === $share) {
@@ -68,8 +74,8 @@ final readonly class ShareAndLabelField
             return self::LABEL_EMPTY;
         }
 
-        // A text that is not UTF-8 makes the match fail, and is refused like a control character, since GitHub refuses both.
-        if (1 === preg_match('/\p{Cc}/u', $label) || false === preg_match('//u', $label)) {
+        // A text that is not UTF-8 makes the match fail, and is refused like a control character, since GitHub refuses both. The Unicode line and paragraph separators break a line without being control characters.
+        if (1 === preg_match('/[\p{Cc}\p{Zl}\p{Zp}]/u', $label) || false === preg_match('//u', $label)) {
             return self::LABEL_NOT_ONE_LINE;
         }
 

@@ -54,6 +54,8 @@ final class ShareAndLabelFieldTest extends TestCase
         yield 'with a tab inside' => ["good\tfirst", ShareAndLabelField::LABEL_NOT_ONE_LINE];
         yield 'with a line break at the end, trimmed away' => ["intakt\n", null];
         yield 'not UTF-8' => ["bad\xFF", ShareAndLabelField::LABEL_NOT_ONE_LINE];
+        yield 'with a Unicode line separator inside' => ["one\u{2028}two", ShareAndLabelField::LABEL_NOT_ONE_LINE];
+        yield 'with a Unicode paragraph separator inside' => ["one\u{2029}two", ShareAndLabelField::LABEL_NOT_ONE_LINE];
     }
 
     #[DataProvider('labels')]
@@ -68,6 +70,30 @@ final class ShareAndLabelFieldTest extends TestCase
 
         self::assertTrue($field->isAccepted());
         self::assertSame([' 20 ', 20], [$field->share, $field->percent()]);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function slidersOf(): iterable
+    {
+        yield 'plain digits' => ['35', '35'];
+        yield 'with a plus sign' => ['+35', '35'];
+        yield 'padded' => [' 20 ', '20'];
+        yield 'zero with a plus sign' => ['+0', '0'];
+        yield 'the upper bound' => ['100', '100'];
+        yield 'out of range, so the default' => ['120', ShareAndLabelField::DEFAULT_SHARE];
+        yield 'a word, so the default' => ['twenty', ShareAndLabelField::DEFAULT_SHARE];
+        yield 'empty, so the default' => ['', ShareAndLabelField::DEFAULT_SHARE];
+    }
+
+    #[DataProvider('slidersOf')]
+    public function testTheSliderHoldsTheAcceptedPercentInPlainDigitsOrTheDefault(string $share, string $slider): void
+    {
+        self::assertSame($slider, ShareAndLabelField::submitted($share, 'intakt')->sliderShare());
+    }
+
+    public function testBeforeACheckTheSliderHoldsTheDefaultShare(): void
+    {
+        self::assertSame(ShareAndLabelField::DEFAULT_SHARE, ShareAndLabelField::unsubmitted('intakt')->sliderShare());
     }
 
     public function testOneWrongValueIsEnoughToRefuseTheStep(): void

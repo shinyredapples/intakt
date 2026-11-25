@@ -313,6 +313,43 @@ final class AddProjectControllerTest extends DashboardPageTestCase
     }
 
     /** @return iterable<string, array{string, string}> */
+    public static function sharesARangeInputWouldDrop(): iterable
+    {
+        yield 'with a plus sign' => ['+35', '35'];
+        yield 'padded' => [' 20 ', '20'];
+        yield 'zero with a plus sign' => ['+0', '0'];
+    }
+
+    // Pinned, because a range input drops a value with a sign or spaces and puts its thumb at the midpoint, away from the percent the page shows.
+    #[DataProvider('sharesARangeInputWouldDrop')]
+    public function testAnAcceptedShareIsOneNumberOnTheSliderBesideItAndInTheCheckedLine(string $share, string $percent): void
+    {
+        $page = $this->browser->request('POST', '/projects/new?step=4', ['share' => $share, 'label' => 'intakt']);
+
+        self::assertSame(
+            [$percent, $percent.'%', $percent.'%'],
+            [$page->filter('input#share')->attr('value'), $page->filter('output#share-percent')->text(), $page->filter('#step-share-label .detected strong')->first()->text()],
+        );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function refusedShares(): iterable
+    {
+        yield 'out of range' => ['120'];
+        yield 'a word' => ['twenty'];
+        yield 'empty' => [''];
+    }
+
+    #[DataProvider('refusedShares')]
+    public function testARefusedShareLeavesTheSliderAndItsPercentAtTheDefault(string $share): void
+    {
+        $page = $this->browser->request('POST', '/projects/new?step=4', ['share' => $share, 'label' => 'intakt']);
+
+        self::assertSame(['20', '20%'], [$page->filter('input#share')->attr('value'), $page->filter('output#share-percent')->text()]);
+        self::assertCount(1, $page->filter('#share-error[role=alert]'));
+    }
+
+    /** @return iterable<string, array{string, string}> */
     public static function checks(): iterable
     {
         yield 'the address check' => ['1', 'form.check-repository'];
@@ -352,7 +389,7 @@ final class AddProjectControllerTest extends DashboardPageTestCase
         self::assertSame('Step 4 of 5: Share and label', $page->filter('.wizard .step-count')->text());
         self::assertSame([ShareAndLabelField::SHARE_OUT_OF_RANGE, ShareAndLabelField::LABEL_EMPTY], $page->filter('#step-share-label .field-error[role=alert]')->each(static fn (Crawler $error): string => $error->text()));
         self::assertSame('share-hint share-error', $page->filter('input#share')->attr('aria-describedby'));
-        self::assertSame('120', $page->filter('input#share')->attr('value'));
+        self::assertSame(ShareAndLabelField::DEFAULT_SHARE, $page->filter('input#share')->attr('value'));
         self::assertCount(0, $page->filter('.detected'));
     }
 
