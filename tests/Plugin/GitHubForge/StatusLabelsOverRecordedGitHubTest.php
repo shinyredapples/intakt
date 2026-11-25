@@ -48,7 +48,7 @@ final class StatusLabelsOverRecordedGitHubTest extends KernelTestCase
 
     private LockFactory $locks;
 
-    // Evidence E1 of #3932: the labels before a round, after it is queued and after the publication handler published its verdict.
+    // Evidence E1 of #3932, because no build reaches a live pull request: the owner checks the live forge after merge.
     public function testAPullRequestsStatusLabelGoesFromNoneToInReviewWhenItsRoundIsQueuedAndToWaitingOnYouOnceItsVerdictIsPublished(): void
     {
         $before = $this->pull->labels;
@@ -144,7 +144,7 @@ final class StatusLabelsOverRecordedGitHubTest extends KernelTestCase
         return new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $handed, $verdicts, new OwnerAsks($handed, $protected, $this->fixture->ledger()), new ScriptedGitHub()->forge(), new ChangePublications(new LockFactory(new InMemoryStore())), $this->fixture->log, $this->mirror());
     }
 
-    // One lock store for every writer, as the workers of one install share theirs.
+    // One lock store for every writer, because the workers of one install share theirs and a writer on its own store would never find the lock held.
     private function mirror(): RoundStatusMirror
     {
         return new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), $this->locks, $this->fixture->log, $this->pull->adapter('acme/widgets'));
