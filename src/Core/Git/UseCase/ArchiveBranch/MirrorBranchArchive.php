@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\ArchiveBranch;
 
+use DateTimeZone;
 use Intakt\Core\Git\Contract\ArchivedBranch;
 use Intakt\Core\Git\Contract\BranchArchive;
 use Intakt\Core\Git\Contract\BranchNotArchived;
@@ -13,7 +14,6 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\MirroredHead;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\ProjectNameRefused;
-use DateTimeZone;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
@@ -97,6 +97,14 @@ final readonly class MirrorBranchArchive implements BranchArchive
         $this->run(new GitCall($call->command, $call->directory, $call->environment->with(GIT_ALLOW_PROTOCOL: 'file')));
     }
 
+    /**
+     * @param list<string> $arguments
+     */
+    private function mustRun(array $arguments, string $repository): string
+    {
+        return $this->run($this->hardened->callInBareRepository($repository, ...$arguments));
+    }
+
     private function mustHold(string $ref, string $commit, string $archive): void
     {
         $held = trim($this->mustRun(['rev-parse', '--verify', '--quiet', $ref.'^{commit}'], $archive));
@@ -104,14 +112,6 @@ final readonly class MirrorBranchArchive implements BranchArchive
         if ($held !== $commit) {
             throw BranchNotArchived::because(sprintf('%s does not hold %s', $ref, $commit));
         }
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function mustRun(array $arguments, string $repository): string
-    {
-        return $this->run($this->hardened->callInBareRepository($repository, ...$arguments));
     }
 
     private function run(GitCall $call): string

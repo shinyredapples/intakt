@@ -183,14 +183,10 @@ final class MirrorBranchArchiveTest extends TestCase
         $this->remote->remove();
     }
 
-    private function head(string $branch, string $commit): MirroredHead
+    private function mirror(): void
     {
-        return new MirroredHead('alpha', new BranchHead($branch, $commit));
-    }
-
-    private function archivePath(): string
-    {
-        return $this->root.'/archive/alpha.git';
+        $network = new NetworkGit(new RecordingClock(), new NullLogger());
+        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->root.'/mirrors'))->update('alpha', $this->remote->path);
     }
 
     private function archiver(): MirrorBranchArchive
@@ -200,10 +196,14 @@ final class MirrorBranchArchiveTest extends TestCase
         return new MirrorBranchArchive(new HardenedGit(), new Filesystem(), new LockFactory(new InMemoryStore()), $clock, new Mirrors($this->root.'/mirrors'), new Mirrors($this->root.'/archive'));
     }
 
-    private function mirror(): void
+    private function head(string $branch, string $commit): MirroredHead
     {
-        $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->root.'/mirrors'))->update('alpha', $this->remote->path);
+        return new MirroredHead('alpha', new BranchHead($branch, $commit));
+    }
+
+    private function archivePath(): string
+    {
+        return $this->root.'/archive/alpha.git';
     }
 
     private function git(string $directory, string ...$arguments): string

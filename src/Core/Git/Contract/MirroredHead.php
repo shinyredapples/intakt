@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Contract;
 
-// A branch head the project's mirror holds, which is where its objects are copied from.
+// Names the mirror by project because the archive copies the head's objects from it.
 final readonly class MirroredHead
 {
     public function __construct(
