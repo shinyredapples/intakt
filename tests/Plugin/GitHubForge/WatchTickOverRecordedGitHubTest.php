@@ -16,6 +16,7 @@ use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -45,6 +46,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
@@ -59,6 +61,7 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
@@ -283,7 +286,10 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        // No status labels, because these ticks read only the steering labels and the ledger.
+        $statuses = new StatusMirrors($find, $rounds, new RoundStatusMirror(self::createStub(LatestRoundStatus::class), $locks, $logger), $logger);
+
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
     }
 
     private function recordedEvents(): string
