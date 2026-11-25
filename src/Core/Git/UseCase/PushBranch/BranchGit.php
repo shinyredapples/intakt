@@ -6,7 +6,9 @@ namespace Intakt\Core\Git\UseCase\PushBranch;
 
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RemoteCredential;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use SensitiveParameter;
 use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
@@ -50,9 +52,9 @@ final readonly class BranchGit
      *
      * @throws BranchNotPushed
      */
-    public function outputFromRemote(string $repository, array $arguments): string
+    public function outputFromRemote(string $repository, #[SensitiveParameter] array $arguments, ?RemoteCredential $credential = null): string
     {
-        $process = $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments);
+        $process = $this->finished($this->process($repository, $arguments, self::NETWORK, $credential), $arguments);
 
         // Not the error output, because git may repeat the remote's address, and a credential can be part of it.
         return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed with exit code %d', $arguments[0] ?? '', $process->getExitCode() ?? -1));
@@ -64,9 +66,24 @@ final readonly class BranchGit
      *
      * @throws BranchNotPushed
      */
-    public function exitCodeAtRemote(string $repository, array $arguments): int
+    public function exitCodeAtRemote(string $repository, #[SensitiveParameter] array $arguments): int
     {
         return $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments)->getExitCode() ?? -1;
+    }
+
+    // The exit code and the standard output, for a push run with --porcelain whose caller reads each ref's status; never the error output, because git may repeat the remote's address there.
+    /**
+     * @param list<string> $arguments
+     *
+     * @return array{int, string}
+     *
+     * @throws BranchNotPushed
+     */
+    public function outcomeAtRemote(string $repository, #[SensitiveParameter] array $arguments, ?RemoteCredential $credential = null): array
+    {
+        $process = $this->finished($this->process($repository, $arguments, self::NETWORK, $credential), $arguments);
+
+        return [$process->getExitCode() ?? -1, $process->getOutput()];
     }
 
     // The config entries that change where git sends a remote string (url.<base>.insteadOf and url.<base>.pushInsteadOf rewrites, and every remote.<name>.* key, includes followed) as key and value pairs, in one call, because git applies them before it reads or pushes, so the address the caller checked would not be the one git reaches.
@@ -96,7 +113,7 @@ final readonly class BranchGit
     /**
      * @throws BranchNotPushed
      */
-    public function refuseRewrittenRemote(string $repository, string $remote): void
+    public function refuseRewrittenRemote(string $repository, #[SensitiveParameter] string $remote): void
     {
         $section = 'remote.'.$remote.'.';
 
@@ -117,10 +134,10 @@ final readonly class BranchGit
      *
      * @phpstan-impure
      */
-    public function remoteTip(string $repository, string $remote, string $branch): ?string
+    public function remoteTip(string $repository, #[SensitiveParameter] string $remote, string $branch, ?RemoteCredential $credential = null): ?string
     {
         $ref = 'refs/heads/'.$branch;
-        $listed = $this->outputFromRemote($repository, ['ls-remote', '--', $remote, $ref]);
+        $listed = $this->outputFromRemote($repository, ['ls-remote', '--', $remote, $ref], $credential);
 
         // Git matches the pattern against the tail of every ref, so "refs/heads/a/refs/heads/task" is listed too and may come first: only the exact ref is the branch.
         foreach (explode("\n", $listed) as $line) {
@@ -159,7 +176,7 @@ final readonly class BranchGit
      *
      * @throws BranchNotPushed
      */
-    private function process(string $repository, array $arguments, array $environment): Process
+    private function process(string $repository, #[SensitiveParameter] array $arguments, array $environment, ?RemoteCredential $credential = null): Process
     {
         try {
             $call = $this->hardened->callInBareRepository($repository, ...$arguments);
@@ -170,7 +187,24 @@ final readonly class BranchGit
             throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped or found no bare repository', $arguments[0] ?? ''));
         }
 
-        return new Process([...$call->command], $call->directory, [...$call->environment, ...$environment], null, $this->timeoutSeconds);
+        return new Process([...$call->command], $call->directory, $this->withCredential([...$call->environment, ...$environment], $credential), null, $this->timeoutSeconds);
+    }
+
+    // One more config entry in the environment, never on the command line or in the address, because every user of the machine can read a command line and git repeats the address in its messages.
+    /**
+     * @param array<string, string|false> $environment
+     *
+     * @return array<string, string|false>
+     */
+    private function withCredential(#[SensitiveParameter] array $environment, ?RemoteCredential $credential): array
+    {
+        if (null === $credential) {
+            return $environment;
+        }
+
+        $index = (int) ($environment['GIT_CONFIG_COUNT'] ?? 0);
+
+        return [...$environment, 'GIT_CONFIG_COUNT' => (string) ($index + 1), 'GIT_CONFIG_KEY_'.$index => 'http.extraHeader', 'GIT_CONFIG_VALUE_'.$index => $credential->authorizationHeader()];
     }
 
     // Every call goes through this one step, so none leaves the push as a Process exception.
@@ -179,7 +213,7 @@ final readonly class BranchGit
      *
      * @throws BranchNotPushed
      */
-    private function finished(Process $process, array $arguments): Process
+    private function finished(#[SensitiveParameter] Process $process, #[SensitiveParameter] array $arguments): Process
     {
         return $this->guardedRun->run($process, 'git '.($arguments[0] ?? ''));
     }

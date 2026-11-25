@@ -8,6 +8,14 @@ use Intakt\Core\Git\Contract\ArchivedHead;
 use Intakt\Core\Git\Contract\ArchivedHeadPush;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RemoteCredential;
+use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
+use Intakt\Core\Git\UseCase\PushBranch\PushArchivedHead;
+use Intakt\Core\Git\UseCase\PushBranch\PushLockName;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
 use Intakt\Plugin\Forge\Contract\BranchRestore;
@@ -37,7 +45,11 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\RetryableHttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Process;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 // Recorded GitHub answers keyed by method and URL (a body, or three digits for an HTTP status), with every request kept, because a test must see which pages were read and that no delete was sent.
@@ -48,6 +60,14 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(BranchHead::class)]
 #[UsesClass(BranchNotPushed::class)]
 #[UsesClass(BranchRestore::class)]
+#[UsesClass(BranchGit::class)]
+#[UsesClass(GitCall::class)]
+#[UsesClass(GuardedRun::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(Mirrors::class)]
+#[UsesClass(PushArchivedHead::class)]
+#[UsesClass(PushLockName::class)]
+#[UsesClass(RemoteCredential::class)]
 #[UsesClass(GitHubCalls::class)]
 #[UsesClass(CheckedInstallationTokens::class)]
 #[UsesClass(ForgeBranch::class)]
@@ -576,17 +596,24 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->forge()->delete($this->branch());
     }
 
-    public function testAMissingBranchIsRestoredByAGitPushOfTheArchivedHeadAndNoRefWriteThroughTheApi(): void
+    public function testAMissingBranchIsRestoredByARealGitPushIntoARepositoryWithoutItsCommitAndNoRefWriteThroughTheApi(): void
     {
-        $push = $this->createMock(ArchivedHeadPush::class);
-        $push->expects($this->once())->method('push')->with(
-            new ArchivedHead('alpha', new BranchHead('intakt/7-old', self::HEAD)),
-            sprintf('https://x-access-token:%s@github.com/acme/widgets.git', 'installation-secret'),
-        );
+        $root = sys_get_temp_dir().'/intakt-github-restore-'.bin2hex(random_bytes(6));
+        $git = static fn (string ...$arguments): string => trim(new Process(['git', ...$arguments], null, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->mustRun()->getOutput());
+        $git('init', '--quiet', '--bare', $root.'/archive/alpha.git');
+        $git('init', '--quiet', '--bare', $root.'/github.git');
+        $head = $git('-C', $root.'/archive/alpha.git', '-c', 'user.name=Archive', '-c', 'user.email=archive@example.com', 'commit-tree', $git('-C', $root.'/archive/alpha.git', 'mktree'), '-m', 'archived');
+        $push = new PushArchivedHead(new BranchGit(new HardenedGit(), new GuardedRun()), new LockFactory(new InMemoryStore()), new Mirrors($root.'/archive'));
 
-        $this->forge($push)->restore($this->restore());
+        try {
+            self::assertSame(1, new Process(['git', '-C', $root.'/github.git', 'cat-file', '-e', $head])->run());
+            $this->forge(new GitHubAddressOnDisk($push, 'https://github.com/acme/widgets.git', 'installation-secret', $root.'/github.git'))->restore(new BranchRestore('alpha', 'intakt/7-old', new CommitId($head)));
 
-        self::assertSame(['GET '.self::REPOSITORY.'/branches/intakt/7-old'], $this->requests);
+            self::assertSame($head, $git('-C', $root.'/github.git', 'rev-parse', 'refs/heads/intakt/7-old'));
+            self::assertSame(['GET '.self::REPOSITORY.'/branches/intakt/7-old'], $this->requests);
+        } finally {
+            new Filesystem()->remove($root);
+        }
     }
 
     public function testABranchThatExistsIsNotRestoredAndNothingIsPushed(): void

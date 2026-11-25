@@ -130,7 +130,7 @@ final readonly class GitHubBranchCalls
         };
     }
 
-    // The installation token for a git push, because git reaches GitHub over https with it as the password of the push address.
+    // The installation token for a git push, because git reaches GitHub over https with it as the password of an x-access-token login.
     /**
      * @throws ForgeReadFailed
      */

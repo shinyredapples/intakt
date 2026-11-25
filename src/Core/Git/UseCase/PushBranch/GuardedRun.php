@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\PushBranch;
 
 use Intakt\Core\Git\Contract\BranchNotPushed;
+use SensitiveParameter;
 use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Exception\RuntimeException;
@@ -16,7 +17,7 @@ final readonly class GuardedRun
     /**
      * @throws BranchNotPushed
      */
-    public function run(Process $process, string $program): Process
+    public function run(#[SensitiveParameter] Process $process, string $program): Process
     {
         try {
             $process->run();

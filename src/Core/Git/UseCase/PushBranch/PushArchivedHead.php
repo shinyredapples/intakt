@@ -8,9 +8,11 @@ use Intakt\Core\Git\Contract\ArchivedHead;
 use Intakt\Core\Git\Contract\ArchivedHeadPush;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\GitServices;
+use Intakt\Core\Git\Contract\RemoteCredential;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Override;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\Exception\ExceptionInterface;
 use Symfony\Component\Lock\LockFactory;
@@ -30,14 +32,14 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
     }
 
     #[Override]
-    public function push(ArchivedHead $head, string $remote): void
+    public function push(ArchivedHead $head, #[SensitiveParameter] string $remote, ?RemoteCredential $credential = null): void
     {
         $archive = $this->archiveOf($head);
         $this->refuseMalformedHead($head, $archive);
         $lock = $this->lockedBranch($head);
 
         try {
-            $this->restore($head, $archive, $remote);
+            $this->restore($head, $archive, $remote, $credential);
         } finally {
             $this->release($lock);
         }
@@ -52,13 +54,18 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
         }
     }
 
-    // A name git allows and a commit the archive holds (BranchHead already holds an object id), because a tree or blob is no branch head.
+    // A name git allows and a commit the archive holds under exactly this id, because a tree or blob is no branch head, and a SHA-256 archive takes a 40-digit id as an abbreviation of a longer one, which the read after the push would never find.
     private function refuseMalformedHead(ArchivedHead $head, string $archive): void
     {
+        $commit = $head->head->commit;
         $this->git->lines($archive, ['check-ref-format', self::BRANCHES.$head->head->branch]);
 
-        if ('commit' !== $this->git->lines($archive, ['cat-file', '-t', $head->head->commit])) {
-            throw BranchNotPushed::because(sprintf('the archive holds no commit %s', $head->head->commit));
+        if ('commit' !== $this->git->lines($archive, ['cat-file', '-t', $commit])) {
+            throw BranchNotPushed::because(sprintf('the archive holds no commit %s', $commit));
+        }
+
+        if ($commit !== $this->git->lines($archive, ['rev-parse', '--verify', '--end-of-options', $commit.'^{commit}'])) {
+            throw BranchNotPushed::because(sprintf('%s is no full commit id of the archive', $commit));
         }
     }
 
@@ -76,23 +83,30 @@ final readonly class PushArchivedHead implements ArchivedHeadPush
         return $acquired ? $lock : throw BranchNotPushed::because('another push of this branch is running');
     }
 
-    private function restore(ArchivedHead $head, string $archive, string $remote): void
+    // The remote lists no dangling symbolic branch, so a forge that can have one checks for it before this push.
+    private function restore(ArchivedHead $head, string $archive, #[SensitiveParameter] string $remote, ?RemoteCredential $credential): void
     {
         $branch = $head->head->branch;
+        $ref = self::BRANCHES.$branch;
         $this->git->refuseRewrittenRemote($archive, $remote);
 
-        if (null !== $this->git->remoteTip($archive, $remote, $branch)) {
+        if (null !== $this->git->remoteTip($archive, $remote, $branch, $credential)) {
             throw BranchNotPushed::because(sprintf('the branch %s exists on the remote, and a restore never overwrites a branch', $branch));
         }
 
         // A lease on an empty value lets the push only create the branch: one made since the read above is refused by git and by the remote's ref update, also when the archived head would fast-forward it.
-        $exitCode = $this->git->exitCodeAtRemote($archive, ['push', '--quiet', '--force-with-lease='.self::BRANCHES.$branch.':', '--', $remote, $head->head->commit.':'.self::BRANCHES.$branch]);
+        [$exitCode, $statuses] = $this->git->outcomeAtRemote($archive, ['push', '--porcelain', '--force-with-lease='.$ref.':', '--', $remote, $head->head->commit.':'.$ref], $credential);
 
         if (0 !== $exitCode) {
             throw BranchNotPushed::because(sprintf('the remote refused the restore of %s (git push exited with %d)', $branch, $exitCode));
         }
 
-        if ($this->git->remoteTip($archive, $remote, $branch) !== $head->head->commit) {
+        // Only a new branch counts, because a branch another writer made at the same head meanwhile is "up to date" to git, which then pushes nothing and exits with 0.
+        if (!in_array("*\t".$head->head->commit.':'.$ref."\t[new branch]", explode("\n", $statuses), true)) {
+            throw BranchNotPushed::because(sprintf('the push did not create the branch %s, so another writer made it during the restore', $branch));
+        }
+
+        if ($this->git->remoteTip($archive, $remote, $branch, $credential) !== $head->head->commit) {
             throw BranchNotPushed::because(sprintf('the remote branch %s is not at the archived head after the push', $branch));
         }
     }

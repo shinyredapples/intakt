@@ -10,6 +10,7 @@ use Intakt\Core\Git\Contract\ArchivedHead;
 use Intakt\Core\Git\Contract\ArchivedHeadPush;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\RemoteCredential;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
 use Intakt\Plugin\Forge\Contract\BranchRestore;
@@ -94,8 +95,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     {
         try {
             $this->refuseExisting($restore->name);
-            $remote = $this->repository->pushRemote($this->calls->pushToken());
-            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $remote);
+            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $this->repository->pushRemote(), new RemoteCredential('x-access-token', $this->calls->pushToken()));
         } catch (ForgeReadFailed|BranchNotPushed $failed) {
             throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: %s', $restore->name, $failed->getMessage()), $failed->getCode(), $failed);
         }
@@ -255,7 +255,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     private function refuseExisting(string $name): void
     {
         if ($this->calls->exists($this->repository->path().'/branches/'.$this->segments($name))) {
-            throw new ForgeReadFailed('it exists, and a restore never overwrites a branch.');
+            throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: it exists, and a restore never overwrites a branch.', $name));
         }
     }
 }

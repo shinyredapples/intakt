@@ -14,6 +14,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\MirroredHead;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\RemoteCredential;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\UseCase\ArchiveBranch\MirrorBranchArchive;
@@ -51,6 +52,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(Mirrors::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(ProjectNameRefused::class)]
+#[CoversClass(RemoteCredential::class)]
 #[UsesClass(UpdateMirror::class)]
 final class PushArchivedHeadTest extends TestCase
 {
@@ -105,6 +107,88 @@ final class PushArchivedHeadTest extends TestCase
         }
 
         self::assertSame($this->base, $this->git($this->forge->path, 'rev-parse', 'refs/heads/topic'));
+    }
+
+    public function testABranchAnotherWriterMadeAtTheArchivedHeadDuringTheRestoreIsRefused(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $this->git($this->forge->path, 'fetch', '--quiet', $this->archivePath(), $this->topicHead);
+        $git = new ExecutableFinder()->find('git') ?? self::fail('git is not on PATH.');
+        $programs = new ProgramOnPath();
+        $programs->runFirstOn('git', 'push', sprintf('%s -C %s update-ref refs/heads/topic %s', escapeshellarg($git), escapeshellarg($this->forge->path), $this->topicHead));
+
+        try {
+            $this->expectRefusal('The branch was not pushed: the push did not create the branch topic, so another writer made it during the restore');
+            $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+        } finally {
+            $programs->remove();
+        }
+    }
+
+    public function testTheLockIsFreeAgainAfterARestoreThatLanded(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+
+        $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path);
+
+        self::assertTrue($this->locks->createLock(PushLockName::of('alpha', 'topic'), autoRelease: false)->acquire(false));
+    }
+
+    public function testTheCredentialReachesGitAsAHeaderInItsEnvironmentAndNeverOnItsCommandLine(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $calls = $this->root.'/calls';
+        $programs = new ProgramOnPath();
+        $programs->runFirstOn('git', 'push', sprintf('{ echo "$@"; env; } >> %s', escapeshellarg($calls)));
+
+        try {
+            $this->restorer()->push($this->head('topic', $this->topicHead), $this->forge->path, new RemoteCredential('x-access-token', 'held-for-the-push'));
+        } finally {
+            $programs->remove();
+        }
+
+        $recorded = (string) file_get_contents($calls);
+        self::assertStringNotContainsString('held-for-the-push', $recorded);
+        self::assertStringContainsString('=Authorization: Basic '.base64_encode('x-access-token:held-for-the-push'), $recorded);
+        self::assertStringContainsString('=http.extraHeader', $recorded);
+    }
+
+    public function testNoCredentialOfTheRemoteIsInTheTraceOfARefusedRestore(): void
+    {
+        $this->archiveTopicAndDeleteItOnTheForge();
+        $remote = 'https://x-access-token:in-the-address@example.invalid/acme/widgets.git';
+        $this->git($this->archivePath(), 'config', 'url.file:///nowhere.insteadOf', $remote);
+        $ignored = ini_set('zend.exception_ignore_args', '0');
+
+        try {
+            $this->restorer()->push($this->head('topic', $this->topicHead), $remote, new RemoteCredential('x-access-token', 'held-for-the-push'));
+            self::fail('A rewritten remote must not be pushed to.');
+        } catch (BranchNotPushed $refused) {
+            $trace = print_r($refused->getTrace(), true);
+            self::assertStringNotContainsString('in-the-address', $trace);
+            self::assertStringNotContainsString('held-for-the-push', $trace);
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignored);
+        }
+    }
+
+    public function testAnAbbreviatedIdOfACommitInASha256ArchiveIsRefusedBeforeAnythingIsPushed(): void
+    {
+        $forge = new TemporaryRepository('sha256');
+        $forge->commitFile('a.txt', 'one');
+        $forge->checkoutNewBranch('topic');
+        $head = $forge->commitFile('b.txt', 'two');
+        $forge->checkout('main');
+        $this->git($forge->path, 'clone', '--quiet', '--bare', $forge->path, $this->archivePath());
+        $forge->deleteBranch('topic');
+
+        try {
+            $this->expectRefusal(sprintf('The branch was not pushed: %s is no full commit id of the archive', substr($head, 0, 40)));
+            $this->restorer()->push($this->head('topic', substr($head, 0, 40)), $forge->path);
+        } finally {
+            self::assertSame('', $this->git($forge->path, 'branch', '--list', 'topic'));
+            $forge->remove();
+        }
     }
 
     public function testARestoreIsRefusedWhileAPushOfTheSameBranchHoldsItsLock(): void

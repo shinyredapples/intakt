@@ -87,14 +87,28 @@ final readonly class LocalForgeBranches implements ForgeBranches
         }
     }
 
+    // The repository's absolute common directory as the remote, because git resolves a relative path from the archive, where it could name another repository; the push brings the commit's objects with it.
     public function restore(BranchRestore $restore): void
     {
-        // The repository's own path as the remote, so the push reaches this forge and brings the commit's objects with it; the push's own read of the branch under its lock is the existence check, because the forge is the same repository.
         try {
-            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $this->repository->path);
-        } catch (BranchNotPushed $failed) {
+            $common = $this->commonDirectory();
+            $this->refuseExisting($restore->name);
+            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $common);
+        } catch (ForgeReadFailed|BranchNotPushed $failed) {
             throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: %s', $restore->name, $failed->getMessage()), $failed->getCode(), $failed);
         }
+    }
+
+    // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch.
+    private function refuseExisting(string $name): void
+    {
+        $process = $this->git(['show-ref', '--exists', self::HEADS.$name]);
+
+        match ($process->getExitCode()) {
+            self::MISSING => null,
+            0 => throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: it exists, and a restore never overwrites a branch.', $name)),
+            default => throw new ForgeReadFailed(sprintf('git show-ref failed: %s', trim($process->getErrorOutput()))),
+        };
     }
 
     // Only a files repository, because both the listing check and the delete's HEAD locks read the ref files.

@@ -29,10 +29,10 @@ final readonly class RepositoryAddress
         return '/repos/'.rawurlencode($this->owner).'/'.rawurlencode($this->repository);
     }
 
-    // The token as the password of the https address, the form GitHub takes from an App's installation; the address is never shown, because it holds the token.
-    public function pushRemote(string $token): string
+    // Without the token, because git passes the address on its command line and repeats it in its messages; the token reaches git as a header instead.
+    public function pushRemote(): string
     {
-        return sprintf('https://x-access-token:%s@github.com/%s/%s.git', rawurlencode($token), rawurlencode($this->owner), rawurlencode($this->repository));
+        return sprintf('https://github.com/%s/%s.git', rawurlencode($this->owner), rawurlencode($this->repository));
     }
 
     // GitHub's filter for a branch of this repository, because a fork's branch of the same name must not match it.

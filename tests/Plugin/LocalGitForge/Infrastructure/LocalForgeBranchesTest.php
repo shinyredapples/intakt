@@ -779,10 +779,47 @@ final class LocalForgeBranchesTest extends TestCase
             $this->branches()->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($archived)));
             self::fail('An existing branch must not be restored over.');
         } catch (ForgeWriteFailed $refused) {
-            self::assertSame('The branch "intakt/feature" was not restored: The branch was not pushed: the branch intakt/feature exists on the remote, and a restore never overwrites a branch', $refused->getMessage());
+            self::assertSame('The branch "intakt/feature" was not restored: it exists, and a restore never overwrites a branch.', $refused->getMessage());
         }
 
         self::assertSame($current, $this->repository->objectAt('refs/heads/intakt/feature'));
+    }
+
+    public function testItRefusesToRestoreOverASymbolicBranchWhoseTargetIsMissingAndCreatesNoTarget(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $archived = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $this->archiveAndDeleteFeature($archived);
+        new Process(['git', 'symbolic-ref', 'refs/heads/intakt/feature', 'refs/heads/intakt/other'], $this->repository->path, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->mustRun();
+
+        try {
+            $this->branches()->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($archived)));
+            self::fail('A dangling symbolic branch must not be restored over.');
+        } catch (ForgeWriteFailed $refused) {
+            self::assertSame('The branch "intakt/feature" was not restored: it exists, and a restore never overwrites a branch.', $refused->getMessage());
+        }
+
+        self::assertFileDoesNotExist($this->repository->path.'/.git/refs/heads/intakt/other');
+        self::assertSame("ref: refs/heads/intakt/other\n", file_get_contents($this->repository->path.'/.git/refs/heads/intakt/feature'));
+    }
+
+    public function testABranchIsRestoredIntoARepositoryGivenByARelativePath(): void
+    {
+        $this->repository->checkoutNewBranch('intakt/feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+        $this->archiveAndDeleteFeature($head);
+        $directory = (string) getcwd();
+        chdir(dirname($this->repository->path));
+
+        try {
+            $this->forgeAt(new LocalRepository('./'.basename($this->repository->path), 'main'))->restore(new BranchRestore('alpha', 'intakt/feature', new CommitId($head)));
+        } finally {
+            chdir($directory);
+        }
+
+        self::assertSame($head, $this->repository->objectAt('refs/heads/intakt/feature'));
     }
 
     public function testARestoreThePushRefusesFailsAsAWrite(): void
