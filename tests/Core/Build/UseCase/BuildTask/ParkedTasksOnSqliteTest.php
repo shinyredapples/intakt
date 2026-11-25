@@ -393,20 +393,6 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         return $this->failureOfParking($this->parkedTasks());
     }
 
-    // The other run's write is forced into the lookup of the order, because that lookup stands between the parking's read of the row and its own write.
-    private function parkedTasksWhoseOrderLookupFirst(callable $interleaved): ParkedTasks
-    {
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('append')->willReturnCallback($this->ledger()->append(...));
-        $ledger->method('readOfKindsMentioning')->willReturnCallback(function (Mentions $runs, LedgerEventKind ...$kinds) use ($interleaved): RecordedEvents {
-            $interleaved();
-
-            return $this->ledger()->readOfKindsMentioning($runs, ...$kinds);
-        });
-
-        return new ParkedTasks($this->connection(), $ledger, $this->registry(), $this->clock());
-    }
-
     private function startBothRuns(): void
     {
         $this->appendTaskStep($this->olderRun());
@@ -427,6 +413,20 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     private function olderRun(): BuildRun
     {
         return new BuildRun('sample', 42, self::OLDER_RUN);
+    }
+
+    // The other run's write is forced into the lookup of the order, because that lookup stands between the parking's read of the row and its own write.
+    private function parkedTasksWhoseOrderLookupFirst(callable $interleaved): ParkedTasks
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback($this->ledger()->append(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback(function (Mentions $runs, LedgerEventKind ...$kinds) use ($interleaved): RecordedEvents {
+            $interleaved();
+
+            return $this->ledger()->readOfKindsMentioning($runs, ...$kinds);
+        });
+
+        return new ParkedTasks($this->connection(), $ledger, $this->registry(), $this->clock());
     }
 
     /**

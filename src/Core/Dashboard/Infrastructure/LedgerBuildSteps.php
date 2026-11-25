@@ -97,13 +97,6 @@ final readonly class LedgerBuildSteps
         return null !== $run && Uuid::isValid($run) ? strtolower($run) : false;
     }
 
-    private function isRowOf(RecordedEvent $recorded, string $project, string $task): bool
-    {
-        $payload = PayloadFields::of($recorded);
-
-        return $project === $payload->text('project') && $task === $payload->text('task');
-    }
-
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
     /**
      * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}|null
@@ -130,6 +123,13 @@ final readonly class LedgerBuildSteps
         }
 
         return ['project' => $project, 'task' => $task, 'step' => $step->value, 'outcome' => $outcome->value, 'failure' => $failure, 'ended_at' => $recorded->recordedAt->format(DATE_ATOM), 'run' => $this->namedRunOf($recorded)];
+    }
+
+    private function isRowOf(RecordedEvent $recorded, string $project, string $task): bool
+    {
+        $payload = PayloadFields::of($recorded);
+
+        return $project === $payload->text('project') && $task === $payload->text('task');
     }
 
     // Only a failed step has a failure text, and only the build job asks, so any other pairing is no row the build writes.
@@ -184,6 +184,7 @@ final readonly class LedgerBuildSteps
      */
     private function newestFirst(array $latest, RecordedEvents $events): array
     {
+        /** @var array<array-key, array<array-key, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>> $ordered */
         $ordered = [];
 
         foreach ($events as $recorded) {
