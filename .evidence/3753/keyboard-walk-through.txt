@@ -30,3 +30,109 @@ ok   step 5 finishing action: reached with Tab x15 (a "Open the review"), focus 
 ok   finish with "Open the review": Enter -> step 1, "Review of sample-change in sample"
 ok   finished on /reviews/round-1
 keyboard walk-through: no failures
+
+== part 2 (#3903): every enabled control on the five setup steps and the five Add project steps
+FrankenPHP with its built-in Mercure hub up (stream sources present), SQLite, headless Chromium 1440 x 900, keys only (Tab, Enter, Space, arrows, Esc).
+A focus ring counts as shown when the focused element has a non-zero outline or a box shadow.
+"Start the first review" (step 5 with an AI key and the sample) is not walked: keeping a key asks the provider, which no check here may call; part 1 walked "Open the review" in its place.
+-- setup wizard (/setup), compose demo with a recording, no AI key
+ok   setup search button: reached with Tab x7 (button "Search tasks, pull requests, settings… Ctrl K"), focus ring shown
+ok   setup search dialog: Enter opens it (true), Esc closes it (true), focus back on "Search tasks, pull requests, settings… Ctrl K"
+ok   setup step marker 1 (from step 2): reached with Tab x10 (a "1 Repository"), focus ring shown
+ok   setup marker 1 "Repository": Enter -> /setup?step=1, "Connect your repository"
+ok   setup step marker 2 (from step 1): reached with Tab x11 (a "2 GitHub App"), focus ring shown
+ok   setup marker 2 "GitHub App": Enter -> /setup?step=2, "Create Intakt's GitHub App"
+ok   setup step marker 3 (from step 1): reached with Tab x12 (a "3 AI account"), focus ring shown
+ok   setup marker 3 "AI account": Enter -> /setup?step=3, "Add an AI account"
+ok   setup step marker 4 (from step 1): reached with Tab x13 (a "4 Check"), focus ring shown
+ok   setup marker 4 "Check": Enter -> /setup?step=4, "Check the project"
+ok   setup step marker 5 (from step 1): reached with Tab x14 (a "5 Done"), focus ring shown
+ok   setup marker 5 "Done": Enter -> /setup?step=5, "Ready to start"
+ok   setup step 1 address field: reached with Tab x15 (input ""), focus ring shown
+ok   setup step 1 submit "not an address" from the field: Enter -> /setup?step=1, "Connect your repository"
+ok   setup step 1 error shown: "This is not a repository address: use https://github.com/owner/name or owner/name.", aria-invalid=true
+ok   setup step 1 address field again: reached with Tab x15 (input "not an address"), focus ring shown
+ok   setup step 1 Check the address: reached with Tab x1 (button "Check the address"), focus ring shown
+ok   setup step 1 Check the address with "acme/widgets": Space -> /setup?step=1, "Connect your repository"
+ok   setup step 1 fixed: names acme/widgets (true), no error (true)
+ok   setup step 1 Continue: reached with Tab x17 (a "Continue"), focus ring shown
+ok   setup step 1 Continue: Enter -> /setup?step=2, "Create Intakt's GitHub App"
+ok   setup /setup?step=2 "Create the app on GitHub": disabled by design (D3), never reached by Tab (skipped)
+ok   setup step 2 Back: reached with Tab x15 (a "Back"), focus ring shown
+ok   setup step 2 Back: Enter -> /setup?step=1, "Connect your repository"
+ok   setup step 2 Continue: reached with Tab x16 (a "Continue"), focus ring shown
+ok   setup step 2 Continue: Enter -> /setup?step=3, "Add an AI account"
+ok   setup step 3 key field: reached with Tab x15 (input ""), focus ring shown
+ok   setup step 3 Keep the key: reached with Tab x3 (button "Keep the key"), focus ring shown
+ok   setup step 3 Keep the key with an empty field: Enter -> stays on /setup?step=3, the browser holds it (required) and focuses "provider-key"
+ok   setup step 3 Back: reached with Tab x16 (a "Back"), focus ring shown
+ok   setup step 3 Back: Enter -> /setup?step=2, "Create Intakt's GitHub App"
+ok   setup step 3 Skip: reached with Tab x17 (a "Skip"), focus ring shown
+ok   setup step 3 Skip: Enter -> /setup?step=4, "Check the project"
+ok   setup step 4 Back: reached with Tab x15 (a "Back"), focus ring shown
+ok   setup step 4 Back: Enter -> /setup?step=3, "Add an AI account"
+ok   setup step 4 Run again: reached with Tab x16 (a "Run again"), focus ring shown
+ok   setup step 4 Run again (reloads the check): Enter -> /setup?step=4, "Check the project"
+ok   setup step 4 Continue: reached with Tab x17 (a "Continue"), focus ring shown
+ok   setup step 4 Continue: Enter -> /setup?step=5, "Ready to start"
+ok   setup step 5 Back: reached with Tab x16 (a "Back"), focus ring shown
+ok   setup step 5 Back: Enter -> /setup?step=4, "Check the project"
+ok   setup step 5 Play the demo run: reached with Tab x15 (button "Play the demo run"), focus ring shown
+ok   setup step 5 finish with Play the demo run: Space -> /demo?play=8eeadd7ff760f5b04f532968428f92c3, "The demo run"
+-- Add project (/projects/new)
+ok   add project search button: reached with Tab x7 (button "Search tasks, pull requests, settings… Ctrl K"), focus ring shown
+ok   add project search dialog: Enter opens it (true), Esc closes it (true), focus back on "Search tasks, pull requests, settings… Ctrl K"
+ok   add project breadcrumb Projects: reached with Tab x10 (a "Projects"), focus ring shown
+ok   add project breadcrumb Projects: Enter -> /projects, "Projects"
+ok   add project step marker 1 (from step 2): reached with Tab x11 (a "1 Repository"), focus ring shown
+ok   add project marker 1 "Repository": Enter -> /projects/new?step=1, "Which repository?"
+ok   add project step marker 2 (from step 1): reached with Tab x12 (a "2 Install the App"), focus ring shown
+ok   add project marker 2 "Install the App": Enter -> /projects/new?step=2, "Install Intakt's GitHub App on it"
+ok   add project step marker 3 (from step 1): reached with Tab x13 (a "3 Check"), focus ring shown
+ok   add project marker 3 "Check": Enter -> /projects/new?step=3, "Check the project"
+ok   add project step marker 4 (from step 1): reached with Tab x14 (a "4 Share and label"), focus ring shown
+ok   add project marker 4 "Share and label": Enter -> /projects/new?step=4, "Share and label"
+ok   add project step marker 5 (from step 1): reached with Tab x15 (a "5 Start"), focus ring shown
+ok   add project marker 5 "Start": Enter -> /projects/new?step=5, "Ready to start"
+ok   add project step 1 address field: reached with Tab x16 (input ""), focus ring shown
+ok   add project step 1 submit "not an address" from the field: Enter -> /projects/new?step=1, "Which repository?"
+ok   add project step 1 error shown: "This is not a repository address: use https://github.com/owner/name or owner/name.", aria-invalid=true
+ok   add project step 1 address field again: reached with Tab x16 (input "not an address"), focus ring shown
+ok   add project step 1 Check the address: reached with Tab x1 (button "Check the address"), focus ring shown
+ok   add project step 1 Check the address with the full address: Space -> /projects/new?step=1, "Which repository?"
+ok   add project step 1 fixed: names acme/widgets (true), no error (true)
+ok   add project step 1 Cancel: reached with Tab x18 (a "Cancel"), focus ring shown
+ok   add project step 1 Cancel: Enter -> /projects, "Projects"
+ok   add project step 1 Continue: reached with Tab x19 (a "Continue"), focus ring shown
+ok   add project step 1 Continue: Enter -> /projects/new?step=2, "Install Intakt's GitHub App on it"
+ok   add project /projects/new?step=2 "Install the App on GitHub": disabled by design (D3), never reached by Tab (skipped)
+ok   add project step 2 Back: reached with Tab x16 (a "Back"), focus ring shown
+ok   add project step 2 Back: Enter -> /projects/new?step=1, "Which repository?"
+ok   add project step 2 Continue: reached with Tab x17 (a "Continue"), focus ring shown
+ok   add project step 2 Continue: Enter -> /projects/new?step=3, "Check the project"
+ok   add project step 3 Back: reached with Tab x16 (a "Back"), focus ring shown
+ok   add project step 3 Back: Enter -> /projects/new?step=2, "Install Intakt's GitHub App on it"
+ok   add project step 3 Run again: reached with Tab x17 (a "Run again"), focus ring shown
+ok   add project step 3 Run again (reloads step 3): Enter -> /projects/new?step=3, "Check the project"
+ok   add project step 3 Continue: reached with Tab x18 (a "Continue"), focus ring shown
+ok   add project step 3 Continue: Enter -> /projects/new?step=4, "Share and label"
+ok   add project step 4 share slider: reached with Tab x16 (input "20"), focus ring shown
+ok   add project step 4 slider: Right, Right, Left moves it from 20% to 21% (value 21), the percent follows
+ok   add project step 4 label field: reached with Tab x1 (input "intakt"), focus ring shown
+ok   add project step 4 Check the share and label: reached with Tab x1 (button "Check the share and label"), focus ring shown
+ok   add project step 4 submit with an empty label: Enter -> /projects/new?step=4, "Share and label"
+ok   add project step 4 error shown: "Enter the issue label.", aria-invalid=true
+ok   add project step 4 label field again: reached with Tab x17 (input ""), focus ring shown
+ok   add project step 4 submit the fixed label from the field: Enter -> /projects/new?step=4, "Share and label"
+ok   add project step 4 fixed: "21% of the week, issues labeled intakt", no error (true)
+ok   add project step 4 Back: reached with Tab x19 (a "Back"), focus ring shown
+ok   add project step 4 Back: Enter -> /projects/new?step=3, "Check the project"
+ok   add project step 4 Continue: reached with Tab x20 (a "Continue"), focus ring shown
+ok   add project step 4 Continue: Enter -> /projects/new?step=5, "Ready to start"
+ok   add project /projects/new?step=5 "Start": disabled by design (D3), never reached by Tab (skipped)
+ok   add project step 5 Back: reached with Tab x16 (a "Back"), focus ring shown
+ok   add project step 5 Back: Enter -> /projects/new?step=4, "Share and label"
+-- setup wizard step 5 on an install that is not the compose demo, no AI key
+ok   setup step 5 link "step 3, AI account": reached with Tab x15 (a "step 3, AI account"), focus ring shown
+ok   setup step 5 link "step 3, AI account": Enter -> /setup?step=3, "Add an AI account"
+keyboard walk-through, part 2: no failures (97 checks, no control needed a fix)
