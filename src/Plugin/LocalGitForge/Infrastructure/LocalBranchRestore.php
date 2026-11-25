@@ -61,6 +61,14 @@ final readonly class LocalBranchRestore
         return substr($output, 0, -1);
     }
 
+    // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch. A ref that cannot be read is refused alike, because only a missing one may be created.
+    private function refuseExisting(string $name): void
+    {
+        if (self::MISSING !== $this->git($name, ['show-ref', '--exists', 'refs/heads/'.$name])->getExitCode()) {
+            throw $this->notRestored($name, 'it exists or cannot be read, and a restore never overwrites a branch.');
+        }
+    }
+
     // A symbolic branch another writer makes after the check is not listed to the push, whose empty lease then lets the remote create the branch it names. That target did not exist when the push wrote it, so it is removed again while it still holds the archived head.
     private function undoWriteThroughSymbolicBranch(string $name, string $head): void
     {
@@ -78,14 +86,6 @@ final readonly class LocalBranchRestore
         $undo = $this->git($name, ['update-ref', '--no-deref', '-d', $target, $head]);
 
         throw $this->notRestored($name, $undo->isSuccessful() ? sprintf('another writer made it a symbolic branch during the restore, so the push wrote %s, which was removed again.', $target) : sprintf('another writer made it a symbolic branch during the restore, so the push may have written %s, which could not be removed: %s', $target, trim($undo->getErrorOutput())));
-    }
-
-    // The ref itself and not the commit it resolves to, because a push to a symbolic branch whose target is missing creates that target, and ls-remote in the push does not list such a branch. A ref that cannot be read is refused alike, because only a missing one may be created.
-    private function refuseExisting(string $name): void
-    {
-        if (self::MISSING !== $this->git($name, ['show-ref', '--exists', 'refs/heads/'.$name])->getExitCode()) {
-            throw $this->notRestored($name, 'it exists or cannot be read, and a restore never overwrites a branch.');
-        }
     }
 
     /**
