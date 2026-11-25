@@ -323,6 +323,46 @@ final class GitHubStatusLabelsTest extends TestCase
         $this->labelsOf()->match('alpha', new ChangeId($address ?? self::PULL), $this->round);
     }
 
+    private function storedRound(): LatestRoundStatus
+    {
+        return new readonly class($this->roundNow(...)) implements LatestRoundStatus {
+            public function __construct(private Closure $now)
+            {
+            }
+
+            public function of(string $project, string $change): ?ReviewStatus
+            {
+                $status = ($this->now)();
+
+                return $status instanceof RoundStatusLabel ? ReviewStatus::from(substr($status->value, strlen(RoundStatusLabel::FAMILY_PREFIX))) : null;
+            }
+        };
+    }
+
+    private function roundNow(): ?RoundStatusLabel
+    {
+        return $this->round;
+    }
+
+    private function skipLog(): AbstractLogger
+    {
+        return new class($this->skipped(...)) extends AbstractLogger {
+            public function __construct(private readonly Closure $skipped)
+            {
+            }
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                ($this->skipped)((string) $message);
+            }
+        };
+    }
+
+    private function skipped(string $message): void
+    {
+        $this->skips[] = $message;
+    }
+
     // Records the status labels the failed pass left, so a test can show that it wrote nothing.
     private function failedRead(): void
     {
@@ -443,45 +483,5 @@ final class GitHubStatusLabelsTest extends TestCase
         foreach ($labels as $label) {
             $this->labeled(is_string($label) ? $label : '', self::OWN);
         }
-    }
-
-    private function storedRound(): LatestRoundStatus
-    {
-        return new readonly class($this->roundNow(...)) implements LatestRoundStatus {
-            public function __construct(private Closure $now)
-            {
-            }
-
-            public function of(string $project, string $change): ?ReviewStatus
-            {
-                $status = ($this->now)();
-
-                return $status instanceof RoundStatusLabel ? ReviewStatus::from(substr($status->value, strlen(RoundStatusLabel::FAMILY_PREFIX))) : null;
-            }
-        };
-    }
-
-    private function roundNow(): ?RoundStatusLabel
-    {
-        return $this->round;
-    }
-
-    private function skipLog(): AbstractLogger
-    {
-        return new class($this->skipped(...)) extends AbstractLogger {
-            public function __construct(private readonly Closure $skipped)
-            {
-            }
-
-            public function log(mixed $level, string|Stringable $message, array $context = []): void
-            {
-                ($this->skipped)((string) $message);
-            }
-        };
-    }
-
-    private function skipped(string $message): void
-    {
-        $this->skips[] = $message;
     }
 }

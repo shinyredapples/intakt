@@ -100,6 +100,30 @@ final class GitHubStatusReadsTest extends TestCase
         $this->paged(1, $requested)->of($this->address());
     }
 
+    private function reads(string $labels, string $events): GitHubStatusReads
+    {
+        $identity = new RecordedTrust(TrustChecks::clock())->client();
+        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($labels, $events, $identity): ResponseInterface {
+            $path = (string) parse_url($url, PHP_URL_PATH);
+            if (1 === preg_match('#/issues/[0-9]+/labels$#', $path)) {
+                return new MockResponse($labels);
+            }
+            if (1 === preg_match('#/issues/[0-9]+/events$#', $path)) {
+                return new MockResponse($events);
+            }
+
+            return $identity->request($method, $url, $options);
+        }, 'https://api.github.com');
+        $wiring = TrustChecks::wiring($http);
+
+        return new GitHubStatusReads($wiring->calls, $wiring->tokens);
+    }
+
+    private function address(): PullRequestAddress
+    {
+        return PullRequestAddress::of(new ChangeId(RecordedTrust::PULL_BY_WRITER));
+    }
+
     /**
      * @param list<int> $requested
      */
@@ -117,30 +141,6 @@ final class GitHubStatusReadsTest extends TestCase
             $count = $page <= 10 ? 100 : $beyond;
 
             return new MockResponse(json_encode(array_fill(0, $count, ['name' => 'area:x']), JSON_THROW_ON_ERROR));
-        }, 'https://api.github.com');
-        $wiring = TrustChecks::wiring($http);
-
-        return new GitHubStatusReads($wiring->calls, $wiring->tokens);
-    }
-
-    private function address(): PullRequestAddress
-    {
-        return PullRequestAddress::of(new ChangeId(RecordedTrust::PULL_BY_WRITER));
-    }
-
-    private function reads(string $labels, string $events): GitHubStatusReads
-    {
-        $identity = new RecordedTrust(TrustChecks::clock())->client();
-        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($labels, $events, $identity): ResponseInterface {
-            $path = (string) parse_url($url, PHP_URL_PATH);
-            if (1 === preg_match('#/issues/[0-9]+/labels$#', $path)) {
-                return new MockResponse($labels);
-            }
-            if (1 === preg_match('#/issues/[0-9]+/events$#', $path)) {
-                return new MockResponse($events);
-            }
-
-            return $identity->request($method, $url, $options);
         }, 'https://api.github.com');
         $wiring = TrustChecks::wiring($http);
 

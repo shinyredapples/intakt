@@ -70,19 +70,6 @@ final readonly class GitHubStatusReads
         throw new ForgeReadFailed('The change holds more events than this forge reads.');
     }
 
-    // A full last page asks for one more, because only an empty answer shows that the listing ended.
-    /**
-     * @param list<array<mixed>> $listed
-     *
-     * @throws ForgeReadFailed
-     */
-    private function mustHaveEnded(array $listed, int $page, string $what): void
-    {
-        if ($page > self::MAX_PAGES && [] !== $listed) {
-            throw new ForgeReadFailed(sprintf('The change holds more %s than this forge reads.', $what));
-        }
-    }
-
     /**
      * @return list<array<mixed>>
      *
@@ -114,7 +101,20 @@ final readonly class GitHubStatusReads
             throw new ForgeReadFailed(sprintf('GitHub answered a listing of %s that is not a list.', $path));
         }
 
-        return array_map(static fn (mixed $entry): array => is_array($entry) && [] !== $entry && !array_is_list($entry) ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path)), $entries);
+        return array_map(fn (mixed $entry): array => $this->objectOf($entry, $path), $entries);
+    }
+
+    // A full last page asks for one more, because only an empty answer shows that the listing ended.
+    /**
+     * @param list<array<mixed>> $listed
+     *
+     * @throws ForgeReadFailed
+     */
+    private function mustHaveEnded(array $listed, int $page, string $what): void
+    {
+        if ($page > self::MAX_PAGES && [] !== $listed) {
+            throw new ForgeReadFailed(sprintf('The change holds more %s than this forge reads.', $what));
+        }
     }
 
     /**
@@ -168,5 +168,15 @@ final readonly class GitHubStatusReads
         }
 
         return str_starts_with($name, RoundStatusLabel::FAMILY_PREFIX) ? new LabelEvent($name, $login, 'labeled' === $kind) : null;
+    }
+
+    /**
+     * @return array<mixed>
+     *
+     * @throws ForgeReadFailed
+     */
+    private function objectOf(mixed $entry, string $path): array
+    {
+        return is_array($entry) && [] !== $entry && !array_is_list($entry) ? $entry : throw new ForgeReadFailed(sprintf('GitHub listed an entry of %s that is not an object.', $path));
     }
 }
