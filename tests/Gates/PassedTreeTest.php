@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use DateTimeZone;
 use Intakt\Gates\FullReport;
 use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
@@ -813,10 +814,23 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertNotSame($before, $fingerprint->taken());
     }
 
+    public function testAPassIsReusedOnTheUtcDayItWasRecordedOnAndNotTheDayAfter(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $clock = new MockClock('tomorrow 01:00', 'UTC');
+        self::assertTrue(PassedTree::before($this->fingerprint($root, $home), $clock)->recordPass());
+
+        $clock->modify('22:59:59');
+        self::assertTrue(PassedTree::before($this->fingerprint($root, $home), $clock)->hasPassed());
+
+        $clock->modify('+1 day');
+        self::assertFalse(PassedTree::before($this->fingerprint($root, $home), $clock)->hasPassed());
+    }
+
     public function testARecordOfAnotherFingerprintIsNotReused(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
-        $root->write(PassedTree::RECORD, '{"fingerprint":"'.str_repeat('0', 64).'"}'."\n");
+        $root->write(PassedTree::RECORD, '{"fingerprint":"'.str_repeat('0', 64).'","day":"'.$this->settledClock()->now()->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d').'"}'."\n");
 
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }

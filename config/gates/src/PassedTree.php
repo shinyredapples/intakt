@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use DateTimeZone;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 
@@ -11,16 +12,16 @@ final readonly class PassedTree
 {
     public const string RECORD = FullReport::FOLDER.'/passed.json';
 
-    private function __construct(private TreeFingerprint $fingerprint, private ?string $taken, private int $startedAt)
+    private function __construct(private TreeFingerprint $fingerprint, private ?string $taken, private int $startedAt, private string $day)
     {
     }
 
     // Because the fingerprint is taken before any gate starts, a tree edited while the gates run never records a pass for what they did not see.
     public static function before(TreeFingerprint $fingerprint, ClockInterface $clock = new NativeClock()): self
     {
-        $startedAt = $clock->now()->getTimestamp();
+        $now = $clock->now();
 
-        return new self($fingerprint, $fingerprint->taken(), $startedAt);
+        return new self($fingerprint, $fingerprint->taken(), $now->getTimestamp(), $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'));
     }
 
     // Because the record is a file the checked code can write too, it only spares a run its caller asked to spare, never one that gates a change.
@@ -82,9 +83,10 @@ final readonly class PassedTree
         return $this->fingerprint->root.'/'.self::RECORD;
     }
 
+    // Because a gate may judge a date against today's (the reproductions gate does), a pass stands only for the UTC day its run started on.
     private function contents(string $fingerprint): string
     {
-        return '{"fingerprint":"'.$fingerprint.'"}'."\n";
+        return '{"fingerprint":"'.$fingerprint.'","day":"'.$this->day.'"}'."\n";
     }
 
     private function folderStaysInside(): bool
