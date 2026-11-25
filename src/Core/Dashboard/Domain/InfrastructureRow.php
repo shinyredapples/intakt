@@ -66,7 +66,7 @@ final readonly class InfrastructureRow
     public function withForge(?ForgeConnectionVerdict $forge): self
     {
         return new self([...$this->figures, match (true) {
-            null === $forge => new InfrastructureFigure(self::FORGE, 'checking'),
+            !$forge instanceof ForgeConnectionVerdict => new InfrastructureFigure(self::FORGE, 'checking'),
             null !== $forge->problem => InfrastructureFigure::down(self::FORGE, $forge->problem),
             // Not "connected", because without an App nothing was asked of the forge.
             !$forge->configured => new InfrastructureFigure(self::FORGE, 'not configured'),

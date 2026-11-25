@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Fiber;
 use Intakt\Core\Dashboard\Infrastructure\RememberedForgeVerdict;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
@@ -15,7 +16,6 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
-use Fiber;
 
 #[CoversClass(RememberedForgeVerdict::class)]
 #[UsesClass(ForgeConnectionVerdict::class)]

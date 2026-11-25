@@ -34,7 +34,7 @@ final readonly class RememberedForgeVerdict
     public function latest(): ?ForgeConnectionVerdict
     {
         $kept = $this->kept();
-        if (null !== $kept) {
+        if ($kept instanceof ForgeConnectionVerdict) {
             return $kept;
         }
 
