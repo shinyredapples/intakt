@@ -196,9 +196,24 @@ final class EntrypointProcessesTest extends TestCase
 
             self::assertSame([], array_values(array_filter($children, $this->hasNotEnded(...))));
         } finally {
-            foreach ($children as $pid) {
-                posix_kill($pid, self::KILL);
-            }
+            $this->killStandInsStillRunning($children);
+        }
+    }
+
+    public function testTheCleanupKillsALeftOverStandInButNoProcessThatReusedASavedPid(): void
+    {
+        $this->startEntrypoint();
+        $standIn = (int) array_search('scheduler_watcher', $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]), true);
+        $unrelated = new Process(['sleep', '30']);
+        $unrelated->start();
+
+        try {
+            $this->killStandInsStillRunning([$standIn, (int) $unrelated->getPid()]);
+
+            $this->waitUntilEnded([$standIn]);
+            self::assertTrue($unrelated->isRunning());
+        } finally {
+            $unrelated->stop(0);
         }
     }
 
@@ -224,10 +239,21 @@ final class EntrypointProcessesTest extends TestCase
     {
         $this->stopTheEntrypoint();
         // Killed here because an entrypoint with the defect the forced-order test proves absent ends without stopping this child, which would otherwise outlive the test.
-        foreach ($this->childrenStartedBeforeTheStop() as $pid) {
-            posix_kill($pid, self::KILL);
-        }
+        $this->killStandInsStillRunning($this->childrenStartedBeforeTheStop());
         new Filesystem()->remove($this->directory);
+    }
+
+    // Only a running process whose environment names this test's folder, because a saved PID of a child that ended may already name an unrelated process.
+    /**
+     * @param list<int> $pids
+     */
+    private function killStandInsStillRunning(array $pids): void
+    {
+        foreach ($pids as $pid) {
+            if ($this->hasNotEnded($pid) && str_contains((string) @file_get_contents('/proc/'.$pid.'/environ'), $this->directory)) {
+                posix_kill($pid, self::KILL);
+            }
+        }
     }
 
     private function stopTheEntrypoint(): void
