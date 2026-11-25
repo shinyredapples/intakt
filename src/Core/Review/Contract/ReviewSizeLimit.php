@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use InvalidArgumentException;
 
-// The most characters of diff one review takes; a larger change is split.
+// One home for the default, because the config tree and the typed value must agree on it.
 final readonly class ReviewSizeLimit
 {
     public const int DEFAULT_CHARACTERS = 200000;
