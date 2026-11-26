@@ -135,15 +135,17 @@ flowchart LR
   c3 -- still not approved --> g2[Generation 2:<br/>a stronger model,<br/>fresh cycles]
   g2 -- still not approved --> m[The Maintainer decides]
   sb([Third send-back,<br/>counted across cycles]) -. planned .-> s[Split into smaller tasks, once]
-  s -. "no way to split" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
+  s -. "no way to split,<br/>first hand-over" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
+  s -. "no way to split,<br/>second hand-over" .-> o[It comes to you]
 ```
 
-Running builds on their own is planned ([what works today](../reference/user-manual.md)), so this whole flow is planned too. In it, the task moves on to generation 2 after its last cycle. The dotted arrows are a later addition to that plan: at the third send-back, whichever cycle that falls in, the task is split once instead, as the last bullet below says.
+Running builds on their own is planned ([what works today](../reference/user-manual.md)), so this whole flow is planned too. In it, the task moves on to generation 2 after its last cycle. The dotted arrows are a later addition to that plan: at the third send-back, whichever cycle that falls in, the task is split once instead, as the bullet on the third send-back below says.
 
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of Developer. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
-- If that doesn't work either, the **Maintainer** decides: split the task, rewrite it, or ask you.
-- *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the Maintainer splits it into smaller tasks, once. If its open problems give no way to split it, the Maintainer rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
+- If that doesn't work either, the **Maintainer** decides: split the task, rewrite it (only the first time the task reaches it), or ask you.
+- *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the Maintainer splits it into smaller tasks, once. If its open problems give no way to split it, the Maintainer rewrites what the task must do or gives it one more try with a stronger model, but only when this is the first time the task reaches the Maintainer; the second time, it comes to you, as the next bullet says. A task that was already split this way is never split by this rule again.
+- *(Planned:)* the **second time a task reaches the Maintainer**, whatever brought it there either time (reviews that ran out, the newest project, a broken environment, a change grown too big, a failure, running out of memory), the Maintainer only splits it: no rewrite and no other try with a stronger model. If it cannot be split, it comes to you.
 
 A cycle that changes nothing (the Developer couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead, unless what it needs is the newest project: then it is rebuilt once with it, or goes straight to the Maintainer if it has no try left or the rebuild leaves it stuck ([holds](how-intakt-works.md#when-something-gets-stuck)).
 
@@ -221,7 +223,7 @@ While a slot drains, the dashboard says "draining" on that slot; it usually take
 | Word | Meaning |
 |---|---|
 | **Hold** | a pause with a reason, which lifts by itself when the reason is gone |
-| **Hand-over** | the task goes to the Maintainer, which decides what happens next |
+| **Hand-over** | the task goes to the Maintainer, which decides what happens next; the second time, it splits the task or, when it cannot, passes it to you (planned) |
 | **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
 | **Review cap** (planned) | at most a few pieces of finished work wait for a reviewer (or are being reviewed) before the Developers pause; work waiting for its checks or to be merged doesn't count |
 | **In-flight limit** (planned) | at most a few more pieces of finished but unmerged work exist, whatever they wait for, before the Developers pause; twice the review cap by default |
