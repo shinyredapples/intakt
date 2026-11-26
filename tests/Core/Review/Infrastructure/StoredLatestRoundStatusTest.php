@@ -89,7 +89,7 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         self::assertNull($this->latestStatus()->of('alpha', 'feat/none'));
 
         $reads = array_filter(
-            array_map(static fn (array $query): string => (string) $query['sql'], array_merge(...array_values($queries->getData()))),
+            array_map(static fn (array $query): string => is_string($query['sql']) ? $query['sql'] : '', array_merge(...array_values($queries->getData()))),
             static fn (string $sql): bool => str_contains($sql, 'FROM review_round'),
         );
         self::assertNotSame([], $reads);
