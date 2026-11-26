@@ -197,6 +197,14 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return null === $named ? $everyAccountFailed : new EveryAccountCoolingDown($this->provider, $named);
     }
 
+    /**
+     * @param array<string, int> $waits
+     */
+    private function freedUntried(array $waits, SendFailures $failures): bool
+    {
+        return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
+    }
+
     // Per account the longer of what its limit still has to run and the window now stored for it, because another worker can have extended a window that this call's own limit names shorter; null when no account of the call recorded a limit.
     /**
      * @param array<string, int> $waits
@@ -213,14 +221,6 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         return [] === $named ? null : min($named);
-    }
-
-    /**
-     * @param array<string, int> $waits
-     */
-    private function freedUntried(array $waits, SendFailures $failures): bool
-    {
-        return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
     }
 
     // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
