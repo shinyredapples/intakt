@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -94,7 +95,7 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         );
         self::assertNotSame([], $reads);
         foreach ($reads as $sql) {
-            self::assertMatchesRegularExpression('/change_ref\s+(=|LIKE)\s/i', $sql);
+            self::assertMatchesRegularExpression('/change_ref\s+=\s|INSTR\(\w+\.change_ref, \?\)/i', $sql);
         }
     }
 
@@ -119,6 +120,17 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
 
         self::assertNull($this->latestStatus()->of('alpha', 'FEAT/thing'));
         self::assertSame(ReviewStatus::InReview, $this->latestStatus()->of('alpha', 'feat/thing'));
+    }
+
+    public function testASpellingWithALeadingNullByteStillFindsItsRound(): void
+    {
+        $canonical = 'https://github.com/acme/widgets/pull/12';
+        $this->roundOf($canonical);
+        $entities = self::getContainer()->get(EntityManagerInterface::class);
+        $entities->getConnection()->executeStatement('UPDATE review_round SET change_ref = ?', ["\0".$canonical]);
+        $entities->clear();
+
+        self::assertSame(ReviewStatus::InReview, $this->latestStatus()->of('alpha', $canonical));
     }
 
     protected function setUp(): void

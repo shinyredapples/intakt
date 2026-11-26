@@ -35,6 +35,11 @@ final class ChangeAddressTest extends TestCase
         self::assertNull(ChangeAddress::pullRequestNumber('https://example.com/acme/widgets/pull/7'));
     }
 
+    public function testAnAddressTheCanonicalFormLeavesAloneHasNoPullRequestNumber(): void
+    {
+        self::assertNull(ChangeAddress::pullRequestNumber('https://github.com/acme/../pull/12'));
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
