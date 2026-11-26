@@ -9,6 +9,7 @@ use Intakt\Core\Review\Infrastructure\ReviewSizeLimitConfiguration;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Config\Exception\LoaderLoadException;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -61,6 +62,46 @@ final class WiredReviewSizeLimitTest extends KernelTestCase
         self::assertSame(['alpha' => 41], $this->limitsOf($yaml));
     }
 
+    /**
+     * @param array<int|string, int> $expected
+     */
+    #[DataProvider('declarations')]
+    public function testTheLimitIsFiledUnderTheNameTheProjectsTreeGivesTheProject(string $entry, array $expected): void
+    {
+        $yaml = "projects:\n$entry\n    tiers:\n      strong: { provider: anthropic, model: big }\n    review_size_limit: 43\n";
+
+        self::assertSame($expected, $this->limitsOf($yaml));
+    }
+
+    /**
+     * @return iterable<string, array{string, array<int|string, int>}>
+     */
+    public static function declarations(): iterable
+    {
+        yield 'keyed map' => ['  alpha-one:', ['alpha-one' => 43]];
+        yield 'named list entry' => ['  - name: alpha-one', ['alpha-one' => 43]];
+        yield 'keyed map with an explicit name' => ["  outer-key:\n    name: alpha-one", ['alpha-one' => 43]];
+        yield 'integer key with an explicit name' => ["  7:\n    name: alpha-one", ['alpha-one' => 43]];
+        yield 'list entry with an unquoted integer name' => ['  - name: 41', [41 => 43]];
+        yield 'list entry with a quoted integer name' => ['  - name: "41"', [41 => 43]];
+        yield 'list entry with a float name' => ['  - name: 1.5', ['1.5' => 43]];
+    }
+
+    public function testAnInvalidLimitOfAProjectNamedByItsAttributeStopsBoot(): void
+    {
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/must be a positive whole number of characters of diff/');
+
+        $this->limitsOf("projects:\n  outer-key:\n    name: alpha-one\n    tiers:\n      strong: { provider: anthropic, model: big }\n    review_size_limit: 1.5\n");
+    }
+
+    public function testAProjectWithoutTheSettingBesideOneWithItKeepsTheDefault(): void
+    {
+        $yaml = "projects:\n  outer-key:\n    name: alpha-one\n    tiers:\n      strong: { provider: anthropic, model: big }\n    review_size_limit: 43\n  beta:\n    tiers:\n      strong: { provider: anthropic, model: big }\n";
+
+        self::assertSame(['alpha-one' => 43, 'beta' => 200000], $this->limitsOf($yaml));
+    }
+
     protected function setUp(): void
     {
         $this->containers = self::compiledContainers();
@@ -91,7 +132,7 @@ final class WiredReviewSizeLimitTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, int>
+     * @return array<int|string, int>
      */
     private function limitsOf(string $yaml): array
     {
@@ -101,7 +142,7 @@ final class WiredReviewSizeLimitTest extends KernelTestCase
         $this->containers->useFor([$yaml]);
         self::bootKernel();
 
-        /** @var array<string, int> $limits */
+        /** @var array<int|string, int> $limits */
         $limits = self::getContainer()->getParameter(ReviewServices::SIZE_LIMITS);
 
         return $limits;
