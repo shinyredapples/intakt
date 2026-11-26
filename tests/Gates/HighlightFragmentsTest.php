@@ -9,6 +9,7 @@ use Intakt\Gates\HighlightFragment;
 use Intakt\Gates\HighlightFragments;
 use Intakt\Gates\HighlightHistory;
 use Intakt\Gates\HighlightLayout;
+use Intakt\Gates\HighlightOrder;
 use Intakt\Gates\HighlightRowKind;
 use Intakt\Gates\RepositoryAttributesRefused;
 use Override;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightFragments::class)]
 #[CoversClass(HighlightHistory::class)]
+#[CoversClass(HighlightOrder::class)]
 #[UsesClass(HighlightAssembly::class)]
 #[UsesClass(HighlightRowKind::class)]
 #[CoversClass(HighlightFragment::class)]
@@ -172,6 +174,44 @@ final class HighlightFragmentsTest extends SandboxTestCase
 
         self::assertSame([], $assembly->findings);
         self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Earlier | planned | T2 (#2) |\n| Later | planned | T10 (#10) |\n", $assembly->text);
+    }
+
+    public function testFragmentsOneMergedParentOfAnOctopusMergeAddedInTurnApplyInThatParentsOrder(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('branch', 'right');
+        $this->sandbox->git('checkout', '--quiet', '-b', 'left');
+        $this->commitFragment('90-lock.md', "## Tooling\n| Lock | planned | T2 (#90) |\n");
+        $this->commitFragment('20-lock-done.md', "## Tooling\n| Lock | done | T2 (#20) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'right');
+        $this->commitFragment('30-clock.md', "## Tooling\n| Clock | done | T3 (#30) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'left', 'right');
+
+        $assembly = $this->assembled();
+
+        self::assertSame([], $assembly->findings);
+        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Lock | done | T2 (#20) |\n| Clock | done | T3 (#30) |\n", $assembly->text);
+    }
+
+    public function testAFragmentAnOctopusMergeAddsItselfAppliesAfterTheRowsOfEveryMergedParent(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('branch', 'right');
+        $this->sandbox->git('checkout', '--quiet', '-b', 'left');
+        $this->commitFragment('900-lock.md', "## Tooling\n| Lock | planned | T2 (#900) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'right');
+        $this->commitFragment('800-clock.md', "## Tooling\n| Clock | planned | T3 (#800) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-commit', 'left', 'right');
+        $this->commitFragment('5-both-done.md', "## Tooling\n| Lock | done | T2 (#5) |\n| Clock | done | T3 (#5) |\n");
+
+        $assembly = $this->assembled();
+
+        self::assertSame([], $assembly->findings);
+        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Lock | done | T2 (#5) |\n| Clock | done | T3 (#5) |\n", $assembly->text);
     }
 
     public function testTwoUncommittedFragmentsThatSetTheSameRowFailTheAssembly(): void

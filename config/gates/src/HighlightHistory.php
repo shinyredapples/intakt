@@ -11,22 +11,25 @@ final readonly class HighlightHistory
 
     private const int UNBORN_HEAD = 1;
 
+    private const int ONLY_LANE = 0;
+
+    private const int MERGED_SIDES = 0;
+
+    private const int ADDED_BY_THE_MERGE = 1;
+
     public function __construct(
         private ProcessRunner $runner = new ProcessRunner(),
     ) {
     }
 
-    /**
-     * @return array<string, int>|string
-     */
-    public function ranksOn(string $root): array|string
+    public function orderOn(string $root): HighlightOrder|string
     {
         // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
         $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
 
         // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
         if (!$head instanceof ProcessResult || self::UNBORN_HEAD === $head->exitCode) {
-            return [];
+            return new HighlightOrder();
         }
 
         $unreadable = $this->unreadableHistoryFinding($root, $head);
@@ -35,9 +38,9 @@ final readonly class HighlightHistory
             return $unreadable;
         }
 
-        $groups = $this->groupsAddedIn($root, ['HEAD']);
+        $places = $this->placesAddedIn($root, ['HEAD']);
 
-        return is_string($groups) ? $groups : $this->ranksOf($groups);
+        return is_string($places) ? $places : new HighlightOrder($places);
     }
 
     private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
@@ -52,9 +55,9 @@ final readonly class HighlightHistory
     /**
      * @param list<string> $revisions
      *
-     * @return list<list<string>>|string
+     * @return array<string, list<int>>|string
      */
-    private function groupsAddedIn(string $root, array $revisions): array|string
+    private function placesAddedIn(string $root, array $revisions): array|string
     {
         $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H %P', ...$revisions, '--', HighlightFragments::DIRECTORY.'/'], $root);
 
@@ -62,37 +65,21 @@ final readonly class HighlightHistory
             return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
         }
 
-        $groups = [];
+        $places = [];
 
-        foreach ($this->additionsIn($log->output) as [$parents, $names]) {
-            $ordered = $this->mergedSideOrder($root, $parents, $names);
+        foreach ($this->additionsIn($log->output) as $position => [$parents, $names]) {
+            $within = $this->placesWithin($root, $parents, $names);
 
-            if (is_string($ordered)) {
-                return $ordered;
+            if (is_string($within)) {
+                return $within;
             }
 
-            $groups = [...$groups, ...$ordered];
-        }
-
-        return $groups;
-    }
-
-    /**
-     * @param list<list<string>> $groups
-     *
-     * @return array<string, int>
-     */
-    private function ranksOf(array $groups): array
-    {
-        $ranks = [];
-
-        foreach ($groups as $rank => $names) {
-            foreach ($names as $name) {
-                $ranks[$name] = $rank;
+            foreach ($within as $name => $place) {
+                $places[$name] = [$position, ...$place];
             }
         }
 
-        return $ranks;
+        return $places;
     }
 
     // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
@@ -129,74 +116,59 @@ final readonly class HighlightHistory
      * @param list<string> $parents
      * @param list<string> $names
      *
-     * @return list<list<string>>|string
+     * @return array<string, list<int>>|string
      */
-    private function mergedSideOrder(string $root, array $parents, array $names): array|string
+    private function placesWithin(string $root, array $parents, array $names): array|string
     {
-        // The merged side's own first-parent order decides, because a merge that adds several fragments at once brought in another line of history (main fast-forwarded to a branch that merged main).
+        // The merged sides' own first-parent order decides, because a merge that adds several fragments at once brought in other lines of history (main fast-forwarded to a branch that merged main).
         if (count($names) < 2 || count($parents) < 2) {
-            return [$names];
+            return array_fill_keys($names, []);
         }
 
-        $sides = $this->sidesOf($root, $parents, $names);
+        $sides = $this->placesOnSides($root, $parents, $names);
 
         if (is_string($sides)) {
             return $sides;
         }
 
-        $groups = $this->togetherOrder($sides);
-        $addedByTheMerge = array_values(array_diff($names, ...$groups));
+        $addedByTheMerge = array_fill_keys(array_keys(array_diff_key(array_flip($names), $sides)), [self::ONLY_LANE, self::ADDED_BY_THE_MERGE]);
 
-        return [] === $addedByTheMerge ? $groups : [...$groups, $addedByTheMerge];
+        return [...$sides, ...$addedByTheMerge];
     }
 
     /**
      * @param list<string> $parents
      * @param list<string> $names
      *
-     * @return list<list<list<string>>>|string
+     * @return array<string, list<int>>|string
      */
-    private function sidesOf(string $root, array $parents, array $names): array|string
+    private function placesOnSides(string $root, array $parents, array $names): array|string
     {
-        $sides = [];
+        $places = [];
 
-        foreach (array_slice($parents, 1) as $parent) {
-            $side = $this->sideOrder($root, [$parent, '^'.$parents[0]], $names);
+        foreach (array_slice($parents, 1) as $lane => $parent) {
+            $side = $this->sidePlaces($root, [$parent, '^'.$parents[0]], $names);
 
             if (is_string($side)) {
                 return $side;
             }
 
-            if ([] !== $side) {
-                $sides[] = $side;
+            // A fragment two parents both hold keeps the first parent's place, and its order against the other parent stays unknown.
+            foreach ($side as $name => $place) {
+                $places[$name] ??= [self::ONLY_LANE, self::MERGED_SIDES, $lane, ...$place];
             }
         }
 
-        return $sides;
-    }
-
-    /**
-     * @param list<list<list<string>>> $sides
-     *
-     * @return list<list<string>>
-     */
-    private function togetherOrder(array $sides): array
-    {
-        // The merged parents reached the branch together, so fragments from different parents share one place and overlapping rows are refused.
-        return match (count($sides)) {
-            0 => [],
-            1 => $sides[0],
-            default => [array_values(array_unique(array_merge(...array_merge(...$sides))))],
-        };
+        return $places;
     }
 
     /**
      * @param list<string> $range
      * @param list<string> $names
      *
-     * @return list<list<string>>|string
+     * @return array<string, list<int>>|string
      */
-    private function sideOrder(string $root, array $range, array $names): array|string
+    private function sidePlaces(string $root, array $range, array $names): array|string
     {
         $present = $this->presentIn($root, $range[0], $names);
 
@@ -204,16 +176,9 @@ final readonly class HighlightHistory
             return $present;
         }
 
-        $side = $this->groupsAddedIn($root, $range);
+        $side = $this->placesAddedIn($root, $range);
 
-        if (is_string($side)) {
-            return $side;
-        }
-
-        return array_values(array_filter(
-            array_map(static fn (array $group): array => array_values(array_intersect($group, $present)), $side),
-            static fn (array $group): bool => [] !== $group,
-        ));
+        return is_string($side) ? $side : array_intersect_key($side, array_flip($present));
     }
 
     /**

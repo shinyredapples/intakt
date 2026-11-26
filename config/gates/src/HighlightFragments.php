@@ -77,10 +77,10 @@ final readonly class HighlightFragments
             return new HighlightAssembly('', ['cannot read '.HighlightLayout::FILE]);
         }
 
-        $history = $this->history->ranksOn($root);
+        $order = $this->history->orderOn($root);
 
-        if (is_string($history)) {
-            return new HighlightAssembly('', [$history]);
+        if (is_string($order)) {
+            return new HighlightAssembly('', [$order]);
         }
 
         $layout = HighlightLayout::fromLines($layout);
@@ -88,12 +88,12 @@ final readonly class HighlightFragments
         $findings = $this->nameFindings($names);
         $rowsByFragment = [];
 
-        foreach ($this->fragmentsInOrder($names, $history) as $name) {
+        foreach ($this->fragmentsInOrder($names, $order) as $name) {
             [$rowsByFragment[$name], $fragmentFindings] = $this->rowsOf($root, $name, $layout);
             $findings = [...$findings, ...$fragmentFindings];
         }
 
-        $findings = [...$findings, ...$this->unorderedRowFindings($rowsByFragment, $history)];
+        $findings = [...$findings, ...$this->unorderedRowFindings($rowsByFragment, $order)];
         $rows = array_reduce($rowsByFragment, $this->withReplacedRows(...), []);
 
         return new HighlightAssembly([] === $findings ? $layout->assembledWith($rows) : '', $findings);
@@ -139,21 +139,16 @@ final readonly class HighlightFragments
     }
 
     /**
-     * @param list<string>       $names
-     * @param array<string, int> $history
+     * @param list<string> $names
      *
      * @return list<string>
      */
-    private function fragmentsInOrder(array $names, array $history): array
+    private function fragmentsInOrder(array $names, HighlightOrder $order): array
     {
         $fragments = array_values(array_filter($names, static fn (string $name): bool => 1 === preg_match(self::FRAGMENT_NAME, $name)));
 
         // A later change replaces an earlier one's row whatever their issue numbers, so fragments apply in the order they reached the branch; an uncommitted fragment is the newest.
-        usort($fragments, static function (string $a, string $b) use ($history): int {
-            $byHistory = ($history[$a] ?? PHP_INT_MAX) <=> ($history[$b] ?? PHP_INT_MAX);
-
-            return 0 === $byHistory ? strnatcmp($a, $b) : $byHistory;
-        });
+        usort($fragments, $order->compare(...));
 
         return $fragments;
     }
@@ -171,22 +166,19 @@ final readonly class HighlightFragments
 
     /**
      * @param array<string, array<string, array<string, string>>> $rowsByFragment
-     * @param array<string, int>                                  $history
      *
      * @return list<string>
      */
-    private function unorderedRowFindings(array $rowsByFragment, array $history): array
+    private function unorderedRowFindings(array $rowsByFragment, HighlightOrder $order): array
     {
         // Fragments without a distinct place in history would otherwise fall back to their numbers, and an older change could silently replace a newer row.
         $setBy = [];
         $findings = [];
 
         foreach ($rowsByFragment as $name => $rows) {
-            $rank = $history[$name] ?? PHP_INT_MAX;
-
             foreach ($this->rowKeysOf($rows) as [$section, $key]) {
-                $earlier = $setBy[$rank][$section][$key] ?? null;
-                $setBy[$rank][$section][$key] = $earlier ?? $name;
+                $earlier = array_find($setBy[$section][$key] ?? [], static fn (string $other): bool => !$order->knowsWhichCameFirst($other, $name));
+                $setBy[$section][$key][] = $name;
 
                 if (null !== $earlier) {
                     $findings[] = self::DIRECTORY.'/'.$earlier.' and '.self::DIRECTORY.'/'.$name.' both set row "'.$key.'" of section "'.$section.'", but git history does not say which came first: add them in separate commits, or assemble in a clone with the full history';
