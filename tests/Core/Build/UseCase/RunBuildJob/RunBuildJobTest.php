@@ -305,7 +305,23 @@ final class RunBuildJobTest extends TestCase
 
         $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
 
-        self::assertSame([BuildVerdict::NoResult, null, null, "log\n"], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText, $outcome->log]);
+        self::assertSame([BuildVerdict::NoResult, null, null], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText]);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputEndsItsLogWithTheOrchestratorsOwnReason(): void
+    {
+        $output = OutputFiles::of(['build.log' => 'builder text']);
+
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("builder text\nno result: the build script could not clear the job's output\n", $outcome->log);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputAndLeftNoLogStillSaysWhy(): void
+    {
+        $outcome = $this->runBuilds(OutputFiles::of([]), end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("no result: the build script could not clear the job's output\n", $outcome->log);
     }
 
     public function testAJobThatExitedWithAnotherFailingCodeIsStillReadFromItsOutput(): void
@@ -325,6 +341,50 @@ final class RunBuildJobTest extends TestCase
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
+    }
+
+    public function testABuildLogFolderTheRunnerRefusesIsNoResultWithTheOrchestratorsFixedReasonAsItsLog(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile('build.log'));
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n"], [$outcome->verdict, $outcome->log]);
+    }
+
+    public function testAnOutputTheRunnerCouldNotListIsNoResultWithAReasonThatClaimsNoEntryWasSeen(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::unlisted());
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n"], [$outcome->verdict, $outcome->log]);
+    }
+
+    #[TestWith(["\n"])]
+    #[TestWith(["\r"])]
+    #[TestWith(["\u{0085}"])]
+    #[TestWith(["\u{2028}"])]
+    #[TestWith(["\u{2029}"])]
+    public function testARefusedOutputNameWithALineBreakNeverReachesTheLog(string $lineBreak): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile('invalid'.$lineBreak.'FORGED_LOG_LINE'));
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame(["no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n", 1], [$outcome->log, preg_match_all('/\R/u', $outcome->log)]);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputAddsNoSecondLineEndToALogThatEndsInOne(): void
+    {
+        $output = OutputFiles::of(['build.log' => "builder text\n"]);
+
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("builder text\nno result: the build script could not clear the job's output\n", $outcome->log);
     }
 
     protected function setUp(): void
