@@ -88,6 +88,8 @@ final class RunBuildJobTest extends TestCase
 
     private mixed $toolTimeLimit = 1500;
 
+    private string $script = self::SCRIPT;
+
     private RecordedBuildStops $stops;
 
     private ?BuildStopCause $stopWhileRunning = null;
@@ -405,9 +407,10 @@ final class RunBuildJobTest extends TestCase
         $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
         $runner = self::createMock(JobRunner::class);
         $runner->expects(self::never())->method('run');
+        $this->script = $this->folder.'/absent-build-script.sh';
 
         try {
-            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), script: $this->folder.'/absent-build-script.sh')->run($this->job());
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
             self::fail('the build script read did not fail');
         } catch (IOException) {
         }
@@ -487,11 +490,11 @@ final class RunBuildJobTest extends TestCase
         return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', new Decisions(), null), $tier, 'intakt-job-demo:1');
     }
 
-    private function useCase(JobRunner $runner, ResolvedModel $model, ?Filesystem $filesystem = null, string $script = self::SCRIPT): RunBuildJob
+    private function useCase(JobRunner $runner, ResolvedModel $model, ?Filesystem $filesystem = null): RunBuildJob
     {
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $script,$this->folder.'/prompts', $this->stops);
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->folder.'/prompts', $this->stops);
     }
 }

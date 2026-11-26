@@ -157,6 +157,11 @@ final readonly class RunBuildJob
         return $absolute;
     }
 
+    private function commandOf(BuildJob $job, string $model): JobCommand
+    {
+        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds);
+    }
+
     // A file of its own for each run, readable by the orchestrator's user only, so two builds never share one.
     private function promptFileFor(BuildJob $job): string
     {
@@ -165,11 +170,6 @@ final readonly class RunBuildJob
         $this->filesystem->appendToFile($file, $this->prompts->textFor($job->brief));
 
         return $file;
-    }
-
-    private function commandOf(BuildJob $job, string $model): JobCommand
-    {
-        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds);
     }
 
     private function ranJob(JobSpec $spec): ?JobResult
