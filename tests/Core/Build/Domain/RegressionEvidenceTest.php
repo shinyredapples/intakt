@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
+use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\RegressionRun;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RegressionEvidence::class)]
+#[CoversClass(ReadableLines::class)]
 #[UsesClass(RegressionRuns::class)]
 #[UsesClass(RegressionRun::class)]
 #[UsesClass(Paths::class)]
@@ -158,6 +160,76 @@ final class RegressionEvidenceTest extends TestCase
         $body = new RegressionEvidence($this->runs())->addedTo("## Evidenced\nShown.");
 
         self::assertSame("## Evidenced\nShown.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAParagraphUnderlinedWithEqualsSignsIsALevelOneEvidenceHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Evidence\n========\n\n## E1\n\nShown.\n\nAppendix\n===\n\nMore.");
+
+        self::assertSame("Evidence\n========\n\n## E1\n\nShown.\n\n".self::LINES."\n\nAppendix\n===\n\nMore.", $body);
+    }
+
+    public function testAParagraphUnderlinedWithHyphensIsALevelTwoEvidenceHeadingThatEndsAtTheNextLevelTwoHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Summary.\n\nEvidence:\n---\n\n### E1\n\nShown.\n\n## Follow-ups\n\n- none");
+
+        self::assertSame("Summary.\n\nEvidence:\n---\n\n### E1\n\nShown.\n\n".self::LINES."\n\n## Follow-ups\n\n- none", $body);
+    }
+
+    public function testASetextHeadingEndsAnAtxEvidenceSectionBeforeItsTextLine(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\nFollow-ups\nand notes\n---\n\n- none");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\nFollow-ups\nand notes\n---\n\n- none", $body);
+    }
+
+    public function testAnIndentedEvidenceLineAboveHyphensIsIndentedCodeNotAHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Summary.\n\n    Evidence\n---\n\nMore.\n\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("Summary.\n\n    Evidence\n---\n\nMore.\n\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testATabIndentedEvidenceLineAboveEqualsSignsIsIndentedCodeNotAHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Summary.\n\n  \tEvidence\n===\n\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("Summary.\n\n  \tEvidence\n===\n\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testAnIndentedLineThatContinuesAParagraphIsPartOfTheSetextHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Evidence\n    for this part\n---\n\nShown.");
+
+        self::assertSame("Evidence\n    for this part\n---\n\nShown.\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceLineAboveHyphensInsideACodeFenceIsNotAHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("```\nEvidence\n---\n```\n\nText.");
+
+        self::assertSame("```\nEvidence\n---\n```\n\nText.\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testHyphensAfterABlankLineAreAThematicBreakThatDoesNotEndTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\nShown.\n\n---\n\nMore.\n\n".self::LINES, $body);
+    }
+
+    public function testHyphensUnderAListItemAreAThematicBreakThatDoesNotEndTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n- E1: shown\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\n- E1: shown\n---\n\nMore.\n\n".self::LINES, $body);
+    }
+
+    public function testATextLineAfterAThematicBreakCanStillBeASetextHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Summary.\n\n***\nEvidence\n---\n\nShown.\n\n## Next");
+
+        self::assertSame("Summary.\n\n***\nEvidence\n---\n\nShown.\n\n".self::LINES."\n\n## Next", $body);
     }
 
     private function runs(): RegressionRuns
