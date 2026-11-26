@@ -16,6 +16,8 @@ The owl's call is one of three outcomes:
 
 Plain code decides the outcome from the votes and the list, never from how a reviewer worded its answer. So a verdict of changes always names something to fix.
 
+When the reviewers agree, the owl's call comes without a model call. That is when they all approve, or when every reviewer reported each P1 and P2 at the same file and line and nobody raised a P3. Every one of those findings goes on the list To fix. When they disagree, or a P3 needs a call, one model call marks the findings.
+
 ## The list To fix
 
 On the main view, each row is one thing to change. It sits in its urgency's group and shows only the first sentence and the place. On a desktop the three groups stand side by side; on a phone they stack, Urgent first. A group with nothing in it says "None". Press a row to open the finding's own page: the whole text, where it sits (the file as a few lines with the finding's line marked, or with no line marked and "Line not recorded" when the line is not known, and any code the reviewer quoted, as written; Intakt keeps no copy of the code itself, so it shows none), who reported it and how serious each reviewer found it, and the owl's call. **Back to the review** returns to the list.
