@@ -32,7 +32,7 @@ final readonly class HighlightHistory
             return $unreadable;
         }
 
-        $committed = $this->runner->git(['ls-tree', '--full-name', '--name-only', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
+        $committed = $this->runner->git(['ls-tree', '--full-name', '--format=%(objecttype) %(path)', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
 
         if (!$committed->succeeded()) {
             return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$committed->firstErrorLine();
@@ -40,7 +40,7 @@ final readonly class HighlightHistory
 
         $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
 
-        return $log->succeeded() ? new HighlightOrder($this->placesIn($log->output, $this->linesOf($committed->output))) : 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
+        return $log->succeeded() ? new HighlightOrder($this->placesIn($log->output, $this->committedFilesIn($committed->output))) : 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
     }
 
     private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
@@ -55,9 +55,18 @@ final readonly class HighlightHistory
     /**
      * @return list<string>
      */
-    private function linesOf(string $output): array
+    private function committedFilesIn(string $output): array
     {
-        return array_values(array_filter(explode("\n", $output), static fn (string $line): bool => '' !== $line));
+        $files = [];
+
+        // A folder committed under a fragment's name would otherwise lend its place to a fragment written there again.
+        foreach (explode("\n", $output) as $line) {
+            if (str_starts_with($line, 'blob ')) {
+                $files[] = substr($line, \strlen('blob '));
+            }
+        }
+
+        return $files;
     }
 
     /**

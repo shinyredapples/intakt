@@ -327,6 +327,20 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
     }
 
+    public function testAFragmentWrittenAgainWhereACommittedFolderReplacedItTiesWithAnotherUncommittedOne(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/2-earlier.md');
+        $this->sandbox->write('docs/highlights.d/2-earlier.md/archive.txt', "archived\n");
+        $this->sandbox->commitAll('replace the fragment with a folder');
+        $this->sandbox->git('rm', '--quiet', '-r', 'docs/highlights.d/2-earlier.md');
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+
+        self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
+    }
+
     public function testTheHistoryOfAFileInASubfolderDoesNotOrderATopLevelFragmentOfTheSameName(): void
     {
         $this->sandbox->startRepository();
