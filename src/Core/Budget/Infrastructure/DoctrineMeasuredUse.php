@@ -112,9 +112,8 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
 
                 return $this->endOutagesBefore($record, $previous);
             });
-            // Boundary: detaches the rolled-back reading on any failure and rethrows it, because whatever ended the transaction leaves the record without its row.
+            // Boundary: detaches the rolled-back reading on any failure and rethrows it, because the database may give its position to the next reading, which the entity manager then refuses as a second object of one identity.
         } catch (Throwable $failure) {
-            // Detached, because its row is rolled back and the database may give its position to the next reading, which the entity manager then refuses as a second object of one identity.
             $this->entities->detach($record);
 
             throw $failure;
