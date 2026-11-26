@@ -26,7 +26,7 @@ Each bench change is a pair: the **base**, the sample project before the change,
 
 ## Both commands call your paid models
 
-Each review of a bench change is a real review by your project's Code reviewers: every reviewer reads the change once, and their judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
+Each review of a bench change is a real review by your project's Code reviewers: every reviewer reads the change once, and their judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something they do not all agree on (a serious finding every reviewer reported alike goes on the list without that call). Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
 
 ## Two commands
 
