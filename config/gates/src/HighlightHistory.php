@@ -43,14 +43,6 @@ final readonly class HighlightHistory
         return $log->succeeded() ? new HighlightOrder($this->placesIn($log->output, $this->linesOf($committed->output))) : 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
     }
 
-    /**
-     * @return list<string>
-     */
-    private function linesOf(string $output): array
-    {
-        return array_values(array_filter(explode("\n", $output), static fn (string $line): bool => '' !== $line));
-    }
-
     private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
     {
         if (!$head->succeeded()) {
@@ -58,6 +50,14 @@ final readonly class HighlightHistory
         }
 
         return $this->shallowHistoryFinding($root);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function linesOf(string $output): array
+    {
+        return array_values(array_filter(explode("\n", $output), static fn (string $line): bool => '' !== $line));
     }
 
     /**
@@ -79,7 +79,7 @@ final readonly class HighlightHistory
             }
         }
 
-        // Only a fragment HEAD holds has a commit: one deleted and written again is uncommitted, and a file in a subfolder is not a fragment of the same name.
+        // A fragment deleted and written again would otherwise keep its old commit's place, and a file in a subfolder would lend its commit to a fragment of the same name, because the log names every path ever added.
         $places = array_intersect_key($places, array_flip($committedPaths));
 
         return array_combine(array_map(basename(...), array_keys($places)), array_values($places));
