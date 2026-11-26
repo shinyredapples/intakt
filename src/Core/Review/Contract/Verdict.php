@@ -74,6 +74,13 @@ final readonly class Verdict
         return clone ($this, ['verdict' => Decision::Changes]);
     }
 
+    // Only on a fresh verdict, because a stored one reads back with origin Reviewer.
+    #[Ignore]
+    public function isIntakts(): bool
+    {
+        return VerdictOrigin::Intakt === $this->origin;
+    }
+
     // The first finding of a blocked verdict says why, because a recorded blocked verdict is one Intakt gave, and each of those holds its reason in its one finding.
     #[Ignore]
     public function blockedReason(): ?string

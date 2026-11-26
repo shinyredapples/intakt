@@ -43,7 +43,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(PanelReviewer::class)]
 final class TechnicalWriterLaneTest extends KernelTestCase
 {
-    private const string OFF_THE_PAGES = VerdictUnreadable::IN_WORDS.': the Technical writer reported a new finding outside the docs pages.';
+    private const string OFF_THE_PAGES = VerdictUnreadable::IN_WORDS.': the Technical writer reported a finding outside the docs pages.';
 
     private const string REPEATED_PROPOSAL = VerdictUnreadable::IN_WORDS.': the Technical writer repeated an open finding as a proposal.';
 
@@ -127,6 +127,25 @@ final class TechnicalWriterLaneTest extends KernelTestCase
         self::assertSame(self::REPEATED_PROPOSAL, $this->writersFailure());
     }
 
+    public function testARepeatOfTheTechnicalWriterThatMovesAnOpenFindingOntoCodeIsRefusedAndLeavesTheFindingOnItsPage(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Approve, [], [], []), new Verdict(Decision::Changes, [$this->blockingAt('docs/user/cart.md')], [], []));
+        $this->startRound();
+
+        $this->deliverAll(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 1, null, 'Still wrong.', FixableBy::Builder, true, 'SOLID', null)], [], []));
+
+        self::assertSame(self::OFF_THE_PAGES, $this->writersFailure());
+        self::assertSame(['docs/user/cart.md'], array_map(static fn (TrackedFinding $tracked): ?string => $tracked->latest->file, $this->fixture->storedFindings(RoundFixture::CHANGE)));
+    }
+
+    public function testABlockedVerdictIntaktGivesTheTechnicalWriterIsRecordedWithItsOwnReason(): void
+    {
+        $this->deliverAll(Verdict::noTools());
+
+        self::assertNull($this->writersFailure());
+        self::assertStringContainsString('"'.Verdict::NO_TOOLS.'"', $this->writer()?->verdictJson() ?? '');
+    }
+
     public function testARepeatOfTheTechnicalWriterThatIsNoProposalIsRecorded(): void
     {
         $this->deliverAll(new Verdict(Decision::Approve, [], [], []), new Verdict(Decision::Changes, [$this->blockingAt('docs/user/cart.md')], [], []));
@@ -160,10 +179,14 @@ final class TechnicalWriterLaneTest extends KernelTestCase
 
     private function writersFailure(): ?string
     {
-        $rounds = $this->fixture->storedRounds();
-        $writers = array_filter(array_last($rounds)?->reviewers() ?? [], static fn (RoundReviewer $reviewer): bool => ReviewerRole::TECHNICAL_WRITER === $reviewer->roleName());
+        return $this->writer()?->failure();
+    }
 
-        return array_first($writers)?->failure();
+    private function writer(): ?RoundReviewer
+    {
+        $rounds = $this->fixture->storedRounds();
+
+        return array_first(array_filter(array_last($rounds)?->reviewers() ?? [], static fn (RoundReviewer $reviewer): bool => ReviewerRole::TECHNICAL_WRITER === $reviewer->roleName()));
     }
 
     /**

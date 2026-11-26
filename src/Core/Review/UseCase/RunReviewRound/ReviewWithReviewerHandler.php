@@ -128,23 +128,24 @@ final readonly class ReviewWithReviewerHandler
     }
 
     // Here too and not only in the reviewer agent, because the ledger closes any id a recorded verdict names, whichever vendor answered.
+    // Not Intakt's own failure verdicts, because their one finding has no file and holds the reason the review failed.
     private function refuseWhatTheWriterMayNotSay(ReviewLane $lane, ReviewBrief $brief, Verdict $verdict): void
     {
-        if (ReviewLane::Docs !== $lane) {
+        if (ReviewLane::Docs !== $lane || $verdict->isIntakts()) {
             return;
         }
 
         $this->ids->checkedAgainst($brief, $verdict);
-        $this->refuseNewFindingsOffThePages($verdict);
+        $this->refuseFindingsOffThePages($verdict);
         $this->refuseRepeatedProposals($verdict);
     }
 
-    // Refused like a foreign id, because the writer never saw the code and a finding it records there would block the head; key-safe, because the reason names no text of the model.
-    private function refuseNewFindingsOffThePages(Verdict $verdict): void
+    // Refused like a foreign id, because the writer never saw the code: a new finding there would block the head, and a repeat there would move an open finding onto code. Key-safe, because the reason names no text of the model.
+    private function refuseFindingsOffThePages(Verdict $verdict): void
     {
         foreach ($verdict->findings as $finding) {
-            if (!$finding->repeat && (null === $finding->file || !$this->pages->contains($finding->file))) {
-                throw VerdictUnreadable::becauseKeySafe('the Technical writer reported a new finding outside the docs pages.');
+            if (null === $finding->file || !$this->pages->contains($finding->file)) {
+                throw VerdictUnreadable::becauseKeySafe('the Technical writer reported a finding outside the docs pages.');
             }
         }
     }
