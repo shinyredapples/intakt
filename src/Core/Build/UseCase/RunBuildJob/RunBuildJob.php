@@ -168,8 +168,7 @@ final readonly class RunBuildJob
         try {
             $result = $this->jobs->run($spec);
         } catch (JobOutputRefused $refusal) {
-            // No result, because the job wrote what the runner refuses to read; the runner's reason is the log, because the job's own log is part of what was refused,
-            // as when the script cannot remove what the builder left in the build log's place, and the job's standard error is the builder's to write too.
+            // No result, with the runner's reason as the log, because the job's own log is part of what was refused and its standard error is the builder's to write too.
             return new BuildJobOutcome(BuildVerdict::NoResult, log: sprintf("no result: the runner refused the job's output: %s\n", $refusal->getMessage()));
         }
 
