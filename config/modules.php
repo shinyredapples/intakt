@@ -9,6 +9,7 @@ return [
     'Core/Budget',
     'Core/Build',
     'Core/Dashboard',
+    'Core/Disk',
     'Core/Git',
     'Core/HandBack',
     'Core/Job',

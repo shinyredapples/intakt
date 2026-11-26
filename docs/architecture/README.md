@@ -123,6 +123,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Development setup](development-setup.md): the compose override that watches files and reloads the workers.
 - [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
 - [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
+- [Disk floors](disk-floors.md): when a folder's free bytes or free inodes are too low for new work.
 - [Persistence](persistence.md): the supported databases.
 - [Job containers](job-containers.md): a fresh container per job, with a network allowlist.
 - [Job images](job-images.md): how a project's job image is made and checked.
