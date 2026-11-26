@@ -1495,6 +1495,12 @@ final class BuildTaskTest extends TestCase
         return $runner;
     }
 
+    // The job BuildTask builds for request(), because the watch records a stop for the job it watches.
+    private function buildJob(): BuildJob
+    {
+        return new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief('', new Decisions(), null), Tier::Standard, self::IMAGE);
+    }
+
     // Because the remote can move while the build job runs, and only a change after the job shows which mirror the pre-push check reads.
     private function runnerAfterWhich(JobRunner $built, callable $change): JobRunner
     {
@@ -1622,12 +1628,6 @@ final class BuildTaskTest extends TestCase
     private function request(int $issue, string $remote): BuildTaskRequest
     {
         return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone, self::IMAGE);
-    }
-
-    // The job BuildTask builds for request(), because the watch records a stop for the job it watches.
-    private function buildJob(): BuildJob
-    {
-        return new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief('', new Decisions(), null), Tier::Standard, self::IMAGE);
     }
 
     private function remoteTip(): ?string
