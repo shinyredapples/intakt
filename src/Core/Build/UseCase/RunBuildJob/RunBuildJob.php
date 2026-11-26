@@ -168,7 +168,7 @@ final readonly class RunBuildJob
         try {
             $result = $this->jobs->run($spec);
         } catch (JobOutputRefused) {
-            // A fixed reason of the orchestrator's own: the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
+            // The reason is fixed because the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
             return new BuildJobOutcome(BuildVerdict::NoResult, log: "no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n");
         }
 

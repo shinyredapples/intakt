@@ -365,7 +365,7 @@ final class RunBuildJobTest extends TestCase
 
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
-        self::assertSame(["no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n", 1], [$outcome->log, count(preg_split('/\R/u', rtrim($outcome->log, "\n")) ?: [])]);
+        self::assertSame(["no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n", 1], [$outcome->log, preg_match_all('/\R/u', $outcome->log)]);
     }
 
     public function testAJobWhoseScriptCouldNotClearTheOutputAddsNoSecondLineEndToALogThatEndsInOne(): void
