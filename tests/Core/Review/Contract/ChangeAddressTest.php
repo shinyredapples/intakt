@@ -43,6 +43,24 @@ final class ChangeAddressTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
+    public static function nonCanonicalGitHubPullRequestForms(): iterable
+    {
+        yield 'http scheme' => ['http://github.com/acme/widgets/pull/7'];
+        yield 'user info' => ['https://bot@github.com/acme/widgets/pull/7'];
+        yield 'port' => ['https://github.com:8443/acme/widgets/pull/7'];
+        yield 'ssh scheme' => ['ssh://github.com/acme/widgets/pull/7'];
+    }
+
+    #[DataProvider('nonCanonicalGitHubPullRequestForms')]
+    public function testAPullRequestPathUnderAnotherSchemeUserInfoOrPortKeepsItsSpellingAndHasNoPullRequestNumber(string $address): void
+    {
+        self::assertSame($address, ChangeAddress::canonical($address));
+        self::assertNull(ChangeAddress::pullRequestNumber($address));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function otherFormsOfOnePullRequest(): iterable
     {
         yield 'a fragment' => ['https://github.com/Acme/Widgets/pull/7#discussion'];

@@ -27,18 +27,16 @@ final readonly class ChangeAddress
         return sprintf('https://github.com/%s/%s/pull/%s', strtolower($match[1]), strtolower($match[2]), $match[3]);
     }
 
-    // Null unless the address is a GitHub pull request, so a caller can narrow a read to the spellings that hold the number.
+    // Null unless canonical() turns the address into an https GitHub pull request address without user info or port, so a caller can narrow a read to the spellings that hold the number and match every other address exactly.
     public static function pullRequestNumber(string $address): ?string
     {
-        $canonical = self::canonical($address);
+        $uri = Uri::parse(self::canonical($address));
 
-        $path = Uri::parse($canonical);
-
-        if (!$path instanceof Uri || 'github.com' !== $path->getHost()) {
+        if (!$uri instanceof Uri || 'https' !== $uri->getScheme() || 'github.com' !== $uri->getHost() || null !== $uri->getUserInfo() || null !== $uri->getPort()) {
             return null;
         }
 
-        return 1 === preg_match(self::PULL_REQUEST_PATH, $path->getRawPath(), $match) ? $match[3] : null;
+        return 1 === preg_match(self::PULL_REQUEST_PATH, $uri->getRawPath(), $match) ? $match[3] : null;
     }
 
     public static function sameChange(string $one, string $other): bool
