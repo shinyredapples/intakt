@@ -1,0 +1,1330 @@
+src/Core/Platform/Infrastructure/HeldCredentials.php-69-            return $this->kept?->read()?->secret();
+src/Core/Platform/Infrastructure/HeldCredentials.php:70:        } catch (KeptProviderKeyUnreadable) {
+--
+src/Core/Platform/Infrastructure/HeldCredentials.php-79-            return $this->vault?->reveal($name);
+src/Core/Platform/Infrastructure/HeldCredentials.php:80:        } catch (SodiumException) {
+--
+src/Core/Platform/Infrastructure/HeldCredentials.php-83-            // Boundary: Symfony's vault throws a bare RuntimeException when it has no key, because it names no exception of its own to catch.
+src/Core/Platform/Infrastructure/HeldCredentials.php:84:        } catch (Throwable $failure) {
+--
+src/Core/Platform/Infrastructure/LogLevelFromEnvironment.php-22-            $value = $getEnv($name);
+src/Core/Platform/Infrastructure/LogLevelFromEnvironment.php:23:        } catch (EnvNotFoundException) {
+--
+src/Plugin/PhpGate/Contract/PhpGateSteps.php-47-        if (!is_string($text)) { $refuse($file." cannot be read."); }
+src/Plugin/PhpGate/Contract/PhpGateSteps.php:48:        try { return json_decode($text, true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse($file." is not valid JSON."); }
+--
+src/Plugin/PhpGate/Contract/PhpGateSteps.php-109-        if (!is_string($text)) { $refuse($show($file)." cannot be read."); }
+src/Plugin/PhpGate/Contract/PhpGateSteps.php:110:        try { return json_decode($text, true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse($show($file)." is not valid JSON."); }
+--
+src/Core/Git/Contract/NetworkGit.php-73-            $process->run();
+src/Core/Git/Contract/NetworkGit.php:74:        } catch (RuntimeException $stopped) {
+--
+src/Core/Ledger/Contract/LedgerPayloads.php-86-            $json = json_encode($entry, JSON_THROW_ON_ERROR);
+src/Core/Ledger/Contract/LedgerPayloads.php:87:        } catch (JsonException) {
+--
+src/Core/Ledger/Contract/LedgerPayloads.php-105-            $payload = $this->serializer->deserialize($json, $class, JsonEncoder::FORMAT, $context);
+src/Core/Ledger/Contract/LedgerPayloads.php:106:        } catch (ExceptionInterface) {
+--
+src/Core/Git/Infrastructure/GitBuildCheckout.php-37-            $this->mirrors->update($project, $remote);
+src/Core/Git/Infrastructure/GitBuildCheckout.php:38:        } catch (ProcessFailure $stopped) {
+src/Core/Git/Infrastructure/GitBuildCheckout.php-39-            throw BuildCheckoutFailed::stopped($stopped);
+src/Core/Git/Infrastructure/GitBuildCheckout.php:40:        } catch (IOException|RepositoryAttributesRefused|LockFailure|ReportableFailure $failure) {
+--
+src/Core/Git/Infrastructure/GitBuildCheckout.php-49-            $this->clones->make($project, new TaskBranch($branch), $directory);
+src/Core/Git/Infrastructure/GitBuildCheckout.php:50:        } catch (ProcessFailure $stopped) {
+src/Core/Git/Infrastructure/GitBuildCheckout.php-51-            throw BuildCheckoutFailed::stopped($stopped);
+src/Core/Git/Infrastructure/GitBuildCheckout.php:52:        } catch (IOException|RepositoryAttributesRefused|ReportableFailure $failure) {
+--
+src/Core/Git/Infrastructure/GitBuildCheckout.php-61-            $this->heads->take($project, $head, $directory);
+src/Core/Git/Infrastructure/GitBuildCheckout.php:62:        } catch (ProcessFailure $stopped) {
+src/Core/Git/Infrastructure/GitBuildCheckout.php-63-            throw BuildCheckoutFailed::stopped($stopped);
+src/Core/Git/Infrastructure/GitBuildCheckout.php:64:        } catch (RepositoryAttributesRefused|ReportableFailure $failure) {
+--
+src/Core/Git/Infrastructure/GitBuildCheckout.php-73-            return $this->mirrorPaths->pathOf($project);
+src/Core/Git/Infrastructure/GitBuildCheckout.php:74:        } catch (ProjectNameRefused $failure) {
+--
+src/Core/Ledger/Contract/PayloadFields.php-22-            $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
+src/Core/Ledger/Contract/PayloadFields.php:23:        } catch (JsonException) {
+--
+src/Plugin/GitHubForge/Domain/WorkflowFileScan.php-30-            $workflow = $this->reader->workflow($workflowText);
+src/Plugin/GitHubForge/Domain/WorkflowFileScan.php:31:        } catch (WorkflowFormNotRead $unread) {
+--
+src/Core/Git/UseCase/MakeBuildClone/MakeBuildCloneCommand.php-33-            $this->clones->make($input->project, $branch, $input->directory);
+src/Core/Git/UseCase/MakeBuildClone/MakeBuildCloneCommand.php:34:        } catch (IOException|ReportableFailure $failure) {
+--
+src/Core/Ledger/Infrastructure/DoctrineLedger.php-48-            $manager->flush();
+src/Core/Ledger/Infrastructure/DoctrineLedger.php:49:        } catch (Exception|EntityManagerClosed|LedgerEventsAreAppendOnly $failure) {
+--
+src/Core/Git/UseCase/MakeBuildClone/MakeBuildClone.php-60-            // Boundary: removes the half-made clone and rethrows, because a clone that failed half-way must never be taken for a build clone.
+src/Core/Git/UseCase/MakeBuildClone/MakeBuildClone.php:61:        } catch (Throwable $failed) {
+--
+src/Plugin/GitHubForge/Domain/CiDefinition.php-64-            $this->reader->workflow($content);
+src/Plugin/GitHubForge/Domain/CiDefinition.php:65:        } catch (WorkflowFormNotRead) {
+--
+src/Core/Git/UseCase/ListProtectedChanges/ProtectedHeadsOfMirrors.php-34-            return $this->checked($project, $head);
+src/Core/Git/UseCase/ListProtectedChanges/ProtectedHeadsOfMirrors.php:35:        } catch (ProjectNameRefused|CommitNameRefused|ProtectedPathRefused $refused) {
+--
+src/Core/Outage/Infrastructure/HttpsProbe.php-29-            ])->getStatusCode();
+src/Core/Outage/Infrastructure/HttpsProbe.php:30:        } catch (TransportExceptionInterface) {
+--
+src/Plugin/Forge/Contract/RoundStatusMirror.php-33-            $this->reconcileOrThrow($project, $change);
+src/Plugin/Forge/Contract/RoundStatusMirror.php:34:        } catch (LockAcquiringException $failure) {
+--
+src/Plugin/Forge/Contract/RoundStatusMirror.php-36-            // Boundary: logged and dropped, because the next pass reconciles the label again and a retry of the round must not wait on a label.
+src/Plugin/Forge/Contract/RoundStatusMirror.php:37:        } catch (Throwable $failure) {
+--
+src/Plugin/Forge/Contract/RoundStatusMirror.php-92-            // Boundary: the lock expires on its own, so a release that fails only delays the next writer.
+src/Plugin/Forge/Contract/RoundStatusMirror.php:93:        } catch (Throwable $failure) {
+--
+src/Core/Git/UseCase/ListProtectedChanges/ListProtectedChanges.php-44-            ];
+src/Core/Git/UseCase/ListProtectedChanges/ListProtectedChanges.php:45:        } catch (ChangeNotRead|RepositoryAttributesRefused $unreadable) {
+--
+src/Core/Outage/Infrastructure/DnsProbe.php-37-                ->run();
+src/Core/Outage/Infrastructure/DnsProbe.php:38:        } catch (ExceptionInterface) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php-75-            });
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php:76:        } catch (UniqueConstraintViolationException|RetryableException $failure) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php-146-            });
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php:147:        } catch (RetryableException $refusal) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php-234-            // Boundary: closes the manager, rolls back and rethrows any failure of the write, because a write that fails in any way must leave no open level on the shared connection.
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php:235:        } catch (Throwable $failure) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php-248-                $connection->rollBack();
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php:249:            } catch (Exception) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php-275-            $connection->commit();
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php:276:        } catch (Exception) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php-302-            $native->exec('ROLLBACK');
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php:303:        } catch (SQLite3Exception $refusal) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php-380-            return $read();
+src/Plugin/GitHubWorkSource/Infrastructure/IntakeStore.php:381:        } catch (RetryableException $refusal) {
+--
+src/Core/Git/UseCase/ListProtectedChanges/ListProtectedChangesCommand.php-32-            $changes = $this->heads->checked($project, $head);
+src/Core/Git/UseCase/ListProtectedChanges/ListProtectedChangesCommand.php:33:        } catch (ProjectNameRefused|CommitNameRefused|ProtectedPathRefused $refused) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/CompleteListing.php-51-            return $this->syncOf($project);
+src/Plugin/GitHubWorkSource/Infrastructure/CompleteListing.php:52:        } catch (ProjectHeldByAnotherWriter|ListingReplacedMeanwhile $held) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/CompleteListing.php-65-            $vouched = $this->vouchWhatSteers($project, $rows, $rules);
+src/Plugin/GitHubWorkSource/Infrastructure/CompleteListing.php:66:        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectNamesNoEligibilityLabel $short) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/CompleteListing.php-169-            $this->vouchWhatSteers($project, $newer, $rules);
+src/Plugin/GitHubWorkSource/Infrastructure/CompleteListing.php:170:        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
+--
+src/Core/Git/UseCase/UpdateMirror/UpdateMirror.php-86-            $bare = $this->local(['rev-parse', '--is-bare-repository'], $path);
+src/Core/Git/UseCase/UpdateMirror/UpdateMirror.php:87:        } catch (WorkTreeInBareRepository) {
+--
+src/Core/Git/UseCase/UpdateMirror/UpdateMirror.php-175-            return true;
+src/Core/Git/UseCase/UpdateMirror/UpdateMirror.php:176:        } catch (IOException $failed) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php-99-            return $this->pullRequests->reworksOf($project, $plan, $tasks);
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php:100:        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php-138-            return $this->isStillSteered($project, $issue);
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php:139:        } catch (ItemNotAsPlanned $changed) {
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php-140-            return $this->readAgainOnTheNextListing($project, $issue, $changed);
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php:141:        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php-189-            $this->store->forgetVouchingOf($project, $issue->number());
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php:190:        } catch (ProjectHeldByAnotherWriter $held) {
+--
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php-214-            return $this->isHeldByAFailure($project, $task->number, $plan) ? null : WorkPick::picked($task);
+src/Plugin/GitHubWorkSource/Infrastructure/GitHubWorkSource.php:215:        } catch (ProjectHeldByAnotherWriter $held) {
+--
+src/Core/Git/UseCase/UpdateMirror/UpdateMirrorCommand.php-29-            $path = $this->mirror->update($project, $remote);
+src/Core/Git/UseCase/UpdateMirror/UpdateMirrorCommand.php:30:        } catch (ReportableFailure $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/SteeringTrustCheck.php-102-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/SteeringTrustCheck.php:103:        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $failure) {
+--
+src/Core/Git/UseCase/PushBranch/BranchGit.php-123-            $call = $this->hardened->callInBareRepository($repository, ...$arguments);
+src/Core/Git/UseCase/PushBranch/BranchGit.php:124:        } catch (RepositoryAttributesRefused $refused) {
+src/Core/Git/UseCase/PushBranch/BranchGit.php-125-            throw BranchNotPushed::because($refused->getMessage());
+src/Core/Git/UseCase/PushBranch/BranchGit.php:126:        } catch (RuntimeException) {
+--
+src/Core/Git/UseCase/PushBranch/PushBranch.php-46-            // Boundary: releases the branch lock on any failure and rethrows it, because a lock left held would refuse the branch's later pushes until it expires.
+src/Core/Git/UseCase/PushBranch/PushBranch.php:47:        } catch (Throwable $failure) {
+--
+src/Core/Git/UseCase/PushBranch/PushBranch.php-66-            $acquired = $lock->acquire(false);
+src/Core/Git/UseCase/PushBranch/PushBranch.php:67:        } catch (ExceptionInterface $failure) {
+--
+src/Core/Git/UseCase/PushBranch/PushBranch.php-94-            $this->release($lock);
+src/Core/Git/UseCase/PushBranch/PushBranch.php:95:        } catch (BranchNotPushed) {
+--
+src/Core/Git/UseCase/PushBranch/PushBranch.php-104-            $lock->release();
+src/Core/Git/UseCase/PushBranch/PushBranch.php:105:        } catch (ExceptionInterface) {
+--
+src/Core/Git/UseCase/PushBranch/PushBranch.php-114-            $lock->release();
+src/Core/Git/UseCase/PushBranch/PushBranch.php:115:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/InstallationReader.php-36-            $token = $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/InstallationReader.php:37:        } catch (InstallationTokenNotMinted $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/InstallationReader.php-161-            $body = 200 === $status ? $response->toArray(false) : [];
+src/Plugin/GitHubForge/Infrastructure/InstallationReader.php:162:        } catch (ExceptionInterface $failure) {
+--
+src/Core/Git/UseCase/PushBranch/PushRecords.php-146-            $decoded = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
+src/Core/Git/UseCase/PushBranch/PushRecords.php:147:        } catch (JsonException) {
+--
+src/Core/Git/UseCase/PushBranch/GuardedRun.php-22-            $process->run();
+src/Core/Git/UseCase/PushBranch/GuardedRun.php:23:        } catch (RuntimeException $stopped) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiKeyCheck.php-50-                ->asText();
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiKeyCheck.php:51:        } catch (AuthenticationException) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiKeyCheck.php-53-            // Boundary: logs any other provider failure and answers not checked, because a check that cannot answer must not refuse a key.
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiKeyCheck.php:54:        } catch (Throwable $failure) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiKeyCheck.php-80-                $light = $this->tiers->configured($project, Tier::Light);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiKeyCheck.php:81:            } catch (TierResolutionFailure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php-80-            $body = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php:81:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php-99-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php:100:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php-125-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php:126:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php-127-            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubPullRequestBranches.php:128:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-106-            $this->resolver->configured($project, $tier);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:107:        } catch (TierNotMapped) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-117-            return $this->tiers->answering($project, $tier);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:118:        } catch (EveryAccountCoolingDown|EveryProviderOut|EveryKeyRejected $out) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-132-            $options = $this->serverOptions($answering, $request);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:133:        } catch (NoReviewServerAccess) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-187-            return $unstreamed();
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:188:        } catch (IncompleteStreamException) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-201-            return $first();
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:202:        } catch (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException $failure) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-214-            return $review();
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:215:        } catch (IncompleteStreamException $incomplete) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-247-            $verdict = $this->reviewer->review($request, $platform, $platform->answering);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:248:        } catch (VerdictUnreadable $unreadable) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-253-            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:254:        } catch (Throwable $failure) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-277-            $judgement = $this->judge->judge($request, $platform, $answering->model);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:278:        } catch (IncompleteStreamException $incomplete) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php-283-            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php:284:        } catch (Throwable $failure) {
+--
+src/Core/Watchdog/Domain/CommitClassifier.php-31-            return $this->classifiedWalk($main);
+src/Core/Watchdog/Domain/CommitClassifier.php:32:        } catch (MainHistoryRewritten) {
+--
+src/Plugin/GitHubForge/Infrastructure/SteeringIdentities.php-49-            $jwt = $this->jwt->sign();
+src/Plugin/GitHubForge/Infrastructure/SteeringIdentities.php:50:        } catch (InstallationTokenNotMinted $failure) {
+--
+src/Core/Dashboard/Infrastructure/CapturingLiveUpdates.php-70-            // Boundary: logs a failed capture and swallows it, because a capture is best effort like the update itself and must never fail the work that published.
+src/Core/Dashboard/Infrastructure/CapturingLiveUpdates.php:71:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/CapturingLiveUpdates.php-82-            // Boundary: logs a failed lock release and swallows it, because the update already went out and the lock expires on its own.
+src/Core/Dashboard/Infrastructure/CapturingLiveUpdates.php:83:        } catch (Throwable $failure) {
+--
+src/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchive.php-52-            $lock->acquire(true);
+src/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchive.php:53:        } catch (ProjectNameRefused|LockFailure $refused) {
+--
+src/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchive.php-58-            return $this->keep($head, $mirror, $archive);
+src/Core/Git/UseCase/ArchiveBranch/MirrorBranchArchive.php:59:        } catch (IOException|ProcessFailure|RepositoryAttributesRefused $failed) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/AccountLimitedVendor.php-66-            return $call();
+src/Plugin/SymfonyAiVendor/Infrastructure/AccountLimitedVendor.php:67:        } catch (ProviderRateLimited|ProviderFailedTransiently $out) {
+src/Plugin/SymfonyAiVendor/Infrastructure/AccountLimitedVendor.php-68-            throw $this->nextAccountOrWait($project, $tier, $out);
+src/Plugin/SymfonyAiVendor/Infrastructure/AccountLimitedVendor.php:69:        } catch (ProviderRejectedTheKey $rejected) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php-214-            $headers = $response->getHeaders(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php:215:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php-259-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php:260:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php-270-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php:271:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php-272-            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueReads.php:273:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php-63-            return $this->tiers->answering($project, self::TIER);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php:64:        } catch (EveryAccountCoolingDown|EveryProviderOut $out) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php-76-            // Boundary: leaves the call unsettled and rethrows it typed, because any failure of the call must reach the queue as a vendor failure, which tries the escalation again.
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php:77:        } catch (Throwable $failure) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php-92-            $answer = $execution->getContent();
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php:93:        } catch (ValidationException) {
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php-94-            return null;
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php:95:        } catch (RuntimeException $exception) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php-111-            // Boundary: a ledger that cannot take the row is logged by class only, never thrown, because the provider's error carries the queue's delay and its chain may echo part of a key.
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php:112:        } catch (Throwable $unrecorded) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php-124-            $this->serializer->deserialize($result->getText(), EscalationVerdict::class, JsonEncoder::FORMAT, self::STRICT);
+src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiEscalationReviews.php:125:        } catch (ExceptionInterface) {
+--
+src/Core/Watchdog/Infrastructure/MainHistory.php-315-            $call = $this->git->call($directory, ...$arguments);
+src/Core/Watchdog/Infrastructure/MainHistory.php:316:        } catch (RepositoryAttributesRefused $refused) {
+src/Core/Watchdog/Infrastructure/MainHistory.php-317-            throw MainNotRead::because($refused->getMessage());
+src/Core/Watchdog/Infrastructure/MainHistory.php:318:        } catch (RuntimeException $failed) {
+--
+src/Core/Bench/Domain/Expectations.php-24-            $entries = json_decode($json, false, flags: JSON_THROW_ON_ERROR);
+src/Core/Bench/Domain/Expectations.php:25:        } catch (JsonException $e) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php-116-                // Boundary: the catch below logs the unreadable round and goes on with the others, because unreadable usage must not lose the call or its other rounds from the ledger.
+src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php:117:            } catch (Throwable $unreadable) {
+--
+src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php-165-            $converted = $result->getResult();
+src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php:166:        } catch (ExceptionInterface|HttpClientExceptionInterface) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php-82-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php:83:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php-106-            $etag = $response->getHeaders(false)['etag'][0] ?? null;
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php:107:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php-163-            return new OpenChange($id, new CommitId($this->text($pull, 'head', 'sha')), $this->moments->parse($this->text($pull, 'updated_at')));
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php:164:        } catch (ChangeNotFound|ChangeIdEmpty|CommitIdMalformed $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php-201-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php:202:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php-203-            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubWatchReads.php:204:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Core/Dashboard/Infrastructure/PublishProjectFilter.php-41-            // Boundary: logs a failed filter update and swallows it, because the round is already committed and a failed live update must not send its start back to the queue.
+src/Core/Dashboard/Infrastructure/PublishProjectFilter.php:42:        } catch (Throwable $failure) {
+--
+src/Core/Budget/Infrastructure/DoctrineMeasuredUse.php-115-            // Boundary: detaches the rolled-back reading on any failure and rethrows it, because the database may give its position to the next reading, which the entity manager then refuses as a second object of one identity.
+src/Core/Budget/Infrastructure/DoctrineMeasuredUse.php:116:        } catch (Throwable $failure) {
+--
+src/Core/Watchdog/Infrastructure/TrustedSignatures.php-67-            return $this->verifiedSigner($signers, $signatureFile, $payload);
+src/Core/Watchdog/Infrastructure/TrustedSignatures.php:68:        } catch (IOException) {
+--
+src/Core/Watchdog/Infrastructure/TrustedSignatures.php-96-            }
+src/Core/Watchdog/Infrastructure/TrustedSignatures.php:97:        } catch (RuntimeException) {
+--
+src/Core/Dashboard/Infrastructure/LivePageRendering.php-35-            // Boundary: logs and renders again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing.
+src/Core/Dashboard/Infrastructure/LivePageRendering.php:36:        } catch (Throwable $failure) {
+--
+src/Core/HandBack/Infrastructure/DependencySnapshotUses.php-35-            $order = json_decode($this->filesystem->readFile($file), flags: JSON_THROW_ON_ERROR);
+src/Core/HandBack/Infrastructure/DependencySnapshotUses.php:36:        } catch (JsonException) {
+--
+src/Core/Mcp/Contract/OwnerToken.php-38-            $kept = trim(new Filesystem()->readFile($this->keptFile));
+src/Core/Mcp/Contract/OwnerToken.php:39:        } catch (IOException) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php-65-            $path = $this->commentsPath($issue);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php:66:        } catch (ForgeReadFailed $unknown) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php-76-            $stored = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php:77:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php-109-            $body = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php:110:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php-152-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php:153:        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php-172-            $comments = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php:173:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php-191-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php:192:        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php-211-            $stored = $this->comment(is_array($decoded) ? $decoded : throw new ForgeReadFailed('GitHub answered something other than a comment.'));
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueComments.php:212:        } catch (JsonException|ForgeReadFailed $unread) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeLabels.php-40-            // Boundary: a failed read counts no label, because a read that failed is never a decision; the round runs on the configured panel.
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeLabels.php:41:        } catch (ChangeNotFound|ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeLabels.php-57-            // Boundary: logged and dropped, because the round already steers by the first read, and the next round tries the removal again.
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeLabels.php:58:        } catch (ChangeNotFound|ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
+--
+src/Core/Watchdog/Infrastructure/LedgerHalts.php-135-            return new OwnerCard($recorded->id, $payload->project, new MainViolation($payload->commit, $payload->violation), $recorded->recordedAt);
+src/Core/Watchdog/Infrastructure/LedgerHalts.php:136:        } catch (CommitNameNotFull) {
+--
+src/Core/Dashboard/Infrastructure/PublishFirstReview.php-39-            // Boundary: logs a failed update and swallows it, because the round is already committed and a failed live update must not send its start back to the queue.
+src/Core/Dashboard/Infrastructure/PublishFirstReview.php:40:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php-49-            // Boundary: logs a failed headline and swallows it, because the board is a view and a round update must never change a verdict or a round.
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php:50:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php-60-            // Boundary: logs a failed headline and swallows it, because the board is a view and removing a project's rows must not fail over it.
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php:61:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php-112-            // Boundary: logs a pool that cannot be read and goes on, because the memory of the last push only saves repeat traffic.
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php:113:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php-124-            // Boundary: logs a pool that cannot be written and goes on, because the push itself matters more than its memory.
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php:125:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php-153-            // Boundary: logs a pool that cannot be written and goes on, because the board is already pushed and a missing record costs one repeat push.
+src/Core/Dashboard/Infrastructure/LiveBoardHeadline.php:154:        } catch (Throwable $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/OutvotedLabels.php-39-            // Boundary: logged and dropped, because the round already steers by the value applied last, and the next round tries the removal again.
+src/Plugin/GitHubForge/Infrastructure/OutvotedLabels.php:40:        } catch (ForgeWriteFailed|ForgeRateLimited $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusReads.php-86-            $body = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusReads.php:87:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusReads.php-98-            $entries = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusReads.php:99:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusReads.php-129-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusReads.php:130:        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubAuthorTrust.php-30-            // Boundary: logs any failure and counts the author as untrusted, because a check that cannot answer must never let a head run.
+src/Plugin/GitHubForge/Infrastructure/GitHubAuthorTrust.php:31:        } catch (Throwable $unanswered) {
+--
+src/Core/Dashboard/Infrastructure/WaitingCount.php-35-            // Boundary: logs an unreadable notice store and shows nothing waiting, because every page carries the shell and one hint must not take them all down.
+src/Core/Dashboard/Infrastructure/WaitingCount.php:36:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php-157-            // Boundary: logs a failed summary step and swallows it, because the summary is a view and its loss must not touch the round.
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php:158:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php-229-            // Boundary: logs a failed read and returns null, because the judged state must still go out when its findings cannot be read.
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php:230:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php-244-            // Boundary: logs a failed read and returns null, because the progress must still go out when its reviewers cannot be named.
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php:245:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php-270-            // Boundary: logs a failed ledger read and returns null, so the reviewer's live update still goes out.
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php:271:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php-285-            // Boundary: logs a failed render and skips the update, because a live update is best effort and must never change a verdict or a round.
+src/Core/Dashboard/Infrastructure/MercureRoundUpdates.php:286:        } catch (Throwable $failure) {
+--
+src/Core/Bench/UseCase/ReviewBenchChange/ReviewBenchChangeCommand.php-44-            $review = $this->review->of($this->checkout->open($change, $project, $directory));
+src/Core/Bench/UseCase/ReviewBenchChange/ReviewBenchChangeCommand.php:45:        } catch (BenchChangeNotFound|ReportableFailure $failure) {
+--
+src/Core/HandBack/UseCase/CheckPullRequestText/PullRequestTextRoutes.php-102-            $lock->acquire(true);
+src/Core/HandBack/UseCase/CheckPullRequestText/PullRequestTextRoutes.php:103:        } catch (ExceptionInterface $failure) {
+--
+src/Core/HandBack/UseCase/CheckPullRequestText/PullRequestTextRoutes.php-117-            $lock->release();
+src/Core/HandBack/UseCase/CheckPullRequestText/PullRequestTextRoutes.php:118:        } catch (ExceptionInterface) {
+--
+src/Core/HandBack/UseCase/CheckPullRequestText/PullRequestTextRoutes.php-135-            }
+src/Core/HandBack/UseCase/CheckPullRequestText/PullRequestTextRoutes.php:136:        } catch (Exception|PDOException|JsonException $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeAuthorship.php-31-            return $this->identities->isBot($login) && $this->identities->isOwn($login);
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeAuthorship.php:32:        } catch (ChangeNotFound|TrustNotChecked|InstallationNotReadBack|InstallationDoesNotMatchConfiguration|InstallationTokenNotMinted $unanswered) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-188-            return $this->hasHeadMoved($change);
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:189:        } catch (ForgeReadFailed|ChangeNotFound $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-264-            return new CommitId($this->textAt($data, ...$keys));
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:265:        } catch (CommitIdMalformed $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-321-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:322:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-339-            $body = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:340:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-366-            $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:367:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-379-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:380:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-381-            throw new ForgeWriteFailed('No GitHub installation token for a write.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:382:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-396-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:397:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php-398-            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubForge.php:399:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php-78-            $this->deleteAtHead($branch);
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php:79:        } catch (ForgeReadFailed $failed) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php-123-            $process->run();
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php:124:        } catch (RepositoryAttributesRefused $refused) {
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php-125-            throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php:126:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php-294-            $reason = 'a worktree checked it out while it was deleted';
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php:295:        } catch (ForgeReadFailed $unread) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php-301-            $this->read(['update-ref', '--no-deref', $reference, $branch->head->hash, '']);
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php:302:        } catch (ForgeReadFailed $lost) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php-327-                : $unreadable;
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php:328:        } catch (ForgeReadFailed) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php-336-            return new CommitId($hash);
+src/Plugin/LocalGitForge/Infrastructure/LocalForgeBranches.php:337:        } catch (CommitIdMalformed $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/TrustAnswers.php-54-            $body = 200 === $status ? $response->toArray(false) : [];
+src/Plugin/GitHubForge/Infrastructure/TrustAnswers.php:55:        } catch (ExceptionInterface $failure) {
+--
+src/Core/HandBack/UseCase/CheckPullRequestText/CheckPullRequestTextCommand.php-34-            $result = $this->resultOf($input, $this->read($input->task), $this->bodyOf($this->read($input->pullRequestText)));
+src/Core/HandBack/UseCase/CheckPullRequestText/CheckPullRequestTextCommand.php:35:        } catch (PullRequestTextFileUnreadable|PullRequestTextTaskRefused|ReportableFailure $failure) {
+--
+src/Core/HandBack/UseCase/CheckPullRequestText/CheckPullRequestTextCommand.php-51-            return $this->filesystem->readFile($path);
+src/Core/HandBack/UseCase/CheckPullRequestText/CheckPullRequestTextCommand.php:52:        } catch (IOException) {
+--
+src/Core/Watchdog/UseCase/ClearHalt/ClearHaltCommand.php-35-            $cleared = $this->clear->cleared($card, $this->ownerToken($io));
+src/Core/Watchdog/UseCase/ClearHalt/ClearHaltCommand.php:36:        } catch (OnlyTheOwnerClearsAHalt|OnlyAStandingCardIsCleared|HaltNotRecorded $refused) {
+--
+src/Core/Watchdog/UseCase/ClearHalt/ClearHaltCommand.php-60-            $answer = $io->askQuestion(self::ownerTokenQuestion());
+src/Core/Watchdog/UseCase/ClearHalt/ClearHaltCommand.php:61:        } catch (RuntimeException) {
+--
+src/Core/Dashboard/Infrastructure/ReplayMarks.php-34-            return $this->answerTo(new ReplayMarkOfRound($round));
+src/Core/Dashboard/Infrastructure/ReplayMarks.php:35:        } catch (HandlerFailedException $failed) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php-286-            return new CommitId(trim($output));
+src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php:287:        } catch (CommitIdMalformed $invalid) {
+--
+src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php-319-            $process->run();
+src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php:320:        } catch (RepositoryAttributesRefused $refused) {
+src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php-321-            throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
+src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php:322:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/PostedComments.php-83-            $body = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/PostedComments.php:84:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/PostedComments.php-111-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/PostedComments.php:112:        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/PostedComments.php-129-            $comments = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/PostedComments.php:130:        } catch (JsonException $invalid) {
+--
+src/Core/Bench/UseCase/RunBench/RunBenchCommand.php-42-            $changes = $this->bench->reviewEveryChange($project, $repeat);
+src/Core/Bench/UseCase/RunBench/RunBenchCommand.php:43:        } catch (ReportableFailure $failure) {
+--
+src/Plugin/LocalGitForge/Infrastructure/RebasesAndBisects.php-87-            return new Filesystem()->readFile($path);
+src/Plugin/LocalGitForge/Infrastructure/RebasesAndBisects.php:88:        } catch (IOException $unread) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php-106-            $body = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php:107:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php-116-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php:117:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php-269-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php:270:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php-271-            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubIssueHistories.php:272:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusLabels.php-53-            return $this->identities->isOwn($login);
+src/Plugin/GitHubForge/Infrastructure/GitHubStatusLabels.php:54:        } catch (TrustNotChecked $unchecked) {
+--
+src/Core/Dashboard/Infrastructure/MercureLiveUpdates.php-34-            // Boundary: logs a failed publication and swallows it, because a hub that is down must never fail the request or the work that published.
+src/Core/Dashboard/Infrastructure/MercureLiveUpdates.php:35:        } catch (Throwable $failure) {
+--
+src/Plugin/SymfonyAiVendor/UseCase/ProbeProviders/ProbeProvidersCommand.php-78-            return $this->resolver->resolve($project, $tier)->provider;
+src/Plugin/SymfonyAiVendor/UseCase/ProbeProviders/ProbeProvidersCommand.php:79:        } catch (TierResolutionFailure) {
+--
+src/Plugin/SymfonyAiVendor/UseCase/ProbeProviders/ProbeProvidersCommand.php-95-            // Boundary: reports the failure class and fails this provider only, because the probe must go on to the next provider.
+src/Plugin/SymfonyAiVendor/UseCase/ProbeProviders/ProbeProvidersCommand.php:96:        } catch (Throwable $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForgeBranches.php-78-            $this->refuseUnlessStillDeletable($branch);
+src/Plugin/GitHubForge/Infrastructure/GitHubForgeBranches.php:79:        } catch (ForgeReadFailed $unread) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubForgeBranches.php-205-            return new CommitId($sha);
+src/Plugin/GitHubForge/Infrastructure/GitHubForgeBranches.php:206:        } catch (CommitIdMalformed $malformed) {
+--
+src/Core/Budget/UseCase/ReplayDay/ReplayDayCommand.php-30-            $this->replay->replay($this->stepsOf($script), new ConsoleLogger($io), static fn (string $line) => $io->writeln(OutputFormatter::escape($line)));
+src/Core/Budget/UseCase/ReplayDay/ReplayDayCommand.php:31:        } catch (IOException|ReportableFailure|UsedPercentOutOfRange $failure) {
+--
+src/Core/HandBack/UseCase/CheckHandBack/BundleSecretScan.php-77-            $process->run();
+src/Core/HandBack/UseCase/CheckHandBack/BundleSecretScan.php:78:        } catch (ExceptionInterface) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php-100-            $status = $this->calls->asInstallation('DELETE', $path, ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0])->getStatusCode();
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php:101:        } catch (ExceptionInterface $failure) {
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php-102-            throw $this->unsent($failure::class);
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php:103:        } catch (ForgeReadFailed $noToken) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php-123-            $links = $response->getHeaders(false)['link'] ?? [];
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php:124:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php-139-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php:140:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php-141-            throw new ForgeReadFailed('No GitHub installation token for a branch call.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php:142:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php-156-            return $this->typed(json_decode($body, false, flags: JSON_THROW_ON_ERROR));
+src/Plugin/GitHubForge/Infrastructure/GitHubBranchCalls.php:157:        } catch (JsonException $invalid) {
+--
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php-35-            $guarded = $this->guard->guarded($input);
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php:36:        } catch (AHaltNamesItsProject|CommitNameNotFull|RecordedMergeNotARange|OwnerKeyRefused $refused) {
+--
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php-39-            return Command::INVALID;
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php:40:        } catch (NoticeNotRecorded $failed) {
+--
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php-44-            return Command::FAILURE;
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php:45:        } catch (MainNotRead|HaltNotRecorded $failed) {
+--
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php-48-            return Command::FAILURE;
+src/Core/Watchdog/UseCase/GuardMain/GuardMainCommand.php:49:        } catch (ProcessFailedException $failed) {
+--
+src/Plugin/GitHubForge/Infrastructure/SecretScan.php-37-            $process->run();
+src/Plugin/GitHubForge/Infrastructure/SecretScan.php:38:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php-68-            return $this->repositories->addressOf($project);
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php:69:        } catch (ForgeReadFailed $unknown) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php-163-            return $this->identities->isOwn($login);
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php:164:        } catch (TrustNotChecked $unchecked) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php-199-            $body = $response->getContent(false);
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php:200:        } catch (ForgeRateLimited $limited) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php-202-            throw new ForgeWriteFailed('GitHub is rate limited for a pull request call: '.$limited->getMessage(), 0, $limited);
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php:203:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php-231-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php:232:        } catch (JsonException $invalid) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php-242-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php:243:        } catch (InstallationTokenNotMinted $notMinted) {
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php-244-            throw new ForgeWriteFailed('No GitHub installation token for a write.', $notMinted->getCode(), previous: $notMinted);
+src/Plugin/GitHubForge/Infrastructure/GitHubChangeOpener.php:245:        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Core/Watchdog/UseCase/GuardMain/GuardMain.php-112-                $this->notices->notice($project, $commit);
+src/Core/Watchdog/UseCase/GuardMain/GuardMain.php:113:            } catch (NoticeNotRecorded $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubLabelWrites.php-53-            $status = $this->calls->asInstallation($method, $path, $options)->getStatusCode();
+src/Plugin/GitHubForge/Infrastructure/GitHubLabelWrites.php:54:        } catch (ExceptionInterface $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/GitHubLabelWrites.php-72-            return $this->tokens->current()->value;
+src/Plugin/GitHubForge/Infrastructure/GitHubLabelWrites.php:73:        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+--
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php-99-            (void) $this->jwt->sign();
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php:100:        } catch (InstallationSettingsRefused $unreadable) {
+--
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php-104-            );
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php:105:        } catch (InstallationTokenNotMinted) {
+--
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php-114-            (void) $this->readBackOf()->check();
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php:115:        } catch (InstallationDoesNotMatchConfiguration $mismatch) {
+--
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php-119-            );
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php:120:        } catch (InstallationNotReadBack $notRead) {
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php-121-            return $this->cannotRun($notRead->getMessage());
+src/Plugin/GitHubForge/Infrastructure/ForgeConnectionCheck.php:122:        } catch (ForgeRateLimited $limited) {
+--
+src/Plugin/LocalGitForge/UseCase/BootHead/InstanceBoot.php-66-            // Boundary: turns any crash of the boot into a crashed outcome, so the caller records it instead of failing with it.
+src/Plugin/LocalGitForge/UseCase/BootHead/InstanceBoot.php:67:        } catch (Throwable $crash) {
+--
+src/Plugin/LocalGitForge/UseCase/BootHead/InstanceBoot.php-139-            $process->run();
+src/Plugin/LocalGitForge/UseCase/BootHead/InstanceBoot.php:140:        } catch (ProcessTimedOutException) {
+--
+src/Core/Dashboard/UseCase/ReplayDemo/ReplayDemoCommand.php-48-            $this->replays->replay($recording, $input->factor);
+src/Core/Dashboard/UseCase/ReplayDemo/ReplayDemoCommand.php:49:        } catch (IOException|RecordingIsMalformed|ReplayIsRefused|ReplayStopped $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/InstallationReadBack.php-45-            return $this->reader->read();
+src/Plugin/GitHubForge/Infrastructure/InstallationReadBack.php:46:        } catch (InstallationNotReadBack $failure) {
+--
+src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php-32-            $classification = $this->check->classified($input->repository, $this->watched($input->lastSeenHead, $input->recordedMerge), $input->trustedKeys());
+src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php:33:        } catch (CommitNameNotFull|RecordedMergeNotARange|OwnerKeyRefused $refused) {
+--
+src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php-36-            return Command::INVALID;
+src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php:37:        } catch (MainNotRead $notRead) {
+--
+src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php-40-            return Command::FAILURE;
+src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php:41:        } catch (ProcessFailedException $failed) {
+--
+src/Core/HandBack/UseCase/CheckHandBack/IncomingObjects.php-30-            new Filesystem()->mkdir($folder, 0o700);
+src/Core/HandBack/UseCase/CheckHandBack/IncomingObjects.php:31:        } catch (IOException) {
+--
+src/Core/HandBack/UseCase/CheckHandBack/IncomingObjects.php-58-            }
+src/Core/HandBack/UseCase/CheckHandBack/IncomingObjects.php:59:        } catch (IOException) {
+--
+src/Core/HandBack/UseCase/CheckHandBack/IncomingObjects.php-70-            new Filesystem()->remove($folder);
+src/Core/HandBack/UseCase/CheckHandBack/IncomingObjects.php:71:        } catch (IOException) {
+--
+src/Plugin/GitHubForge/UseCase/ScanCiChange/ScanCiChangeCommand.php-36-            $result = $this->scan->of($this->workflows->of($repository, $head));
+src/Plugin/GitHubForge/UseCase/ScanCiChange/ScanCiChangeCommand.php:37:        } catch (CommitNotRead|RepositoryAttributesRefused $failure) {
+--
+src/Core/Dashboard/UseCase/PlayDemo/PlayDemoRunHandler.php-63-            $this->replays->replay($this->format->read($this->filesystem->readFile($this->recording)), self::FACTOR, $this->recreateAMissingDemoProject(...));
+src/Core/Dashboard/UseCase/PlayDemo/PlayDemoRunHandler.php:64:        } catch (IOException|RecordingIsMalformed|ReplayIsRefused|ReplayStopped $failure) {
+--
+src/Plugin/GitHubForge/Infrastructure/InstallationTokenMinter.php-51-            $body = 201 === $status ? $response->toArray(false) : [];
+src/Plugin/GitHubForge/Infrastructure/InstallationTokenMinter.php:52:        } catch (ExceptionInterface $failure) {
+--
+src/Core/HandBack/UseCase/CheckHandBack/HandBackRoutes.php-75-            }
+src/Core/HandBack/UseCase/CheckHandBack/HandBackRoutes.php:76:        } catch (Exception|PDOException|JsonException $failure) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/RunCheckJobCommand.php-35-            $outcome = $this->checks->run($this->jobOf($input));
+src/Core/HandBack/UseCase/RunCheckJob/RunCheckJobCommand.php:36:        } catch (ReportableFailure|JobRefused $failure) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/CheckDependencies.php-58-            $saved = $this->snapshots->lease($inputs->key());
+src/Core/HandBack/UseCase/RunCheckJob/CheckDependencies.php:59:        } catch (IOException|ExceptionInterface) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/CheckDependencies.php-85-            return $this->snapshots->lease($inputs->key());
+src/Core/HandBack/UseCase/RunCheckJob/CheckDependencies.php:86:        } catch (IOException|ExceptionInterface) {
+--
+src/Core/HandBack/UseCase/CheckHandBack/CheckHandBackCommand.php-31-            $result = $this->routes->route(new HandBack($input->repository, $input->branch, $input->bundle, $input->mergeMain, $credentials), $text);
+src/Core/HandBack/UseCase/CheckHandBack/CheckHandBackCommand.php:32:        } catch (ReportableFailure $failure) {
+--
+src/Core/HandBack/UseCase/CheckHandBack/CheckHandBackCommand.php-66-            return $this->filesystem->readFile($path);
+src/Core/HandBack/UseCase/CheckHandBack/CheckHandBackCommand.php:67:        } catch (IOException $unreadable) {
+--
+src/Plugin/GitHubForge/UseCase/CheckTrust/CheckTrustCommand.php-31-            $trust = $this->trust->check($repository, $account);
+src/Plugin/GitHubForge/UseCase/CheckTrust/CheckTrustCommand.php:32:        } catch (ReportableFailure $failure) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php-85-            return $this->platformOf($this->jobs->run($spec));
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php:86:        } catch (JobOutputRefused|JobRefused) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php-127-            $installed = $result instanceof JobResult && $this->keptFor($result, $inputs->platform) && $this->saved($inputs, $folder.'/kept');
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php:128:        } catch (IOException) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php-178-            return $this->jobs->run($spec);
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php:179:        } catch (JobOutputRefused|JobRefused) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php-199-            return true;
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php:200:        } catch (IOException) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php-211-            return true;
+src/Core/HandBack/UseCase/RunCheckJob/DependencyJobs.php:212:        } catch (IOException) {
+--
+src/Plugin/LocalGitForge/UseCase/ReviewChange/LocalChangeReview.php-97-            // Boundary: removes the snapshot and rethrows the start failure (unless removal itself throws), because no queued round owns it once the start failed.
+src/Plugin/LocalGitForge/UseCase/ReviewChange/LocalChangeReview.php:98:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/UseCase/RunSetup/SetupSteps.php-94-            $kept = $this->keptKeys->configured();
+src/Core/Dashboard/UseCase/RunSetup/SetupSteps.php:95:        } catch (KeptProviderKeyUnreadable) {
+--
+src/Core/Dashboard/UseCase/RunSetup/SetupSteps.php-117-                $resolved = $this->tiers->resolve($project, $tier);
+src/Core/Dashboard/UseCase/RunSetup/SetupSteps.php:118:            } catch (TierResolutionFailure $failure) {
+--
+src/Core/Dashboard/UseCase/RunSetup/SetupSteps.php-130-            $panel = $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels()));
+src/Core/Dashboard/UseCase/RunSetup/SetupSteps.php:131:        } catch (PanelConfigurationFailure $failure) {
+--
+src/Plugin/GitHubForge/UseCase/CheckInstallation/CheckInstallationCommand.php-25-            $installation = $this->readBack->check();
+src/Plugin/GitHubForge/UseCase/CheckInstallation/CheckInstallationCommand.php:26:        } catch (ReportableFailure $failure) {
+--
+src/Core/HandBack/UseCase/RunRegressionTests/RunRegressionTests.php-98-            // Boundary: records a head run that cannot be prepared or run as no result after a passed base, because that base already shows the test proves nothing and must not be discarded; otherwise rethrows.
+src/Core/HandBack/UseCase/RunRegressionTests/RunRegressionTests.php:99:        } catch (Throwable $failure) {
+--
+src/Core/HandBack/UseCase/RunRegressionTests/RunRegressionTests.php-174-            return $this->jobs->run($spec);
+src/Core/HandBack/UseCase/RunRegressionTests/RunRegressionTests.php:175:        } catch (JobOutputRefused) {
+--
+src/Plugin/GitHubForge/UseCase/ListCiChanges/ListCiChangesCommand.php-52-            return new WorkflowFile($file, $this->filesystem->readFile($file));
+src/Plugin/GitHubForge/UseCase/ListCiChanges/ListCiChangesCommand.php:53:        } catch (IOException $failure) {
+--
+src/Core/HandBack/UseCase/RunCheckJob/RunCheckJob.php-171-            return $this->jobs->run($spec);
+src/Core/HandBack/UseCase/RunCheckJob/RunCheckJob.php:172:        } catch (JobOutputRefused) {
+--
+src/Plugin/GitHubForge/UseCase/ApprovePush/PushApprovalCommand.php-34-            $outcome = $this->gate->decide($input->repository, $input->head, $issue);
+src/Plugin/GitHubForge/UseCase/ApprovePush/PushApprovalCommand.php:35:        } catch (ChangeNotShown $notShown) {
+--
+src/Plugin/GitHubForge/UseCase/ApprovePush/PushApprovalCommand.php-38-            return Command::FAILURE;
+src/Plugin/GitHubForge/UseCase/ApprovePush/PushApprovalCommand.php:39:        } catch (CommitNotRead|RepositoryAttributesRefused|ForgeReadFailed|ForgeWriteFailed|ForgeRateLimited $failure) {
+--
+src/Plugin/LocalGitForge/UseCase/ReviewChange/DemoReviewCommand.php-49-            $review = $this->review->of($this->inputForSample($this->repository));
+src/Plugin/LocalGitForge/UseCase/ReviewChange/DemoReviewCommand.php:50:        } catch (ReportableFailure $failure) {
+--
+src/Core/Dashboard/UseCase/StartReview/ReviewStarts.php-75-            $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
+src/Core/Dashboard/UseCase/StartReview/ReviewStarts.php:76:        } catch (PanelNotConfigured) {
+--
+src/Core/Dashboard/UseCase/StartReview/ReviewStarts.php-78-            return new StartAnswer([self::FLASH_ERROR, 'This project has no reviewers set up yet, so nothing was started.']);
+src/Core/Dashboard/UseCase/StartReview/ReviewStarts.php:79:        } catch (ReportableFailure $refusal) {
+--
+src/Core/Dashboard/UseCase/RecordDemo/RecordingFormat.php-39-            return $this->serializer->deserialize($json, Recording::class, JsonEncoder::FORMAT, self::MOMENTS);
+src/Core/Dashboard/UseCase/RecordDemo/RecordingFormat.php:40:        } catch (ExceptionInterface $failure) {
+--
+src/Core/Dashboard/UseCase/RecordDemo/RecordingFormat.php-54-            return $this->serializer->deserialize($line, CapturedUpdate::class, JsonEncoder::FORMAT, self::MOMENTS);
+src/Core/Dashboard/UseCase/RecordDemo/RecordingFormat.php:55:        } catch (ExceptionInterface) {
+--
+src/Plugin/LocalGitForge/UseCase/ReviewChange/StartReviewTool.php-53-            return StartedReview::of($this->review->of($input, new ForwardedProgress($client)));
+src/Plugin/LocalGitForge/UseCase/ReviewChange/StartReviewTool.php:54:        } catch (ReportableFailure $failure) {
+--
+src/Core/Dashboard/UseCase/ShowError/ShowErrorController.php-104-            // Boundary: logs a failed shell and answers with the plain page, because the error page itself must never fail.
+src/Core/Dashboard/UseCase/ShowError/ShowErrorController.php:105:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/UseCase/ShowError/ShowErrorController.php-120-            // Boundary: logs an unreadable ledger and lists no projects, because the error page must answer even when the ledger is what failed.
+src/Core/Dashboard/UseCase/ShowError/ShowErrorController.php:121:        } catch (Throwable $failure) {
+--
+src/Plugin/GitHubForge/UseCase/ScanWorkflow/ScanWorkflowCommand.php-31-            $workflow = $this->filesystem->readFile($file);
+src/Plugin/GitHubForge/UseCase/ScanWorkflow/ScanWorkflowCommand.php:32:        } catch (IOException $failure) {
+--
+src/Core/Build/UseCase/ShowBuildTier/ShowBuildTierCommand.php-40-            $choice = $this->routing->tierFor($input->project, BuildFacts::fromLabels(new Labels(...$input->label), new Paths(...$input->path), $setback)->afterEscalation($this->escalationOf($input)));
+src/Core/Build/UseCase/ShowBuildTier/ShowBuildTierCommand.php:41:        } catch (ReportableFailure $failure) {
+--
+src/Plugin/LocalGitForge/UseCase/ReviewChange/ReviewChangeCommand.php-41-            $review = $this->review->of($input);
+src/Plugin/LocalGitForge/UseCase/ReviewChange/ReviewChangeCommand.php:42:        } catch (ReportableFailure $failure) {
+--
+src/Core/Ai/Infrastructure/CodexLogin.php-33-            $contents = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+src/Core/Ai/Infrastructure/CodexLogin.php:34:        } catch (JsonException) {
+--
+src/Core/Build/UseCase/RunBuildJob/RunBuildJobCommand.php-47-            $outcome = $this->builds->run($this->jobOf($input));
+src/Core/Build/UseCase/RunBuildJob/RunBuildJobCommand.php:48:        } catch (TierResolutionFailure|ReportableFailure|JobRefused|IOException $failure) {
+--
+src/Core/Dashboard/UseCase/RecordDemo/RecordDemoCommand.php-39-            $this->filesystem->dumpFile($input->recording, $this->format->write($recording));
+src/Core/Dashboard/UseCase/RecordDemo/RecordDemoCommand.php:40:        } catch (RecordingNeedsCapturedUpdates|IOException $failure) {
+--
+src/Core/Build/UseCase/RunBuildJob/RunBuildJob.php-169-            return $this->jobs->run($spec);
+src/Core/Build/UseCase/RunBuildJob/RunBuildJob.php:170:        } catch (JobOutputRefused) {
+--
+src/Core/Build/UseCase/RunBuildJob/RunBuildJob.php-233-            );
+src/Core/Build/UseCase/RunBuildJob/RunBuildJob.php:234:        } catch (QuestionRefused $refusal) {
+--
+src/Plugin/LocalGitForge/UseCase/ReviewChange/KeptSnapshots.php-51-            $process->run();
+src/Plugin/LocalGitForge/UseCase/ReviewChange/KeptSnapshots.php:52:        } catch (RepositoryAttributesRefused|ExceptionInterface $failure) {
+--
+src/Core/Build/Domain/BuildQuestion.php-77-            $data = json_decode(self::withDecodableKeys($text), false, 8, JSON_THROW_ON_ERROR);
+src/Core/Build/Domain/BuildQuestion.php:78:        } catch (JsonException) {
+--
+src/Core/Dashboard/UseCase/RecordDemo/CapturedUpdates.php-85-            return explode("\n", $this->filesystem->readFile($this->capture));
+src/Core/Dashboard/UseCase/RecordDemo/CapturedUpdates.php:86:        } catch (IOException $failure) {
+--
+src/Core/Ai/Infrastructure/ProviderKeySource.php-85-            return $this->vault->reveal($name);
+src/Core/Ai/Infrastructure/ProviderKeySource.php:86:        } catch (SodiumException) {
+--
+src/Core/Ai/Infrastructure/ProviderKeySource.php-90-            // Boundary: Symfony's vault throws a bare RuntimeException when it has no key, because it names no exception of its own to catch.
+src/Core/Ai/Infrastructure/ProviderKeySource.php:91:        } catch (Throwable $failure) {
+--
+src/Core/Dashboard/UseCase/ShowBoard/ShowBoardController.php-143-            $reading = $this->server->read();
+src/Core/Dashboard/UseCase/ShowBoard/ShowBoardController.php:144:        } catch (AdminApiNotOnLocalhost $refused) {
+--
+src/Core/Build/UseCase/ChooseBuildModel/ChooseBuildModelCommand.php-53-            );
+src/Core/Build/UseCase/ChooseBuildModel/ChooseBuildModelCommand.php:54:        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|ModelChoiceNotRecorded|EscalationStillPending $failure) {
+--
+src/Core/Build/UseCase/BuildTask/BuildTaskCommand.php-32-            $outcome = $this->buildTask->run($request);
+src/Core/Build/UseCase/BuildTask/BuildTaskCommand.php:33:        } catch (BuildStepNotRecorded|PushRemoteRefused $failure) {
+--
+src/Core/Ai/Infrastructure/CompletedCodexTurn.php-41-            $data = $this->inner->getData();
+src/Core/Ai/Infrastructure/CompletedCodexTurn.php:42:        } catch (RuntimeException $processFailed) {
+--
+src/Core/Build/UseCase/BuildTask/PushStep.php-33-            $outcome = $this->branches->push($this->pushOf($request, $accepted, $text));
+src/Core/Build/UseCase/BuildTask/PushStep.php:34:        } catch (BuildCheckoutFailed|BranchNotPushed|UnsignedCommitRefused|ChangeTextHoldsSecret|ForgeWriteFailed $failure) {
+--
+src/Plugin/LocalGitForge/UseCase/SummarizeChange/SummarizeChangeCommand.php-33-            $change = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), $this->nameStatus)->change(new ChangeId($input->branch));
+src/Plugin/LocalGitForge/UseCase/SummarizeChange/SummarizeChangeCommand.php:34:        } catch (ReportableFailure $failure) {
+--
+src/Core/Build/UseCase/BuildTask/HandBackCheck.php-47-            $this->checkout->takeCheckedHead($request->project, new BranchHead($request->branch, $result->head), $request->directory);
+src/Core/Build/UseCase/BuildTask/HandBackCheck.php:48:        } catch (ExceptionInterface $stopped) {
+--
+src/Core/Build/UseCase/BuildTask/HandBackCheck.php-50-            return $this->stoppedBy($stopped);
+src/Core/Build/UseCase/BuildTask/HandBackCheck.php:51:        } catch (BuildCheckoutFailed|ObjectIdMalformed|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused $failure) {
+--
+src/Core/Dashboard/UseCase/ShowTeam/TeamRoster.php-82-            $tiers = $this->reachableTiersOf($project);
+src/Core/Dashboard/UseCase/ShowTeam/TeamRoster.php:83:        } catch (BuildRoutingNotConfigured) {
+--
+src/Core/Dashboard/UseCase/ShowTeam/TeamRoster.php-91-                $providers[] = $this->tiers->configured($project, $tier)->provider;
+src/Core/Dashboard/UseCase/ShowTeam/TeamRoster.php:92:            } catch (TierResolutionFailure) {
+--
+src/Core/Dashboard/UseCase/ShowTeam/TeamRoster.php-152-            return $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels(ChangeDescription::FULL_REVIEW_LABEL)))->reviewers;
+src/Core/Dashboard/UseCase/ShowTeam/TeamRoster.php:153:        } catch (PanelConfigurationFailure) {
+--
+src/Core/Ai/Infrastructure/CodexLogins.php-55-            $this->stored($account);
+src/Core/Ai/Infrastructure/CodexLogins.php:56:        } catch (CodexLoginUnusable) {
+--
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php-58-            $configured = $this->keeping->configured() instanceof ConfiguredKey || $this->anAccountIsEnabled();
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php:59:        } catch (KeptProviderKeyUnreadable $unreadable) {
+--
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php-77-            $configured = $this->keeping->keep($key);
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php:78:        } catch (KeyNotRecognised $notRecognised) {
+--
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php-80-            return [self::FLASH_ERROR, $notRecognised->getMessage().' No key was kept.'];
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php:81:        } catch (KeyRefusedByProvider) {
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php-82-            return [self::FLASH_ERROR, 'The provider refused the key, so it was not kept.'];
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php:83:        } catch (KeyNotChecked) {
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php-84-            return [self::FLASH_ERROR, 'The provider could not be asked to check the key, so it was not kept. Try again.'];
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php:85:        } catch (ProviderKeyAlreadyKept) {
+--
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php-87-            return self::ALREADY_CONFIGURED;
+src/Core/Dashboard/UseCase/KeepProviderKey/KeepProviderKeyController.php:88:        } catch (KeptProviderKeyNotWritten) {
+--
+src/Core/Build/UseCase/BuildTask/PullRequestTextCheck.php-29-            $result = $this->round->route(PullRequestTextTask::resolved($this->checkout->mirrorOf($request->project), $request->branch), $taskText, $body);
+src/Core/Build/UseCase/BuildTask/PullRequestTextCheck.php:30:        } catch (BuildCheckoutFailed|PullRequestTextTaskRefused|PullRequestTextRoundNotRecorded $failure) {
+--
+src/Core/Build/UseCase/BuildTask/HandBackFile.php-41-            return $this->checkedIn($request, $bundle, $check);
+src/Core/Build/UseCase/BuildTask/HandBackFile.php:42:        } catch (IOException|BuildCheckoutFailed $failure) {
+--
+src/Core/Build/UseCase/BuildTask/PrePushCheck.php-59-            $outcome = $this->jobs->run(new CheckJob($handBack, $request->image, null, new Paths()));
+src/Core/Build/UseCase/BuildTask/PrePushCheck.php:60:        } catch (ExceptionInterface $stopped) {
+--
+src/Core/Build/UseCase/BuildTask/PrePushCheck.php-62-            return $this->stoppedBy($stopped);
+src/Core/Build/UseCase/BuildTask/PrePushCheck.php:63:        } catch (HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
+--
+src/Core/Build/UseCase/BuildTask/PrePushCheck.php-78-            $runs = $this->regressionTests->run(new CheckJob($handBack, $request->image, null, new Paths()));
+src/Core/Build/UseCase/BuildTask/PrePushCheck.php:79:        } catch (ExceptionInterface|IOExceptionInterface|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
+--
+src/Plugin/LocalGitForge/UseCase/CheckVerdictIdentity/CheckVerdictIdentityCommand.php-44-            $this->check($io, $input);
+src/Plugin/LocalGitForge/UseCase/CheckVerdictIdentity/CheckVerdictIdentityCommand.php:45:        } catch (ReportableFailure $failure) {
+--
+src/Plugin/LocalGitForge/UseCase/CheckVerdictIdentity/CheckVerdictIdentityCommand.php-81-            return VerdictIdentity::fromRecorded($recorded);
+src/Plugin/LocalGitForge/UseCase/CheckVerdictIdentity/CheckVerdictIdentityCommand.php:82:        } catch (RecordedIdentityMalformed|ReviewTermMalformed|CommitIdMalformed $invalid) {
+--
+src/Core/Review/UseCase/ServeReviewTools/ReviewedRepository.php-105-            return new Checkout($round->checkoutRoot());
+src/Core/Review/UseCase/ServeReviewTools/ReviewedRepository.php:106:        } catch (CheckoutNotADirectory $unavailable) {
+--
+src/Core/Review/UseCase/ServeReviewTools/ReviewedRepository.php-129-            return $step();
+src/Core/Review/UseCase/ServeReviewTools/ReviewedRepository.php:130:        } catch (PathNotInCheckout|PathOutsideCheckout|PathNotReadable|SearchTextEmpty $refused) {
+--
+src/Core/Build/UseCase/BuildTask/PushRemoteCheck.php-39-            $uri = new Uri($remote);
+src/Core/Build/UseCase/BuildTask/PushRemoteCheck.php:40:        } catch (UriException) {
+--
+src/Core/Build/UseCase/BuildTask/PushRemoteCheck.php-63-            $uri = new Uri($remote);
+src/Core/Build/UseCase/BuildTask/PushRemoteCheck.php:64:        } catch (UriException) {
+--
+src/Core/Server/Infrastructure/AdminApi.php-38-            return ['status' => $response->getStatusCode(), 'body' => $response->getContent(false)];
+src/Core/Server/Infrastructure/AdminApi.php:39:        } catch (ExceptionInterface) {
+--
+src/Core/Server/Infrastructure/AdminApi.php-48-            $base = new Uri($this->baseUrl);
+src/Core/Server/Infrastructure/AdminApi.php:49:        } catch (InvalidUriException) {
+--
+src/Core/Ai/Infrastructure/AccountPlatform.php-67-            // Boundary: records every failure of the account and rethrows it, because a cooldown or a log must follow whatever the platform threw.
+src/Core/Ai/Infrastructure/AccountPlatform.php:68:        } catch (Throwable $failure) {
+--
+src/Core/Ai/Infrastructure/AccountPlatform.php-172-            $value = trim($answer->getObject()->getHeaders(false)['retry-after'][0] ?? '', " \t");
+src/Core/Ai/Infrastructure/AccountPlatform.php:173:        } catch (ExceptionInterface) {
+--
+src/Core/Ai/Infrastructure/AccountPlatform.php-196-            // Boundary: any failure of the account store is logged, because the provider's 429 must still reach the caller and the pin must still cool.
+src/Core/Ai/Infrastructure/AccountPlatform.php:197:        } catch (Throwable $notSaved) {
+--
+src/Core/Ai/Infrastructure/AccountPlatform.php-236-            $this->pinnedCooldowns->coolDown($this->pinned, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET);
+src/Core/Ai/Infrastructure/AccountPlatform.php:237:        } catch (PinnedProviderCooldownNotSaved $notSaved) {
+--
+src/Core/Build/UseCase/BuildTask/ParkedTasks.php-68-            $this->connection->commit();
+src/Core/Build/UseCase/BuildTask/ParkedTasks.php:69:        } catch (Exception) {
+--
+src/Core/Build/UseCase/BuildTask/ParkedTasks.php-88-            }
+src/Core/Build/UseCase/BuildTask/ParkedTasks.php:89:        } catch (Exception|PDOException) {
+--
+src/Core/Build/UseCase/BuildTask/BuildTask.php-104-            $failure = $lock->acquire(blocking: false) ? null : self::START_BUSY;
+src/Core/Build/UseCase/BuildTask/BuildTask.php:105:        } catch (ExceptionInterface) {
+--
+src/Core/Build/UseCase/BuildTask/BuildTask.php-139-            $issue = $this->issues->readOpen($request->project, $request->issue);
+src/Core/Build/UseCase/BuildTask/BuildTask.php:140:        } catch (ForgeReadFailed|ForgeRateLimited $failure) {
+--
+src/Core/Build/UseCase/BuildTask/BuildTask.php-189-            $this->checkout->updateMirror($request->project, $request->remote);
+src/Core/Build/UseCase/BuildTask/BuildTask.php:190:        } catch (BuildCheckoutFailed $failure) {
+--
+src/Core/Build/UseCase/BuildTask/BuildTask.php-200-            $this->checkout->makeClone($request->project, $request->branch, $request->directory);
+src/Core/Build/UseCase/BuildTask/BuildTask.php:201:        } catch (BuildCheckoutFailed $failure) {
+--
+src/Core/Build/UseCase/BuildTask/BuildTask.php-218-            $outcome = $this->builds->run($this->jobOf($request, $task));
+src/Core/Build/UseCase/BuildTask/BuildTask.php:219:        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|JobRefused|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
+--
+src/Core/Build/UseCase/BuildTask/BuildTask.php-305-            $this->parkedTasks->park($run, $question);
+src/Core/Build/UseCase/BuildTask/BuildTask.php:306:        } catch (TaskNotParked $notParked) {
+--
+src/Core/Ai/Infrastructure/KeptProviderKeyVariables.php-45-            $key = $this->keys->read();
+src/Core/Ai/Infrastructure/KeptProviderKeyVariables.php:46:        } catch (KeptProviderKeyUnreadable) {
+--
+src/Core/Ai/Infrastructure/KeptProviderKeyVariables.php-105-            // Boundary: keeps a failing foreign loader from stopping the boot or a request, and logs it so the kept key is never paired with the owner's endpoint unnoticed.
+src/Core/Ai/Infrastructure/KeptProviderKeyVariables.php:106:        } catch (Throwable $failure) {
+--
+src/Core/Server/Infrastructure/WebServerCheck.php-40-            $status = $this->http->request('GET', 'http://localhost:'.$serverPort.self::PATH, $this->options($dashboardPort))->getStatusCode();
+src/Core/Server/Infrastructure/WebServerCheck.php:41:        } catch (ExceptionInterface) {
+--
+src/Core/Review/UseCase/ServeReviewTools/IssueReviewCredentialCommand.php-27-            $state = $this->rounds->stored($round)->state();
+src/Core/Review/UseCase/ServeReviewTools/IssueReviewCredentialCommand.php:28:        } catch (RoundNotFound $notFound) {
+--
+src/Core/Ai/Infrastructure/FinishedProcessResult.php-41-            $data = $this->inner->getData();
+src/Core/Ai/Infrastructure/FinishedProcessResult.php:42:        } catch (ProcessTimedOutException $timeout) {
+src/Core/Ai/Infrastructure/FinishedProcessResult.php-43-            throw $this->cutOffUnlessFinished($timeout, 'the CLI timed out');
+src/Core/Ai/Infrastructure/FinishedProcessResult.php:44:        } catch (ProcessSignaledException $killed) {
+src/Core/Ai/Infrastructure/FinishedProcessResult.php-45-            throw $this->cutOffUnlessFinished($killed, sprintf('the CLI was stopped by signal %d', $killed->getSignal()));
+src/Core/Ai/Infrastructure/FinishedProcessResult.php:46:        } catch (RuntimeException $failed) {
+--
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php-138-            return $this->reviewer->review($round->project(), $round->id(), $request);
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php:139:        } catch (ProviderRateLimited $limited) {
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php-140-            throw EscalationLimited::untilFree($limited->retryAfterSeconds);
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php:141:        } catch (VendorAccountBusy) {
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php-142-            throw EscalationLimited::untilFree(null);
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php:143:        } catch (ProviderFailedTransiently) {
+--
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php-145-            // Boundary: rethrows any other reviewer failure as the call's own failure, because the vendor plugin behind the contract may fail in ways the handler cannot name.
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php:146:        } catch (Throwable $failure) {
+--
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php-156-                $this->verdicts->keep($command->key, $verdict, $command->round);
+src/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Handler.php:157:            } catch (VerdictAlreadyKept) {
+--
+src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php-103-            return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings, $round->id(), new Paths(...$this->rounds->filesOf($round))));
+src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php:104:        } catch (ProviderRateLimited $limited) {
+src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php-105-            throw JudgeLimited::after($limited->retryAfterSeconds);
+src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php:106:        } catch (VendorAccountBusy|ProviderFailedTransiently) {
+src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php-107-            throw JudgeLimited::after(null);
+src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php:108:        } catch (VendorAccountOut) {
+--
+src/Core/Review/UseCase/MarkReplay/FlagProjectAsReplayHandler.php-25-            $this->entities->getConnection()->transactional(static fn (Connection $inner): int|string => $inner->insert('review_replay_project', ['project' => $command->project]));
+src/Core/Review/UseCase/MarkReplay/FlagProjectAsReplayHandler.php:26:        } catch (UniqueConstraintViolationException) {
+--
+src/Core/Ai/Infrastructure/TypedRejectionConverter.php-44-            return $this->answer->getResult();
+src/Core/Ai/Infrastructure/TypedRejectionConverter.php:45:        } catch (AuthenticationException) {
+--
+src/Core/Ai/Infrastructure/CodexTokenRefresh.php-48-            ]])->toArray();
+src/Core/Ai/Infrastructure/CodexTokenRefresh.php:49:        } catch (ExceptionInterface $failure) {
+--
+src/Core/Ai/Infrastructure/AccountFailoverPlatform.php-67-            $answer = $this->failover($free)->invoke($model, $input, $options);
+src/Core/Ai/Infrastructure/AccountFailoverPlatform.php:68:        } catch (RuntimeException $everyAccountFailed) {
+--
+src/Core/Review/UseCase/JudgeRound/RecurringP1s.php-65-                $heads[$round->id()->toRfc4122()] = $round->identity()->commits->head->hash;
+src/Core/Review/UseCase/JudgeRound/RecurringP1s.php:66:            } catch (RecordedIdentityMalformed) {
+--
+src/Core/Server/UseCase/Doctor/DoctorCommand.php-70-            $checks = InfrastructureChecks::of($this->status->read());
+src/Core/Server/UseCase/Doctor/DoctorCommand.php:71:        } catch (AdminApiNotOnLocalhost $refused) {
+--
+src/Core/Ai/Infrastructure/IsolatedClaudeCodeCli.php-52-            // Boundary: removes the bearer file on any failure to start the run and rethrows, because no run will read it.
+src/Core/Ai/Infrastructure/IsolatedClaudeCodeCli.php:53:        } catch (Throwable $notStarted) {
+--
+src/Core/Review/UseCase/ChoosePanel/ChoosePanelCommand.php-38-            $panel = $this->panels->panelForChange($input->project, $change);
+src/Core/Review/UseCase/ChoosePanel/ChoosePanelCommand.php:39:        } catch (ReportableFailure $failure) {
+--
+src/Core/Review/UseCase/IndexResolvedFindings/IndexResolvedFindingsHandler.php-36-            $this->indexResolvedFindingsOf($round);
+src/Core/Review/UseCase/IndexResolvedFindings/IndexResolvedFindingsHandler.php:37:        } catch (ProjectMemoryNeedsEmbeddingModel $missing) {
+--
+src/Core/Review/UseCase/EscalateRecurringP1/EscalationsOfChange.php-113-            return $round->identity()->commits->head->hash;
+src/Core/Review/UseCase/EscalateRecurringP1/EscalationsOfChange.php:114:        } catch (RecordedIdentityMalformed) {
+--
+src/Core/Ai/Infrastructure/KeptProviderKeyFile.php-47-            $this->linkWhereNothingIs($written);
+src/Core/Ai/Infrastructure/KeptProviderKeyFile.php:48:        } catch (IOException|JsonException) {
+--
+src/Core/Ai/Infrastructure/KeptProviderKeyFile.php-113-            $data = json_decode($json, true, 4, JSON_THROW_ON_ERROR);
+src/Core/Ai/Infrastructure/KeptProviderKeyFile.php:114:        } catch (JsonException) {
+--
+src/Core/Ai/Infrastructure/KeptProviderKeyFile.php-133-            $providerKey = ProviderKey::recognise($key, $this->providers);
+src/Core/Ai/Infrastructure/KeptProviderKeyFile.php:134:        } catch (KeyNotRecognised) {
+--
+src/Core/Review/UseCase/EscalateRecurringP1/BoundTransientEscalationFailures.php-33-            return $stack->next()->handle($this->stamped($envelope), $stack);
+src/Core/Review/UseCase/EscalateRecurringP1/BoundTransientEscalationFailures.php:34:        } catch (HandlerFailedException $failed) {
+--
+src/Core/Ai/Infrastructure/AccountCooldownWindows.php-125-            // Boundary: logs the failed read and keeps the default minute, because the provider's own limit must still reach the caller and the account must still pause.
+src/Core/Ai/Infrastructure/AccountCooldownWindows.php:126:        } catch (Throwable $unreadable) {
+--
+src/Core/Server/UseCase/ShowServerStatus/ShowServerStatusCommand.php-30-            $reading = $this->status->read();
+src/Core/Server/UseCase/ShowServerStatus/ShowServerStatusCommand.php:31:        } catch (ReportableFailure $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php-36-            return $step();
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php:37:        } catch (ForgeRateLimited $paused) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php-41-            // Boundary: backs off only this head on any failure of its step, because it must not end the tick for the heads after it.
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php:42:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php-56-            // Boundary: backs off this head when its wait cannot be stored, because that is a failure of this head alone and must not end the tick for the heads after it.
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php:57:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php-67-            // Boundary: logs a back-off that cannot be stored and reopens the entity manager, so the head stays due and the next heads still run.
+src/Core/Watcher/UseCase/WatchPullRequests/HeadBackOff.php:68:        } catch (Throwable $notBackedOff) {
+--
+src/Core/Upstream/Infrastructure/ReproductionRunner.php-65-            $process->run();
+src/Core/Upstream/Infrastructure/ReproductionRunner.php:66:        } catch (ProcessTimedOutException) {
+--
+src/Core/Review/UseCase/ReadRound/ReadableRounds.php-23-            return $this->rounds->stored($roundId);
+src/Core/Review/UseCase/ReadRound/ReadableRounds.php:24:        } catch (RoundNotFound $notFound) {
+--
+src/Core/Review/UseCase/ReadRound/ReadableRounds.php-32-            return $this->rounds->stored($roundId);
+src/Core/Review/UseCase/ReadRound/ReadableRounds.php:33:        } catch (RoundNotFound) {
+--
+src/Core/Server/UseCase/CheckServerHealth/CheckServerHealthCommand.php-26-            $reading = $this->status->read();
+src/Core/Server/UseCase/CheckServerHealth/CheckServerHealthCommand.php:27:        } catch (AdminApiNotOnLocalhost $refused) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/DiscardedRounds.php-29-            // Boundary: logs a failed discard, because the failure that caused it is the one the caller rethrows.
+src/Core/Watcher/UseCase/WatchPullRequests/DiscardedRounds.php:30:        } catch (Throwable $discardFailure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/ChangesHandedToIntakt.php-207-                }
+src/Core/Watcher/UseCase/WatchPullRequests/ChangesHandedToIntakt.php:208:            } catch (ForgeReadFailed $unread) {
+src/Core/Watcher/UseCase/WatchPullRequests/ChangesHandedToIntakt.php-209-                $this->logger->warning('The author of {change} in {project} could not be read, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $unread->getMessage()]);
+src/Core/Watcher/UseCase/WatchPullRequests/ChangesHandedToIntakt.php:210:            } catch (ForgeRateLimited $limited) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/ChangesHandedToIntakt.php-250-            $decoded = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
+src/Core/Watcher/UseCase/WatchPullRequests/ChangesHandedToIntakt.php:251:        } catch (JsonException) {
+--
+src/Core/Review/Contract/VerdictParser.php-30-            return $read();
+src/Core/Review/Contract/VerdictParser.php:31:        } catch (ValidationException $exception) {
+src/Core/Review/Contract/VerdictParser.php-32-            throw $this->firstViolation($exception);
+src/Core/Review/Contract/VerdictParser.php:33:        } catch (RuntimeException $exception) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/HeadLocks.php-55-            // Boundary: tries to give every held lock back and rethrows, because a lock left held would keep its head from later ticks until it expires.
+src/Core/Watcher/UseCase/WatchPullRequests/HeadLocks.php:56:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/HeadLocks.php-112-                $lock->release();
+src/Core/Watcher/UseCase/WatchPullRequests/HeadLocks.php:113:            } catch (LockReleasingException $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/HeadLocks.php-126-            // Boundary: logs a back-off that cannot start, because the failure that ended the tick is the one the caller rethrows.
+src/Core/Watcher/UseCase/WatchPullRequests/HeadLocks.php:127:        } catch (Throwable $notReported) {
+--
+src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php-80-            $paths = array_keys(iterator_to_array(new FilesystemIterator($folder, FilesystemIterator::KEY_AS_PATHNAME | FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::SKIP_DOTS)));
+src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php:81:        } catch (UnexpectedValueException) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php-93-            // Boundary: logs an unreadable stored result and boots main again, because a lost cache entry must not stop the review the boot only gates.
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php:94:        } catch (Throwable $unread) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php-110-            // Boundary: logs an alert the ledger refused, because the row stays pending so a later ask records it, and the review must go on.
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php:111:        } catch (Throwable $unrecorded) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php-136-            // Boundary: logs a stored result the ledger or the lock refused, because the next hit of the same stored result records it again and the review must go on.
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php:137:        } catch (Throwable $unrecorded) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php-147-            // Boundary: turns any failure of the boot into a crashed outcome, because the boot runs foreign code whose failures cannot be named in advance.
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php:148:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php-179-            $this->entities->getConnection()->transactional(fn (Connection $inner): int|string => $this->replaceExpiredCrashAndInsert($inner, $record));
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php:180:        } catch (UniqueConstraintViolationException) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php-183-            // Boundary: logs a result that cannot be stored, because main then only boots again next time and the review must go on.
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php:184:        } catch (Throwable $unstored) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php-206-            // Boundary: logs a ledger line that cannot be written, because the computed result still gates the review.
+src/Core/Watcher/UseCase/WatchPullRequests/BootResults.php:207:        } catch (Throwable $unrecorded) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/FailedHeads.php-76-            // Boundary: logs a failed install-wide record and reopens the entity manager, so the head still backs off alone and the next heads run.
+src/Core/Watcher/UseCase/WatchPullRequests/FailedHeads.php:77:        } catch (Throwable $notReported) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/FailedHeads.php-126-            // Boundary: rethrows after the rollback, and first reports a failed hand-over when the count reaches the hand-over threshold, because the head must stay due so the tick fails and the next one tries again.
+src/Core/Watcher/UseCase/WatchPullRequests/FailedHeads.php:127:        } catch (Throwable $notRecorded) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/FailedHeads.php-154-            // Boundary: logs a back-off that cannot start, because the hand-over's own failure is the one the caller rethrows.
+src/Core/Watcher/UseCase/WatchPullRequests/FailedHeads.php:155:        } catch (Throwable $notStarted) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/WatchPullRequestsHandler.php-39-            $this->changed->enqueue($project->name);
+src/Core/Watcher/UseCase/WatchPullRequests/WatchPullRequestsHandler.php:40:        } catch (ListingInProgress) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/WatchPullRequestsHandler.php-42-            return;
+src/Core/Watcher/UseCase/WatchPullRequests/WatchPullRequestsHandler.php:43:        } catch (ForgeRateLimited) {
+--
+src/Core/Review/UseCase/PublishVerdict/PublishVerdictHandler.php-68-            $this->publishReviewOf($round);
+src/Core/Review/UseCase/PublishVerdict/PublishVerdictHandler.php:69:        } catch (ReviewTextHoldsSecret) {
+--
+src/Core/Review/UseCase/PublishVerdict/PublishVerdictHandler.php-71-            $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $this->verdicts->unpublishable($round));
+src/Core/Review/UseCase/PublishVerdict/PublishVerdictHandler.php:72:        } catch (ChangeNotFound) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/StaleVerdicts.php-72-            // Boundary: rethrown with Review's own reason, because the head_failed card shows only the cause and the bus's wrapper does not say it was the withdrawal that failed.
+src/Core/Watcher/UseCase/WatchPullRequests/StaleVerdicts.php:73:        } catch (Throwable $refused) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootGate.php-46-            // Boundary: logs any failure of the gate and starts the review without it, because the boot only gates a review and must never stop it.
+src/Core/Watcher/UseCase/WatchPullRequests/BootGate.php:47:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/BootGate.php-78-            // Boundary: logs a failed trust check and counts the author as untrusted, so the head is not booted (its review still starts), because a check that cannot answer must never let a head boot.
+src/Core/Watcher/UseCase/WatchPullRequests/BootGate.php:79:        } catch (Throwable $unanswered) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/StartedRounds.php-44-            // Boundary: rolls back, discards the kept snapshot and rethrows, because a round that was not recorded must leave nothing behind.
+src/Core/Watcher/UseCase/WatchPullRequests/StartedRounds.php:45:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/StartedRounds.php-259-            $connection->rollBack();
+src/Core/Watcher/UseCase/WatchPullRequests/StartedRounds.php:260:        } catch (Exception) {
+--
+src/Core/Job/Infrastructure/DockerEngine.php-73-            $body = $response->getContent(false);
+src/Core/Job/Infrastructure/DockerEngine.php:74:        } catch (TransportExceptionInterface) {
+--
+src/Core/Job/Infrastructure/DockerEngine.php-185-            return new EngineAnswer($path, $response->getStatusCode(), $this->headOf($response, $bytes))->demultiplexedHead(200);
+src/Core/Job/Infrastructure/DockerEngine.php:186:        } catch (TransportExceptionInterface $failure) {
+--
+src/Core/Job/Infrastructure/DockerEngine.php-277-            return new EngineAnswer($path, $response->getStatusCode(), $response->getContent(false));
+src/Core/Job/Infrastructure/DockerEngine.php:278:        } catch (TransportExceptionInterface $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/StatusMirrors.php-35-            // Boundary: the status pass still runs, because no label should wait on the heads, and the head step's failure is rethrown unchanged.
+src/Core/Watcher/UseCase/WatchPullRequests/StatusMirrors.php:36:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/StatusMirrors.php-49-            // Boundary: only logged, because the head step's failure is the one the tick reports.
+src/Core/Watcher/UseCase/WatchPullRequests/StatusMirrors.php:50:        } catch (Throwable $failure) {
+--
+src/Core/Watcher/UseCase/WatchPullRequests/StatusMirrors.php-81-            // Boundary: kept and returned, so the pass goes on with the next pull request and rethrows it once all were tried.
+src/Core/Watcher/UseCase/WatchPullRequests/StatusMirrors.php:82:        } catch (Throwable $failure) {
+--
+src/Core/Review/UseCase/RunReviewRound/RoundLedger.php-231-            $substitutes = $this->tiers->substitutes($reviewer->round()->project(), $reviewer->tier());
+src/Core/Review/UseCase/RunReviewRound/RoundLedger.php:232:        } catch (TierResolutionFailure) {
+--
+src/Core/Review/UseCase/RunReviewRound/RoundLedger.php-251-            return $this->tiers->resolve($reviewer->round()->project(), $reviewer->tier())->model;
+src/Core/Review/UseCase/RunReviewRound/RoundLedger.php:252:        } catch (TierResolutionFailure) {
+--
+src/Core/ReviewerForLoop/Infrastructure/RecordedPullRequestFile.php-45-            $data = json_decode($text, true, 16, JSON_THROW_ON_ERROR);
+src/Core/ReviewerForLoop/Infrastructure/RecordedPullRequestFile.php:46:        } catch (JsonException) {
+--
+src/Core/Review/UseCase/RunReviewRound/BlockReviewerOfFailedMessage.php-35-            // Boundary: logs every failure instead of throwing because the worker does not catch what a failure listener throws, so it would stop before parking the message.
+src/Core/Review/UseCase/RunReviewRound/BlockReviewerOfFailedMessage.php:36:        } catch (Throwable $failure) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewRounds.php-259-            return $this->once($work);
+src/Core/Review/UseCase/RunReviewRound/ReviewRounds.php:260:        } catch (RetryableException $failure) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewRounds.php-293-            // Boundary: clears the entity manager and rethrows because rolled-back entities and their database ids would collide with the next transaction.
+src/Core/Review/UseCase/RunReviewRound/ReviewRounds.php:294:        } catch (Throwable $failure) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php-47-                // Boundary: republishes the stored round and rethrows, because a review that throws may have handed its reviewer back and lowered the started count, or failed while storing its verdict and left the reviewer running.
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php:48:            } catch (Throwable $handedBack) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php-66-            $review = $this->vendor->review($round->project(), $reviewer->tier(), $request);
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php:67:        } catch (ProviderRateLimited $limited) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php-70-            throw ReviewerRateLimited::after($limited->retryAfterSeconds);
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php:71:        } catch (VendorAccountBusy) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php-74-            throw ReviewerRateLimited::after(null);
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php:75:        } catch (NoProviderLeft $outage) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php-78-            return;
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php:79:        } catch (VendorAccountOut) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php-82-            throw ReviewerMovesToAnotherAccount::now();
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php:83:        } catch (VerdictUnreadable $unreadable) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php-87-            // Boundary: records every failure because one left uncaught would leave the reviewer running until its hold ends, and keeps the class only because a provider's message can echo a key.
+src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php:88:        } catch (Throwable $failure) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewerLeases.php-108-                return $this->recordOnce($reviewer, $move);
+src/Core/Review/UseCase/RunReviewRound/ReviewerLeases.php:109:            } catch (ReviewEventNotRecorded $refused) {
+--
+src/Core/Review/UseCase/RunReviewRound/ReviewerLeases.php-213-            // Boundary: clears the entity manager and rethrows because rolled-back entities and their database ids would collide with the next transaction.
+src/Core/Review/UseCase/RunReviewRound/ReviewerLeases.php:214:        } catch (Throwable $failure) {
+--
+src/Core/ReviewerForLoop/Domain/LoopReviewReader.php-177-            $decoded = json_decode(array_last($candidates)['text'], true, 16, JSON_THROW_ON_ERROR);
+src/Core/ReviewerForLoop/Domain/LoopReviewReader.php:178:        } catch (JsonException) {
+--
+src/Core/Review/UseCase/RunReviewRound/StoredFindings.php-202-            $connection->transactional(static fn (Connection $inner): int|string => $inner->insert('change_findings', ['project' => $project, 'change_ref' => $change, 'rounds' => ChangeFindings::NO_ROUNDS, 'findings' => ChangeFindings::NO_FINDINGS, 'recorded_round' => ChangeFindings::NO_ROUNDS]));
+src/Core/Review/UseCase/RunReviewRound/StoredFindings.php:203:        } catch (UniqueConstraintViolationException) {
+--
+src/Core/Job/Infrastructure/JobOutputDirectories.php-46-            $entries = new DirectoryIterator($directory);
+src/Core/Job/Infrastructure/JobOutputDirectories.php:47:        } catch (UnexpectedValueException) {
+--
+src/Core/Job/Infrastructure/JobOutputDirectories.php-133-            new Filesystem()->chmod($path, 0o700);
+src/Core/Job/Infrastructure/JobOutputDirectories.php:134:        } catch (IOException) {
+--
+src/Core/Review/Infrastructure/IssuedReviewServerAccesses.php-49-            return $this->credential->issueFor($round->toRfc4122());
+src/Core/Review/Infrastructure/IssuedReviewServerAccesses.php:50:        } catch (ReviewCredentialNeedsSecret $unsigned) {
+--
+src/Core/Ai/Infrastructure/PinnedProviderCooldownWindows.php-47-            // Boundary: a lock or cache that fails is a window not saved, so the caller handles one exception and still cools the account and passes on the provider's 429.
+src/Core/Ai/Infrastructure/PinnedProviderCooldownWindows.php:48:        } catch (Throwable $failure) {
+--
+src/Core/Review/Infrastructure/ToolsOfRound.php-41-            return $this->http->during($this->round, fn (): ToolResult => $this->tools->execute($toolCall));
+src/Core/Review/Infrastructure/ToolsOfRound.php:42:        } catch (ToolExecutionException $exception) {
+--
+src/Core/Review/Infrastructure/ReviewerRuns.php-36-            $this->conversations->save($conversation);
+src/Core/Review/Infrastructure/ReviewerRuns.php:37:        } catch (ConflictException $taken) {
+--
+src/Core/Review/Infrastructure/JudgeAgent.php-44-            $answer = $execution->getContent();
+src/Core/Review/Infrastructure/JudgeAgent.php:45:        } catch (ValidationException) {
+src/Core/Review/Infrastructure/JudgeAgent.php-46-            return null;
+src/Core/Review/Infrastructure/JudgeAgent.php:47:        } catch (RuntimeException $exception) {
+--
+src/Core/Review/Infrastructure/RoundToolCalls.php-74-            $this->entities->flush();
+src/Core/Review/Infrastructure/RoundToolCalls.php:75:        } catch (Exception|ORMException $failure) {
+--
+src/Core/Review/Infrastructure/CheckedOutFile.php-35-            return $checkout->resolve($path);
+src/Core/Review/Infrastructure/CheckedOutFile.php:36:        } catch (PathNotInCheckout|PathOutsideCheckout) {
+--
+src/Core/Review/Infrastructure/PanelConfiguration.php-122-            $panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels(ChangeDescription::FULL_REVIEW_LABEL)));
+src/Core/Review/Infrastructure/PanelConfiguration.php:123:        } catch (PanelConfigurationFailure $failure) {
+--
+src/Core/Review/Infrastructure/HeadClones.php-52-            // Boundary: any failure, also an unexpected one, must remove the partial clone before it ends the job.
+src/Core/Review/Infrastructure/HeadClones.php:53:        } catch (Throwable $failed) {
+--
+src/Core/Review/Infrastructure/HeadClones.php-87-            $this->remove($clone);
+src/Core/Review/Infrastructure/HeadClones.php:88:        } catch (IOException) {
+--
+src/Core/Review/Infrastructure/VerdictInText.php-42-            return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
+src/Core/Review/Infrastructure/VerdictInText.php:43:        } catch (ExceptionInterface $exception) {
+--
+src/Core/Review/Infrastructure/VerdictInText.php-94-            return $this->serializer->deserialize($content, ReviewerAnswer::class, JsonEncoder::FORMAT, self::STRICT);
+src/Core/Review/Infrastructure/VerdictInText.php:95:        } catch (TypeError $error) {
+--
+src/Core/Review/Infrastructure/EscalationAgent.php-35-            $messages = $this->prompt->messagesFor($request);
+src/Core/Review/Infrastructure/EscalationAgent.php:36:        } catch (CitedCodeNotShown $notShown) {
+--
+src/Core/Review/Infrastructure/NamesCutAtASpace.php-105-            return $checkout->resolve($path);
+src/Core/Review/Infrastructure/NamesCutAtASpace.php:106:        } catch (PathNotInCheckout|PathOutsideCheckout) {
+--
+src/Core/Review/Infrastructure/KeptVerdicts.php-35-            ));
+src/Core/Review/Infrastructure/KeptVerdicts.php:36:        } catch (UniqueConstraintViolationException) {
+--
+src/Core/Job/UseCase/SweepJobContainers/SweepJobContainersCommand.php-23-            $removed = $this->orphans->removeAll();
+src/Core/Job/UseCase/SweepJobContainers/SweepJobContainersCommand.php:24:        } catch (DockerEngineFailed $failure) {
+--
+src/Core/Review/Infrastructure/StreamedAnswer.php-104-            }
+src/Core/Review/Infrastructure/StreamedAnswer.php:105:        } catch (RetryableExceptionInterface $broken) {
+src/Core/Review/Infrastructure/StreamedAnswer.php-106-            throw $started ? $this->tally->cut(StreamCutBy::ProviderFailureMidStream, self::BROKEN_MID_STREAM, $broken) : $broken;
+src/Core/Review/Infrastructure/StreamedAnswer.php:107:        } catch (IncompleteStreamException $cut) {
+--
+src/Core/Review/Infrastructure/Repository/SearchFiles.php-105-            return new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS);
+src/Core/Review/Infrastructure/Repository/SearchFiles.php:106:        } catch (UnexpectedValueException $unopened) {
+--
+src/Core/Review/Infrastructure/ReviewJob.php-133-            return $this->jobs->run($spec);
+src/Core/Review/Infrastructure/ReviewJob.php:134:        } catch (JobOutputRefused) {
+--
+src/Core/Review/Infrastructure/AddedLinesInCheckout.php-24-            $checkout = new Checkout($checkoutRoot);
+src/Core/Review/Infrastructure/AddedLinesInCheckout.php:25:        } catch (CheckoutNotADirectory) {
+--
+src/Core/Review/Infrastructure/MalformedToolCalls.php-39-            return $this->inner->execute($toolCall);
+src/Core/Review/Infrastructure/MalformedToolCalls.php:40:        } catch (InvalidToolCallArgumentsException|ToolNotFoundException $exception) {
+--
+src/Core/Review/Infrastructure/MalformedToolCalls.php-43-            throw $exception;
+src/Core/Review/Infrastructure/MalformedToolCalls.php:44:        } catch (ToolExecutionException $exception) {
+--
+src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php-41-            $this->checkout->resolve($path);
+src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php:42:        } catch (PathOutsideCheckout $refused) {
+src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php-43-            $event->deny($refused->getMessage());
+src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php:44:        } catch (PathNotInCheckout) {
+--
+src/Core/Review/Infrastructure/OptionalProjectMemory.php-36-            // Boundary: logs any read failure and returns no memory, because project memory is optional and must never fail the review.
+src/Core/Review/Infrastructure/OptionalProjectMemory.php:37:        } catch (Throwable $failure) {
+--
+src/Core/Review/Infrastructure/OptionalProjectMemory.php-49-            // Boundary: logs any read failure and returns no settled memory, because project memory is optional and must never fail the review.
+src/Core/Review/Infrastructure/OptionalProjectMemory.php:50:        } catch (Throwable $failure) {
+--
+src/Core/Review/Infrastructure/FindingKeys.php-240-            $real = $checkout->resolve($path);
+src/Core/Review/Infrastructure/FindingKeys.php:241:        } catch (PathNotInCheckout) {
+src/Core/Review/Infrastructure/FindingKeys.php-242-            return null;
+src/Core/Review/Infrastructure/FindingKeys.php:243:        } catch (PathOutsideCheckout) {
+--
+src/Core/Review/Infrastructure/FindingKeys.php-265-            $checkout->resolve($path);
+src/Core/Review/Infrastructure/FindingKeys.php:266:        } catch (PathNotInCheckout) {
+src/Core/Review/Infrastructure/FindingKeys.php-267-            return false;
+src/Core/Review/Infrastructure/FindingKeys.php:268:        } catch (PathOutsideCheckout) {
+--
+src/Core/Review/Infrastructure/StoredSessionSummaries.php-31-            $round = $this->rounds->stored($roundId);
+src/Core/Review/Infrastructure/StoredSessionSummaries.php:32:        } catch (RoundNotFound) {
+--
+src/Core/Job/UseCase/BuildJobImage/ProjectFiles.php-86-            $process->run();
+src/Core/Job/UseCase/BuildJobImage/ProjectFiles.php:87:        } catch (RepositoryAttributesRefused|ExceptionInterface $failure) {
+--
+src/Core/Job/UseCase/BuildJobImage/Devcontainer.php-49-            $config = json_decode($json ?? '', true, flags: JSON_THROW_ON_ERROR);
+src/Core/Job/UseCase/BuildJobImage/Devcontainer.php:50:        } catch (JsonException $broken) {
+--
+src/Core/Job/UseCase/BuildJobImage/CliManifest.php-38-            return new Filesystem()->readFile($manifest);
+src/Core/Job/UseCase/BuildJobImage/CliManifest.php:39:        } catch (IOException) {
+--
+src/Core/Job/UseCase/BuildJobImage/CliManifest.php-50-            $decoded = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+src/Core/Job/UseCase/BuildJobImage/CliManifest.php:51:        } catch (JsonException $exception) {
+--
+src/Core/Job/UseCase/BuildJobImage/PlanJobImageCommand.php-28-            $plan = $this->planner->planFor($directory, $kind);
+src/Core/Job/UseCase/BuildJobImage/PlanJobImageCommand.php:29:        } catch (JobImageNotBuilt $refused) {
+--
+src/Core/Review/Infrastructure/CheckoutFileNames.php-49-            }
+src/Core/Review/Infrastructure/CheckoutFileNames.php:50:        } catch (UnexpectedValueException) {
+--
+src/Core/Ai/UseCase/ListProjectTiers/ListProjectTiersCommand.php-61-            $resolved = $this->resolver->resolve($project, $tier);
+src/Core/Ai/UseCase/ListProjectTiers/ListProjectTiersCommand.php:62:        } catch (TierResolutionFailure $failure) {
+--
+src/Core/Job/UseCase/BuildJobImage/BuildContext.php-34-            // Boundary: removes the half-written context folder on any failure and rethrows it, because nothing else knows the folder to clean it up.
+src/Core/Job/UseCase/BuildJobImage/BuildContext.php:35:        } catch (Throwable $failure) {
+--
+src/Core/Ai/UseCase/ProbeCodexLogin/ProbeCodexLoginCommand.php-47-            $answer = $this->answer($settings, $account);
+src/Core/Ai/UseCase/ProbeCodexLogin/ProbeCodexLoginCommand.php:48:        } catch (CodexLoginUnusable|RuntimeException $failure) {
+--
+src/Core/Job/UseCase/BuildJobImage/BuildJobImageCommand.php-26-            $built = $this->images->build($input->directory, $tag, $input->kind);
+src/Core/Job/UseCase/BuildJobImage/BuildJobImageCommand.php:27:        } catch (ReportableFailure|JobRefused $failure) {
+--
+src/Core/Review/Infrastructure/ReviewerAgent.php-100-            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer), $reviewer);
+src/Core/Review/Infrastructure/ReviewerAgent.php:101:        } catch (BadRequestException|InvalidRequestException $refused) {
+--
+src/Core/Review/Infrastructure/ReviewerAgent.php-122-            return $this->reportedAsRead($this->prompt->verdictIn($execution), $reviewer);
+src/Core/Review/Infrastructure/ReviewerAgent.php:123:        } catch (VerdictUnreadable $unreadable) {
+--
+src/Core/Review/Infrastructure/ReviewerAgent.php-127-            throw $unreadable;
+src/Core/Review/Infrastructure/ReviewerAgent.php:128:        } catch (MaxIterationsExceededException) {
+src/Core/Review/Infrastructure/ReviewerAgent.php-129-            throw VerdictUnreadable::becauseKeySafe(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
+src/Core/Review/Infrastructure/ReviewerAgent.php:130:        } catch (ReviewServerLost) {
+src/Core/Review/Infrastructure/ReviewerAgent.php-131-            return Verdict::noTools();
+src/Core/Review/Infrastructure/ReviewerAgent.php:132:        } catch (RuntimeException $failure) {
+--
+src/Core/Job/UseCase/BuildJobImage/PhpProfile.php-59-            return $this->constraint->matches(new Constraint('==', new VersionParser()->normalize($version)));
+src/Core/Job/UseCase/BuildJobImage/PhpProfile.php:60:        } catch (UnexpectedValueException) {
+--
+src/Core/Job/UseCase/BuildJobImage/PhpProfile.php-143-            $composer = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+src/Core/Job/UseCase/BuildJobImage/PhpProfile.php:144:        } catch (JsonException $broken) {
+--
+src/Core/Job/UseCase/BuildJobImage/PhpProfile.php-229-            return new VersionParser()->parseConstraints($constraint);
+src/Core/Job/UseCase/BuildJobImage/PhpProfile.php:230:        } catch (UnexpectedValueException) {
