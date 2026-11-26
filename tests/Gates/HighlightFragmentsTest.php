@@ -120,6 +120,60 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Lock | done | T2 (#2022) |\n\n", $assembly->text);
     }
 
+    public function testAFragmentAMergeRestoresAfterTheMergedSideDeletedItAppliesAfterTheRowsOfThatSide(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('checkout', '--quiet', '-b', 'side');
+        $this->commitFragment('2832-restored.md', "## Tooling\n| Clock | restored by merge | T2 (#2832) |\n");
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/2832-restored.md');
+        $this->commitFragment('2022-side.md', "## Tooling\n| Clock | from side | T2 (#2022) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-commit', 'side');
+        $this->commitFragment('2832-restored.md', "## Tooling\n| Clock | restored by merge | T2 (#2832) |\n");
+
+        $assembly = $this->assembled();
+
+        self::assertSame([], $assembly->findings);
+        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Clock | restored by merge | T2 (#2832) |\n\n", $assembly->text);
+    }
+
+    public function testFragmentsFromTwoMergedParentsOfOneMergeThatSetTheSameRowFailTheAssembly(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('branch', 'right');
+        $this->sandbox->git('checkout', '--quiet', '-b', 'left');
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'right');
+        $this->commitFragment('10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'left', 'right');
+
+        $assembly = $this->assembled();
+
+        self::assertSame('', $assembly->text);
+        self::assertSame([self::UNORDERED_CLOCK], $assembly->findings);
+    }
+
+    public function testFragmentsFromTwoMergedParentsOfOneMergeWhoseRowsDoNotOverlapAssemble(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('branch', 'right');
+        $this->sandbox->git('checkout', '--quiet', '-b', 'left');
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Earlier | planned | T2 (#2) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'right');
+        $this->commitFragment('10-later.md', "## Tooling\n| Later | planned | T10 (#10) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'left', 'right');
+
+        $assembly = $this->assembled();
+
+        self::assertSame([], $assembly->findings);
+        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Earlier | planned | T2 (#2) |\n| Later | planned | T10 (#10) |\n", $assembly->text);
+    }
+
     public function testTwoUncommittedFragmentsThatSetTheSameRowFailTheAssembly(): void
     {
         $this->sandbox->startRepository();

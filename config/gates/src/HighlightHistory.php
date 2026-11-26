@@ -138,18 +138,60 @@ final readonly class HighlightHistory
             return [$names];
         }
 
-        $side = $this->groupsAddedIn($root, [...array_slice($parents, 1), '^'.$parents[0]]);
+        $sides = [];
+
+        foreach (array_slice($parents, 1) as $parent) {
+            $side = $this->sideOrder($root, $parent, $parents[0], $names);
+
+            if (is_string($side)) {
+                return $side;
+            }
+
+            if ([] !== $side) {
+                $sides[] = $side;
+            }
+        }
+
+        // The merged parents reached the branch together, so fragments from different parents share one place and overlapping rows are refused.
+        $groups = match (count($sides)) {
+            0 => [],
+            1 => $sides[0],
+            default => [array_values(array_unique(array_merge(...array_merge(...$sides))))],
+        };
+        $addedByTheMerge = array_values(array_diff($names, ...$groups));
+
+        return [] === $addedByTheMerge ? $groups : [...$groups, $addedByTheMerge];
+    }
+
+    /**
+     * @param list<string> $names
+     *
+     * @return list<list<string>>|string
+     */
+    private function sideOrder(string $root, string $parent, string $firstParent, array $names): array|string
+    {
+        // A fragment the side added and deleted again is not what the merge brings in: the merge itself restored it.
+        $tree = $this->runner->git(['ls-tree', '--name-only', $parent, '--', HighlightFragments::DIRECTORY.'/'], $root);
+
+        if (!$tree->succeeded()) {
+            return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$tree->firstErrorLine();
+        }
+
+        $present = array_values(array_intersect($names, array_map(basename(...), array_filter(explode("\n", $tree->output)))));
+
+        if ([] === $present) {
+            return [];
+        }
+
+        $side = $this->groupsAddedIn($root, [$parent, '^'.$firstParent]);
 
         if (is_string($side)) {
             return $side;
         }
 
-        $groups = array_values(array_filter(
-            array_map(static fn (array $group): array => array_values(array_intersect($group, $names)), $side),
+        return array_values(array_filter(
+            array_map(static fn (array $group): array => array_values(array_intersect($group, $present)), $side),
             static fn (array $group): bool => [] !== $group,
         ));
-        $addedByTheMerge = array_values(array_diff($names, ...$groups));
-
-        return [] === $addedByTheMerge ? $groups : [...$groups, $addedByTheMerge];
     }
 }
