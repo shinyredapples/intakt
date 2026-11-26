@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\HandBack\UseCase\CheckHandBack;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
@@ -69,6 +70,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(HandBackBranchRefused::class)]
 #[UsesClass(CredentialVariableUnset::class)]
 #[UsesClass(PullRequestTextUnreadable::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 final class CheckHandBackCommandTest extends TestCase
 {
     private const string CREDENTIAL = 'INTAKT_TEST_MOUNTED_CREDENTIAL';
@@ -216,6 +218,18 @@ final class CheckHandBackCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('"a..b" is not a branch name git accepts', $this->flat($tester));
+    }
+
+    public function testAMirrorHoldingInfoAttributesFailsWithTheRefusal(): void
+    {
+        $this->history->commit('Build work');
+        $bundle = $this->history->bundle('main..task');
+        new Filesystem()->dumpFile($this->history->mirror.'/info/attributes', "* -text\n");
+
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $bundle, 'pull-request-text' => $this->text()]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('info/attributes exists: git reads it', $this->flat($tester));
     }
 
     public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
