@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Budget\Contract\SharedHold;
@@ -17,9 +16,9 @@ use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
@@ -59,7 +58,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(HeldCredentials::class)]
 #[UsesClass(Redaction::class)]
 #[UsesClass(LedgerFailingHeads::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
 #[UsesClass(DoctrineInstallWideFailures::class)]
@@ -283,8 +282,7 @@ final class FailedHeadsTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
         $this->entities = $entities;
         $this->pending = new PendingHeads($entities, $this->clock);

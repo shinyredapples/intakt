@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Mcp\Contract;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
@@ -129,8 +128,7 @@ final class DemoOwnerTokenSdkClientTest extends KernelTestCase
         $container = self::getContainer();
         $entities = $container->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in($container);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn($container);
         $container->set(ChangeReviews::class, $container->get('intakt.test.mcp.review_change'));
         $container->set(Panels::class, $container->get(OnePanel::class));
 

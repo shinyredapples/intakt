@@ -17,6 +17,8 @@ use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Domain\Headline;
+use Intakt\Core\Dashboard\Domain\InfrastructureFigure;
+use Intakt\Core\Dashboard\Domain\InfrastructureRow;
 use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -30,13 +32,27 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
+use Intakt\Core\Dashboard\Infrastructure\RememberedForgeVerdict;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Server\Contract\EndpointDown;
+use Intakt\Core\Server\Contract\HubHealth;
+use Intakt\Core\Server\Contract\ServerMetrics;
+use Intakt\Core\Server\Contract\ServerReading;
+use Intakt\Core\Server\Contract\ServerStatus;
+use Intakt\Core\Server\Contract\WorkerThreads;
+use Intakt\Core\Server\Infrastructure\AdminApi;
+use Intakt\Core\Server\Infrastructure\AdminApiServerStatus;
+use Intakt\Core\Server\Infrastructure\PrometheusSamples;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnection;
+use Intakt\Plugin\GitHubForge\Contract\ForgeConnectionVerdict;
+use Intakt\Tests\Core\Server\RecordedAdminApi;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
@@ -62,6 +78,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(Headline::class)]
 #[UsesClass(RefuseForeignHost::class)]
 #[UsesClass(LedgerFailingHeads::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(FailingHead::class)]
 #[UsesClass(FailingMains::class)]
 #[UsesClass(FailingMain::class)]
@@ -69,6 +86,17 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(SampleChangeSource::class)]
 #[UsesClass(WaitingCount::class)]
+#[UsesClass(InfrastructureRow::class)]
+#[UsesClass(InfrastructureFigure::class)]
+#[UsesClass(AdminApi::class)]
+#[UsesClass(AdminApiServerStatus::class)]
+#[UsesClass(PrometheusSamples::class)]
+#[UsesClass(ServerReading::class)]
+#[UsesClass(WorkerThreads::class)]
+#[UsesClass(ServerMetrics::class)]
+#[UsesClass(EndpointDown::class)]
+#[UsesClass(ForgeConnectionVerdict::class)]
+#[UsesClass(RememberedForgeVerdict::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     /**
@@ -80,6 +108,8 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
      * @var list<list<OutageNotice>|RuntimeException>
      */
     private array $readings = [];
+
+    private ?ForgeConnectionVerdict $forge = null;
 
     public function testTheRootAddressShowsTheBoard(): void
     {
@@ -242,13 +272,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(1, $page->filter('#projfilter option[value="build-only"]'));
     }
 
-    public function testADemoInstallWithoutAReviewOpensOnTheFirstRunPage(): void
+    public function testADemoInstallWithoutAReviewOpensOnTheSetupWizardsReadyStep(): void
     {
         $this->onADemoInstall();
 
         $this->browser->request('GET', '/');
 
-        self::assertResponseRedirects('/setup', Response::HTTP_SEE_OTHER);
+        self::assertResponseRedirects('/setup?step=5', Response::HTTP_SEE_OTHER);
     }
 
     public function testADemoInstallWithAReviewOpensOnTheBoard(): void
@@ -1082,6 +1112,90 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
     }
 
+    public function testTheBoardRendersTheInfrastructureRowFromRecordedMetricsAndThreadsResponses(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame([
+            ['Threads busy', '0'],
+            ['Threads idle', '2'],
+            ['Queue depth', '0'],
+            ['Worker restarts', '2'],
+            ['Hub', 'healthy'],
+            ['Forge', 'connected'],
+        ], $this->infrastructureIn($page));
+    }
+
+    public function testTheBoardShowsTheForgeDownWithTheProblemTheForgeCheckGives(): void
+    {
+        $this->forge = ForgeConnectionVerdict::failed('GITHUB_APP_ID is not a number', 'set GITHUB_APP_ID');
+
+        $forge = $this->browser->request('GET', '/')->filter('#infrastructure .infra-figure.down');
+
+        self::assertSame(['Forge', 'down (GITHUB_APP_ID is not a number)'], [$forge->filter('dt')->text(), $forge->filter('dd')->text()]);
+    }
+
+    public function testTheBoardShowsTheForgeAsNotConfiguredOnAnInstallWithoutAnApp(): void
+    {
+        $this->forge = ForgeConnectionVerdict::withoutAnApp();
+
+        self::assertContains(['Forge', 'not configured'], $this->infrastructureIn($this->browser->request('GET', '/')));
+    }
+
+    public function testTheBoardShowsTheInfrastructureRowAsDownWhenTheAdminApiIsUnreachable(): void
+    {
+        $this->server = new RecordedAdminApi()->unreachable()->status();
+
+        $row = $this->browser->request('GET', '/')->filter('#infrastructure');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(['Worker threads', 'Server metrics', 'Hub'], $row->filter('.infra-figure.down dt')->each(static fn (Crawler $label): string => $label->text()));
+        self::assertSame('down (/frankenphp/threads did not answer)', $row->filter('.infra-figure.down dd')->first()->text());
+    }
+
+    public function testACredentialInTheQueryOfTheAdminApiUrlNeverReachesTheInfrastructureRow(): void
+    {
+        $this->server = new RecordedAdminApi()->unreachable()->status('http://127.0.0.1:2019?password=synthetic-query-password');
+
+        $this->browser->request('GET', '/');
+
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('synthetic-query-password', (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testTheBoardShowsTheInfrastructureRowAsDownInsteadOfFailingWhenTheAdminApiUrlIsNotOnLocalhost(): void
+    {
+        $this->server = new RecordedAdminApi()->status('https://admin.example:2019');
+
+        $row = $this->browser->request('GET', '/')->filter('#infrastructure');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(3, $row->filter('.infra-figure.down'));
+        self::assertStringContainsString('must be plain http on localhost, 127.0.0.1 or [::1], not https on admin.example', $row->text());
+    }
+
+    public function testTheBoardMarksAnUnhealthyHubInTheInfrastructureRow(): void
+    {
+        $this->server = new RecordedAdminApi()->answering('/mercure/health/ready', '{"status":"down"}', 503)->status();
+
+        $hub = $this->browser->request('GET', '/')->filter('#infrastructure .infra-figure.unhealthy');
+
+        self::assertSame(['Hub', 'unhealthy'], [$hub->filter('dt')->text(), $hub->filter('dd')->text()]);
+    }
+
+    public function testACredentialInTheReasonOfADownSourceIsRedactedInTheInfrastructureRow(): void
+    {
+        $token = 'ghp_'.str_repeat('a1', 18);
+        $status = self::createStub(ServerStatus::class);
+        $status->method('read')->willReturn(new ServerReading(new EndpointDown('refused for token '.$token), new ServerMetrics(0, 0), HubHealth::Healthy));
+        $this->server = $status;
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertStringContainsString('refused for token [redacted]', $page->filter('#infrastructure .infra-figure.down dd')->text());
+        self::assertStringNotContainsString($token, (string) $this->browser->getResponse()->getContent());
+    }
+
     // Nothing waits unless a test says so, because the board reads the owner notices for its Needs you card on every load and a page test creates no schema.
     protected function setUp(): void
     {
@@ -1093,6 +1207,10 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
             return $reading instanceof RuntimeException ? throw $reading : $reading;
         });
         self::getContainer()->set(OwnerNotices::class, $stub);
+        // Stubbed, because the board runs the forge check when it has no verdict of the last minute and no test may reach GitHub.
+        $forge = self::createStub(ForgeConnection::class);
+        $forge->method('run')->willReturnCallback(fn (): ForgeConnectionVerdict => $this->forge ?? ForgeConnectionVerdict::passed());
+        self::getContainer()->set(ForgeConnection::class, $forge);
     }
 
     private function column(Crawler $page, string $name): Crawler
@@ -1130,5 +1248,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     private function noticesAre(OutageNotice ...$notices): void
     {
         $this->notices = array_values($notices);
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function infrastructureIn(Crawler $page): array
+    {
+        return $page->filter('#infrastructure .infra-figure')->each(static fn (Crawler $figure): array => [$figure->filter('dt')->text(), $figure->filter('dd')->text()]);
     }
 }

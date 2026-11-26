@@ -10,6 +10,10 @@ use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\RelevantMemory;
+use Intakt\Core\Memory\Contract\SettledFinding;
+use Intakt\Core\Memory\Contract\SettledMemory;
+use Intakt\Core\Memory\Contract\SettledQuery;
+use Override;
 use Symfony\AI\Store\Retriever;
 
 final readonly class StoreProjectMemory implements ProjectMemory
@@ -20,6 +24,7 @@ final readonly class StoreProjectMemory implements ProjectMemory
     ) {
     }
 
+    #[Override]
     public function relevantTo(MemoryQuery $query): RelevantMemory
     {
         if ($query->files->isEmpty()) {
@@ -27,6 +32,29 @@ final readonly class StoreProjectMemory implements ProjectMemory
         }
 
         return RelevantMemory::within($this->describing($query), $query->maxBytes);
+    }
+
+    #[Override]
+    public function settledOn(SettledQuery $query): SettledMemory
+    {
+        $files = $query->files();
+
+        if ($files->isEmpty()) {
+            return SettledMemory::none();
+        }
+
+        return SettledMemory::sortedBy($query, $this->settledAbout($query->project, $files));
+    }
+
+    /**
+     * @return Generator<SettledFinding>
+     */
+    private function settledAbout(string $project, Paths $files): Generator
+    {
+        // SettledMemory decides which findings count and whether their code is unchanged, because the store only ranks.
+        foreach ($this->retriever->retrieve($this->searchText($files), ['filter' => $this->documents->settledOfProject($project)]) as $document) {
+            yield $this->documents->toSettledFinding($document);
+        }
     }
 
     /**

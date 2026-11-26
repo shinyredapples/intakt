@@ -55,7 +55,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Review job](review-job.md): how one reviewer's CLI runs in a job container.
 - [Reviewer agent](reviewer-agent.md): the reviewer that runs through Symfony AI.
 - [Reviewer repository tools](reviewer-repository-tools.md): the three read-only tools a reviewer reads the change with.
-- [Prompt assembly](prompt-assembly.md): the one class that builds every message sent to a model.
+- [Prompt assembly](prompt-assembly.md): the one class that builds every message sent to a model, and the only places that may build its carriers (`ReviewerRole`, `RoundReviewer`, `ReviewerConversation`).
 - [Boot step](boot-step.md): booting a commit once to see whether it starts.
 - [Project memory](project-memory.md): what Intakt learned about a project, handed to reviewers.
 - [Ledger](ledger.md): the append-only event log that everything else reads.
@@ -67,6 +67,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Live updates](live-updates.md): how a running review reaches the open page without a reload.
 - [Status read model](status.md): the status JSON per project.
 - [Server status](server-status.md): reading the web server's own state from inside the container.
+- [Doctor](doctor.md): `intakt:doctor`, the infrastructure health checks from the terminal, one line per check with what to do.
 
 ### Models and budget
 
@@ -81,9 +82,10 @@ The pages below are detailed reference for contributors. Each one describes its 
 ### Forges and identity
 
 - [Forge contract and the local git forge](forge-contract.md): how Intakt reads and writes changes on a forge.
+- [Branch cleanup](branch-cleanup.md): how a forge lists, judges and deletes branches for branch cleanup.
 - [GitHub App identity](github-app-identity.md): how Intakt acts on GitHub as its App.
 - [Pull requests handed to Intakt](handed-to-intakt.md): how Intakt decides which pull requests are its own to review and publish on.
-- [Work intake from GitHub issues](work-intake.md): how labeled issues become tasks.
+- [Work intake from GitHub issues](work-intake.md): how labeled issues become tasks, and how `GitHubWorkSource` picks the next one.
 - [Workflow risk scan](workflow-risk-scan.md): how a change to the CI workflows is checked, and held for the owner when risky.
 
 ### Builds
@@ -92,8 +94,9 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Build job](build-job.md): the builder's CLI in a job container and what it returns.
 - [Builder prompt](builder-prompt.md): what a builder is told, with every untrusted input fenced.
 - [Hand-back checks](hand-back.md): the checks on what a build returns before anything is pushed.
-- [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone.
+- [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone, and the pull request text rule (Evidence references, body cap).
 - [The build lane's review cap and in-flight limit](lanes.md): when a new build may start.
+- [When a build over its allowance stops](build-allowance.md): the progress stop, the runaway ceiling and the per-task total, with their causes; the build job keeps a stopped job's commits and carries its cause, but nothing watches a running build yet.
 - [Bare mirror](mirror.md): the local copy of each project's repository.
 - [Build clone](build-clone.md): the fresh clone a build works in.
 - [Retried network git calls](network-git.md): how a failed network git call is tried again.
@@ -106,6 +109,8 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Quality gates](quality-gates.md): every gate `bin/check` runs.
 - [CI](ci.md): what runs on GitHub Actions and when. Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
 - [Journeys](journeys.md): end-to-end tests of what a user does in a fresh install.
+- [Journey check](journey-check.md): `bin/journey-check`, user journeys walked in a real browser against a running Intakt.
+- [The install check](install-check.md): `bin/install-check` installs the project the way the README says, on a clean clone, and reports a failing step.
 - [The journey page](journey-page.md): how `docs/journey.md` and its charts are regenerated.
 - [Releases](releases.md): the labels each pull request gets from its title type, for the release notes.
 - [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors.
@@ -115,8 +120,10 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [The demo with docker compose](demo-with-docker-compose.md): the one-command demo.
 - [The demo recording](demo-recording.md): recording a real review and playing it back in the demo.
 - [Container image](container-image.md): the image and its smoke test.
+- [Development setup](development-setup.md): the compose override that watches files and reloads the workers.
 - [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
 - [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
+- [Disk floors](disk-floors.md): when a folder's free bytes or free inodes are too low for new work.
 - [Persistence](persistence.md): the supported databases.
 - [Job containers](job-containers.md): a fresh container per job, with a network allowlist.
 - [Job images](job-images.md): how a project's job image is made and checked.

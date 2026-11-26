@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Vendor\Contract;
 
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\Provider;
 use Uri\Rfc3986\Uri;
 
@@ -18,10 +19,7 @@ interface ProviderDescriptor
     public function label(): string;
 
     // The first one holds the provider's key, so a kept key is served as that variable.
-    /**
-     * @return list<string>
-     */
-    public function variables(): array;
+    public function variables(): EnvironmentVariables;
 
     // Anchored with the D modifier, so a key with a trailing newline does not fit.
     /**

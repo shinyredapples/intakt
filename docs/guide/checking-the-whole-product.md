@@ -18,8 +18,8 @@ A third helper, the round driver, starts a review on the sample project and move
 
 | Journey | The path | Status |
 |---|---|---|
-| First install and setup | a new install gets its database, its board's first line says nothing is running yet, its **Set up Intakt** button opens the first-run page, it shows an empty projects page, is given the sample project (a second time changes nothing), shows an empty reviews page, starts the first review from the first-run page, which opens that review's page, after which the button has moved to the projects page | built |
-| First run of the demo without a key | a new demo install without a key opens on the first-run page, which opens on the recorded review and says in plain words that it cannot play there, above the key form | built |
+| First install and setup | a new install gets its database, its board's first line says nothing is running yet, its **Set up Intakt** button opens the first step of the setup wizard, it shows an empty projects page, is given the sample project (a second time changes nothing), shows an empty reviews page, starts the first review from the wizard's last step, which opens that review's page, after which the button has moved to the projects page | built |
+| First run of the demo without a key | a new demo install without a key opens on the setup wizard's last step, which opens on the recorded review and says in plain words that it cannot play there and to add a key in step 3, whose key form is there | built |
 | First run of the demo with a key | the same start, then a pasted Hugging Face token (a stand-in, so no provider is asked) is kept, a restart gives the sample project its reviewers, pressing the start opens the live review page of the review it started, and once the review has run that page shows the judge's verdict | built |
 | A task picked, built, reviewed and merged on the demo repository | the whole life of a task | planned |
 | The dashboard showing live progress | the watcher sees a pull request on the sample project (read from a recording, not a forge) and starts a review, the review page shows it in progress, every live update the review sends fits the page a person watching it holds, until the judge has ruled and the page shows it judged; the page that stayed open, with those updates applied, shows the judge's call, the problems, the tokens and the cost as a fresh load does, and no line on it asks you to reload; the first line of the board, as the dashboard sent it while a reviewer worked, names the change under review and links to its review, and once the judge has ruled the board says nothing is running; whether the browser itself listens for those updates is checked by a separate test, not by this journey | built |
@@ -38,7 +38,19 @@ GITHUB_REPOSITORY=owner/name bin/journey-alarm --run=https://github.com/owner/na
 
 It reads stdin when you give no file, and `--run` is optional. It talks to GitHub through `gh` and needs a token in `GH_TOKEN` (or `GITHUB_TOKEN`) in the environment: without one it stops before calling GitHub, even when `gh` is signed in, and the command itself never reads a key.
 
-In GitHub, the journeys run on every push to main. On a pull request they run when it changes anything outside `docs/`, `tests/` and `upstream/` (the product, its app image or the CI configuration) or the journeys' own test code; a pull request that only changes docs or other tests skips them and its check still shows green. They run as the `journeys` job of the `ci` workflow. When one fails there, that pull request's checks (or that push's) turn red, and no task is filed. The `journeys` workflow also runs them on main every night. Start a run of it with its "Run workflow" button or `gh workflow run journeys.yml`. Only a red run of this workflow files or updates the urgent task. The nightly run stays for now; it is removed once the journeys in the `ci` workflow have been green on main for a week.
+In GitHub, the journeys run on every push to main that did not already pass as a pull request into main with exactly the same files. On a pull request they run when it changes anything outside `docs/`, `tests/` and `upstream/` (the product, its app image or the CI configuration) or the journeys' own test code; a pull request that only changes docs or other tests skips them and its check still shows green. They run as the `journeys` job of the `ci` workflow. When one fails there, that pull request's checks (or that push's) turn red, and no task is filed. The `journeys` workflow also runs them on main every night. Start a run of it with its "Run workflow" button or `gh workflow run journeys.yml`. Only a red run of this workflow files or updates the urgent task. The nightly run stays for now; it is removed once the journeys in the `ci` workflow have been green on main for a week.
 A run that times out files or updates a task that says so; a run you cancel files nothing.
 
+`bin/install-check` tries the install the README describes and, when `GITHUB_REPOSITORY` is set, hands its report to `bin/journey-alarm --install-check=<report.json>` itself: one task per failing step, closed when the step passes ([the install check](../architecture/install-check.md)).
+
 The technical side is in [Journeys](../architecture/journeys.md).
+
+## Journeys in a real browser
+
+A second kind of journey check clicks through a dashboard that is already running, in a real browser without a window:
+
+```
+bin/journey-check http://localhost:7781
+```
+
+Each journey starts on a fresh page, finds buttons and text by what they say on screen, and passes or fails. A failing one names the step that broke and, when it can, saves a picture of the page in `var/journey-check/` under a folder for that run. It ends with 0 when every journey passed, 1 when one failed and 2 when it could not run, for example when nothing answers at the address. It has no journeys of its own yet; the first one is planned. It needs Node.js and Playwright: the [user manual](../reference/user-manual.md#walking-user-journeys-with-the-journey-check) has the commands, and the technical side is in [Journey check](../architecture/journey-check.md).

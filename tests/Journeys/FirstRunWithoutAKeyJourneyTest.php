@@ -57,18 +57,21 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
 
     private function openTheDashboard(): void
     {
-        self::assertSame('/setup', $this->redirectOf('/'));
+        self::assertSame('/setup?step=5', $this->redirectOf('/'));
     }
 
     private function readTheRecordedReviewOffer(): void
     {
-        $page = $this->visit('/setup');
+        $ready = $this->visit('/setup?step=5');
 
-        self::assertSame('See a real review', $page->filter('#see-review h1')->text());
-        self::assertSame('This install has no recorded review. Add a key below to run one live.', $page->filter('#see-review .next')->text());
-        self::assertSame('missing', $page->filter('#step-providers')->attr('data-state'));
-        self::assertCount(1, $page->filter('form.keep-provider-key'));
-        self::assertCount(0, $page->filter('form.start-first-review'));
+        self::assertSame('See a real review', $ready->filter('#see-review h2')->text());
+        self::assertSame('This install has no recorded review. Add a key in step 3, AI account, to run one live.', $ready->filter('#see-review .next')->text());
+        self::assertCount(0, $ready->filter('form.start-first-review'));
+
+        $account = $this->visit('/setup?step=3');
+
+        self::assertSame('missing', $account->filter('#step-providers')->attr('data-state'));
+        self::assertCount(1, $account->filter('form.keep-provider-key'));
     }
 
     /**

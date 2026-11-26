@@ -14,6 +14,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubPullRequestBranches;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
@@ -69,6 +70,13 @@ final class RecordedIssueApi
         return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments());
     }
 
+    public function pullRequestBranches(): GitHubPullRequestBranches
+    {
+        [$calls, $checked] = $this->wiring();
+
+        return new GitHubPullRequestBranches($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments());
+    }
+
     public static function fixture(string $name): string
     {
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
@@ -83,7 +91,7 @@ final class RecordedIssueApi
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $http = new MockHttpClient($this->answer(...), 'https://api.github.com');
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');

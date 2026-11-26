@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// The README's no-key path: open /demo, press "Play the demo run" and wait until the replayed review shows its verdict. No model is called.
+// Usage: bin/install-check-demo <address of a running dashboard> <folder for the screenshot>
+// Needs Node.js 22 and Playwright (NODE_PATH names where it is installed); CHROME_PATH names a system Chrome or Chromium.
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+const VERDICT_SECONDS = 180;
+
+async function main(argv) {
+  const [address, folder] = argv;
+  if (address === undefined || folder === undefined) throw new Error('usage: bin/install-check-demo <address> <folder>');
+  const { chromium } = require('playwright');
+  const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
+  try {
+    const page = await browser.newPage();
+    await page.goto(address.replace(/\/+$/, '') + '/demo');
+    await page.getByRole('button', { name: 'Play the demo run' }).click();
+    try {
+      await page.waitForSelector('#review-verdict', { timeout: VERDICT_SECONDS * 1000 });
+    } catch {
+      await screenshot(page, folder, 'demo-no-verdict');
+      throw new Error('the replayed review did not reach its verdict within ' + VERDICT_SECONDS + ' seconds, now at ' + page.url());
+    }
+    await screenshot(page, folder, 'demo-verdict');
+    console.log('The replayed review reached its verdict at ' + page.url());
+  } finally {
+    await browser.close();
+  }
+}
+
+async function screenshot(page, folder, name) {
+  fs.mkdirSync(folder, { recursive: true });
+  await page.screenshot({ path: path.join(folder, name + '.png'), fullPage: true });
+}
+
+main(process.argv.slice(2)).then(
+  () => (process.exitCode = 0),
+  (error) => {
+    console.error('Install check demo stopped: ' + error.message);
+    process.exitCode = 1;
+  },
+);

@@ -5,25 +5,44 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Git\Contract\BranchPushRequest;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Git\Contract\ProtectedChanges;
+use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
+use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
+use Intakt\Core\Review\UseCase\PublishVerdict\ChangePublications;
+use Intakt\Core\Review\UseCase\PublishVerdict\OwnerAsks;
+use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
+use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
+use Intakt\Core\Review\UseCase\PublishVerdict\VerdictForTheLoop;
+use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Core\Review\UseCase\RunReviewRound\MirrorOpenedRoundStatusHandler;
+use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
+use Intakt\Core\Watcher\Contract\HandedOverChanges;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
+use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Core\Watcher\UseCase\AdmitHeads\AdmitHeads;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
@@ -44,6 +63,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
@@ -51,25 +71,37 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubChangeLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCiRuns;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubLabelWrites;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusLabels;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubStatusReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubWatchReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\OutvotedLabels;
+use Intakt\Plugin\GitHubForge\Infrastructure\TrustedPullRequestLabels;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\RecordingCommandBus;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\StandingQueryBus;
@@ -95,9 +127,117 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 {
     private const string GREEN = '2222222222222222222222222222222222222222';
 
+    private const string GREEN_PULL = 'https://github.com/acme/widgets/pull/8';
+
     private EntityManagerInterface $entities;
 
     private string $firstHeadRuns = 'runs_in_progress.json';
+
+    private ?ChangeLabels $steering = null;
+
+    private RecordedStatusOfPullRequest $status;
+
+    private ReviewStatus $roundStatus = ReviewStatus::InReview;
+
+    private ?LatestRoundStatus $latest = null;
+
+    // Evidence E1 of #3878 over a recorded tick, because a build has no forge access, so this stands in for the live pull request the owner checks after merge.
+    public function testAPullRequestsTrustedSteeringLabelsReachTheQueuedRoundWithTheValueAppliedLast(): void
+    {
+        $pull = new RecordedPullRequestLabels('/repos/acme/widgets/issues/8', RecordedTrust::OWN_IDENTITY);
+        $pull->applied('review:full', RecordedTrust::WRITER);
+        $pull->applied('model:light', RecordedTrust::WRITER);
+        $pull->applied('model:strong', RecordedTrust::WRITER);
+        $pull->applied('model:standard', RecordedTrust::TRIAGE);
+        $this->steering = $this->changeLabelsOver($pull);
+        $commands = new RecordingCommandBus();
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+
+        $stored = $this->entities->getRepository(StartedRound::class)->findOneBy(['change' => self::GREEN_PULL]);
+        self::assertInstanceOf(StartedRound::class, $stored);
+        self::assertSame(
+            [['review:full', 'model:strong'], ['review:full', 'model:strong'], ['review:full', 'model:strong', 'model:standard'], ['Two values of one label family were set on this change. Only the one applied last counts, so Intakt removed: `model:light`. If you applied one of them again just now, apply it once more: the value applied last counts.']],
+            [[...$commands->started[0]->start->labels], [...$stored->labels()], $pull->labels, $pull->comments],
+        );
+    }
+
+    // Evidence E1 of #3944 over the real status adapter, because a build has no forge access and the owner checks the live pull request after merge.
+    public function testThePullRequestWhoseRoundATickQueuesCarriesTheInReviewLabelBesideItsOtherLabelsAfterThatTick(): void
+    {
+        $this->status->applied('review:full', RecordedTrust::WRITER);
+        $before = $this->status->labels;
+
+        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+
+        self::assertSame([['review:full'], ['review:full', 'status:in-review'], []], [$before, $this->status->labels, $this->status->comments]);
+    }
+
+    public function testAPersonsStatusLabelOnAnUnchangedPullRequestWhoseReconcileFailedIsRestoredOnTheNextPassWithOneComment(): void
+    {
+        $this->status->applied('status:waiting-on-you', RecordedTrust::WRITER);
+        $this->status->eventReadsToFail = 1;
+        $commands = new RecordingCommandBus();
+        try {
+            $this->handler($commands)(new WatchPullRequests('alpha'));
+            self::fail('The failed events read was swallowed.');
+        } catch (ForgeReadFailed) {
+            $afterTheFailure = [$this->status->labels, $this->status->comments];
+        }
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+
+        self::assertSame([[['status:waiting-on-you'], []], ['status:in-review'], 1, 1], [$afterTheFailure, $this->status->labels, count($this->status->comments), count($commands->started)]);
+    }
+
+    public function testAStoredRoundThatMovesOnReplacesTheInReviewLabelOnTheNextPassOverAnUnchangedListingWithoutAComment(): void
+    {
+        $commands = new RecordingCommandBus();
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+        $inReview = $this->status->labels;
+        $this->roundStatus = ReviewStatus::WaitingOnYou;
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+
+        self::assertSame([['status:in-review'], ['status:waiting-on-you'], [], 1], [$inReview, $this->status->labels, $this->status->comments, count($commands->started)]);
+    }
+
+    // Over the real stored round state, because only the recorded publication may move the label on.
+    public function testAJudgedRoundWhosePublicationHasNotRunKeepsTheInReviewLabelUntilTheNextPassAfterItsPublication(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->latest = new StoredLatestRoundStatus($fixture->transactions());
+        $roundId = $this->judgedRound($fixture);
+        $commands = new RecordingCommandBus();
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+        $judged = $this->status->labels;
+        $rounds = $fixture->transactions();
+        $rounds->recordPublication($rounds->stored($roundId));
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+
+        self::assertSame([['status:in-review'], ['status:waiting-on-you'], [], 1], [$judged, $this->status->labels, $this->status->comments, count($commands->started)]);
+    }
+
+    // Evidence E1 of #3945: the queued RoundOpened and the real publication handler over a scripted GitHub move the label on themselves, with no watcher pass at all, so the owner's live check after merge has a recorded counterpart.
+    public function testAPullRequestsLabelsBeforeARoundAfterQueueingAndAfterThePublicationHandlerPublishedTheStoredRoundFollowTheRound(): void
+    {
+        $this->status->applied('review:full', RecordedTrust::WRITER);
+        $fixture = new RoundFixture(self::getContainer());
+        $before = $this->status->labels;
+        $roundId = $fixture->startFor(self::GREEN_PULL, $fixture->bus, 2);
+        $opened = new MirrorOpenedRoundStatusHandler($fixture->transactions(), $this->recordedMirror($fixture));
+        foreach ($fixture->bus->announced as $announced) {
+            $opened($announced);
+        }
+        $queued = $this->status->labels;
+        $this->judge($fixture);
+
+        $this->publicationHandler($fixture)(new PublishVerdict($roundId));
+
+        self::assertSame([['review:full'], ['review:full', 'status:in-review'], ['review:full', 'status:waiting-on-you'], []], [$before, $queued, $this->status->labels, $this->status->comments]);
+    }
 
     public function testATickOverTwoRecordedPullRequestsRecordsOnePendingHeadAndQueuesOneRound(): void
     {
@@ -195,8 +335,22 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
+        $this->status = new RecordedStatusOfPullRequest('/repos/acme/widgets/issues/8', RecordedTrust::OWN_IDENTITY);
+    }
+
+    // The real read of the labels over the recorded pull request, so the permission answer and the family rule decide what reaches the round; the permissions are the ones recorded for `acme/widget`, because the listing's fixtures name `acme/widgets`.
+    private function changeLabelsOver(RecordedPullRequestLabels $pull): GitHubChangeLabels
+    {
+        $identity = new RecordedTrust(TrustChecks::clock())->client();
+        $http = new MockHttpClient(static fn (string $method, string $url, array $options): ResponseInterface => $pull->answers((string) parse_url($url, PHP_URL_PATH))
+            ? $pull->answer($method, (string) parse_url($url, PHP_URL_PATH), is_string($options['body'] ?? null) ? $options['body'] : '')
+            : $identity->request($method, str_replace('/repos/acme/widgets/', '/repos/acme/widget/', $url), $options), 'https://api.github.com');
+        $wiring = TrustChecks::wiring($http);
+        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
+        $outvoted = new OutvotedLabels(new GitHubLabelWrites($wiring->calls, $wiring->tokens), new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), new NullLogger());
+
+        return new GitHubChangeLabels(new TrustedPullRequestLabels($pull, $wiring->check, $repositories), $outvoted, new NullLogger());
     }
 
     private function pushOf(string $branch, string $head): BranchPushRequest
@@ -223,7 +377,12 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $installWide = new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $clock), $clock, $logger);
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
-        $starts = new RoundStarts($commands, $rounds, $ledger);
+        $steering = $this->steering;
+        if (!$steering instanceof ChangeLabels) {
+            $steering = self::createStub(ChangeLabels::class);
+            $steering->method('steeringOf')->willReturn(new Labels());
+        }
+        $starts = new RoundStarts($commands, $rounds, $ledger, $steering);
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $queries = new StandingQueryBus($recorded, $this->entities);
         // Main's boot line goes to a ledger of its own, because the test counts only the lines of the two heads.
@@ -233,7 +392,14 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        $latest = $this->latest;
+        if (!$latest instanceof LatestRoundStatus) {
+            $latest = self::createStub(LatestRoundStatus::class);
+            $latest->method('of')->willReturnCallback(fn (): ReviewStatus => $this->roundStatus);
+        }
+        $statuses = new StatusMirrors($find, $rounds, new RoundStatusMirror($latest, $locks, $logger, $this->statusLabels()), $logger);
+
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
     }
 
     private function recordedEvents(): string
@@ -247,7 +413,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     private function reads(MockClock $clock): GitHubWatchReads
     {
         $http = new MockHttpClient(fn (string $method, string $url): ResponseInterface => $this->answer($url), 'https://api.github.com');
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
@@ -270,6 +436,61 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
     private function panel(): Panel
     {
         return new Panel([new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10)], QuorumPolicy::All);
+    }
+
+    // Both #7 and #8 are recorded, because a tick that queues #7's round reconciles its labels too; Intakt's own identity comes from the answers recorded for `acme/widget`, because the listing's fixtures name `acme/widgets`.
+    private function statusLabels(): GitHubStatusLabels
+    {
+        $identity = new RecordedTrust(TrustChecks::clock())->client();
+        $pulls = [$this->status, new RecordedStatusOfPullRequest('/repos/acme/widgets/issues/7', RecordedTrust::OWN_IDENTITY)];
+        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($pulls, $identity): ResponseInterface {
+            $path = (string) parse_url($url, PHP_URL_PATH);
+            $pull = array_find($pulls, static fn (RecordedStatusOfPullRequest $pull): bool => $pull->answers($path));
+
+            return $pull instanceof RecordedStatusOfPullRequest
+                ? $pull->answer($method, $path, is_string($options['body'] ?? null) ? $options['body'] : '')
+                : $identity->request($method, str_replace('/repos/acme/widgets/', '/repos/acme/widget/', $url), $options);
+        }, 'https://api.github.com');
+        $wiring = TrustChecks::wiring($http);
+        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]);
+
+        return new GitHubStatusLabels(new GitHubStatusReads($wiring->calls, $wiring->tokens), $repositories, $wiring->identities, new GitHubIssueComments($wiring->calls, $wiring->tokens, $repositories, '12345'), new GitHubLabelWrites($wiring->calls, $wiring->tokens));
+    }
+
+    private function recordedMirror(RoundFixture $fixture): RoundStatusMirror
+    {
+        return new RoundStatusMirror(new StoredLatestRoundStatus($fixture->transactions()), new LockFactory(new InMemoryStore()), new NullLogger(), $this->statusLabels());
+    }
+
+    private function judgedRound(RoundFixture $fixture): string
+    {
+        $roundId = $fixture->startFor(self::GREEN_PULL, $fixture->bus, 2);
+        $this->judge($fixture);
+
+        return $roundId;
+    }
+
+    private function judge(RoundFixture $fixture): void
+    {
+        $vendor = new VerdictPerRole([]);
+        foreach ($fixture->bus->messages as $message) {
+            $fixture->deliver($message, $vendor);
+        }
+        foreach ($fixture->judgings() as $judging) {
+            $fixture->judge($vendor)($judging);
+        }
+    }
+
+    private function publicationHandler(RoundFixture $fixture): PublishVerdictHandler
+    {
+        $handed = new HandedOverChanges($fixture->ledger());
+        $protected = self::createStub(ProtectedHeads::class);
+        $protected->method('of')->willReturn(ProtectedChanges::touching(new Paths()));
+        $locks = new LockFactory(new InMemoryStore());
+        $mirror = $this->recordedMirror($fixture);
+        $verdicts = new VerdictForTheLoop(new StoredVerdicts(self::getContainer()->get('serializer.stored')), $fixture->findingStore(), new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads(), new ConfiguredPrices([])), new ChangeDecision());
+
+        return new PublishVerdictHandler($fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $handed, $verdicts, new OwnerAsks($handed, $protected, $fixture->ledger()), new ScriptedGitHub()->forge(), new ChangePublications($locks), $mirror, new NullLogger());
     }
 
     private function fixture(string $name): string

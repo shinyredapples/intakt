@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Closure;
+use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
 use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
@@ -33,6 +34,9 @@ abstract class JourneyTestCase extends TestCase
     private const string QUEUE_VARIABLE = 'MESSENGER_TRANSPORT_DSN';
     // The instance's database, because the worker that steps a round is a console process of its own, which would never see a message queued in memory here.
     private const string SHARED_QUEUE = 'doctrine://default';
+    private const string ADMIN_API_VARIABLE = 'FRANKENPHP_ADMIN_URL';
+    // On a reserved name that resolves nowhere, so even a reader that sent a request would reach no server.
+    private const string REFUSED_ADMIN_API = 'http://admin-api.invalid';
 
     private JourneySteps $steps;
 
@@ -176,10 +180,17 @@ abstract class JourneyTestCase extends TestCase
      */
     final protected function dashboardWith(array $environment): KernelBrowser
     {
-        $browser = new KernelBrowser($this->bootDriverKernel($environment), ['HTTP_HOST' => 'localhost:'.$this->dashboardPort()]);
+        // An admin URL the reader refuses before any request, because the board reads the server status on each load and a journey must never reach an admin API that happens to listen on this machine; set in $_ENV, so it holds after the reboot KernelBrowser does before each later request, and first, so a journey can still override it.
+        $browser = new KernelBrowser($this->bootDriverKernel([self::ADMIN_API_VARIABLE => self::REFUSED_ADMIN_API, ...$environment]), ['HTTP_HOST' => 'localhost:'.$this->dashboardPort()]);
         $browser->followRedirects();
 
         return $browser;
+    }
+
+    // Asked of the reader's own refusal, so a journey reads the reason the board shows for the admin URL dashboardWith() sets.
+    final protected function refusedAdminApiReason(): string
+    {
+        return AdminApiNotOnLocalhost::becauseOfTheAddress('http', parse_url(self::REFUSED_ADMIN_API, PHP_URL_HOST))->getMessage();
     }
 
     // On the shared queue, because the worker that runs the queued round is another console process than the tick that queued it.

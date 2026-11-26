@@ -7,14 +7,20 @@ namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\InfrastructureRow;
 use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\SetupStep;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\RememberedForgeVerdict;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
+use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Server\Contract\AdminApiNotOnLocalhost;
+use Intakt\Core\Server\Contract\ServerStatus;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
 use Symfony\Component\Clock\ClockInterface;
@@ -39,6 +45,8 @@ final readonly class ShowBoardController
         private UrlGeneratorInterface $urls,
         private WaitingCount $waiting,
         private ClockInterface $clock,
+        private ServerStatus $server,
+        private RememberedForgeVerdict $forge,
     ) {
     }
 
@@ -49,9 +57,9 @@ final readonly class ShowBoardController
         $events = $this->ledger->readInOrder();
         $board = $this->reviewPages->boardOf($events);
 
-        // Only on a demo install, because an install without the sample has nothing on the first-run page to start and keeps the board's own opening.
+        // Only on a demo install, because an install without the sample has nothing on the setup wizard to start and keeps the board's own opening; it lands on the Ready step, which holds the recorded review and the first review's start.
         if ($board->hasNoReview() && $this->sample->hasRepository()) {
-            return $this->variesByDevice($this->redirectTo(DashboardRoutes::FIRST_RUN));
+            return $this->variesByDevice($this->redirectTo(DashboardRoutes::RUN_SETUP, [RunSetupController::STEP => SetupStep::Ready->value]));
         }
 
         if ($this->landsOnWaiting($request)) {
@@ -71,11 +79,12 @@ final readonly class ShowBoardController
             'now' => $this->clock->now(),
             'columns' => $board->shownColumns(),
             'coming_next' => $board->comingNext(),
+            'infrastructure' => $this->infrastructureRow(),
         ])));
     }
 
     /**
-     * @param array<string, string> $parameters
+     * @param array<string, int|string> $parameters
      */
     private function redirectTo(string $route, array $parameters = []): RedirectResponse
     {
@@ -119,5 +128,23 @@ final readonly class ShowBoardController
     private function redactedMain(FailingMain $main): FailingMain
     {
         return new FailingMain($main->project, $main->main, $main->toolFingerprint, $this->redactor->redact($main->reason));
+    }
+
+    // The forge figure comes from the check the doctor runs, so the board and the doctor cannot judge the forge apart (decision D1 of #3826).
+    private function infrastructureRow(): InfrastructureRow
+    {
+        return $this->serverRow()->withForge($this->forge->latest());
+    }
+
+    // A refused admin API address shows on the row instead of failing the whole board, because the board is where the owner looks first.
+    private function serverRow(): InfrastructureRow
+    {
+        try {
+            $reading = $this->server->read();
+        } catch (AdminApiNotOnLocalhost $refused) {
+            return InfrastructureRow::refused($this->redactor->redact($refused->getMessage()));
+        }
+
+        return InfrastructureRow::of($reading, $this->redactor->redact(...));
     }
 }

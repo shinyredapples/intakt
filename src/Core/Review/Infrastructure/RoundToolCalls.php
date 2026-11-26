@@ -7,6 +7,8 @@ namespace Intakt\Core\Review\Infrastructure;
 use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Exception\ORMException;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\ToolCallCount;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundToolCall;
@@ -19,6 +21,7 @@ final readonly class RoundToolCalls
     public function __construct(
         private EntityManagerInterface $entities,
         private LoggerInterface $logger,
+        private Redaction $redaction,
     ) {
     }
 
@@ -43,15 +46,13 @@ final readonly class RoundToolCalls
         return array_map(static fn (array $row): ToolCallCount => new ToolCallCount($row['tool'], (int) $row['calls']), $rows);
     }
 
-    /**
-     * @return list<string>
-     */
-    public function filesReadIn(ReviewRound $round): array
+    public function filesReadIn(ReviewRound $round): Paths
     {
         /** @var list<array{fileRead: string}> $rows */
         $rows = $this->rowsOf($round, 'SELECT c.fileRead, MIN(c.position) AS HIDDEN firstRead FROM %s c WHERE c.round = :round AND c.fileRead IS NOT NULL GROUP BY c.fileRead ORDER BY firstRead');
 
-        return array_column($rows, 'fileRead');
+        // Redacted on the way out, because the summary is published live and a path is the model's text; rows kept before this read the same.
+        return new Paths(...array_map($this->redaction->redact(...), array_column($rows, 'fileRead')));
     }
 
     /**

@@ -1,6 +1,6 @@
 # Project memory: what Intakt remembers
 
-Every builder and reviewer starts with a fresh, empty box. So how does the tenth builder know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built: the notebook itself (notes tied to files, looked up within a size limit, read-only for reviewers) exists, a finished review writes the fixed findings into it, and every reviewer is handed the notes for the files it reviews; builders are not handed it yet. This describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
+Every Developer and reviewer starts with a fresh, empty box. So how does the tenth Developer know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built: the notebook itself (notes tied to files, looked up within a size limit, read-only for reviewers) exists, a finished review writes the fixed findings into it, and every reviewer is handed the notes for the files it reviews; Developers are not handed it yet. This describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
 
 ## How it works
 
@@ -14,11 +14,13 @@ flowchart LR
   you([You]) -- "pin, edit, delete" --> notebook
 ```
 
-- **Only Intakt writes it**, and only from things that really happened: a merged change's summary, a review finding that was fixed, a check that failed twice for the same cause. A builder or reviewer can't write to it, so no AI can plant something misleading there.
+- **Only Intakt writes it**, and only from things that really happened: a merged change's summary, a review finding that was fixed, a check that failed twice for the same cause. A Developer or reviewer can't write to it, so no AI can plant something misleading there.
 - **Every job reads it** as a short briefing at the start: what the project is, what is in flight, recent decisions, and the known pitfalls for the files it is about to touch. The briefing has a size limit, so it stays cheap.
 - **You can curate it** on the dashboard: pin what matters, edit what is wrong, delete what is no longer true.
 
 ## Notes that go out of date
+
+The same goes for a **settled finding**: a review point that was rejected on purpose, kept with the reason, so reviewers do not raise it again. It is remembered with a fingerprint of the code it points at; when that code changes on main it is marked stale and stops counting as settled. Deleting one from the dashboard comes with a later part; only the storage side of deleting exists now. (Intakt can store and expire these now; it does not yet record them from reviews or show them to reviewers.)
 
 A note like "the verdict parser refuses empty lists because ..." is only true while that code stays the same. So each note that explains code remembers **which files it describes**. When one of those files changes on main, the note is marked **stale**: the briefing says so, and the dashboard shows it, until a later job describes the code again. No job reads an outdated explanation as fact.
 

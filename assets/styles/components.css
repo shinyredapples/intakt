@@ -484,6 +484,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .crumbs li { display: flex; align-items: center; gap: var(--s8); min-width: 0; overflow-wrap: anywhere; }
 .crumbs li + li::before { content: "/"; color: var(--muted); }
 .crumbs [aria-current="page"] { color: var(--muted); }
+/* The page's own crumb shrinks on the trail's line so a long change name wraps there, because as a whole item it moved to a line of its own and left its "/" alone. */
+.crumbs li:last-child { flex: 1 1 12ch; }
 /* A crumb link is a control that stands alone, not in a sentence, so on a phone it takes the 44 px floor. */
 @media (max-width: 760px) {
   .crumbs a { display: inline-flex; align-items: center; min-height: 44px; }
@@ -499,10 +501,19 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }
 /* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
 .page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+/* The mock of the task page puts its actions at the top beside the title, so the title column takes the rest of the row and the actions wrap under it only when it would be narrower than 280 px. */
+.page-head:has(> .task-actions) { align-items: flex-start; }
+.page-head:has(> .task-actions) > div:first-child { flex: 1 1 280px; }
+/* The browser's own top margin of the title put Stop above the title text, so the title starts at the top of the row like the actions. */
+.page-head:has(> .task-actions) h1 { margin-top: 0; }
 .page-head .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* DESIGN.md, Awkward data: a figure's kind label is one word, so it never breaks into letters beside a long cost on a phone. */
+.page-head .meta .figure-kind { white-space: nowrap; overflow-wrap: normal; }
 /* On a phone a shrinking label broke into letters beside a long cost, so the label keeps its width and the figure wraps. */
 .page-head .meta .fact-label { flex: none; white-space: nowrap; overflow-wrap: normal; }
 .page-head .meta .fact-label + span { min-width: 0; }
+/* DESIGN.md, Awkward data: as a flex row, a cost with its kind label and price date shrank to one narrow column per part on a phone, so it flows as one text that wraps between words. */
+.page-head .meta #review-summary-cost { display: inline; }
 /* The octopus stays beside the title on a phone: the head does not wrap and the title column takes the rest of the width. */
 .setup .page-head { align-items: center; flex-wrap: nowrap; }
 .setup .page-head > div { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
@@ -551,7 +562,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* The review list: each row is one link of at least 44 px at every width (WCAG 2.2 asks for 24), and the round id sits outside it, so a click selects the whole id for copying instead of opening the round. */
 .review-rows { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hairline); }
 .review-row { border-bottom: 1px solid var(--hairline); }
-.review-link { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); min-height: 44px; padding: var(--s8) var(--s4) var(--s4); color: inherit; text-decoration: none; }
+.review-link, .review-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); min-height: 44px; padding: var(--s8) var(--s4) var(--s4); color: inherit; text-decoration: none; }
 .review-link:hover .review-title { text-decoration: underline; }
 .review-title { flex: 1 1 16rem; font: 600 var(--t15)/1.3 var(--f-head); overflow-wrap: anywhere; }
 .review-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); color: var(--muted); font-size: var(--t13); }
@@ -578,7 +589,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .live-calls { margin: 0 0 var(--s8); padding-left: var(--s16); color: var(--muted); font-family: var(--f-mono); font-size: var(--t13); overflow-wrap: anywhere; }
 .live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .live-text .asked-again { margin: 0 0 var(--s8); color: var(--muted); font-size: var(--t13); white-space: normal; }
-/* The first-run page (mock setup.html): its 760 px text column, the step markers and one section per step. */
+/* The setup wizard (mock setup.html): its 760 px text column, the step markers and one section per step. */
 /* The mock's column pads 48 px above and 80 px below (24 px and 48 px on a phone, with 16 px gutters) and has no shell around it. Here .content already pads 32 px (16 px on a phone), so the column adds only the rest. */
 .setup { max-width: 760px; margin: 0 auto; padding: var(--s16) var(--s24) var(--s48); }
 .steps { display: flex; gap: var(--s8); margin: 0 0 var(--s8); padding: 0; list-style: none; }
@@ -601,6 +612,58 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .step .address { overflow-wrap: anywhere; }
 .choice h3 { margin: var(--s16) 0 var(--s8); font-size: var(--t15); }
 .step .command { margin: 0 0 var(--s16); padding: var(--s12); border-radius: var(--r-btn); background: var(--tint); font-family: var(--f-mono); font-size: var(--t13); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The setup wizard (mock setup.html): one step per page, the progress links above it, its errors in red under the field they name. */
+.wizard .steps { margin-bottom: calc(var(--s32) + var(--s8)); }
+.wizard .steps a { color: inherit; text-decoration: none; }
+.wizard .steps a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--r-btn); }
+.wizard .step-count { display: none; }
+.wizard .step { padding: 0; border-top: 0; }
+.wizard .step h1 { margin: 0 0 var(--s8); }
+.wizard .field { display: grid; gap: calc(var(--s4) + 2px); margin-bottom: calc(var(--s16) + var(--s4)); }
+.wizard .field label { font: 600 var(--t15)/1.3 var(--f-head); }
+.wizard .field .input { width: 100%; }
+.wizard .field .hint { color: var(--muted); font-size: var(--t13); }
+.wizard .field .field-error { margin-left: 0; }
+.wizard .step-error { color: var(--red); }
+.wizard .detected { display: flex; gap: calc(var(--s8) + 2px); align-items: center; margin: calc(var(--s16) + var(--s4)) 0; padding: var(--s12) calc(var(--s12) + 2px); border-radius: var(--r-card); background: var(--tint); }
+.wizard .detected p { margin: 0; overflow-wrap: anywhere; }
+.wizard .detected .i { color: var(--primary); }
+.wizard .not-wired { margin: var(--s16) 0 0; color: var(--muted); }
+.wizard .app-permissions { margin: var(--s12) 0 0; font-size: var(--t13); }
+.wizard .step-nav .grow { flex: 1; }
+/* The Add project flow (mock add-project.html): short values keep a short field, and only the failed part of a check is red (DESIGN.md, Errors). */
+.wizard .field .input.narrow { max-width: 240px; }
+.add-project .checks li[data-boot="failed"] strong { color: var(--red); }
+.checks { margin: 0; padding: 0; list-style: none; }
+.checks li { display: flex; gap: var(--s12); align-items: flex-start; padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
+.checks li:first-child { border-top: 1px solid var(--hairline); }
+.checks li p { margin: var(--s4) 0 0; font-size: var(--t13); overflow-wrap: anywhere; }
+.checks .i.ok { color: var(--primary); }
+.checks .i.info { color: var(--muted); }
+.checks .i.broken-i { color: var(--red); }
+.checks + .step-nav { margin-top: var(--s16); border-top: 0; }
+.wizard .first-review { margin-top: var(--s24); }
+.wizard .first-review .next { margin: var(--s4) 0 0; color: var(--muted); font-size: var(--t13); }
+@media (max-width: 760px) {
+  /* The progress keeps only its bars, each a 44 px tall link, and the step count says where the reader is (DESIGN.md, Phone patterns). */
+  .wizard .steps { margin-bottom: var(--s8); }
+  .wizard .steps li { position: relative; gap: 0; }
+  .wizard .steps a { position: absolute; top: -20px; right: 0; left: 0; height: 44px; }
+  .wizard .steps a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .wizard .step-count { display: block; margin-bottom: var(--s24); font-size: var(--t15); }
+  .wizard .step-nav { flex-wrap: wrap; }
+}
+/* The Add project flow shows its step count at every width, under the progress (mock add-project.html, .flow .step-count), and its weekly share is a slider with its percent beside it. */
+.add-project .step-count { display: block; margin: calc(-1 * var(--s24)) 0 var(--s24); }
+.share-row { display: flex; align-items: center; gap: var(--s16); max-width: 420px; }
+.share-row input[type="range"] { flex: 1; height: 24px; accent-color: var(--deep); }
+.share-row output { min-width: 48px; font-weight: 600; }
+@media (max-width: 760px) {
+  /* The progress links reach 20 px above their bars, so this margin alone keeps the bars 20 px under the breadcrumb (it collapses with the breadcrumb's smaller bottom margin) and no link covers the Projects link. */
+  .add-project .steps { margin-top: calc(var(--s16) + var(--s4)); }
+  .add-project .step-count { margin: 0 0 calc(var(--s16) + var(--s4)); }
+  .share-row input[type="range"] { height: 44px; }
+}
 .comp-nav { display: flex; flex-wrap: wrap; gap: var(--s8); margin-bottom: var(--s24); }
 .comp-nav a { padding: var(--s4) var(--s12); border-radius: var(--r-chip); background: var(--tint); color: var(--ink); font-size: var(--t13); text-decoration: none; }
 .comp-sec { margin-bottom: var(--s48); }
@@ -728,6 +791,21 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .ttabs ~ .task-grid .timeline-title { display: none; }
   .log { margin-top: 0; }
 }
+/* At 390 wide the reviewers table measured 567 px in a 358 px box and hid the count and Stop past the edge, so a phone stacks each reviewer: role and outcome, model, findings, then Stop across the row. */
+/* The outcome track is capped and its text may break anywhere, because a blocked reviewer's unbroken note in an `auto` track pushed the row offscreen again. */
+/* Only the Findings heading stays in view, and only when it carries the newest round's "counted" label, because that label and its source tooltip live nowhere else. */
+@media (max-width: 760px) {
+  .round .ledger.reviewers thead, .round .ledger.reviewers thead tr { display: block; }
+  .round .ledger.reviewers th:not(.num), .round .ledger.reviewers th.num:not(:has(.figure-kind)) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .round .ledger.reviewers th.num { display: block; padding: 0 0 var(--s8); border-bottom: 0; text-align: left; }
+  .round .ledger.reviewers tr { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(60%); column-gap: var(--s12); padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
+  .round .ledger.reviewers td { padding: 0 0 var(--s4); border-bottom: 0; text-align: left; overflow-wrap: anywhere; }
+  .round .ledger.reviewers .reviewer-outcome { flex-wrap: wrap; }
+  .round .ledger.reviewers td:nth-child(3) { grid-row: 1; grid-column: 2; }
+  .round .ledger.reviewers td:nth-child(2), .round .ledger.reviewers td:nth-child(n+4) { grid-column: 1 / -1; }
+  .round .ledger.reviewers td.num::before { content: "Findings: "; color: var(--muted); }
+  .round .ledger.reviewers .stop-reviewer .btn { width: 100%; }
+}
 
 /* Status line and the Status page's lanes */
 .working { margin: var(--s24) 0 var(--s32); }
@@ -737,6 +815,13 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .status-line .grow { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .status-line > .i:first-child { color: var(--primary); }
 .status-line .go { transform: rotate(-90deg); }
+/* Infrastructure row: muted like the status line, so only a down source or an unhealthy hub draws the eye; it wraps, so a long reason never widens the page. */
+.infra-figures { display: flex; flex-wrap: wrap; gap: var(--s8) var(--s24); margin: var(--s24) 0 0; padding: 0 var(--s16); color: var(--muted); }
+.infra-figure { display: flex; gap: var(--s8); min-width: 0; }
+.infra-figure dt::after { content: ":"; }
+.infra-figure dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.infra-figure.down dd, .infra-figure.unhealthy dd { color: var(--red); }
+.infra-reason { color: var(--muted); }
 /* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
@@ -886,6 +971,8 @@ a.lane:hover { background: var(--tint-2); }
 .multiples.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .multiple { margin: 0; min-width: 0; }
 .multiple .sub-h { margin: 0 0 var(--s4); font: 600 var(--t15)/1.3 var(--f-head); }
+/* Trends Up next: DESIGN.md list rows, the board's review rows, under one small heading per group (D6 of issue 2864). */
+.up-next h3 { margin: var(--s16) 0 var(--s4); color: var(--muted); font: 600 var(--t13)/1.3 var(--f-body); }
 .chart-svg { display: block; overflow: visible; width: 100%; max-width: 360px; height: auto; }
 .c-grid { stroke: var(--hairline); stroke-width: 1; }
 .c-base { stroke: var(--muted); stroke-width: 1; opacity: .6; }

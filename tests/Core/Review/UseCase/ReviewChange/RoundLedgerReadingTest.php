@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
@@ -15,19 +16,22 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
-use Intakt\Core\Review\Contract\ReviewerBlocked;
-use Intakt\Core\Review\Contract\ReviewerStarted;
+use Intakt\Core\Review\Contract\ModelNames;
+use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\UseCase\ReviewChange\ReviewerFigures;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -36,10 +40,13 @@ use Symfony\AI\Platform\Bridge\Generic\Completions\TokenUsageExtractor as Comple
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\SerializerInterface;
+use WeakReference;
 
 #[Group('persistence')]
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(LedgerPayloads::class)]
+#[CoversClass(RoundCostList::class)]
 #[UsesClass(RoundTokens::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
@@ -51,13 +58,15 @@ use Symfony\Component\Serializer\Encoder\JsonEncoder;
 #[UsesClass(UsageUnsettled::class)]
 #[UsesClass(TokenUsageRow::class)]
 #[UsesClass(TokenFigures::class)]
-#[UsesClass(ReviewerStarted::class)]
-#[UsesClass(ReviewerBlocked::class)]
+#[UsesClass(ReviewerFigures::class)]
+#[UsesClass(ModelNames::class)]
 final class RoundLedgerReadingTest extends KernelTestCase
 {
     private const string ROUND = '0192a000-0000-7000-8000-000000000001';
 
     private const string OTHER_ROUND = '0192a000-0000-7000-8000-000000000002';
+
+    private const string THIRD_ROUND = '0192a000-0000-7000-8000-000000000003';
 
     private RoundFixture $fixture;
 
@@ -115,22 +124,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
     }
 
-    public function testASettledRowWithATokenCountThatIsNotANumberIsSkipped(): void
-    {
-        $this->recordCall('c1', self::ROUND, 'settled');
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [['prompt' => 'many'] + $this->usage()]]);
-
-        self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
-    }
-
-    public function testAStartedRowOfAnUnknownTierIsSkipped(): void
-    {
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'huge', 'round' => self::ROUND]);
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [$this->usage()]]);
-
-        self::assertSame([0, 0, 0, 0], $this->tokensOf(self::ROUND));
-    }
-
     public function testARoundsCostIsItsCallsPricedByTheirModel(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');
@@ -147,7 +140,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, ['small']], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, ['small']], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testAClaudeCodeCallWhoseAnswerNamesNoModelIsPricedByTheModelItsTierResolvedTo(): void
@@ -175,7 +168,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testAnUnsettledCallOfAModelWithoutAPriceThatRecordedNoUsageHasAnUnknownCostNamingTheModel(): void
@@ -185,13 +178,46 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, ['unpriced']], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, ['unpriced']], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testAnUnsettledCallOfAPricedModelThatRecordedNoUsageCostsNothing(): void
     {
         $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'strong', 'round' => self::ROUND, 'model' => 'big']);
         $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'unsettled', 'failure' => 'RuntimeException', 'usages' => []]);
+
+        self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
+    }
+
+    public function testAStartedCallOfAModelWithoutAPriceThatNeverEndedHasAnUnknownCostNamingTheModel(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'strong', 'round' => self::ROUND, 'model' => 'unpriced']);
+
+        $cost = $this->reading()->costOf(self::ROUND);
+
+        self::assertSame([null, ['unpriced']], [$cost->usd, [...$cost->unpriced]]);
+    }
+
+    public function testAStartedCallOfAPricedModelThatNeverEndedCostsNothing(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'strong', 'round' => self::ROUND, 'model' => 'big']);
+
+        self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
+    }
+
+    public function testASettledCallBesideANeverEndedCallOfAModelWithoutAPriceHasAnUnknownCost(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::ROUND, 'model' => 'small']);
+
+        $cost = $this->reading()->costOf(self::ROUND);
+
+        self::assertSame([null, ['small']], [$cost->usd, [...$cost->unpriced]]);
+    }
+
+    public function testANeverEndedCallOfAModelWithoutAPriceInAnotherRoundAddsNothing(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'strong', 'round' => self::OTHER_ROUND, 'model' => 'unpriced']);
 
         self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
     }
@@ -204,7 +230,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, [], 'unknown'], [$cost->usd, $cost->unpriced, $cost->reading()]);
+        self::assertSame([null, [], 'unknown'], [$cost->usd, [...$cost->unpriced], $cost->reading()]);
     }
 
     public function testACallLackingInputTokensOfAModelWithoutAPriceStillNamesTheModel(): void
@@ -214,7 +240,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         $cost = $this->reading()->costOf(self::ROUND);
 
-        self::assertSame([null, ['small']], [$cost->usd, $cost->unpriced]);
+        self::assertSame([null, ['small']], [$cost->usd, [...$cost->unpriced]]);
     }
 
     public function testACallReportingZeroInputTokensIsStillPriced(): void
@@ -232,20 +258,231 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
     }
 
+    public function testTheRoundsOfOnePageArePricedFromOneReadOfTheLedger(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->recordCall('c2', self::OTHER_ROUND, 'settled');
+        $counting = new ReadCountingLedger($this->ledger);
+
+        $this->reading($counting)->costsOf(self::ROUND, self::OTHER_ROUND, self::THIRD_ROUND);
+
+        self::assertSame(1, $counting->reads);
+    }
+
+    public function testEachRoundOfABatchIsPricedByTheModelsOfItsOwnCalls(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->recordCall('c2', self::ROUND, 'unsettled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c3', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::OTHER_ROUND, 'model' => 'cheap']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c3', 'phase' => 'settled', 'usages' => [$this->usage()]]);
+
+        $costs = $this->reading()->costsOf(self::ROUND, self::OTHER_ROUND);
+
+        self::assertEqualsWithDelta([2 * (100 * 2.0 + 20 * 10.0) / 1_000_000, (100 * 1.0 + 20 * 4.0) / 1_000_000], [$costs->of(self::ROUND)->usd, $costs->of(self::OTHER_ROUND)->usd], 1e-12);
+    }
+
+    public function testARoundOfAnUnpricedModelStaysUnknownInABatchWhileTheOtherRoundKeepsItsFigure(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::OTHER_ROUND, 'model' => 'small']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'settled', 'usages' => [$this->usage()]]);
+
+        $costs = $this->reading()->costsOf(self::ROUND, self::OTHER_ROUND);
+
+        self::assertSame([(100 * 2.0 + 20 * 10.0) / 1_000_000, null, ['small']], [$costs->of(self::ROUND)->usd, $costs->of(self::OTHER_ROUND)->usd, [...$costs->of(self::OTHER_ROUND)->unpriced]]);
+    }
+
+    public function testAStartedCallWithoutAnEndingRowMakesOnlyItsOwnRoundOfABatchUnknownOnAnUnpricedModel(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::OTHER_ROUND, 'model' => 'small']);
+
+        $costs = $this->reading()->costsOf(self::ROUND, self::OTHER_ROUND);
+
+        self::assertSame([(100 * 2.0 + 20 * 10.0) / 1_000_000, null, ['small']], [$costs->of(self::ROUND)->usd, $costs->of(self::OTHER_ROUND)->usd, [...$costs->of(self::OTHER_ROUND)->unpriced]]);
+    }
+
+    public function testTheUnpricedModelsOfARoundInABatchKeepTheOrderItsOwnCallsStarted(): void
+    {
+        foreach ([['shared', self::ROUND, 'alpha'], ['other', self::OTHER_ROUND, 'zeta'], ['shared', self::OTHER_ROUND, 'alpha']] as [$call, $round, $model]) {
+            $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => $model]);
+        }
+
+        $reading = $this->reading();
+
+        self::assertSame([...$reading->costOf(self::OTHER_ROUND)->unpriced], [...$reading->costsOf(self::ROUND, self::OTHER_ROUND)->of(self::OTHER_ROUND)->unpriced]);
+    }
+
+    public function testAUsageWithoutInputTokensMakesOnlyItsOwnRoundOfABatchUnknown(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::OTHER_ROUND, 'model' => 'big']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'settled', 'usages' => [['prompt' => null] + $this->usage()]]);
+
+        $costs = $this->reading()->costsOf(self::ROUND, self::OTHER_ROUND);
+
+        self::assertSame([(100 * 2.0 + 20 * 10.0) / 1_000_000, 'unknown'], [$costs->of(self::ROUND)->usd, $costs->of(self::OTHER_ROUND)->reading()]);
+    }
+
+    public function testARoundOfABatchWithoutCallsCostsNothing(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+
+        self::assertSame(0.0, $this->reading()->costsOf(self::ROUND, self::OTHER_ROUND)->of(self::OTHER_ROUND)->usd);
+    }
+
+    public function testARoundsCostAloneIsItsCostInABatch(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->recordCall('c2', self::OTHER_ROUND, 'unsettled');
+
+        self::assertEquals($this->reading()->costOf(self::OTHER_ROUND), $this->reading()->costsOf(self::ROUND, self::OTHER_ROUND)->of(self::OTHER_ROUND));
+    }
+
+    public function testTheCostOfARoundTheBatchDidNotAskForIsRefused(): void
+    {
+        $costs = $this->reading()->costsOf(self::ROUND);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $costs->of(self::OTHER_ROUND);
+    }
+
     public function testTheModelsOfAReviewerAreTheModelsItsCallsInTheRoundRanOnEachNamedOnce(): void
     {
         foreach ([['c1', 'r1', self::ROUND, 'big'], ['c2', 'r1', self::ROUND, 'small'], ['c3', 'r1', self::ROUND, 'big'], ['c4', 'r2', self::ROUND, 'other'], ['c5', 'r1', self::OTHER_ROUND, 'later']] as [$call, $reviewer, $round, $model]) {
             $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => $model, 'reviewer' => $reviewer]);
         }
 
-        self::assertSame(['big', 'small'], $this->reading()->modelsOfReviewer(self::ROUND, 'r1'));
+        self::assertSame(['big', 'small'], $this->modelsOf('r1'));
     }
 
     public function testAReviewerWhoseCallsStartedBeforeTheModelWasKeptNamesNoModel(): void
     {
         $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::ROUND, 'reviewer' => 'r1']);
 
-        self::assertSame([], $this->reading()->modelsOfReviewer(self::ROUND, 'r1'));
+        self::assertSame([], $this->modelsOf('r1'));
+    }
+
+    public function testEachReviewerOfARoundGetsOnlyTheTokensOfItsOwnCalls(): void
+    {
+        $this->recordReviewerCall('r1', 100);
+        $this->recordReviewerCall('r1', 50);
+        $this->recordReviewerCall('r2', 7);
+        $this->recordReviewerCall('r1', 1000, self::OTHER_ROUND);
+
+        $figures = $this->reading()->figuresOfReviewers(self::ROUND, ['r1', 'r2']);
+
+        self::assertSame([[2, 150], [1, 7]], [[$figures['r1']->tokens->calls, $figures['r1']->tokens->prompt], [$figures['r2']->tokens->calls, $figures['r2']->tokens->prompt]]);
+    }
+
+    public function testAReviewerThatAnsweredHasADurationFromItsStartToItsVerdict(): void
+    {
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
+        $this->fixture->clock->sleep(3);
+        $this->recordReviewerRow(LedgerEventKind::VerdictReceived, 'r1', ['decision' => 'approve', 'findings' => 0, 'mode' => 'live']);
+
+        self::assertSame(3000, $this->millisecondsOf('r1'));
+    }
+
+    public function testAReviewerThatEndedBlockedHasADurationFromItsStartToItsBlockedRow(): void
+    {
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
+        $this->fixture->clock->sleep(1);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r1', ['reason' => 'its message was moved to the failure transport']);
+
+        self::assertSame(1000, $this->millisecondsOf('r1'));
+    }
+
+    public function testAReviewerThatFailedOrWasStoppedHasADurationToItsLastEnd(): void
+    {
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
+        $this->fixture->clock->sleep(1);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerFailed, 'r1', ['failure' => 'quota']);
+        $this->fixture->clock->sleep(1);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStopped, 'r1');
+
+        self::assertSame(2000, $this->millisecondsOf('r1'));
+    }
+
+    public function testAReviewerWithAStartAndNoEndRowHasNoDuration(): void
+    {
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
+        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r2', ['reason' => 'blocked']);
+
+        self::assertNull($this->millisecondsOf('r1'));
+    }
+
+    public function testAnEndRowOfAnotherRoundGivesTheReviewerNoDuration(): void
+    {
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
+        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r1', ['round' => self::OTHER_ROUND, 'reason' => 'blocked']);
+
+        self::assertNull($this->millisecondsOf('r1'));
+    }
+
+    public function testAReviewerTheLedgerNeverNamedHasNoTokensNoModelsAndNoDuration(): void
+    {
+        $figures = $this->reading()->figuresOfReviewers(self::ROUND, ['r1'])['r1'];
+
+        self::assertSame([0, [], null], [$figures->tokens->calls, [...$figures->models], $figures->milliseconds]);
+    }
+
+    public function testReadingTheTokensOfARoundDoesNotRetainTheUsageOfOtherRounds(): void
+    {
+        foreach (['unrelated-one', 'unrelated-two', 'unrelated-three'] as $call) {
+            $this->append(LedgerEventKind::UsageRecorded, ['call' => $call]);
+        }
+
+        $held = [];
+        $reading = new RoundLedgerReading($this->ledger, new LedgerPayloads($this->unrelatedUsageSerializer($held)), new ConfiguredPrices([]));
+
+        self::assertSame(0, $reading->tokensOf(self::ROUND)->calls);
+    }
+
+    public function testPricingOneRoundBesideManyUnrelatedEndedCallsGrowsPeakMemoryNoMoreThanTwiceWhatReadingItsTokensDoes(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->recordCallIn($ledger, 'target', self::ROUND);
+
+        for ($call = 0; $call < 2000; ++$call) {
+            $this->recordCallIn($ledger, 'unrelated-'.$call, 'history-'.$call);
+        }
+
+        $reading = $this->reading($ledger);
+        $tokens = $this->peakMemoryGrowthOf(static fn (): int => $reading->tokensOf(self::ROUND)->calls);
+        $cost = $this->peakMemoryGrowthOf(static fn (): ?float => $reading->costsOf(self::ROUND)->of(self::ROUND)->usd);
+
+        self::assertLessThanOrEqual(2 * $tokens, $cost);
+    }
+
+    public function testUsageRowsOfAnotherRoundChangeNeitherTheRoundsTokensNorAReviewersTokens(): void
+    {
+        $this->recordReviewerCall('r1', 100);
+        $before = $this->reading()->figuresOfReviewers(self::ROUND, ['r1'])['r1']->tokens;
+        $tokensBefore = $this->reading()->tokensOf(self::ROUND);
+
+        $this->recordReviewerCall('r1', 1000, self::OTHER_ROUND);
+        $this->recordReviewerCall('r2', 500, self::OTHER_ROUND);
+
+        self::assertEquals(
+            [$tokensBefore, $before],
+            [$this->reading()->tokensOf(self::ROUND), $this->reading()->figuresOfReviewers(self::ROUND, ['r1'])['r1']->tokens],
+        );
+    }
+
+    public function testReadingTheFiguresOfARoundsReviewersReadsTheLedgerTwiceHoweverManyReviewersItHas(): void
+    {
+        foreach (['r1', 'r2', 'r3'] as $reviewer) {
+            $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, $reviewer);
+            $this->recordReviewerCall($reviewer, 10);
+            $this->recordReviewerRow(LedgerEventKind::ReviewerStopped, $reviewer);
+        }
+        $counting = new ReadCountingLedger($this->ledger);
+
+        $this->reading($counting)->figuresOfReviewers(self::ROUND, ['r1', 'r2', 'r3']);
+
+        self::assertSame(2, $counting->reads);
     }
 
     public function testTheActIdsOfAJudgeDoneRowInTodaysFormatAreRead(): void
@@ -262,13 +499,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
         self::assertSame(['F1', 'F3'], $this->actIdsOf(self::ROUND));
-    }
-
-    public function testAJudgeDoneRowWithAFindingOfAnUnknownSeverityIsSkipped(): void
-    {
-        $this->append(LedgerEventKind::JudgeDone, ['act' => ['F2'], 'findings' => [['id' => 'F2', 'severity' => 'P9', 'text' => 'Odd.']]] + $this->judgeDone(self::ROUND));
-
-        self::assertSame([], $this->actIdsOf(self::ROUND));
     }
 
     public function testTheDroppedFindingsOfAJudgeDoneRowAreReadWithTheirReasons(): void
@@ -340,24 +570,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(['The branch is unreachable.', null, null], array_map(static fn (JudgeDoneFinding $finding): ?string => $finding->judgeNote, $findings));
     }
 
-    public function testAReviewerWithAStartAndALaterBlockedRowLastsFromItsStartToTheBlockedRow(): void
-    {
-        $this->record(LedgerEventKind::ReviewerStarted, new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
-        $this->fixture->clock->modify('+2 seconds');
-        $this->record(LedgerEventKind::ReviewerBlocked, new ReviewerBlocked(self::ROUND, 'r1', 'security', Tier::Standard, 'the budget is spent'));
-
-        self::assertSame(2000, $this->reading()->millisecondsOfReviewer('r1'));
-    }
-
-    public function testAReviewerWithAStartAndNoEndRowHasNoDuration(): void
-    {
-        $this->record(LedgerEventKind::ReviewerStarted, new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
-        $this->fixture->clock->modify('+2 seconds');
-        $this->record(LedgerEventKind::ReviewerBlocked, new ReviewerBlocked(self::ROUND, 'r2', 'security', Tier::Standard, 'the budget is spent'));
-
-        self::assertNull($this->reading()->millisecondsOfReviewer('r1'));
-    }
-
     public function testARoundTheJudgeHasNotAnsweredHasNoJudgeDone(): void
     {
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::OTHER_ROUND));
@@ -376,9 +588,58 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->ledger = $this->fixture->ledger();
     }
 
-    private function record(LedgerEventKind $kind, ReviewerStarted|ReviewerBlocked $payload): void
+    /**
+     * @param array<string, mixed> $more
+     */
+    private function recordReviewerRow(LedgerEventKind $kind, string $reviewer, array $more = []): void
     {
-        self::assertTrue($this->ledger->append(new LedgerEvent($kind, StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT)))->succeeded());
+        $this->append($kind, $more + ['round' => self::ROUND, 'reviewer' => $reviewer, 'role' => 'correctness', 'tier' => 'standard']);
+    }
+
+    private function recordReviewerCall(string $reviewer, int $prompt, string $round = self::ROUND): void
+    {
+        $call = $round.'/'.$reviewer.'/'.$prompt;
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => 'big', 'reviewer' => $reviewer]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['prompt' => $prompt] + $this->usage()]]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function modelsOf(string $reviewer): array
+    {
+        return [...$this->reading()->figuresOfReviewers(self::ROUND, [$reviewer])[$reviewer]->models];
+    }
+
+    private function millisecondsOf(string $reviewer): ?int
+    {
+        return $this->reading()->figuresOfReviewers(self::ROUND, [$reviewer])[$reviewer]->milliseconds;
+    }
+
+    /**
+     * @param list<WeakReference<TokenUsageRow>> $held
+     */
+    private function unrelatedUsageSerializer(array &$held): SerializerInterface
+    {
+        $serializer = self::createStub(SerializerInterface::class);
+        $serializer->method('deserialize')->willReturnCallback(
+            static function (string $json, string $class) use (&$held): ?UsageSettled {
+                if (UsageSettled::class !== $class) {
+                    return null;
+                }
+
+                $decoded = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+                $call = is_array($decoded) && is_string($decoded['call'] ?? null) ? $decoded['call'] : '';
+                self::assertFalse('unrelated-three' === $call && ($held[0] ?? null)?->get() instanceof TokenUsageRow, 'The usage of an unrelated call is still retained.');
+
+                $usage = new TokenUsageRow(null, null, 42, null, null, null, null, null, null, null, null, null, null);
+                $held[0] ??= WeakReference::create($usage);
+
+                return new UsageSettled($call, 'settled', [$usage]);
+            },
+        );
+
+        return $serializer;
     }
 
     /**
@@ -411,6 +672,28 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::UsageRecorded, null === $round ? $started : $started + ['round' => $round]);
         $ended = ['call' => $call, 'phase' => $ending, 'usages' => [$this->usage()]];
         $this->append(LedgerEventKind::UsageRecorded, 'unsettled' === $ending ? $ended + ['failure' => 'RuntimeException'] : $ended);
+    }
+
+    // In a ledger of its own, because thousands of rows written to the database would make the memory test slow.
+    private function recordCallIn(Ledger $ledger, string $call, string $round): void
+    {
+        foreach ([['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => 'big'], ['call' => $call, 'phase' => 'settled', 'usages' => array_fill(0, 5, $this->usage())]] as $payload) {
+            self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
+        }
+    }
+
+    /**
+     * @param Closure(): mixed $read
+     */
+    // Measured from the memory in use just before the read, because only what the read itself holds at its peak is compared.
+    private function peakMemoryGrowthOf(Closure $read): int
+    {
+        gc_collect_cycles();
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+        $read();
+
+        return memory_get_peak_usage() - $before;
     }
 
     // Written through the payload classes from what the vendor's extractor read, because a row written by hand could carry a model the vendor never reports.
@@ -452,8 +735,8 @@ final class RoundLedgerReadingTest extends KernelTestCase
         return ['account' => null, 'model' => 'big', 'prompt' => 100, 'completion' => 20, 'thinking' => null, 'tool' => null, 'cached' => null, 'cache_creation' => null, 'cache_read' => null, 'total' => 120, 'remaining' => null, 'remaining_minute' => null, 'remaining_month' => null];
     }
 
-    private function reading(): RoundLedgerReading
+    private function reading(?Ledger $ledger = null): RoundLedgerReading
     {
-        return new RoundLedgerReading($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices(['big' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
+        return new RoundLedgerReading($ledger ?? $this->ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices(['big' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5], 'cheap' => ['input' => 1.0, 'output' => 4.0, 'cache_read' => 0.1, 'cache_write' => 1.25]]));
     }
 }

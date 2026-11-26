@@ -87,8 +87,8 @@ final readonly class BenchChangeCheckout
     {
         $this->filesystem->mkdir($directory);
         // The git folder is named, because git init refuses the pinned work tree without one.
-        $call = $this->hardened->call(['--git-dir=.git', 'init', '--quiet', '--initial-branch='.self::BASE], $directory);
-        new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS)->mustRun();
+        $call = $this->hardened->call($directory, '--git-dir=.git', 'init', '--quiet', '--initial-branch='.self::BASE);
+        new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS)->mustRun();
         $this->commit($directory, $this->fixtures.'/base', 'Add the shop helpers');
         $this->git($directory, 'switch', '--quiet', '--create', 'bench/'.$name);
         $this->commit($directory, $tree, 'Change '.$name);
@@ -105,9 +105,9 @@ final readonly class BenchChangeCheckout
 
     private function git(string $directory, string ...$arguments): string
     {
-        $call = $this->hardened->call(array_values($arguments), $directory);
+        $call = $this->hardened->call($directory, ...$arguments);
 
-        return new Process($call->command, $call->directory, [...$call->environment, ...self::COMMITTER], timeout: self::TIMEOUT_SECONDS)->mustRun()->getOutput();
+        return new Process([...$call->command], $call->directory, [...$call->environment, ...self::COMMITTER], timeout: self::TIMEOUT_SECONDS)->mustRun()->getOutput();
     }
 
     private function describe(string $diff): ChangeDescription

@@ -1,8 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# Green only when the server's admin API answers, and the dashboard too; in the demo also only once the entrypoint has seeded the sample, so `docker compose up --wait` returns when the page can be opened.
-curl --fail --silent --show-error --max-time 4 --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics"
+# Green only when the server is healthy (the hub healthy, a worker thread ready, every admin API endpoint answering) and the dashboard answers; in the demo also only once the entrypoint has seeded the sample, so `docker compose up --wait` returns when the page can be opened.
+# The reader's URL is always set from the listener of this server (CADDY_ADMIN, or localhost:2019 when it is unset or empty, as in the Caddyfile), so an inherited FRANKENPHP_ADMIN_URL never points the check at another server (a bare port such as :2019 means localhost).
+admin=${CADDY_ADMIN:-localhost:2019}
+[[ $admin == :* ]] && admin="localhost${admin}"
+export FRANKENPHP_ADMIN_URL="http://${admin}"
+php bin/console intakt:server:health --no-ansi
 curl --fail --silent --show-error --max-time 4 --output /dev/null -H "Host: localhost:${DASHBOARD_PORT:-7781}" "http://localhost:${SERVER_PORT:-7781}/"
 
 if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} && ! -e var/sample-ready ]]; then

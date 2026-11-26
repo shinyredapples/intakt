@@ -6,7 +6,7 @@ what was achieved inside that window, and what comes next. Development continues
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/roadmap-dark.svg" width="600" height="350">
-    <img src="assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard; we are here, with the octopus: M5 Demo, the hackathon release, 22 Nov; next: M6 Runs alongside (beside the build loop), M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="600" height="350" loading="lazy">
+    <img src="assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard, M5 Demo (the hackathon release, 22 Nov); we are here, with the octopus: M6 Reviewer for the loop (reviews the build loop's changes); next: M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="600" height="350" loading="lazy">
   </picture>
 </p>
 
@@ -57,8 +57,8 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
   which needs one provider key or Hugging Face token; without one, the demo plays a recorded real review of the sample
   change instead, calling no model ([five-minute start](../README.md#five-minute-start),
   [timed run](bench.md#timed-run)).
-- **The review page:** the owl's verdict card first, with how many findings are left to fix, then one To fix card per
-  finding with its priority, file and line. **Full record** holds the timeline, each round's reviewers, the judge's
+- **The review page:** the owl's verdict card first, with how many findings are left to fix, then the findings in three urgency groups, one row per
+  finding with its first sentence, file and line. **Full record** holds the timeline, each round's reviewers, the judge's
   call on every finding, the tokens and the cost ([reading the verdict](user/04-reading-the-verdict.md),
   [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
 - **Trends:** figures about the reviews of every project as tiles ([the Trends page](reference/user-manual.md#the-trends-page)).
@@ -76,7 +76,7 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
 
 Counted on 2026-11-22 from the repository: 8,501 commits on main (counted), 30 upstream reproductions in `upstream/`
-and 12 fixes (11 pull requests) merged upstream (counted, [upstream reproductions](../upstream/README.md)). Counted on
+and 13 fixes (12 pull requests) merged upstream (counted on 2026-11-23, [upstream reproductions](../upstream/README.md)). Counted on
 2026-11-22 from the GitHub API: 1,211 merged pull requests (counted). Counted from the GitHub API
 to 2026-11-13, as listed in [the journey](journey.md): 773 closed issues (counted, 761 done and 12 dropped).
 
@@ -96,8 +96,8 @@ to 2026-11-13, as listed in [the journey](journey.md): 773 closed issues (counte
 Development continues. The next milestones, from [the plan](plan.md) and the
 [GitHub milestones](https://github.com/shinyredapples/intakt/milestones):
 
-- **M6 Runs alongside (the shadow phase):** Intakt runs beside the build loop that developed it, takes the place of
-  one of its reviewers on pull requests on GitHub, and its verdict counts.
+- **M6 Reviewer for the loop:** Intakt reviews the build loop's changes, takes the place of one of the loop's
+  reviewers on pull requests on GitHub, and its verdict counts.
 - **M7 Builder half:** Intakt builds a task from an issue to a pull request.
 - **M8 Switch:** Intakt runs its own loop.
 

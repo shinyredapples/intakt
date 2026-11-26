@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Closure;
 use DateTimeImmutable;
 use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
@@ -14,7 +15,6 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -23,9 +23,11 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -73,7 +75,7 @@ use Twig\Environment;
 #[UsesClass(LivePageRendering::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerTokens::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
@@ -331,7 +333,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertSame(['Checked, but the outcome was not recorded', '1 to fix · 0 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Checked, but the outcome was not recorded', '1 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
     public function testThePushedOwlsCardStatesTheJudgesCallAndCountsTheFindingsToFix(): void
@@ -341,7 +343,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['Changes needed', '2 to fix · 0 urgent'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '2 to fix'], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text()]);
     }
 
     public function testThePushedOwlsCardCountsTheFindingsToFixAsTheCardsItShows(): void
@@ -351,7 +353,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertStringStartsWith($updated->filter('#review-to-fix .fix-card')->count().' to fix', $updated->filter('#review-verdict .verdict-count')->text());
+        self::assertStringStartsWith($updated->filter('#review-to-fix .fix-row')->count().' to fix', $updated->filter('#review-verdict .verdict-count')->text());
     }
 
     public function testAPageOpenedBeforeTheRoundStartsShowsOneNumberPerFindingWithTheMergedIdsAsSecondaryTextOnceTheRoundIsJudged(): void
@@ -367,15 +369,15 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         );
     }
 
-    public function testAPageOpenedBeforeTheRoundStartsShowsOneToFixCardPerFindingOnceTheRoundIsJudged(): void
+    public function testAPageOpenedBeforeTheRoundStartsShowsOneRowPerFindingInItsUrgencysGroupOnceTheRoundIsJudged(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
 
         $this->givenTheRoundIsJudgedAsOneEntryPerCause($round);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame([['Urgent', 'Text of F1.'], ['Should fix', 'Text of F2.']], $updated->filter('#review-to-fix .fix-card')->each(static fn (Crawler $card): array => [$card->filter('.urgency')->text(), $card->filter('.fix-title')->text()]));
-        self::assertSame('2 to fix · 1 urgent', $updated->filter('#review-verdict .verdict-count')->text());
+        self::assertSame([['Urgent', ['Text of F1.']], ['Should fix', ['Text of F2.']], ['Nice to have', []]], $updated->filter('#review-to-fix .fix-group')->each(static fn (Crawler $group): array => [$group->filter('.fix-group-name')->text(), $group->filter('.fix-title')->each(static fn (Crawler $title): string => $title->text())]));
+        self::assertSame('2 to fix', $updated->filter('#review-verdict .verdict-count')->text());
     }
 
     public function testAJudgedRoundOfOneEntryPerCausePushedToAPageOpenedBeforeItStartsShowsTheFindingsAsAReloadDoes(): void
@@ -389,14 +391,14 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($reloaded->filter('#round-'.$id.'-judged')->html(), $updated->filter('#round-'.$id.'-judged')->html());
     }
 
-    public function testAJudgedRoundWithNothingToFixPushesAnApprovedCardThatCountsZeroAndNoToFixCard(): void
+    public function testAJudgedRoundWithNothingToFixPushesAnApprovedCardThatCountsZeroAndNoFindingGroups(): void
     {
         [$round, , $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
 
         $this->givenTheRoundIsJudgedWith($round, []);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['Approved', '0 to fix · 0 urgent', 0, 0], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text(), $updated->filter('.fix-card')->count(), $updated->filter('.state-block')->count()]);
+        self::assertSame(['Approved', '0 to fix', 0, 0], [$updated->filter('#review-verdict .verdict-words')->text(), $updated->filter('#review-verdict .verdict-count')->text(), $updated->filter('.fix-group')->count(), $updated->filter('.state-block')->count()]);
     }
 
     // A round started without a recorded quorum has no outcome, and a policy must never be guessed.
@@ -430,8 +432,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'Fix now'], ['F2', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertSame(['/reviews/'.$id.'/record#round-'.$id.'-finding-F1'], $updated->filter('#review-to-fix a.fix-card')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
-        self::assertSame(['Should fix', 'Text of F1.'], [$updated->filter('#review-to-fix .urgency')->text(), $updated->filter('#review-to-fix .fix-title')->text()]);
+        self::assertSame(['/reviews/'.$id.'/findings/F1'], $updated->filter('#review-to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame('Text of F1.', $updated->filter('#review-to-fix .fix-group.should-fix .fix-title')->text());
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
         self::assertSame('Checked.', $updated->filter('#round-'.$id.'-state')->text());
         self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-head-state .chip')->text());
@@ -489,20 +491,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($this->browser->request('GET', '/reviews/'.$id)->filter('#review-verdict')->outerHtml(), $updated->filter('#review-verdict')->outerHtml());
     }
 
-    public function testAVerdictWithFindingsPushedToTheMainViewSwapsTheStateBlockForTheToFixCardsAsAReloadDoes(): void
+    public function testAVerdictWithFindingsPushedToTheMainViewSwapsTheStateBlockForTheFindingGroupsAsAReloadDoes(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
         $id = $round->toRfc4122();
         $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
         $page = $this->browser->request('GET', '/reviews/'.$id);
-        self::assertSame([1, 0], [$page->filter('.state-block')->count(), $page->filter('.fix-card')->count()]);
+        self::assertSame([1, 0], [$page->filter('.state-block')->count(), $page->filter('.fix-row')->count()]);
 
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
         $reloaded = $this->browser->request('GET', '/reviews/'.$id);
-        self::assertSame([0, 2], [$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-card')->count()]);
-        self::assertSame([$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-card')->count()], [$updated->filter('.state-block')->count(), $updated->filter('.fix-card')->count()]);
+        self::assertSame([0, 2], [$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-row')->count()]);
+        self::assertSame([$reloaded->filter('.state-block')->count(), $reloaded->filter('.fix-row')->count()], [$updated->filter('.state-block')->count(), $updated->filter('.fix-row')->count()]);
         self::assertSame($reloaded->filter('#review-to-fix')->outerHtml(), $updated->filter('#review-to-fix')->outerHtml());
     }
 
@@ -663,7 +665,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($next, new RoundProgress(0, 2, true));
 
         $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
-        self::assertSame([0, 0, 0], [$updated->filter('.state-block')->count(), $updated->filter('a.sb-finding')->count(), $updated->filter('.fix-card')->count()]);
+        self::assertSame([0, 0, 0], [$updated->filter('.state-block')->count(), $updated->filter('a.sb-finding')->count(), $updated->filter('.fix-row')->count()]);
     }
 
     public function testAJudgedRoundWhoseFindingsWereNotRecordedSaysSoInTheLiveUpdateAsOnLoad(): void
@@ -1275,7 +1277,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testAPageOpenedBeforeTheRoundStartsCountsTheToolCallsByKindInPlainWords(): void
     {
-        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 2), new ToolCallCount('search_files', 1)], Cost::inUsd(0.1), ['src/discount.js'], [], [], [], false));
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 2), new ToolCallCount('search_files', 1)], Cost::inUsd(0.1), new Paths('src/discount.js'), [], [], [], false));
 
         $this->publishedUpdates()->summaryChanged($round);
 
@@ -1283,12 +1285,15 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([['File reads', '2'], ['Searches', '1'], ['Total', '3']], $this->pairsOf($updated->filter('#round-'.$id.'-summary-tools .ls-tools')));
     }
 
-    // One text node in one nowrap button, so neither the markup nor the button's own style can put "F" and "1" on two lines.
-    public function testAPageOpenedBeforeTheRoundStartsKeepsEachFindingIdOfTheLiveSummaryOnOneLineBesideALongText(): void
+    // One text node in one nowrap button, so neither the markup nor the button's own style can put "F" and "1" on two lines; review-finding-id.browser.mjs measures it in a narrow viewport.
+    public function testAFindingIdPushedToAPageOpenedWithAnEmptyLiveSummaryAppearsOnlyAfterThePushInOneNowrapButton(): void
     {
-        $long = new Finding('F1', Severity::P2, 'src/discount.js', 3, null, str_repeat('The discount is applied twice when the cart holds a voucher. ', 6), FixableBy::Builder, false, null, null);
-        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [$long], [], false));
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false);
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
+        self::assertCount(0, $page->filter('#round-'.$id.'-summary-findings .linkbtn'));
+        self::assertStringNotContainsString('F1', $page->filter('#round-'.$id.'-summary-findings')->text());
 
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [$this->longFinding()], [], false);
         $this->publishedUpdates()->summaryChanged($round);
 
         $updated = $this->replaced($page, $this->publishedStreams());
@@ -1298,6 +1303,27 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $sheet = (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
         self::assertMatchesRegularExpression('/\.ls-findings \.linkbtn \{[^}]*white-space: nowrap;/', $sheet);
         self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none;[^}]*white-space: nowrap;/', $sheet);
+    }
+
+    // review-finding-id.browser.mjs applies these files with the pinned Turbo, so they must stay what the page renders and pushes.
+    public function testTheBrowserChecksFindingsPartIsTheOneOfAPageWithAnEmptyLiveSummary(): void
+    {
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false);
+        [, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
+
+        self::assertSame($this->findingIdFixture('before.html'), $this->normalized(str_replace($id, 'ROUND', $page->filter('#round-'.$id.'-summary-findings')->outerHtml())));
+    }
+
+    public function testTheBrowserChecksStreamIsTheOnePushedForALongFinding(): void
+    {
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false);
+        [$round, $id] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
+        $summary = new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [$this->longFinding()], [], false);
+
+        $this->publishedUpdates()->summaryChanged($round);
+
+        $findings = new Crawler($this->publishedStreams())->filter('turbo-stream[target="round-'.$id.'-summary-findings"]');
+        self::assertSame($this->findingIdFixture('streams.html'), $this->normalized(str_replace($id, 'ROUND', $findings->outerHtml())));
     }
 
     public function testAReadAnswerReachesTheReviewPageAsItsTypedAnswerAfterTheRetryMarkerAndNeverAsJson(): void
@@ -1410,10 +1436,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), new Paths('src/A.php'), [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1/record');
 
-        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [], [], false)]);
+        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), new Paths(), [], [], [], false)]);
 
         $targets = new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
         self::assertCount(4, $targets);
@@ -1445,11 +1471,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testASummaryPushedToThePageLeavesTheReviewWideCostAlone(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1/record');
         $before = $page->filter('.ls-cost dd')->eq(1)->text();
 
-        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [], false)]));
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), new Paths(), [], [], [], false)]));
 
         self::assertStringStartsWith('0.9000 USD,', $updated->filter('.ls-cost dd')->first()->text());
         self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
@@ -1457,11 +1483,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testASummaryPushedToThePageRendersFindingIdsAsHighlightButtons(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1/record');
         $reported = new Finding('F7', Severity::P2, 'src/A.php', 3, null, 'Name it.', FixableBy::Builder, false, null, null);
 
-        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [$reported], [], false)]));
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), new Paths(), [], [$reported], [], false)]));
 
         self::assertSame('F7', $updated->filter('#round-round-1-summary-findings .ls-findings button')->attr('data-highlight-finding'));
     }
@@ -1509,6 +1535,25 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         parent::tearDown();
     }
 
+    private function longFinding(): Finding
+    {
+        return new Finding('F1', Severity::P2, 'src/discount.js', 3, null, str_repeat('The discount is applied twice when the cart holds a voucher. ', 6), FixableBy::Builder, false, null, null);
+    }
+
+    private function findingIdFixture(string $name): string
+    {
+        $contents = file_get_contents(__DIR__.'/review-finding-id/'.$name);
+        self::assertIsString($contents);
+
+        return rtrim($contents, "\n");
+    }
+
+    // The template's indentation carries no layout, so the fixtures keep one space where it has a run of them.
+    private function normalized(string $html): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $html);
+    }
+
     private function actionsTheConnectionControllerHolds(): string
     {
         $script = (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
@@ -1553,11 +1598,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     /**
      * @return array{Uuid, string, Crawler}
      */
-    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary $summary): array
+    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary|Closure $summary): array
     {
         $this->browser->disableReboot();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn($summary);
+        $summaries->method('ofRound')->willReturnCallback($summary instanceof Closure ? $summary : static fn (): SessionSummary => $summary);
         self::getContainer()->set(SessionSummaries::class, $summaries);
         $this->givenTheHubRecordsWhatIsPublished();
         $round = Uuid::v7();
@@ -1574,7 +1619,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->browser->disableReboot();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
         $this->givenTheHubRecordsWhatIsPublished();
         $round = Uuid::v7();

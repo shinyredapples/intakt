@@ -10,13 +10,14 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
+use Intakt\Plugin\Forge\Contract\CommentBodies;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
-use JsonException;
 
 // Asked on the forge and in the ledger, because a protected head of a pull request handed to Intakt merges only with the owner's approval of that head, and the request lists every protected change of it: docs/design/05-architecture/08-merge.md
 final readonly class OwnerAsks
@@ -72,10 +73,7 @@ final readonly class OwnerAsks
         }
     }
 
-    /**
-     * @return list<string>
-     */
-    private function partsOf(CommitId $head, ProtectedChanges $changes): array
+    private function partsOf(CommitId $head, ProtectedChanges $changes): CommentBodies
     {
         $lines = [sprintf(self::HEADING, $head->hash), '', self::ASK];
 
@@ -84,14 +82,14 @@ final readonly class OwnerAsks
             $lines = [...$lines, '', self::UNREADABLE];
         }
 
-        if ([] === $changes->paths) {
-            return [implode("\n", $lines)];
+        if ($changes->paths->isEmpty()) {
+            return new CommentBodies(implode("\n", $lines));
         }
 
         $parts = [];
         $part = implode("\n", [...$lines, '', self::LISTED]);
         $listed = 0;
-        foreach (array_map($this->lineOf(...), $changes->paths) as $line) {
+        foreach (array_map($this->lineOf(...), [...$changes->paths]) as $line) {
             // A part ends only after a path, so no part is posted that lists none.
             if ($listed > 0 && strlen($part) + 1 + strlen($line) > self::PART_BYTES) {
                 $parts[] = $part;
@@ -103,7 +101,7 @@ final readonly class OwnerAsks
             ++$listed;
         }
 
-        return [...$parts, $part];
+        return new CommentBodies(...[...$parts, $part]);
     }
 
     // Control bytes and backslashes spelled out first, so a newline in a name stays on its line; invalid UTF-8 replaced, because git allows any bytes in a file name and the forge takes only text.
@@ -128,16 +126,10 @@ final readonly class OwnerAsks
     // The change without letter case, as the hand-over is read, because two rounds may name one pull request in two spellings.
     private function names(RecordedEvent $recorded, ReviewRound $round, string $head): bool
     {
-        try {
-            $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            // Skipped, because a ledger row is never rewritten and one bad row must not stop a publication.
-            return false;
-        }
+        $payload = PayloadFields::of($recorded);
+        $change = $payload->text('change');
 
-        $change = is_array($payload) ? ($payload['change'] ?? null) : null;
-
-        return is_string($change) && strtolower($change) === strtolower($round->change()) && [$round->project(), $head] === [$payload['project'] ?? null, $payload['head'] ?? null];
+        return null !== $change && strtolower($change) === strtolower($round->change()) && [$round->project(), $head] === [$payload->text('project'), $payload->text('head')];
     }
 
     // Invalid UTF-8 substituted, because git allows any bytes in a file name and the line must still be written.
@@ -148,7 +140,7 @@ final readonly class OwnerAsks
             'change' => $round->change(),
             'head' => $ask->verdict->head->hash,
             'round' => $round->id()->toRfc4122(),
-            'paths' => $ask->changes->paths,
+            'paths' => [...$ask->changes->paths],
             'unreadable' => $ask->changes->unreadable,
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
     }

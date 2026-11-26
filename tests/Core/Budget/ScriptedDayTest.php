@@ -7,7 +7,6 @@ namespace Intakt\Tests\Core\Budget;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
@@ -18,6 +17,7 @@ use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
+use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
@@ -26,11 +26,14 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 // Through the Doctrine store, because a worker decides on the readings it keeps, refusals and ages included.
 #[Group('persistence')]
 #[CoversClass(CeilingStartGuard::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
+#[UsesClass(AccountReadingLock::class)]
 #[UsesClass(WindowReadingRecord::class)]
 #[UsesClass(StartDecision::class)]
 #[UsesClass(WindowReading::class)]
@@ -76,10 +79,9 @@ final class ScriptedDayTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher());
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher(), new AccountReadingLock(new LockFactory(new InMemoryStore())));
         $this->guard = new CeilingStartGuard($this->measured, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
     }
 

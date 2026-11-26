@@ -17,6 +17,8 @@ final readonly class ReviewerOutcome
     public ?string $note;
     public ?string $substitute;
     public ProjectMode $mode;
+    // False until a start is recorded, because a reviewer whose message failed for good is blocked without ever starting.
+    public bool $started;
 
     public function __construct(
         public string $id,
@@ -31,12 +33,13 @@ final readonly class ReviewerOutcome
         $this->note = null;
         $this->substitute = null;
         $this->mode = ProjectMode::Live;
+        $this->started = false;
     }
 
     // The model comes from the latest start alone, because a reviewer started again may run on another model, and a start written before the model was recorded has none.
     public function restarted(DateTimeImmutable $at, ?string $model): self
     {
-        return new self($this->id, $this->role, $this->tier, $at, $model);
+        return clone (new self($this->id, $this->role, $this->tier, $at, $model), ['started' => true]);
     }
 
     // The tier stands in for a start written before Intakt recorded the model, so every place that names a reviewer says the same.
@@ -57,6 +60,22 @@ final readonly class ReviewerOutcome
 
         // The id alone also for a bare lab namespace ("anthropic/"), because it names no model to put before the lab.
         return $lab instanceof AiLab && '' !== $name ? $name.' ('.$lab->value.')' : $this->model;
+    }
+
+    // The lab alone, because a face has room for one short word; a model of no known lab keeps its id, so a recorded model never reads as missing.
+    public function faceLabel(): string
+    {
+        if (null === $this->model || '' === $this->model) {
+            return 'Model not recorded';
+        }
+
+        return AiLab::of($this->model)->value ?? $this->model;
+    }
+
+    // A reviewer without an outcome is still at work or was stopped, so its face says which in words rather than the ledger's state.
+    public function verdictInWords(): string
+    {
+        return $this->outcome()?->plainWords() ?? (ReviewerProgress::Stopped === $this->progressOf($this) ? 'Stopped' : 'No verdict yet');
     }
 
     public function outcome(): ?ReviewOutcome
@@ -94,5 +113,11 @@ final readonly class ReviewerOutcome
     public function substitutedBy(string $provider, ?string $model): self
     {
         return clone ($this, ['substitute' => $provider, 'model' => $model ?? $this->model]);
+    }
+
+    // Read through a reviewer rather than `$this`, because PHPStan keeps the constructor's Running for `$this->progress` although `stopped()` sets it (upstream/phpstan-clone-with-readonly-constructor-type).
+    private function progressOf(self $reviewer): ReviewerProgress
+    {
+        return $reviewer->progress;
     }
 }

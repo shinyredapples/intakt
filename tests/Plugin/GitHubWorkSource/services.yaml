@@ -1,0 +1,11 @@
+services:
+    # Public under a test name, so a test proves the container hands the work source each project's eligibility label.
+    test.intakt.eligibility_labels:
+        alias: Intakt\Core\Watcher\Contract\EligibilityLabels
+        public: true
+    # The reads after the listing, from the recording tests/Core/Build/services.yaml serves as the listing, so intakt:queue:show runs on an install without GitHub.
+    Intakt\Tests\Plugin\GitHubWorkSource\RecordedQueueAnswers:
+        autowire: true
+    Intakt\Plugin\GitHubForge\Contract\IssueHistories: '@Intakt\Tests\Plugin\GitHubWorkSource\RecordedQueueAnswers'
+    Intakt\Plugin\GitHubForge\Contract\SteeringAccounts: '@Intakt\Tests\Plugin\GitHubWorkSource\RecordedQueueAnswers'
+    Intakt\Plugin\GitHubForge\Contract\PullRequestBranches: '@Intakt\Tests\Plugin\GitHubWorkSource\RecordedQueueAnswers'

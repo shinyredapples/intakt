@@ -24,11 +24,11 @@ final readonly class RequiredTools
     private const array GATE_CHILD = ['sh', 'setsid'];
 
     // Because a child in a session of its own gets no Ctrl-C from the terminal, so only these can stop its group.
-    private const array GATE_CHILD_EXTENSIONS = ['pcntl' => 'pcntl_signal', 'posix' => 'posix_kill'];
+    private const array GATE_CHILD_EXTENSIONS = ['pcntl' => ['pcntl_signal', ...ProcessGroup::FUNCTIONS['pcntl']], 'posix' => ProcessGroup::FUNCTIONS['posix']];
 
     private const array BY_GATE = [
         'audit' => ['composer'],
-        'journeys' => ['sh', 'env', 'setsid'],
+        'journeys' => ['sh', 'env', 'setsid', 'unshare', 'true'],
         'tests' => ['sh', 'unshare', 'setsid', 'true', 'bash', 'jq'],
         'secrets' => [self::SCANNER, 'env'],
         'secrets-history' => [self::SCANNER, 'env'],
@@ -72,7 +72,7 @@ final readonly class RequiredTools
             return [];
         }
 
-        $extensions = array_keys(array_filter(self::GATE_CHILD_EXTENSIONS, static fn (string $function): bool => !function_exists($function)));
+        $extensions = array_keys(array_filter(self::GATE_CHILD_EXTENSIONS, static fn (array $functions): bool => !array_all($functions, static fn (string $function): bool => function_exists($function))));
 
         return [
             ...$this->missingAmong([...$this->commandsOf($gates), ...self::GATE_CHILD]),

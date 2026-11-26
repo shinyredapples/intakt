@@ -18,10 +18,13 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
+use Intakt\Core\Review\Infrastructure\ClaudeCodeJobEvents;
+use Intakt\Core\Review\Infrastructure\ReportedUsage;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewJobFailure;
 use Intakt\Core\Review\Infrastructure\ReviewJobImages;
+use Intakt\Tests\Core\Job\OutputFiles;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -33,6 +36,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ReviewJobFailure::class)]
 #[UsesClass(ReviewJobRequest::class)]
 #[UsesClass(ReviewJobAnswer::class)]
+#[UsesClass(ClaudeCodeJobEvents::class)]
+#[UsesClass(ReportedUsage::class)]
 #[UsesClass(ReviewJobImages::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(JobSpec::class)]
@@ -81,7 +86,7 @@ final class ReviewJobTest extends TestCase
         self::assertNotNull($this->ran);
         self::assertSame(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-review', ReviewJob::CHECKOUT, self::HEAD, ReviewJob::PROMPT, 'claude_code', 'claude-sonnet-5-5'],
-            $this->ran->command,
+            [...$this->ran->command],
         );
     }
 
@@ -126,7 +131,7 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews($this->answered(self::CLAUDE_ANSWER))->run($this->request());
 
         self::assertNotNull($this->ran);
-        self::assertSame(['api.anthropic.com'], $this->ran->egress->hosts);
+        self::assertSame(['api.anthropic.com'], [...$this->ran->egress->hosts]);
     }
 
     public function testACodexReviewerMayReachTheChatGptBackendOnly(): void
@@ -136,7 +141,7 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews($this->answered($answer, 'codex'))->run($this->request(new ResolvedModel(Provider::Codex, 'gpt-5.3-codex')));
 
         self::assertNotNull($this->ran);
-        self::assertSame(['chatgpt.com'], $this->ran->egress->hosts);
+        self::assertSame(['chatgpt.com'], [...$this->ran->egress->hosts]);
     }
 
     public function testAReviewerOnAnApiProviderIsRefusedBeforeAnyJobStarts(): void
@@ -203,7 +208,7 @@ final class ReviewJobTest extends TestCase
 
     public function testARefusedCheckoutFailsWithTheScriptsReason(): void
     {
-        $output = new JobOutput([ReviewJob::LOG => "fatal: some git error\nrefused: the checkout is writable\n"]);
+        $output = OutputFiles::of([ReviewJob::LOG => "fatal: some git error\nrefused: the checkout is writable\n"]);
 
         $this->expectException(ReviewJobFailure::class);
         $this->expectExceptionMessageIsOrContains('The review job refused to run the reviewer: the checkout is writable.');
@@ -216,12 +221,12 @@ final class ReviewJobTest extends TestCase
         $this->expectException(ReviewJobFailure::class);
         $this->expectExceptionMessageIsOrContains('The review job refused to run the reviewer: it exited with 2.');
 
-        (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 2), new JobOutput([])))->run($this->request());
+        (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 2), OutputFiles::of([])))->run($this->request());
     }
 
     public function testARefusedJobFailsWhateverItsAnswerSays(): void
     {
-        $output = new JobOutput([ReviewJob::LOG => "refused: the checkout differs from the head\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
+        $output = OutputFiles::of([ReviewJob::LOG => "refused: the checkout differs from the head\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
 
         $this->expectException(ReviewJobFailure::class);
 
@@ -257,7 +262,7 @@ final class ReviewJobTest extends TestCase
 
     public function testACliThatExitedWithAFailingStatusFailsWhateverItsAnswerSays(): void
     {
-        $output = new JobOutput([ReviewJob::LOG => "claude_code exited with 0\nclaude_code exited with 1\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
+        $output = OutputFiles::of([ReviewJob::LOG => "claude_code exited with 0\nclaude_code exited with 1\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
 
         $this->expectException(ReviewJobFailure::class);
         $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code exited with 1.');
@@ -267,7 +272,7 @@ final class ReviewJobTest extends TestCase
 
     public function testACliLineTheCliForgedBeforeTheScriptsOwnDoesNotCount(): void
     {
-        $output = new JobOutput([ReviewJob::LOG => "claude_code exited with 1\nclaude_code exited with 0\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
+        $output = OutputFiles::of([ReviewJob::LOG => "claude_code exited with 1\nclaude_code exited with 0\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
 
         $answer = $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
 
@@ -276,7 +281,7 @@ final class ReviewJobTest extends TestCase
 
     public function testALogWithoutTheScriptsExitLineIsNoResult(): void
     {
-        $output = new JobOutput([ReviewJob::LOG => '', ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
+        $output = OutputFiles::of([ReviewJob::LOG => '', ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
 
         $this->expectException(ReviewJobFailure::class);
         $this->expectExceptionMessageIsOrContains('The review job did not report how the reviewer\'s CLI claude_code exited.');
@@ -286,7 +291,7 @@ final class ReviewJobTest extends TestCase
 
     public function testAJobWithoutAnAnswerFileFails(): void
     {
-        $output = new JobOutput([ReviewJob::LOG => "claude_code exited with 0\n"]);
+        $output = OutputFiles::of([ReviewJob::LOG => "claude_code exited with 0\n"]);
 
         $this->expectException(ReviewJobFailure::class);
         $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code gave no answer the review job can read.');
@@ -307,7 +312,7 @@ final class ReviewJobTest extends TestCase
 
     private function answered(string $answer, string $provider = 'claude_code'): JobResult
     {
-        return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([ReviewJob::ANSWER => $answer, ReviewJob::LOG => $provider." exited with 0\n"]));
+        return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([ReviewJob::ANSWER => $answer, ReviewJob::LOG => $provider." exited with 0\n"]));
     }
 
     /**

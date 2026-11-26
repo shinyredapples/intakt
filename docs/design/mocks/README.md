@@ -28,7 +28,7 @@ Then open `http://localhost:8000/design/mocks/review-scoreboard/index.html`. Its
 
 ## Technical writer sketches
 
-[technical-writer-sketches.html](technical-writer-sketches.html) offers the owner three candidate animals for the Technical writer's character (#3563): an otter, a heron and a red panda, drawn as inline SVG. Each stands beside the Maintainer (`assets/maintainer-light.webp` and `assets/maintainer-dark.webp`, copied from `assets/images/characters/` so that a server rooted in this folder can serve them), in the light and the dark variant at once, whatever the page theme. None of them is in the team strip yet: the owner's choice decides which one joins it after the Maintainer (#3588). Serve it from this folder (`docs/design/mocks`), as in "Opening the mocks", and open `http://localhost:8000/technical-writer-sketches.html`; the rail does not link to it.
+[technical-writer-sketches.html](technical-writer-sketches.html) offers the owner three candidate animals for the Technical writer's character (#3563): an otter, a heron and a red panda, drawn as inline SVG. Each stands beside the Maintainer (`assets/maintainer-light.webp` and `assets/maintainer-dark.webp`, copied from `assets/images/characters/` so that a server rooted in this folder can serve them), in the light and the dark variant at once, whatever the page theme. The owner chose B, the heron: it joins the team strip after the Maintainer and shows on the Technical writer card of `team.html` (`assets/technical_writer-light.webp` and `assets/technical_writer-dark.webp`, copied from `assets/images/characters/` like the Maintainer's files) (#3588). Serve it from this folder (`docs/design/mocks`), as in "Opening the mocks", and open `http://localhost:8000/technical-writer-sketches.html`; the rail does not link to it.
 
 ## Fonts
 
@@ -36,7 +36,7 @@ The other mocks load their fonts from Google Fonts, so opening them or running `
 
 ## Screenshots
 
-The screenshots are not committed. `tools/screenshots.js` writes all of them for the pages in this folder, light and dark, at 1440 and 390 wide, to `screens/` with an index in `screens/INDEX.md`. It needs Node.js and Playwright:
+The screenshots are not committed. `tools/screenshots.js` writes all of them for the pages in this folder, light and dark, at 1440 and 390 wide (the board and the task page also at 1920 and 2560), to `screens/` with an index in `screens/INDEX.md`. It needs Node.js and Playwright:
 
 ```sh
 npm install --global playwright

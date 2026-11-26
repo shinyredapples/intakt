@@ -8,7 +8,7 @@ use Closure;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\ORM\EntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -19,6 +19,7 @@ use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -33,6 +34,8 @@ use Intakt\Core\Review\Contract\BootHarness;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Panel;
@@ -41,10 +44,12 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\VerdictIdentity;
+use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\BootRecord;
@@ -73,6 +78,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\VerdictsWithdrawalRefused;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
@@ -82,12 +88,17 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
+use Intakt\Plugin\Forge\Contract\ChangeLabels;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Core\Watcher\UseCase\AdmitHeads\RecordedChecks;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
@@ -131,6 +142,10 @@ use Symfony\Component\Messenger\Exception\HandlerFailedException;
 #[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
+#[CoversClass(StatusMirrors::class)]
+#[UsesClass(RoundStatusMirror::class)]
+#[UsesClass(RoundStatusLabel::class)]
+#[UsesClass(StoredLatestRoundStatus::class)]
 #[UsesClass(WatchPullRequests::class)]
 #[UsesClass(DoctrineInstallWideFailures::class)]
 #[UsesClass(ItemFailureRecord::class)]
@@ -154,6 +169,7 @@ use Symfony\Component\Messenger\Exception\HandlerFailedException;
 #[UsesClass(BootOutcome::class)]
 #[UsesClass(MainCommit::class)]
 #[UsesClass(MarkVerdictsStale::class)]
+#[UsesClass(Labels::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
@@ -182,9 +198,15 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private WatchPullRequestsHandler $handler;
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
+    private Labels $steering;
     // Read from its own ledger, because the in-memory one reads nothing back.
     private ?Ledger $openings = null;
     private ?ChangeAuthorship $authorship = null;
+    private RecordedStatusLabels $statusLabels;
+    private LatestRoundStatus $latest;
+    private ReviewStatus $roundStatus = ReviewStatus::InReview;
+    /** @var list<string> */
+    private array $unreadableRounds = [];
 
     public function testANewHeadWithPendingCiStartsNoRound(): void
     {
@@ -433,6 +455,125 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $start = new StartReview('alpha', 'Review it.', new RequestedRound('7', null, new ChangeSource('repo', 'main')));
         self::assertEquals([new StartReviewAtHead($start, new CommitId(str_repeat(self::GREEN, 40)))], $this->commands->started);
         self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+    }
+
+    public function testTheSteeringLabelsOfThePullRequestReachTheRoundItStarts(): void
+    {
+        $this->steering = new Labels('review:full', 'model:strong');
+
+        $this->startRoundOnGreenHead();
+
+        self::assertSame(['review:full', 'model:strong'], [...$this->commands->started[0]->start->labels]);
+    }
+
+    public function testTheStaleCheckJudgesAnEarlierRoundByTheLabelsItStartedWithNotByTheLabelsReadAgain(): void
+    {
+        $this->steering = new Labels('review:full');
+        $this->startRoundOnGreenHead();
+        $this->steering = new Labels();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['review:full'], [...$this->queries->identitiesAsked[0]->round->start->labels]);
+    }
+
+    // Evidence E1 of #3944 over the recorded listing, because a build has no forge access and the owner checks the live pull request after merge.
+    public function testThePullRequestWhoseRoundATickQueuesCarriesTheInReviewLabelAfterThatTick(): void
+    {
+        $before = $this->statusLabels->on('7');
+
+        $this->startRoundOnGreenHead();
+
+        self::assertSame([[], ['status:in-review']], [$before, $this->statusLabels->on('7')]);
+    }
+
+    public function testAnOpenPullRequestWithoutARoundGetsNoStatusLabel(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([[], 0], [$this->statusLabels->on('1'), $this->statusLabels->writes]);
+    }
+
+    public function testAnUnchangedPullRequestWhoseReconcileFailedIsReconciledAgainOnTheNextPass(): void
+    {
+        $this->statusLabels->readsToFail = 1;
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tickFailingWith('The labels of 7 could not be read.');
+        $failed = $this->statusLabels->on('7');
+
+        $this->tick();
+
+        self::assertSame([[], ['status:in-review'], 1], [$failed, $this->statusLabels->on('7'), $this->listing->conditionalAnswers]);
+    }
+
+    public function testAPullRequestWhoseHeadIsNotDueTakesTheStatusOfItsStoredRoundOnTheNextPass(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->roundStatus = ReviewStatus::WaitingOnYou;
+
+        $this->tick();
+
+        self::assertSame([['status:waiting-on-you'], 2, 1], [$this->statusLabels->on('7'), $this->statusLabels->writes, $this->listing->conditionalAnswers]);
+    }
+
+    // Over Review's own store, because only it knows whether the publication of a judged round ran.
+    public function testAJudgedRoundWhosePublicationHasNotRunStaysInReviewUntilTheNextPassAfterItsPublication(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->latest = new StoredLatestRoundStatus($fixture->transactions());
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change(RoundFixture::CHANGE, self::GREEN, '2026-11-02T09:00:00Z'));
+        $roundId = $this->judgedRound($fixture);
+        $this->tick();
+        $judged = $this->statusLabels->on(RoundFixture::CHANGE);
+        $rounds = $fixture->transactions();
+        $rounds->recordPublication($rounds->stored($roundId));
+
+        $this->tick();
+
+        self::assertSame([['status:in-review'], ['status:waiting-on-you'], 2], [$judged, $this->statusLabels->on(RoundFixture::CHANGE), $this->statusLabels->writes]);
+    }
+
+    public function testWhenTheRoundLookupOfTheFirstOfTwoOpenPullRequestsFailsTheSecondStillGetsItsLabelAndTheFirstFailureSurfaces(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->unreadableRounds = ['7'];
+
+        try {
+            $this->tick();
+            self::fail('The failed round lookup was swallowed.');
+        } catch (RuntimeException $failure) {
+            self::assertSame('The rounds of 7 cannot be read.', $failure->getMessage());
+        }
+
+        $logged = array_find($this->logger->logged, static fn (array $line): bool => 'The status label of {change} of {project} was not reconciled: {reason}' === $line[0]);
+        self::assertSame([['status:in-review'], '7', 'alpha'], [$this->statusLabels->on('8'), $logged[1]['change'] ?? null, $logged[1]['project'] ?? null]);
+    }
+
+    public function testWhenTheLabelsReadOfTheFirstOfTwoOpenPullRequestsFailsTheSecondStillGetsItsLabelAndTheTickReportsTheFailure(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->statusLabels->readsToFail = 1;
+
+        $this->tickFailingWith('The labels of 7 could not be read.');
+
+        self::assertSame([[], ['status:in-review']], [$this->statusLabels->on('7'), $this->statusLabels->on('8')]);
+    }
+
+    public function testATickWhoseHeadStepAndStatusPassBothFailReportsTheHeadFailure(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->unreadableRounds = ['7'];
+        $this->useLedger(new InMemoryLedger(0));
+
+        $this->tickExpectingFailure();
+
+        $logged = array_find($this->logger->logged, static fn (array $line): bool => 'The status pass of {project} failed after its head step failed: {reason}' === $line[0]);
+        self::assertSame(['alpha', 'The rounds of 7 cannot be read.'], [$logged[1]['project'] ?? null, $logged[1]['reason'] ?? null]);
     }
 
     public function testAGreenHeadSeenAgainOnASecondTickStartsNoSecondRound(): void
@@ -691,7 +832,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
                     'round_id' => 'other',
                     'stale' => false,
                     'queued_recorded' => false,
-                ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
+                    'labels' => [],
+                ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN, 'labels' => Types::JSON]);
             }
         };
 
@@ -855,7 +997,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatMovesDuringARoundMakesThatRoundsVerdictsStaleAndStoresIt(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -868,7 +1010,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAStaleRoundIsRecordedOnceWhileTheMovedHeadIsReadAgain(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
         $this->tick();
 
@@ -880,7 +1022,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
     public function testAHeadThatMovesWhileItsRoundIsStillStartingMakesThatRoundsVerdictsStaleOnTheNextTick(): void
     {
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
         $this->commands->whileStarting = function (): void {
             $this->commands->whileStarting = null;
@@ -898,7 +1040,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatMovesOnlyInDocumentationLeavesTheVerdictsStanding(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['docs/feature.md']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('docs/feature.md'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -910,7 +1052,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAMovedHeadWithPendingCiMakesTheVerdictsStaleButStartsNoNewRound(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -945,11 +1087,31 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testARedHeadIsRecordedWithItsHeadAndNoCiLogText(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        $redKeys = [];
+        $redHeads = [];
+        foreach ($this->ledger->kinds() as $index => $kind) {
+            if (LedgerEventKind::HeadRed === $kind) {
+                $redKeys[] = array_keys($this->ledger->payloads()[$index]);
+                $redHeads[] = $this->ledger->payloads()[$index]['head'];
+            }
+        }
+
+        self::assertSame([['project', 'change', 'head', 'read_again_at']], $redKeys);
+        self::assertSame([str_repeat(self::RED, 40)], $redHeads);
+    }
+
     public function testARedMovedHeadIsCheckedAgainForStaleVerdictsOnceItsCommitArrives(): void
     {
         $this->startRoundOnGreenHead();
         $this->queries->fetched = false;
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->queries->fetched = true;
@@ -976,7 +1138,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAStaleLineTheLedgerCouldNotTakeIsRecordedByALaterTick(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->useLedger(new InMemoryLedger(0));
         $this->tickExpectingFailure();
@@ -991,7 +1153,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAStaleRoundWhoseLineWasRecordedIsNotRecordedAgainByALaterMove(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, new Paths());
         $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:06:00Z'));
@@ -1113,7 +1275,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatReturnsToAnEarlierHeadWhoseRoundStandsStartsNoSecondRound(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['docs/feature.md']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('docs/feature.md'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
@@ -1298,7 +1460,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $this->failToWithdrawOnARefusedHead();
         $this->queries->headBoot = BootOutcome::booted();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:10:00Z'));
 
         $this->clock->modify('+61 seconds');
@@ -1338,7 +1500,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $this->startRoundOnGreenHead();
         $this->queries->headBoot = BootOutcome::failed('The server did not start.');
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
 
         $this->tick();
@@ -1366,7 +1528,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAHeadThatReturnsAndFailsToBootWithdrawsTheApprovalsOfItsRoundAlreadyFoundStale(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->queries->headBoot = BootOutcome::failed('The server did not start.');
@@ -1470,8 +1632,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->listing = new RecordedForge();
         $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
         $this->commands = new RecordingCommandBus();
@@ -1481,13 +1642,32 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->queries = new StandingQueryBus($recorded, $entities);
         $this->locks = new BeforeChangeLockStore();
         $this->logger = new RecordingLogger();
+        $this->steering = new Labels();
+        $this->statusLabels = new RecordedStatusLabels();
+        $latest = self::createStub(LatestRoundStatus::class);
+        $latest->method('of')->willReturnCallback(fn (): ReviewStatus => $this->roundStatus);
+        $this->latest = $latest;
         $this->handler = $this->handler();
+    }
+
+    private function judgedRound(RoundFixture $fixture): string
+    {
+        $vendor = new VerdictPerRole([]);
+        $roundId = $fixture->startFor(RoundFixture::CHANGE, $fixture->bus, 2);
+        foreach ($fixture->bus->messages as $message) {
+            $fixture->deliver($message, $vendor);
+        }
+        foreach ($fixture->judgings() as $judging) {
+            $fixture->judge($vendor)($judging);
+        }
+
+        return $roundId;
     }
 
     private function moveFromGreenToNextGreenAndBack(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
@@ -1499,7 +1679,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private function returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, new Paths('src/Feature.php'));
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->queries->headBoot = BootOutcome::failed('The server did not start.');
@@ -1585,6 +1765,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         });
     }
 
+    private function tickFailingWith(string $reason): void
+    {
+        try {
+            $this->tick();
+            self::fail('The failed status reconcile was swallowed.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame($reason, $failure->getMessage());
+        }
+    }
+
     private function tickExpectingFailure(): void
     {
         try {
@@ -1624,7 +1814,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
         $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
-        $starts = new RoundStarts($this->commands, $rounds, $ledger);
+        $steering = self::createStub(ChangeLabels::class);
+        $steering->method('steeringOf')->willReturnCallback(fn (): Labels => $this->steering);
+        $starts = new RoundStarts($this->commands, $rounds, $ledger, $steering);
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
         $authors = self::createStub(AuthorTrust::class);
         $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
@@ -1634,7 +1826,24 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
         $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        $statuses = new StatusMirrors($find, new StartedRounds($this->roundLookups(), $pending, new DiscardedRounds($this->commands, $logger)), new RoundStatusMirror($this->latest, new LockFactory(new InMemoryStore()), $logger, $this->statusLabels), $logger);
+
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
+    }
+
+    // Each lookup goes to the stored rounds except one of a change the test made unreadable, because the decisions need one pull request's lookup to fail alone.
+    private function roundLookups(): EntityManagerInterface
+    {
+        $repository = self::createStub(EntityRepository::class);
+        $repository->method('count')->willReturnCallback(function (array $criteria): int {
+            $change = $criteria['change'] ?? null;
+
+            return is_string($change) && in_array($change, $this->unreadableRounds, true) ? throw new RuntimeException('The rounds of '.$change.' cannot be read.') : $this->entities->getRepository(StartedRound::class)->count(['project' => $criteria['project'] ?? null, 'change' => $change]);
+        });
+        $lookups = self::createStub(EntityManagerInterface::class);
+        $lookups->method('getRepository')->willReturn($repository);
+
+        return $lookups;
     }
 
     private function panel(): Panel

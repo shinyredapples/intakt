@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use LogicException;
 
@@ -70,7 +71,7 @@ final class StoredIssue
     ) {
         $listed = $reading->listed;
         $this->title = mb_substr($listed->title, 0, 255);
-        $this->labels = $listed->labels;
+        $this->labels = [...$listed->labels];
         $this->author = $listed->author;
         $this->updatedAt = $this->moment($listed->updatedAt);
         $this->milestoneDue = $listed->milestoneDue instanceof DateTimeImmutable ? $this->moment($listed->milestoneDue) : null;
@@ -91,6 +92,12 @@ final class StoredIssue
         $this->vouchedLabels = $vouching->labels;
     }
 
+    public function forgetVouching(): void
+    {
+        $this->trusted = null;
+        $this->vouchedLabels = [];
+    }
+
     // Kept only while the update time and what steers both stand, because an edit in the second of the earlier listing keeps the update time and the history vouched for the earlier labels and references.
     public function keepVouchingOf(self $stored): void
     {
@@ -102,12 +109,10 @@ final class StoredIssue
         $this->vouchedLabels = $stored->vouchedLabels;
     }
 
-    // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body.
+    // Compared as the queued item, because the pick asks the same of it and a row whose listing went unchanged keeps the numbers without the body.
     public function isListedAs(IssueHistory $history, IssueReferences $references): bool
     {
-        $body = $history->body;
-
-        return $this->hasLabels($history->currentLabels) && $this->namesNumbers($references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
+        return $this->queued()->isListedAs($history, $references);
     }
 
     public function isVouched(): bool
@@ -134,7 +139,7 @@ final class StoredIssue
     // The body comes back empty, because only the numbers it names steer the queue, and those are kept.
     public function queued(): QueuedIssue
     {
-        $listed = new ListedIssue($this->number, $this->title, '', $this->labels, $this->author, $this->instant($this->updatedAt), null === $this->milestoneDue ? null : $this->instant($this->milestoneDue), $this->pullRequest);
+        $listed = new ListedIssue($this->number, $this->title, '', new IssueLabels(...$this->labels), $this->author, $this->instant($this->updatedAt), null === $this->milestoneDue ? null : $this->instant($this->milestoneDue), $this->pullRequest);
         $reading = new ItemReading($listed, $this->waitsFor, $this->unreadableWaits, $this->closedBy);
 
         return new QueuedIssue($reading, $this->storedVouching());
@@ -158,6 +163,11 @@ final class StoredIssue
     public function updatedAt(): DateTimeImmutable
     {
         return $this->instant($this->updatedAt);
+    }
+
+    public function isPullRequest(): bool
+    {
+        return $this->pullRequest;
     }
 
     // In any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.

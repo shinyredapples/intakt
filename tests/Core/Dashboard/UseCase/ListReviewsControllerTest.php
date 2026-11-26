@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
@@ -28,6 +29,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ListReviewsController::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(LedgerFailingHeads::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
 #[UsesClass(ReviewSummary::class)]
@@ -310,6 +312,31 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('main .empty', 'No review has started yet.');
         self::assertSelectorNotExists('.review-rows');
         self::assertSelectorNotExists('.failing-heads');
+    }
+
+    public function testTheReviewListCarriesAHiddenEmptyLineForAProjectFilterThatHidesEveryRow(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame(['No review for this project yet'], $crawler->filter('.review-rows ~ [data-project-empty][hidden] > .col-empty')->each(static fn ($line): string => $line->text()));
+    }
+
+    public function testTheFailedPullRequestsCarryAHiddenEmptyLineForAProjectFilterThatHidesEveryCard(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame(['No failed pull request for this project'], $crawler->filter('.failing-heads > [data-project-empty][hidden] > .col-empty')->each(static fn ($line): string => $line->text()));
+    }
+
+    public function testAnEmptyLedgerShowsNoProjectEmptyLine(): void
+    {
+        $this->browser->request('GET', '/reviews');
+
+        self::assertSelectorNotExists('[data-project-empty]');
     }
 
     public function testTheEmptyReviewListShowsTheWaitingOctopusAt144PxAboveItsUnchangedWords(): void

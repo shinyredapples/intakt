@@ -4,9 +4,9 @@ This page explains what happens when you install Intakt, and what changes when y
 
 ## Installing
 
-Intakt is one container, and Docker or Podman is all you need: the image ships everything else ([requirements](../architecture/requirements.md)). Once the wizard is built, you start the container, open the dashboard, and the wizard does the rest.
+Intakt is one container, and Docker or Podman is all you need: the image ships everything else ([requirements](../architecture/requirements.md)). You start the container and open the dashboard, where the setup wizard at `/setup` walks you through five steps.
 
-The wizard is planned, not built yet. For now you create the GitHub App yourself and give Intakt its identity through three environment variables: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` ([the user guide](../reference/user-manual.md) explains each). The planned flow:
+The five steps (Repository, GitHub App, AI account, Check, Ready) can be opened today, but the actions that save things are still planned: the wizard does not keep the repository address, its app button does nothing yet, and a kept key is the one part of step 3 that works. For now you create the GitHub App yourself and give Intakt its identity through three environment variables: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` ([the user guide](../reference/user-manual.md) explains each). The planned flow of the whole wizard:
 
 ```mermaid
 flowchart TD
@@ -28,6 +28,10 @@ There is no login, password or setup code: by default the dashboard's port is pu
 5. **Defaults:** one Developer, at most two finished changes waiting for review, the label `intakt`. Everything ends up in one config file you can edit later.
 
 A new project starts with the smallest team: the Tech lead, the Developer, the Code reviewers and the Maintainer, nothing more. The Designer, the Security engineer and the AI engineer are opt-in per project, off until you turn one on, and so is every tool they need (security scanners, accessibility and page-quality tools, a scan of the running app); the wizard proposes none of them (planned, [details](../design/05-architecture/11-setup.md#the-starting-team)). Without the Security engineer, every change to the project's protected files comes to you.
+
+## When something does not work
+
+Start here, also when the dashboard does not open. In the folder with Intakt's `compose.yaml`, run `docker compose exec intakt php bin/console intakt:doctor`. It checks that the web server answers, its workers and figures, the live-update hub, the background workers and the GitHub App connection (read-only, with no GitHub App set it passes), and prints one line for each: `pass`, or `fail` with what to do next. It changes nothing, and it ends with an error code when any check fails, so a script can use it too. [When something goes wrong](../user/08-when-something-goes-wrong.md) lists more cases.
 
 ## Adding Intakt to a project you already have
 
@@ -60,10 +64,10 @@ The checks the foundation creates become **protected**: you approve them once, a
 
 ## The smallest setup
 
-One subscription and one modest machine is enough. This part is planned, not built yet. Intakt looks at what the install has each time it starts work, and with one account it runs one Developer and one reviewer. It does not run two builds at once, because one build can need about 5 GB of memory. A change to protected files, a security-relevant change or a large change gets a second review by another model of the same vendor; a change that only touches docs or tests gets one review. Tasks that would be big are split earlier, because redoing a large change costs the most.
+One subscription and one modest machine is enough. This part is planned, not built yet. Intakt looks at what the install has each time it starts work, and with one account it runs one Developer and one reviewer. It does not run two builds at once, because one build can need about 5 GB of memory. A change to protected files, a security-relevant change or a large change gets a second review by another model of the same vendor; a change that only touches docs or tests gets one review, because there is no second company to ask. Tasks that would be big are split earlier, because redoing a large change costs the most.
 
 Intakt works out how many Developers and reviewers fit each time it starts work, so adding an account or memory is picked up on its own; a second account from another company brings back the second reviewer from that company. Only if you want more than that default do you raise the numbers yourself. See [accounts and costs](accounts-and-costs.md#the-smallest-setup).
 
 ## Updating
 
-New versions install themselves safely (planned): Intakt checks the new version beside the old one while work goes on, tries it on one build slot first, then moves the other slots over, each as soon as its job is done. Only an update that changes stored data so the old version could not read it pauses all work. Updates that are not urgent wait for the update windows you set; an urgent one (a security fix, or a fix for something that stops work) and a version you pick yourself install right away. If anything fails, it rolls back and tells you; only when such a data-changing update fails after work has resumed can it not go back, so work pauses until a newer version fixes it ([draining](the-engine-room.md#draining-and-updates)).
+New versions install themselves safely (planned): in a normal update, Intakt checks the new version beside the old one while work goes on, tries it on one build slot first, then moves the other slots over at once. In a normal update, a running job finishes on the version it started on, so no slot waits, and new work stops only for one restart of a few seconds. Only a version that says it needs a drain makes work wait: one that changes how jobs talk to Intakt or how they are kept apart lets the running jobs finish, restarts, and only then checks itself and tries one slot (going back to the old version if that fails), and one that changes stored data so the old version could not read it pauses all work. Updates that are not urgent wait for the update windows you set; an urgent one (a security fix, or a fix for something that stops work) and a version you pick yourself install right away. If anything fails, it rolls back and tells you; only when such a data-changing update fails after work has resumed can it not go back, so work pauses until a newer version fixes it ([draining](the-engine-room.md#draining-and-updates)).

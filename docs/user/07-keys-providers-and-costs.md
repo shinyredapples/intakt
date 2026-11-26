@@ -16,19 +16,19 @@ Your first live review ran on one key. Now you want the real setup: two labs on 
 | `claude_code` | a reviewer or the judge on a Claude subscription | `CLAUDE_CODE_OAUTH_TOKEN` |
 | `codex` | a reviewer on a Codex subscription | a login file, see the reference |
 
-A provider without its key is switched off, and Intakt still starts. The setup page lists each one, for example: Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
+A provider without its key is switched off, and Intakt still starts. Step 3 of the setup wizard, **Add an AI account**, lists each one, for example: Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
 
-![Step 1 of the setup page, "Add a key here", marked Done: "openai_compatible has a key", then three lines saying the anthropic, openai and claude_code providers are disabled and which variable enables each, and the tiers of the project sample: strong and light on Kimi K3.1 Pro, standard on DeepSeek V4 Pro 0813, all through openai_compatible](../assets/guide/add-a-key.webp)
+![Step 3 of the setup wizard, "Add an AI account", on an install with no key: a field to paste a key, then four lines saying the anthropic, openai, openai_compatible and claude_code providers are disabled and which variable enables each, and the Back, Skip and Keep the key buttons](../assets/guide/add-a-key.webp)
 
 ## Where a key goes
 
 Keys never go into a committed file. Put them in one of these places:
 
-1. **The setup page,** for your first key: paste it in **Add a key here**. It is checked with the provider before it is kept.
+1. **The setup wizard,** for your first key: paste it on step 3, **Add an AI account**. It is checked with the provider before it is kept.
 2. **`.env.local`,** for everything else: copy `.env.dist` to `.env.local` and fill in the variables above.
 3. **Symfony secrets,** for example `php bin/console secrets:set ANTHROPIC_API_KEY`.
 
-A key in `.env.local` or in the secrets always wins over one kept from the setup page. After you add or change a key, restart Intakt so it reads it.
+A key in `.env.local` or in the secrets always wins over one kept from the setup wizard. After you add or change a key, restart Intakt so it reads it.
 
 ## Two labs, one Hugging Face token
 
@@ -44,11 +44,17 @@ A project never names a model per reviewer. It maps three tiers to a provider an
 - **standard,** a mid-range model,
 - **light,** a small model; the owl runs on it.
 
-Each reviewer names a tier. So one changed line moves every reviewer on that tier to a newer model. The tiers live in the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel) says which file that is).
+Each reviewer names a tier. So one changed line moves every reviewer on that tier to a newer model. Use the newest model of each maker for reviews; the example configuration names the ones the project recommends today. The tiers live in the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel) says which file that is).
+
+## When a build runs long
+
+A build went past its allowance but keeps fixing tests. It may go on while it makes progress. Two limits are meant to stop it even then: the runaway ceiling for one build, and the per-task total across its continuations. A build stopped by either keeps the commits it made, and they are checked and pushed like any other.
+
+Planned: Intakt does not watch a running build for these limits yet. Today a build ends when its session's time runs out, and it keeps its commits the same way.
 
 ## When a provider says "slow down"
 
-When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day. The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.
+When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day and at least one second (a reset of zero or already past waits one second). The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.
 
 ## Reading the cost
 
@@ -56,10 +62,12 @@ Every review page shows the tokens and the cost of each round. The cost is an es
 
 1. Open the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel)).
 2. Under `budget.prices`, add each model with its `input` and `output` price.
-3. Optionally set `budget.price_date`, the day you read the prices, in quotes.
+3. Optionally set `budget.price_date`, the day you read the prices, in quotes. If you read them on different days, use the earliest.
 4. Run `php bin/console cache:clear`.
 
-The page then shows a figure, an **estimated** label and the price date. A model without a price makes the cost read "unknown, no price for" that model, never a partial sum. The demo brings its own list prices, dated 2026-11-18.
+The tokens table splits the prompt's cache tokens. **Cache read** and **Cache write** are the ones the provider named as such; **Cached** is the rest it did not tell apart, so a round can show a cache read and a cached figure side by side. Optional `cache_read` and `cache_write` prices apply to the first two, and the cached figure costs the `input` price.
+
+The page then shows a figure, an **estimated** label and the price date. A model without a price makes the cost read "unknown, no price for" that model, never a partial sum. This holds for a call that has not recorded its end yet (still running, or cut off) too: if its model has no price, the round's cost is unknown; if the model has a price, such a call adds nothing. The demo brings its own list prices, dated 2026-11-13, the earliest day any of them was read.
 
 ## Running on a subscription
 

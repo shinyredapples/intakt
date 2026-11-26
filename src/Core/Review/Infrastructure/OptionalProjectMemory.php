@@ -8,6 +8,8 @@ use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
 use Intakt\Core\Memory\Contract\RelevantMemory;
+use Intakt\Core\Memory\Contract\SettledMemory;
+use Intakt\Core\Memory\Contract\SettledQuery;
 use Intakt\Core\Platform\Contract\KeptForTheProcess;
 use Override;
 use Psr\Log\LoggerInterface;
@@ -31,14 +33,37 @@ final class OptionalProjectMemory implements ProjectMemory
     {
         try {
             return $this->memory->relevantTo($query);
-        } catch (ProjectMemoryNeedsEmbeddingModel $missing) {
-            $this->reportMissingModelOnce($query->project, $missing);
-            // Boundary: logs any other read failure and returns no memory, because project memory is optional and must never fail the review.
+            // Boundary: logs any read failure and returns no memory, because project memory is optional and must never fail the review.
         } catch (Throwable $failure) {
-            $this->logger->warning('Project memory could not be read; the review goes on without it.', ['project' => $query->project, 'exception' => $failure]);
+            $this->explain($query->project, $failure);
         }
 
         return RelevantMemory::within([], $query->maxBytes);
+    }
+
+    #[Override]
+    public function settledOn(SettledQuery $query): SettledMemory
+    {
+        try {
+            return $this->memory->settledOn($query);
+            // Boundary: logs any read failure and returns no settled memory, because project memory is optional and must never fail the review.
+        } catch (Throwable $failure) {
+            $this->explain($query->project, $failure);
+        }
+
+        return SettledMemory::none();
+    }
+
+    // A missing embedding model is a set-up choice, so it gets one info line per start; any other failure is a warning with its trace.
+    private function explain(string $project, Throwable $failure): void
+    {
+        if ($failure instanceof ProjectMemoryNeedsEmbeddingModel) {
+            $this->reportMissingModelOnce($project, $failure);
+
+            return;
+        }
+
+        $this->logger->warning('Project memory could not be read; the review goes on without it.', ['project' => $project, 'exception' => $failure]);
     }
 
     // One info line per start without a trace, because nothing is broken and a per-message reset would bring back one line per review.

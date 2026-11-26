@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\CheckJob;
@@ -13,9 +14,14 @@ use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRun;
+use Intakt\Core\HandBack\Contract\RegressionRuns;
+use Intakt\Core\HandBack\Contract\RegressionTests;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobRefused;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\Filesystem\Exception\IOExceptionInterface;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
@@ -26,13 +32,24 @@ final readonly class PrePushCheck
     public function __construct(
         private CheckJobs $jobs,
         private HandBackFile $files,
+        private RegressionTests $regressionTests,
+        private LoggerInterface $logger,
     ) {
     }
 
     // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed.
-    public function failureOf(BuildTaskRequest $request, string $bundle): ?string
+    public function resultOf(BuildTaskRequest $request, string $bundle, TaskKind $kind): PrePushResult
     {
-        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack));
+        $result = $this->files->check($request, $bundle, fn (HandBack $handBack): PrePushResult => $this->resultIn($request, $handBack, $kind));
+
+        return $result instanceof PrePushResult ? $result : new PrePushResult($result, null);
+    }
+
+    private function resultIn(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): PrePushResult
+    {
+        $failure = $this->failureIn($request, $handBack);
+
+        return null === $failure ? $this->regressionResult($request, $handBack, $kind) : new PrePushResult($failure, null);
     }
 
     private function failureIn(BuildTaskRequest $request, HandBack $handBack): ?string
@@ -48,6 +65,47 @@ final readonly class PrePushCheck
         }
 
         return $outcome instanceof RefusedHandBack ? $outcome->reason() : $this->failureOfJob($outcome);
+    }
+
+    // Only a bug whose check passed, so a head that fails the check is not run twice more; only a missing test or a test that passes on the base fails, because the other results are not proof either way.
+    private function regressionResult(BuildTaskRequest $request, HandBack $handBack, TaskKind $kind): PrePushResult
+    {
+        if (TaskKind::Bug !== $kind) {
+            return new PrePushResult(null, null);
+        }
+
+        try {
+            $runs = $this->regressionTests->run(new CheckJob($handBack, $request->image, null, new Paths()));
+        } catch (ExceptionInterface|IOExceptionInterface|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
+            // The job's script that cannot be read too: a run that could not happen proves nothing either way, so the verdict stays as the check job gave it.
+            $this->logger->warning('The regression tests of a bug head could not run.', ['project' => $request->project, 'exception' => $failure]);
+
+            return new PrePushResult(null, null);
+        }
+
+        if ($runs instanceof RegressionRuns) {
+            $this->logger->info('The regression tests of a bug head ran.', [
+                'project' => $request->project,
+                'tests' => [...$runs->tests],
+                'base' => $runs->base?->value,
+                'head' => $runs->head?->value,
+            ]);
+
+            $failure = $this->unprovenBy($runs);
+
+            return new PrePushResult($failure, null === $failure ? $runs : null);
+        }
+
+        return new PrePushResult(null, null);
+    }
+
+    private function unprovenBy(RegressionRuns $runs): ?string
+    {
+        return match (true) {
+            $runs->foundNoTest() => 'the head of a bug adds no regression test',
+            RegressionRun::Passed === $runs->base => 'the new test of a bug also passes on the base, so it proves nothing',
+            default => null,
+        };
     }
 
     private function stoppedBy(ExceptionInterface $stopped): string

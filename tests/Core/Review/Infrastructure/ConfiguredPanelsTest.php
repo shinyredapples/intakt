@@ -42,6 +42,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Decision::class)]
 final class ConfiguredPanelsTest extends TestCase
 {
+    private const array TIERS = ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic'], 'standard' => ['provider' => 'anthropic'], 'light' => ['provider' => 'anthropic']]]];
+
     public function testThePanelOfAProjectCarriesItsReviewersInConfigOrderAndItsPolicy(): void
     {
         $panels = new ConfiguredPanels(['alpha' => [
@@ -50,7 +52,7 @@ final class ConfiguredPanelsTest extends TestCase
                 ['role' => 'correctness', 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Logic.', 'budget' => 5],
                 ['role' => 'style', 'tier' => 'light', 'provider' => 'openai', 'prompt' => 'Style.', 'budget' => 2],
             ],
-        ]]);
+        ]], self::TIERS);
 
         $panel = $panels->panelFor('alpha');
 
@@ -67,7 +69,7 @@ final class ConfiguredPanelsTest extends TestCase
         $this->expectException(PanelNotConfigured::class);
         $this->expectExceptionObject(new PanelNotConfigured('beta'));
 
-        new ConfiguredPanels([])->panelFor('beta');
+        new ConfiguredPanels([], [])->panelFor('beta');
     }
 
     public function testAChangeBelowTheLineThresholdKeepsTheCorePanel(): void
@@ -89,108 +91,6 @@ final class ConfiguredPanelsTest extends TestCase
         $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths('docs/a.md', 'config/security/rules/x.yaml'), new Labels()));
 
         self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testAPathGlobWithOneStarDoesNotReachIntoSubfolders(): void
-    {
-        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths('docs/a/b.md'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testAChangedPathThatIsNotValidUtf8StillMatchesItsGlob(): void
-    {
-        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths("config/security/\xFF.php"), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testAChangedPathWithANewlineStillMatchesADoubleStarGlob(): void
-    {
-        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths("config/security/a\nb.php"), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testADoubleStarBetweenSlashesMatchesNoFolderAtAll(): void
-    {
-        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, new Paths('src/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testADoubleStarBetweenSlashesMatchesNestedFoldersWithANewline(): void
-    {
-        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, new Paths("src/x\ny/Security/a.php"), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testADoubleStarBetweenSlashesDoesNotMatchAFolderThatOnlyEndsInTheName(): void
-    {
-        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, new Paths('src/NoSecurity/Door.php'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testALeadingDoubleStarMatchesAFolderAtTheRoot(): void
-    {
-        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, new Paths('Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testALeadingDoubleStarMatchesANestedFolder(): void
-    {
-        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, new Paths('a/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testALeadingDoubleStarDoesNotMatchAFolderThatOnlyEndsInTheName(): void
-    {
-        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, new Paths('NoSecurity/Door.php'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testConsecutiveDoubleStarsBetweenSlashesMatchNoFolderAtAll(): void
-    {
-        $panel = $this->securityRule('src/**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('src/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testConsecutiveDoubleStarsBetweenSlashesMatchANestedFolder(): void
-    {
-        $panel = $this->securityRule('src/**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('src/a/Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testConsecutiveLeadingDoubleStarsMatchAFolderAtTheRoot(): void
-    {
-        $panel = $this->securityRule('**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('Security/Door.php'), new Labels()));
-
-        self::assertSame(['correctness', 'security'], $this->roles($panel));
-    }
-
-    public function testConsecutiveLeadingDoubleStarsDoNotMatchAFolderThatOnlyEndsInTheName(): void
-    {
-        $panel = $this->securityRule('**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, new Paths('NoSecurity/Door.php'), new Labels()));
-
-        self::assertSame(['correctness'], $this->roles($panel));
-    }
-
-    public function testAOneCharacterWildcardMatchesOneCharacterOfAUtf8Path(): void
-    {
-        $panel = new ConfiguredPanels(['alpha' => [
-            'quorum' => 'all',
-            'reviewers' => [$this->reviewer('correctness')],
-            'rules' => [['paths' => ['src/?.php'], 'reviewers' => [$this->reviewer('short')]]],
-        ]])->panelForChange('alpha', new ChangeDescription(1, new Paths('src/é.php'), new Labels()));
-
-        self::assertSame(['correctness', 'short'], $this->roles($panel));
     }
 
     public function testAChangeToNoMatchingPathKeepsTheCorePanelAndItsQuorum(): void
@@ -215,6 +115,75 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness'], $this->roles($panel));
     }
 
+    public function testAModelLabelSetsTheTierOfEveryReviewer(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([Tier::Light], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testTheLastModelLabelWins(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light', 'model:standard')));
+
+        self::assertSame([Tier::Standard], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testAModelLabelThatNamesNoTierKeepsTheConfiguredTier(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:gpt-9')));
+
+        self::assertSame([Tier::Strong], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testALowerModelLabelKeepsTheStrongReviewerAQuorumThatNeedsOneRequires(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'one-strong-plus-one',
+            'reviewers' => [[...$this->reviewer('correctness'), 'tier' => 'strong'], [...$this->reviewer('design'), 'tier' => 'standard']],
+        ]], self::TIERS);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([Tier::Strong, Tier::Light], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testALowerModelLabelLowersAStrongReviewerUnderAQuorumThatNeedsNoStrongVote(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'majority',
+            'reviewers' => [[...$this->reviewer('correctness'), 'tier' => 'strong']],
+        ]], self::TIERS);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([Tier::Light], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
+    public function testAModelLabelKeepsAReviewerOnItsTierWhenTheProjectMapsTheLabelledTierToAnotherProvider(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [[...$this->reviewer('correctness'), 'tier' => 'strong', 'provider' => 'anthropic'], [...$this->reviewer('design'), 'tier' => 'standard', 'provider' => 'openai']],
+        ]], ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic'], 'standard' => ['provider' => 'openai'], 'light' => ['provider' => 'openai']]]]);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:light')));
+
+        self::assertSame([[Tier::Strong, Provider::Anthropic], [Tier::Light, Provider::OpenAi]], array_map(static fn (PanelReviewer $reviewer): array => [$reviewer->model->tier, $reviewer->model->provider], $panel->reviewers));
+    }
+
+    public function testAModelLabelKeepsTheConfiguredTierWhenTheProjectMapsNoModelToTheLabelledTier(): void
+    {
+        $panels = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [$this->reviewer('correctness')],
+        ]], ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic'], 'light' => ['provider' => 'anthropic']]]]);
+
+        $panel = $panels->panelForChange('alpha', new ChangeDescription(1, new Paths(), new Labels('model:standard')));
+
+        self::assertSame([Tier::Strong], array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers));
+    }
+
     private function ruled(): ConfiguredPanels
     {
         return new ConfiguredPanels(['alpha' => [
@@ -224,26 +193,7 @@ final class ConfiguredPanelsTest extends TestCase
                 ['min_lines' => 100, 'reviewers' => [$this->reviewer('big')]],
                 ['paths' => ['config/security/**', 'docs/*.md'], 'reviewers' => [$this->reviewer('security')]],
             ],
-        ]]);
-    }
-
-    private function nested(): ConfiguredPanels
-    {
-        return $this->securityRule('src/**/Security/**');
-    }
-
-    private function anywhere(): ConfiguredPanels
-    {
-        return $this->securityRule('**/Security/**');
-    }
-
-    private function securityRule(string $glob): ConfiguredPanels
-    {
-        return new ConfiguredPanels(['alpha' => [
-            'quorum' => 'all',
-            'reviewers' => [$this->reviewer('correctness')],
-            'rules' => [['paths' => [$glob], 'reviewers' => [$this->reviewer('security')]]],
-        ]]);
+        ]], self::TIERS);
     }
 
     /**

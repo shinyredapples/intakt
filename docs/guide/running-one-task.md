@@ -22,7 +22,7 @@ flowchart LR
 3. **Clone:** it makes a fresh copy for the work in `<folder>`.
 4. **Build job:** the Developer works on the issue in a container of its own and hands back its commits and the pull request text.
 5. **Hand-back check:** Intakt checks what came back: only new commits on the task's branch, nothing that rewrites history, no secrets.
-6. **Pre-push check:** it runs the project's checks on the work once more, in a fresh container, merged with the latest main.
+6. **Pre-push check:** it runs the project's checks on the work once more, in a fresh container, merged with the latest main. For a `bug` task, once those checks pass and only when the work adds, changes or renames a test, it then also tries to run those tests twice, once on the code as it was before the fix and once on the fixed code, and records how both runs ended (a run that cannot start has no result): a real regression test fails before the fix and passes after it. If the work adds no test, or its new test already passes before the fix, the test proves nothing: the step fails with that reason and nothing is pushed, the same as when a check is red.
 7. **Push:** it signs the commits with its own key, pushes the branch and opens (or updates) the pull request.
 
 ## Where it stops
@@ -33,6 +33,7 @@ One check comes before every step: when the project has a `github` entry, `--rem
 
 - A step fails when, for example, GitHub cannot list the issues, the issue is not open, the Developer made no commit, the hand-back check refuses what came back, the checks fail, or the branch conflicts with main (then nothing is pushed).
 - When the Developer ends with a question instead of a change, the task stops at the build job: Intakt stores the question, runs no later step and the command still ends without an error.
+- When the task is labeled `bug` and misses one of its four parts (When, Today, Expected, Must keep working), the task also stops at the build job, after the clone and before the Developer runs: Intakt stores a question naming the missing parts, runs no later step and the command ends without an error ([writing a bug task](writing-a-good-task.md#writing-a-bug-task)).
 - When every step passes, the pull request is open and the command ends after the push.
 
 ## Finding the steps in the ledger

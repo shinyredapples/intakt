@@ -11,10 +11,15 @@ budget:
     # Optional: the price of each model, keyed by the model name exactly as a tier (or substitute) names it, never the name a provider's answer reports, in US dollars per million tokens, for the cost line of a review.
     # input and output are required; cache_read and cache_write default to input. A round that used a model without a price shows its cost as unknown.
     # Optional: the day you read the prices (YYYY-MM-DD, in quotes: YAML would turn an unquoted date into a timestamp); the review shows it beside the estimated cost, and says the price date is unknown without it.
-    price_date: '2026-11-17'
+    # The shipped date is the earliest day any price in the table below was read; prices read on a later day carry the earlier date.
+    price_date: '2026-11-13'
     prices:
         claude-opus-5-5: { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 }
         claude-haiku-5-5: { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 }
+        claude-sonnet-5-5: { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 }
+        gpt-6.2-sol: { input: 2, output: 10 }
+        gpt-6.1-terra: { input: 1, output: 5 }
+        gpt-6-luna: { input: 0.1, output: 0.5 }
 # Optional: the share of the GitHub installation's hourly allowance kept for the calls Intakt cannot do without, a whole number from 0 (no reserve) to 100 (default 20);
 # while less is left, each project's open pull requests are listed once a minute on average.
 github:
@@ -22,6 +27,14 @@ github:
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
 # A tier on provider codex must name this model: { provider: codex, model: gpt-6.2-sol }.
 codex: { model: gpt-6.2-sol, effort: high }
+# Optional: how many days a reviewer conversation (the prompts with the reviewed code and the replies) is kept after its last message, a whole number from 1 to 36500 (default 30), or forever to delete nothing.
+# A scheduled task deletes older ones every ten minutes, never one whose review round is still open (a round whose judging failed, or whose upper wait ran out, counts as finished); the ledger is never touched.
+retention:
+    conversation_days: 30
+# Optional: settings of the disk check (no work step calls it yet; the next part wires it in). Below these free bytes or free inodes of a folder, Intakt holds new work there until space is back (defaults 2147483648 bytes and 100000 inodes, each a whole number of at least 1).
+disk:
+    min_free_bytes: 2147483648
+    min_free_inodes: 100000
 # Each project maps the capability tiers to a provider (anthropic, openai, openai_compatible, claude_code, codex) and a model name.
 projects:
     alpha:
@@ -55,7 +68,7 @@ projects:
         # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
         # the task text is given to every round until the pull request text is read from the forge.
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
-        # `eligibility_label` (optional, not read yet) is the issue label that lets Intakt build a task; it must not be blank.
+        # `eligibility_label` (optional, `intakt` when left out, read by the work source that chooses the next task; `php bin/console intakt:queue:show <project>` prints the order it picks in) is the issue label that lets Intakt build a task; it must not be blank.
         watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha, eligibility_label: intakt }
         # Optional: the files and folders (everything below one counts) a change may only touch with an approval, from the repository's root;
         # .gitmodules and submodules always count. `php bin/console intakt:protected:list alpha <head>` lists what a head touches.
@@ -69,4 +82,4 @@ projects:
         tiers:
             strong: { provider: openai, model: gpt-6.2-sol }
             standard: { provider: openai, model: gpt-6.1-terra }
-            light: { provider: openai_compatible, model: local-small }
+            light: { provider: openai, model: gpt-6-luna }

@@ -28,11 +28,13 @@ use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\NearLine;
+use Intakt\Core\Review\Contract\P1Keys;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -44,6 +46,7 @@ use Intakt\Core\Review\Domain\FindingKey;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
+use Intakt\Core\Review\Infrastructure\StoredP1KeysNormalizer;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
@@ -52,6 +55,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(ReviewStarted::class)]
@@ -62,6 +66,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewerBlocked::class)]
 #[CoversClass(ReviewerStopped::class)]
 #[CoversClass(JudgeDone::class)]
+#[CoversClass(ReviewerFindingsRecorded::class)]
 #[CoversClass(JudgeDoneFinding::class)]
 #[CoversClass(DroppedFinding::class)]
 #[CoversClass(QuoteNearLines::class)]
@@ -79,6 +84,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(FindingIds::class)]
 #[UsesClass(SameCause::class)]
 #[UsesClass(StoredFindingIdsNormalizer::class)]
+#[UsesClass(P1Keys::class)]
+#[UsesClass(StoredP1KeysNormalizer::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(ProjectNotConfigured::class)]
 #[UsesClass(ConfiguredTierResolver::class)]
@@ -153,6 +160,18 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor(), new FindingKeys())->reviewerStarted($reviewer);
 
         self::assertSame(['round', 'reviewer', 'role', 'tier'], array_keys($ledger->payloads()[0]));
+    }
+
+    public function testAReviewersStartIsAppendedWithItsRoundAsTheSubjectAndAVerdictWithoutOne(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $ledger = new InMemoryLedger();
+        $rounds = $this->roundLedger($ledger);
+
+        $rounds->reviewerStarted($reviewer);
+        $rounds->verdictReceived($reviewer, Verdict::noTools());
+
+        self::assertSame([$reviewer->round()->id()->toRfc4122(), null], $ledger->subjects());
     }
 
     public function testOnlyTheStartOfAReviewerCarriesItsModel(): void
@@ -523,7 +542,18 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"p1_keys":{"F1":"abc","F2":null}}', JudgeDone::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(JudgeDone::class, $done);
-        self::assertSame(['F1' => 'abc', 'F2' => null], $done->p1Keys);
+        self::assertSame(['F1' => 'abc', 'F2' => null], iterator_to_array($done->p1Keys));
+    }
+
+    public function testAJudgeRowWrittenBeforeP1KeysWereOneValueReadsBackAndIsWrittenAgainUnchanged(): void
+    {
+        $row = '{"round":"'.self::ROUND.'","act":["F1","F2"],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":{"F1":"abc","F2":null},"fallback":null}';
+
+        $done = $this->serializer()->deserialize($row, JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertSame(['abc', null], [$done->p1Keys->keyOf('F1'), $done->p1Keys->keyOf('F2')]);
+        self::assertSame($row, $this->written($done));
     }
 
     public function testAJudgeRowWrittenBeforeKeysWereRecordedReadsWithNoKeys(): void
@@ -531,7 +561,38 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', JudgeDone::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(JudgeDone::class, $done);
-        self::assertSame([], $done->p1Keys);
+        self::assertSame([], iterator_to_array($done->p1Keys));
+    }
+
+    public function testAJudgeRowWithAP1KeyThatIsNoStringDoesNotRead(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+
+        $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"p1_keys":{"F1":3}}', JudgeDone::class, JsonEncoder::FORMAT);
+    }
+
+    public function testAReviewerFindingsRowWrittenBeforeItsFieldsWereTypedReadsBackAndIsWrittenAgainUnchanged(): void
+    {
+        $row = '{"round":"'.self::ROUND.'","reviewer":"reviewer-a","findings":["F1","F2"],"severities":{"F1":"P1","F2":"P3"}}';
+
+        $recorded = $this->serializer()->deserialize($row, ReviewerFindingsRecorded::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(ReviewerFindingsRecorded::class, $recorded);
+        self::assertSame([['F1', 'F2'], ['F1' => Severity::P1, 'F2' => Severity::P3]], [[...$recorded->findings], $recorded->severities]);
+        self::assertSame($row, $this->written($recorded));
+    }
+
+    public function testAReviewerFindingsRowWrittenBeforeSeveritiesWereRecordedReadsWithNone(): void
+    {
+        $recorded = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","reviewer":"reviewer-a","findings":["F1"]}', ReviewerFindingsRecorded::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(ReviewerFindingsRecorded::class, $recorded);
+        self::assertNull($recorded->severities);
+    }
+
+    public function testAReviewerFindingsRowWithoutFindingsIsWrittenWithAnEmptyListAndEmptySeverities(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","reviewer":"reviewer-a","findings":[],"severities":[]}', $this->written(new ReviewerFindingsRecorded(self::ROUND, 'reviewer-a', new FindingIds(), [])));
     }
 
     public function testADoneJudgeRecordsEachReviewersCountedVoteAndReadsItBack(): void

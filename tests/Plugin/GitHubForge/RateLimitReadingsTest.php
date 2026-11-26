@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\FlockStore;
 
@@ -51,14 +53,14 @@ final class RateLimitReadingsTest extends TestCase
 
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
     }
 
     public function testAnotherInstallationIsNotPaused(): void
     {
         $this->limitOf($this->process(), 429, ['retry-after' => ['90']]);
 
-        $this->process()->refuseWhileLimited('999');
+        $this->process()->refuseWhileLimited('999', RateLimitReadings::CORE);
 
         self::assertNull($this->process()->latest('999'));
     }
@@ -88,12 +90,12 @@ final class RateLimitReadingsTest extends TestCase
         self::assertSame($this->clock->now()->getTimestamp() + 569, $later->resetsAt->getTimestamp());
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
     }
 
     public function testARetryAfterGivenAsADateIsARateLimitUntilThatMoment(): void
     {
-        $limited = $this->limitOf($this->process(), 403, ['retry-after' => ['Wed, 25 Nov 2026 10:05:00 GMT']]);
+        $limited = $this->limitOf($this->process(), 403, ['retry-after' => [$this->clock->now()->modify('+5 minutes')->setTimezone(new DateTimeZone('UTC'))->format('D, d M Y H:i:s \G\M\T')]]);
 
         self::assertSame($this->clock->now()->getTimestamp() + 300, $limited->resetsAt->getTimestamp());
     }
@@ -114,7 +116,7 @@ final class RateLimitReadingsTest extends TestCase
         self::assertSame($this->clock->now()->getTimestamp() + 60, $limited->resetsAt->getTimestamp());
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
     }
 
     public function testA403WithCallsLeftAndNoRetryAfterIsNoRateLimit(): void
@@ -122,7 +124,7 @@ final class RateLimitReadingsTest extends TestCase
         $reset = (string) ($this->clock->now()->getTimestamp() + 600);
 
         $this->process()->observe('678', 403, ['x-ratelimit-remaining' => ['12'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset]]);
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
 
         self::assertSame(12, $this->process()->latest('678')?->remaining);
     }
@@ -141,7 +143,7 @@ final class RateLimitReadingsTest extends TestCase
     {
         $this->limitOf($this->process(), 403, $this->exhausted('graphql'));
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
 
         self::assertNull($this->process()->latest('678'));
     }
@@ -152,7 +154,7 @@ final class RateLimitReadingsTest extends TestCase
 
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678', 'graphql');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::GRAPHQL);
     }
 
     public function testAnExhaustedGraphqlPoolAnsweredWith200PausesGraphqlCalls(): void
@@ -162,14 +164,14 @@ final class RateLimitReadingsTest extends TestCase
         self::assertSame($this->clock->now()->getTimestamp() + 3600, $limited->resetsAt->getTimestamp());
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678', 'graphql');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::GRAPHQL);
     }
 
     public function testAnExhaustedGraphqlPoolAnsweredWith200DoesNotPauseRestCalls(): void
     {
         $this->limitOf($this->process(), 200, $this->exhausted('graphql'));
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
 
         self::assertNull($this->process()->latest('678'));
     }
@@ -179,7 +181,7 @@ final class RateLimitReadingsTest extends TestCase
         $reset = (string) ($this->clock->now()->getTimestamp() + 600);
 
         $this->process()->observe('678', 200, ['retry-after' => ['60'], 'x-ratelimit-remaining' => ['3'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => ['graphql']]);
-        $this->process()->refuseWhileLimited('678', 'graphql');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::GRAPHQL);
 
         self::assertNull($this->process()->latest('678'));
     }
@@ -187,7 +189,7 @@ final class RateLimitReadingsTest extends TestCase
     public function testARestAnswerWith200ThatSpentTheLastCallIsNoRateLimit(): void
     {
         $this->process()->observe('678', 200, $this->exhausted('core'));
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
 
         self::assertSame(0, $this->process()->latest('678')?->remaining);
     }
@@ -198,7 +200,7 @@ final class RateLimitReadingsTest extends TestCase
 
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::CORE);
     }
 
     public function testAPauseStoredUnderTheEarlierKeyIsNotShortenedByALaterLimit(): void
@@ -214,7 +216,7 @@ final class RateLimitReadingsTest extends TestCase
     {
         $this->pauseStoredByAnEarlierVersion();
 
-        $this->process()->refuseWhileLimited('678', 'graphql');
+        $this->process()->refuseWhileLimited('678', RateLimitReadings::GRAPHQL);
 
         self::assertNull($this->process()->latest('678'));
     }
@@ -223,7 +225,8 @@ final class RateLimitReadingsTest extends TestCase
     {
         $this->directory = sys_get_temp_dir().'/intakt-rate-limits-'.bin2hex(random_bytes(4));
         mkdir($this->directory);
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        // The files expire on the wall clock, which no test clock reaches, so the test clock starts at the wall clock's current second.
+        $this->clock = new MockClock('@'.new NativeClock()->now()->getTimestamp());
     }
 
     protected function tearDown(): void

@@ -10,6 +10,7 @@ use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
@@ -47,7 +48,7 @@ final class PhpInImageTest extends TestCase
     {
         $runner = $this->createMock(JobRunner::class);
         $runner->expects($this->once())->method('run')
-            ->with(self::callback(static fn (JobSpec $spec): bool => self::IMAGE === $spec->image && $spec->egress->isNone() && [] === $spec->inputs && 'php' === $spec->command[0]))
+            ->with(self::callback(static fn (JobSpec $spec): bool => self::IMAGE === $spec->image && $spec->egress->isNone() && [] === $spec->inputs && 'php' === [...$spec->command][0]))
             ->willReturn($this->resultWith('{"version": "8.5.12", "extensions": ["intl", "pdo_sqlite"]}'));
 
         new PhpInImage($runner)->verify('intakt-job/demo:main', self::IMAGE, PhpProfile::fromComposerJson(self::COMPOSER_JSON));
@@ -95,7 +96,7 @@ final class PhpInImageTest extends TestCase
     {
         $runner = self::createStub(JobRunner::class);
         $end = new JobEnd(JobCause::Exited, 127);
-        $runner->method('run')->willReturn(new JobResult($end, new JobOutput([])));
+        $runner->method('run')->willReturn(new JobResult($end, new JobOutput()));
 
         $this->expectExceptionObject(JobImageNotBuilt::probeFailed('intakt-job/demo:main', $end));
 
@@ -126,6 +127,6 @@ final class PhpInImageTest extends TestCase
 
     private function resultWith(string $answer): JobResult
     {
-        return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['php.json' => $answer]));
+        return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(new JobOutputFile('php.json', $answer)));
     }
 }

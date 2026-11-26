@@ -220,7 +220,7 @@ final class GitHubForgeTest extends TestCase
         $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
 
         self::assertSame(HeadMoveKind::Commits, $move->kind);
-        self::assertSame(['src/Added.php', 'docs/read me.md'], $move->paths);
+        self::assertSame(['src/Added.php', 'docs/read me.md'], [...$move->paths]);
     }
 
     public function testItReportsBothPathsOfAFileRenamedByTheNewCommits(): void
@@ -231,7 +231,7 @@ final class GitHubForgeTest extends TestCase
 
         $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
 
-        self::assertSame(['src/Guard.php', 'docs/Guard.php'], $move->paths);
+        self::assertSame(['src/Guard.php', 'docs/Guard.php'], [...$move->paths]);
     }
 
     public function testItReportsARewriteWhenTheNewCommitsListThreeHundredFiles(): void
@@ -252,7 +252,7 @@ final class GitHubForgeTest extends TestCase
         $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
 
         self::assertSame(HeadMoveKind::Commits, $move->kind);
-        self::assertCount(299, $move->paths);
+        self::assertCount(299, [...$move->paths]);
     }
 
     public function testItReportsARewriteWhenTheNewCommitsHaveNoFileList(): void
@@ -289,12 +289,24 @@ final class GitHubForgeTest extends TestCase
         $file = $forge->fileAtHead($change, 'src/My Dir/Widget.php');
 
         self::assertSame(self::fixture('contents_widget.txt'), $file->content);
+        self::assertNull($file->binaryBytes);
         self::assertContains('GET '.self::API.'/contents/src/My%20Dir/Widget.php?ref='.self::HEAD, $this->requested);
+    }
+
+    public function testAFileWhoseAnswerHoldsANulByteIsNamedBinaryByItsSize(): void
+    {
+        $forge = $this->forge($this->contentsAnswer(new MockResponse("\x89PNG\r\n\0 logo")));
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $file = $forge->fileAtHead($change, 'assets/logo.png');
+
+        self::assertSame(12, $file->binaryBytes);
+        self::assertSame('Binary file, not shown: 12 bytes', $file->content);
     }
 
     public function testItRefusesAFileMissingAtHeadAsFileNotFoundAtHead(): void
     {
-        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_contains($url, '/contents/') ? new MockResponse(self::fixture('not_found.json'), ['http_code' => 404]) : null);
+        $forge = $this->forge($this->contentsAnswer(new MockResponse(self::fixture('not_found.json'), ['http_code' => 404])));
         $change = $forge->change(new ChangeId(self::PULL));
 
         $this->expectException(FileNotFoundAtHead::class);
@@ -405,7 +417,8 @@ final class GitHubForgeTest extends TestCase
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
-        $identity = new RecordedInstallation(self::MINTED)->client();
+        // GitHub's clock stays at the start, so every mint answers with the expiry of the first token.
+        $identity = new RecordedInstallation(new MockClock($clock->now()), self::MINTED)->client();
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
         $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, FreshReadings::at($clock), $tokens)), $expected, new NullLogger()), $tokens);
@@ -618,7 +631,7 @@ final class GitHubForgeTest extends TestCase
     private function forgeOver(HttpClientInterface $http): GitHubForge
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $identity = new RecordedInstallation(self::MINTED)->client();
+        $identity = new RecordedInstallation($clock, self::MINTED)->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
@@ -666,6 +679,11 @@ final class GitHubForgeTest extends TestCase
         $body = $this->sent[self::POST_REVIEW]['body'] ?? null;
 
         return is_string($body) ? $body : throw new LogicException('No review was posted.');
+    }
+
+    private function contentsAnswer(ResponseInterface $response): Closure
+    {
+        return static fn (string $url): ?ResponseInterface => str_contains($url, '/contents/') ? $response : null;
     }
 
     private static function comparison(string $mergeBase, int $files): string

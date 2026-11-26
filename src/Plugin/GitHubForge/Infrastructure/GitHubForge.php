@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
@@ -30,6 +31,7 @@ use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Domain\RefusedCredentials;
 use JsonException;
 use NoDiscard;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
@@ -46,7 +48,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private const string RAW = 'application/vnd.github.raw+json';
     private const int COMPARED_FILES_CAP = 300;
     private const int NOT_FOUND = 404;
-    private const int UNAUTHORIZED = 401;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -82,7 +83,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     {
         $head = $change->commits->head;
         if ($earlier->equals($head)) {
-            return new HeadMove(HeadMoveKind::Unmoved, []);
+            return new HeadMove(HeadMoveKind::Unmoved, new Paths());
         }
 
         $address = PullRequestAddress::of($change->id);
@@ -90,15 +91,15 @@ final readonly class GitHubForge implements Forge, ForgeWrites
 
         // A clean merge of the base is never reported, because the API cannot prove that the merge added nothing of its own.
         if (null === $comparison || 'ahead' !== ($comparison['status'] ?? null)) {
-            return new HeadMove(HeadMoveKind::Rewritten, []);
+            return new HeadMove(HeadMoveKind::Rewritten, new Paths());
         }
 
         $entries = $this->completeFilesOf($comparison);
 
         // An incomplete list cannot prove which paths the new commits touched, so the verdict must not survive on it.
         return null === $entries
-            ? new HeadMove(HeadMoveKind::Rewritten, [])
-            : new HeadMove(HeadMoveKind::Commits, array_map(static fn (ChangedFile $file): string => $file->path, $this->filesIn($entries)));
+            ? new HeadMove(HeadMoveKind::Rewritten, new Paths())
+            : new HeadMove(HeadMoveKind::Commits, new Paths(...array_map(static fn (ChangedFile $file): string => $file->path, $this->filesIn($entries))));
     }
 
     public function fileAtHead(Change $change, string $path): FileContent
@@ -108,7 +109,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         $segments = array_map(rawurlencode(...), explode('/', $path));
         $content = $this->get($address->repositoryPath().'/contents/'.implode('/', $segments), self::RAW, ['ref' => $head->hash]);
 
-        return null === $content ? throw FileNotFoundAtHead::at($path, $head) : new FileContent($path, $head, $content);
+        return null === $content ? throw FileNotFoundAtHead::at($path, $head) : FileContent::ofBytes($path, $head, $content);
     }
 
     public function postReview(string $project, Change $change, ReviewComment $comment): void
@@ -139,9 +140,9 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private function publishAsTheApp(ChangeId $change, PublishedVerdict $verdict): void
     {
         $address = PullRequestAddress::of($change);
-        $comments = $verdict->comments();
+        $comments = [...$verdict->comments()];
         // The asks scanned as GitHub shows them, without tags and entities, because a file name in an ask is written with entities inside <code>, and an entity in the middle of a key or a tag right after it hides the key from the scan's rules.
-        $rendered = array_map(static fn (string $ask): string => html_entity_decode(strip_tags($ask), ENT_QUOTES | ENT_HTML5, 'UTF-8'), $verdict->ownerAsks);
+        $rendered = array_map(static fn (string $ask): string => html_entity_decode(strip_tags($ask), ENT_QUOTES | ENT_HTML5, 'UTF-8'), [...$verdict->ownerAsks]);
         if (array_any([...$comments, ...$rendered], $this->secrets->findsSecretIn(...))) {
             throw ReviewTextHoldsSecret::afterRedaction();
         }
@@ -174,10 +175,11 @@ final readonly class GitHubForge implements Forge, ForgeWrites
      */
     private function askPartsOf(PublishedVerdict $verdict): array
     {
-        $digest = hash('sha256', json_encode($verdict->ownerAsks, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
-        $markers = array_map(static fn (int $part): string => sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $digest, $part + 1), array_keys($verdict->ownerAsks));
+        $asks = [...$verdict->ownerAsks];
+        $digest = hash('sha256', json_encode($asks, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
+        $markers = array_map(static fn (int $part): string => sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $digest, $part + 1), array_keys($asks));
 
-        return array_combine($markers, array_map(static fn (string $ask): array => [$ask], $verdict->ownerAsks));
+        return array_combine($markers, array_map(static fn (string $ask): array => [$ask], $asks));
     }
 
     private function isStale(Change $change): bool
@@ -347,7 +349,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             return $body;
         }
 
-        throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+        throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: RefusedCredentials::STATUS === $status ? new ForgeCredentialsRefused() : null);
     }
 
     /**
@@ -367,7 +369,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: RefusedCredentials::STATUS === $status ? new ForgeCredentialsRefused() : null);
         }
     }
 

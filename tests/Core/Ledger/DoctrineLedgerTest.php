@@ -24,6 +24,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 
@@ -55,6 +56,41 @@ final class DoctrineLedgerTest extends KernelTestCase
 
         self::assertSame(LedgerEventKind::cases(), array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, $events));
         self::assertSame('{"kind":"review_started"}', $events[0]->event->payload);
+    }
+
+    public function testAReadAboutASubjectReturnsOnlyTheEventsOfThatKindAndExactSubjectInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewerStarted, 'first', 'r1'], [LedgerEventKind::ReviewerStarted, 'other round', 'r10'], [LedgerEventKind::VerdictReceived, 'other kind', 'r1'], [LedgerEventKind::ReviewerStarted, 'no subject', null], [LedgerEventKind::ReviewerStarted, 'retry', 'r1']] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        $events = iterator_to_array($ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1'));
+
+        self::assertSame(['first', 'retry'], array_map(static fn (RecordedEvent $event): string => $event->event->payload, $events));
+        self::assertSame(['r1', 'r1'], array_map(static fn (RecordedEvent $event): ?string => $event->event->subject, $events));
+    }
+
+    public function testAReadAboutAPrefixOfAStoredSubjectReadsNothing(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'first', 'r1'))->succeeded());
+
+        self::assertSame([], iterator_to_array($ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r')));
+    }
+
+    public function testAReadWithoutSubjectReturnsOnlyTheEventsOfThatKindAppendedWithoutOneInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewerStarted, 'first', null], [LedgerEventKind::ReviewerStarted, 'with subject', 'r1'], [LedgerEventKind::VerdictReceived, 'other kind', null], [LedgerEventKind::ReviewerStarted, 'second', null]] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted)));
+
+        self::assertSame(['first', 'second'], $payloads);
     }
 
     public function testAReadOfOneKindReturnsOnlyTheEventsOfThatKindInTheOrderTheyWereAppended(): void
@@ -116,6 +152,80 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
 
         self::assertSame([], iterator_to_array($ledger->readMentioning(new Mentions())));
+    }
+
+    public function testAReadByKindsAndTextsReturnsOnlyEventsOfThoseKindsThatMentionATextInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::JudgeDone, '{"round":"r-1"}'], [LedgerEventKind::ReviewStarted, '{"round":"r-1"}'], [LedgerEventKind::UsageRecorded, '{"round":"r-1"}'], [LedgerEventKind::JudgeDone, '{"round":"r-2"}'], [LedgerEventKind::ReviewStarted, '{"round":"r-3"}']] as [$kind, $payload]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
+        }
+
+        $events = $ledger->readOfKindsMentioning(new Mentions('r-2', 'r-1'), LedgerEventKind::ReviewStarted, LedgerEventKind::JudgeDone);
+
+        self::assertSame([[LedgerEventKind::JudgeDone, '{"round":"r-1"}'], [LedgerEventKind::ReviewStarted, '{"round":"r-1"}'], [LedgerEventKind::JudgeDone, '{"round":"r-2"}']], array_map(static fn (RecordedEvent $event): array => [$event->event->kind, $event->event->payload], iterator_to_array($events)));
+    }
+
+    public function testAReadByKindsAndTextsTakesItsWildcardAndEscapeCharactersLiterally(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach (['{"note":"a_b"}', '{"note":"axb"}', '{"note":"50%!"}'] as $payload) {
+            self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, $payload))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning(new Mentions('a_b', '50%!'), LedgerEventKind::JudgeDone)));
+
+        self::assertSame(['{"note":"a_b"}', '{"note":"50%!"}'], $payloads);
+    }
+
+    public function testAReadByKindsAndMoreTextsThanOneQueryHoldsReturnsEachMatchingEventOnceInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $calls = array_map(static fn (int $n): string => sprintf('00000000-0000-7000-8000-%012d', $n), range(1, 1100));
+
+        foreach ([[LedgerEventKind::UsageRecorded, '{"call":"'.$calls[1099].'"}'], [LedgerEventKind::JudgeDone, '{"call":"'.$calls[0].'"}'], [LedgerEventKind::UsageRecorded, '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}'], [LedgerEventKind::UsageRecorded, '{"call":"'.$calls[500].'"}']] as [$kind, $payload]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning(new Mentions(...$calls), LedgerEventKind::UsageRecorded)));
+
+        self::assertSame(['{"call":"'.$calls[1099].'"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'], $payloads);
+    }
+
+    public function testAReadByOneKindRepeatedAThousandTimesReturnsTheMatchingEventOnce(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"r-1"}'))->succeeded());
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning(new Mentions('r-1'), ...array_fill(0, 1000, LedgerEventKind::JudgeDone))));
+
+        self::assertSame(['{"round":"r-1"}'], $payloads);
+    }
+
+    // Counted in the bound values, because the engine's own parameter limit differs between builds and may admit the repeated kinds.
+    public function testAReadByOneKindRepeatedBindsTheKindOnce(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $queries = self::getContainer()->get('doctrine.debug_data_holder');
+        self::assertInstanceOf(DebugDataHolder::class, $queries);
+        $queries->reset();
+
+        $ledger->readOfKindsMentioning(new Mentions('r-1'), LedgerEventKind::JudgeDone, LedgerEventKind::JudgeDone, LedgerEventKind::JudgeDone);
+
+        $bound = array_merge(...array_map(static fn (array $query): array => array_values((array) $query['params']), array_merge(...array_values($queries->getData()))));
+        self::assertSame(1, count(array_keys($bound, LedgerEventKind::JudgeDone->value, true)));
+    }
+
+    public function testAReadByNoKindOrNoTextReadsNothing(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
+
+        self::assertSame([], iterator_to_array($ledger->readOfKindsMentioning(new Mentions('r-1'))));
+        self::assertSame([], iterator_to_array($ledger->readOfKindsMentioning(new Mentions(), LedgerEventKind::JudgeDone)));
     }
 
     public function testEventsAreReadInAppendOrderAfterTheClockStepsBack(): void

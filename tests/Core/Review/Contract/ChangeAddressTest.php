@@ -24,6 +24,40 @@ final class ChangeAddressTest extends TestCase
         self::assertSame('https://github.com/acme/my.widgets/pull/7', ChangeAddress::canonical('HTTPS://GitHub.com/Acme/My.Widgets/pull/7'));
     }
 
+    public function testThePullRequestNumberOfAGitHubPullRequestAddressIsRead(): void
+    {
+        self::assertSame('7', ChangeAddress::pullRequestNumber('HTTPS://GitHub.com/Acme/Widgets/pull/7/'));
+    }
+
+    public function testAnAddressThatIsNotAGitHubPullRequestHasNoPullRequestNumber(): void
+    {
+        self::assertNull(ChangeAddress::pullRequestNumber('feat/pull/7'));
+        self::assertNull(ChangeAddress::pullRequestNumber('https://example.com/acme/widgets/pull/7'));
+    }
+
+    public function testAnAddressTheCanonicalFormLeavesAloneHasNoPullRequestNumber(): void
+    {
+        self::assertNull(ChangeAddress::pullRequestNumber('https://github.com/acme/../pull/12'));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function nonCanonicalGitHubPullRequestForms(): iterable
+    {
+        yield 'http scheme' => ['http://github.com/acme/widgets/pull/7'];
+        yield 'user info' => ['https://bot@github.com/acme/widgets/pull/7'];
+        yield 'port' => ['https://github.com:8443/acme/widgets/pull/7'];
+        yield 'ssh scheme' => ['ssh://github.com/acme/widgets/pull/7'];
+    }
+
+    #[DataProvider('nonCanonicalGitHubPullRequestForms')]
+    public function testAPullRequestPathUnderAnotherSchemeUserInfoOrPortKeepsItsSpellingAndHasNoPullRequestNumber(string $address): void
+    {
+        self::assertSame($address, ChangeAddress::canonical($address));
+        self::assertNull(ChangeAddress::pullRequestNumber($address));
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

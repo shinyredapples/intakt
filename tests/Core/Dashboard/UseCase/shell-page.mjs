@@ -62,17 +62,23 @@ class FakeElement {
     }
 }
 
-// The project filter as the layout renders it: All projects with the empty value, then one option per project, the linked projects marked selected. A browser shows the last marked option when several are.
+// The project filter as the layout renders it: All projects with the empty value, then one option per project, the linked projects marked selected and the projects only the page adds marked as its own. A browser shows the last marked option when several are.
 class FakeSelect extends FakeElement {
-    constructor(page, projects, linked) {
+    constructor(page, projects, linked, pageProjects = []) {
         super(page);
         this.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))]
-            .map((option) => ({ ...option, defaultSelected: linked.includes(option.value) }));
+            .map((option) => ({ ...option, defaultSelected: linked.includes(option.value), dataset: pageProjects.includes(option.value) ? { pageOption: '' } : {} }));
         this.value = this.options.findLast((option) => option.defaultSelected)?.value ?? '';
     }
 
     get selectedOptions() {
         return this.options.filter((option) => option.value === this.value);
+    }
+
+    // As in a browser, replacing the options leaves the first one chosen.
+    replaceChildren(...options) {
+        this.options = options;
+        this.value = options[0]?.value ?? '';
     }
 }
 
@@ -152,7 +158,8 @@ class FakeKey {
 export class Browser {
     storage = new Map();
 
-    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'], address = 'http://localhost/reviews', linked = null, more = false, phone = false } = {}) {
+    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'], address = 'http://localhost/reviews', linked = null, more = false, phone = false, pageProjects = [] } = {}) {
+        this.pageProjects = pageProjects;
         this.systemTheme = systemTheme;
         this.more = more;
         this.phone = phone;
@@ -200,6 +207,7 @@ export class Browser {
             history,
             URL,
             Event,
+            TextEncoder,
         };
         const window = {
             page,
@@ -228,7 +236,7 @@ export class Browser {
         const themeToggles = [new FakeElement(page), new FakeElement(page)];
         const body = new FakeElement(page);
         // The server marks the project of the address selected when the install lists it; a test may name the marked options itself.
-        const projectFilter = new FakeSelect(page, this.projects, this.linked ?? [new URL(this.address).searchParams.get('project')]);
+        const projectFilter = new FakeSelect(page, this.projects, this.linked ?? [new URL(this.address).searchParams.get('project')], this.pageProjects);
         const rows = this.rows.map((project) => Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
         // The layout renders the More item and its sheet only for a page that has pages under More.
         const more = this.more ? new FakeElement(page) : null;
@@ -247,7 +255,9 @@ export class Browser {
                 delete shownElements['[data-project-trail]'];
             };
         }
-        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': [...rows, ...workingNow.cards], '[data-section-current]': trail ? [projectsItem] : [] };
+        // The rows' empty line as the server renders them: hidden, its container holding the rows.
+        const emptyLine = Object.assign(new FakeElement(page), { hidden: true, parentElement: Object.assign(new FakeElement(page), { querySelectorAll: (selector) => (selector === '[data-project]' ? rows : []) }) });
+        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': [...rows, ...workingNow.cards], '[data-section-current]': trail ? [projectsItem] : [], '[data-project-empty]': [emptyLine] };
 
         show(shownElements, allShown);
         context.location.href = this.address;
@@ -275,6 +285,7 @@ export class Browser {
             projectsMarked: () => projectsItem.hasAttribute('aria-current'),
             history,
             shownRows: () => rows.filter((row) => !row.hidden).map((row) => row.dataset.project),
+            emptyLineShown: () => !emptyLine.hidden,
             // What a script listening on the document, such as assets/column-more.js, sees of each filter run: the rows it left shown.
             listenForShownProjects: () => {
                 const seen = [];
@@ -310,7 +321,7 @@ export class Browser {
                     target: stream,
                     detail: {
                         render: () => {
-                            projectFilter.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))];
+                            projectFilter.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))].map((option) => ({ ...option, dataset: {} }));
                             projectFilter.value = '';
                         },
                     },

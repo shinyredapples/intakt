@@ -15,6 +15,7 @@ final readonly class StartReview implements CommandMessage
         public string $project,
         public string $task,
         public RequestedRound $round,
+        public Labels $labels = new Labels(),
     ) {
         $this->source = $round->source ?? throw new RoundSourceMissing('A round started without waiting needs the repository and base its change is read from.');
     }

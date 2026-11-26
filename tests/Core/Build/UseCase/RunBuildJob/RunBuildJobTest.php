@@ -9,8 +9,10 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
@@ -19,6 +21,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -28,19 +31,23 @@ use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputRefused;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Job\OutputFiles;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJob::class)]
@@ -48,6 +55,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuildVerdict::class)]
 #[CoversClass(BuilderNotOnClaudeCode::class)]
 #[CoversClass(BuildCloneIsNoFolder::class)]
+#[CoversClass(RecordedBuildStops::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -81,9 +89,21 @@ final class RunBuildJobTest extends TestCase
 
     private mixed $toolTimeLimit = 1500;
 
+    private string $script = self::SCRIPT;
+
+    private RecordedBuildStops $stops;
+
+    private ?BuildStopCause $stopWhileRunning = null;
+
+    private ?string $promptFolder = null;
+
+    private ?Gate $gate = null;
+
+    private string $workingDirectory = '';
+
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
     {
-        $outcome = $this->runBuilds(new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "log\n"]))->run($this->job());
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "log\n"]))->run($this->job());
 
         self::assertTrue($outcome->built());
         self::assertSame('BUNDLE', $outcome->bundle);
@@ -93,12 +113,12 @@ final class RunBuildJobTest extends TestCase
 
     public function testTheTiersModelAndTheBranchReachTheBuildScript(): void
     {
-        (void) $this->runBuilds(new JobOutput([]), new ResolvedModel(Provider::ClaudeCode, 'claude-opus-5-5'))->run($this->job(Tier::Strong));
+        (void) $this->runBuilds(OutputFiles::of([]), new ResolvedModel(Provider::ClaudeCode, 'claude-opus-5-5'))->run($this->job(Tier::Strong));
 
         self::assertNotNull($this->ran);
         self::assertSame(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', '', '1500'],
-            $this->ran->command,
+            [...$this->ran->command],
         );
     }
 
@@ -109,10 +129,10 @@ final class RunBuildJobTest extends TestCase
     {
         $this->toolTimeLimit = $seconds;
 
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame((string) $seconds, $this->ran->command[11]);
+        self::assertSame((string) $seconds, [...$this->ran->command][11]);
     }
 
     #[TestWith([3000])]
@@ -123,7 +143,7 @@ final class RunBuildJobTest extends TestCase
 
         $this->expectExceptionObject(new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of 3000 seconds, not %d.', $seconds)));
 
-        $this->runBuilds(new JobOutput([]));
+        $this->runBuilds(OutputFiles::of([]));
     }
 
     #[TestWith([true])]
@@ -135,7 +155,7 @@ final class RunBuildJobTest extends TestCase
 
         $this->expectExceptionMessageMatches('/tool time limit must be a whole number of seconds, not /');
 
-        $this->runBuilds(new JobOutput([]));
+        $this->runBuilds(OutputFiles::of([]));
     }
 
     #[TestWith([0])]
@@ -146,7 +166,7 @@ final class RunBuildJobTest extends TestCase
 
         $this->expectExceptionMessageMatches('/must be at least 1 second .*, not '.$seconds.'\.$/');
 
-        $this->runBuilds(new JobOutput([]));
+        $this->runBuilds(OutputFiles::of([]));
     }
 
     #[TestWith([12, 2])]
@@ -156,24 +176,24 @@ final class RunBuildJobTest extends TestCase
     {
         $this->gatesAtOnce = new GatesAtOnce($processors, $slots);
 
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame('', $this->ran->command[10]);
+        self::assertSame('', [...$this->ran->command][10]);
         self::assertSame(1, new GatesByDefault($processors, $this->ran->limits->cpus, $this->ran->limits->memoryBytes)->count);
     }
 
     public function testTheJobsTimeLimitLeavesRoomToBundleAfterTheAllowance(): void
     {
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertGreaterThan((int) $this->ran->command[9], $this->ran->limits->seconds);
+        self::assertGreaterThan((int) [...$this->ran->command][9], $this->ran->limits->seconds);
     }
 
     public function testTheBuildClonedAndThePromptAreTheJobsOnlyInputs(): void
     {
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
 
         self::assertNotNull($this->ran);
         self::assertSame([$this->folder.'/clone', RunBuildJob::CLONE], [$this->ran->inputs[0]->hostPath, $this->ran->inputs[0]->containerPath]);
@@ -183,7 +203,7 @@ final class RunBuildJobTest extends TestCase
 
     public function testThePromptFileHoldsTheFencedTaskWhileTheJobRunsAndIsRemovedAfterwards(): void
     {
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
 
         self::assertNotNull($this->ran);
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task')->rendered(), $this->promptSeen);
@@ -211,19 +231,19 @@ final class RunBuildJobTest extends TestCase
 
     public function testTheJobMayReachTheVendorsApiAndTheGatesRegistriesOnly(): void
     {
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame(['api.anthropic.com', ...new PhpGate()->registryHosts()], $this->ran->egress->hosts);
+        self::assertSame(['api.anthropic.com', ...new PhpGate()->registryHosts()], [...$this->ran->egress->hosts]);
     }
 
     public function testTheJobIdNamesTheProjectAndBranchSoASecondBuildOfThemIsRefusedWhileOneRuns(): void
     {
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
         $first = $this->ran?->id->value;
-        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('again', [], null), Tier::Light, 'img'));
+        (void) $this->runBuilds(OutputFiles::of([]))->run(new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('again', new Decisions(), null), Tier::Light, 'img'));
         $second = $this->ran?->id->value;
-        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demot', $this->folder.'/clone', 'ask', new BuildBrief('x', [], null), Tier::Light, 'img'));
+        (void) $this->runBuilds(OutputFiles::of([]))->run(new BuildJob('demot', $this->folder.'/clone', 'ask', new BuildBrief('x', new Decisions(), null), Tier::Light, 'img'));
 
         self::assertSame($first, $second);
         self::assertNotSame($first, $this->ran?->id->value);
@@ -244,12 +264,12 @@ final class RunBuildJobTest extends TestCase
     {
         $this->expectExceptionObject(BuildCloneIsNoFolder::at($this->folder.'/missing'));
 
-        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/missing', 'task', new BuildBrief('x', [], null), Tier::Standard, 'img'));
+        (void) $this->runBuilds(OutputFiles::of([]))->run(new BuildJob('demo', $this->folder.'/missing', 'task', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'img'));
     }
 
     public function testAJobWithoutABundleMadeNoCommits(): void
     {
-        $outcome = $this->runBuilds(new JobOutput(['pull-request.md' => "feat: x\n"]))->run($this->job());
+        $outcome = $this->runBuilds(OutputFiles::of(['pull-request.md' => "feat: x\n"]))->run($this->job());
 
         self::assertSame(BuildVerdict::NoCommits, $outcome->verdict);
         self::assertNull($outcome->bundle);
@@ -259,7 +279,7 @@ final class RunBuildJobTest extends TestCase
     {
         $question = '{"question":"Which store?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}';
 
-        $outcome = $this->runBuilds(new JobOutput(['question.json' => $question, 'handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+        $outcome = $this->runBuilds(OutputFiles::of(['question.json' => $question, 'handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
 
         self::assertSame(BuildVerdict::Asked, $outcome->verdict);
         self::assertSame(['Which store?', ['SQLite', 'Postgres'], 'SQLite'], [$outcome->question?->question, $outcome->question?->choices, $outcome->question?->recommendation]);
@@ -271,7 +291,7 @@ final class RunBuildJobTest extends TestCase
     {
         $question = '{"question":"Which store?","choices":["SQLite"],"recommendation":"Postgres"}';
 
-        $outcome = $this->runBuilds(new JobOutput(['question.json' => $question, 'build.log' => "log\n"]))->run($this->job());
+        $outcome = $this->runBuilds(OutputFiles::of(['question.json' => $question, 'build.log' => "log\n"]))->run($this->job());
 
         self::assertSame(BuildVerdict::QuestionRefused, $outcome->verdict);
         self::assertNull($outcome->question);
@@ -280,7 +300,7 @@ final class RunBuildJobTest extends TestCase
 
     public function testAJobWithoutThePullRequestTextIsNotBuilt(): void
     {
-        $outcome = $this->runBuilds(new JobOutput(['handback.bundle' => 'BUNDLE']))->run($this->job());
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE']))->run($this->job());
 
         self::assertSame(BuildVerdict::NoPullRequestText, $outcome->verdict);
         self::assertFalse($outcome->built());
@@ -288,7 +308,7 @@ final class RunBuildJobTest extends TestCase
 
     public function testAJobTheEngineStoppedIsNotBuiltWhateverItsOutputSays(): void
     {
-        $output = new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "cut\n"]);
+        $output = OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "cut\n"]);
 
         $killed = $this->runBuilds($output, end: new JobEnd(JobCause::MemoryKilled, 137))->run($this->job());
         $timedOut = $this->runBuilds($output, end: new JobEnd(JobCause::TimedOut, 137))->run($this->job());
@@ -299,16 +319,32 @@ final class RunBuildJobTest extends TestCase
 
     public function testAJobWhoseScriptCouldNotClearTheOutputIsNoResultWhateverItsOutputSays(): void
     {
-        $output = new JobOutput(['handback.bundle' => 'PLANTED', 'pull-request.md' => "planted\n", 'build.log' => "log\n"]);
+        $output = OutputFiles::of(['handback.bundle' => 'PLANTED', 'pull-request.md' => "planted\n", 'build.log' => "log\n"]);
 
         $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
 
-        self::assertSame([BuildVerdict::NoResult, null, null, "log\n"], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText, $outcome->log]);
+        self::assertSame([BuildVerdict::NoResult, null, null], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText]);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputEndsItsLogWithTheOrchestratorsOwnReason(): void
+    {
+        $output = OutputFiles::of(['build.log' => 'builder text']);
+
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("builder text\nno result: the build script could not clear the job's output\n", $outcome->log);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputAndLeftNoLogStillSaysWhy(): void
+    {
+        $outcome = $this->runBuilds(OutputFiles::of([]), end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("no result: the build script could not clear the job's output\n", $outcome->log);
     }
 
     public function testAJobThatExitedWithAnotherFailingCodeIsStillReadFromItsOutput(): void
     {
-        $output = new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]);
+        $output = OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]);
 
         $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, 1))->run($this->job());
 
@@ -325,15 +361,240 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
     }
 
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAJobStoppedWhileItRanHandsBackItsBundleAndTextCarryingTheCause(BuildStopCause $cause): void
+    {
+        $this->stopWhileRunning = $cause;
+
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertSame([BuildVerdict::Built, 'BUNDLE', "feat: x\n", $cause], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText, $outcome->stopCause]);
+    }
+
+    public function testAJobWithoutAStopCarriesNoCause(): void
+    {
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertNull($outcome->stopCause);
+    }
+
+    public function testAStopCauseIsReadOnceSoTheBranchsNextBuildCarriesNone(): void
+    {
+        $this->stopWhileRunning = BuildStopCause::NoProgress;
+        $builds = $this->runBuilds(OutputFiles::of([]));
+        (void) $builds->run($this->job());
+        $this->stopWhileRunning = null;
+
+        self::assertNull($builds->run($this->job())->stopCause);
+    }
+
+    public function testAStopCauseOfAJobThatFailedIsForgottenWithIt(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec): never {
+            $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+
+            throw new RuntimeException('engine gone');
+        });
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the failure was not passed on');
+        } catch (RuntimeException) {
+        }
+
+        self::assertNull($this->stops->causeFor($this->job()));
+    }
+
+    public function testARefusedJobLeavesTheCauseOfTheBuildThatHoldsTheBranch(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec): never {
+            throw JobRefused::alreadyRunning($spec->id);
+        });
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the refusal was not passed on');
+        } catch (JobRefused) {
+        }
+
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAJobThatNeverReachedTheRunnerLeavesTheCauseOfTheBuildThatHoldsTheBranchAndNoPromptFile(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $this->script = $this->folder.'/absent-build-script.sh';
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the build script read did not fail');
+        } catch (IOException) {
+        }
+
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+        self::assertSame([], glob($this->folder.'/prompts/*'));
+    }
+
+    public function testAPromptInputTheJobRefusesLeavesNoPromptFileAndKeepsTheRecordedStopCause(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        chdir($this->folder);
+        $this->promptFolder = 'relative-prompts';
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the relative prompt input was accepted');
+        } catch (JobRefused) {
+        }
+
+        self::assertSame([], glob($this->folder.'/relative-prompts/*'));
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAGateThatFailsBeforeTheRunnerIsCalledLeavesTheRecordedCauseAndNoPromptFile(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $this->gate = self::createStub(Gate::class);
+        $this->gate->method('registryHosts')->willThrowException(new RuntimeException('registry list unavailable'));
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the gate failure was not passed on');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], glob($this->folder.'/prompts/*'));
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAPromptThatCannotBeWrittenLeavesNoPromptFileAndKeepsTheRecordedStopCause(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $filesystem = new class extends Filesystem {
+            /**
+             * @param string|resource $content
+             */
+            public function appendToFile(string $filename, $content, bool $lock = false): void
+            {
+                throw new IOException('prompt write failed');
+            }
+        };
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), $filesystem)->run($this->job());
+            self::fail('the write failure was not passed on');
+        } catch (IOException) {
+        }
+
+        self::assertSame([], glob($this->folder.'/prompts/*'));
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAStopCauseIsForgottenEvenWhenRemovingThePromptFails(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec): never {
+            $this->stops->record($this->job(), BuildStopCause::NoProgress);
+
+            throw new RuntimeException('engine gone');
+        });
+        $filesystem = new class extends Filesystem {
+            /**
+             * @param string|iterable<mixed> $files
+             */
+            public function remove(string|iterable $files): void
+            {
+                throw new IOException('prompt cleanup failed');
+            }
+        };
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), $filesystem)->run($this->job());
+            self::fail('the cleanup failure was not passed on');
+        } catch (IOException) {
+        }
+
+        self::assertNull($this->stops->causeFor($this->job()));
+    }
+
+    public function testAStopCauseOfAnotherBranchIsNotCarried(): void
+    {
+        $this->stops->record(new BuildJob('demo', $this->folder.'/clone', 'other', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'img'), BuildStopCause::PerTaskTotal);
+
+        $outcome = $this->runBuilds(OutputFiles::of([]))->run($this->job());
+
+        self::assertNull($outcome->stopCause);
+    }
+
+    public function testABuildLogFolderTheRunnerRefusesIsNoResultWithTheOrchestratorsFixedReasonAsItsLog(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile('build.log'));
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n"], [$outcome->verdict, $outcome->log]);
+    }
+
+    public function testAnOutputTheRunnerCouldNotListIsNoResultWithAReasonThatClaimsNoEntryWasSeen(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::unlisted());
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n"], [$outcome->verdict, $outcome->log]);
+    }
+
+    #[TestWith(["\n"])]
+    #[TestWith(["\r"])]
+    #[TestWith(["\u{0085}"])]
+    #[TestWith(["\u{2028}"])]
+    #[TestWith(["\u{2029}"])]
+    public function testARefusedOutputNameWithALineBreakNeverReachesTheLog(string $lineBreak): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile('invalid'.$lineBreak.'FORGED_LOG_LINE'));
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame(["no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n", 1], [$outcome->log, preg_match_all('/\R/u', $outcome->log)]);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputAddsNoSecondLineEndToALogThatEndsInOne(): void
+    {
+        $output = OutputFiles::of(['build.log' => "builder text\n"]);
+
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("builder text\nno result: the build script could not clear the job's output\n", $outcome->log);
+    }
+
     protected function setUp(): void
     {
         $this->gatesAtOnce = new GatesAtOnce(12, 1);
+        $this->stops = new RecordedBuildStops();
         $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->folder.'/clone');
+        $this->workingDirectory = (string) getcwd();
     }
 
     protected function tearDown(): void
     {
+        chdir($this->workingDirectory);
         new Filesystem()->remove($this->folder);
     }
 
@@ -342,6 +603,10 @@ final class RunBuildJobTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($output, $end): JobResult {
             $this->ran = $spec;
+            // Recorded while the job runs, because that is when the watch of a running build (#3965) will record its stop.
+            if ($this->stopWhileRunning instanceof BuildStopCause) {
+                $this->stops->record($this->job(), $this->stopWhileRunning);
+            }
             $this->promptSeen = (string) file_get_contents($spec->inputs[1]->hostPath);
 
             return new JobResult($end, $output);
@@ -352,14 +617,14 @@ final class RunBuildJobTest extends TestCase
 
     private function job(Tier $tier = Tier::Standard): BuildJob
     {
-        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
+        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', new Decisions(), null), $tier, 'intakt-job-demo:1');
     }
 
-    private function useCase(JobRunner $runner, ResolvedModel $model): RunBuildJob
+    private function useCase(JobRunner $runner, ResolvedModel $model, ?Filesystem $filesystem = null): RunBuildJob
     {
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->promptFolder ?? $this->folder.'/prompts', $this->stops);
     }
 }

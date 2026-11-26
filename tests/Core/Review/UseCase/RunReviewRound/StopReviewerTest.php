@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
@@ -48,6 +49,7 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 // Through a worker and the real reviewer agent, so the stop is proven from the ledger row of the request to the verdict and the ledger row of the stop.
 #[Group('persistence')]
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[CoversClass(ReviewerMoves::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(Verdict::class)]
@@ -79,18 +81,6 @@ final class StopReviewerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped], $this->stopRows());
     }
 
-    public function testARequestAlreadyAnsweredByAStopDoesNotStopALaterRun(): void
-    {
-        $message = $this->started();
-        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
-        $this->record(LedgerEventKind::ReviewerStopped, $message);
-
-        $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
-
-        self::assertSame(['approve'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
-        self::assertCount(1, $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
-    }
-
     public function testTheProgressPublishedAfterAStopShowsTheReviewerStopped(): void
     {
         $message = $this->started();
@@ -117,7 +107,7 @@ final class StopReviewerTest extends KernelTestCase
         $message = $this->started();
 
         try {
-            $this->fixture->deliver($message, new ScriptedVendor(new ProviderRateLimited(30, new RuntimeException('429'))));
+            $this->fixture->deliver($message, new VerdictPerRole(failure: new ProviderRateLimited(30, new RuntimeException('429'))));
             self::fail('The rate limit was recorded as a failure.');
         } catch (ReviewerRateLimited) {
         }

@@ -31,6 +31,7 @@ final readonly class BuildContext
 
         try {
             $this->write($plan, $directory, $file);
+            // Boundary: removes the half-written context folder on any failure and rethrows it, because nothing else knows the folder to clean it up.
         } catch (Throwable $failure) {
             $filesystem->remove($folder);
 

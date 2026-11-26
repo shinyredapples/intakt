@@ -14,6 +14,7 @@ use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -63,6 +64,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(CiRunOrigin::class)]
 #[UsesClass(CiState::class)]
 #[UsesClass(CommitId::class)]
+#[UsesClass(CommitIdMalformed::class)]
 #[UsesClass(ForgeCredentialsRefused::class)]
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(OpenChange::class)]
@@ -560,6 +562,16 @@ final class GitHubWatchReadsTest extends TestCase
         $this->state();
     }
 
+    public function testAWorkflowRunWhoseCheckSuiteIdIsNullLinksNoSuiteAndTheHeadIsStillRead(): void
+    {
+        $this->runs = 'runs_with_a_null_check_suite_id.json';
+        $this->suites = 'suites_green.json';
+
+        $names = array_map(static fn (CiRun $run): string => $run->origin->name, $this->state()->runs);
+
+        self::assertSame(['10', 'suite:401'], $names);
+    }
+
     public function testACheckSuiteWithoutItsIdRaisesAReadFailure(): void
     {
         $this->suites = 'suites_without_id.json';
@@ -735,9 +747,33 @@ final class GitHubWatchReadsTest extends TestCase
     {
         $this->listing = 'pulls_bad_moment.json';
 
-        $this->expectException(ForgeReadFailed::class);
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a moment this forge cannot read.'));
 
         $this->reads()->listOpen('alpha', null);
+    }
+
+    public function testAListedPullRequestWithAMalformedHeadRaisesAReadFailureCausedByTheMalformedCommitId(): void
+    {
+        $this->listing = 'pulls_malformed_head.json';
+
+        try {
+            $this->reads()->listOpen('alpha', null);
+            self::fail('A malformed head is no change this forge can read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertInstanceOf(CommitIdMalformed::class, $failure->getPrevious());
+        }
+    }
+
+    public function testAListedPullRequestAtAnotherHostRaisesAReadFailureCausedByTheUnknownChange(): void
+    {
+        $this->listing = 'pulls_foreign_address.json';
+
+        try {
+            $this->reads()->listOpen('alpha', null);
+            self::fail('A pull request at another host is no change this forge can read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertInstanceOf(ChangeNotFound::class, $failure->getPrevious());
+        }
     }
 
     public function testAProjectWithoutAGitHubRepositoryRaisesAReadFailureBeforeAnyRequest(): void
@@ -777,7 +813,7 @@ final class GitHubWatchReadsTest extends TestCase
             return $this->answer($url);
         }, 'https://api.github.com');
         $clock = $this->clock;
-        $identity = new RecordedInstallation('installation-secret')->client();
+        $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');

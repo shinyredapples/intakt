@@ -55,10 +55,9 @@ final readonly class RoundFinding
             return null;
         }
 
-        // Code spans are found on the whole text before any cut, as FindingText finds them (a run of backticks closed by a run of the same length, across lines too), so a line break or a mark inside one never ends the headline; an unclosed backtick is a plain character.
-        preg_match_all('/(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)/s', $text, $spans, PREG_OFFSET_CAPTURE);
+        // Code spans are found on the whole text before any cut, so a line break or a mark inside one never ends the headline.
         $at = 0;
-        foreach ([...$spans[0], ['', strlen($text)]] as [$span, $start]) {
+        foreach ([...$this->codeSpansOf($text), [strlen($text), '', '']] as [$start, $span]) {
             // A sentence ends at a mark followed by white space or the end, so a dot in a name (src/A.php, 1.5) never ends it. Searched gap by gap instead of in one pattern over the line, which runs out of PCRE's stack on a long first sentence.
             if (1 === preg_match('/\R|[.!?](?=[\s\p{Z}]|$)/u', $text, $end, PREG_OFFSET_CAPTURE, $at) && $end[0][1] < $start) {
                 $cut = $end[0][1] + (str_contains('.!?', $end[0][0]) ? 1 : 0);
@@ -72,23 +71,20 @@ final readonly class RoundFinding
         return $text;
     }
 
+    /**
+     * @return list<string>
+     */
+    public function quotedCode(): array
+    {
+        // The reviewer's own code spans, found as the headline finds them, and not the quote check's counted list, which leaves out a quote it cannot check (a lone `0`) that the reviewer still gave.
+        return array_column($this->codeSpansOf($this->text ?? ''), 2);
+    }
+
     public function goesOnAfterItsHeadline(): bool
     {
         $headline = $this->headline();
 
         return null !== $headline && $headline !== $this->trimmedText();
-    }
-
-    // What the text says after its headline, for the card's explanation line, so the card never shows the headline twice; null when nothing follows it.
-    public function afterHeadline(): ?string
-    {
-        if (!$this->goesOnAfterItsHeadline()) {
-            return null;
-        }
-
-        $rest = preg_replace('/^[\s\p{Z}]+/u', '', substr((string) $this->trimmedText(), strlen((string) $this->headline())));
-
-        return '' === $rest ? null : $rest;
     }
 
     public function urgency(): ?FindingUrgency
@@ -121,5 +117,43 @@ final readonly class RoundFinding
         $trimmed = preg_replace('/^[\s\p{Z}]+|[\s\p{Z}]+$/u', '', (string) $this->text);
 
         return '' === $trimmed ? null : $trimmed;
+    }
+
+    // Scanned with string functions instead of a lazy pattern, because a pattern runs out of PCRE's backtracking limit on a long span and then finds no span at all; the spans stay those FindingText finds (a run of backticks closed by the next run of the same length, an unclosed run is plain text).
+    /**
+     * @return list<array{int, string, string}>
+     */
+    private function codeSpansOf(string $text): array
+    {
+        $spans = [];
+        $at = 0;
+        while (false !== $open = strpos($text, '`', $at)) {
+            $fence = strspn($text, '`', $open);
+            $close = $this->closingRunOf($text, $fence, $open + $fence);
+            if (null === $close) {
+                $at = $open + $fence;
+
+                continue;
+            }
+
+            $spans[] = [$open, substr($text, $open, $close + $fence - $open), substr($text, $open + $fence, $close - $open - $fence)];
+            $at = $close + $fence;
+        }
+
+        return $spans;
+    }
+
+    private function closingRunOf(string $text, int $fence, int $from): ?int
+    {
+        while (false !== $close = strpos($text, '`', $from)) {
+            $run = strspn($text, '`', $close);
+            if ($run === $fence) {
+                return $close;
+            }
+
+            $from = $close + $run;
+        }
+
+        return null;
     }
 }

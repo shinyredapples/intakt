@@ -6,6 +6,7 @@ namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
 use Closure;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\BinaryFiles;
@@ -130,11 +131,11 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         $head = $change->commits->head;
 
         if ($earlier->equals($head)) {
-            return new HeadMove(HeadMoveKind::Unmoved, []);
+            return new HeadMove(HeadMoveKind::Unmoved, new Paths());
         }
 
         if (!$this->exists($earlier) || !$this->isAncestor($earlier->hash, $head->hash)) {
-            return new HeadMove(HeadMoveKind::Rewritten, []);
+            return new HeadMove(HeadMoveKind::Rewritten, new Paths());
         }
 
         $kind = $this->isCleanMergeOfBase($earlier, $head) ? HeadMoveKind::CleanMergeOfBase : HeadMoveKind::Commits;
@@ -149,9 +150,7 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
 
     public function fileAt(CommitId $commit, string $path): FileContent
     {
-        $bytes = $this->blob($this->blobAt($commit, $path));
-
-        return $this->binaryFiles->isBinary($bytes) ? FileContent::binary($path, $commit, strlen($bytes)) : new FileContent($path, $commit, $bytes);
+        return FileContent::ofBytes($path, $commit, $this->blob($this->blobAt($commit, $path)));
     }
 
     public function baseCommit(): CommitId
@@ -257,12 +256,9 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $merged->isSuccessful() && trim($merged->getOutput()) === trim($this->read(['rev-parse', $head->hash.'^{tree}']));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function pathsBetween(CommitRange $commits): array
+    private function pathsBetween(CommitRange $commits): Paths
     {
-        return array_map(static fn (ChangedFile $file): string => $file->path, [...$this->changedFiles($commits)]);
+        return new Paths(...array_map(static fn (ChangedFile $file): string => $file->path, [...$this->changedFiles($commits)]));
     }
 
     private function blobAt(CommitId $head, string $path): string
@@ -318,8 +314,8 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         }
 
         try {
-            $call = $this->hardened->call($arguments, $this->repository->path);
-            $process = new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS);
+            $call = $this->hardened->call($this->repository->path, ...$arguments);
+            $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
             $process->run();
         } catch (RepositoryAttributesRefused $refused) {
             throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);

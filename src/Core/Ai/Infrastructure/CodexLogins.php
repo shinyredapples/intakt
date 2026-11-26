@@ -46,6 +46,20 @@ final readonly class CodexLogins
         return $this->directory.'/logins/'.$account.'/'.self::LOGIN_FILE;
     }
 
+    // Read the way a call reads it, so a file a call would reject counts as no login.
+    public function hasLogin(string $account): bool
+    {
+        $this->assertAccountName($account);
+
+        try {
+            $this->stored($account);
+        } catch (CodexLoginUnusable) {
+            return false;
+        }
+
+        return true;
+    }
+
     // The name becomes a path and a lock key, so only a name an account can have is accepted.
     private function assertAccountName(string $account): void
     {

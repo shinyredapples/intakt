@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -19,22 +20,30 @@ use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyVariables;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
+use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
+use Intakt\Core\BranchCleanup\Contract\BranchCleanupServices;
+use Intakt\Core\BranchCleanup\Infrastructure\BranchCleanupConfiguration;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Infrastructure\BudgetConfiguration;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Infrastructure\BuildRoutingConfiguration;
+use Intakt\Core\Disk\Contract\DiskServices;
+use Intakt\Core\Disk\Infrastructure\DiskConfiguration;
 use Intakt\Core\Git\Contract\GitServices;
 use Intakt\Core\Git\Infrastructure\ProtectedPathsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
+use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
+use Intakt\Core\Review\Infrastructure\ReviewSizeLimitConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
@@ -46,13 +55,10 @@ use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
 use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Config\Definition\Processor;
-use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
-use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigurator;
 use Symfony\Component\DependencyInjection\Parameter;
@@ -61,36 +67,10 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\HttpKernel\Log\Logger;
 use Symfony\Component\Yaml\Yaml;
 
-// Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
-    $environmentValue = static function (string $name): ?string {
-        $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+    $environmentValue = ProviderKeySource::environmentValue(...);
 
-        return is_string($value) && '' !== $value ? $value : null;
-    };
-
-    // The framework's default vault directory and decryption key (SYMFONY_DECRYPTION_SECRET when set, else the vault's own private key file), which config/packages/framework.yaml keeps.
-    $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
-    // Decoded by the framework's own base64: env processor (lenient, either alphabet), so a key the framework accepts is not missing here.
-    $decryptionSecret = $environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '';
-    $decryptionKey = new EnvVarProcessor(new Container())->getEnv('base64', 'SYMFONY_DECRYPTION_SECRET', static fn (): string => $decryptionSecret);
-    $vault = new SodiumVault($vaultDirectory, is_string($decryptionKey) ? $decryptionKey : null);
-    // Names only, since decrypting every entry up front would let an unrelated secret abort the boot; the framework's env loader reveals one name at a time too.
-    $vaultNames = $vault->list();
-
-    // False for a listed secret whose reveal throws, apart from null for one the vault lacks or cannot open, because the vault's loader throws the same way at run time before any later loader is asked.
-    $vaultValue = static function (string $name) use ($vault, $vaultNames): string|false|null {
-        if (!array_key_exists($name, $vaultNames)) {
-            return null;
-        }
-
-        try {
-            return $vault->reveal($name);
-        } catch (SodiumException|RuntimeException) {
-            // A decryption key of the wrong length, or no key at all, throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
-            return false;
-        }
-    };
+    $vault = ProviderKeySource::openVault(__DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env()), $environmentValue('SYMFONY_DECRYPTION_SECRET'));
 
     // Only the test environment reads a variable for it, so a test keeps its key outside the install's data volume, where the file is the live key, and no other install can be pointed away from it.
     $keptKeyDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_PROVIDER_KEY_DIR') : null) ?? dirname(__DIR__, 2).'/var/data';
@@ -101,20 +81,7 @@ return static function (ContainerConfigurator $container): void {
     // The framework's own fallback logger on stderr, because the app's logger is a service of the container being built, and a skipped kept key must not go unnoticed.
     $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, new Logger(LogLevel::WARNING), [$vault])->loadEnvVars();
 
-    // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
-    $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {
-        if (null !== $environmentValue($name)) {
-            return true;
-        }
-
-        $fromVault = $vaultValue($name);
-        // The kept key must not enable the provider here: resolving the variable would throw in the vault's loader before the kept key is reached.
-        if (false === $fromVault) {
-            return false;
-        }
-
-        return '' !== ($fromVault ?? '') || '' !== ($keptValues[$name] ?? '');
-    };
+    $keySource = new ProviderKeySource($vault, $keptValues, $environmentValue);
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
@@ -124,12 +91,23 @@ return static function (ContainerConfigurator $container): void {
     // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the mode tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
     $reviewJobs = [];
+    $sizeLimits = [];
     $modes = [];
     $watches = [];
     $builds = [];
     $protectedPaths = [];
+    $branchCleanups = [];
     if (is_array($contentProjects)) {
         foreach ($contentProjects as $name => $project) {
+            // Both spellings, because the design writes keep-branches and the cleanup tree normalizes either to the underscored key.
+            foreach (['clean_other_branches', 'clean-other-branches', 'keep_branches', 'keep-branches'] as $cleanupKey) {
+                if (is_array($project) && array_key_exists($cleanupKey, $project)) {
+                    $branchCleanups[$name][$cleanupKey] = $project[$cleanupKey];
+                    unset($project[$cleanupKey]);
+                    $contentProjects[$name] = $project;
+                }
+            }
+
             if (is_array($project) && array_key_exists('protected_paths', $project)) {
                 $protectedPaths[$name] = ['protected_paths' => $project['protected_paths']];
                 unset($project['protected_paths']);
@@ -139,6 +117,13 @@ return static function (ContainerConfigurator $container): void {
             if (is_array($project) && array_key_exists('review', $project)) {
                 $reviews[$name] = $project['review'];
                 unset($project['review']);
+                $contentProjects[$name] = $project;
+            }
+
+            if (is_array($project) && array_key_exists(ReviewSizeLimitConfiguration::KEY, $project)) {
+                // Filed under the key the projects tree gives the entry, or it would be lost and read as the default.
+                $sizeLimits[ReviewSizeLimitConfiguration::keyOf($name, $project['name'] ?? null)] = $project[ReviewSizeLimitConfiguration::KEY];
+                unset($project[ReviewSizeLimitConfiguration::KEY]);
                 $contentProjects[$name] = $project;
             }
 
@@ -181,6 +166,17 @@ return static function (ContainerConfigurator $container): void {
     /** @var array{github: array{reserve_percent: int}} $githubSettings */
     $githubSettings = new Processor()->processConfiguration(new GitHubConfiguration(), [$github]);
 
+    // How long conversations are kept is the owner's for the installation too, so it also sits beside the projects.
+    $retention = array_key_exists('retention', $contents) ? ['retention' => $contents['retention']] : [];
+    unset($contents['retention']);
+    /** @var array{retention: array{conversation_days: int|string}} $retentionSettings */
+    $retentionSettings = new Processor()->processConfiguration(new RetentionConfiguration(), [$retention]);
+    // The disk floors guard the installation's own folders, so they sit beside the projects as well.
+    $disk = array_key_exists('disk', $contents) ? ['disk' => $contents['disk']] : [];
+    unset($contents['disk']);
+    /** @var array{disk: array{min_free_bytes: int, min_free_inodes: int}} $diskSettings */
+    $diskSettings = new Processor()->processConfiguration(new DiskConfiguration(), [$disk]);
+
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
     $projects = $configuration['projects'];
@@ -188,12 +184,16 @@ return static function (ContainerConfigurator $container): void {
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     /** @var array<string, array{image: string}> $projectReviewJobs */
     $projectReviewJobs = new Processor()->processConfiguration(new ReviewJobConfiguration(), [['projects' => $reviewJobs]])['projects'];
+    // A project without the setting reads the default, so every configured project has a limit.
+    $projectSizeLimits = ReviewSizeLimitConfiguration::limitsOf(array_keys($projects), $sizeLimits);
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
-    /** @var array<string, array{repository: string, base: string, task: string, github?: string}> $projectWatches */
+    /** @var array<string, array{repository: string, base: string, task: string, github?: string, eligibility_label: string}> $projectWatches */
     $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     /** @var array<string, array{protected_paths: list<string>}> $projectProtectedPaths */
     $projectProtectedPaths = new Processor()->processConfiguration(new ProtectedPathsConfiguration(), [['projects' => $protectedPaths]])['projects'];
+    /** @var array<string, array{clean_other_branches: bool, keep_branches: list<string>}> $projectBranchCleanups */
+    $projectBranchCleanups = new Processor()->processConfiguration(new BranchCleanupConfiguration(), [['projects' => $branchCleanups]])['projects'];
     // A project without a build section routes by the defaults, so every configured project has rules.
     $builds = array_replace(array_fill_keys(array_keys($projects), []), $builds);
     /** @var array<string, array{build: array{tier: string, sensitive_paths: list<string>, escalate_on: list<string>}}> $projectBuilds */
@@ -238,7 +238,7 @@ return static function (ContainerConfigurator $container): void {
 
     // Each account gets a platform of its own, with the credentials of its own variables; the default account keeps the bundle's own platform and ids.
     $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform, $codexPlatform): array {
-        $variables = array_map($env, $account->variables());
+        $variables = array_map($env, [...$account->variables()]);
         $default = Account::DEFAULT === $account->name;
         $generic = Provider::OpenAiCompatible->value.($default ? '' : '_'.$account->name);
         $events = new Reference('event_dispatcher');
@@ -269,11 +269,18 @@ return static function (ContainerConfigurator $container): void {
     $disabled = [];
     $disabledAccounts = [];
     $enabledAccounts = [];
+    $listedAccounts = [];
+    // Keyed as the configuration tree normalizes them, so a provider listed as openai-compatible counts as listed under openai_compatible.
+    $explicitAccounts = is_array($contents['accounts'] ?? null) ? array_flip(array_map(static fn (int|string $key): string => str_replace('-', '_', (string) $key), array_keys($contents['accounts']))) : [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
-        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
+        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command; accounts the file lists for it still show, without credentials.
         if (Provider::Codex === $provider && !isset($configuration[Provider::Codex->configKey()])) {
+            if (array_key_exists($provider->value, $explicitAccounts)) {
+                $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
+            }
+
             continue;
         }
 
@@ -282,9 +289,9 @@ return static function (ContainerConfigurator $container): void {
 
         foreach ($configuration['accounts'][$provider->value] as $name) {
             $account = new Account($provider, $name);
-            $missing = array_values(array_filter($account->variables(), static fn (string $variable): bool => !$isSet($variable)));
+            $missing = $keySource->missing($account);
 
-            if ([] === $missing) {
+            if ($missing->isEmpty()) {
                 $enabled[$name] = $account;
 
                 continue;
@@ -293,9 +300,14 @@ return static function (ContainerConfigurator $container): void {
             $missingOf[$name] = $missing;
         }
 
+        // A provider without a key that the file does not list under accounts keeps only its implicit default account, so the owner never set it up and only the disabled-provider note names it.
+        if ([] !== $enabled || array_key_exists($provider->value, $explicitAccounts)) {
+            $listedAccounts[$provider->value] = $configuration['accounts'][$provider->value];
+        }
+
         // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
         if ([] === $enabled) {
-            $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? []);
+            $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? new EnvironmentVariables());
 
             continue;
         }
@@ -344,23 +356,29 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    $container->parameters()->set(AiServices::LISTED_ACCOUNTS, $listedAccounts);
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
-        static fn (string $name): string => $env(new Account(Provider::OpenAiCompatible, $name)->variables()[0]),
+        static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),
         $enabledAccounts[Provider::OpenAiCompatible->value] ?? [],
     ));
     $container->parameters()->set(AiServices::PROJECTS, $projects);
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
     $container->parameters()->set(ReviewServices::PROJECT_FILE, $projectsFile);
+    $container->parameters()->set(ReviewServices::SIZE_LIMITS, $projectSizeLimits);
     $container->parameters()->set(ReviewServices::JOB_IMAGES, ReviewJobConfiguration::imagesOf($projectReviewJobs));
     $container->parameters()->set(BuildServices::ROUTING, array_map(static fn (array $project): array => $project['build'], $projectBuilds));
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
+    $container->parameters()->set(BranchCleanupServices::PROJECTS, $projectBranchCleanups);
     $container->parameters()->set(GitServices::PROTECTED_PATHS, array_map(static fn (array $project): array => $project['protected_paths'], $projectProtectedPaths));
     $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
     $container->parameters()->set(BudgetServices::PRICE_DATE, $ceilings['budget']['price_date']);
+    $container->parameters()->set(ReviewServices::CONVERSATION_DAYS, RetentionConfiguration::daysOf($retentionSettings['retention']['conversation_days']));
+    $container->parameters()->set(DiskServices::MIN_FREE_BYTES, $diskSettings['disk']['min_free_bytes']);
+    $container->parameters()->set(DiskServices::MIN_FREE_INODES, $diskSettings['disk']['min_free_inodes']);
     $container->parameters()->set(GitHubForgeServices::RESERVE_PERCENT, $githubSettings['github']['reserve_percent']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)
@@ -372,6 +390,10 @@ return static function (ContainerConfigurator $container): void {
         ->autowire()
         ->autoconfigure()
         ->arg('$codex', new Parameter(Provider::Codex->parameter()));
+    // Built from the watch sections here, because the Contract class takes typed labels and the parameter holds arrays.
+    $container->services()->set(EligibilityLabels::class)
+        ->factory(WatchConfiguration::eligibilityLabelsOf(...))
+        ->args([new Parameter(WatcherServices::PROJECTS)]);
     $container->services()->set(AiServices::PROVIDER_PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');

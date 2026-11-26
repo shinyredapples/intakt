@@ -38,11 +38,19 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $round = $this->step('start a round through the watcher', $this->startTheRound(...));
         $running = $this->step('open the running round', fn (): Crawler => $this->openTheRunningRound($round));
         $updates = $this->step('step the round until the judge has ruled', fn (): array => $this->stepTheRound($round));
-        $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
-        $this->step('read the reviewers the updates placed by role and model', fn () => $this->readTheReviewersPlacedLive($round, $updates));
-        $this->step('read the board headline pushed once a reviewer started', fn () => $this->readThePushedHeadline($round));
+        $this->step('check the recorded updates against the running page', static function () use ($round, $updates, $running): void {
+            new RoundStreamCheck()->assertFitsThePage($round, $updates, $running);
+        });
+        $this->step('read the reviewers the updates placed by role and model', function () use ($round, $updates): void {
+            $this->readTheReviewersPlacedLive($round, $updates);
+        });
+        $this->step('read the board headline pushed once a reviewer started', function () use ($round): void {
+            $this->readThePushedHeadline($round);
+        });
         $judged = $this->step('open the judged round', fn (): Crawler => $this->openTheJudgedRound($round));
-        $this->step('read the judged content without a reload', fn () => $this->readTheJudgedContentWithoutAReload($round, new StreamedPage()->after($round, $updates, $running), $judged));
+        $this->step('read the judged content without a reload', function () use ($round, $updates, $running, $judged): void {
+            $this->readTheJudgedContentWithoutAReload($round, new StreamedPage()->after($round, $updates, $running), $judged);
+        });
         $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
     }
 
@@ -172,7 +180,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     {
         self::assertStringContainsString(self::ENDED_TEXT, $live->filter('#round-'.$round.'-state')->text());
         self::assertSame($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text(), $live->filter('#review-verdict .verdict-words')->text());
-        self::assertSame('0 to fix · 0 urgent', $live->filter('#review-verdict .verdict-count')->text());
+        self::assertSame('0 to fix', $live->filter('#review-verdict .verdict-count')->text());
         self::assertSame([0, 0], [$live->filter('.state-block')->count(), $judged->filter('.state-block')->count()]);
         self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
         self::assertSame(self::ALL_STARTED, $live->filter('#round-'.$round.'-started')->text());

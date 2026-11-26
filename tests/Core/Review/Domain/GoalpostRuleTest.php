@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\GoalpostRule;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -19,46 +20,32 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Verdict::class)]
 final class GoalpostRuleTest extends TestCase
 {
-    public function testARoundOneP1StaysP1(): void
+    // The expected finding is built through the constructor, not withSeverity, so a row fails when the rule and that helper agree on a wrong severity; the whole finding is compared, so a row also proves the rule keeps every other field.
+    #[DataProvider('roundsAndSeverities')]
+    public function testAFindingKeepsTheSeverityItsRoundAllowsAndTheRestOfItsFields(int $round, Finding $finding, Severity $severity): void
     {
-        self::assertSame(Severity::P1, new GoalpostRule()->applyTo(1, $this->finding(Severity::P1))->severity);
+        $expected = self::finding($severity, $finding->requirement, $finding->regression);
+
+        self::assertEquals($expected, new GoalpostRule()->applyTo($round, $finding));
     }
 
-    public function testANewRoundTwoP1WithoutRegressionOrRequirementBecomesP3(): void
+    /**
+     * @return iterable<string, array{int, Finding, Severity}>
+     */
+    public static function roundsAndSeverities(): iterable
     {
-        self::assertSame(Severity::P3, new GoalpostRule()->applyTo(2, $this->finding(Severity::P1))->severity);
-    }
-
-    public function testANewRoundThreeP2WithoutRegressionOrRequirementBecomesP3(): void
-    {
-        self::assertSame(Severity::P3, new GoalpostRule()->applyTo(3, $this->finding(Severity::P2))->severity);
-    }
-
-    public function testARegressionInRoundTwoStaysP1(): void
-    {
-        self::assertSame(Severity::P1, new GoalpostRule()->applyTo(2, $this->finding(Severity::P1, regression: true))->severity);
-    }
-
-    public function testARoundTwoP1CitingARequirementStaysP1(): void
-    {
-        self::assertSame(Severity::P1, new GoalpostRule()->applyTo(2, $this->finding(Severity::P1, requirement: 'Storytelling'))->severity);
-    }
-
-    public function testABlankRequirementDoesNotCountAsCited(): void
-    {
-        self::assertSame(Severity::P3, new GoalpostRule()->applyTo(2, $this->finding(Severity::P1, requirement: '  '))->severity);
-    }
-
-    public function testARoundTwoP3StaysP3AndTheRestOfTheFindingIsKept(): void
-    {
-        $finding = $this->finding(Severity::P3);
-
-        self::assertEquals($finding, new GoalpostRule()->applyTo(2, $finding));
+        yield 'a round one P1 stays P1' => [1, self::finding(Severity::P1), Severity::P1];
+        yield 'a new round two P1 without regression or requirement becomes P3' => [2, self::finding(Severity::P1), Severity::P3];
+        yield 'a new round three P2 without regression or requirement becomes P3' => [3, self::finding(Severity::P2), Severity::P3];
+        yield 'a regression in round two stays P1' => [2, self::finding(Severity::P1, regression: true), Severity::P1];
+        yield 'a round two P1 citing a requirement stays P1' => [2, self::finding(Severity::P1, requirement: 'Storytelling'), Severity::P1];
+        yield 'a blank requirement does not count as cited' => [2, self::finding(Severity::P1, requirement: '  '), Severity::P3];
+        yield 'a round two P3 stays P3 and the rest of the finding is kept' => [2, self::finding(Severity::P3), Severity::P3];
     }
 
     public function testAVerdictCarriesANewRoundTwoP1AsP3(): void
     {
-        $verdict = new GoalpostRule()->applyToVerdict(2, $this->verdict($this->finding(Severity::P1)), []);
+        $verdict = new GoalpostRule()->applyToVerdict(2, $this->verdict(self::finding(Severity::P1)), []);
 
         self::assertSame(Severity::P3, $verdict->findings[0]->severity);
     }
@@ -88,14 +75,14 @@ final class GoalpostRuleTest extends TestCase
         self::assertSame(Severity::P3, $verdict->findings[0]->severity);
     }
 
+    private static function finding(Severity $severity, ?string $requirement = null, bool $regression = false): Finding
+    {
+        return new Finding('x', $severity, 'src/A.php', 3, null, 'Text', FixableBy::Builder, false, $requirement, null, $regression);
+    }
+
     private function verdict(Finding $finding): Verdict
     {
         return new Verdict(Decision::Changes, [$finding], [], []);
-    }
-
-    private function finding(Severity $severity, ?string $requirement = null, bool $regression = false): Finding
-    {
-        return new Finding('x', $severity, 'src/A.php', 3, null, 'Text', FixableBy::Builder, false, $requirement, null, $regression);
     }
 
     private function repeat(string $id, Severity $severity): Finding

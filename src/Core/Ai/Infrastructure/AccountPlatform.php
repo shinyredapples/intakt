@@ -184,9 +184,13 @@ final readonly class AccountPlatform implements PlatformInterface
         return null === $seconds ? null : max(1, min(AccountCooldowns::LONGEST_SECONDS, $seconds));
     }
 
-    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset. The account cools before the pin, and a failing write of either is logged and costs neither the other its window nor the caller the provider's 429.
-    private function coolDownLimited(?int $retryAfter): void
+    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset. A reset of zero or less waits the same second as a header of zero, because both stores save no window for it and the call could then report no wait at all. The account cools before the pin, and a failing write of either is logged and costs neither the other its window nor the caller the provider's 429.
+    private function coolDownLimited(?int $reset): void
     {
+        $retryAfter = null === $reset ? null : max(1, $reset);
+        // Noted before either store is written, because a pinned call whose windows were not saved still has to wait what the limit named (AccountFailoverPlatform::typed()).
+        $this->failures->limitedUntil($this->account, $this->clock->now()->getTimestamp() + min(AccountCooldowns::LONGEST_SECONDS, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET));
+
         try {
             if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
                 $this->cooldowns->coolDownUntilPlanResets($this->account);

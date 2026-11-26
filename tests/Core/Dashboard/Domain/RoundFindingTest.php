@@ -23,6 +23,31 @@ final class RoundFindingTest extends TestCase
         self::assertSame('The total in src/A.php is off by 1.5.', new RoundFinding('F1', 'P1', 'The total in src/A.php is off by 1.5. It drops the last item.')->headline());
     }
 
+    public function testTheQuotedCodeIsEveryCodeSpanAsTheReviewerWroteIt(): void
+    {
+        self::assertSame(['0', 'a`b', "x\ny"], new RoundFinding('F1', 'P2', "It returns `0`, quotes ``a`b`` and `x\ny`, and leaves `open.")->quotedCode());
+    }
+
+    public function testACodeSpanOfAMillionBytesIsStillQuoted(): void
+    {
+        $code = str_repeat('x', 1_000_000);
+
+        // Compared by hash, because a failed comparison of the whole span prints a million bytes.
+        self::assertSame([md5($code)], array_map(md5(...), new RoundFinding('F1', 'P2', 'The reviewer quoted `'.$code.'`.')->quotedCode()));
+    }
+
+    public function testAHeadlineNeverEndsInsideACodeSpanOfAMillionBytes(): void
+    {
+        $headline = 'It quotes `a. '.str_repeat('x', 1_000_000).'`.';
+
+        self::assertSame(md5($headline), md5((string) new RoundFinding('F1', 'P2', $headline.' Then more.')->headline()));
+    }
+
+    public function testAFindingWithoutTextQuotesNoCode(): void
+    {
+        self::assertSame([], new RoundFinding('F1', 'P2', null)->quotedCode());
+    }
+
     public function testAFindingsHeadlineNeverEndsInsideAnInlineCodeSpan(): void
     {
         self::assertSame('Keep `Ready? yes` as the prompt.', new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt. The answer is required.')->headline());
@@ -107,16 +132,6 @@ final class RoundFindingTest extends TestCase
             new RoundFinding('F1', 'P2', "\u{00A0}")->goesOnAfterItsHeadline(),
             new RoundFinding('F1', 'P2', null)->goesOnAfterItsHeadline(),
         ]);
-    }
-
-    public function testWhatFollowsTheHeadlineIsTheRestOfTheTextWithoutTheHeadline(): void
-    {
-        self::assertSame('It drops the last item.', new RoundFinding('F1', 'P1', 'The total in src/A.php is off by 1.5.  It drops the last item.')->afterHeadline());
-    }
-
-    public function testNothingFollowsTheHeadlineOfOneSentenceOrOfNoText(): void
-    {
-        self::assertSame([null, null], [new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt.')->afterHeadline(), new RoundFinding('F1', 'P2', null)->afterHeadline()]);
     }
 
     public function testAFindingsUrgencyReadsItsSeverityAsHowSoonToFixIt(): void

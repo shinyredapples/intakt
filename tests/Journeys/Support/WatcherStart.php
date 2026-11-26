@@ -15,6 +15,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherSchedule;
 use JsonException;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
@@ -29,10 +30,8 @@ final readonly class WatcherStart
     // The sample commits' own moment, so the recording describes the same pull request on every install.
     private const string RECORDED_AT = '2026-11-01T00:00:00+00:00';
     private const int COMMAND_SECONDS = 60;
-    // Added to the schedule's interval, because a fresh worker sends its first tick one interval after it starts (Symfony's PeriodicalTrigger), and then handles it.
-    private const int TICK_MARGIN_SECONDS = 30;
-    // Added to the worker's time limit, so a schedule that never fires ends the worker and fails with this class's message, not the process timeout.
-    private const int PROCESS_MARGIN_SECONDS = 30;
+    // Added to the schedule's interval for the process timeout, because a fresh worker sends its first tick one interval after its first poll (Symfony's PeriodicalTrigger), after its boot, and then handles it; the timeout only ends a worker whose schedule never fires.
+    private const int TICK_MARGIN_SECONDS = 60;
     private const int GIT_SECONDS = 30;
 
     /**
@@ -61,9 +60,9 @@ final readonly class WatcherStart
 
     private function sampleHeadIn(string $repository): string
     {
-        $call = $this->hardened->call(['rev-parse', '--verify', SampleRepository::BRANCH.'^{commit}'], $repository);
+        $call = $this->hardened->call($repository, 'rev-parse', '--verify', SampleRepository::BRANCH.'^{commit}');
 
-        return trim(new Process($call->command, $call->directory, $call->environment, timeout: self::GIT_SECONDS)->mustRun()->getOutput());
+        return trim(new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::GIT_SECONDS)->mustRun()->getOutput());
     }
 
     // Written beside the configuration, so the journey's directory holds and removes everything this start adds.
@@ -127,15 +126,20 @@ final readonly class WatcherStart
         return array_fill_keys(array_column($lines, 1), true);
     }
 
+    // Without a time limit of the worker's own, because that limit counts from the worker's start while the schedule counts its first interval from its first poll, so a first poll that a busy machine delays past the margin ended the worker before the tick, cleanly and without a round.
     private function tick(string $configuration, string $recording): void
     {
-        $limit = $this->intervalSeconds() + self::TICK_MARGIN_SECONDS;
+        $seconds = $this->intervalSeconds() + self::TICK_MARGIN_SECONDS;
 
-        ($this->console)(
-            ['messenger:consume', 'scheduler_watcher', '--limit=1', '--time-limit='.$limit],
-            [self::CONFIGURATION_VARIABLE => $configuration, self::RECORDING_VARIABLE => $recording],
-            $limit + self::PROCESS_MARGIN_SECONDS,
-        );
+        try {
+            ($this->console)(
+                ['messenger:consume', 'scheduler_watcher', '--limit=1'],
+                [self::CONFIGURATION_VARIABLE => $configuration, self::RECORDING_VARIABLE => $recording],
+                $seconds,
+            );
+        } catch (ProcessTimedOutException $noTick) {
+            throw new RuntimeException(sprintf('The watcher worker on the recording %s handled no tick within %d seconds.', $recording, $seconds), $noTick->getCode(), previous: $noTick);
+        }
     }
 
     private function intervalSeconds(): int

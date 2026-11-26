@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\PublishVerdict;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
@@ -19,10 +23,13 @@ use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\PublishHandedOverChange;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReplayProject;
+use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\ChangePublications;
@@ -38,6 +45,7 @@ use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfJudgedRound;
 use Intakt\Core\Review\UseCase\PublishVerdict\VerdictForTheLoop;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\ReviewerForLoop\Contract\LoopVerdict;
 use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
 use Intakt\Core\ReviewerForLoop\Domain\LoopReviewReader;
@@ -54,6 +62,8 @@ use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Tests\Core\Dashboard\UseCase\AppendRefusingLedger;
@@ -61,11 +71,13 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\DeferringJudge;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Plugin\Forge\RecordingStatusLabels;
 use Intakt\Tests\Plugin\GitHubForge\ScriptedGitHub;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -91,8 +103,11 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ChangesHandedToIntakt::class)]
 #[UsesClass(WatcherLedger::class)]
 #[UsesClass(HandedOverChanges::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(ProtectedChanges::class)]
 #[CoversClass(RoundLedgerReading::class)]
+#[CoversClass(ReviewRound::class)]
+#[CoversClass(ReviewRounds::class)]
 #[UsesClass(PublishedVerdict::class)]
 #[UsesClass(HeadStatus::class)]
 #[UsesClass(LoopReviewReader::class)]
@@ -106,6 +121,9 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ReplayProject::class)]
 #[UsesClass(ReplayMark::class)]
 #[UsesClass(CountedVote::class)]
+#[UsesClass(StoredLatestRoundStatus::class)]
+#[UsesClass(RoundStatusMirror::class)]
+#[UsesClass(RoundStatusLabel::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -120,6 +138,8 @@ final class PublishVerdictTest extends KernelTestCase
     private LockFactory $locks;
 
     private ProtectedChanges $protectedChanges;
+
+    private RecordingStatusLabels $labels;
 
     public function testAPullRequestHandedToIntaktInALiveProjectGetsTheReviewPostedWithTheRoundsToken(): void
     {
@@ -155,7 +175,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAHandedOverHeadThatTouchesProtectedPathsGetsTheReviewWithTheOwnerAskAndAPendingStatus(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['.github/workflows/ci.yaml', 'bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('.github/workflows/ci.yaml', 'bin/check'));
 
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -184,7 +204,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAProtectedPathThatCouldForgeTheAskIsPostedEscaped(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(["bin/a\n- <code>b</code> `c` <!-- d **e** #12 [f](g)\\h"]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths("bin/a\n- <code>b</code> `c` <!-- d **e** #12 [f](g)\\h"));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -194,7 +214,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAProtectedPathThatIsNotUtf8IsPostedWithItsInvalidBytesReplaced(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(["bin/\xff"]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths("bin/\xff"));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -205,7 +225,7 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $this->handOver('alpha', self::PULL);
         $paths = array_map(static fn (int $n): string => sprintf('bin/%02d', $n), range(1, 51));
-        $this->protectedChanges = ProtectedChanges::touching($paths);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths(...$paths));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -218,7 +238,7 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $this->handOver('alpha', self::PULL);
         $paths = array_map(static fn (int $n): string => sprintf('protected/%s/%04d', str_repeat('x', 60), $n), range(1, 2000));
-        $this->protectedChanges = ProtectedChanges::touching($paths);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths(...$paths));
 
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -233,7 +253,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAProtectedFileNameThatHoldsASecretPublishesOnlyAnErrorStatus(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -244,7 +264,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testARetryWhoseProtectedPathsChangedPostsTheAskItRecords(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/old']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/old'));
         $roundId = $this->judgedRound(self::PULL, []);
         $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 502);
         $handler = $this->handler(new ConfiguredProjectModes([]));
@@ -253,7 +273,7 @@ final class PublishVerdictTest extends KernelTestCase
             self::fail('A refused status must fail the publication.');
         } catch (ForgeWriteFailed) {
         }
-        $this->protectedChanges = ProtectedChanges::touching(['bin/new']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/new'));
 
         $handler(new PublishVerdict($roundId));
 
@@ -264,7 +284,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAnAskWhosePathsFillAPartToItsLastByteNeedsNoSecondPart(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/a', $this->pathFillingThePartWith(0)]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/a', $this->pathFillingThePartWith(0)));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -275,7 +295,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAnAskWhosePathsPassAPartByOneByteGetsASecondPartWithTheLastPath(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/a', $this->pathFillingThePartWith(1)]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/a', $this->pathFillingThePartWith(1)));
 
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
@@ -286,7 +306,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testARetriedPublicationOfAProtectedHeadPostsTheAskOnceAndRecordsOneAsk(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
         $roundId = $this->judgedRound(self::PULL, []);
         $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 502);
         $handler = $this->handler(new ConfiguredProjectModes([]));
@@ -314,7 +334,7 @@ final class PublishVerdictTest extends KernelTestCase
             self::fail('A refused status must fail the publication.');
         } catch (ForgeWriteFailed) {
         }
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $handler(new PublishVerdict($roundId));
 
@@ -325,10 +345,136 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertCount(1, $this->ownerAsks());
     }
 
+    public function testAVerdictTheForgePublishedIsRecordedOnTheRoundAtThePublicationTime(): void
+    {
+        $this->handOver('alpha', self::PULL);
+
+        $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertEquals(new DateTimeImmutable('2026-10-30 12:00:00', new DateTimeZone('UTC')), $this->fixture->transactions()->stored($roundId)->publishedAt());
+    }
+
+    public function testAVerdictTheForgeDidNotPublishLeavesTheRoundUnpublished(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $roundId = $this->judgedRound(self::PULL, []);
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturn(false);
+
+        $this->handlerOver($forge, new ConfiguredProjectModes([]))(new PublishVerdict($roundId));
+
+        self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
+    }
+
+    public function testAnErrorStatusPublishedInPlaceOfAVerdictThatHoldsASecretLeavesTheRoundUnpublished(): void
+    {
+        $roundId = $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P1, 'The fixture holds a key: sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)))]);
+
+        self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
+    }
+
+    public function testAnErrorStatusWithoutAVerdictLeavesABlockedRoundInReview(): void
+    {
+        $blocked = new Verdict(Decision::Blocked, [], [], []);
+
+        $roundId = $this->publishRoundJudgedOn(['Look at part 1.' => $blocked, 'Look at part 2.' => $blocked]);
+
+        $this->assertStaysInReviewAfterItsErrorStatus($roundId);
+    }
+
+    public function testAReplayErrorWithoutAVerdictLeavesTheRoundInReview(): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay('alpha'));
+
+        $roundId = $this->publishedApprovalAt(SampleIdentity::HEAD);
+
+        $this->assertStaysInReviewAfterItsErrorStatus($roundId);
+    }
+
+    public function testAJudgedRoundWhosePublicationIsSkippedStaysUnpublished(): void
+    {
+        $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
+    }
+
+    public function testARoundOfALocalBranchStaysUnpublished(): void
+    {
+        $roundId = $this->judgedRound(RoundFixture::CHANGE, []);
+
+        $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+
+        self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
+        self::assertSame(['warning'], array_column($this->fixture->log->cleanLogs(), 0));
+    }
+
+    public function testAPublicationTheForgeRefusedForMessengerToRetryLeavesTheRoundUnpublished(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 422);
+
+        try {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+            self::fail('The refused write was not reported.');
+        } catch (ForgeWriteFailed) {
+            self::assertNull($this->fixture->transactions()->stored($roundId)->publishedAt());
+        }
+    }
+
+    public function testAPublishedVerdictReconcilesTheStatusLabelToWaitingOnYou(): void
+    {
+        $this->publishRoundJudgedOn([]);
+
+        self::assertSame(['status:waiting-on-you'], $this->labels->labels);
+    }
+
+    public function testAPublicationTheForgeRefusedDoesNotReconcileTheStatusLabel(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 422);
+
+        try {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+            self::fail('The refused write was not reported.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame([], $this->labels->passes);
+        }
+    }
+
+    // The order is forced from inside the queue writer's reads: the publication commits while the writer holds the lock, so its own reconcile is skipped and the writer puts back the round state it read before.
+    public function testAPublicationWhileTheQueueWriterHoldsTheLockLeavesOnlyTheStoredRoundsStatusAfterTheNextReconcile(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $handler = $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $this->labels->whileReading(function () use ($handler, $roundId): void {
+            foreach ($this->publicationsOf($roundId) as $publication) {
+                $handler($publication);
+            }
+        });
+        $change = new ChangeId(self::PULL);
+
+        $this->mirror()->reconcile('alpha', $change);
+        $afterTheQueueWriter = $this->labels->labels;
+        $this->mirror()->reconcile('alpha', $change);
+
+        self::assertSame([['status:in-review'], ['status:waiting-on-you']], [$afterTheQueueWriter, $this->labels->labels]);
+        self::assertLessThanOrEqual(1, $this->labels->comments);
+    }
+
+    public function testAPublicationThatCommitsBeforeTheQueueWritersReconcileLeavesTheStoredRoundsStatus(): void
+    {
+        $this->publishRoundJudgedOn([]);
+
+        $this->mirror()->reconcile('alpha', new ChangeId(self::PULL));
+
+        self::assertSame(['status:waiting-on-you'], $this->labels->labels);
+        self::assertLessThanOrEqual(1, $this->labels->comments);
+    }
+
     public function testAnOwnerAskTheForgeDidNotPublishIsNotRecorded(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
         $roundId = $this->judgedRound(self::PULL, []);
         $forge = self::createStub(ForgeWrites::class);
         $forge->method('publishVerdict')->willReturn(false);
@@ -341,7 +487,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testASecondRoundOfTheSameProtectedHeadRecordsNoSecondAsk(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $first = $this->judgedApprovalAt(SampleIdentity::HEAD);
         $this->handler(new ConfiguredProjectModes([]))(new PublishVerdict($first));
@@ -354,7 +500,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testARoundThatNamesTheSamePullRequestInAnotherLetterCaseRecordsNoSecondAsk(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $first = $this->judgedApprovalAt(SampleIdentity::HEAD);
         $this->handler(new ConfiguredProjectModes([]))(new PublishVerdict($first));
@@ -453,7 +599,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAHandedOverProtectedHeadWithChangesAsksNoOwner(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('A', Severity::P2, 'Fix the guard.'))], new ConfiguredProjectModes([]));
 
@@ -464,7 +610,7 @@ final class PublishVerdictTest extends KernelTestCase
 
     public function testAProtectedHeadThatIsNotHandedToIntaktIsPublishedForTheLoopWithoutAnAsk(): void
     {
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
 
         $this->publishRoundJudgedOn([]);
 
@@ -475,7 +621,7 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAnAskTheLedgerRefusesFailsThePublicationAfterTheForgeShowsIt(): void
     {
         $this->handOver('alpha', self::PULL);
-        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths('bin/check'));
         $roundId = $this->judgedRound(self::PULL, []);
 
         try {
@@ -896,7 +1042,8 @@ final class PublishVerdictTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $this->github = new ScriptedGitHub();
         $this->locks = new LockFactory(new InMemoryStore());
-        $this->protectedChanges = ProtectedChanges::touching([]);
+        $this->protectedChanges = ProtectedChanges::touching(new Paths());
+        $this->labels = new RecordingStatusLabels(['status:in-review']);
     }
 
     // The application's command bus, so the publication the mark queues lands on the application's queue.
@@ -906,6 +1053,16 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertInstanceOf(MessageBusInterface::class, $commands);
 
         new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($roundId));
+    }
+
+    // The error status is asserted too, so the round is known to be unpublished although the forge took a write for it.
+    private function assertStaysInReviewAfterItsErrorStatus(string $roundId): void
+    {
+        $round = $this->fixture->transactions()->stored($roundId);
+
+        self::assertSame(['error'], array_slice(array_column(array_column($this->github->writes, 1), 'state'), -1));
+        self::assertNull($round->publishedAt());
+        self::assertSame(ReviewStatus::InReview, new StoredLatestRoundStatus($this->fixture->transactions())->of($round->project(), $round->change()));
     }
 
     private function publishedApprovalAt(string $head): string
@@ -1015,7 +1172,7 @@ final class PublishVerdictTest extends KernelTestCase
         $handed = new HandedOverChanges($this->fixture->ledger());
         $asks = new OwnerAsks($handed, $this->protectedHeads(), $askLedger ?? $this->fixture->ledger());
 
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log);
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->mirror(), $this->fixture->log);
     }
 
     private function protectedHeads(): ProtectedHeads
@@ -1125,6 +1282,11 @@ final class PublishVerdictTest extends KernelTestCase
         $sent = array_map(static fn (Envelope $envelope): object => $envelope->getMessage(), $queue->getSent());
 
         return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishVerdict && $roundId === $message->roundId));
+    }
+
+    private function mirror(): RoundStatusMirror
+    {
+        return new RoundStatusMirror(new StoredLatestRoundStatus($this->fixture->transactions()), $this->locks, new NullLogger(), $this->labels);
     }
 
     private function recognizer(): ChangesHandedToIntakt

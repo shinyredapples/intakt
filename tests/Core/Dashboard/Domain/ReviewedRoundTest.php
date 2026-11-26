@@ -16,6 +16,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -33,6 +34,18 @@ final class ReviewedRoundTest extends TestCase
         $round = $this->round()->withSeveritiesByReviewer(['r-1' => ['F1' => 'P2'], 'r-2' => ['F1' => 'P1']]);
 
         self::assertSame(['P2', 'P1', null, null], [$round->severityReportedBy('r-1', 'F1'), $round->severityReportedBy('r-2', 'F1'), $round->severityReportedBy('r-1', 'F2'), $round->severityReportedBy('r-3', 'F1')]);
+    }
+
+    public function testTheReportCountAddsOnePerReviewerAndPerIdOfTheFindingThatReviewerReported(): void
+    {
+        $round = $this->round()->withFindingsByReviewer(['r-1' => ['F1', 'F3'], 'r-2' => ['F1', 'F6'], 'r-3' => []]);
+
+        self::assertSame(3, $round->reportCountOf(new RoundFinding('F1', 'P1', 'Text.', merged: ['F6'])));
+    }
+
+    public function testTheReportCountIsUnknownWhenWhoReportedWhatIsNotRecorded(): void
+    {
+        self::assertNull($this->round()->reportCountOf(new RoundFinding('F1', 'P1', 'Text.', merged: ['F6'])));
     }
 
     public function testEveryFindingCountsAsRecordedUntilTheRoundIsMarkedOtherwise(): void
@@ -111,6 +124,89 @@ final class ReviewedRoundTest extends TestCase
     public function testRoundsOfTwoBranchesWhoseNamesDifferOnlyInLetterCaseAreOfTwoReviews(): void
     {
         self::assertFalse($this->roundOf('r-1', 'feat/Widget')->isOfTheSameReviewAs($this->roundOf('r-2', 'feat/widget')));
+    }
+
+    public function testTwoReviewersWhoBothAskForChangesAreSaidToAgree(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->answered('b', Decision::Changes)]);
+
+        self::assertSame('Both say changes needed', $round->agreement());
+    }
+
+    public function testThreeReviewersWhoAllApproveAreSaidToAgreeWithoutSayingBoth(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Approve), $this->answered('b', Decision::Approve), $this->answered('c', Decision::Approve)]);
+
+        self::assertSame('All 3 say approved', $round->agreement());
+    }
+
+    public function testReviewersWhoAnswerDifferentlyAreSaidToDisagree(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->answered('b', Decision::Approve)]);
+
+        self::assertSame('The reviewers disagree', $round->agreement());
+    }
+
+    public function testASoleReviewerIsNamedAsTheReviewer(): void
+    {
+        $round = new ReviewedRound(new RoundStart('r-1', 'alpha', 1), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+
+        self::assertSame('The reviewer says approved', $round->withOutcomes([$this->answered('a', Decision::Approve)])->agreement());
+    }
+
+    public function testNoReviewerOutcomeGivesNoAgreementLine(): void
+    {
+        self::assertSame('', $this->round()->withOutcomes([$this->started('a')])->agreement());
+    }
+
+    public function testTwoFailedReviewersGaveNoVerdictSoThereIsNoAgreementLine(): void
+    {
+        self::assertSame('', $this->round()->withOutcomes([$this->started('a')->failed('timeout'), $this->started('b')->failed('timeout')])->agreement());
+    }
+
+    public function testTwoMatchingVerdictsOnAPanelOfThreeSayHowManyOfThePanel(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->answered('b', Decision::Changes), $this->started('c')]);
+
+        self::assertSame('2 of 3 say changes needed', $round->agreement());
+    }
+
+    public function testOneVerdictBesideAFailedReviewerSaysOneOfTwo(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Approve), $this->started('b')->failed('timeout')]);
+
+        self::assertSame('1 of 2 says approved', $round->agreement());
+    }
+
+    public function testABlockedReviewerIsNotReadAsDisagreeing(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->started('b')->blocked('no access')]);
+
+        self::assertSame('1 of 2 says changes needed', $round->agreement());
+    }
+
+    public function testOneRecordedVerdictOnAPanelOfTwoSaysOneOfTwoWhileTheOtherHasNoRowYet(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes)]);
+
+        self::assertSame('1 of 2 says changes needed', $round->agreement());
+    }
+
+    public function testMoreReviewerRowsThanTheStartRowNamedCountAsThePanel(): void
+    {
+        $round = new ReviewedRound(new RoundStart('r-1', 'alpha', 1), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+
+        self::assertSame('Both say approved', $round->withOutcomes([$this->answered('a', Decision::Approve), $this->answered('b', Decision::Approve)])->agreement());
+    }
+
+    private function answered(string $id, Decision $decision): ReviewerOutcome
+    {
+        return $this->started($id)->answered($decision, 0, ProjectMode::Live);
+    }
+
+    private function started(string $id): ReviewerOutcome
+    {
+        return new ReviewerOutcome($id, 'correctness', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'));
     }
 
     private function round(): ReviewedRound

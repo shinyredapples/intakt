@@ -4,31 +4,38 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\Infrastructure;
 
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 
 #[CoversClass(WatchConfiguration::class)]
+#[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
+#[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 final class WatchConfigurationTest extends TestCase
 {
     public function testAWatchSectionWithOnlyTheRequiredKeysIsAccepted(): void
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.']);
 
-        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.']], $projects);
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'intakt']], $projects);
     }
 
     public function testAGitHubRepositoryNamedOwnerSlashNameIsAccepted(): void
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']);
 
-        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']], $projects);
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets', 'eligibility_label' => 'intakt']], $projects);
     }
 
-    public function testAnEligibilityLabelIsAccepted(): void
+    public function testANamedEligibilityLabelReplacesTheDefault(): void
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'build']);
 
@@ -92,6 +99,14 @@ final class WatchConfigurationTest extends TestCase
         $this->processed(['repository' => '/r', 'base' => 'main', 'task' => '   ']);
     }
 
+    public function testAWatchSectionWithoutItsTaskIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/"task" under "intakt\.projects\.alpha" must be configured/');
+
+        $this->processed(['repository' => '/r', 'base' => 'main']);
+    }
+
     public function testANumericRepositoryIsRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);
@@ -104,6 +119,38 @@ final class WatchConfigurationTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
 
         $this->processed(['repository' => '/r', 'task' => 'Review.']);
+    }
+
+    public function testEachWatchedProjectGetsTheEligibilityLabelItsSectionNames(): void
+    {
+        $labels = WatchConfiguration::eligibilityLabelsOf(['alpha' => ['eligibility_label' => 'intakt'], 'beta' => ['eligibility_label' => 'build']]);
+
+        self::assertSame(['intakt', 'build'], [$labels->of('alpha'), $labels->of('beta')]);
+    }
+
+    public function testAProjectNamedWithDigitsGetsTheEligibilityLabelItsSectionNames(): void
+    {
+        $labels = WatchConfiguration::eligibilityLabelsOf($this->decoded('{"123": {"eligibility_label": "intakt"}}'));
+
+        self::assertSame('intakt', $labels->of('123'));
+    }
+
+    public function testAProjectWithoutAWatchSectionGetsNoEligibilityLabel(): void
+    {
+        $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('alpha'));
+
+        WatchConfiguration::eligibilityLabelsOf(['beta' => ['eligibility_label' => 'intakt']])->of('alpha');
+    }
+
+    /**
+     * @return array<string, array{eligibility_label: string}>
+     */
+    private function decoded(string $json): array
+    {
+        /** @var array<string, array{eligibility_label: string}> $projects */
+        $projects = json_decode($json, true);
+
+        return $projects;
     }
 
     /**

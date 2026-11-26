@@ -1,0 +1,15 @@
+{%- set info = '<svg class="i info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg>' %}
+{%- set broken = '<svg class="i broken-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.2v.2"/></svg>' %}
+<section class="step" id="step-check" data-s="3" data-state="{{ failing_mains is empty ? 'no-failure' : 'failed' }}" aria-labelledby="a3h">
+    <h1 id="a3h">Check the project</h1>
+    <p class="lead">Intakt reads what the boot check of each project's main branch recorded. It changes nothing.</p>
+    <ul class="checks">
+        {%- for main in failing_mains %}
+        <li class="check" data-project="{{ main.project }}" data-boot="failed">{{ broken|raw }}<div><strong>{{ main.project }}: main does not boot</strong><p class="muted">{{ main.reason }}</p></div></li>
+        {%- else %}
+        <li class="check" data-boot="no-failure">{{ info|raw }}<div><strong>No failed boot of main recorded</strong><p class="muted">The watcher boots main when it checks a trusted author's pull request of a watched project; a failed boot would show here.</p></div></li>
+        {%- endfor %}
+    </ul>
+    <p class="not-wired">Checking a repository before it is added is not built yet, so this step shows only the boot checks of the projects Intakt already watches.</p>
+    <div class="step-nav"><a class="btn quiet" href="{{ back }}">Back</a><a class="btn secondary" href="{{ path(route, {(query): step.value}) }}">Run again</a><span class="grow"></span><a class="btn primary" href="{{ continue }}">Continue</a></div>
+</section>

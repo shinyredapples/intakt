@@ -146,7 +146,7 @@ final readonly class RecurringP1s
         $places = [];
 
         foreach ($done->act as $id) {
-            $key = $done->p1Keys[$id] ?? null;
+            $key = $done->p1Keys->keyOf($id);
 
             if (null !== $key) {
                 $places[$key] ??= $id;

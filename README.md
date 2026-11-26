@@ -31,16 +31,17 @@ docker compose up -d --wait
 
 The latest, with everything built after the deadline (main):
 
+<!-- install-check: the daily install check runs the commands of the code block right below this comment -->
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
-No key? Open http://localhost:7781/demo (or **See a real review** on http://localhost:7781/setup) and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/reference/user-manual.md#playing-the-demo-run-in-the-dashboard)). The dashboard has no login, so it answers only `http://localhost:7781` on the machine that runs it; from another device, open an SSH tunnel first ([how](docs/user/08-when-something-goes-wrong.md#the-dashboard-says-open-the-dashboard-on-localhost)).
+No key? Open http://localhost:7781/demo (or **See a real review** on http://localhost:7781/setup?step=5) and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/reference/user-manual.md#playing-the-demo-run-in-the-dashboard)). The dashboard has no login, so it answers only `http://localhost:7781` on the machine that runs it; from another device, open an SSH tunnel first ([how](docs/user/08-when-something-goes-wrong.md#the-dashboard-says-open-the-dashboard-on-localhost)).
 
 With your agent: the clone's `.mcp.json` connects Claude Code. The review is live, so it needs a key first (see *With a key* below). Run `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository`. It prints, among other lines, `Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <token>"`. Run `export INTAKT_MCP_TOKEN=<token>` with the token after `Bearer` in that line (or run the printed `claude mcp add` line instead), then start `claude` in the clone, approve the `intakt` MCP server when Claude Code asks, install the [skill](skills/intakt-review/README.md) and say *intakt review the demo* ([details](docs/reference/mcp.md)).
 
-With a key: on http://localhost:7781/setup, under **Use your own project**, paste one provider key or Hugging Face token in **Add a key here**, press **Keep the key**, run `docker compose restart intakt`, then press **Start the first review** ([Hugging Face details](docs/reference/user-manual.md#running-the-demo-on-a-hugging-face-token)). Or from the terminal: `docker compose exec intakt php bin/console intakt:demo` prints the verdict ([read it](docs/reference/user-manual.md#reading-a-verdict)). Calls are billed to the key's owner. The [demo walkthrough](docs/guide/demo-walkthrough.md) retells the run in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
+With a key: on http://localhost:7781/setup?step=3, the setup wizard's **AI account** step, paste one provider key or Hugging Face token, press **Keep the key**, run `docker compose restart intakt`, then press **Start the first review** on step 5 ([Hugging Face details](docs/reference/user-manual.md#running-the-demo-on-a-hugging-face-token)). Or from the terminal: `docker compose exec intakt php bin/console intakt:demo` prints the verdict ([read it](docs/reference/user-manual.md#reading-a-verdict)). Calls are billed to the key's owner. The [demo walkthrough](docs/guide/demo-walkthrough.md) retells the run in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
 Without Docker or a key: `composer install`, then `bin/check` runs the quality gates every change passes (one JSON line per gate), `bin/check --journeys` the user journeys ([what they cover](docs/guide/checking-the-whole-product.md)) and `bin/console about` boots the app on SQLite.
 
@@ -53,17 +54,17 @@ How each was measured, the full tables and how to run the bench yourself: [docs/
 
 ## Found and fixed upstream
 
-Building Intakt led to 12 fixes (11 pull requests) merged upstream in Symfony, Symfony AI and Doctrine, with more open or reported. Every reproduction and its upstream status: [`upstream/`](upstream/README.md#found-and-fixed-upstream).
+Building Intakt led to 13 fixes (12 pull requests) merged upstream in Symfony, Symfony AI and Doctrine, with more open or reported. Every reproduction and its upstream status: [`upstream/`](upstream/README.md#found-and-fixed-upstream).
 
 ## The team
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark.webp" width="760" height="116">
-    <img src="docs/assets/team-light.webp" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, each drawn as an animal with its tool" width="760" height="113" loading="lazy">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark.webp" width="760" height="109">
+    <img src="docs/assets/team-light.webp" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer, Maintainer and Technical writer, each drawn as an animal with its tool" width="760" height="106" loading="lazy">
   </picture>
   <br>
-  The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order.
+  The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer, Maintainer and Technical writer, in that order.
 </p>
 
 ## Status
@@ -71,13 +72,13 @@ Building Intakt led to 12 fixes (11 pull requests) merged upstream in Symfony, S
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/roadmap-dark.svg" width="420" height="245">
-    <img src="docs/assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard; we are here, with the octopus: M5 Demo, the hackathon release, 22 Nov; next: M6 Runs alongside (beside the build loop), M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="420" height="245" loading="lazy">
+    <img src="docs/assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard, M5 Demo (the hackathon release, 22 Nov); we are here, with the octopus: M6 Reviewer for the loop (reviews the build loop's changes); next: M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="420" height="245" loading="lazy">
   </picture>
 </p>
 
 **Works today:** the review loop. A panel of reviewers from different AI labs reviews a branch, a judge makes one list to fix, and the dashboard shows each round live.
 
-**Next:** reviewing pull requests on GitHub, then Intakt building tasks as well as reviewing them ([the plan](docs/plan.md)).
+**Next:** Intakt's review replacing one of the reviewers in the loop that builds it, then Intakt building tasks as well as reviewing them ([the plan](docs/plan.md)).
 
 ## Documentation
 

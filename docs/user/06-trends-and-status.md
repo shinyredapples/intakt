@@ -25,7 +25,7 @@ A tile appears only when there is a figure for it, never as a made-up 0. Point a
 ## The charts answer three questions
 
 1. **Which reviewer finds what?** *Catches by reviewer* has one small chart per reviewer role, with a bar per urgency. The number in brackets counts the findings only that reviewer reported. This is the answer to your colleague.
-2. **What does the owl keep?** *Checked findings* counts the findings kept to fix, merged as duplicates, deferred and rejected.
+2. **What does the owl keep?** *Checked findings* counts the findings kept to fix, merged as duplicates, deferred and rejected. Only the owl's own calls count: a pass where the owl's answer could not be read is left out, because Intakt then put every P1 and P2 on the to-fix list itself and left the P3 findings unmarked, which is not a rejection. Passes from before Intakt wrote this down are left out too.
 3. **How busy were you?** *Passes and cost per day* appears once reviews ran on 3 or more days.
 
 Each chart carries a chip that says whether its figures are counted or estimated.
@@ -34,14 +34,27 @@ Each chart carries a chip that says whether its figures are counted or estimated
 
 When you have played the demo run, a **Demo review** toggle sits at the top. Press it to count your own reviews only; press it again to bring the demo back.
 
+## Up next: the rounds going on now
+
+At the bottom of Trends, **Up next** lists the review rounds the board shows under In review, also before the first review and with the demo left out.
+
+- **In progress:** rounds whose reviewers have started, with the reviewers that did.
+- **Waiting to start:** rounds no reviewer has picked up yet. After them come pull requests the watcher queued that have not started yet, marked "Queued, not started yet".
+
+Click a round to open its review page. A queued pull request has no link until its round starts, because its review page does not exist before that. When nothing is going on, Up next says "Nothing running or queued.". The list shows the moment you opened the page: reload it to see newer rounds.
+
+## History: what changed and who changed it
+
+Open `/history` to read the ledger as a list, newest first. Each row says who made the change, what it was, the project and the time. Where a value changed, the row shows it before and after; an expiry shows when the change has one. A secret never shows, only its fingerprint. The project filter at the top shows one project or all, and a reviewer's step counts for the project of its review; a row that belongs to no project shows under every project. Add `?project=` and a project name to the address to open the page with that project chosen; choose **All projects** to see every row again.
+
 ## Now: what is running right now
 
-Trends looks back. For the present moment, open **Now** in the menu. The board's status line sums it up in one phrase, such as "Running smoothly · 1 reviewer working" or "Quiet · nobody working".
+Trends mostly looks back. For the present moment, open **Now** in the menu. The board's status line sums it up in one phrase, such as "Running smoothly · 1 reviewer working" or "Quiet · nobody working".
 
 ![The board in dark mode: the sleeping octopus above the status line "Quiet, nobody working" with an arrow to the Status page, then the columns Waiting on you, In review and Done](../assets/guide/board.webp)
 
 1. Click the status line.
-2. The **Status** page lists every reviewer still at work, with its role, its change, its project and its round.
+2. The **Status** page lists every reviewer still at work, with its role, its change, its project and its round. A reviewer that started an hour ago or more is left out, since no review runs that long.
 3. Click a lane to open the review it is working on.
 
 When nobody works, the page says so: "No reviewer is working right now: reviewers appear here while they review a change".

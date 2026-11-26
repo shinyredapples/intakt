@@ -16,8 +16,11 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Domain\BugPart;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -33,16 +36,19 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\HandBack\Contract\CheckJobs;
 use Intakt\Core\HandBack\Contract\HandBackChecks;
+use Intakt\Core\HandBack\Contract\PullRequestTextRound;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
@@ -58,6 +64,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
@@ -65,6 +72,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -84,15 +92,20 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(BuildQuestion::class)]
+#[UsesClass(BugReport::class)]
+#[UsesClass(BugPart::class)]
+#[UsesClass(TaskKind::class)]
 #[UsesClass(HandBackCheck::class)]
 #[UsesClass(HandBackFile::class)]
 #[UsesClass(PrePushCheck::class)]
+#[UsesClass(PullRequestTextCheck::class)]
 #[UsesClass(PushStep::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
+#[UsesClass(RecordedBuildStops::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
@@ -161,6 +174,49 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringNotContainsString('PLANT', $tester->getDisplay());
     }
 
+    public function testABugTaskWithAMissingPartIsParkedWithAQuestionNamingItAndRunsNoBuildJob(): void
+    {
+        $task = Issues::task(7, ['intakt', 'bug'], ['body' => "**When:** open the page\n**Today:** it fails\n**Expected:** it loads"]);
+
+        $outcome = $this->buildTask($task)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertSame([BuildStep::BuildJob, null, true], [$outcome->last, $outcome->failure, $outcome->parked()]);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
+        // The scripted job would have asked another question, so this one proves the job never ran.
+        self::assertStringContainsString('missing: Must keep working.', $this->question());
+        $payload = $this->connection()->fetchOne('SELECT payload FROM ledger_event ORDER BY position DESC LIMIT 1');
+        self::assertIsString($payload);
+        self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null}', $payload);
+    }
+
+    public function testABugTaskWithAnEmptyPartIsParkedWithAQuestionNamingIt(): void
+    {
+        $task = Issues::task(7, ['intakt', 'bug'], ['body' => "## When\nopen the page\n## Today\n\n## Expected\nit loads\n## Must keep working\nthe list"]);
+
+        $outcome = $this->buildTask($task)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertTrue($outcome->parked());
+        self::assertStringContainsString('missing: Today.', $this->question());
+    }
+
+    public function testABugTaskWithAllFourPartsGoesOnToTheBuildJob(): void
+    {
+        $task = Issues::task(7, ['intakt', 'bug'], ['body' => "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d"]);
+
+        $outcome = $this->buildTask($task)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertTrue($outcome->parked());
+        self::assertStringContainsString('PLANT-question', $this->question());
+    }
+
+    public function testATaskWithoutTheBugLabelIsNotCheckedForTheFourParts(): void
+    {
+        $outcome = $this->buildTask(Issues::task(7, ['intakt'], ['body' => 'no parts at all']))->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertTrue($outcome->parked());
+        self::assertStringContainsString('PLANT-question', $this->question());
+    }
+
     protected function setUp(): void
     {
         $this->folder = sys_get_temp_dir().'/intakt-build-task-parks-'.bin2hex(random_bytes(6));
@@ -180,21 +236,29 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         parent::tearDown();
     }
 
-    private function buildTask(): BuildTask
+    private function buildTask(?ListedIssue $task = null): BuildTask
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('readOpen')->willReturn(Issues::task(7));
+        $reads->method('readOpen')->willReturn($task ?? Issues::task(7));
         $checkout = self::createStub(BuildCheckout::class);
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops());
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+    }
+
+    private function question(): string
+    {
+        $question = $this->connection()->fetchOne('SELECT question FROM build_parked_task');
+        self::assertIsString($question);
+
+        return $question;
     }
 
     private function ledger(): Ledger

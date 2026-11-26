@@ -12,6 +12,9 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
@@ -55,6 +58,9 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[CoversClass(CompleteListing::class)]
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeStore::class)]
+#[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
+#[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(GitHubIssueReads::class)]
 #[UsesClass(IssueFields::class)]
 #[UsesClass(GitHubIssueHistories::class)]
@@ -317,6 +323,44 @@ final class CompleteListingTest extends KernelTestCase
         self::assertTrue($this->rowOf(7)->queued()->isTrusted());
     }
 
+    public function testATaskCarryingOnlyTheLoopsLabelIsNotPlannedForAProjectWhoseWatchNamesItsOwnLabel(): void
+    {
+        $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['intakt'])]);
+
+        $plan = $this->listingWatching(new EligibilityLabels(new ProjectEligibilityLabel('alpha', 'intakt')))->planOf('alpha');
+
+        self::assertInstanceOf(IntakePlan::class, $plan);
+        self::assertSame([8], $this->numbersOf($plan->ready));
+        self::assertSame([], $plan->held);
+        self::assertSame([8], $this->histories->read);
+    }
+
+    public function testEachProjectPlansOnlyTheTasksCarryingTheLabelItsWatchNames(): void
+    {
+        $watches = new EligibilityLabels(new ProjectEligibilityLabel('alpha', 'intakt'), new ProjectEligibilityLabel('beta', 'ready'));
+        $issues = [Issues::task(7, ['ready']), Issues::task(8, ['intakt'])];
+        $this->reads->lists($issues);
+        $alpha = $this->listingWatching($watches)->planOf('alpha');
+        $this->reads->lists($issues);
+
+        $beta = $this->listingWatching($watches)->planOf('beta');
+
+        self::assertInstanceOf(IntakePlan::class, $alpha);
+        self::assertInstanceOf(IntakePlan::class, $beta);
+        self::assertSame([[8], [7]], [$this->numbersOf($alpha->ready), $this->numbersOf($beta->ready)]);
+    }
+
+    public function testAProjectWithoutAWatchSectionLeavesTheListingShortWithoutAForgeCall(): void
+    {
+        $this->reads->lists([Issues::task(8, ['intakt'])]);
+
+        $plan = $this->listingWatching(new EligibilityLabels(new ProjectEligibilityLabel('beta', 'intakt')))->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame(0, $this->reads->listings);
+        self::assertSame(['Project "alpha" has no watch section, so it names no eligibility label.'], $this->shortListingReasons());
+    }
+
     public function testAListingAnotherWorkerStoredMeanwhileIsWhatTheWaitsAreAnsweredFrom(): void
     {
         $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])]);
@@ -493,8 +537,7 @@ final class CompleteListingTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->store = new IntakeStore($entities);
         $this->reads = new RecordedIssueReads();
         $this->histories = new ScriptedHistories($this->reads);
@@ -555,7 +598,7 @@ final class CompleteListingTest extends KernelTestCase
     {
         $references = new IssueReferences();
         $row = StoredIssue::of('alpha', new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
-        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), [...$listed->labels]), $listed->body, $listed->labels);
         $row->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => 'ana' === $account));
 
         return $row;
@@ -656,9 +699,14 @@ final class CompleteListingTest extends KernelTestCase
 
     private function listingOver(IssueReads $reads, IssueHistories $histories, string $label = 'intakt'): CompleteListing
     {
+        return $this->listingWatching(new EligibilityLabels(new ProjectEligibilityLabel('alpha', $label)), $reads, $histories);
+    }
+
+    private function listingWatching(EligibilityLabels $labels, ?IssueReads $reads = null, ?IssueHistories $histories = null): CompleteListing
+    {
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
 
-        return new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules($label), new IssueReferences(), $this->logger);
+        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, $labels, new IssueReferences(), $this->logger);
     }
 }

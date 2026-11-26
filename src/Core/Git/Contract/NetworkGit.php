@@ -67,7 +67,7 @@ final readonly class NetworkGit
 
     private function attempt(GitCall $call): Process|string
     {
-        $process = new Process($call->command, $call->directory, [...$call->environment, ...self::NETWORK], timeout: $this->timeoutSeconds);
+        $process = new Process([...$call->command], $call->directory, [...$call->environment, ...self::NETWORK], timeout: $this->timeoutSeconds);
 
         try {
             $process->run();

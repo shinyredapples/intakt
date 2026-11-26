@@ -80,11 +80,12 @@ final readonly class IntakeStore
         }
     }
 
-    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
+    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it. A stored pull request is refused like a missing row, because the listing stores a pull request only for the rules to read and never queues one.
     public function failForGood(string $project, int $number, string $reason): void
     {
-        $this->ownManager()->wrapInTransaction(static function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
-            if (!$manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
+        $this->underTheListingLock($project, function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
+            $task = $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]);
+            if (!$task instanceof StoredIssue || $task->isPullRequest()) {
                 throw TaskNotQueued::named($project, $number);
             }
 
@@ -99,19 +100,81 @@ final readonly class IntakeStore
         });
     }
 
+    // The validator goes too, because with it the forge answers the next listing as unchanged and the row would never be read again; the generation moves, so a listing read before this loses its write instead of storing the forgotten vouching again.
+    public function forgetVouchingOf(string $project, int $number): void
+    {
+        $this->readOf($project, fn (): mixed => $this->underTheListingLock($project, static function (EntityManagerInterface $manager) use ($project, $number): null {
+            $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number])?->forgetVouching();
+            $manager->find(IntakeValidator::class, $project)?->advance(null);
+
+            return null;
+        }));
+    }
+
     /**
      * @return array<int, string>
      */
     public function failuresOf(string $project): array
     {
-        return $this->readOf($project, function () use ($project): array {
-            $failures = [];
-            foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
-                $failures[$failure->number()] = $failure->reason();
-            }
+        return $this->readOf($project, fn (): array => $this->reasonsOf($this->ownManager(), $project));
+    }
 
-            return $failures;
-        });
+    // Read once the lock is held, because a failure recorded since the plan was made must keep its task from being picked: the pick is ordered before any failure that commits after this read.
+    /**
+     * @return array<int, string>
+     */
+    public function failuresUnderTheListingLock(string $project): array
+    {
+        return $this->readOf($project, fn (): array => $this->underTheListingLock($project, fn (EntityManagerInterface $manager): array => $this->reasonsOf($manager, $project)));
+    }
+
+    // A reader on SQLite's default journal lets the lock's write through and refuses only the COMMIT, so the transaction SQLite then keeps open is rolled back before the refusal is thrown: left open, every later transaction on the connection would be refused as already active, and an uncommitted failure would be read back as recorded.
+    /**
+     * @template T
+     *
+     * @param callable(EntityManagerInterface): T $work
+     *
+     * @return T
+     */
+    private function underTheListingLock(string $project, callable $work): mixed
+    {
+        try {
+            return $this->inTransaction($this->ownManager(), function (EntityManagerInterface $manager) use ($project, $work): mixed {
+                $this->lockTheSyncRow($manager, $project);
+
+                return $work($manager);
+            });
+        } catch (RetryableException $refusal) {
+            $this->rollBackARefusedCommit();
+
+            throw $refusal;
+        }
+    }
+
+    // SQLite has no row lock, and in WAL mode a transaction reads from the snapshot of its first read, so a failure could commit between the row read and the failure read and be missed. A write that changes no row, sent before any read, takes SQLite's write lock and reads the latest commit; a server database changes nothing for it and relies on the row lock.
+    private function lockTheSyncRow(EntityManagerInterface $manager, string $project): void
+    {
+        $sync = $manager->getClassMetadata(IntakeValidator::class);
+        $column = $sync->getColumnName('project');
+        $manager->getConnection()->createQueryBuilder()
+            ->update($sync->getTableName())
+            ->set($column, $column)
+            ->where('1 = 0')
+            ->executeStatement();
+        $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function reasonsOf(EntityManagerInterface $manager, string $project): array
+    {
+        $failures = [];
+        foreach ($this->rowsOf($manager, TaskFailure::class, $project) as $failure) {
+            $failures[$failure->number()] = $failure->reason();
+        }
+
+        return $failures;
     }
 
     /**
@@ -149,11 +212,15 @@ final readonly class IntakeStore
         }
     }
 
-    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held.
+    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held, and a refused nested rollback would leave its level open on the shared connection.
     /**
-     * @param callable(EntityManagerInterface): bool $write
+     * @template T
+     *
+     * @param callable(EntityManagerInterface): T $write
+     *
+     * @return T
      */
-    private function inTransaction(EntityManagerInterface $manager, callable $write): bool
+    private function inTransaction(EntityManagerInterface $manager, callable $write): mixed
     {
         $connection = $manager->getConnection();
         $outer = $connection->getTransactionNestingLevel();
@@ -164,6 +231,7 @@ final readonly class IntakeStore
             $connection->commit();
 
             return $written;
+            // Boundary: closes the manager, rolls back and rethrows any failure of the write, because a write that fails in any way must leave no open level on the shared connection.
         } catch (Throwable $failure) {
             $manager->close();
             $this->rollBackAfter($connection, $outer);

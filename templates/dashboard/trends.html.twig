@@ -29,6 +29,21 @@
 <div class="chart-tip" data-chart-target="tip" aria-hidden="true" hidden><strong></strong><span></span></div>
 {% endmacro %}
 
+{#- One Up next row; without a link it is a plain line, for a round that has no review page yet. -#}
+{% macro up_next_row(href, project, title, facts) %}
+<li class="review-row" data-project="{{ project }}">
+    {% if href is not null %}<a class="review-link" href="{{ href }}">{% else %}<div class="review-line">{% endif %}
+        <span class="review-title">{{ title }}</span>
+        <span class="review-facts">
+            <span class="pname">{{ project }}</span>
+            {% for fact in facts %}
+            <span>{{ fact }}</span>
+            {% endfor %}
+        </span>
+    {% if href is not null %}</a>{% else %}</div>{% endif %}
+</li>
+{% endmacro %}
+
 {% block body %}
 {% set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_TRENDS') %}
 {% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
@@ -67,7 +82,7 @@
 </dl>
 {% endif %}
 {% if not trends.anyReview %}
-{# The same start as step 3 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). #}
+{# The same start as step 5 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). #}
 <div class="empty">
     {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}
     <h2>No reviews yet</h2>
@@ -78,7 +93,7 @@
         {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
     </form>
     {% else %}
-    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}#step-first-review">Start the first review</a>
+    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP'), {(constant('Intakt\\Core\\Dashboard\\UseCase\\RunSetup\\RunSetupController::STEP')): constant('Intakt\\Core\\Dashboard\\Domain\\SetupStep::Ready').value}) }}#step-first-review">Start the first review</a>
     {% endif %}
 </div>
 {% else %}
@@ -162,4 +177,26 @@
     {% endif %}
 </div>
 {% endif %}
+{#- Shown also before the first review and with the demo left out, because it lists what the board shows in review now, not what the figures count (D6 of #2864). -#}
+<section class="section up-next" id="up-next" aria-labelledby="up-next-title">
+    <h2 id="up-next-title">Up next</h2>
+    {% if up_next.emptyLine is not null %}
+    <p class="muted">{{ up_next.emptyLine }}</p>
+    {% else %}
+    {#- Each group renders the rounds UpNext puts in it, so the page never decides a round's group itself; a queued round has no link, because its review page answers 404 until the round starts (decision 2 of #3159). -#}
+    {% for group in [{title: 'In progress', started: up_next.inProgress, queued: []}, {title: 'Waiting to start', started: up_next.waitingToStart, queued: up_next.queued}] %}
+    {% if group.started is not empty or group.queued is not empty %}
+    <h3 id="up-next-{{ loop.index }}">{{ group.title }}</h3>
+    <ul class="review-rows" aria-labelledby="up-next-{{ loop.index }}">
+        {% for round in group.started %}
+        {{ _self.up_next_row(path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round.round}), round.project, round.change is same as('') ? constant('Intakt\\Core\\Dashboard\\Domain\\ReviewSummary::UNNAMED_CHANGE') : round.change, (round.number is null ? [] : ['Round ' ~ round.number])|merge([round.startedOutcomes is empty ? 'No reviewer has started yet' : round.startedOutcomes|map(outcome => outcome.role|capitalize)|join(', ')])) }}
+        {% endfor %}
+        {% for round in group.queued %}
+        {{ _self.up_next_row(null, round.project, round.title, ['Queued, not started yet']) }}
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+</section>
 {% endblock %}

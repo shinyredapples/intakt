@@ -15,14 +15,21 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
+use Intakt\Core\Build\Domain\BugPart;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\ReadableLines;
+use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
@@ -34,6 +41,8 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PrePushResult;
+use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
@@ -41,6 +50,7 @@ use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchPushRequest;
@@ -48,6 +58,7 @@ use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\Git\Domain\CommitObject;
@@ -69,12 +80,31 @@ use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\CheckVerdict;
+use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
+use Intakt\Core\HandBack\Contract\MissingEvidenceItems;
+use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
+use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
+use Intakt\Core\HandBack\Contract\PullRequestTextTask;
+use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Contract\RegressionRun;
+use Intakt\Core\HandBack\Contract\RegressionRuns;
+use Intakt\Core\HandBack\Contract\RegressionTests;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
+use Intakt\Core\HandBack\Domain\CodeSpans;
+use Intakt\Core\HandBack\Domain\EvidenceItems;
+use Intakt\Core\HandBack\Domain\FencedBlock;
+use Intakt\Core\HandBack\Domain\HiddenBlockOpeners;
+use Intakt\Core\HandBack\Domain\MarkdownPart;
+use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\OpenListItems;
+use Intakt\Core\HandBack\Domain\ParagraphEnd;
+use Intakt\Core\HandBack\Domain\PullRequestTextRule;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
@@ -82,7 +112,12 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
+use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
+use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\Job\Contract\JobCause;
@@ -109,6 +144,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -119,9 +155,17 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\PushScenario;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\RecordingChangeOpening;
+use Intakt\Tests\Core\HandBack\CheckJobsFor;
+use Intakt\Tests\Core\HandBack\FailingLockStore;
+use Intakt\Tests\Core\HandBack\RecordingLedger;
+use Intakt\Tests\Core\HandBack\UnreadableLedger;
+use Intakt\Tests\Core\HandBack\UnreleasableLockStore;
+use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -148,6 +192,24 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(HandBackCheck::class)]
 #[CoversClass(HandBackFile::class)]
 #[CoversClass(PrePushCheck::class)]
+#[CoversClass(PullRequestTextCheck::class)]
+#[UsesClass(RoutePullRequestText::class)]
+#[UsesClass(PullRequestTextRoutes::class)]
+#[UsesClass(PullRequestTextTask::class)]
+#[UsesClass(FailedPullRequestText::class)]
+#[UsesClass(PullRequestTextOutcome::class)]
+#[UsesClass(MissingEvidenceItems::class)]
+#[UsesClass(PullRequestTextRoute::class)]
+#[UsesClass(PullRequestTextVerdict::class)]
+#[UsesClass(PullRequestTextRule::class)]
+#[UsesClass(EvidenceItems::class)]
+#[UsesClass(MarkdownText::class)]
+#[UsesClass(MarkdownPart::class)]
+#[UsesClass(CodeSpans::class)]
+#[UsesClass(FencedBlock::class)]
+#[UsesClass(HiddenBlockOpeners::class)]
+#[UsesClass(OpenListItems::class)]
+#[UsesClass(ParagraphEnd::class)]
 #[CoversClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
@@ -172,6 +234,11 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ProposedChange::class)]
 #[UsesClass(RunCheckJob::class)]
 #[UsesClass(LostContentCheck::class)]
+#[UsesClass(CheckDependencies::class)]
+#[UsesClass(CheckedLockFiles::class)]
+#[UsesClass(DependencyJobs::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyStep::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(CheckJobOutcome::class)]
@@ -205,10 +272,17 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
+#[UsesClass(RecordedBuildStops::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
 #[UsesClass(BuildBrief::class)]
+#[UsesClass(TaskKind::class)]
+#[UsesClass(BugReport::class)]
+#[UsesClass(RegressionEvidence::class)]
+#[UsesClass(ReadableLines::class)]
+#[UsesClass(PrePushResult::class)]
+#[UsesClass(BugPart::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
@@ -237,12 +311,16 @@ final class BuildTaskTest extends TestCase
 
     private const string CHECK_SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
 
+    private const string BUG_BODY = "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d";
+
     private const string IMAGE = 'intakt-job-alpha:1';
 
     // Because CI runs as a user without a git identity, and git refuses a commit without one.
     private const array IDENTITY = ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false'];
 
     private string $scanner = 'gitleaks';
+
+    private ?RegressionTests $regressionTests = null;
 
     private string $mirrors;
 
@@ -270,6 +348,13 @@ final class BuildTaskTest extends TestCase
     private Filesystem $handBackFiles;
 
     private RecordingChangeOpening $changes;
+
+    // A ledger that reads back for the text round, because InMemoryLedger reads nothing and the round counts the task's earlier lines.
+    private ?RecordingLedger $textLedger = null;
+
+    private ?LockFactory $textLocks = null;
+
+    private RecordedBuildStops $stops;
 
     public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
@@ -319,7 +404,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame(array_fill(0, 7, 'passed'), array_column($this->stepsIn($ledger), 'outcome'));
         self::assertSame('7', $ledger->payloads()[0]['task']);
         self::assertNull($this->stepsIn($ledger)[6]['failure']);
-        self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened, LedgerEventKind::BuildStepEnded], array_slice($ledger->kinds(), 6));
+        self::assertSame([LedgerEventKind::PullRequestTextPassed, LedgerEventKind::BuildStepEnded, LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened, LedgerEventKind::BuildStepEnded], array_slice($ledger->kinds(), 5));
         self::assertFileExists($this->clone.'/a.txt');
         self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
         self::assertSame('', $this->inClone('status', '--porcelain'));
@@ -331,6 +416,22 @@ final class BuildTaskTest extends TestCase
         self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
     }
 
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testABuildStoppedWhileItRanHandsBackItsCommitsThroughTheHandBackAndPrePushChecksToThePush(BuildStopCause $cause): void
+    {
+        $stopped = new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief('x', new Decisions(), null), Tier::Standard, self::IMAGE);
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => $this->stops->record($stopped, $cause));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
+        self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
+        self::assertNull($this->stops->causeFor($stopped), 'the build job did not read the recorded cause');
+    }
+
     public function testThePullRequestTextsFirstLineIsTheTitleAndWhatFollowsTheBlankLineTheBody(): void
     {
         $this->runner = $this->committingRunner(text: "feat: task 7\n\nThe body.\n\nEvidence: tests pass.\n");
@@ -338,6 +439,104 @@ final class BuildTaskTest extends TestCase
         (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
         self::assertSame(['feat: task 7', "The body.\n\nEvidence: tests pass."], [$this->changes->text?->title, $this->changes->text?->body]);
+    }
+
+    public function testAFirstPullRequestTextMissEndsAtThePrePushCheckSentBackWithTheMissingItemsAndKeepsTheCommitsUnpushed(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red, and the word zebracorn\n");
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the pull request text is sent back to the builder: the pull request text does not reference every top-level Evidence item of the task; missing: E2', $outcome->failure);
+        self::assertSame($outcome->failure, $this->stepsIn($ledger)[5]['failure']);
+        self::assertContains(LedgerEventKind::PullRequestTextSentBack, $ledger->kinds());
+        self::assertStringNotContainsString('zebracorn', (string) json_encode($ledger->payloads()));
+        self::assertSame("Build task 7\n", $this->inClone('log', '-1', '--format=%s', 'feat/task'));
+        self::assertNull($this->remoteTip());
+        self::assertSame(0, $this->changes->calls);
+    }
+
+    public function testASecondPullRequestTextMissInARowGoesOnToThePushAndTheReviewers(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->textLedger = new RecordingLedger();
+        $first = $this->taskOf(new InMemoryLedger(), [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+        new Filesystem()->remove($this->clone);
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $first->last);
+        self::assertFalse($outcome->failed(), (string) $outcome->failure);
+        self::assertSame(BuildStep::Push, $outcome->last);
+        self::assertSame([LedgerEventKind::PullRequestTextSentBack, LedgerEventKind::PullRequestTextToReviewers], $this->textLedger->kinds());
+        self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
+        self::assertSame(1, $this->changes->opened);
+    }
+
+    public function testALockStoreThatFailsInTheTextRoundEndsAtThePrePushCheckWithFixedTextAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->textLocks = new LockFactory(new FailingLockStore());
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertStringStartsWith('the pull request text round was not recorded, because its lock failed: Failed to acquire the "intakt-pull-request-text-', (string) $outcome->failure);
+        self::assertSame($outcome->failure, $this->stepsIn($ledger)[5]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testATextRoundLockThatCannotBeReleasedStillSendsTheFirstMissBackWithAStepRow(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->textLocks = new LockFactory(new UnreleasableLockStore());
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertStringStartsWith('the pull request text is sent back to the builder: ', (string) $outcome->failure);
+        self::assertSame($outcome->failure, $this->stepsIn($ledger)[5]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testALedgerThatCannotBeReadInTheTextRoundEndsAtThePrePushCheckWithFixedTextAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->textLedger = new RecordingLedger(onRead: static fn () => throw new UnreadableLedger('the ledger is unreachable'));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the pull request text round was not recorded, because the ledger could not be read: the ledger is unreachable', $outcome->failure);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testAPullRequestBodyOverTheCapEndsAtThePrePushCheckSentBack(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n".str_repeat('a', 4001));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the pull request text is sent back to the builder: the pull request body is over the cap', $outcome->failure);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testAFailedCheckJobRecordsNoPullRequestTextLineSoItsMissDoesNotCount(): void
+    {
+        $this->runner = $this->committingRunner(text: "feat: task 7\n\n- E1: red\n");
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "failed 2\n", RunCheckJob::LOG => "tests failed\n"]);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [$this->taskWithEvidence()])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame([], array_filter($ledger->kinds(), static fn (LedgerEventKind $kind): bool => str_starts_with($kind->value, 'pull_request_text_')));
     }
 
     public function testAPullRequestTextWithoutATitleEndsAtThePushStepAndPushesNothing(): void
@@ -383,7 +582,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame(self::IMAGE, $this->checked->image);
         self::assertSame([realpath(new Mirrors($this->mirrors)->pathOf('alpha')), RunCheckJob::MIRROR], [$this->checked->inputs[0]->hostPath, $this->checked->inputs[0]->containerPath]);
         self::assertSame(RunCheckJob::BUNDLE, $this->checked->inputs[1]->containerPath);
-        self::assertSame(['feat/task', '--', ...new PhpGate()->checkSteps(null)], array_slice($this->checked->command, 6));
+        self::assertSame(['feat/task', '--', ...new PhpGate()->checkSteps(null)], array_slice([...$this->checked->command], 6));
     }
 
     public function testAFailureAtThePrePushCheckEndsThereWithItsExitCodeRecordedNothingOfItsLogAndNoPush(): void
@@ -431,7 +630,7 @@ final class BuildTaskTest extends TestCase
         $this->checkRunner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$mainInTheMirror): JobResult {
             $mainInTheMirror = $this->git(['rev-parse', 'HEAD'], $spec->inputs[0]->hostPath);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
         });
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
@@ -702,6 +901,17 @@ final class BuildTaskTest extends TestCase
         self::assertSame('failed', $ledger->payloads()[3]['outcome']);
     }
 
+    public function testABareInvalidArgumentExceptionFromTheBuildJobPassesThrough(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(new InvalidArgumentException('a bug in the build job'));
+        $this->runner = $runner;
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the build job'));
+
+        (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+    }
+
     public function testABuildJobTheRunnerRefusesEndsAtTheBuildJobStepWithItsMessage(): void
     {
         $runner = self::createStub(JobRunner::class);
@@ -780,7 +990,7 @@ final class BuildTaskTest extends TestCase
             $ran = $spec;
             $prompt = (string) file_get_contents($spec->inputs[1]->hostPath);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([]));
         });
         $this->runner = $runner;
 
@@ -789,8 +999,96 @@ final class BuildTaskTest extends TestCase
         self::assertInstanceOf(JobSpec::class, $ran);
         self::assertSame([realpath($this->clone), RunBuildJob::CLONE], [$ran->inputs[0]->hostPath, $ran->inputs[0]->containerPath]);
         self::assertSame(self::IMAGE, $ran->image);
-        self::assertSame('feat/task', $ran->command[6]);
+        self::assertSame('feat/task', [...$ran->command][6]);
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body")->rendered(), $prompt);
+    }
+
+    public function testABugTaskWithAllFourPartsReachesTheBuildJobWithTheTestFirstInstruction(): void
+    {
+        $prompt = '';
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$prompt): JobResult {
+            $prompt = (string) file_get_contents($spec->inputs[1]->hostPath);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput());
+        });
+        $this->runner = $runner;
+        $body = "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d";
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'bug'], ['body' => $body])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertStringContainsString('write that test first', $prompt);
+    }
+
+    public function testABugHeadWhoseTestFailsOnTheBaseAndPassesOnTheHeadGoesOnToThePushAndReview(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertContains(BuildStep::PrePushCheck, $outcome->passedSteps());
+        self::assertNotSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertNotNull($this->remoteTip());
+        self::assertSame("## Evidence\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed", $this->changes->text?->body);
+    }
+
+    public function testABugHeadWhoseBodyHasASetextEvidenceHeadingGetsTheRegressionLinesInThatSection(): void
+    {
+        $this->runner = $this->committingRunner(text: "fix: task 7\n\nSummary.\n\n    Evidence\n---\n\nEvidence\n--------\n\n- E1: shown\n\nFollow-ups\n----------\n\n- none\n");
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertContains(BuildStep::Push, $outcome->passedSteps());
+        self::assertSame("Summary.\n\n    Evidence\n---\n\nEvidence\n--------\n\n- E1: shown\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed\n\nFollow-ups\n----------\n\n- none", $this->changes->text?->body);
+    }
+
+    public function testAFeatureHeadIsPushedWithItsBodyUnchanged(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'feature'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Push, $outcome->last);
+        self::assertSame('', $this->changes->text?->body);
+    }
+
+    public function testABugHeadWhoseTestPassesOnTheBaseEndsAtThePrePushCheckWithTheReasonAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Passed, RegressionRun::Passed));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the new test of a bug also passes on the base, so it proves nothing', $outcome->failure);
+        self::assertSame('failed', $ledger->payloads()[5]['outcome']);
+        self::assertSame($outcome->failure, $ledger->payloads()[5]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testABugHeadWithoutANewTestEndsAtThePrePushCheckWithTheReasonAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the head of a bug adds no regression test', $outcome->failure);
+        self::assertSame('failed', $ledger->payloads()[5]['outcome']);
+        self::assertSame($outcome->failure, $ledger->payloads()[5]['failure']);
+        self::assertNull($this->remoteTip());
     }
 
     public function testATierLabelOfTheIssueChoosesTheBuildsTier(): void
@@ -1095,6 +1393,7 @@ final class BuildTaskTest extends TestCase
     protected function setUp(): void
     {
         $this->locks = new LockFactory(new InMemoryStore());
+        $this->stops = new RecordedBuildStops();
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -1115,7 +1414,7 @@ final class BuildTaskTest extends TestCase
     protected function tearDown(): void
     {
         $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub', $this->mirrors.'-checks']);
         $this->remote->remove();
     }
 
@@ -1144,7 +1443,7 @@ final class BuildTaskTest extends TestCase
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($files): JobResult {
             $this->checked = $spec;
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput($files));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of($files));
         });
 
         return $runner;
@@ -1210,7 +1509,7 @@ final class BuildTaskTest extends TestCase
             $bundle = (string) file_get_contents($job.'.bundle');
             new Filesystem()->remove([$job, $job.'.bundle']);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
         });
 
         return $runner;
@@ -1228,6 +1527,11 @@ final class BuildTaskTest extends TestCase
         });
 
         return $runner;
+    }
+
+    private function taskWithEvidence(): ListedIssue
+    {
+        return Issues::task(7, with: ['body' => "Build it.\n\nEvidence:\n- E1. A red check.\n- E2. A green check.\n"]);
     }
 
     private function inClone(string ...$arguments): string
@@ -1267,20 +1571,31 @@ final class BuildTaskTest extends TestCase
         return $this->locks->createLock(new BuildRun('alpha', $task, 'any run')->startLockKey());
     }
 
+    private function regressionRuns(RegressionRuns $runs): RegressionTests
+    {
+        $regressionTests = self::createStub(RegressionTests::class);
+        $regressionTests->method('run')->willReturn($runs);
+
+        return $regressionTests;
+    }
+
     private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, Ledger $ledger): BuildTask
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops);
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
-        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
+        $dependencies = new CheckJobsFor($this->mirrors.'-checks')->dependencies($this->checkRunner, new PhpGate());
+        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $dependencies, $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
+
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

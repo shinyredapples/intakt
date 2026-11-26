@@ -69,15 +69,15 @@ final readonly class StaleVerdicts
     {
         try {
             $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
-        } catch (Throwable $refused) {
             // Boundary: rethrown with Review's own reason, because the head_failed card shows only the cause and the bus's wrapper does not say it was the withdrawal that failed.
+        } catch (Throwable $refused) {
             throw VerdictsWithdrawalRefused::because($refused);
         }
     }
 
     private function check(WatchedProject $project, OpenChange $open, StartedRound $round): void
     {
-        $current = $this->ask(new IdentityAtHead($project->startAt($open), new CommitId($round->head())), HeadIdentity::class);
+        $current = $this->ask(new IdentityAtHead($project->startAt($open, $round->labels()), new CommitId($round->head())), HeadIdentity::class);
         $verdicts = $this->ask(new VerdictsOfRound($round->roundId(), $current->identity, $current->move), RoundVerdicts::class);
 
         if (Standing::Stale === $verdicts->standing->standing) {

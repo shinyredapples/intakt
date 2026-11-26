@@ -10,7 +10,6 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
-use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\PendingHead;
@@ -217,6 +216,25 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(['round-1'], array_map(static fn (StartedRound $round): string => $round->roundId(), $open));
     }
 
+    public function testAPullRequestWhoseRoundStartedAtAnEarlierStaleHeadHasARound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $this->markStored(
+            stale: true,
+            recorded: true,
+        );
+
+        self::assertTrue($this->rounds->hasRoundOf('alpha', RecordedForge::change('7', 'e', '2026-11-02T10:05:00Z')));
+    }
+
+    public function testAPullRequestWithoutAStartedRoundHasNoRound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+
+        self::assertFalse($this->rounds->hasRoundOf('alpha', RecordedForge::change('8', 'b', '2026-11-02T09:00:00Z')));
+        self::assertFalse($this->rounds->hasRoundOf('beta', $this->green()));
+    }
+
     public function testAReturningHeadWhoseStaleRoundStillOwesItsQueuedLineStartsNoRound(): void
     {
         $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
@@ -327,8 +345,7 @@ final class StartedRoundsTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::rowsIn(self::getContainer());
         $this->commands = new RecordingCommandBus();
         $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
         $this->logger = new RecordingLogger();
@@ -350,7 +367,8 @@ final class StartedRoundsTest extends KernelTestCase
             'round_id' => 'round-0',
             'stale' => false,
             'queued_recorded' => false,
-        ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
+            'labels' => [],
+        ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN, 'labels' => Types::JSON]);
     }
 
     private function deleteRoundsOnNextLoad(): void

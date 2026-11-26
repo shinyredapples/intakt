@@ -7,6 +7,7 @@ namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
@@ -67,7 +68,6 @@ final readonly class DependencyJobs
 
     /**
      * @throws DockerEngineFailed
-     * @throws JobRefused
      * @throws JobEventNotRecorded
      */
     public function platformIn(string $image, DependencyStep $step, string $head): ?string
@@ -75,7 +75,7 @@ final readonly class DependencyJobs
         $spec = new JobSpec(
             new JobId('probe-'.substr($head, 0, 40)),
             $image,
-            ['/bin/sh', '-c', self::PROBE, 'intakt-probe', $step->platformProbe],
+            new JobCommand('/bin/sh', '-c', self::PROBE, 'intakt-probe', $step->platformProbe),
             [],
             new JobLimits(self::PROBE_MEMORY_BYTES, self::CPUS, self::PROBE_SECONDS),
             JobEgress::none(),
@@ -83,7 +83,8 @@ final readonly class DependencyJobs
 
         try {
             return $this->platformOf($this->jobs->run($spec));
-        } catch (JobOutputRefused) {
+        } catch (JobOutputRefused|JobRefused) {
+            // Any refusal of the probe only costs the reuse, so the check installs itself.
             return null;
         }
     }
@@ -163,10 +164,10 @@ final readonly class DependencyJobs
         return new JobSpec(
             new JobId('install-'.substr(basename($folder), 0, 40)),
             $image,
-            ['/bin/sh', '-c', $this->filesystem->readFile($this->installScript), 'intakt-install', self::LOCK, $step->platformProbe, $step->install, ...$step->lockFiles],
+            new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->installScript), 'intakt-install', self::LOCK, $step->platformProbe, $step->install, ...$step->lockFiles),
             [new JobInput($folder.'/lock', self::LOCK)],
             new JobLimits(self::INSTALL_MEMORY_BYTES, self::CPUS, self::INSTALL_SECONDS),
-            [] === $hosts ? JobEgress::none() : JobEgress::to($hosts),
+            $hosts->isEmpty() ? JobEgress::none() : JobEgress::to($hosts),
             new JobKeptFolder($folder.'/kept'),
         );
     }

@@ -26,6 +26,7 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\JudgingFailed;
+use Intakt\Core\Review\Contract\P1Keys;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
@@ -76,10 +77,10 @@ final readonly class RoundLedger
         ));
     }
 
-    // The model goes with the start, because the dashboard names a reviewer by it from the ledger alone and a later change of the tier's model must not rename it.
+    // The model goes with the start, because the dashboard names a reviewer by it from the ledger alone and a later change of the tier's model must not rename it; the round is the subject, because the starts of one round are then read through the index without reading every other round's.
     public function reviewerStarted(RoundReviewer $reviewer): void
     {
-        $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer), model: $this->modelOf($reviewer)));
+        $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer), model: $this->modelOf($reviewer)), $reviewer->round()->id()->toRfc4122());
     }
 
     // The mode goes with each verdict, because the mode of its moment is lost once the project is switched.
@@ -100,8 +101,8 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded(
             $reported->reviewer->round()->id()->toRfc4122(),
             $reported->reviewer->id()->toRfc4122(),
-            $reported->findings,
-            $reported->severities,
+            new FindingIds(...$reported->findings),
+            array_map(Severity::from(...), $reported->severities),
         ));
     }
 
@@ -198,16 +199,13 @@ final readonly class RoundLedger
     }
 
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
-    /**
-     * @return array<string, ?string>
-     */
-    private function p1KeysOf(ReviewRound $round, JudgedFindings $judged): array
+    private function p1KeysOf(ReviewRound $round, JudgedFindings $judged): P1Keys
     {
-        $keys = [];
+        $keys = new P1Keys();
 
         foreach ($judged->findings as $finding) {
             if (Severity::P1 === $finding->severity) {
-                $keys[$finding->id] = $this->keys->of($finding, $round->checkoutRoot())?->value;
+                $keys = $keys->with($finding->id, $this->keys->of($finding, $round->checkoutRoot())?->value);
             }
         }
 
@@ -256,9 +254,9 @@ final readonly class RoundLedger
         }
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused|EscalationVerdictKept|EscalationReviewFailed $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused|EscalationVerdictKept|EscalationReviewFailed $payload, ?string $subject = null): void
     {
-        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
+        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT), $subject));
 
         if (!$result->succeeded()) {
             throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);

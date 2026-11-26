@@ -1,0 +1,5 @@
+services:
+    # Public under a test name, because the container would drop the roster as a private service, and a test proves the roster it wires from the config file.
+    test.intakt.team_roster:
+        alias: Intakt\Core\Dashboard\UseCase\ShowTeam\TeamRoster
+        public: true

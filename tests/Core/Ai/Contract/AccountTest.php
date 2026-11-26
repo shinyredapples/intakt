@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Contract;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\Provider;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,12 +17,12 @@ final class AccountTest extends TestCase
 {
     public function testTheDefaultAccountReadsTheProvidersOwnVariables(): void
     {
-        self::assertSame(['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'], new Account(Provider::OpenAiCompatible, Account::DEFAULT)->variables());
+        self::assertSame(['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'], [...new Account(Provider::OpenAiCompatible, Account::DEFAULT)->variables()]);
     }
 
     public function testAnotherAccountReadsTheProvidersVariablesWithItsNameAppended(): void
     {
-        self::assertSame(['OPENAI_COMPATIBLE_BASE_URL_TEAM_B', 'OPENAI_COMPATIBLE_API_KEY_TEAM_B'], new Account(Provider::OpenAiCompatible, 'team_b')->variables());
+        self::assertSame(['OPENAI_COMPATIBLE_BASE_URL_TEAM_B', 'OPENAI_COMPATIBLE_API_KEY_TEAM_B'], [...new Account(Provider::OpenAiCompatible, 'team_b')->variables()]);
     }
 
     public function testTheKeyNamesTheProviderAndTheAccount(): void
@@ -38,7 +39,7 @@ final class AccountTest extends TestCase
     {
         self::assertSame(
             'Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.',
-            new Account(Provider::Anthropic, 'team')->disabledMessage(['ANTHROPIC_API_KEY_TEAM']),
+            new Account(Provider::Anthropic, 'team')->disabledMessage(new EnvironmentVariables('ANTHROPIC_API_KEY_TEAM')),
         );
     }
 }

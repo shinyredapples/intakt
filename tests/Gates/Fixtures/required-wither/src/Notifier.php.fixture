@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+use Symfony\Contracts\Service\Attribute\Required;
+
+final readonly class Notifier
+{
+    public function __construct(
+        private LoggerInterface $logger = new NullLogger(),
+    ) {
+    }
+
+    #[Required]
+    public function withLogger(LoggerInterface $logger): self
+    {
+        return new self($logger);
+    }
+
+    public function notify(string $text): void
+    {
+        $this->logger->info($text);
+    }
+}

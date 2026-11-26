@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\HandBack\UseCase\CheckHandBack;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
@@ -69,6 +70,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(HandBackBranchRefused::class)]
 #[UsesClass(CredentialVariableUnset::class)]
 #[UsesClass(PullRequestTextUnreadable::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 final class CheckHandBackCommandTest extends TestCase
 {
     private const string CREDENTIAL = 'INTAKT_TEST_MOUNTED_CREDENTIAL';
@@ -137,16 +139,16 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertStringContainsString('refused, handed over: '.HandBackRefusal::TouchesMain->reason(), $this->flat($tester));
     }
 
-    public function testAPullRequestTextThatCannotBeReadFailsWithItsPath(): void
+    public function testAPullRequestTextWithANameLongerThanTheErrorBlockFailsWithItsWholePathAndWritesNothing(): void
     {
         $this->history->commit('First');
-        $missing = $this->history->folder.'/missing.md';
+        // Longer than the block's 120 columns, so the name is always cut, whatever the checkout path or terminal.
+        $missing = $this->history->folder.'/'.str_repeat('missing-', 25).'text.md';
 
         $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $missing]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        // Without the folder, because the error block wraps a long path.
-        self::assertStringContainsString('missing.md" cannot be read', $this->flat($tester));
+        self::assertStringContainsString($this->unwrapped('"'.$missing.'" cannot be read'), $this->unwrapped($tester->getDisplay()));
         self::assertSame([], $this->ledger->kinds());
     }
 
@@ -218,6 +220,18 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertStringContainsString('"a..b" is not a branch name git accepts', $this->flat($tester));
     }
 
+    public function testAMirrorHoldingInfoAttributesFailsWithTheRefusal(): void
+    {
+        $this->history->commit('Build work');
+        $bundle = $this->history->bundle('main..task');
+        new Filesystem()->dumpFile($this->history->mirror.'/info/attributes', "* -text\n");
+
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $bundle, 'pull-request-text' => $this->text()]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('info/attributes exists: git reads it', $this->flat($tester));
+    }
+
     public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
     {
         $files = self::createStub(Filesystem::class);
@@ -279,5 +293,11 @@ final class CheckHandBackCommandTest extends TestCase
     private function flat(CommandTester $tester): string
     {
         return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
+    }
+
+    // Every space goes, because the block cuts a long word anywhere and indents the rest.
+    private function unwrapped(string $text): string
+    {
+        return (string) preg_replace('/\s+/', '', $text);
     }
 }

@@ -10,6 +10,12 @@ Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replac
 - **Intakt:** `Waits for` lines are read from the task text only, and only when the task was written and last edited by an account with write access; comments are never read for them. A line may sit in a blockquote or a list and carry emphasis around the words (`> - **Waits for:** #9`); a note after the `#n` list may hold no digit of any script, a line whose list cannot be read (`Waits for #9 then 10`) holds the task as an unreadable wait, and a line inside an `<!-- external -->` block counts for nothing. The rules are listed in [Work intake](work-intake.md#wait-lines-domainissuereferences). Built in `Plugin/GitHubWorkSource` (`IssueReferences`, `IntakeRules`).
 - **Why:** the task text is the one place a wait is written and kept, so what a task waits for is read from one place and changes only when the task is edited.
 
+## Finish before start in the build lane
+
+- **The loop:** an `urgent` task goes before work on an open pull request (its `test_priority.py`, [Parity](parity.md)), and a pull request whose task lost `ready` left the queue: on 2026-11-13 three pull requests, one of them approved, were orphaned this way.
+- **Intakt:** by the design, work that finishes an open pull request goes before an `urgent` new task, what an approved head still needs goes first in every lane, oldest approval first, and a pull request whose task lost `ready` is held in its place with its reviews ([Choosing work](../design/05-architecture/03-choosing-work.md), step 5; [Merge](../design/05-architecture/08-merge.md)). The intake order built today (`QueueOrder`) puts a task with an open pull request, found by closing keyword or by branch, before a fresh one, also an urgent one; not built yet: the approved-head order and the build lane (T56) that builds in this order.
+- **Why:** with about 30 `urgent` tasks queued, five builders started urgent first builds for three hours while approved pull requests waited, and the open pull requests grew from 5 to 12.
+
 ## Job containers instead of system users and sandboxes
 
 - **The loop:** builders share a Unix user and a long-lived worktree, so every piece of state they leave (dotfiles, git config, caches and the like) has to be reset by hand, and each reset found by review became one more denylist item ([principles](../design/02-principles.md)).
@@ -27,6 +33,24 @@ Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replac
 - **The loop:** egress is denied by default (its `test_review_gpt_egress.py`).
 - **Intakt:** a probe job has no network at all; the PHP gate's check job may reach the package registry hosts the gate names ([Check job](check-job.md)) and nothing else; any other job names the exact hosts it may reach, sits on an internal network of its own, and its only way out is a proxy of its own that allows `CONNECT` to port 443 of those hosts and nothing else (it does not check that TLS runs inside the tunnel); each refused request is recorded in the ledger (`job_egress_refused`). Built in `Core/Job` ([Egress](job-containers.md#egress)). The parity item for this behavior stays open until it has run on a host with a Docker daemon.
 - **Why:** the allowlist is a property of the job, not of the machine or a user account, so two jobs never share one.
+
+## Room learned per account from the first reading
+
+- **The loop:** learned on 2026-11-13, at full load, that two accounts of one vendor differ: on one a five-hour window lasted five builders about 90 minutes, on the other only the weekly window counted. Its planner was fixed that day.
+- **Intakt:** the planner learns each account's room from that account's own readings from the start and never assumes two accounts of one vendor are alike ([accounts differ](../design/05-architecture/06-budget-and-model-planner.md#accounts-differ)). Planned in T81; nothing of it is built yet.
+- **Why:** a rule found by running out of room is designed in, so Intakt does not learn it again.
+
+## Small findings in a cleanup task per area
+
+- **The loop:** learned at full load on 2026-11-13 that follow-up tasks were a third of all tasks filed, each costing about 490k tokens against about 74k for a polish round.
+- **Intakt:** a polish round may change any file the approved change already changes, its unapplied P3 items wait in one cleanup task per area, built at about ten items or when the oldest is a day old, a cleanup build files no further P3 items, and a deferred P2 still gets a task of its own ([Reviews](../design/05-architecture/07-reviews.md); [Choosing work](../design/05-architecture/03-choosing-work.md), step 5). Planned in T59; nothing of it is built yet.
+- **Why:** a rule found by running at full load is designed in, so Intakt does not learn it again.
+
+## Prose measured by words for the size limit
+
+- **The loop:** learned on 2026-11-13 that counting changed lines made a change whose size is documentation look far larger than it reads: two pull requests of about 200k characters each.
+- **Intakt:** the size of a pushed head counts prose (Markdown and plain-text files anywhere in the repository) as a word diff with long unchanged lines trimmed and code by changed lines, and compares their sum with the split tier ([Reviews](../design/05-architecture/07-reviews.md), an oversized head). Planned in T48; nothing of it is built yet.
+- **Why:** measured this way, the two pull requests came to 101k and 186k, so documentation changes stay reviewable.
 
 ## A start check and a reduced mode instead of failing halfway
 
