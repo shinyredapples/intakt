@@ -501,6 +501,39 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('The judge kept 0 of 1 findings and rejected 1.', $page->filter('#chart-judge .takeaway')->text());
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function pathsWithPlainCodeMarks(): iterable
+    {
+        yield 'plain code' => ['plain_code'];
+        yield 'plain code and a model call' => ['plain_code_and_model_call'];
+    }
+
+    // D4 of #862: an act mark plain code gave is not the model's call, so it adds nothing to the judge's chart.
+    #[DataProvider('pathsWithPlainCodeMarks')]
+    public function testARoundPlainCodeMarkedAddsNothingToTheJudgesCalls(string $path): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->judgeFindings('r-1', ['F1' => 'reject']);
+        $this->ledger->startRound('r-2', 'alpha');
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, (string) json_encode(['round' => 'r-2', 'act' => ['F1'], 'follow_ups' => [], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.']], 'fallback' => false, 'path' => $path])));
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('The judge kept 0 of 1 findings and rejected 1.', $page->filter('#chart-judge .takeaway')->text());
+    }
+
+    public function testARoundAModelCallMarkedCountsItsActMarksAsTheJudgesCalls(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, (string) json_encode(['round' => 'r-1', 'act' => ['F1'], 'follow_ups' => [], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.']], 'fallback' => false, 'path' => 'model_call'])));
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('The judge kept 1 of 1 findings and rejected 0.', $page->filter('#chart-judge .takeaway')->text());
+    }
+
     public function testAJudgeRowWrittenBeforeTheFallbackWasRecordedLeavesTheJudgeChartOut(): void
     {
         $this->ledger->startRound('r-1', 'alpha');

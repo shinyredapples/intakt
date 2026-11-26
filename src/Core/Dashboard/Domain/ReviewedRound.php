@@ -37,7 +37,7 @@ final readonly class ReviewedRound
     // False when the judge's row holds a finding entry that cannot be read, or marks an id its findings do not hold, so a count over the round never reads a lost finding as none.
     public bool $everyFindingRecorded;
 
-    // True when the judge left a finding without its mark (the fallback for an answer that cannot be read), null for a row written before that was recorded, so a count of the judge's own calls can leave both out.
+    // True when the judge left a finding without its mark (the fallback for an answer that cannot be read), null for a row written before that was recorded or a round plain code marked in whole or in part, so a count of the judge's own calls can leave both out.
     public ?bool $judgeFellBack;
     public ReviewState $state;
     public TokenFigures $tokens;

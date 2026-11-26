@@ -39,6 +39,7 @@ use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictPath;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -260,7 +261,8 @@ final class LedgerRounds
                 'findings' => $this->judgedFindings($judge, $findings ?? []),
                 'dropped' => $this->droppedFindings($recorded),
                 'everyRecorded' => $this->payloads->isEveryJudgedFindingRecorded($recorded, $judge),
-                'fallback' => $judge->fallback,
+                // Null for a round plain code marked in whole or in part, like a row written before the fallback was recorded, because its act marks are not the model's own calls.
+                'fallback' => VerdictPath::ModelCall === $judge->path ? $judge->fallback : null,
                 'textRecorded' => null !== $findings,
                 'at' => $recorded->recordedAt,
                 'votes' => $judge->votes,
