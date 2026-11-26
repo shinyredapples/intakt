@@ -15,7 +15,7 @@ final readonly class ReadableLines
         public array $headings,
         public ?string $openFence,
         private array $paragraph,
-        private bool $belowItem,
+        private TextPlace $place,
     ) {
     }
 
@@ -24,7 +24,7 @@ final readonly class ReadableLines
      */
     public static function of(array $lines): self
     {
-        $read = new self([], null, [], false);
+        $read = new self([], null, [], TextPlace::Apart);
 
         foreach ($lines as $number => $line) {
             $read = $read->after($number, $line);
@@ -60,7 +60,7 @@ final readonly class ReadableLines
     {
         $level = '=' === ltrim($line)[0] ? 1 : 2;
 
-        return new self($this->headings + [$first => [$level, trim(implode("\n", array_map(trim(...), $this->paragraph)))]], null, [], false);
+        return new self($this->headings + [$first => [$level, trim(implode("\n", array_map(trim(...), $this->paragraph)))]], null, [], TextPlace::Apart);
     }
 
     private function opened(int $number, string $line): self
@@ -68,22 +68,22 @@ final readonly class ReadableLines
         $fence = $this->opening($line);
 
         if (null !== $fence) {
-            return new self($this->headings, $fence, [], false);
+            return new self($this->headings, $fence, [], TextPlace::Apart);
         }
 
         $heading = $this->headingOf($line);
 
         if (null !== $heading) {
-            return new self($this->headings + [$number => $heading], null, [], false);
+            return new self($this->headings + [$number => $heading], null, [], TextPlace::Apart);
         }
 
         if ($this->isItem($line)) {
-            return new self($this->headings, null, [], true);
+            return new self($this->headings, null, [], TextPlace::BelowItem);
         }
 
         $paragraph = $this->paragraphAfter($this->paragraph, $number, $line);
 
-        return new self($this->headings, null, $paragraph, $this->belowItem && [] !== $paragraph);
+        return new self($this->headings, null, $paragraph, [] === $paragraph ? TextPlace::Apart : $this->place);
     }
 
     private function opening(string $line): ?string
@@ -104,6 +104,25 @@ final readonly class ReadableLines
         return 1 === preg_match('/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? [strlen($heading[1]), $heading[2] ?? ''] : null;
     }
 
+    // A list item line starts no paragraph, because CommonMark reads a `---` below it as a thematic break, not as an underline.
+    private function isItem(string $line): bool
+    {
+        if ($this->isBreak($line)) {
+            return false;
+        }
+
+        // An ordered item can interrupt a paragraph only when it starts at 1, so `2. text` inside a paragraph stays paragraph text. A paragraph that started directly below a list item line is that item's wrapped text, where the next item may carry any number.
+        $ordered = [] !== $this->paragraph && TextPlace::Apart === $this->place ? '1[.)]' : '\d{1,9}[.)]';
+
+        return 1 === preg_match('/^ {0,3}(?:[-+*]|'.$ordered.')(?:[ \t]|$)/', $line);
+    }
+
+    // A thematic break starts no paragraph, because CommonMark reads a `---` below it as another thematic break, not as an underline.
+    private function isBreak(string $line): bool
+    {
+        return 1 === preg_match('/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/', $line);
+    }
+
     /**
      * @param array<int, string> $paragraph
      *
@@ -121,24 +140,5 @@ final readonly class ReadableLines
         }
 
         return $paragraph + [$number => $line];
-    }
-
-    // A thematic break starts no paragraph, because CommonMark reads a `---` below it as another thematic break, not as an underline.
-    private function isBreak(string $line): bool
-    {
-        return 1 === preg_match('/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/', $line);
-    }
-
-    // A list item line starts no paragraph, because CommonMark reads a `---` below it as a thematic break, not as an underline.
-    private function isItem(string $line): bool
-    {
-        if ($this->isBreak($line)) {
-            return false;
-        }
-
-        // An ordered item can interrupt a paragraph only when it starts at 1, so `2. text` inside a paragraph stays paragraph text. A paragraph that started directly below a list item line is that item's wrapped text, where the next item may carry any number.
-        $ordered = [] !== $this->paragraph && !$this->belowItem ? '1[.)]' : '\d{1,9}[.)]';
-
-        return 1 === preg_match('/^ {0,3}(?:[-+*]|'.$ordered.')(?:[ \t]|$)/', $line);
     }
 }
