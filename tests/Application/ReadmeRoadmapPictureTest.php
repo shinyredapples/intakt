@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class ReadmeRoadmapPictureTest extends TestCase
 {
-    private const array MILESTONES = ['M0 Unblock', 'M1 Review core', 'M2 Panel and rounds', 'M3 Agents and memory', 'M4 Live dashboard', 'M5 Demo', 'M6 Runs alongside', 'M7 Builder half', 'M8 Switch'];
+    private const array MILESTONES = ['M0 Unblock', 'M1 Review core', 'M2 Panel and rounds', 'M3 Agents and memory', 'M4 Live dashboard', 'M5 Demo', 'M6 Reviewer for the loop', 'M7 Builder half', 'M8 Switch'];
 
     public function testTheRoadmapPictureServesTheDarkImageForADarkColorScheme(): void
     {
@@ -89,6 +89,53 @@ final class ReadmeRoadmapPictureTest extends TestCase
         }
     }
 
+    public function testTheRoadmapPictureAltPutsWeAreHereAtM6AfterM5Done(): void
+    {
+        $alt = $this->imgAttribute('alt');
+
+        $m5 = strpos($alt, 'M5 Demo');
+        $here = strpos($alt, 'we are here');
+        $m6 = strpos($alt, 'M6 Reviewer for the loop');
+
+        self::assertIsInt($m5);
+        self::assertIsInt($here);
+        self::assertIsInt($m6);
+        self::assertLessThan($here, $m5);
+        self::assertLessThan($m6, $here);
+    }
+
+    public function testBothRoadmapImagesNameM6ReviewerForTheLoopAndNoStaleLabel(): void
+    {
+        foreach (['light', 'dark'] as $theme) {
+            $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
+
+            self::assertStringContainsString('<tspan class="id">M6</tspan> Reviewer</text>', $svg);
+            self::assertStringContainsString('>for the loop</text>', $svg);
+            self::assertStringContainsString('reviews the build', $svg);
+            self::assertStringNotContainsString('Runs alongside', $svg);
+            self::assertStringNotContainsString('beside the build loop', $svg);
+        }
+    }
+
+    // Each row's label sits 6 units below its circle's center, so a shared center line ties a label to its circle.
+    public function testBothRoadmapImagesPutTheMarkerOnM6AndM5InTheDoneColumn(): void
+    {
+        foreach (['light', 'dark'] as $theme) {
+            $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
+
+            [$markerX, $markerY] = $this->pair('/<circle cx="(\d+)" cy="(\d+)" r="15"[^>]*stroke="#F2A541"/', $svg);
+            [$m6X, $m6Y] = $this->pair('/<text x="(\d+)" y="(\d+)"><tspan class="id">M6<\/tspan>/', $svg);
+            self::assertSame((int) $m6Y, (int) $markerY + 6);
+            self::assertLessThan((int) $m6X, (int) $markerX);
+
+            [$m0X, $m0Y] = $this->pair('/<text x="(\d+)" y="(\d+)"><tspan class="id">M0<\/tspan>/', $svg);
+            [$m5X, $m5Y] = $this->pair('/<text x="(\d+)" y="(\d+)"><tspan class="id">M5<\/tspan> Demo<\/text>/', $svg);
+            self::assertSame($m0X, $m5X);
+            [$doneX, $doneFill] = $this->pair('/<circle cx="(\d+)" cy="'.((int) $m0Y - 6).'" r="8" fill="(#[0-9A-F]{6})"\/>/', $svg);
+            self::assertStringContainsString('<circle cx="'.$doneX.'" cy="'.((int) $m5Y - 6).'" r="8" fill="'.$doneFill.'"/>', $svg);
+        }
+    }
+
     public function testTheRoadmapPictureLoadsLazily(): void
     {
         self::assertSame('lazy', $this->imgAttribute('loading'));
@@ -105,6 +152,16 @@ final class ReadmeRoadmapPictureTest extends TestCase
 
         self::assertGreaterThan($status, $picture);
         self::assertLessThan($worksToday, $picture);
+    }
+
+    /**
+     * @return array{string, string}
+     */
+    private function pair(string $pattern, string $svg): array
+    {
+        self::assertSame(1, preg_match($pattern, $svg, $match));
+
+        return [$match[1] ?? '', $match[2] ?? ''];
     }
 
     private function picture(): string

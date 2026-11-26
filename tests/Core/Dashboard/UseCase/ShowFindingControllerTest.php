@@ -37,6 +37,103 @@ final class ShowFindingControllerTest extends DashboardPageTestCase
         );
     }
 
+    public function testAFindingWithAFileAndLineDrawsTheFileAndMarksTheLine(): void
+    {
+        $this->givenAFindingToFix();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame('src/A.php', $crawler->filter('.file-map .file-map-file figcaption')->text());
+        self::assertSame(1, $crawler->filter('.file-map .file-map-line.marked')->count());
+        self::assertSame('Line 7', $crawler->filter('.file-map .file-map-mark')->text());
+        self::assertSame(0, $crawler->filter('.file-map .file-map-quotes')->count());
+    }
+
+    public function testAFindingWithQuotesListsThemBesideTheMapAndDrawsNoOtherCode(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->reportFindings('round-1', 'correctness', ['F1']);
+        $this->ledger->reportFindings('round-1', 'security', []);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The call `array_pop($items);` drops <b>the</b> last item.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame(['array_pop($items);'], $crawler->filter('.file-map .file-map-quotes code')->each(static fn (Crawler $code): string => $code->text()));
+        self::assertSame(0, $crawler->filter('.file-map pre')->count());
+        self::assertSame(0, $crawler->filter('.file-map b')->count());
+    }
+
+    public function testAFindingWithNeitherAFileNorQuotesLeavesTheMapOutAndStillRenders(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->reportFindings('round-1', 'correctness', ['F1']);
+        $this->ledger->reportFindings('round-1', 'security', []);
+        $this->ledger->judgeToFixWithoutPlace('round-1', 'Something is off.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(0, $crawler->filter('.file-map')->count());
+        self::assertSame('Something is off.', $crawler->filter('.finding-head h1')->text());
+        self::assertSame(1, $crawler->filter('.finding-reporters li')->count());
+    }
+
+    public function testAFindingWithAFileButNoLineSaysTheLineIsNotRecorded(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixIn('round-1', 'src/B.php', null);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame('Line not recorded', $crawler->filter('.file-map .file-map-mark')->text());
+    }
+
+    public function testAFileWithNoRecordedLineMarksNoRow(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixIn('round-1', 'src/B.php', null);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame(5, $crawler->filter('.file-map .file-map-line')->count());
+        self::assertSame(0, $crawler->filter('.file-map .file-map-line.marked')->count());
+    }
+
+    public function testLineOneIsMarkedOnTheFirstRowWithNoRowsBeforeIt(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixIn('round-1', 'src/B.php', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame(1, $crawler->filter('.file-map .file-map-line:first-child.marked')->count());
+        self::assertSame(3, $crawler->filter('.file-map .file-map-line')->count());
+    }
+
+    public function testLineTwoHasOneRowBeforeItsMark(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixIn('round-1', 'src/B.php', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame(1, $crawler->filter('.file-map .file-map-line:nth-child(2).marked')->count());
+    }
+
+    public function testAQuoteTheQuoteCheckCannotCountStillShowsWithoutAFile(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->reportFindings('round-1', 'correctness', ['F1']);
+        $this->ledger->reportFindings('round-1', 'security', []);
+        $this->ledger->judgeToFixWithoutPlace('round-1', 'It returns `0` and prints `<b>total</b>`.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame(['0', '<b>total</b>'], $crawler->filter('.file-map .file-map-quotes code')->each(static fn (Crawler $code): string => $code->text()));
+        self::assertSame(0, $crawler->filter('.file-map .file-map-file')->count());
+        self::assertSame(0, $crawler->filter('.file-map-quotes b')->count());
+    }
+
     public function testATextThatGoesOnAfterTheHeadlineIsShownWhole(): void
     {
         $this->givenAFindingToFix();

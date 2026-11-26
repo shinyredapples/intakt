@@ -77,15 +77,15 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 ## CI: the second opinion
 
-**CI** (continuous integration) is the project's full check run again on the pushed version, on a machine the Developer does not control. For Intakt's own repository it runs on every pull request from the same repository and on every push to main. Today that is GitHub running the project's checks on its own machines.
+**CI** (continuous integration) is the project's full check run again on the pushed version, on a machine the Developer does not control. For Intakt's own repository it runs on every pull request from the same repository and on every push to main, except a push whose commit already passed as a pull request into main with exactly the same files. Such a push still shows a green run in which only the `main` job ran. Today that is GitHub running the project's checks on its own machines.
 
-Before pushing, Intakt runs the project's check itself (`bin/check --fast` for a PHP project, the quick version). CI repeats that check in full after the push and can add jobs of its own. For Intakt's own repository it also runs:
+Before pushing, Intakt runs the project's check itself (`bin/check --fast` for a PHP project, the quick version). CI repeats that check in full after the push, except a push to main whose version already passed as a pull request into main with exactly the same files, and can add jobs of its own. For Intakt's own repository it also runs:
 - the journeys, which walk through a first install and the live review page;
 - the database tests on MySQL, MariaDB and PostgreSQL (the check before the push uses SQLite only), when a pull request touches the database layer, its migrations, the dependencies, the persistence tests or their setup, or the CI files;
 - building the app image, with a smoke test and a check that it starts on an empty volume, unless a pull request changes only files under `docs/`, `tests/` or `upstream/`;
 - an upgrade check, when a pull request touches migrations, mapped database classes, the `Dockerfile`, the `docker/` folder or the locked dependencies: the image starts on a copy of the data of the version the change starts from, and then that older version starts again on its untouched original data.
 
-On main, the database tests, the image build with its smoke test and first-start check, and the upgrade check run on every push. So CI is a second, independent opinion that can also catch what the check before the push never looks at, and the reviewers only start once it is green.
+On main, the database tests, the image build with its smoke test and first-start check, and the upgrade check run on every push, except a push whose version already passed CI as a pull request into main with exactly the same files: that push skips the full run, because it was already checked. The database tests and the slow gate tests that a pull request's own filters left out then run on the next full run on main: a nightly one is planned (#2126); until it exists, the next direct push or release. The upgrade check of that later run starts from the version just before it, which already holds the skipped change, so the upgrade across that change is not checked on main. So CI is a second, independent opinion that can also catch what the check before the push never looks at, and the reviewers only start once it is green.
 
 *(Planned; this is the decided design:)* CI is the project's full check, tests included, run on the pushed version after every push: by default a fresh container that Intakt starts itself, or the forge's CI (GitHub's machines) where the project sets it, or both. That run is the Developer's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task. For Intakt's own repository it is GitHub's CI, and the checks before the push are only the quick ones that do not run the change's code. Another project runs before the push whatever pre-push command it configures, and its whole check when it configures none.
 
@@ -116,7 +116,7 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 Some AI companies are routers: Hugging Face, for example, passes each call on to another company that runs the model. You can name that company, the **router provider**, after a colon in the model's name, such as `moonshotai/Kimi-K3.1-Pro:deepinfra`, and every call for that model then goes to it.
 
-When the router provider says "too many calls" (a rate limit), Intakt pauses it on that account: for as long as the answer asked, for one minute when it gave no time, and never longer than a day. While the pause lasts, Intakt sends that router provider no call from that account, from any worker on this computer. The account pauses as well, as for any rate limit.
+When the router provider says "too many calls" (a rate limit), Intakt pauses it on that account: for as long as the answer asked, for one minute when it gave no time, never longer than a day and never shorter than a second (a zero or past time waits one second). While the pause lasts, Intakt sends that router provider no call from that account, from any worker on this computer. The account pauses as well, as for any rate limit.
 
 What happens to the call then:
 - When another account of the same company is free, the call goes there at once.
@@ -135,15 +135,17 @@ flowchart LR
   c3 -- still not approved --> g2[Generation 2:<br/>a stronger model,<br/>fresh cycles]
   g2 -- still not approved --> m[The Maintainer decides]
   sb([Third send-back,<br/>counted across cycles]) -. planned .-> s[Split into smaller tasks, once]
-  s -. "no way to split" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
+  s -. "no way to split,<br/>first hand-over" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
+  s -. "no way to split,<br/>second hand-over" .-> o[It comes to you]
 ```
 
-Running builds on their own is planned ([what works today](../reference/user-manual.md)), so this whole flow is planned too. In it, the task moves on to generation 2 after its last cycle. The dotted arrows are a later addition to that plan: at the third send-back, whichever cycle that falls in, the task is split once instead, as the last bullet below says.
+Running builds on their own is planned ([what works today](../reference/user-manual.md)), so this whole flow is planned too. In it, the task moves on to generation 2 after its last cycle. The dotted arrows are a later addition to that plan: at the third send-back, whichever cycle that falls in, the task is split once instead, as the bullet on the third send-back below says.
 
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of Developer. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
-- If that doesn't work either, the **Maintainer** decides: split the task, rewrite it, or ask you.
-- *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the Maintainer splits it into smaller tasks, once. If its open problems give no way to split it, the Maintainer rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
+- If that doesn't work either, the **Maintainer** decides: split the task, rewrite it (only the first time the task reaches it), or ask you.
+- *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the Maintainer splits it into smaller tasks, once. If its open problems give no way to split it, the Maintainer rewrites what the task must do or gives it one more try with a stronger model, but only when this is the first time the task reaches the Maintainer; the second time, it comes to you, as the next bullet says. A task that was already split this way is never split by this rule again.
+- *(Planned:)* the **second time a task reaches the Maintainer**, whatever brought it there either time (reviews that ran out, the newest project, a broken environment, a change grown too big, a failure, running out of memory), the Maintainer only splits it: no rewrite and no other try with a stronger model. If it cannot be split, it comes to you.
 
 A cycle that changes nothing (the Developer couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead, unless what it needs is the newest project: then it is rebuilt once with it, or goes straight to the Maintainer if it has no try left or the rebuild leaves it stuck ([holds](how-intakt-works.md#when-something-gets-stuck)).
 
@@ -221,7 +223,7 @@ While a slot drains, the dashboard says "draining" on that slot; it usually take
 | Word | Meaning |
 |---|---|
 | **Hold** | a pause with a reason, which lifts by itself when the reason is gone |
-| **Hand-over** | the task goes to the Maintainer, which decides what happens next |
+| **Hand-over** | the task goes to the Maintainer, which decides what happens next; the second time, it splits the task or, when it cannot, passes it to you (planned) |
 | **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
 | **Review cap** (planned) | at most a few pieces of finished work wait for a reviewer (or are being reviewed) before the Developers pause; work waiting for its checks or to be merged doesn't count |
 | **In-flight limit** (planned) | at most a few more pieces of finished but unmerged work exist, whatever they wait for, before the Developers pause; twice the review cap by default |
