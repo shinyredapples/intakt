@@ -153,15 +153,26 @@ final readonly class ReadableLines
         $end = $this->htmlEnd($line, $paragraph);
 
         if (null !== $end) {
-            // The HTML element outlives the Markdown block when another end tag ends the block, so its own end tag is tracked apart.
-            $element = 1 === preg_match('#^</(?:pre|script|style|textarea)>$#', $end[1] ?? '') ? $end[1] : $state['element'];
-
-            return [$this->htmlAfter($line, [...$this->withParagraph($state, null, $end), 'element' => $element]), null];
+            return [$this->htmlStarted($line, $state, $end), null];
         }
 
         $text = trim($line);
 
         return [$this->withParagraph($state, null === $paragraph ? [$number, $text] : [$paragraph[0], $paragraph[1].' '.$text]), null];
+    }
+
+    /**
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string} $state
+     * @param array{string, ?string}                                                                                 $end
+     *
+     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string}
+     */
+    private function htmlStarted(string $line, array $state, array $end): array
+    {
+        // The HTML element outlives the Markdown block when another end tag ends the block, so its own end tag is tracked apart.
+        $element = 1 === preg_match('#^</(?:pre|script|style|textarea)>$#', $end[1] ?? '') ? $end[1] : $state['element'];
+
+        return $this->htmlAfter($line, [...$this->withParagraph($state, null, $end), 'element' => $element]);
     }
 
     private function opening(string $line): ?string
