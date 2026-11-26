@@ -133,6 +133,7 @@ final readonly class BootResults
 
         try {
             $this->recordWhileHolding($lock, $key, $outcome);
+            // Boundary: logs a stored result the ledger or the lock refused, because the next hit of the same stored result records it again and the review must go on.
         } catch (Throwable $unrecorded) {
             $this->logger->error("Main's stored boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
         }
