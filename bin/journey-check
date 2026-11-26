@@ -27,7 +27,7 @@ const JOURNEYS = [
     name: 'First run without a key',
     steps: [
       // The wizard's last step, where a fresh dashboard sends its visitor and where the demo run is offered.
-      named('open /setup and see the start', open('/setup?step=5'), seeRole('heading', 'See a real review')),
+      named('open the last setup step and see the start', open('/setup?step=5'), seeRole('heading', 'See a real review')),
       press('button', 'Play the demo run'),
       // The demo page follows the run to its review as soon as the queue worker started it, which can be before the page is looked at, so its heading is asked for only while the page is still there.
       named('reach /demo and see the demo run', arrive('/demo'), seeRoleWhileAt('/demo', 'heading', 'The demo run')),
@@ -227,8 +227,9 @@ function watch(page) {
     trail.visits.push(withoutFragment(frame.url()));
     trail.changed();
   };
+  // An answer without content (204, 205) leaves the document in place, so it never stands for the page at that address.
   const answered = (response) => {
-    if (!isOfMainFrame(page, response) || !suppliedThePage(response.request())) return;
+    if (!isOfMainFrame(page, response) || !suppliedThePage(response.request()) || [204, 205].includes(response.status())) return;
     recordStatus(trail.statuses, withoutFragment(response.url()), response.status());
     trail.changed();
   };
@@ -313,18 +314,16 @@ function seeRoleWhileAt(pathOnSite, role, name) {
 }
 
 // For what the review page shows: the wait alone would pass on any page with the same text, the demo page included, and a match on one page could be credited to the next, so the wait starts on the review page and the page must not move before it ends.
+// The wait for the review page and the look share one deadline, so a late verdict fails within the step's time, not within twice that.
 function seeRoleSince(pathOnSite, role, name, timeout = STEP_TIMEOUT_MS) {
-  const seen = seeRole(role, name, timeout);
-
   return {
-    name: `${seen.name} on the review page reached from ${pathOnSite}`,
+    name: `${seeRole(role, name, timeout).name} on the review page reached from ${pathOnSite}`,
     run: async (page, address) => {
       const trail = TRAILS.get(page);
       if (trail === undefined) throw new Error(`no press came before ${pathOnSite}`);
-      await waitForReviewPage(page, address, pathOnSite, timeout);
-      const review = withoutFragment(page.url());
-      const visits = trail.visits.length;
-      await seen.run(page);
+      const deadline = performance.now() + timeout;
+      const { review, visits } = await waitForReviewPage(page, address, pathOnSite, timeout);
+      await seeRole(role, name, Math.max(1, Math.round(deadline - performance.now()))).run(page);
       expectReviewPagesSince(page, address, pathOnSite);
       // Turbo names the address it is on again after a page load, so only another address counts as a move.
       if ([...trail.visits.slice(visits), withoutFragment(page.url())].some((where) => where !== review)) {
@@ -335,11 +334,17 @@ function seeRoleSince(pathOnSite, role, name, timeout = STEP_TIMEOUT_MS) {
 }
 
 // The demo page stays until a queue worker starts the run, so it may take as long as what is looked for; any other address ends the wait at once.
+// The review page it judged and the trail's length are taken together, so a move after the judgement (back to the demo page included) counts as a move.
 async function waitForReviewPage(page, address, pathOnSite, timeout) {
   const expected = new URL(address + pathOnSite);
-  await holdsWithin(TRAILS.get(page), () => !isAt(page.url(), expected), timeout);
+  const trail = TRAILS.get(page);
+  await holdsWithin(trail, () => !isAt(page.url(), expected), timeout);
+  const at = withoutFragment(page.url());
+  const visits = trail.visits.length;
   expectReviewPagesSince(page, address, pathOnSite);
-  if (!isReviewPage(page.url(), address)) throw new Error(`the page stayed at ${originAndPath(page.url())}, not on a review page`);
+  if (!isReviewPage(at, address)) throw new Error(`the page stayed at ${originAndPath(at)}, not on a review page`);
+
+  return { review: at, visits };
 }
 
 // A page may have passed a review page and moved on to a wrong one, or the other way round, so every address it has been at since the arrival must be a review page, not only the first or the last, and all of them the same round, as the next one could show another run's verdict.

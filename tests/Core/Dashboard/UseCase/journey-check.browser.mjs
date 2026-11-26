@@ -415,3 +415,24 @@ test('a demo page that is missing fails the first journey at step 3', async () =
     assert.equal(result.failure.step, 'reach /demo and see the demo run');
     assert.equal(result.failure.error, 'the press did not lead to /demo with a success status within 10 s; it led to http://localhost/demo (HTTP 404)');
 });
+
+test('a demo page that answers HTTP 500 and then navigates to its own address again, answered HTTP 204, fails the first journey at step 3', async () => {
+    // A 204 leaves the failed document in place, so its status must not stand for the page.
+    const pages = demoSite({ demo: '<h1>The demo run</h1><script>setTimeout(() => location.assign(location.href), 50);</script>' });
+
+    const result = await runJourney(routedSite(pages, { '/demo': [500, 204] }), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.match(result.failure.error, /it led to http:\/\/localhost\/demo \(HTTP 500\)/);
+});
+
+test('the wait for the review page and the look on it share one deadline, so a verdict later than the step\'s time fails', async () => {
+    // Either wait alone fits in the step's 1500 ms; both together do not.
+    const pages = demoSite({ demo: '<h1>The demo run</h1><script>setTimeout(() => location.assign(\'/reviews/r1\'), 1000);</script>', delayMs: 1000 });
+    const journey = { name: 'Shared deadline', steps: [open('/setup?step=5'), press('button', 'Play the demo run'), seeRoleSince('/demo', 'heading', 'Changes needed', 1500)] };
+
+    const result = await runJourney(routedSite(pages), ORIGIN, journey, scratch(), 1);
+
+    assert.equal(result.failure.step, 'see the heading "Changes needed" on the review page reached from /demo');
+    assert.match(result.failure.error, /Timeout \d+ms exceeded/);
+});
