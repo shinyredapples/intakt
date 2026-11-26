@@ -15,7 +15,7 @@ The role name `technical_writer` is refused for a reviewer of the panel or of a 
 
 ### What it is given
 
-`ReviewWithReviewerHandler` cuts the diff to the docs pages (`Infrastructure\DocsPartOfDiff`, which keeps a file section when any path in its header is a page) and starts a `ReviewerConversation` in the `Docs` lane. `ReviewerPrompt` then uses `TECHNICAL_WRITER_INSTRUCTIONS` through `PromptAssembly::systemWithRole()`, fences the task, the docs part and the open findings on docs pages (`openFor()`; `OpenFindingIds` refuses an answer naming any other id) like any reviewer input and adds no project memory notes. The tools are the reviewers' read-only toolbox at the head; none writes. Retries keep the lane.
+`ReviewWithReviewerHandler` cuts the diff to the docs pages (`Infrastructure\DocsPartOfDiff`, which keeps a file section when any path in its header is a page) and starts a `ReviewerConversation` in the `Docs` lane. `ReviewerPrompt` then uses `TECHNICAL_WRITER_INSTRUCTIONS` through `PromptAssembly::systemWithRole()`, fences the task, the docs part and the open findings on docs pages (`openFor()`; `OpenFindingIds` refuses an answer naming any other id) like any reviewer input and adds no project memory notes, also when the project memory has notes on the pages. The handler also refuses, as an unreadable verdict that stores nothing, a new finding that has no file or names a file outside `DocsPages`, so the writer never records a finding on code. The tools are the reviewers' read-only toolbox at the head; none writes. Retries keep the lane.
 
 ### How its vote counts
 
@@ -23,6 +23,6 @@ Its verdict has the reviewers' shape and parser. `Contract\ChangeDecision` count
 
 ### Proposals
 
-A finding whose requirement starts with `Proposal:` is made a P3 that only the owner can fix (`Domain\OwnerProposals`, applied in `ReviewerAgent` before the approval guards and in the handler before the verdict is stored). `Contract\JudgedFindings` never puts such a finding (`Finding::proposesToOwner()`) on the act list: marked act or defer it is a follow-up, marked reject it is rejected. Filing proposals as tasks waits for the follow-up inbox.
+A finding whose requirement starts with `Proposal:` is made a P3 that only the owner can fix (`Domain\OwnerProposals`, applied in `ReviewerAgent` before the approval guards and in the handler before the verdict is stored). `Contract\JudgedFindings` never puts such a finding (`Finding::proposesToOwner()`) on the act list: marked act or defer it is a follow-up, marked reject it is rejected. A proposal that repeats an open finding is refused as unreadable, because the goalpost rule would give it the open finding's blocking severity. Filing proposals as tasks waits for the follow-up inbox.
 
-Tests: `TechnicalWriterTriggerTest`, `SummarySectionTest`, `LocalChangeDescriptionTest`, `ConfiguredPanelsTest`, `PanelConfigurationTest`, `DocsPartOfDiffTest`, `ReviewerPromptDocsLaneTest`, `TechnicalWriterLaneTest`, `ChangeDecisionTest`, `OwnerProposalsTest`, `JudgedFindingsTest`.
+Tests: `TechnicalWriterTriggerTest`, `SummarySectionTest`, `LocalChangeDescriptionTest`, `ConfiguredPanelsTest`, `PanelConfigurationTest`, `DocsPartOfDiffTest`, `ReviewerPromptDocsLaneTest`, `TechnicalWriterLaneTest`, `ChangeDecisionTest`, `OwnerProposalsTest`, `JudgedFindingsTest`, `HashedReviewPromptsTest` (the reviewer prompt hash covers `TECHNICAL_WRITER_INSTRUCTIONS` too).

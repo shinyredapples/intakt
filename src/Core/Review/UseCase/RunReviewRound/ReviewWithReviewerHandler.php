@@ -77,7 +77,7 @@ final readonly class ReviewWithReviewerHandler
             $brief = new ReviewBrief(new ChangeUnderReview($round->project(), $round->task(), $this->diffFor($lane, $round->diff())), $this->openFor($lane, $round), $round->number());
             $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), $round->id(), $reviewer->id(), lane: $lane));
             $review = $this->vendor->review($round->project(), $reviewer->tier(), $request);
-            $this->refuseForeignIds($lane, $brief, $review->verdict);
+            $this->refuseWhatTheWriterMayNotSay($lane, $brief, $review->verdict);
         } catch (ProviderRateLimited $limited) {
             $this->leases->handBack($reviewer);
 
@@ -128,10 +128,34 @@ final readonly class ReviewWithReviewerHandler
     }
 
     // Here too and not only in the reviewer agent, because the ledger closes any id a recorded verdict names, whichever vendor answered.
-    private function refuseForeignIds(ReviewLane $lane, ReviewBrief $brief, Verdict $verdict): void
+    private function refuseWhatTheWriterMayNotSay(ReviewLane $lane, ReviewBrief $brief, Verdict $verdict): void
     {
-        if (ReviewLane::Docs === $lane) {
-            $this->ids->checkedAgainst($brief, $verdict);
+        if (ReviewLane::Docs !== $lane) {
+            return;
+        }
+
+        $this->ids->checkedAgainst($brief, $verdict);
+        $this->refuseNewFindingsOffThePages($verdict);
+        $this->refuseRepeatedProposals($verdict);
+    }
+
+    // Refused like a foreign id, because the writer never saw the code and a finding it records there would block the head; key-safe, because the reason names no text of the model.
+    private function refuseNewFindingsOffThePages(Verdict $verdict): void
+    {
+        foreach ($verdict->findings as $finding) {
+            if (!$finding->repeat && (null === $finding->file || !$this->pages->contains($finding->file))) {
+                throw VerdictUnreadable::becauseKeySafe('the Technical writer reported a new finding outside the docs pages.');
+            }
+        }
+    }
+
+    // Refused, because the goalpost rule gives a repeat the open finding's severity and would undo the owner's P3 a proposal is lowered to.
+    private function refuseRepeatedProposals(Verdict $verdict): void
+    {
+        foreach ($verdict->findings as $finding) {
+            if ($finding->repeat && $finding->namesProposal()) {
+                throw VerdictUnreadable::becauseKeySafe('the Technical writer repeated an open finding as a proposal.');
+            }
         }
     }
 

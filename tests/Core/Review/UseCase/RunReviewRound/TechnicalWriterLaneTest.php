@@ -21,7 +21,9 @@ use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Domain\OwnerProposals;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\DocsPartOfDiff;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
@@ -41,6 +43,10 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(PanelReviewer::class)]
 final class TechnicalWriterLaneTest extends KernelTestCase
 {
+    private const string OFF_THE_PAGES = VerdictUnreadable::IN_WORDS.': the Technical writer reported a new finding outside the docs pages.';
+
+    private const string REPEATED_PROPOSAL = VerdictUnreadable::IN_WORDS.': the Technical writer repeated an open finding as a proposal.';
+
     private RoundFixture $fixture;
 
     private int $delivered = 0;
@@ -87,6 +93,51 @@ final class TechnicalWriterLaneTest extends KernelTestCase
         self::assertSame(['F1'], $this->stillOpen());
     }
 
+    public function testAFindingOfTheTechnicalWriterOnCodeStoresNothingAndFailsItsReviewAsUnreadable(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Changes, [$this->blockingAt('src/Cart.php')], [], []));
+
+        self::assertSame([], $this->fixture->storedFindings(RoundFixture::CHANGE));
+        self::assertSame(self::OFF_THE_PAGES, $this->writersFailure());
+    }
+
+    public function testAFindingOfTheTechnicalWriterWithoutAFileStoresNothing(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Changes, [new Finding('X', Severity::P1, null, null, null, 'Wrong.', FixableBy::Builder, false, 'SOLID', null)], [], []));
+
+        self::assertSame([], $this->fixture->storedFindings(RoundFixture::CHANGE));
+        self::assertSame(self::OFF_THE_PAGES, $this->writersFailure());
+    }
+
+    public function testAFindingOfTheTechnicalWriterOnAPageIsStored(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Changes, [$this->blockingAt('docs/user/cart.md')], [], []));
+
+        self::assertCount(1, $this->fixture->storedFindings(RoundFixture::CHANGE));
+        self::assertNull($this->writersFailure());
+    }
+
+    public function testAProposalOfTheTechnicalWriterThatRepeatsAnOpenFindingIsRefusedAsUnreadable(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Approve, [], [], []), new Verdict(Decision::Changes, [$this->blockingAt('docs/user/cart.md')], [], []));
+        $this->startRound();
+
+        $this->deliverAll(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'docs/user/cart.md', 1, null, 'Split the chapter.', FixableBy::Builder, true, 'Proposal: user guide structure', null)], [], []));
+
+        self::assertSame(self::REPEATED_PROPOSAL, $this->writersFailure());
+    }
+
+    public function testARepeatOfTheTechnicalWriterThatIsNoProposalIsRecorded(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Approve, [], [], []), new Verdict(Decision::Changes, [$this->blockingAt('docs/user/cart.md')], [], []));
+        $this->startRound();
+
+        $this->deliverAll(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'docs/user/cart.md', 1, null, 'Still wrong.', FixableBy::Builder, true, 'SOLID', null)], [], []));
+
+        self::assertNull($this->writersFailure());
+        self::assertSame(['F1'], $this->stillOpen());
+    }
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
@@ -105,6 +156,14 @@ final class TechnicalWriterLaneTest extends KernelTestCase
             new PanelReviewer(new ReviewerRole('correctness', 'Check the change.'), $model, 4),
             new PanelReviewer(new ReviewerRole(ReviewerRole::TECHNICAL_WRITER, 'Check the docs.'), $model, 4),
         ], QuorumPolicy::All));
+    }
+
+    private function writersFailure(): ?string
+    {
+        $rounds = $this->fixture->storedRounds();
+        $writers = array_filter(array_last($rounds)?->reviewers() ?? [], static fn (RoundReviewer $reviewer): bool => ReviewerRole::TECHNICAL_WRITER === $reviewer->roleName());
+
+        return array_first($writers)?->failure();
     }
 
     /**

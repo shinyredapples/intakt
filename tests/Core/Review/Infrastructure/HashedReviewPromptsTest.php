@@ -29,8 +29,25 @@ final class HashedReviewPromptsTest extends TestCase
     {
         $hashes = new HashedReviewPrompts()->hashes();
 
-        self::assertSame(hash('sha256', ReviewerPrompt::INSTRUCTIONS), $hashes->reviewer);
+        self::assertSame(hash('sha256', hash('sha256', ReviewerPrompt::INSTRUCTIONS).hash('sha256', ReviewerPrompt::TECHNICAL_WRITER_INSTRUCTIONS)), $hashes->reviewer);
         self::assertSame(hash('sha256', JudgePrompt::INSTRUCTIONS), $hashes->judge);
+    }
+
+    public function testChangingOnlyTheTechnicalWritersInstructionsChangesTheReviewerHash(): void
+    {
+        $shipped = new HashedReviewPrompts()->hashes();
+        $changed = new HashedReviewPrompts(writer: 'Another instruction.')->hashes();
+
+        self::assertNotSame($shipped->reviewer, $changed->reviewer);
+        self::assertSame($shipped->judge, $changed->judge);
+    }
+
+    public function testMovingTextBetweenTheReviewerAndTheWritersInstructionsChangesTheReviewerHash(): void
+    {
+        $one = new HashedReviewPrompts('Check ab', writer: 'c')->hashes();
+        $other = new HashedReviewPrompts('Check a', writer: 'bc')->hashes();
+
+        self::assertNotSame($one->reviewer, $other->reviewer);
     }
 
     public function testAChangedReviewerPromptChangesOnlyTheReviewerHash(): void
