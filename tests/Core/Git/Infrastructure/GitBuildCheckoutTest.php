@@ -6,6 +6,8 @@ namespace Intakt\Tests\Core\Git\Infrastructure;
 
 use Intakt\Core\Disk\Contract\DiskHeadroom;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Domain\FloorCheck;
+use Intakt\Core\Disk\Domain\FloorRefused;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
@@ -21,6 +23,7 @@ use Intakt\Core\Git\UseCase\TakeCheckedHead\TakeCheckedHead;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Disk\DiskUnreadable;
 use Intakt\Tests\Core\Disk\DiskWithRoom;
+use Intakt\Tests\Core\Disk\InodesUnreadable;
 use Intakt\Tests\Core\Git\PregMatchThatThrows;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -37,6 +40,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(GitBuildCheckout::class)]
 #[UsesClass(BranchHead::class)]
 #[UsesClass(FreeSpaceUnreadable::class)]
+#[UsesClass(FloorCheck::class)]
+#[UsesClass(FloorRefused::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
@@ -106,6 +111,22 @@ final class GitBuildCheckoutTest extends TestCase
         $this->expectExceptionMessageIsOrContains('could not be read');
 
         $this->checkout(new Filesystem(), new DiskUnreadable())->makeClone('alpha', 'feat/task', $this->mirrors.'-clone');
+    }
+
+    public function testAFreeSpaceReaderThatThrowsFailsTheMirrorUpdateAsABuildCheckoutFailure(): void
+    {
+        $this->expectException(BuildCheckoutFailed::class);
+
+        $this->checkout(new Filesystem(), new FloorCheck(new InodesUnreadable(), $this->mirrors, 1000, 100))->updateMirror('alpha', $this->remote->path);
+    }
+
+    public function testAFreeSpaceReaderThatThrowsFailsTheCloneAsABuildCheckoutFailure(): void
+    {
+        $this->checkout(new Filesystem())->updateMirror('alpha', $this->remote->path);
+
+        $this->expectException(BuildCheckoutFailed::class);
+
+        $this->checkout(new Filesystem(), new FloorCheck(new InodesUnreadable(), $this->mirrors, 1000, 100))->makeClone('alpha', 'feat/task', $this->mirrors.'-clone');
     }
 
     public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheMirrorUpdate(): void
