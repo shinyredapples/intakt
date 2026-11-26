@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -91,7 +92,7 @@ final readonly class VerdictForTheLoop
         $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
         $vote = $given instanceof Decision ? $counted[$reviewer->id()->toRfc4122()] ?? $given : Decision::Blocked;
 
-        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
+        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []), ReviewLane::ofRole($reviewer->roleName()));
     }
 
     /**

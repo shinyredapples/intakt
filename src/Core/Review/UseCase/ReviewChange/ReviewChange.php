@@ -19,6 +19,7 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerOutcome;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
@@ -181,7 +182,7 @@ final readonly class ReviewChange implements ChangeReviews
         $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
         $vote = $given instanceof Decision ? $counted[$reviewer->id()->toRfc4122()] ?? $given : Decision::Blocked;
 
-        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
+        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []), ReviewLane::ofRole($reviewer->roleName()));
     }
 
     /**

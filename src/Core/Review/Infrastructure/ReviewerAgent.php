@@ -10,9 +10,11 @@ use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
+use Intakt\Core\Review\Domain\OwnerProposals;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Override;
 use Symfony\AI\Agent\Agent;
@@ -73,7 +75,7 @@ final readonly class ReviewerAgent implements Reviewer
         // Before the cut approval is put in its place, because a reviewer that names a reserved id has given an unreadable answer whatever it decided, and is asked once more.
         $this->ids->refuseClaimedFailureIds($verdict);
 
-        $counted = $this->ids->asTheRoundCounts($request->brief, $verdict);
+        $counted = $this->ids->asTheRoundCounts($request->brief, $this->proposalsLowered($request, $verdict));
 
         if ($this->approvesCutText($counted, $request->brief, $fenced)) {
             return Verdict::cutApproval();
@@ -108,6 +110,12 @@ final readonly class ReviewerAgent implements Reviewer
     private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
     {
         return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer), $reviewer);
+    }
+
+    // Before the guards, because a proposal lowered to a P3 can count as approval.
+    private function proposalsLowered(ReviewRequest $request, Verdict $verdict): Verdict
+    {
+        return ReviewLane::Docs === $request->conversation->lane ? new OwnerProposals()->applyToVerdict($verdict) : $verdict;
     }
 
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
