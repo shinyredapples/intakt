@@ -13,7 +13,7 @@ final readonly class HighlightFragments
 
     private const string FRAGMENT_NAME = '/^\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/';
 
-    private const string COMMIT = '/^[0-9a-f]{40,64}$/';
+    private const string COMMIT = '/^[0-9a-f]{40,64}(?: [0-9a-f]{40,64})*$/';
 
     private const int UNBORN_HEAD = 1;
 
@@ -90,13 +90,15 @@ final readonly class HighlightFragments
         $layout = HighlightLayout::fromLines($layout);
         $names = $this->fragmentNames($root);
         $findings = $this->nameFindings($names);
-        $rows = [];
+        $rowsByFragment = [];
 
         foreach ($this->fragmentsInOrder($names, $history) as $name) {
-            [$fragmentRows, $fragmentFindings] = $this->rowsOf($root, $name, $layout);
+            [$rowsByFragment[$name], $fragmentFindings] = $this->rowsOf($root, $name, $layout);
             $findings = [...$findings, ...$fragmentFindings];
-            $rows = $this->withReplacedRows($rows, $fragmentRows);
         }
+
+        $findings = [...$findings, ...$this->unorderedRowFindings($rowsByFragment, $history)];
+        $rows = array_reduce($rowsByFragment, $this->withReplacedRows(...), []);
 
         return new HighlightAssembly([] === $findings ? $layout->assembledWith($rows) : '', $findings);
     }
@@ -130,13 +132,9 @@ final readonly class HighlightFragments
             return $unreadable;
         }
 
-        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
+        $groups = $this->groupsAddedIn($root, ['HEAD']);
 
-        if (!$log->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
-        }
-
-        return $this->additionsIn($log->output);
+        return is_string($groups) ? $groups : $this->ranksOf($groups);
     }
 
     /**
@@ -198,22 +196,95 @@ final readonly class HighlightFragments
     }
 
     /**
+     * @param list<string> $revisions
+     *
+     * @return list<list<string>>|string
+     */
+    private function groupsAddedIn(string $root, array $revisions): array|string
+    {
+        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H %P', ...$revisions, '--', self::DIRECTORY.'/'], $root);
+
+        if (!$log->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
+        }
+
+        $groups = [];
+
+        foreach ($this->additionsIn($log->output) as [$parents, $names]) {
+            $ordered = $this->mergedSideOrder($root, $parents, $names);
+
+            if (is_string($ordered)) {
+                return $ordered;
+            }
+
+            $groups = [...$groups, ...$ordered];
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @param list<list<string>> $groups
+     *
      * @return array<string, int>
      */
-    private function additionsIn(string $log): array
+    private function ranksOf(array $groups): array
     {
-        $history = [];
-        $commit = 0;
+        $ranks = [];
 
-        foreach (explode("\n", $log) as $line) {
-            if (1 === preg_match(self::COMMIT, $line)) {
-                ++$commit;
-            } elseif ('' !== $line) {
-                $history[basename($line)] = $commit;
+        foreach ($groups as $rank => $names) {
+            foreach ($names as $name) {
+                $ranks[$name] = $rank;
             }
         }
 
-        return $history;
+        return $ranks;
+    }
+
+    /**
+     * @return list<array{list<string>, list<string>}>
+     */
+    private function additionsIn(string $log): array
+    {
+        $commits = [];
+
+        foreach (explode("\n", $log) as $line) {
+            if (1 === preg_match(self::COMMIT, rtrim($line))) {
+                $commits[] = [array_slice(explode(' ', rtrim($line)), 1), []];
+            } elseif ('' !== $line && [] !== $commits) {
+                $commits[array_key_last($commits)][1][] = basename($line);
+            }
+        }
+
+        return $commits;
+    }
+
+    /**
+     * @param list<string> $parents
+     * @param list<string> $names
+     *
+     * @return list<list<string>>|string
+     */
+    private function mergedSideOrder(string $root, array $parents, array $names): array|string
+    {
+        // A merge that adds several fragments at once brought in another line of history (main fast-forwarded to a branch that merged main), whose own first-parent order says which reached it first.
+        if (count($names) < 2 || count($parents) < 2) {
+            return [$names];
+        }
+
+        $side = $this->groupsAddedIn($root, [...array_slice($parents, 1), '^'.$parents[0]]);
+
+        if (is_string($side)) {
+            return $side;
+        }
+
+        $groups = array_values(array_filter(
+            array_map(static fn (array $group): array => array_values(array_intersect($group, $names)), $side),
+            static fn (array $group): bool => [] !== $group,
+        ));
+        $addedByTheMerge = array_values(array_diff($names, ...$groups));
+
+        return [] === $addedByTheMerge ? $groups : [...$groups, $addedByTheMerge];
     }
 
     // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
@@ -237,6 +308,52 @@ final readonly class HighlightFragments
         $lines = $this->linesOf($root.'/'.$file);
 
         return null === $lines ? [[], ['cannot read '.$file]] : new HighlightFragment($file, $layout)->rowsOf($lines);
+    }
+
+    /**
+     * @param array<string, array<string, array<string, string>>> $rowsByFragment
+     * @param array<string, int>                                  $history
+     *
+     * @return list<string>
+     */
+    private function unorderedRowFindings(array $rowsByFragment, array $history): array
+    {
+        // Fragments without a distinct place in history would otherwise fall back to their numbers, and an older change could silently replace a newer row.
+        $setBy = [];
+        $findings = [];
+
+        foreach ($rowsByFragment as $name => $rows) {
+            $rank = $history[$name] ?? PHP_INT_MAX;
+
+            foreach ($this->rowKeysOf($rows) as [$section, $key]) {
+                $earlier = $setBy[$rank][$section][$key] ?? null;
+                $setBy[$rank][$section][$key] = $earlier ?? $name;
+
+                if (null !== $earlier) {
+                    $findings[] = self::DIRECTORY.'/'.$earlier.' and '.self::DIRECTORY.'/'.$name.' both set row "'.$key.'" of section "'.$section.'", but git history does not say which came first: add them in separate commits, or assemble in a clone with the full history';
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param array<string, array<string, string>> $rows
+     *
+     * @return list<array{string, string}>
+     */
+    private function rowKeysOf(array $rows): array
+    {
+        $keys = [];
+
+        foreach ($rows as $section => $sectionRows) {
+            foreach (array_keys($sectionRows) as $key) {
+                $keys[] = [$section, $key];
+            }
+        }
+
+        return $keys;
     }
 
     /**
