@@ -93,7 +93,10 @@ final readonly class ReplaysRecording
 
     private function refuseCallsTheLedgerHolds(Recording $recording): void
     {
-        new HeldCalls(array_map(static fn (RecordedEvent $row): string => $row->event->payload, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false)))->refuseThoseOf($recording);
+        new HeldCalls(
+            array_map(static fn (RecordedEvent $row): string => $row->event->payload, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false)),
+            array_map(static fn (RecordedEvent $row): ?string => self::roundOf($row->event->payload), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewStarted), false)),
+        )->refuseThoseOf($recording);
     }
 
     // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.

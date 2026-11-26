@@ -15,8 +15,9 @@ final readonly class HeldCalls
 {
     /**
      * @param list<string> $payloads
+     * @param list<?string> $startedRounds
      */
-    public function __construct(private array $payloads)
+    public function __construct(private array $payloads, private array $startedRounds)
     {
     }
 
@@ -53,12 +54,13 @@ final readonly class HeldCalls
         return is_string($value) ? $value : null;
     }
 
-    // Only the demo project's row of the call in a round this recording names but does not start is an earlier Play of it: another recording may reuse the call ID under its own rounds, and a Play of a recording that starts the round leaves that round's start row, which is refused before this check, so a held row without that start came from another recording.
+    // A Play of a usage-only recording writes no start row, so a held call in a round that has one, in the ledger or in this recording, came from another review.
     private function anEarlierPlayHolds(string $call, Recording $recording): bool
     {
         $rounds = array_diff(
             $this->roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => $call === self::callOf($event->payload)),
             $this->roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewStarted === $event->kind),
+            array_filter($this->startedRounds, is_string(...)),
         );
 
         return array_any($this->payloads, static fn (string $payload): bool => $call === self::callOf($payload)
