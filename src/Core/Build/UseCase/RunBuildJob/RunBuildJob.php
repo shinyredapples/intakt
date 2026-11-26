@@ -106,20 +106,26 @@ final readonly class RunBuildJob
     public function run(BuildJob $job): BuildJobOutcome
     {
         $model = $this->modelFor($job);
-        $clone = $this->folder($job->clone);
+        $clone = new JobInput($this->folder($job->clone), self::CLONE);
+        // Prepared before the prompt file exists and outside the try, so a job that cannot be prepared leaves no prompt behind and never reads a stop cause.
+        $id = $job->jobId();
+        $command = $this->commandOf($job, $model);
+        $egress = JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts()));
+        $limits = new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS);
         $prompt = $this->promptFileFor($job);
+        $spec = new JobSpec($id, $job->image, $command, [$clone, new JobInput($prompt, self::PROMPT)], $limits, $egress);
 
         $cause = null;
         $refused = false;
 
         try {
-            $outcome = $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
+            $outcome = $this->outcomeOf($this->ranJob($spec));
         } catch (JobRefused $failure) {
             $refused = true;
 
             throw $failure;
         } finally {
-            // Read before the prompt is removed and also when the job failed, so a cause never reaches the branch's next build, but not for a refused job, because it never started and the cause belongs to the build that holds the branch's job id.
+            // Read before the prompt is removed and also when the job failed, so a cause never reaches the branch's next build, but not for a job the runner refused, because it never started and the cause belongs to the build that holds the branch's job id.
             if (!$refused) {
                 $cause = $this->stops->causeFor($job);
             }
@@ -161,19 +167,9 @@ final readonly class RunBuildJob
         return $file;
     }
 
-    /**
-     * @param list<JobInput> $inputs
-     */
-    private function specOf(BuildJob $job, string $model, array $inputs): JobSpec
+    private function commandOf(BuildJob $job, string $model): JobCommand
     {
-        return new JobSpec(
-            $job->jobId(),
-            $job->image,
-            new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds),
-            $inputs,
-            new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
-            JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts())),
-        );
+        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds);
     }
 
     private function ranJob(JobSpec $spec): ?JobResult
