@@ -22,6 +22,37 @@
         <p class="finding-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
     </div>
 </div>
+{# The file is drawn as a few rows around the marked one, because no excerpt is stored and none is invented; a row is marked only for a recorded line, with no rows drawn before line 1; the quotes are the reviewer's own code spans, as written. #}
+{% set quotes = finding.quotedCode %}
+{% if finding.file is not null or quotes is not empty %}
+<section class="finding-section" aria-labelledby="finding-where">
+    <h2 id="finding-where">Where it sits</h2>
+    <div class="card file-map">
+        {% if finding.file is not null %}
+        <figure class="file-map-file">
+            <figcaption class="mono">{{ finding.file }}</figcaption>
+            <ol class="file-map-lines" aria-hidden="true">
+                {% if finding.line is null %}
+                {% for row in 1..5 %}<li class="file-map-line"></li>{% endfor %}
+                {% else %}
+                {% set before = min(2, finding.line - 1) %}
+                {% if before > 0 %}{% for row in 1..before %}<li class="file-map-line"></li>{% endfor %}{% endif %}
+                <li class="file-map-line marked"></li>
+                {% for row in 1..2 %}<li class="file-map-line"></li>{% endfor %}
+                {% endif %}
+            </ol>
+            <p class="file-map-mark">{{ finding.line is null ? 'Line not recorded' : 'Line ' ~ finding.line }}</p>
+        </figure>
+        {% endif %}
+        {% if quotes is not empty %}
+        <div class="file-map-quotes">
+            <h3>Quoted by the reviewer</h3>
+            <ul>{% for quote in quotes %}<li><code>{{ quote }}</code></li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
 {# The whole text, as on the Full record's card, and only when it goes on after the headline, so nothing the reviewer wrote is lost. #}
 {% if finding.goesOnAfterItsHeadline %}
 <section class="finding-section" aria-labelledby="finding-why">

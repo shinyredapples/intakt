@@ -48,7 +48,7 @@ Each reviewer names a tier. So one changed line moves every reviewer on that tie
 
 ## When a provider says "slow down"
 
-When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day. The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.
+When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day and at least one second (a reset of zero or already past waits one second). The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.
 
 ## Reading the cost
 

@@ -16,6 +16,7 @@ use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
@@ -80,6 +81,8 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
 
     private function givenARoundFromARecordedUsageAnswer(): void
     {
+        // No stored summary, because the page reads the active round's summary from review_round and a page test creates no schema.
+        self::getContainer()->set(SessionSummaries::class, self::createStub(SessionSummaries::class));
         $this->ledger->startRoundOf('feat/thing', self::ROUND, 1);
         $answer = new TextResult('{}');
         $answer->getMetadata()->add('token_usage', new TokenUsage(
