@@ -10,10 +10,10 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
-use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 
 #[Group('persistence')]
 #[CoversClass(StoredLatestRoundStatus::class)]
