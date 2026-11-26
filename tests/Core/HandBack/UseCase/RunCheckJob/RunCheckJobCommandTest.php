@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\HandBack\UseCase\RunCheckJob;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
@@ -39,6 +40,7 @@ use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
@@ -60,6 +62,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunCheckJobCommand::class)]
 #[CoversClass(RunCheckJobInput::class)]
@@ -105,6 +108,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(DockerEngineFailed::class)]
 #[UsesClass(HandBackBranchRefused::class)]
 #[UsesClass(JobRefused::class)]
+#[UsesClass(JobEventNotRecorded::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 final class RunCheckJobCommandTest extends TestCase
 {
     private BuildHistory $history;
@@ -223,6 +228,30 @@ final class RunCheckJobCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('The job "check-demo" is already running.', $this->flat($tester));
+    }
+
+    public function testAJobEventTheLedgerDidNotRecordIsPrintedAndFails(): void
+    {
+        $this->history->commit('Build work');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobEventNotRecorded::for('job_started', 'disk full'));
+
+        $tester = $this->executed($runner, []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('The ledger did not record the job event "job_started": disk full', $this->flat($tester));
+    }
+
+    public function testAMirrorHoldingInfoAttributesIsPrintedAndFails(): void
+    {
+        $this->history->commit('Build work');
+        $bundle = $this->history->bundle('main..task');
+        new Filesystem()->dumpFile($this->history->mirror.'/info/attributes', "* -text\n");
+
+        $tester = $this->executed($this->runnerLeaving([]), ['bundle' => $bundle]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('info/attributes exists: git reads it', $this->flat($tester));
     }
 
     public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void

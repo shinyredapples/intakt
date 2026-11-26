@@ -11,7 +11,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
-use InvalidArgumentException;
+use Intakt\Plugin\GitHubForge\Domain\InstallationSettingsRefused;
 use Psr\Log\LoggerInterface;
 use SensitiveParameter;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -94,10 +94,10 @@ final readonly class ForgeConnectionCheck implements ForgeConnection
         try {
             // Parsed before any call, because the settings are lazy and a wrong one must fail without reaching GitHub.
             if ([] === $this->expected->permissions) {
-                throw new InvalidArgumentException('GITHUB_APP_PERMISSIONS names no permission.');
+                throw new InstallationSettingsRefused('GITHUB_APP_PERMISSIONS names no permission.');
             }
             (void) $this->jwt->sign();
-        } catch (InvalidArgumentException $unreadable) {
+        } catch (InstallationSettingsRefused $unreadable) {
             return ForgeConnectionVerdict::failed(
                 'the App settings cannot be read ('.$unreadable->getMessage().')',
                 'correct GITHUB_APP_PERMISSIONS as name:level pairs and GITHUB_APP_REPOSITORIES as owner/repo names',

@@ -38,6 +38,7 @@ use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
 use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
+use Intakt\Core\Review\Infrastructure\ReviewSizeLimitConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
@@ -88,6 +89,7 @@ return static function (ContainerConfigurator $container): void {
     // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the mode tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
     $reviewJobs = [];
+    $sizeLimits = [];
     $modes = [];
     $watches = [];
     $builds = [];
@@ -113,6 +115,13 @@ return static function (ContainerConfigurator $container): void {
             if (is_array($project) && array_key_exists('review', $project)) {
                 $reviews[$name] = $project['review'];
                 unset($project['review']);
+                $contentProjects[$name] = $project;
+            }
+
+            if (is_array($project) && array_key_exists(ReviewSizeLimitConfiguration::KEY, $project)) {
+                // Filed under the key the projects tree gives the entry, or it would be lost and read as the default.
+                $sizeLimits[ReviewSizeLimitConfiguration::keyOf($name, $project['name'] ?? null)] = $project[ReviewSizeLimitConfiguration::KEY];
+                unset($project[ReviewSizeLimitConfiguration::KEY]);
                 $contentProjects[$name] = $project;
             }
 
@@ -168,6 +177,8 @@ return static function (ContainerConfigurator $container): void {
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     /** @var array<string, array{image: string}> $projectReviewJobs */
     $projectReviewJobs = new Processor()->processConfiguration(new ReviewJobConfiguration(), [['projects' => $reviewJobs]])['projects'];
+    // A project without the setting reads the default, so every configured project has a limit.
+    $projectSizeLimits = ReviewSizeLimitConfiguration::limitsOf(array_keys($projects), $sizeLimits);
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
     /** @var array<string, array{repository: string, base: string, task: string, github?: string, eligibility_label: string}> $projectWatches */
@@ -348,6 +359,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
     $container->parameters()->set(ReviewServices::PROJECT_FILE, $projectsFile);
+    $container->parameters()->set(ReviewServices::SIZE_LIMITS, $projectSizeLimits);
     $container->parameters()->set(ReviewServices::JOB_IMAGES, ReviewJobConfiguration::imagesOf($projectReviewJobs));
     $container->parameters()->set(BuildServices::ROUTING, array_map(static fn (array $project): array => $project['build'], $projectBuilds));
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
