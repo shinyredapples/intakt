@@ -104,7 +104,7 @@ final readonly class ReadableLines
      */
     private function paragraphAfter(array $paragraph, int $number, string $line): array
     {
-        if ('' === trim($line) || $this->endsParagraph($line, [] !== $paragraph)) {
+        if ('' === trim($line) || $this->endsParagraph($line, $paragraph)) {
             return [];
         }
 
@@ -117,10 +117,13 @@ final readonly class ReadableLines
     }
 
     // A list item line and a thematic break start no paragraph, because CommonMark reads a `---` below them as a thematic break, not as an underline.
-    private function endsParagraph(string $line, bool $inParagraph): bool
+    /**
+     * @param array<int, string> $paragraph
+     */
+    private function endsParagraph(string $line, array $paragraph): bool
     {
         // An ordered item can interrupt a paragraph only when it starts at 1, so `2. text` inside a paragraph stays paragraph text.
-        $ordered = $inParagraph ? '1[.)]' : '\d{1,9}[.)]';
+        $ordered = [] !== $paragraph ? '1[.)]' : '\d{1,9}[.)]';
 
         return 1 === preg_match('/^ {0,3}(?:([-*_])(?:[ \t]*\1){2,}[ \t]*$|(?:[-+*]|'.$ordered.')(?:[ \t]|$))/', $line);
     }
