@@ -127,8 +127,7 @@ final readonly class ReviewWithReviewerHandler
         return ReviewLane::Docs === $lane ? array_values(array_filter($open, fn (Finding $finding): bool => null !== $finding->file && $this->pages->contains($finding->file))) : $open;
     }
 
-    // Here too and not only in the reviewer agent, because the ledger closes any id a recorded verdict names, whichever vendor answered.
-    // Not Intakt's own failure verdicts, because their one finding has no file and holds the reason the review failed.
+    // Here too and not only in the reviewer agent, because the ledger closes any id a recorded verdict names, whichever vendor answered; not on Intakt's own failure verdicts, because their one finding has no file and holds the reason the review failed.
     private function refuseWhatTheWriterMayNotSay(ReviewLane $lane, ReviewBrief $brief, Verdict $verdict): void
     {
         if (ReviewLane::Docs !== $lane || $verdict->isIntakts()) {
