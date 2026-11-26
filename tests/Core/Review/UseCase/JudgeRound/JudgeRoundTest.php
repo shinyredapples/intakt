@@ -572,7 +572,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge($judge)($this->judgingOf($round));
 
-        self::assertSame([Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $judge->asked?->findings ?? []));
+        self::assertSame([Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $judge->asked->findings ?? []));
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F3'], 'follow_ups' => ['F2']]], $this->judgeCalls());
         self::assertSame('plain_code_and_model_call', $this->judgeDonePayloads()[0]['path']);
     }
