@@ -111,10 +111,13 @@ final readonly class ReadableLines
             return false;
         }
 
-        // An ordered item can interrupt a paragraph only when it starts at 1, so `2. text` inside a paragraph stays paragraph text. A paragraph that started directly below a list item line is that item's wrapped text, where the next item may carry any number.
-        $ordered = [] !== $this->paragraph && TextPlace::Apart === $this->place ? '1[.)]' : '\d{1,9}[.)]';
+        // A paragraph that started directly below a list item line is that item's wrapped text, where the next item may carry any number and may be empty.
+        if ([] === $this->paragraph || TextPlace::BelowItem === $this->place) {
+            return 1 === preg_match('/^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]|$)/', $line);
+        }
 
-        return 1 === preg_match('/^ {0,3}(?:[-+*]|'.$ordered.')(?:[ \t]|$)/', $line);
+        // An item interrupts a paragraph of its own only when it is not empty and, if ordered, starts at 1, because CommonMark takes the start from the digits' value: `01.` starts at 1, while `2.` and an empty `1.` stay paragraph text.
+        return 1 === preg_match('/^ {0,3}(?:[-+*]|0{0,8}1[.)])[ \t]+\S/', $line);
     }
 
     // A thematic break starts no paragraph, because CommonMark reads a `---` below it as another thematic break, not as an underline.

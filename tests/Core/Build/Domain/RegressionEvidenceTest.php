@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\Domain;
 
 use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
+use Intakt\Core\Build\Domain\TextPlace;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\RegressionRun;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RegressionRuns::class)]
 #[UsesClass(RegressionRun::class)]
 #[UsesClass(Paths::class)]
+#[UsesClass(TextPlace::class)]
 final class RegressionEvidenceTest extends TestCase
 {
     private const string LINES = "- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed";
@@ -251,6 +253,55 @@ final class RegressionEvidenceTest extends TestCase
         $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n1. E1: the test\n   passes\n2. E2: shown\n---\n\n## Follow-ups\n\nNone.");
 
         self::assertSame("## Evidence\n\n1. E1: the test\n   passes\n2. E2: shown\n---\n\n".self::LINES."\n\n## Follow-ups\n\nNone.", $body);
+    }
+
+    public function testAZeroPaddedOrderedItemStartingAtOneEndsAParagraphSoHyphensAreAThematicBreak(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nIntroductory text\n01. First item\n---");
+
+        self::assertSame("## Evidence\n\nIntroductory text\n01. First item\n---\n\n".self::LINES, $body);
+    }
+
+    public function testANineDigitOrderedItemStartingAtOneEndsAParagraphSoHyphensAreAThematicBreak(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nIntroductory text\n000000001) First item\n---");
+
+        self::assertSame("## Evidence\n\nIntroductory text\n000000001) First item\n---\n\n".self::LINES, $body);
+    }
+
+    public function testAZeroPaddedOrderedItemNotStartingAtOneInsideAParagraphIsTextSoHyphensUnderlineIt(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\nFollow-ups\n02. Keep\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\nFollow-ups\n02. Keep\n---\n\nMore.", $body);
+    }
+
+    public function testATenDigitOrderedMarkerInsideAParagraphIsTextSoHyphensUnderlineIt(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\nFollow-ups\n0000000001. Keep\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\nFollow-ups\n0000000001. Keep\n---\n\nMore.", $body);
+    }
+
+    public function testAnEmptyOrderedItemInsideAParagraphIsTextSoHyphensUnderlineIt(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\nFollow-ups\n1.\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\nFollow-ups\n1.\n---\n\nMore.", $body);
+    }
+
+    public function testAnEmptyBulletItemFollowedBySpacesInsideAParagraphIsTextSoHyphensUnderlineIt(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\nFollow-ups\n* \t\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\nFollow-ups\n* \t\n---\n\nMore.", $body);
+    }
+
+    public function testAnEmptyItemBelowAWrappedItemIsAnItemSoHyphensDoNotSplitTheList(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n1. E1: the test\n   passes\n2.\n---\n\n## Follow-ups\n\nNone.");
+
+        self::assertSame("## Evidence\n\n1. E1: the test\n   passes\n2.\n---\n\n".self::LINES."\n\n## Follow-ups\n\nNone.", $body);
     }
 
     public function testACrlfBodyWithASetextEvidenceHeadingGetsTheResultsUnderIt(): void
