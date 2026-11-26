@@ -160,6 +160,7 @@ final class StartReviewHandlerTest extends TestCase
 
     public function testAStartBelowAFloorMakesNoSnapshotAndStartsOnceSpaceIsBack(): void
     {
+        /** @var list<string> $started */
         $started = [];
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('start')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$started): string {
@@ -182,7 +183,7 @@ final class StartReviewHandlerTest extends TestCase
         $space->leave(5000, 10 ** 6);
         $handler($this->startOf(null));
         self::assertCount(1, $started);
-        $this->removeSnapshot($started[0]);
+        $this->removeSnapshot((string) array_first($started));
     }
 
     protected function setUp(): void

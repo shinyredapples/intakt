@@ -20,7 +20,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 final class DiskFloorsPassTest extends TestCase
 {
     #[DataProvider('refusedFloors')]
-    public function testTheContainerIsNotBuiltWithAFloorThatIsNotAWholeNumberOfAtLeastOne(string $parameter, mixed $value, string $named): void
+    public function testTheContainerIsNotBuiltWithAFloorThatIsNotAWholeNumberOfAtLeastOne(string $parameter, float|int|string|null $value, string $named): void
     {
         $container = $this->containerWithFloors(1073741824, 10000);
         $container->setParameter($parameter, $value);
@@ -31,7 +31,7 @@ final class DiskFloorsPassTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, mixed, string}>
+     * @return iterable<string, array{string, float|int|string|null, string}>
      */
     public static function refusedFloors(): iterable
     {
