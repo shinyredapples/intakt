@@ -71,7 +71,7 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 
 ## Nothing new starts, and the disk is nearly full
 
-A build or a review stops before it makes its checkout, with an error such as `new work is held: 8000 free inodes in /tmp, below the floor of 10000`. Intakt holds new work while the disk a checkout lands on has less than 1 GiB or fewer than 10,000 inodes free, because one checkout per reviewed head can use up inodes long before bytes. Running work finishes.
+A build or a review stops before it copies the project or makes its checkout, with an error such as `new work is held: 8000 free inodes in /tmp, below the floor of 10000`. Intakt holds new work while the disk a checkout lands on has less than 1 GiB or fewer than 10,000 inodes free, because one checkout per reviewed head can use up inodes long before bytes. Running work finishes.
 
 1. Run `df -h` and `df -i` on the folder the error names.
 2. Free space or inodes there, for example by deleting old build folders.
