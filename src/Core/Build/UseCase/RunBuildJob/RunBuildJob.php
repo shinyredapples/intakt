@@ -50,10 +50,10 @@ final readonly class RunBuildJob
     // An exit code, because a builder that can plant files in the output can plant any marker there too, but cannot set the script's exit code.
     public const int OUTPUT_NOT_CLEARED = 3;
 
-    // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.
-    // One sentence for every way the runner refuses the output, the listing that failed before any entry was seen included, because the exception does not say which way it was.
+    // Covers a failed listing too, because the exception does not say which refusal it was.
     private const string REFUSED_OUTPUT = "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n";
 
+    // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.
     private const string VENDOR_HOST = 'api.anthropic.com';
 
     private const int MEMORY_BYTES = 4 * 1024 ** 3;
