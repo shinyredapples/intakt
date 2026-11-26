@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 
+use Closure;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
@@ -52,14 +53,28 @@ final readonly class HeldCalls
         return is_string($value) ? $value : null;
     }
 
-    // Only the demo project's row of the call in a round of this recording is an earlier Play of it, because another recording replayed before may reuse the call ID under its own rounds.
+    // Only the demo project's row of the call in a round this recording names but does not start is an earlier Play of it: another recording may reuse the call ID under its own rounds, and a Play of a recording that starts the round leaves that round's start row, which is refused before this check, so a held row without that start came from another recording.
     private function anEarlierPlayHolds(string $call, Recording $recording): bool
     {
-        $rounds = array_map(static fn (RecordedLedgerEvent $event): ?string => $call === self::callOf($event->payload) ? self::stringOf($event->payload, 'round') : null, $recording->events);
+        $rounds = array_diff(
+            self::roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => $call === self::callOf($event->payload)),
+            self::roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewStarted === $event->kind),
+        );
 
         return array_any($this->payloads, static fn (string $payload): bool => $call === self::callOf($payload)
             && CreateDemoProjectCommand::NAME === self::stringOf($payload, 'project')
-            && null !== self::stringOf($payload, 'round')
             && in_array(self::stringOf($payload, 'round'), $rounds, true));
+    }
+
+    /**
+     * @param Closure(RecordedLedgerEvent): bool $matches
+     *
+     * @return list<string>
+     */
+    private static function roundsOf(Recording $recording, Closure $matches): array
+    {
+        $rounds = array_map(static fn (RecordedLedgerEvent $event): ?string => $matches($event) ? self::stringOf($event->payload, 'round') : null, $recording->events);
+
+        return array_values(array_filter($rounds, is_string(...)));
     }
 }

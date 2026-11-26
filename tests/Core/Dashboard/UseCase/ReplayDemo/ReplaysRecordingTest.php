@@ -426,14 +426,44 @@ final class ReplaysRecordingTest extends TestCase
         self::assertFalse($this->refusal()->meansAnotherPlayCameFirst());
     }
 
-    public function testAModelCallAnEarlierPlayOfThisRecordingWroteUnderTheDemoProjectMeansAnotherPlayCameFirst(): void
+    public function testARecordingOfModelCallsOnlyPlayedTwiceMeansAnotherPlayCameFirst(): void
+    {
+        $usageOnly = $this->recording([$this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"sample","tier":"standard","round":"'.self::ROUND.'"}', 0)]);
+        $this->replays()->replay($usageOnly, 1.0);
+
+        try {
+            $this->replays()->replay($usageOnly, 1.0);
+            self::fail('A recording whose model call an earlier Play of it wrote was replayed.');
+        } catch (ReplayIsRefused $refused) {
+            self::assertTrue($refused->meansAnotherPlayCameFirst());
+            self::assertCount(1, $this->appended());
+        }
+    }
+
+    public function testAModelCallTheDemoProjectHoldsInARoundThisRecordingStartsWithoutThatStartIsNoEarlierPlay(): void
     {
         $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"'.CreateDemoProjectCommand::NAME.'","tier":"standard","round":"'.self::ROUND.'"}'));
 
         $refused = $this->refusal();
 
-        self::assertTrue($refused->meansAnotherPlayCameFirst());
+        self::assertFalse($refused->meansAnotherPlayCameFirst());
+        self::assertTrue($refused->meansAnotherReviewUsedACall());
         self::assertCount(1, $this->appended());
+    }
+
+    public function testARecordingThatStartsTheRoundOfAModelCallARecordingOfModelCallsOnlyPlayedBeforeIsNoEarlierPlay(): void
+    {
+        $usage = $this->row(LedgerEventKind::UsageRecorded, '{"call":"shared","phase":"started","project":"sample","tier":"standard","round":"round-a"}', 0);
+        $start = $this->row(LedgerEventKind::ReviewStarted, '{"round":"round-a","project":"sample","reviewers":1,"change":"change-b","number":1}', 0);
+        $this->replays()->replay(new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'test', [], 'sample', 'change-a', [$usage], []), 1.0);
+
+        try {
+            $this->replays()->replay(new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'test', [], 'sample', 'change-b', [$start, $usage], []), 1.0);
+            self::fail('A colliding call was replayed.');
+        } catch (ReplayIsRefused $refused) {
+            self::assertFalse($refused->meansAnotherPlayCameFirst());
+            self::assertTrue($refused->meansAnotherReviewUsedACall(), $refused->getMessage());
+        }
     }
 
     public function testAModelCallTheDemoProjectHoldsInARoundOfAnotherRecordingIsNoEarlierPlay(): void
