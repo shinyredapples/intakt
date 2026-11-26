@@ -21,6 +21,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\Paths;
@@ -194,6 +195,18 @@ final readonly class BuildTask
         return null;
     }
 
+    // The mirror as the mirror step left it when the disk holds the fetch, because the run already started and a hold never cuts running work; any other failure ends the step.
+    private function refreshMirror(BuildTaskRequest $request): ?string
+    {
+        try {
+            $this->checkout->updateMirror($request->project, $request->remote);
+        } catch (BuildCheckoutFailed $failure) {
+            return $failure->getPrevious() instanceof NewWorkHeld ? null : $failure->getMessage();
+        }
+
+        return null;
+    }
+
     private function makeClone(BuildTaskRequest $request): ?string
     {
         try {
@@ -249,7 +262,7 @@ final readonly class BuildTask
      */
     private function prePushCheck(BuildTaskRequest $request, ListedIssue $task, array $results): RegressionRuns|string|null
     {
-        $failure = $this->updateMirror($request);
+        $failure = $this->refreshMirror($request);
 
         if (null !== $failure) {
             return $failure;

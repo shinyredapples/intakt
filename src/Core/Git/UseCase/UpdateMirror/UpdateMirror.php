@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\GitCommand;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -37,10 +39,13 @@ final readonly class UpdateMirror
         private Filesystem $filesystem,
         private LockFactory $locks,
         private Mirrors $mirrors,
+        private DiskHeadroom $disk,
     ) {
     }
 
+    // Held before the clone or the fetch, because both write into the mirrors folder, and a build updates its mirror before it makes its clone.
     /**
+     * @throws NewWorkHeld
      * @throws ProjectNameRefused
      * @throws NetworkGitFailed
      * @throws MirrorNotUpdated
@@ -53,6 +58,7 @@ final readonly class UpdateMirror
     {
         $path = $this->mirrors->pathOf($project);
         $remote = $this->fromMirrorsDirectory($remote);
+        $this->disk->admitWorkAt($path);
 
         if ($this->isMirror($path)) {
             $this->fill($path, $remote);

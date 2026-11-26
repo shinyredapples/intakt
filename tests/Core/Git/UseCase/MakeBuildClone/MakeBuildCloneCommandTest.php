@@ -273,7 +273,7 @@ final class MakeBuildCloneCommandTest extends TestCase
     private function givenTheProjectHasAMirror(): void
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update('alpha', $this->remote->path);
+        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), new DiskWithRoom())->update('alpha', $this->remote->path);
     }
 
     private function displayOnOneLine(CommandTester $tester): string

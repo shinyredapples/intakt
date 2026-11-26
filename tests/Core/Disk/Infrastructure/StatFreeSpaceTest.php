@@ -42,6 +42,22 @@ final class StatFreeSpaceTest extends TestCase
         $this->withStatPrinting('42', static fn (): int => new StatFreeSpace()->freeInodes(sys_get_temp_dir()));
     }
 
+    public function testARelativeFolderThatStartsWithADashIsReadAsAFolderNotAnOption(): void
+    {
+        $parent = sys_get_temp_dir().'/intakt-stat-'.bin2hex(random_bytes(6));
+        $filesystem = new Filesystem();
+        $filesystem->mkdir($parent.'/-disk-probe');
+        $directory = (string) getcwd();
+        chdir($parent);
+
+        try {
+            self::assertGreaterThanOrEqual(0, new StatFreeSpace()->freeInodes('-disk-probe'));
+        } finally {
+            chdir($directory);
+            $filesystem->remove($parent);
+        }
+    }
+
     public function testAFolderThatDoesNotExistIsAnExplicitFailureForBytes(): void
     {
         $this->expectException(FreeSpaceUnreadable::class);

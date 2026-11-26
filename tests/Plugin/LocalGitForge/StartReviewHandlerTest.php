@@ -10,6 +10,7 @@ use Intakt\Core\Disk\Contract\DiskFloor;
 use Intakt\Core\Disk\Contract\DiskHeadroom;
 use Intakt\Core\Disk\Contract\DiskHeld;
 use Intakt\Core\Disk\Contract\NewWorkHeld;
+use Intakt\Core\Disk\Contract\FreeSpaceReader;
 use Intakt\Core\Disk\Domain\FloorCheck;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -35,6 +36,7 @@ use Intakt\Tests\Core\Disk\DiskWithRoom;
 use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -184,6 +186,39 @@ final class StartReviewHandlerTest extends TestCase
         $handler($this->startOf(null));
         self::assertCount(1, $started);
         $this->removeSnapshot((string) array_first($started));
+    }
+
+    public function testAStartWithRoomForTheSnapshotButNotInTheRepositorysGitFolderAddsNoWorktree(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('start')->willReturn('round-1');
+        $repository = (string) realpath($this->repository->path);
+        $space = new class ($repository) implements FreeSpaceReader {
+            public function __construct(private readonly string $repository)
+            {
+            }
+
+            #[Override]
+            public function freeBytes(string $folder): int
+            {
+                return str_starts_with($folder, $this->repository) ? 10 : 5000;
+            }
+
+            #[Override]
+            public function freeInodes(string $folder): int
+            {
+                return 10 ** 6;
+            }
+        };
+
+        try {
+            new StartReviewHandler($this->review($reviews, new FloorCheck($space, '/unused', 1000, 100)))($this->startOf(null));
+            self::fail('The review started below the bytes floor of the repository.');
+        } catch (NewWorkHeld $held) {
+            self::assertSame($repository.'/.git', $held->held->folder);
+        }
+
+        self::assertDirectoryDoesNotExist($repository.'/.git/worktrees');
     }
 
     protected function setUp(): void

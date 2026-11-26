@@ -49,7 +49,7 @@ final readonly class LocalChangeReview
         $forge = $this->forgeFor($input);
         $change = $forge->change(new ChangeId($input->change));
         $request = $this->requestFor($input, $change);
-        $this->disk->admitWorkAt($forge->snapshotFolder());
+        $this->admitSnapshot($forge);
 
         return $forge->withSnapshotOf($change->commits->head, fn (string $snapshot): ChangeReview => $this->onStop->during(
             static fn () => $forge->removeSnapshot($snapshot),
@@ -93,7 +93,7 @@ final readonly class LocalChangeReview
     private function start(LocalGitForge $forge, ReviewChangeInput $input, Change $change): QueuedRound
     {
         $request = $this->requestFor($input, $change);
-        $this->disk->admitWorkAt($forge->snapshotFolder());
+        $this->admitSnapshot($forge);
         $snapshot = $forge->keepSnapshotOf($change->commits->head);
 
         try {
@@ -103,6 +103,13 @@ final readonly class LocalChangeReview
             $forge->removeSnapshot($snapshot);
 
             throw $failure;
+        }
+    }
+
+    private function admitSnapshot(LocalGitForge $forge): void
+    {
+        foreach ($forge->snapshotFolders() as $folder) {
+            $this->disk->admitWorkAt($folder);
         }
     }
 

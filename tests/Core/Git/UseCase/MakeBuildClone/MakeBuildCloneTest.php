@@ -475,7 +475,7 @@ final class MakeBuildCloneTest extends TestCase
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update('alpha', $this->remote->path);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), new DiskWithRoom())->update('alpha', $this->remote->path);
     }
 
     private function whenTheBuildCloneIsMade(string $branch): void

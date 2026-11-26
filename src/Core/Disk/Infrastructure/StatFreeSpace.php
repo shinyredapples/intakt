@@ -27,7 +27,7 @@ final readonly class StatFreeSpace implements FreeSpaceReader
     #[Override]
     public function freeInodes(string $folder): int
     {
-        $stat = new Process(['stat', '--file-system', '--format=%d %c', $folder], null, null, null, self::STAT_SECONDS);
+        $stat = new Process(['stat', '--file-system', '--format=%d %c', '--', $folder], null, null, null, self::STAT_SECONDS);
         $stat->run();
         if (!$stat->isSuccessful() || 1 !== preg_match('/^(\d+) (\d+)$/', trim($stat->getOutput()), $counts)) {
             throw FreeSpaceUnreadable::of($folder, 'inodes');

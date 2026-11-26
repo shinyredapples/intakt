@@ -50,6 +50,10 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchPushRequest;
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
+use Intakt\Core\Disk\Domain\FloorCheck;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -147,6 +151,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\Disk\DiskWithRoom;
+use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
@@ -255,6 +260,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(HandBackNotChecked::class)]
 #[UsesClass(JobCredentials::class)]
 #[UsesClass(UpdateMirror::class)]
+#[UsesClass(FloorCheck::class)]
+#[UsesClass(DiskHeld::class)]
+#[UsesClass(NewWorkHeld::class)]
 #[UsesClass(MakeBuildClone::class)]
 #[UsesClass(TakeCheckedHead::class)]
 #[UsesClass(BranchHead::class)]
@@ -338,6 +346,8 @@ final class BuildTaskTest extends TestCase
     private JobRunner $checkRunner;
 
     private ?JobSpec $checked = null;
+
+    private DiskHeadroom $disk;
 
     private Filesystem $handBackFiles;
 
@@ -1206,6 +1216,30 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->mirrors);
     }
 
+    public function testARunBelowAFloorEndsAtTheMirrorStepAndMakesNeitherMirrorNorClone(): void
+    {
+        $this->disk = new FloorCheck(new FreeSpaceInMemory(10, 10 ** 6), '/unused', 1000, 100);
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Mirror, $outcome->last);
+        self::assertStringStartsWith('new work is held: 10 free bytes in ', (string) $outcome->failure);
+        self::assertFileDoesNotExist($this->mirrors.'/alpha.git/HEAD');
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testAPrePushRefreshHeldByTheDiskChecksTheMirrorAsItIsSoTheRunningBuildIsNotCut(): void
+    {
+        $space = new FreeSpaceInMemory(2000, 10 ** 6);
+        $this->disk = new FloorCheck($space, '/unused', 1000, 100);
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), static fn () => $space->leave(10, 10 ** 6));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertNull($outcome->failure);
+        self::assertNotNull($this->checked);
+    }
+
     public function testAMirrorThatCannotBeUpdatedEndsAtTheMirrorStepAndNoCloneIsMade(): void
     {
         $ledger = new InMemoryLedger();
@@ -1356,6 +1390,7 @@ final class BuildTaskTest extends TestCase
 
     protected function setUp(): void
     {
+        $this->disk = new DiskWithRoom();
         $this->locks = new LockFactory(new InMemoryStore());
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
@@ -1578,14 +1613,14 @@ final class BuildTaskTest extends TestCase
 
     private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
     {
-        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors, new DiskWithRoom()), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
+        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors, $this->disk), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
     }
 
     private function mirrorUpdate(Mirrors $mirrors, PersistingStoreInterface $locks): UpdateMirror
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory($locks), $mirrors);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory($locks), $mirrors, $this->disk);
     }
 
     private function request(int $issue, string $remote): BuildTaskRequest

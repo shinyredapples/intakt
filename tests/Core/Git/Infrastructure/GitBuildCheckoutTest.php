@@ -142,7 +142,7 @@ final class GitBuildCheckoutTest extends TestCase
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
         return new GitBuildCheckout(
-            new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), $mirrors),
+            new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), $mirrors, new DiskWithRoom()),
             new MakeBuildClone(new HardenedGit(), $filesystem, $mirrors, new DiskWithRoom()),
             $mirrors,
             new TakeCheckedHead(new HardenedGit(), $mirrors),

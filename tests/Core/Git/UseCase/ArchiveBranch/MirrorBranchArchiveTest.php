@@ -21,6 +21,7 @@ use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
 use Intakt\Plugin\Forge\Contract\ForgeBranches;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -259,7 +260,7 @@ final class MirrorBranchArchiveTest extends TestCase
     private function mirror(): void
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->root.'/mirrors'))->update('alpha', $this->remote->path);
+        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->root.'/mirrors'), new DiskWithRoom())->update('alpha', $this->remote->path);
     }
 
     private function archiver(): MirrorBranchArchive

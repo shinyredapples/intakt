@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
+use Intakt\Core\Disk\Domain\FloorCheck;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
@@ -13,6 +17,8 @@ use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirrorCommand;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use InvalidArgumentException;
@@ -36,6 +42,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(NetworkGitFailed::class)]
 #[UsesClass(MirrorNotUpdated::class)]
 #[UsesClass(GitCall::class)]
+#[UsesClass(FloorCheck::class)]
+#[UsesClass(DiskHeld::class)]
+#[UsesClass(NewWorkHeld::class)]
 final class UpdateMirrorCommandTest extends TestCase
 {
     private string $mirrors;
@@ -87,6 +96,16 @@ final class UpdateMirrorCommandTest extends TestCase
         $this->whenTheCommandRuns('alpha', $this->remote->path, $filesystem);
     }
 
+    public function testAMirrorBelowAFloorSaysWhichFloorAndWhereExitsWithOneAndClonesNothing(): void
+    {
+        $tester = $this->whenTheCommandRuns('alpha', $this->remote->path, disk: new FloorCheck(new FreeSpaceInMemory(10, 10 ** 6), '/unused', 1000, 100));
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        // A narrow terminal also breaks the path inside a word, so the comparison drops all whitespace.
+        self::assertStringContainsString('newworkisheld:10freebytesin'.dirname($this->mirrors).',belowthefloorof1000', (string) preg_replace('/\s+/', '', $tester->getDisplay()));
+        self::assertFileDoesNotExist($this->mirrors.'/alpha.git/HEAD');
+    }
+
     protected function setUp(): void
     {
         $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
@@ -106,10 +125,10 @@ final class UpdateMirrorCommandTest extends TestCase
         return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
-    private function whenTheCommandRuns(string $project, string $remote, Filesystem $filesystem = new Filesystem()): CommandTester
+    private function whenTheCommandRuns(string $project, string $remote, Filesystem $filesystem = new Filesystem(), DiskHeadroom $disk = new DiskWithRoom()): CommandTester
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        $mirror = new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors));
+        $mirror = new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $disk);
         $application = new Application();
         $application->addCommand(new UpdateMirrorCommand($mirror));
         $tester = new CommandTester($application->find('intakt:mirror:update'));
