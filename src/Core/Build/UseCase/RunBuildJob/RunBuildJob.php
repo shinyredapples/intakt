@@ -18,7 +18,6 @@ use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
-use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
@@ -82,6 +81,7 @@ final readonly class RunBuildJob
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
+        private RecordedBuildStops $stops,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {
@@ -110,10 +110,14 @@ final readonly class RunBuildJob
         $prompt = $this->promptFileFor($job);
 
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
+            $outcome = $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
         } finally {
             $this->filesystem->remove($prompt);
+            // Read also when the job failed, so a cause recorded for it never reaches the branch's next build.
+            $cause = $this->stops->causeFor($job);
         }
+
+        return $outcome->stoppedFor($cause);
     }
 
     private function modelFor(BuildJob $job): string
@@ -154,7 +158,7 @@ final readonly class RunBuildJob
     private function specOf(BuildJob $job, string $model, array $inputs): JobSpec
     {
         return new JobSpec(
-            $this->idOf($job),
+            $job->jobId(),
             $job->image,
             new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds),
             $inputs,
@@ -171,12 +175,6 @@ final readonly class RunBuildJob
             // No result, because the job wrote what the runner refuses to read.
             return null;
         }
-    }
-
-    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
-    private function idOf(BuildJob $job): JobId
-    {
-        return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
     }
 
     private function outcomeOf(?JobResult $result): BuildJobOutcome

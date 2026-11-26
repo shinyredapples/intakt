@@ -12,6 +12,7 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
@@ -20,6 +21,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -50,6 +52,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuildVerdict::class)]
 #[CoversClass(BuilderNotOnClaudeCode::class)]
 #[CoversClass(BuildCloneIsNoFolder::class)]
+#[CoversClass(RecordedBuildStops::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -82,6 +85,10 @@ final class RunBuildJobTest extends TestCase
     private GatesAtOnce $gatesAtOnce;
 
     private mixed $toolTimeLimit = 1500;
+
+    private RecordedBuildStops $stops;
+
+    private ?BuildStopCause $stopWhileRunning = null;
 
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
     {
@@ -327,9 +334,66 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
     }
 
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAJobStoppedWhileItRanHandsBackItsBundleAndTextCarryingTheCause(BuildStopCause $cause): void
+    {
+        $this->stopWhileRunning = $cause;
+
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertSame([BuildVerdict::Built, 'BUNDLE', "feat: x\n", $cause], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText, $outcome->stopCause]);
+    }
+
+    public function testAJobWithoutAStopCarriesNoCause(): void
+    {
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertNull($outcome->stopCause);
+    }
+
+    public function testAStopCauseIsReadOnceSoTheBranchsNextBuildCarriesNone(): void
+    {
+        $this->stopWhileRunning = BuildStopCause::NoProgress;
+        $builds = $this->runBuilds(OutputFiles::of([]));
+        (void) $builds->run($this->job());
+        $this->stopWhileRunning = null;
+
+        self::assertNull($builds->run($this->job())->stopCause);
+    }
+
+    public function testAStopCauseOfAJobThatFailedIsForgottenWithIt(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec): never {
+            $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+
+            throw new RuntimeException('engine gone');
+        });
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the failure was not passed on');
+        } catch (RuntimeException) {
+        }
+
+        self::assertNull($this->stops->causeFor($this->job()));
+    }
+
+    public function testAStopCauseOfAnotherBranchIsNotCarried(): void
+    {
+        $this->stops->record(new BuildJob('demo', $this->folder.'/clone', 'other', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'img'), BuildStopCause::PerTaskTotal);
+
+        $outcome = $this->runBuilds(OutputFiles::of([]))->run($this->job());
+
+        self::assertNull($outcome->stopCause);
+    }
+
     protected function setUp(): void
     {
         $this->gatesAtOnce = new GatesAtOnce(12, 1);
+        $this->stops = new RecordedBuildStops();
         $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->folder.'/clone');
     }
@@ -344,6 +408,10 @@ final class RunBuildJobTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($output, $end): JobResult {
             $this->ran = $spec;
+            // While the job runs, as the watch of a running build records its stop.
+            if ($this->stopWhileRunning instanceof BuildStopCause) {
+                $this->stops->record($this->job(), $this->stopWhileRunning);
+            }
             $this->promptSeen = (string) file_get_contents($spec->inputs[1]->hostPath);
 
             return new JobResult($end, $output);
@@ -362,6 +430,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops);
     }
 }
