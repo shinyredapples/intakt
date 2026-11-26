@@ -58,31 +58,6 @@ final readonly class HeadBackOff
         }
     }
 
-    // Along the whole chain, because the command bus wraps the start handler's failure.
-    private function diskHoldIn(Throwable $failure): ?NewWorkHeld
-    {
-        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-            if ($cause instanceof NewWorkHeld) {
-                return $cause;
-            }
-        }
-
-        return null;
-    }
-
-    // No failure, because a disk below a floor is no fault of this pull request and clears on its own; counted as one, an hour of a nearly full disk handed every watched head over.
-    private function waitForRoom(string $project, OpenChange $head, NewWorkHeld $held): void
-    {
-        $this->logger->info('A head waits for room on the disk.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'floor' => $held->held->floor->value, 'folder' => $held->held->folder]);
-
-        try {
-            $this->pending->waitUntil($project, $head, $this->clock->now()->modify(sprintf('+%d seconds', self::DISK_WAIT_SECONDS)));
-            // Boundary: backs off this head when its wait cannot be stored, because that is a failure of this head alone and must not end the tick for the heads after it.
-        } catch (Throwable $failure) {
-            $this->backOffAfterAFailedWait($project, $head, $failure);
-        }
-    }
-
     // No failure, because the forge refused the read before any request and named when it answers again; counted as one, a pause of a few ticks handed a healthy head over.
     private function waitForTheReset(string $project, OpenChange $head, ForgeRateLimited $paused): void
     {
@@ -105,6 +80,31 @@ final readonly class HeadBackOff
         } catch (Throwable $notBackedOff) {
             $this->logger->error('A head\'s back-off could not be stored; it stays due for the next tick.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $notBackedOff]);
             $this->reopenEntityManager();
+        }
+    }
+
+    // Along the whole chain, because the command bus wraps the start handler's failure.
+    private function diskHoldIn(Throwable $failure): ?NewWorkHeld
+    {
+        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            if ($cause instanceof NewWorkHeld) {
+                return $cause;
+            }
+        }
+
+        return null;
+    }
+
+    // No failure, because a disk below a floor is no fault of this pull request and clears on its own; counted as one, an hour of a nearly full disk handed every watched head over.
+    private function waitForRoom(string $project, OpenChange $head, NewWorkHeld $held): void
+    {
+        $this->logger->info('A head waits for room on the disk.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'floor' => $held->held->floor->value, 'folder' => $held->held->folder]);
+
+        try {
+            $this->pending->waitUntil($project, $head, $this->clock->now()->modify(sprintf('+%d seconds', self::DISK_WAIT_SECONDS)));
+            // Boundary: backs off this head when its wait cannot be stored, because that is a failure of this head alone and must not end the tick for the heads after it.
+        } catch (Throwable $failure) {
+            $this->backOffAfterAFailedWait($project, $head, $failure);
         }
     }
 
