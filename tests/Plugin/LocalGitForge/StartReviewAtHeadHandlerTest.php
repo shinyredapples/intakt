@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
-use Intakt\Tests\Core\Disk\DiskWithRoom;
-
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -34,6 +32,7 @@ use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\IdentityAtHeadHandler;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\StartReviewAtHeadHandler;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;

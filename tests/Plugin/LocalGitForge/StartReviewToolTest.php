@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
-use Intakt\Tests\Core\Disk\DiskWithRoom;
-
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
@@ -38,6 +36,7 @@ use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\StartedReview;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\StartReviewTool;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Mcp\Exception\ToolCallException;
 use Mcp\Server\ClientGateway;

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
-use Intakt\Tests\Core\Disk\DiskWithRoom;
-
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
@@ -44,6 +42,7 @@ use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewExit;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
