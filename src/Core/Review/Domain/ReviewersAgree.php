@@ -16,8 +16,8 @@ final readonly class ReviewersAgree
 {
     // The kept findings are the ones left after the quote check, because a dropped finding is never marked. A finding is shared when every reviewer reported a blocking finding at its file and line, the place OnePerPlace merges act entries by, because the ledger does not record which reviewer reported which id; one without a place can be matched with none.
     /**
-     * @param list<?Verdict>  $verdicts
-     * @param list<Finding> $kept
+     * @param list<?Verdict> $verdicts
+     * @param list<Finding>  $kept
      */
     public function over(array $verdicts, array $kept): bool
     {
@@ -42,7 +42,7 @@ final readonly class ReviewersAgree
             return false;
         }
 
-        return array_all($verdicts, static fn (?Verdict $verdict): bool => null !== $verdict && array_any($verdict->findings, static fn (Finding $reported): bool => Severity::P3 !== $reported->severity
+        return array_all($verdicts, static fn (?Verdict $verdict): bool => $verdict instanceof Verdict && array_any($verdict->findings, static fn (Finding $reported): bool => Severity::P3 !== $reported->severity
             && $reported->file === $finding->file
             && $reported->line === $finding->line));
     }
