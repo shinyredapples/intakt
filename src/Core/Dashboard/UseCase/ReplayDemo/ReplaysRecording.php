@@ -101,7 +101,7 @@ final readonly class ReplaysRecording
             $call = LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null;
 
             if (null !== $call && in_array($call, $calls, true)) {
-                throw self::anEarlierPlayHolds($held, $call, $recording) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
+                throw $this->anEarlierPlayHolds($held, $call, $recording) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
             }
         }
     }
@@ -110,7 +110,7 @@ final readonly class ReplaysRecording
     /**
      * @param list<string> $held
      */
-    private static function anEarlierPlayHolds(array $held, string $call, Recording $recording): bool
+    private function anEarlierPlayHolds(array $held, string $call, Recording $recording): bool
     {
         $rounds = array_map(static fn (RecordedLedgerEvent $event): ?string => $call === self::callOf($event->payload) ? self::roundOf($event->payload) : null, $recording->events);
 
