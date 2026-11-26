@@ -315,6 +315,31 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
     }
 
+    public function testAFragmentWrittenAgainAfterItsDeletionWasCommittedTiesWithAnotherUncommittedOne(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/2-earlier.md');
+        $this->sandbox->commitAll('remove the clock row');
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+
+        self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
+    }
+
+    public function testTheHistoryOfAFileInASubfolderDoesNotOrderATopLevelFragmentOfTheSameName(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/archive/2-earlier.md', "archived\n");
+        $this->sandbox->commitAll('archive a file with the same name');
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/archive/2-earlier.md');
+        $this->sandbox->commitAll('remove the archive');
+
+        self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
+    }
+
     public function testARepositoryWithoutCommitsRefusesFragmentsThatSetTheSameRow(): void
     {
         $this->sandbox->startRepository();

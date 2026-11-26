@@ -32,9 +32,23 @@ final readonly class HighlightHistory
             return $unreadable;
         }
 
+        $committed = $this->runner->git(['ls-tree', '--full-name', '--name-only', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
+
+        if (!$committed->succeeded()) {
+            return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$committed->firstErrorLine();
+        }
+
         $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
 
-        return $log->succeeded() ? new HighlightOrder($this->placesIn($log->output)) : 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
+        return $log->succeeded() ? new HighlightOrder($this->placesIn($log->output, $this->linesOf($committed->output))) : 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function linesOf(string $output): array
+    {
+        return array_values(array_filter(explode("\n", $output), static fn (string $line): bool => '' !== $line));
     }
 
     private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
@@ -47,9 +61,11 @@ final readonly class HighlightHistory
     }
 
     /**
+     * @param list<string> $committedPaths
+     *
      * @return array<string, int>
      */
-    private function placesIn(string $log): array
+    private function placesIn(string $log, array $committedPaths): array
     {
         $places = [];
         $position = -1;
@@ -59,11 +75,14 @@ final readonly class HighlightHistory
             if (1 === preg_match(self::COMMIT, rtrim($line))) {
                 ++$position;
             } elseif ('' !== $line && $position >= 0) {
-                $places[basename($line)] = $position;
+                $places[$line] = $position;
             }
         }
 
-        return $places;
+        // Only a fragment HEAD holds has a commit: one deleted and written again is uncommitted, and a file in a subfolder is not a fragment of the same name.
+        $places = array_intersect_key($places, array_flip($committedPaths));
+
+        return array_combine(array_map(basename(...), array_keys($places)), array_values($places));
     }
 
     // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
