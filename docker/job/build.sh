@@ -202,6 +202,11 @@ if [ ! -f "$log" ] || [ -L "$log" ] || [ ! -w "$log" ]; then
         restore_folders "$log"
     fi
     rm -rf -- "$log"
+    # A removal that did not remove leaves the pipe or the link in place, and the append below would wait on it or write through it, so the place is checked and not the removal's status; -e is false for a link to nothing.
+    if [ -e "$log" ] || [ -L "$log" ]; then
+        echo 'the build log could not be started again' >&2
+        exit 3
+    fi
 fi
 # Every later line goes to the log, and a redirection that fails skips its command, the bundle's too, so a log that cannot be written ends the job with the code the orchestrator reads as no result instead of a build without commits.
 # The reason goes to the job's standard error, the only log left to write; the runner keeps none of it, and refuses an output that holds anything but files.
