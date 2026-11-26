@@ -38,6 +38,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Job\OutputFiles;
 use InvalidArgumentException;
@@ -457,6 +458,49 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
     }
 
+    public function testAGateThatFailsBeforeTheRunnerIsCalledLeavesTheRecordedCauseAndNoPromptFile(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $gate = self::createStub(Gate::class);
+        $gate->method('registryHosts')->willThrowException(new RuntimeException('registry list unavailable'));
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), gate: $gate)->run($this->job());
+            self::fail('the gate failure was not passed on');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], glob($this->folder.'/prompts/*'));
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAPromptThatCannotBeWrittenLeavesNoPromptFileAndKeepsTheRecordedStopCause(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $filesystem = new class extends Filesystem {
+            /**
+             * @param string|resource $content
+             */
+            public function appendToFile(string $filename, $content, bool $lock = false): void
+            {
+                throw new IOException('prompt write failed');
+            }
+        };
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), $filesystem)->run($this->job());
+            self::fail('the write failure was not passed on');
+        } catch (IOException) {
+        }
+
+        self::assertSame([], glob($this->folder.'/prompts/*'));
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
     public function testAStopCauseIsForgottenEvenWhenRemovingThePromptFails(): void
     {
         $runner = self::createStub(JobRunner::class);
@@ -574,11 +618,11 @@ final class RunBuildJobTest extends TestCase
         return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', new Decisions(), null), $tier, 'intakt-job-demo:1');
     }
 
-    private function useCase(JobRunner $runner, ResolvedModel $model, ?Filesystem $filesystem = null): RunBuildJob
+    private function useCase(JobRunner $runner, ResolvedModel $model, ?Filesystem $filesystem = null, ?Gate $gate = null): RunBuildJob
     {
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->promptFolder ?? $this->folder.'/prompts', $this->stops);
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $gate ?? new PhpGate(),$this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->promptFolder ?? $this->folder.'/prompts', $this->stops);
     }
 }

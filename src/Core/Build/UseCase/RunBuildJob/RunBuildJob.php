@@ -110,23 +110,28 @@ final readonly class RunBuildJob
     {
         $model = $this->modelFor($job);
         $clone = new JobInput($this->folder($job->clone), self::CLONE);
-        // Prepared before the prompt file exists and outside the try, so a job that cannot be prepared leaves no prompt behind and never reads a stop cause.
+        // The command is built before the prompt file exists, so a build script that cannot be read leaves no prompt behind.
         $command = $this->commandOf($job, $model);
-        $prompt = $this->promptFileFor($job);
+        $prompt = $this->emptyPromptFile();
 
         $cause = null;
-        $refused = false;
+        $reachedRunner = false;
 
         try {
-            // The prompt's input is built inside the try, because a refused input must still remove the prompt file and, like a refused job, never reads the cause.
-            $outcome = $this->outcomeOfRunning($this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT)));
+            // Written and turned into the spec inside the try, because once the prompt file exists every failure must remove it, a failed write and a refused input included.
+            $this->filesystem->appendToFile($prompt, $this->prompts->textFor($job->brief));
+            $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT));
+            // Set only here, so whatever fails before the runner is called, of any exception class, never reads the cause.
+            $reachedRunner = true;
+            $outcome = $this->outcomeOfRunning($spec);
         } catch (JobRefused $failure) {
-            $refused = true;
+            // A job the runner refused never started: the cause belongs to the build that holds the branch's job id.
+            $reachedRunner = false;
 
             throw $failure;
         } finally {
-            // Read before the prompt is removed and also when the job failed, so a cause never reaches the branch's next build, but not for a job the runner refused, because it never started and the cause belongs to the build that holds the branch's job id.
-            if (!$refused) {
+            // Read only for a job the runner was called with and did not refuse, also when that job failed, so its cause never reaches the branch's next build; read before the prompt is removed, so a failed removal cannot keep it.
+            if ($reachedRunner) {
                 $cause = $this->stops->causeFor($job);
             }
             $this->filesystem->remove($prompt);
@@ -163,13 +168,11 @@ final readonly class RunBuildJob
     }
 
     // A file of its own for each run, readable by the orchestrator's user only, so two builds never share one.
-    private function promptFileFor(BuildJob $job): string
+    private function emptyPromptFile(): string
     {
         $this->filesystem->mkdir($this->promptFolder, 0o700);
-        $file = $this->filesystem->tempnam($this->promptFolder, 'prompt-', '.md');
-        $this->filesystem->appendToFile($file, $this->prompts->textFor($job->brief));
 
-        return $file;
+        return $this->filesystem->tempnam($this->promptFolder, 'prompt-', '.md');
     }
 
     private function specOf(BuildJob $job, JobCommand $command, JobInput ...$inputs): JobSpec
