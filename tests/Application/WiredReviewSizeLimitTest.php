@@ -122,7 +122,7 @@ final class WiredReviewSizeLimitTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, int>
+     * @return array<int|string, int>
      */
     private function limitsFor(string $line): array
     {
