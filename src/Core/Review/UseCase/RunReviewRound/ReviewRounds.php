@@ -149,11 +149,15 @@ final readonly class ReviewRounds
     public function ofEverySpelling(string $project, string $change): array
     {
         $canonical = ChangeAddress::canonical($change);
+        $number = ChangeAddress::pullRequestNumber($change);
 
+        // Narrowed to the change's own spellings, because the read runs for every open pull request on each watcher pass and must not grow with the project's history. Any other address is stored as its canonical form; a pull request spelling holds /pull/<n> in its path, and the canonical filter below drops /pull/123 for /pull/12.
+        $spelling = null === $number ? 'r.change.change = :change' : 'r.change.change LIKE :change';
         // Refreshed, because a worker keeps its entity manager between messages, and a round it loaded earlier would hide the state and the publication other workers committed since.
         /** @var list<ReviewRound> $rounds */
-        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project ORDER BY r.change.number DESC', ReviewRound::class))
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND %s ORDER BY r.change.number DESC', ReviewRound::class, $spelling))
             ->setParameter('project', $project)
+            ->setParameter('change', null === $number ? $canonical : '%/pull/'.$number.'%')
             ->setHint(Query::HINT_REFRESH, true)
             ->getResult();
         $ofChange = array_values(array_filter($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical));

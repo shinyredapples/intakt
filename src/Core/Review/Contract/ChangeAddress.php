@@ -27,6 +27,14 @@ final readonly class ChangeAddress
         return sprintf('https://github.com/%s/%s/pull/%s', strtolower($match[1]), strtolower($match[2]), $match[3]);
     }
 
+    // Null unless the address is a GitHub pull request, so a caller can narrow a read to the spellings that hold the number.
+    public static function pullRequestNumber(string $address): ?string
+    {
+        $canonical = self::canonical($address);
+
+        return 1 === preg_match('#^https://github\.com/[^/]+/[^/]+/pull/([1-9][0-9]*)$#D', $canonical, $match) ? $match[1] : null;
+    }
+
     public static function sameChange(string $one, string $other): bool
     {
         return self::canonical($one) === self::canonical($other);
