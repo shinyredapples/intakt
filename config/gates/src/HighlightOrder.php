@@ -20,7 +20,9 @@ final readonly class HighlightOrder
     public function compare(string $a, string $b): int
     {
         // Within one place the names only fix where rows go on the page, because two fragments there that set the same row stop the assembly.
-        return $this->placeOf($a) <=> $this->placeOf($b) ?: strnatcmp($a, $b);
+        $byPlace = $this->placeOf($a) <=> $this->placeOf($b);
+
+        return 0 === $byPlace ? strnatcmp($a, $b) : $byPlace;
     }
 
     public function knowsWhichCameFirst(string $a, string $b): bool

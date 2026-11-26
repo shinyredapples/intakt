@@ -172,28 +172,36 @@ final readonly class HighlightFragments
     private function unorderedRowFindings(array $rowsByFragment, HighlightOrder $order): array
     {
         // Fragments that share a place would otherwise fall back to an order history does not give, and an older change could silently replace a newer row.
-        $setBy = [];
-
-        foreach ($rowsByFragment as $name => $rows) {
-            foreach ($this->rowKeysOf($rows) as [$section, $key]) {
-                $latest = $setBy[$section][$key] ?? [];
-
-                // A fragment at a later place sets the row's final value, so a tie before it does not matter.
-                $setBy[$section][$key] = [] !== $latest && !$order->knowsWhichCameFirst($latest[0], $name) ? [...$latest, $name] : [$name];
-            }
-        }
-
         $findings = [];
 
-        foreach ($setBy as $section => $keys) {
-            foreach ($keys as $key => $names) {
-                if (count($names) > 1) {
-                    $findings[] = $this->listOf($names).' set row "'.$key.'" of section "'.$section.'" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
-                }
+        foreach ($this->latestSettersOf($rowsByFragment, $order) as [$section, $key, $names]) {
+            if (count($names) > 1) {
+                $findings[] = $this->listOf($names).' set row "'.$key.'" of section "'.$section.'" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
             }
         }
 
         return $findings;
+    }
+
+    /**
+     * @param array<string, array<string, array<string, string>>> $rowsByFragment
+     *
+     * @return list<array{string, string, non-empty-list<string>}>
+     */
+    private function latestSettersOf(array $rowsByFragment, HighlightOrder $order): array
+    {
+        $setBy = [];
+
+        foreach ($rowsByFragment as $name => $rows) {
+            foreach ($this->rowKeysOf($rows) as [$section, $key]) {
+                $latest = $setBy[$section][$key][2] ?? [];
+
+                // A fragment at a later place sets the row's final value, so a tie before it does not matter.
+                $setBy[$section][$key] = [$section, $key, [] !== $latest && !$order->knowsWhichCameFirst($latest[0], $name) ? [...$latest, $name] : [$name]];
+            }
+        }
+
+        return array_merge(...array_map(array_values(...), array_values($setBy)));
     }
 
     /**
