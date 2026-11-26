@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\HighlightAssembly;
 use Intakt\Gates\HighlightFragment;
 use Intakt\Gates\HighlightFragments;
+use Intakt\Gates\HighlightHistory;
 use Intakt\Gates\HighlightLayout;
 use Intakt\Gates\HighlightRowKind;
 use Intakt\Gates\RepositoryAttributesRefused;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightFragments::class)]
+#[CoversClass(HighlightHistory::class)]
 #[UsesClass(HighlightAssembly::class)]
 #[UsesClass(HighlightRowKind::class)]
 #[CoversClass(HighlightFragment::class)]
