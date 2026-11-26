@@ -350,7 +350,17 @@ final class RunBuildJobTest extends TestCase
 
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
-        self::assertSame([BuildVerdict::NoResult, "no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n"], [$outcome->verdict, $outcome->log]);
+        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n"], [$outcome->verdict, $outcome->log]);
+    }
+
+    public function testAnOutputTheRunnerCouldNotListIsNoResultWithAReasonThatClaimsNoEntryWasSeen(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::unlisted());
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame([BuildVerdict::NoResult, true, false], [$outcome->verdict, str_contains($outcome->log, 'could not be listed'), str_contains($outcome->log, 'held an entry')]);
     }
 
     #[TestWith(["\n"])]
@@ -365,7 +375,7 @@ final class RunBuildJobTest extends TestCase
 
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
-        self::assertSame(["no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n", 1], [$outcome->log, preg_match_all('/\R/u', $outcome->log)]);
+        self::assertSame(["no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n", 1], [$outcome->log, preg_match_all('/\R/u', $outcome->log)]);
     }
 
     public function testAJobWhoseScriptCouldNotClearTheOutputAddsNoSecondLineEndToALogThatEndsInOne(): void

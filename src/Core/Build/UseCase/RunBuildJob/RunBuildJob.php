@@ -51,6 +51,9 @@ final readonly class RunBuildJob
     public const int OUTPUT_NOT_CLEARED = 3;
 
     // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.
+    // One sentence for every way the runner refuses the output, the listing that failed before any entry was seen included, because the exception does not say which way it was.
+    private const string REFUSED_OUTPUT = "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n";
+
     private const string VENDOR_HOST = 'api.anthropic.com';
 
     private const int MEMORY_BYTES = 4 * 1024 ** 3;
@@ -169,7 +172,7 @@ final readonly class RunBuildJob
             $result = $this->jobs->run($spec);
         } catch (JobOutputRefused) {
             // The reason is fixed because the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
-            return new BuildJobOutcome(BuildVerdict::NoResult, log: "no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n");
+            return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT);
         }
 
         return $this->outcomeOf($result);
