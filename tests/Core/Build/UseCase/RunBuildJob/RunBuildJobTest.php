@@ -25,7 +25,6 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcomes;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
-use Intakt\Core\Build\UseCase\RunBuildJob\UnwatchedBuilds;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -56,7 +55,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuilderNotOnClaudeCode::class)]
 #[CoversClass(BuildCloneIsNoFolder::class)]
 #[CoversClass(BuildJobOutcomes::class)]
-#[CoversClass(UnwatchedBuilds::class)]
+#[CoversClass(BuildStops::class)]
 #[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
@@ -114,12 +113,40 @@ final class RunBuildJobTest extends TestCase
     #[TestWith([BuildStopCause::PerTaskTotal])]
     public function testAJobTheWatchStoppedCarriesItsCauseAndStaysBuilt(BuildStopCause $cause): void
     {
-        $this->stops = self::createStub(BuildStops::class);
-        $this->stops->method('causeFor')->willReturn($cause);
+        $this->stops = new BuildStops();
+        $this->stops->record($this->job(), $cause);
 
         $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
 
         self::assertSame([$cause, true], [$outcome->stopCause, $outcome->built()]);
+    }
+
+    public function testARecordedStopIsForgottenOnceTheJobHasReadIt(): void
+    {
+        $this->stops = new BuildStops();
+        $this->stops->record($this->job(), BuildStopCause::NoProgress);
+        $runBuilds = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]));
+        (void) $runBuilds->run($this->job());
+
+        self::assertNull($runBuilds->run($this->job())->stopCause);
+    }
+
+    public function testAStopRecordedForAnotherBranchIsNotReadForThisJob(): void
+    {
+        $this->stops = new BuildStops();
+        $other = $this->job();
+        $this->stops->record(new BuildJob($other->project, $other->clone, 'other', $other->brief, $other->tier, $other->image), BuildStopCause::RunawayCeiling);
+
+        self::assertNull($this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job())->stopCause);
+    }
+
+    public function testAResetForgetsEveryRecordedStop(): void
+    {
+        $this->stops = new BuildStops();
+        $this->stops->record($this->job(), BuildStopCause::PerTaskTotal);
+        $this->stops->reset();
+
+        self::assertNull($this->stops->causeFor($this->job()));
     }
 
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
@@ -401,6 +428,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits ?? new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops ?? new UnwatchedBuilds());
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new BuildJobOutcomes(), new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $this->limits ?? new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops ?? new BuildStops());
     }
 }

@@ -15,6 +15,7 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\BugPart;
@@ -52,7 +53,6 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcomes;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
-use Intakt\Core\Build\UseCase\RunBuildJob\UnwatchedBuilds;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
@@ -272,7 +272,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
-#[UsesClass(UnwatchedBuilds::class)]
+#[UsesClass(BuildStops::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildLimits::class)]
@@ -395,8 +395,9 @@ final class BuildTaskTest extends TestCase
     public function testAStoppedBuildJobPassesTheHandBackCheckAndIsPushedWithItsPullRequestText(BuildStopCause $cause): void
     {
         $this->runner = $this->committingRunner();
-        $this->stops = self::createStub(BuildStops::class);
-        $this->stops->method('causeFor')->willReturn($cause);
+        $stops = new BuildStops();
+        $stops->record($this->buildJob(), $cause);
+        $this->stops = $stops;
         $ledger = new InMemoryLedger();
 
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
@@ -405,6 +406,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
         self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
         self::assertSame([1, 'feat: task 7'], [$this->changes->opened, $this->changes->text?->title]);
+        self::assertNull($stops->causeFor($this->buildJob()), 'the build job read the recorded cause');
     }
 
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
@@ -1587,7 +1589,7 @@ final class BuildTaskTest extends TestCase
 
     private function builds(): RunBuildJob
     {
-        return new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops ?? new UnwatchedBuilds());
+        return new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new BuildJobOutcomes(), new PhpGate(), new GatesAtOnce(12, 1), 1500, new BuildLimits(2_000_000, 900, 6_000_000, 12_000_000), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops ?? new BuildStops());
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
@@ -1620,6 +1622,12 @@ final class BuildTaskTest extends TestCase
     private function request(int $issue, string $remote): BuildTaskRequest
     {
         return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone, self::IMAGE);
+    }
+
+    // The job BuildTask builds for request(), because the watch records a stop for the job it watches.
+    private function buildJob(): BuildJob
+    {
+        return new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief('', new Decisions(), null), Tier::Standard, self::IMAGE);
     }
 
     private function remoteTip(): ?string

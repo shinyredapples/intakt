@@ -65,7 +65,7 @@ The page then shows a figure, an **estimated** label and the price date. A model
 
 ## Limits for a long build
 
-A build that keeps making progress is worth its tokens, so spend alone will not end one. Four limits will decide when a build without progress stops. Intakt does not watch a running build yet, so today they only have to be valid.
+A build that keeps making progress is worth its tokens, so spend alone will not end one. Four limits will decide when a build without progress stops. Two of them, the runaway ceiling and the per-task total, will stop a build even while it makes progress. Intakt does not watch a running build yet, so today they only have to be valid.
 
 1. Open `config/services.yaml`.
 2. Under `parameters:`, set any of `intakt.build.allowance_tokens`, `intakt.build.idle_seconds`, `intakt.build.ceiling_tokens` and `intakt.build.task_total_tokens`: whole numbers of at least 1, written in the file itself rather than read from an environment variable, the ceiling not below the allowance.

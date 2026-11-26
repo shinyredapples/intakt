@@ -82,7 +82,7 @@ final readonly class RunBuildJob
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
-        private BuildStops $stops = new UnwatchedBuilds(),
+        private BuildStops $stops,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {

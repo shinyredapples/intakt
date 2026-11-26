@@ -21,6 +21,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcomes;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
@@ -307,6 +308,7 @@ final class RunBuildJobCommandTest extends TestCase
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',
+            new BuildStops(),
         ), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:build:run'));
         $tester->execute([
