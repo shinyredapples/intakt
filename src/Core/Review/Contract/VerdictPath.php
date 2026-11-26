@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-// How the Code reviewers' verdict step marked a round: in plain code when the reviewers agree, or by a model call for disagreements and deferrals (D4 of #862).
+// Recorded with the round's outcome, because the outcome reads the same on either path and only this tells plain code from a model call (D4 of #862).
 enum VerdictPath: string
 {
     case PlainCode = 'plain_code';

@@ -110,13 +110,13 @@ final class ReviewersAgreeTest extends TestCase
         return new Verdict(Decision::Approve, [], [], []);
     }
 
-    private function changes(Finding $finding): Verdict
-    {
-        return new Verdict(Decision::Changes, [$finding], [], []);
-    }
-
     private function at(string $id, Severity $severity, int $line): Finding
     {
         return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    private function changes(Finding $finding): Verdict
+    {
+        return new Verdict(Decision::Changes, [$finding], [], []);
     }
 }

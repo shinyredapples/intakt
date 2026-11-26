@@ -10,7 +10,7 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Whether the Code reviewers' verdict step can mark a round in plain code (D4 of #862): every reviewer gave a readable verdict, no finding may be deferred, and every blocking finding is shared; a rule, not a service.
+// Plain code marks a round only when a model call could change nothing but links and notes, because every kept P1 and P2 reaches the act list whatever it is marked (D4 of #862); a rule, not a service.
 #[Exclude]
 final readonly class ReviewersAgree
 {
