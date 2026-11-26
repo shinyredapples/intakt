@@ -142,6 +142,7 @@ final readonly class EscalateRecurringP1Handler
             throw EscalationLimited::untilFree(null);
         } catch (ProviderFailedTransiently) {
             throw EscalationLimited::bounded();
+            // Boundary: rethrows any other reviewer failure as the call's own failure, because the vendor plugin behind the contract may fail in ways the handler cannot name.
         } catch (Throwable $failure) {
             throw EscalationCallFailed::of($command->key, $failure);
         }
