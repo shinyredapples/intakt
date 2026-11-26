@@ -51,6 +51,8 @@ final class UpdateMirrorCommandTest extends TestCase
 
     private TemporaryRepository $remote;
 
+    private DiskHeadroom $disk;
+
     public function testTheCommandPrintsThePathOfTheMirrorAndExitsWithZero(): void
     {
         $tester = $this->whenTheCommandRuns('alpha', $this->remote->path);
@@ -98,7 +100,9 @@ final class UpdateMirrorCommandTest extends TestCase
 
     public function testAMirrorBelowAFloorSaysWhichFloorAndWhereExitsWithOneAndClonesNothing(): void
     {
-        $tester = $this->whenTheCommandRuns('alpha', $this->remote->path, disk: new FloorCheck(new FreeSpaceInMemory(10, 10 ** 6), '/unused', 1000, 100));
+        $this->disk = new FloorCheck(new FreeSpaceInMemory(10, 10 ** 6), '/unused', 1000, 100);
+
+        $tester = $this->whenTheCommandRuns('alpha', $this->remote->path);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         // A narrow terminal also breaks the path inside a word, so the comparison drops all whitespace.
@@ -109,6 +113,7 @@ final class UpdateMirrorCommandTest extends TestCase
     protected function setUp(): void
     {
         $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->disk = new DiskWithRoom();
         $this->remote = new TemporaryRepository();
         $this->remote->commitFile('a.txt', 'one');
     }
@@ -125,10 +130,10 @@ final class UpdateMirrorCommandTest extends TestCase
         return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
-    private function whenTheCommandRuns(string $project, string $remote, Filesystem $filesystem = new Filesystem(), DiskHeadroom $disk = new DiskWithRoom()): CommandTester
+    private function whenTheCommandRuns(string $project, string $remote, Filesystem $filesystem = new Filesystem()): CommandTester
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        $mirror = new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $disk);
+        $mirror = new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $this->disk);
         $application = new Application();
         $application->addCommand(new UpdateMirrorCommand($mirror));
         $tester = new CommandTester($application->find('intakt:mirror:update'));

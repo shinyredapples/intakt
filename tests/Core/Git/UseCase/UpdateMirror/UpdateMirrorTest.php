@@ -56,6 +56,8 @@ final class UpdateMirrorTest extends TestCase
 
     private ?string $originalPath = null;
 
+    private DiskHeadroom $disk;
+
     public function testTheFirstUpdateOfAProjectCreatesItsBareMirror(): void
     {
         $path = $this->update('alpha', $this->remote->path);
@@ -68,10 +70,10 @@ final class UpdateMirrorTest extends TestCase
     public function testAFirstUpdateBelowAFloorClonesNothingAndClonesOnceSpaceIsBack(): void
     {
         $space = new FreeSpaceInMemory(10, 10 ** 6);
-        $disk = new FloorCheck($space, '/unused', 1000, 100);
+        $this->disk = new FloorCheck($space, '/unused', 1000, 100);
 
         try {
-            $this->update('alpha', $this->remote->path, disk: $disk);
+            $this->update('alpha', $this->remote->path);
             self::fail('The update was not held.');
         } catch (NewWorkHeld $held) {
             self::assertSame(DiskFloor::Bytes, $held->held->floor);
@@ -79,7 +81,7 @@ final class UpdateMirrorTest extends TestCase
 
         self::assertFileDoesNotExist($this->mirrors.'/alpha.git/HEAD');
         $space->leave(2000, 10 ** 6);
-        self::assertSame($this->remote->objectAt('HEAD'), $this->git($this->update('alpha', $this->remote->path, disk: $disk), 'rev-parse', 'refs/heads/main'));
+        self::assertSame($this->remote->objectAt('HEAD'), $this->git($this->update('alpha', $this->remote->path), 'rev-parse', 'refs/heads/main'));
     }
 
     public function testALaterUpdateBelowTheInodesFloorFetchesNothingIntoTheMirror(): void
@@ -88,8 +90,10 @@ final class UpdateMirrorTest extends TestCase
         $first = $this->remote->objectAt('HEAD');
         $this->remote->commitFile('b.txt', 'two');
 
+        $this->disk = new FloorCheck(new FreeSpaceInMemory(10 ** 9, 5), '/unused', 1000, 100);
+
         try {
-            $this->update('alpha', $this->remote->path, disk: new FloorCheck(new FreeSpaceInMemory(10 ** 9, 5), '/unused', 1000, 100));
+            $this->update('alpha', $this->remote->path);
             self::fail('The update was not held.');
         } catch (NewWorkHeld $held) {
             self::assertSame(DiskFloor::Inodes, $held->held->floor);
@@ -467,6 +471,7 @@ final class UpdateMirrorTest extends TestCase
     {
         $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
         $this->wrapper = $this->mirrors.'-bin';
+        $this->disk = new DiskWithRoom();
         $this->remote = new TemporaryRepository();
         $this->remote->commitFile('a.txt', 'one');
     }
@@ -507,11 +512,11 @@ final class UpdateMirrorTest extends TestCase
         }
     }
 
-    private function update(string $project, string $remote, ?RecordingClock $clock = null, DiskHeadroom $disk = new DiskWithRoom()): string
+    private function update(string $project, string $remote, ?RecordingClock $clock = null): string
     {
         $network = new NetworkGit($clock ?? new RecordingClock(), new NullLogger());
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $disk)->update($project, $remote);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $this->disk)->update($project, $remote);
     }
 
     private function git(string $directory, string ...$arguments): string

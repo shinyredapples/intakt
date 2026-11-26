@@ -195,18 +195,6 @@ final readonly class BuildTask
         return null;
     }
 
-    // The mirror as the mirror step left it when the disk holds the fetch, because the run already started and a hold never cuts running work; any other failure ends the step.
-    private function refreshMirror(BuildTaskRequest $request): ?string
-    {
-        try {
-            $this->checkout->updateMirror($request->project, $request->remote);
-        } catch (BuildCheckoutFailed $failure) {
-            return $failure->getPrevious() instanceof NewWorkHeld ? null : $failure->getMessage();
-        }
-
-        return null;
-    }
-
     private function makeClone(BuildTaskRequest $request): ?string
     {
         try {
@@ -271,6 +259,18 @@ final readonly class BuildTask
         $checked = $this->prePushChecks->resultOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels)));
 
         return $checked->failure ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))) ?? $checked->runs;
+    }
+
+    // The mirror as the mirror step left it when the disk holds the fetch, because the run already started and a hold never cuts running work; any other failure ends the step.
+    private function refreshMirror(BuildTaskRequest $request): ?string
+    {
+        try {
+            $this->checkout->updateMirror($request->project, $request->remote);
+        } catch (BuildCheckoutFailed $failure) {
+            return $failure->getPrevious() instanceof NewWorkHeld ? null : $failure->getMessage();
+        }
+
+        return null;
     }
 
     /**

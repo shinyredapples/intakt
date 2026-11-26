@@ -106,13 +106,6 @@ final readonly class LocalChangeReview
         }
     }
 
-    private function admitSnapshot(LocalGitForge $forge): void
-    {
-        foreach ($forge->snapshotFolders() as $folder) {
-            $this->disk->admitWorkAt($folder);
-        }
-    }
-
     /**
      * @return Closure(string): ChangeReviewRequest
      */
@@ -148,5 +141,12 @@ final readonly class LocalChangeReview
         $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
 
         return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), $labels);
+    }
+
+    private function admitSnapshot(LocalGitForge $forge): void
+    {
+        foreach ($forge->snapshotFolders() as $folder) {
+            $this->disk->admitWorkAt($folder);
+        }
     }
 }

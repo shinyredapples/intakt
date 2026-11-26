@@ -164,7 +164,7 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
      */
     public function snapshotFolders(): array
     {
-        return [sys_get_temp_dir(), trim($this->read(['rev-parse', '--path-format=absolute', '--git-common-dir']))];
+        return [$this->snapshotFolder(), trim($this->read(['rev-parse', '--path-format=absolute', '--git-common-dir']))];
     }
 
     private function snapshotFolder(): string

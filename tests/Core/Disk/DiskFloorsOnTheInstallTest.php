@@ -77,9 +77,6 @@ final class DiskFloorsOnTheInstallTest extends KernelTestCase
         $bytesFloor = $container->getParameter(DiskServices::FREE_BYTES_FLOOR);
         $inodesFloor = $container->getParameter(DiskServices::FREE_INODES_FLOOR);
         $watched = $container->getParameter(DiskServices::WATCHED_DIRECTORY);
-        self::assertIsInt($bytesFloor);
-        self::assertIsInt($inodesFloor);
-        self::assertIsString($watched);
         $this->bytesFloor = $bytesFloor;
         $this->inodesFloor = $inodesFloor;
         $this->space = new FreeSpaceInMemory($bytesFloor, $inodesFloor);
@@ -97,14 +94,6 @@ final class DiskFloorsOnTheInstallTest extends KernelTestCase
         parent::tearDown();
     }
 
-    private function mirror(): string
-    {
-        $mirrors = self::getContainer()->getParameter(GitServices::MIRRORS_DIRECTORY);
-        self::assertIsString($mirrors);
-
-        return $mirrors.'/'.$this->project.'.git';
-    }
-
     /**
      * @param array<string, string> $input
      */
@@ -115,6 +104,11 @@ final class DiskFloorsOnTheInstallTest extends KernelTestCase
         $tester->execute($input);
 
         return $tester;
+    }
+
+    private function mirror(): string
+    {
+        return self::getContainer()->getParameter(GitServices::MIRRORS_DIRECTORY).'/'.$this->project.'.git';
     }
 
     // A narrow terminal also breaks a path inside a word, so the comparison drops all whitespace.
