@@ -408,7 +408,7 @@ final class RunBuildJobTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($output, $end): JobResult {
             $this->ran = $spec;
-            // While the job runs, as the watch of a running build records its stop.
+            // Recorded while the job runs, because that is when the watch of a running build (#3965) will record its stop.
             if ($this->stopWhileRunning instanceof BuildStopCause) {
                 $this->stops->record($this->job(), $this->stopWhileRunning);
             }
