@@ -15,10 +15,6 @@ final class ControlledFreeSpaceReader implements FreeSpaceReader, ResetInterface
 
     private ?int $freeInodes = PHP_INT_MAX;
 
-    public function __construct()
-    {
-    }
-
     #[Override]
     public function freeBytes(string $folder): int
     {

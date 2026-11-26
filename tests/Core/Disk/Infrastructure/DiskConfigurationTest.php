@@ -62,7 +62,9 @@ final class DiskConfigurationTest extends TestCase
      */
     private function processed(array $disk): array
     {
-        /** @var array{disk: array{min_free_bytes: int, min_free_inodes: int}} */
-        return new Processor()->processConfiguration(new DiskConfiguration(), [$disk]);
+        /** @var array{disk: array{min_free_bytes: int, min_free_inodes: int}} $settings */
+        $settings = new Processor()->processConfiguration(new DiskConfiguration(), [$disk]);
+
+        return $settings;
     }
 }

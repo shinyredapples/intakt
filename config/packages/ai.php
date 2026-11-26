@@ -379,7 +379,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(ReviewServices::CONVERSATION_DAYS, RetentionConfiguration::daysOf($retentionSettings['retention']['conversation_days']));
     $container->parameters()->set(DiskServices::MIN_FREE_BYTES, $diskSettings['disk']['min_free_bytes']);
     $container->parameters()->set(DiskServices::MIN_FREE_INODES, $diskSettings['disk']['min_free_inodes']);
-    $container->parameters()->set(GitHubForgeServices::RESERVE_PERCENT,$githubSettings['github']['reserve_percent']);
+    $container->parameters()->set(GitHubForgeServices::RESERVE_PERCENT, $githubSettings['github']['reserve_percent']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)
         ->autowire()
