@@ -509,7 +509,7 @@ final class JudgeRoundTest extends KernelTestCase
     {
         $round = $this->roundOf(new VerdictPerRole([
             'Look at part 1.' => new Verdict(Decision::Changes, [$this->atLine('A', Severity::P1, 3)], [], []),
-            'Look at part 2.' => new Verdict(Decision::Changes, [$this->atLine('B', Severity::P2, 3)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->atLine('A', Severity::P1, 3)->withId('B')], [], []),
         ]));
         [$first, $second] = $this->reviewerIdsOf($round);
 
@@ -545,6 +545,36 @@ final class JudgeRoundTest extends KernelTestCase
 
         self::assertSame(1, $judge->calls);
         self::assertSame('model_call', $this->judgeDonePayloads()[0]['path']);
+    }
+
+    public function testTwoUnrelatedBlockingFindingsAtOneLineAreNotSharedAndAskTheModel(): void
+    {
+        $round = $this->roundOf(new VerdictPerRole([
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->atLine('A', Severity::P1, 3)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->atLine('B', Severity::P1, 3)], [], []),
+        ]));
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        self::assertSame(1, $judge->calls);
+        self::assertSame('model_call', $this->judgeDonePayloads()[0]['path']);
+    }
+
+    public function testOnlyTheDeferrableFindingBesideSharedBlockingFindingsReachesTheModel(): void
+    {
+        $shared = $this->atLine('A', Severity::P1, 3);
+        $round = $this->roundOf(new VerdictPerRole([
+            'Look at part 1.' => new Verdict(Decision::Changes, [$shared, $this->atLine('C', Severity::P3, 7)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$shared->withId('B')], [], []),
+        ]));
+        $judge = new ScriptedJudgement(new Judgement([new JudgedFinding('F2', Mark::Defer)]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        self::assertSame([Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $judge->asked?->findings ?? []));
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F3'], 'follow_ups' => ['F2']]], $this->judgeCalls());
+        self::assertSame('plain_code_and_model_call', $this->judgeDonePayloads()[0]['path']);
     }
 
     public function testAJudgedRoundDeliveredAgainAsksTheJudgeNothingAndRecordsNoSecondJudgeDone(): void

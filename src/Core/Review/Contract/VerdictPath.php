@@ -9,4 +9,6 @@ enum VerdictPath: string
 {
     case PlainCode = 'plain_code';
     case ModelCall = 'model_call';
+    // Plain code marked the shared blocking findings and a model call marked only the rest, so the dashboard counts none of the round's marks as the model's own.
+    case PlainCodeAndModelCall = 'plain_code_and_model_call';
 }

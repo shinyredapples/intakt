@@ -37,6 +37,25 @@ final readonly class Judgement
         return clone (self::everyBlockingFindingActs($findings), ['fallback' => false, 'path' => VerdictPath::PlainCode]);
     }
 
+    // The shared blocking findings the model never saw come first as act, and a mark the model gave one of their ids anyway is dropped, because a shared finding never goes through the model.
+    /**
+     * @param list<Finding> $shared
+     */
+    public function besidePlainCodeActs(array $shared): self
+    {
+        if ([] === $shared) {
+            return $this;
+        }
+
+        $ids = array_map(static fn (Finding $finding): string => $finding->id, $shared);
+        $own = array_filter($this->marks, static fn (JudgedFinding $mark): bool => !in_array($mark->id, $ids, true));
+
+        return clone ($this, [
+            'marks' => [...array_map(static fn (string $id): JudgedFinding => new JudgedFinding($id, Mark::Act), $ids), ...array_values($own)],
+            'path' => VerdictPath::PlainCodeAndModelCall,
+        ]);
+    }
+
     // Every blocking finding is act, because a judge that cannot be read must never drop one; a P3 gets no mark and so never reaches the builder.
     /**
      * @param list<Finding> $findings

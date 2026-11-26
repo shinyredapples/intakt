@@ -19,107 +19,129 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Finding::class)]
 final class ReviewersAgreeTest extends TestCase
 {
-    public function testReviewersWhoAllApproveWithNoFindingLeftAgree(): void
+    public function testABlockingFindingEveryReviewerReportsAtItsPlaceInTheSameWordsIsShared(): void
     {
-        self::assertTrue(new ReviewersAgree()->over([$this->approval(), $this->approval()], []));
+        $bug = $this->at('A', Severity::P1, 3);
+        $same = $bug->withId('B');
+
+        self::assertSame([$bug, $same], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($same)], [$bug, $same]));
     }
 
-    public function testAP3LeftAfterTheQuoteCheckNeedsAMarkSoTheReviewersDoNotAgree(): void
+    public function testTheSameWordsWithOtherCaseAndSpacingAreStillShared(): void
     {
-        $nit = $this->at('A', Severity::P3, 3);
+        $bug = $this->at('A', Severity::P1, 3);
+        $same = new Finding('B', Severity::P1, 'src/A.php', 3, null, "  text OF\n a. ", FixableBy::Builder, false, null, null);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($nit), $this->changes($nit)], [$nit]));
+        self::assertSame([$bug], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($same)], [$bug]));
     }
 
-    public function testOneReviewerApprovingAndOneRequestingChangesDoNotAgree(): void
+    public function testTwoUnrelatedDefectsReportedAtOneLineAreNotShared(): void
+    {
+        $authorization = new Finding('A', Severity::P1, 'src/Endpoint.php', 12, null, 'The endpoint is missing an access check.', FixableBy::Builder, false, null, null);
+        $serialization = new Finding('B', Severity::P1, 'src/Endpoint.php', 12, null, 'The response omits the requested total.', FixableBy::Builder, false, null, null);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($authorization), $this->changes($serialization)], [$authorization, $serialization]));
+    }
+
+    public function testTheSameWordsAtOneLineWithAnotherSeverityAreNotShared(): void
     {
         $bug = $this->at('A', Severity::P1, 3);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->approval(), $this->changes($bug)], [$bug]));
-    }
-
-    public function testABlockingFindingEveryReviewerReportsAtItsFileAndLineIsShared(): void
-    {
-        $bug = $this->at('A', Severity::P1, 3);
-        $same = $this->at('B', Severity::P2, 3);
-
-        self::assertTrue(new ReviewersAgree()->over([$this->changes($bug), $this->changes($same)], [$bug, $same]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($this->at('A', Severity::P2, 3))], [$bug]));
     }
 
     public function testABlockingFindingOnlyOneReviewerReportsIsNotShared(): void
     {
         $bug = $this->at('A', Severity::P1, 3);
-        $elsewhere = $this->at('B', Severity::P1, 4);
+        $elsewhere = $this->at('A', Severity::P1, 4);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($elsewhere)], [$bug, $elsewhere]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($elsewhere)], [$bug, $elsewhere]));
     }
 
-    public function testAP3AnotherReviewerReportsAtTheSamePlaceDoesNotShareABlockingFinding(): void
+    public function testOnlyTheSharedFindingIsReturnedBesideOneThatIsNot(): void
+    {
+        $bug = $this->at('A', Severity::P1, 3);
+        $lone = $this->at('C', Severity::P2, 9);
+
+        self::assertSame([$bug], new ReviewersAgree()->sharedIn([new Verdict(Decision::Changes, [$bug, $lone], [], []), $this->changes($bug->withId('B'))], [$bug, $lone]));
+    }
+
+    public function testAP3EveryReviewerReportsIsNeverShared(): void
+    {
+        $nit = $this->at('A', Severity::P3, 3);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($nit), $this->changes($nit)], [$nit]));
+    }
+
+    public function testAReviewerWhoApprovesSharesNoFindingAlsoWhenItListsTheSameOne(): void
     {
         $bug = $this->at('A', Severity::P1, 3);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($this->at('B', Severity::P3, 3))], [$bug]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([new Verdict(Decision::Approve, [$bug], [], []), $this->changes($bug)], [$bug]));
+    }
+
+    public function testOneReviewerApprovingAndOneRequestingChangesShareNothing(): void
+    {
+        $bug = $this->at('A', Severity::P1, 3);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([new Verdict(Decision::Approve, [], [], []), $this->changes($bug)], [$bug]));
     }
 
     public function testABlockingFindingWithoutALineIsNeverShared(): void
     {
         $bug = new Finding('A', Severity::P1, 'src/A.php', null, null, 'Broken.', FixableBy::Builder, false, null, null);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($bug)], [$bug]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($bug)], [$bug]));
     }
 
     public function testABlockingFindingWithoutAFileIsNeverShared(): void
     {
         $bug = new Finding('A', Severity::P1, null, 3, null, 'Broken.', FixableBy::Builder, false, null, null);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($bug)], [$bug]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($bug)], [$bug]));
     }
 
     public function testALoneReviewersBlockingFindingIsNotShared(): void
     {
         $bug = $this->at('A', Severity::P1, 3);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug)], [$bug]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug)], [$bug]));
     }
 
-    public function testALoneReviewerWhoApprovesWithNoFindingLeftAgrees(): void
-    {
-        self::assertTrue(new ReviewersAgree()->over([$this->approval()], []));
-    }
-
-    public function testThreeReviewersShareAFindingOnlyWhenEachReportsItsPlace(): void
+    public function testThreeReviewersShareAFindingOnlyWhenEachReportsIt(): void
     {
         $bug = $this->at('A', Severity::P1, 3);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($bug), $this->approval()], [$bug]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($bug), $this->changes($this->at('C', Severity::P1, 8))], [$bug]));
     }
 
-    public function testAReviewerWhoseReviewFailedNeverAgrees(): void
+    public function testAReviewerWhoseReviewFailedSharesNothing(): void
     {
-        self::assertFalse(new ReviewersAgree()->over([$this->approval(), Verdict::noTools()], []));
-    }
-
-    public function testAReviewerClaimingAFailedReviewsIdInAChangesVerdictNeverAgrees(): void
-    {
-        $claimed = new Finding(Verdict::NO_TOOLS, Severity::P1, 'src/A.php', 3, null, 'Broken.', FixableBy::Builder, false, null, null);
         $bug = $this->at('A', Severity::P1, 3);
 
-        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($claimed)], [$bug]));
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), Verdict::noTools()], [$bug]));
     }
 
-    public function testAReviewerWithoutAStoredVerdictNeverAgrees(): void
+    public function testAReviewerClaimingAFailedReviewsIdInAChangesVerdictSharesNothing(): void
     {
-        self::assertFalse(new ReviewersAgree()->over([$this->approval(), null], []));
+        $claimed = new Finding(Verdict::NO_TOOLS, Severity::P1, 'src/A.php', 3, null, 'Text of A.', FixableBy::Builder, false, null, null);
+        $bug = $this->at('A', Severity::P1, 3);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($claimed)], [$bug]));
     }
 
-    public function testARoundWithoutAnyVerdictIsNoAgreement(): void
+    public function testAReviewerWithoutAStoredVerdictSharesNothing(): void
     {
-        self::assertFalse(new ReviewersAgree()->over([], []));
+        $bug = $this->at('A', Severity::P1, 3);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), null], [$bug]));
     }
 
-    private function approval(): Verdict
+    public function testABlockedReviewerSharesNothing(): void
     {
-        return new Verdict(Decision::Approve, [], [], []);
+        $bug = $this->at('A', Severity::P1, 3);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($bug), new Verdict(Decision::Blocked, [$bug], [], [])], [$bug]));
     }
 
     private function at(string $id, Severity $severity, int $line): Finding

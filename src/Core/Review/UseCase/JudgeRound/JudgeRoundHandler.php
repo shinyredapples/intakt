@@ -95,11 +95,22 @@ final readonly class JudgeRoundHandler
      */
     private function judgementOf(ReviewRound $round, array $findings): Judgement
     {
-        // Nothing to mark, or nothing a model could change (D4 of #862), so the model is not paid for an answer plain code can give.
-        if ([] === $findings || new ReviewersAgree()->over($this->rounds->verdictsOf($round), $findings)) {
+        $shared = [] === $findings ? [] : new ReviewersAgree()->sharedIn($this->rounds->verdictsOf($round), $findings);
+        $toMark = array_values(array_filter($findings, static fn (Finding $finding): bool => !in_array($finding, $shared, true)));
+
+        // Nothing a model could change (D4 of #862), so the model is not paid for an answer plain code can give; it marks only the findings the reviewers do not share.
+        if ([] === $toMark) {
             return Judgement::inPlainCode($findings);
         }
 
+        return $this->modelJudgementOf($round, $toMark)->besidePlainCodeActs($shared);
+    }
+
+    /**
+     * @param non-empty-list<Finding> $findings
+     */
+    private function modelJudgementOf(ReviewRound $round, array $findings): Judgement
+    {
         try {
             return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings, $round->id(), new Paths(...$this->rounds->filesOf($round))));
         } catch (ProviderRateLimited $limited) {
