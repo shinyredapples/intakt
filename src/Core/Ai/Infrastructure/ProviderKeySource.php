@@ -13,6 +13,7 @@ use SodiumException;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
+use Throwable;
 
 // Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
 final readonly class ProviderKeySource
@@ -82,8 +83,17 @@ final readonly class ProviderKeySource
 
         try {
             return $this->vault->reveal($name);
-        } catch (SodiumException|RuntimeException) {
-            // A decryption key of the wrong length, or no key at all, throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
+        } catch (SodiumException) {
+            // A decryption key of the wrong length throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
+            return false;
+
+            // Boundary: Symfony's vault throws a bare RuntimeException when it has no key, because it names no exception of its own to catch.
+        } catch (Throwable $failure) {
+            if (RuntimeException::class !== $failure::class) {
+                throw $failure;
+            }
+
+            // The same result as a key of the wrong length, because with no key the secret is as unusable.
             return false;
         }
     }

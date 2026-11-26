@@ -159,6 +159,7 @@ use Intakt\Tests\Core\HandBack\UnreleasableLockStore;
 use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -873,6 +874,17 @@ final class BuildTaskTest extends TestCase
         self::assertSame(BuildStep::BuildJob, $outcome->last);
         self::assertSame(BuildVerdict::NoPullRequestText->reason(), $outcome->failure);
         self::assertSame('failed', $ledger->payloads()[3]['outcome']);
+    }
+
+    public function testABareInvalidArgumentExceptionFromTheBuildJobPassesThrough(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(new InvalidArgumentException('a bug in the build job'));
+        $this->runner = $runner;
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the build job'));
+
+        (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
     }
 
     public function testABuildJobTheRunnerRefusesEndsAtTheBuildJobStepWithItsMessage(): void
