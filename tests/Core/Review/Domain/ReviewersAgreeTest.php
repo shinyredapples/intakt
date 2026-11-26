@@ -60,6 +60,14 @@ final class ReviewersAgreeTest extends TestCase
         self::assertSame([$tight], new ReviewersAgree()->sharedIn([$this->changes($tight), $this->changes($loose)], [$tight]));
     }
 
+    public function testFindingsWhoseTextIsNotValidUtf8AreComparedExactly(): void
+    {
+        $first = new Finding('A', Severity::P1, 'src/Labels.php', 12, null, "The check rejects \xFF here.", FixableBy::Builder, false, null, null);
+        $second = new Finding('B', Severity::P1, 'src/Labels.php', 12, null, "The check  rejects \xFE here.", FixableBy::Builder, false, null, null);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($first), $this->changes($second)], [$first, $second]));
+    }
+
     public function testAFindingWithSeveralCodeSpansIsSharedOnlyWhenEverySpanMatchesExactly(): void
     {
         $first = new Finding('A', Severity::P1, 'src/Labels.php', 12, null, 'Use `a b` instead of `c d`.', FixableBy::Builder, false, null, null);
