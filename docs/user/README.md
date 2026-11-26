@@ -57,6 +57,8 @@ A reviewer's role prompt must come from the owner's panel configuration or the s
 
 Code in a trait counts as outside, even when an allowed class uses the trait. In a trait that a class uses, `new self`, `new static` or `new $class` is judged in each class that uses it, and is refused when it may build one of these objects or its type names no class. In a trait no class uses, all three are refused, except a `new self` or `new static` inside an anonymous class in the trait, which builds that anonymous class. An anonymous class (`new class () {}`) builds none of these objects and passes.
 
+Modules hand each other typed objects, so the `phpstan` gate of `bin/check` refuses an array shape, an untyped array or an array of plain values in a public method or public promoted property of a module's `Contract/` (`intakt.contractArrayType`). A list of objects or enums, or one keyed by strings, is fine ([how to resolve it](../reference/user-manual.md#when-bincheck-reports-an-array-in-a-contract)).
+
 Looking for a setting, a command option or an exact rule? The [complete reference](../reference/user-manual.md) keeps every detail.
 
 The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig, JavaScript, shell and YAML lines a change adds.

@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Domain;
+
+abstract class NamedBase
+{
+    /**
+     * @return list<string>
+     */
+    public function names(): array
+    {
+        return ['sample'];
+    }
+}

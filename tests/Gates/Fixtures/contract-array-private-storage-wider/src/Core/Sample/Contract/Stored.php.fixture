@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use stdClass;
+
+final readonly class Stored
+{
+    /**
+     * @param list<stdClass> $items
+     */
+    public function __construct(
+        /** @var array<int, stdClass> */
+        private array $items,
+    ) {
+    }
+
+    public function count(): int
+    {
+        return count($this->items);
+    }
+}

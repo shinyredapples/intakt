@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use DateTimeImmutable;
+
+trait CarriesItems
+{
+    public function __construct(
+        /** @var array<int, DateTimeImmutable> */
+        public array $items,
+    ) {
+    }
+}
+
+final class Carried
+{
+    use CarriesItems;
+}

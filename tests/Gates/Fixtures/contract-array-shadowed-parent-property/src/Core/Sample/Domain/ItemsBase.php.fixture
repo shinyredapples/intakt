@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Domain;
+
+use stdClass;
+
+abstract class ItemsBase
+{
+    /**
+     * @param list<stdClass> $items
+     */
+    public function __construct(
+        public array $items,
+    ) {
+    }
+}

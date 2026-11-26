@@ -24,6 +24,7 @@ use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\RoundCost;
 use Intakt\Core\Review\Contract\RoundCostList;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -147,7 +148,7 @@ final readonly class RoundLedgerReading implements RoundCosts
             $this->addCall($costs, [$round => null], fn (): Cost => $this->costOfUnendedCalls(array_diff_key($calls, $endedCalls)));
         }
 
-        return new RoundCostList($costs);
+        return new RoundCostList(array_map(static fn (int|string $round, Cost $cost): RoundCost => new RoundCost((string) $round, $cost), array_keys($costs), $costs));
     }
 
     /**

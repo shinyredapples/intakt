@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use DateTimeImmutable;
+
+interface Directory
+{
+    /**
+     * @return array<int, DateTimeImmutable>
+     */
+    public function byNumber(): array;
+
+    /**
+     * @return array<array-key, DateTimeImmutable>
+     */
+    public function byAnyKey(): array;
+}

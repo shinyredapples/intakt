@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+abstract class ListedBase
+{
+    /**
+     * @return list<string>
+     */
+    public function names(): array
+    {
+        return ['sample'];
+    }
+}

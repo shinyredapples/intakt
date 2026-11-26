@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use DateTimeImmutable;
+
+final readonly class Timeline
+{
+    /**
+     * @param list<DateTimeImmutable> $moments
+     */
+    public function __construct(public array $moments)
+    {
+    }
+
+    /**
+     * @return non-empty-list<DateTimeImmutable>|null
+     */
+    public function nonEmpty(): ?array
+    {
+        return [] === $this->moments ? null : $this->moments;
+    }
+
+    public function first(): ?DateTimeImmutable
+    {
+        return array_first($this->moments);
+    }
+}

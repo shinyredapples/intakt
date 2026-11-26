@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+interface Lookup
+{
+    /**
+     * @return array{id: int}|null
+     */
+    public function find(string $name): ?array;
+}

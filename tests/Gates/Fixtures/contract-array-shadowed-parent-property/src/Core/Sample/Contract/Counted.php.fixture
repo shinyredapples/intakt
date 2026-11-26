@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use Intakt\Core\Sample\Domain\ItemsBase;
+
+final class Counted extends ItemsBase
+{
+    /**
+     * @param list<int> $items
+     */
+    public function __construct(array $items)
+    {
+        parent::__construct([]);
+    }
+}

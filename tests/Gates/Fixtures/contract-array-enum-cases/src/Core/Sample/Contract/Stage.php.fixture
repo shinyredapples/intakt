@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+enum Stage: string
+{
+    case Open = 'open';
+    case Closed = 'closed';
+
+    public function isOpen(): bool
+    {
+        return self::Open === $this;
+    }
+}

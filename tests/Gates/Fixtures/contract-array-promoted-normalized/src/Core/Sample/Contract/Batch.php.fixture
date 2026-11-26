@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+use DateTimeImmutable;
+
+final class Batch
+{
+    /**
+     * @param array<int, DateTimeImmutable> $items
+     */
+    public function __construct(
+        /** @var list<DateTimeImmutable> */
+        public array $items,
+    ) {
+        $this->items = array_values($items);
+    }
+}

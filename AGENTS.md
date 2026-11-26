@@ -48,7 +48,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - Calls into a `Contract/` interface or across a plugin boundary use no named arguments: the parameter name would become public API, and an implementation that renames it would break callers.
 - Names: commands imperative, events past tense, queries nouns or questions; exceptions named after the broken rule.
 - A closed set of values is a backed enum; a single named value stays a constant. Any other name built from an enum value is derived from the case too, and every container service id and parameter name lives in its module's ids class.
-- Typed objects across module boundaries, never arrays; array shapes only inside a module.
+- Typed objects across module boundaries, never arrays; array shapes only inside a module (public methods and promoted public properties of a `Contract/` take and return no array shapes, arrays of scalars or untyped arrays; `list<T>` and `array<string, T>` of objects or enums are fine): enforced by `bin/check` (`phpstan`).
 - `DateTimeImmutable` in UTC, `hrtime()` for elapsed time.
 - A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
 - Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>`.

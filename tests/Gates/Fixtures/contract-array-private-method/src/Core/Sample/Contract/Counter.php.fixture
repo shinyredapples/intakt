@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Contract;
+
+final readonly class Counter
+{
+    public function __construct(private int $count)
+    {
+    }
+
+    public function total(): int
+    {
+        return $this->parts()['count'];
+    }
+
+    /**
+     * @return array{count: int}
+     */
+    private function parts(): array
+    {
+        return ['count' => $this->count];
+    }
+}

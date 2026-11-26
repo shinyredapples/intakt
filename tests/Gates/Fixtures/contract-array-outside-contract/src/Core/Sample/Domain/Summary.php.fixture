@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Sample\Domain;
+
+final readonly class Summary
+{
+    /**
+     * @return array{title: string, count: int}
+     */
+    public function totals(): array
+    {
+        return ['title' => 'sample', 'count' => 1];
+    }
+}
