@@ -111,7 +111,7 @@ final readonly class ReadableLines
             return false;
         }
 
-        // A paragraph that started directly below a list item line is that item's wrapped text, where the next item may carry any number and may be empty.
+        // Any item counts outside a paragraph and below a list item line, because a paragraph that started directly below an item is that item's wrapped text, which the next item ends whatever its number and even when empty.
         if ([] === $this->paragraph || TextPlace::BelowItem === $this->place) {
             return 1 === preg_match('/^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]|$)/', $line);
         }
