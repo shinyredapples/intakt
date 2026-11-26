@@ -27,14 +27,14 @@ final class StaticGatesListTest extends TestCase
     {
         $static = $this->namesIn($this->check('--static-gates'), 'static');
 
-        self::assertSame(['environment', 'cs', 'rector', 'architecture', 'comments', 'audit', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'ratchet', 'workflows', 'left-undone'], $static);
+        self::assertSame(['environment', 'cs', 'rector', 'architecture', 'comments', 'audit', 'secrets', 'secrets-history', 'commits', 'dashes', 'ignored', 'highlights', 'reproductions', 'ratchet', 'workflows', 'left-undone'], $static);
     }
 
     public function testTheOrderNamesEveryGateInGateOrder(): void
     {
         $order = $this->namesIn($this->check('--static-gates'), 'order');
 
-        self::assertSame(['environment', 'cs', 'phpstan', 'rector', 'architecture', 'comments', 'audit', 'tests', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'container', 'ratchet', 'workflows', 'left-undone'], $order);
+        self::assertSame(['environment', 'cs', 'phpstan', 'rector', 'architecture', 'comments', 'audit', 'tests', 'secrets', 'secrets-history', 'commits', 'dashes', 'ignored', 'highlights', 'reproductions', 'container', 'ratchet', 'workflows', 'left-undone'], $order);
     }
 
     public function testACodeGateSitsBetweenStaticGatesInTheOrder(): void
