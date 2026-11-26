@@ -138,10 +138,30 @@ final readonly class HighlightHistory
             return [$names];
         }
 
+        $sides = $this->sidesOf($root, $parents, $names);
+
+        if (is_string($sides)) {
+            return $sides;
+        }
+
+        $groups = $this->togetherOrder($sides);
+        $addedByTheMerge = array_values(array_diff($names, ...$groups));
+
+        return [] === $addedByTheMerge ? $groups : [...$groups, $addedByTheMerge];
+    }
+
+    /**
+     * @param list<string> $parents
+     * @param list<string> $names
+     *
+     * @return list<list<list<string>>>|string
+     */
+    private function sidesOf(string $root, array $parents, array $names): array|string
+    {
         $sides = [];
 
         foreach (array_slice($parents, 1) as $parent) {
-            $side = $this->sideOrder($root, $parent, $parents[0], $names);
+            $side = $this->sideOrder($root, [$parent, '^'.$parents[0]], $names);
 
             if (is_string($side)) {
                 return $side;
@@ -152,38 +172,39 @@ final readonly class HighlightHistory
             }
         }
 
+        return $sides;
+    }
+
+    /**
+     * @param list<list<list<string>>> $sides
+     *
+     * @return list<list<string>>
+     */
+    private function togetherOrder(array $sides): array
+    {
         // The merged parents reached the branch together, so fragments from different parents share one place and overlapping rows are refused.
-        $groups = match (count($sides)) {
+        return match (count($sides)) {
             0 => [],
             1 => $sides[0],
             default => [array_values(array_unique(array_merge(...array_merge(...$sides))))],
         };
-        $addedByTheMerge = array_values(array_diff($names, ...$groups));
-
-        return [] === $addedByTheMerge ? $groups : [...$groups, $addedByTheMerge];
     }
 
     /**
+     * @param list<string> $range
      * @param list<string> $names
      *
      * @return list<list<string>>|string
      */
-    private function sideOrder(string $root, string $parent, string $firstParent, array $names): array|string
+    private function sideOrder(string $root, array $range, array $names): array|string
     {
-        // A fragment the side added and deleted again is not what the merge brings in: the merge itself restored it.
-        $tree = $this->runner->git(['ls-tree', '--name-only', $parent, '--', HighlightFragments::DIRECTORY.'/'], $root);
+        $present = $this->presentIn($root, $range[0], $names);
 
-        if (!$tree->succeeded()) {
-            return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$tree->firstErrorLine();
+        if (is_string($present) || [] === $present) {
+            return $present;
         }
 
-        $present = array_values(array_intersect($names, array_map(basename(...), array_filter(explode("\n", $tree->output)))));
-
-        if ([] === $present) {
-            return [];
-        }
-
-        $side = $this->groupsAddedIn($root, [$parent, '^'.$firstParent]);
+        $side = $this->groupsAddedIn($root, $range);
 
         if (is_string($side)) {
             return $side;
@@ -193,5 +214,24 @@ final readonly class HighlightHistory
             array_map(static fn (array $group): array => array_values(array_intersect($group, $present)), $side),
             static fn (array $group): bool => [] !== $group,
         ));
+    }
+
+    /**
+     * @param list<string> $names
+     *
+     * @return list<string>|string
+     */
+    private function presentIn(string $root, string $parent, array $names): array|string
+    {
+        // Only the parent's tree counts, because a fragment the side deleted again and the merge restored is the merge's own, not the side's.
+        $tree = $this->runner->git(['ls-tree', '--name-only', $parent, '--', HighlightFragments::DIRECTORY.'/'], $root);
+
+        if (!$tree->succeeded()) {
+            return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$tree->firstErrorLine();
+        }
+
+        $paths = array_filter(explode("\n", $tree->output), static fn (string $path): bool => '' !== $path);
+
+        return array_values(array_intersect($names, array_map(basename(...), $paths)));
     }
 }
