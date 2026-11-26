@@ -2,6 +2,8 @@
 # Prints yes when the change from <base> to <head> touches what decides whether a new version starts on the old one's data
 # (docker/verify-upgrade.sh), else no: migrations, a Doctrine-mapped class, the image or the locked dependencies.
 set -euo pipefail
+# Bytes, not characters: in a UTF-8 locale read -d '' takes the NUL after a cut multibyte character into the path.
+export LC_ALL=C
 
 if [ "$#" -ne 2 ]; then
   echo "usage: upgrade-needed.sh <base> <head>" >&2

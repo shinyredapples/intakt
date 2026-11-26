@@ -45,6 +45,18 @@ final class UpgradeNeededTest extends SandboxTestCase
         self::assertSame('yes', $this->answer($sandbox));
     }
 
+    public function testACutCharacterDoesNotHideTheNextPath(): void
+    {
+        $sandbox = $this->sandboxWithAMappedClass();
+        $sandbox->write("docs/cut\xC2", 'docs');
+        $sandbox->write('migrations/Version1.php', '<?php');
+        $sandbox->commitAll('test: change');
+
+        $result = $sandbox->runScript(escapeshellarg(self::SCRIPT).' HEAD~1 HEAD', ['LC_ALL' => 'C.UTF-8']);
+
+        self::assertSame('yes', trim($result->output), $result->errors);
+    }
+
     #[DataProvider('changes')]
     public function testTheAnswerSaysWhetherTheChangeTouchesWhatAnUpgradeStartsOn(string $path, string $contents, string $expected): void
     {
