@@ -67,12 +67,6 @@ final readonly class HistoryRow
         return clone ($this, ['project' => $projectOfRound[$this->round]]);
     }
 
-    // Only the dashboard's Stop button writes a reviewer stop request, and that row names no actor, so its kind alone says where it came from.
-    private static function sourceOf(?string $actor, LedgerEventKind $kind): HistorySource
-    {
-        return null !== $actor || LedgerEventKind::ReviewerStopRequested === $kind ? HistorySource::Dashboard : HistorySource::Intakt;
-    }
-
     // The arrow is for a literal change, so it needs two values that differ.
     public function showsChange(): bool
     {
@@ -96,6 +90,12 @@ final readonly class HistoryRow
     private static function filled(?string $text): ?string
     {
         return null === $text || 1 === preg_match('/^[\s\p{Z}\p{Cf}]*\z/u', $text) ? null : $text;
+    }
+
+    // Only the dashboard's Stop button writes a reviewer stop request, and that row names no actor, so its kind alone says where it came from.
+    private static function sourceOf(?string $actor, LedgerEventKind $kind): HistorySource
+    {
+        return null !== $actor || LedgerEventKind::ReviewerStopRequested === $kind ? HistorySource::Dashboard : HistorySource::Intakt;
     }
 
     // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable. It throws on a NUL byte, which would take the whole page down for one row.
