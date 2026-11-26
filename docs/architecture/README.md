@@ -73,6 +73,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 
 - [AI providers](ai-providers.md): which model providers Intakt can use and how keys are found.
 - [Vendor](vendor.md): the layer that calls the models, and the judge.
+- [Disk floors](disk-floors.md): new work is held below a free-byte or free-inode floor.
 - [Capability tiers per project](capability-tiers.md): the mode of each project.
 - [Model choice](model-choice.md): the rules that pick the tier a build starts on.
 - [Measured use](measured-use.md): how Intakt measures and paces its use of subscription windows, with cooldowns and holds.

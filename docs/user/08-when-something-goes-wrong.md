@@ -69,6 +69,14 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 - **Why:** the token is missing or wrong, or writes are off.
 - **What to do:** on the demo, export `INTAKT_MCP_TOKEN` again ([chapter 5](05-let-your-agent-drive.md)). On your own install, set `MCP_OWNER_ACCESS=mcp_tool_write` and `MCP_OWNER_TOKEN` in `.env.local`.
 
+## Nothing new starts, and the disk is nearly full
+
+Intakt holds new work when the disk has less than 1 GiB or fewer than 10,000 inodes free (one checkout per reviewed head can use up inodes long before bytes). Running work finishes.
+
+1. Run `df -h var` and `df -i var` in the install folder.
+2. Free space or inodes, for example by deleting old build folders under `var/jobs`.
+3. New work starts again by itself; there is nothing to reset. To change the floors, see [When the disk runs low](../reference/user-manual.md#when-the-disk-runs-low).
+
 ## The dashboard is slow
 
 - **What you see:** pages take seconds to load.
