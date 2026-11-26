@@ -13,7 +13,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 final readonly class HeldCalls
 {
     /**
-     * @param list<string> $payloads the ledger's `usage_recorded` payloads
+     * @param list<string> $payloads
      */
     public function __construct(private array $payloads)
     {
@@ -24,25 +24,19 @@ final readonly class HeldCalls
      */
     public function refuseThoseOf(Recording $recording): void
     {
-        $calls = array_map(self::callOf(...), $this->payloads);
+        $call = $this->firstHeldCallOf($recording);
 
-        foreach ($recording->events as $event) {
-            $call = LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null;
-
-            if (null !== $call && in_array($call, $calls, true)) {
-                throw $this->anEarlierPlayHolds($call, $recording) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
-            }
+        if (null !== $call) {
+            throw $this->anEarlierPlayHolds($call, $recording) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
         }
     }
 
-    // Only the demo project's row of the call in a round of this recording is an earlier Play of it, because another recording replayed before may reuse the call ID under its own rounds.
-    private function anEarlierPlayHolds(string $call, Recording $recording): bool
+    private function firstHeldCallOf(Recording $recording): ?string
     {
-        $rounds = array_filter(array_map(static fn (RecordedLedgerEvent $event): ?string => $call === self::callOf($event->payload) ? self::stringOf($event->payload, 'round') : null, $recording->events));
+        $held = array_map(self::callOf(...), $this->payloads);
+        $calls = array_map(static fn (RecordedLedgerEvent $event): ?string => LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null, $recording->events);
 
-        return array_any($this->payloads, static fn (string $payload): bool => $call === self::callOf($payload)
-            && CreateDemoProjectCommand::NAME === self::stringOf($payload, 'project')
-            && in_array(self::stringOf($payload, 'round'), $rounds, true));
+        return array_find($calls, static fn (?string $call): bool => null !== $call && in_array($call, $held, true));
     }
 
     private static function callOf(string $payload): ?string
@@ -56,5 +50,16 @@ final readonly class HeldCalls
         $value = is_array($row) ? ($row[$key] ?? null) : null;
 
         return is_string($value) ? $value : null;
+    }
+
+    // Only the demo project's row of the call in a round of this recording is an earlier Play of it, because another recording replayed before may reuse the call ID under its own rounds.
+    private function anEarlierPlayHolds(string $call, Recording $recording): bool
+    {
+        $rounds = array_map(static fn (RecordedLedgerEvent $event): ?string => $call === self::callOf($event->payload) ? self::stringOf($event->payload, 'round') : null, $recording->events);
+
+        return array_any($this->payloads, static fn (string $payload): bool => $call === self::callOf($payload)
+            && CreateDemoProjectCommand::NAME === self::stringOf($payload, 'project')
+            && null !== self::stringOf($payload, 'round')
+            && in_array(self::stringOf($payload, 'round'), $rounds, true));
     }
 }
