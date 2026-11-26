@@ -49,6 +49,9 @@ final readonly class RunBuildJob
     // An exit code, because a builder that can plant files in the output can plant any marker there too, but cannot set the script's exit code.
     public const int OUTPUT_NOT_CLEARED = 3;
 
+    // Covers a failed listing too, because the exception does not say which refusal it was.
+    private const string REFUSED_OUTPUT = "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n";
+
     // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.
     private const string VENDOR_HOST = 'api.anthropic.com';
 
@@ -119,7 +122,7 @@ final readonly class RunBuildJob
         $refused = false;
 
         try {
-            $outcome = $this->outcomeOf($this->ranJob($spec));
+            $outcome = $this->outcomeOfRunning($spec);
         } catch (JobRefused $failure) {
             $refused = true;
 
@@ -172,22 +175,20 @@ final readonly class RunBuildJob
         return $file;
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
+    private function outcomeOfRunning(JobSpec $spec): BuildJobOutcome
     {
         try {
-            return $this->jobs->run($spec);
+            $result = $this->jobs->run($spec);
         } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
+            // The reason is fixed because the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
+            return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT);
         }
+
+        return $this->outcomeOf($result);
     }
 
-    private function outcomeOf(?JobResult $result): BuildJobOutcome
+    private function outcomeOf(JobResult $result): BuildJobOutcome
     {
-        if (!$result instanceof JobResult) {
-            return new BuildJobOutcome(BuildVerdict::NoResult);
-        }
-
         $log = $result->output->contents(self::LOG) ?? '';
 
         return match ($result->end->cause) {
@@ -195,9 +196,15 @@ final readonly class RunBuildJob
             JobCause::TimedOut => new BuildJobOutcome(BuildVerdict::TimedOut, log: $log),
             // The builder cannot set the script's exit code, so the one code that says its files may still be in the output is trusted; what a build hands back is read from the output only.
             JobCause::Exited => self::OUTPUT_NOT_CLEARED === $result->end->exitCode
-                ? new BuildJobOutcome(BuildVerdict::NoResult, log: $log)
+                ? new BuildJobOutcome(BuildVerdict::NoResult, log: $this->withLineEnd($log)."no result: the build script could not clear the job's output\n")
                 : $this->handedBack($result->output, $log),
         };
+    }
+
+    // The builder's last line may lack its end, and the trusted line that follows must stand on a line of its own.
+    private function withLineEnd(string $log): string
+    {
+        return '' === $log || str_ends_with($log, "\n") ? $log : $log."\n";
     }
 
     private function handedBack(JobOutput $output, string $log): BuildJobOutcome
