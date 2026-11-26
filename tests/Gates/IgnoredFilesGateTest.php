@@ -26,6 +26,19 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertStringContainsString('.evidence/1796/built dark.png: tracked although .gitignore excludes it', $run->findingsOf('ignored'));
     }
 
+    public function testBinCheckRunsTheGateAndFailsOnAForceAddedIgnoredFile(): void
+    {
+        $sandbox = $this->startedChange("*.log\n");
+        $sandbox->write('build.log', "log\n");
+        $sandbox->git('add', '--force', 'build.log');
+        $sandbox->commitAll('chore: add a log');
+
+        $run = $sandbox->check('--only=ignored');
+
+        self::assertTrue($run->failed('ignored'), $run->output());
+        self::assertStringContainsString('build.log: tracked although .gitignore excludes it', $run->findingsOf('ignored'));
+    }
+
     public function testATreeWithNothingIgnoredTrackedPassesTheGate(): void
     {
         $sandbox = $this->startedChange("/.evidence/\n");
