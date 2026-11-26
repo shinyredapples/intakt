@@ -33,12 +33,13 @@ final readonly class ReviewersAgree
         return $verdict instanceof Verdict && in_array($verdict->verdict, [Decision::Approve, Decision::Changes], true) && !$verdict->isFailedReview();
     }
 
+    // A lone reviewer shares a finding with nobody, so the model's note stays the only second view of its P1 or P2.
     /**
      * @param list<?Verdict> $verdicts
      */
     private function isShared(Finding $finding, array $verdicts): bool
     {
-        if (null === $finding->file || null === $finding->line) {
+        if (null === $finding->file || null === $finding->line || count($verdicts) < 2) {
             return false;
         }
 

@@ -574,7 +574,7 @@ final class JudgeRoundTest extends KernelTestCase
 
     public function testAFindingQuotingANameAbsentFromTheChangeNeverReachesTheJudge(): void
     {
-        $round = $this->roundTheReviewersDisagreeOn([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
         $judge = new ScriptedJudgement(new Judgement([]));
 
         $this->fixture->judge($judge)($this->judgingOf($round));
@@ -588,7 +588,7 @@ final class JudgeRoundTest extends KernelTestCase
     public function testAFindingWithoutAQuoteAndASymbolAbsentFromTheChangeReachesTheJudge(): void
     {
         $finding = new Finding('A', Severity::P1, 'src/Thing.php', 1, 'grepName', 'The command is built from user input.', FixableBy::Builder, false, null, null);
-        $round = $this->roundTheReviewersDisagreeOn([$finding]);
+        $round = $this->roundReporting([$finding]);
         $judge = new ScriptedJudgement(new Judgement([]));
 
         $this->fixture->judge($judge)($this->judgingOf($round));
@@ -667,7 +667,7 @@ final class JudgeRoundTest extends KernelTestCase
 
     public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
     {
-        $round = $this->roundTheReviewersDisagreeOn([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
 
@@ -700,7 +700,7 @@ final class JudgeRoundTest extends KernelTestCase
 
     public function testTheLinkThatWouldStretchAChainFurtherThanFiveLinesIsNotAppliedToTheRecordedEntries(): void
     {
-        $round = $this->roundTheReviewersDisagreeOn([$this->atLine('A', Severity::P2, 1), $this->atLine('B', Severity::P2, 5), $this->atLine('C', Severity::P2, 9)]);
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 1), $this->atLine('B', Severity::P2, 5), $this->atLine('C', Severity::P2, 9)]);
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1'), new JudgedFinding('F3', Mark::Act, 'F2')])))($this->judgingOf($round));
 
@@ -914,15 +914,6 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
 
         return $this->fixture->round($round->id()->toRfc4122());
-    }
-
-    // The second reviewer approves, so the reviewers disagree and the model is asked even about findings a lone reviewer would have marked in plain code.
-    /**
-     * @param list<Finding> $findings
-     */
-    private function roundTheReviewersDisagreeOn(array $findings): ReviewRound
-    {
-        return $this->roundOf(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
     }
 
     private function roundOf(VerdictPerRole $verdicts): ReviewRound

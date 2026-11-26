@@ -75,11 +75,23 @@ final class ReviewersAgreeTest extends TestCase
         self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($bug)], [$bug]));
     }
 
-    public function testALoneReviewersBlockingFindingAtAPlaceIsShared(): void
+    public function testALoneReviewersBlockingFindingIsNotShared(): void
     {
         $bug = $this->at('A', Severity::P1, 3);
 
-        self::assertTrue(new ReviewersAgree()->over([$this->changes($bug)], [$bug]));
+        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug)], [$bug]));
+    }
+
+    public function testALoneReviewerWhoApprovesWithNoFindingLeftAgrees(): void
+    {
+        self::assertTrue(new ReviewersAgree()->over([$this->approval()], []));
+    }
+
+    public function testThreeReviewersShareAFindingOnlyWhenEachReportsItsPlace(): void
+    {
+        $bug = $this->at('A', Severity::P1, 3);
+
+        self::assertFalse(new ReviewersAgree()->over([$this->changes($bug), $this->changes($bug), $this->approval()], [$bug]));
     }
 
     public function testAReviewerWhoseReviewFailedNeverAgrees(): void
