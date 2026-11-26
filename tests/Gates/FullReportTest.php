@@ -196,7 +196,7 @@ final class FullReportTest extends SandboxTestCase
         self::assertSame(['', 10, '2'], [$report->get('whole')->text(), count($this->findingsIn($report)), $report->get('gates')->items()[0]->get('omitted')->text()]);
     }
 
-    public function testAKeptResultWithANumberTooLargeForPhpIsCopiedUnchangedAndKeepsTheReportWhole(): void
+    public function testAKeptResultWithANumberTooLargeForPhpIsNotKeptAndTheReportListsTheCutLine(): void
     {
         $sandbox = $this->emptySandbox();
         $kept = substr($this->twelveFindings()->toFullJson(), 0, -1).',"note":1e400}';
@@ -207,14 +207,14 @@ final class FullReportTest extends SandboxTestCase
             GateReport::fromChild('comments', new ProcessResult(1, $other->toJson()."\n", ''))->keeping($other->toFullJson()),
         ])->write();
 
-        self::assertSame('{"whole":true,"gates":['.$kept.','.$other->toFullJson().']}'."\n", file_get_contents($sandbox->root.'/'.$file));
+        self::assertSame('{"whole":false,"gates":['.$this->twelveFindings()->toJson().','.$other->toFullJson().']}'."\n", file_get_contents($sandbox->root.'/'.$file));
     }
 
-    public function testAKeptResultWithEmptyAndNumberedObjectsBesideANulKeyKeepsThemAsObjects(): void
+    public function testAKeptResultWithANulPrefixedKeyIsCopiedByteForByteAndKeepsTheReportWhole(): void
     {
         $sandbox = $this->emptySandbox();
         $result = GateResult::failedBecause('dashes', 'notes.md:1');
-        $kept = substr($result->toFullJson(), 0, -1).',"note":{"\u0000key":{},"numeric":{"0":"value"}}}';
+        $kept = substr($result->toFullJson(), 0, -1).',"note":{"\u0000key":"fixture","numeric":["value"]}}';
         $gate = $this->reportOf($result)->keeping($kept);
         self::assertSame($kept, $gate->kept);
 
