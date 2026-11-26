@@ -8,7 +8,7 @@ use Intakt\Core\Disk\Contract\DiskHeld;
 use Intakt\Core\Disk\Contract\DiskServices;
 use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Domain\FloorCheck;
-use Intakt\Core\Git\Contract\GitServices;
+use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,6 +29,8 @@ final class DiskFloorsOnTheInstallTest extends KernelTestCase
     private string $project;
 
     private string $clone;
+
+    private string $mirrors;
 
     private FreeSpaceInMemory $space;
 
@@ -81,6 +83,9 @@ final class DiskFloorsOnTheInstallTest extends KernelTestCase
         $this->inodesFloor = $inodesFloor;
         $this->space = new FreeSpaceInMemory($bytesFloor, $inodesFloor);
         $container->set(FloorCheck::class, new FloorCheck($this->space, $watched, $bytesFloor, $inodesFloor));
+        // A scratch folder, so the suite writes nothing into the install's own mirrors.
+        $this->mirrors = sys_get_temp_dir().'/intakt-disk-mirrors-'.bin2hex(random_bytes(6));
+        $container->set(Mirrors::class, new Mirrors($this->mirrors));
         $this->remote = new TemporaryRepository();
         $this->remote->commitFile('a.txt', 'one');
         $this->project = 'disk-floors-'.bin2hex(random_bytes(4));
@@ -89,7 +94,7 @@ final class DiskFloorsOnTheInstallTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove([$this->mirror(), $this->clone]);
+        new Filesystem()->remove([$this->mirrors, $this->clone]);
         $this->remote->remove();
         parent::tearDown();
     }
@@ -108,7 +113,7 @@ final class DiskFloorsOnTheInstallTest extends KernelTestCase
 
     private function mirror(): string
     {
-        return self::getContainer()->getParameter(GitServices::MIRRORS_DIRECTORY).'/'.$this->project.'.git';
+        return $this->mirrors.'/'.$this->project.'.git';
     }
 
     // A narrow terminal also breaks a path inside a word, so the comparison drops all whitespace.

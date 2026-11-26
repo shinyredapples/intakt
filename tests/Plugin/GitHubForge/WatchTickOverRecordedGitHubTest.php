@@ -375,7 +375,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
         $installWide = new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $clock), $clock, $logger);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger, $clock);
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
         $steering = $this->steering;
         if (!$steering instanceof ChangeLabels) {

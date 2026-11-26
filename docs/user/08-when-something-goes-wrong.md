@@ -75,7 +75,7 @@ A build or a review stops before it copies the project or makes its checkout, wi
 
 1. Run `df -h` and `df -i` on the folder the error names.
 2. Free space or inodes there, for example by deleting old build folders.
-3. Try again, or let Intakt retry a watched pull request by itself; there is nothing to reset. To change the floors, see [When the disk runs low](../reference/user-manual.md#when-the-disk-runs-low).
+3. Try again, or let Intakt retry a watched pull request by itself, once a minute; a held try does not count as a failure of that pull request, and there is nothing to reset. To change the floors, see [When the disk runs low](../reference/user-manual.md#when-the-disk-runs-low).
 
 ## The dashboard is slow
 

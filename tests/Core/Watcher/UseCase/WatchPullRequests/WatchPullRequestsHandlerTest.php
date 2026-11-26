@@ -19,6 +19,9 @@ use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Disk\Contract\DiskFloor;
+use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -150,6 +153,8 @@ use Symfony\Component\Messenger\Exception\HandlerFailedException;
 #[UsesClass(DoctrineInstallWideFailures::class)]
 #[UsesClass(ItemFailureRecord::class)]
 #[UsesClass(FullDisk::class)]
+#[UsesClass(NewWorkHeld::class)]
+#[UsesClass(DiskHeld::class)]
 #[UsesClass(DoctrineHolds::class)]
 #[UsesClass(SharedHoldRecord::class)]
 #[UsesClass(SharedHold::class)]
@@ -934,6 +939,33 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([...array_fill(0, 3, LedgerEventKind::HeadFailed), LedgerEventKind::HeadHandedOver, LedgerEventKind::HeadFailed], $this->ledger->kinds());
         self::assertSame(4, $this->ledger->payloads()[3]['failures']);
+    }
+
+    public function testAHeadWhoseStartTheDiskHoldsWaitsAMinuteWithoutCountingAFailureAndStartsOnceSpaceIsBack(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->commands->whileStarting = static fn (StartReviewAtHead $start): never => throw new HandlerFailedException(new Envelope($start), [new NewWorkHeld(new DiskHeld(DiskFloor::Inodes, 'var', 99, 100))]);
+        $this->tickEvery('+1 minute', 5);
+        $this->commands->whileStarting = null;
+
+        $this->tick();
+
+        self::assertCount(6, $this->commands->started);
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame([], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+    }
+
+    public function testAHeadWhoseStartTheDiskHoldsIsNotTriedAgainWithinTheMinute(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->commands->whileStarting = static fn (): never => throw new NewWorkHeld(new DiskHeld(DiskFloor::Bytes, 'var', 99, 100));
+        $this->tick();
+        $this->clock->modify('+59 seconds');
+
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+        self::assertSame(0, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('6', self::GREEN, '2026-11-02T09:00:00Z')));
     }
 
     public function testAHeadThatKeepsFailingWaitsAtMostHalfAnHourForItsNextTry(): void
@@ -1812,7 +1844,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
         $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
-        $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger, $this->clock);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $steering = self::createStub(ChangeLabels::class);
         $steering->method('steeringOf')->willReturnCallback(fn (): Labels => $this->steering);

@@ -7,19 +7,25 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Clock\ClockInterface;
 use Throwable;
 
 // One head's failure backs off that head alone, because a head that fails on every try once held back every other head of its lane for 40 minutes.
 final readonly class HeadBackOff
 {
+    // One watcher tick, so a head starts within a minute of space coming back.
+    private const int DISK_WAIT_SECONDS = 60;
+
     public function __construct(
         private FailedHeads $failed,
         private PendingHeads $pending,
         private ManagerRegistry $doctrine,
         private LoggerInterface $logger,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -40,9 +46,40 @@ final readonly class HeadBackOff
             return null;
             // Boundary: backs off only this head on any failure of its step, because it must not end the tick for the heads after it.
         } catch (Throwable $failure) {
-            $this->backOffAlone($project, $head, $failure);
+            $held = $this->diskHoldIn($failure);
+
+            if ($held instanceof NewWorkHeld) {
+                $this->waitForRoom($project, $head, $held);
+            } else {
+                $this->backOffAlone($project, $head, $failure);
+            }
 
             return null;
+        }
+    }
+
+    // Along the whole chain, because the command bus wraps the start handler's failure.
+    private function diskHoldIn(Throwable $failure): ?NewWorkHeld
+    {
+        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            if ($cause instanceof NewWorkHeld) {
+                return $cause;
+            }
+        }
+
+        return null;
+    }
+
+    // No failure, because a disk below a floor is no fault of this pull request and clears on its own; counted as one, an hour of a nearly full disk handed every watched head over.
+    private function waitForRoom(string $project, OpenChange $head, NewWorkHeld $held): void
+    {
+        $this->logger->info('A head waits for room on the disk.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'floor' => $held->held->floor->value, 'folder' => $held->held->folder]);
+
+        try {
+            $this->pending->waitUntil($project, $head, $this->clock->now()->modify(sprintf('+%d seconds', self::DISK_WAIT_SECONDS)));
+            // Boundary: backs off this head when its wait cannot be stored, because that is a failure of this head alone and must not end the tick for the heads after it.
+        } catch (Throwable $failure) {
+            $this->backOffAfterAFailedWait($project, $head, $failure);
         }
     }
 
