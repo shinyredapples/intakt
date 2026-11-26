@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
@@ -95,7 +96,7 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         );
         self::assertNotSame([], $reads);
         foreach ($reads as $sql) {
-            self::assertMatchesRegularExpression('/change_ref\s+=\s|INSTR\(\w+\.change_ref, \?\)/i', $sql);
+            self::assertMatchesRegularExpression('/change_ref\s+=\s|INSTR\(\w+\.change_ref, \?\)|LOCATE\(\?, \w+\.change_ref\)|POSITION\(\? IN \w+\.change_ref\)/i', $sql);
         }
     }
 
@@ -127,6 +128,9 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         $canonical = 'https://github.com/acme/widgets/pull/12';
         $this->roundOf($canonical);
         $entities = self::getContainer()->get(EntityManagerInterface::class);
+        if ($entities->getConnection()->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            self::markTestSkipped('PostgreSQL cannot store a NUL byte in a text column.');
+        }
         $entities->getConnection()->executeStatement('UPDATE review_round SET change_ref = ?', ["\0".$canonical]);
         $entities->clear();
 

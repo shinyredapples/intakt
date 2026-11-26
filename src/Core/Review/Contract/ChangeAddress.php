@@ -32,7 +32,13 @@ final readonly class ChangeAddress
     {
         $canonical = self::canonical($address);
 
-        return 1 === preg_match('#^https://github\.com/[a-z0-9-]+/(?!\.+/)[a-z0-9_.-]+/pull/([1-9][0-9]*)$#D', $canonical, $match) ? $match[1] : null;
+        $path = Uri::parse($canonical);
+
+        if (!$path instanceof Uri || 'github.com' !== $path->getHost()) {
+            return null;
+        }
+
+        return 1 === preg_match(self::PULL_REQUEST_PATH, $path->getRawPath(), $match) ? $match[3] : null;
     }
 
     public static function sameChange(string $one, string $other): bool
