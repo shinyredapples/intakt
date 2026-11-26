@@ -7,7 +7,7 @@ namespace Intakt\Core\Dashboard\Domain;
 use DateTimeImmutable;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Counted over the judged rounds that recorded every finding the judge saw and marked, all of them readable, and that recorded the judge's own marks (not the fallback for an answer that cannot be read), because a round kept only as the judge's marks, or one with an unmarked P3, cannot tell a rejected finding from one never recorded or never judged.
+// Counted over the judged rounds that recorded every finding the judge saw and marked, all of them readable, and that recorded the judge's own marks (not the fallback for an answer that cannot be read, nor plain code's act marks), because a round kept only as the judge's marks, or one with an unmarked P3, cannot tell a rejected finding from one never recorded or never judged.
 #[Exclude]
 final readonly class JudgeOutcomes
 {
