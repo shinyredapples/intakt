@@ -360,7 +360,7 @@ final class RunBuildJobTest extends TestCase
 
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
-        self::assertSame([BuildVerdict::NoResult, true, false], [$outcome->verdict, str_contains($outcome->log, 'could not be listed'), str_contains($outcome->log, 'held an entry')]);
+        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n"], [$outcome->verdict, $outcome->log]);
     }
 
     #[TestWith(["\n"])]
