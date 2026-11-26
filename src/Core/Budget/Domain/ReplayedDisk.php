@@ -8,7 +8,7 @@ use Intakt\Core\Disk\Contract\DiskHeadroom;
 use Intakt\Core\Disk\Contract\DiskHeld;
 use Override;
 
-// A replayed day is judged on its recorded readings only, never on the free space of the machine that replays it.
+// Never holds, because a replayed day is judged on its recorded readings, not on the free space of the machine that replays it.
 final readonly class ReplayedDisk implements DiskHeadroom
 {
     #[Override]

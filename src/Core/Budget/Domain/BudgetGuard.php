@@ -49,7 +49,7 @@ final readonly class BudgetGuard implements StartGuard
             return StartDecision::Halted;
         }
 
-        // A merge calls no model but writes the mirror and the ledger, which fail mid-step on a full disk.
+        // A merge calls no model, yet it is held because it writes the mirror and the ledger, which fail mid-step on a full disk.
         if ($this->isDiskHeld()) {
             return StartDecision::DiskLow;
         }
@@ -59,13 +59,13 @@ final readonly class BudgetGuard implements StartGuard
         return $holding?->decision() ?? StartDecision::Start;
     }
 
-    private function isDiskHeld(): bool
-    {
-        return $this->disk->held() instanceof DiskHeld;
-    }
-
     private function isHalted(): bool
     {
         return [] !== $this->halts->standing();
+    }
+
+    private function isDiskHeld(): bool
+    {
+        return $this->disk->held() instanceof DiskHeld;
     }
 }
