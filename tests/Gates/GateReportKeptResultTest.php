@@ -78,13 +78,40 @@ final class GateReportKeptResultTest extends TestCase
         self::assertSame($kept, $report->kept);
     }
 
-    public function testAKeptResultWithItsFindingsUnderTheKeyZeroIsAccepted(): void
+    public function testAKeptResultWithItsFindingsUnderTheKeyZeroIsNotKeptBecauseItIsNotCanonical(): void
     {
         $kept = '{"gate":"dashes","ok":false,"findings":{"0":"notes.md:1 U+2014"},"omitted":0}';
 
-        $report = $this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept);
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
 
-        self::assertSame($kept, $report->kept);
+    public function testAKeptResultWithTheOkKeyTwiceFalseThenTrueIsNotKept(): void
+    {
+        $kept = '{"gate":"dashes","ok":false,"ok":true,"findings":["notes.md:1 U+2014"],"omitted":0}';
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultWithTheOkKeyTwiceTrueThenFalseIsNotKept(): void
+    {
+        $kept = '{"gate":"dashes","ok":true,"ok":false,"findings":["notes.md:1 U+2014"],"omitted":0}';
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultWithARepeatedKeyOfAgreeingValuesIsNotKept(): void
+    {
+        $kept = '{"gate":"dashes","gate":"dashes","ok":false,"findings":["notes.md:1 U+2014"],"omitted":0}';
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultWithSpacesBetweenItsFieldsIsNotKept(): void
+    {
+        $result = GateResult::withFindings('dashes', ['notes.md:1 U+2014']);
+        $kept = str_replace(',"', ', "', $result->toFullJson());
+
+        self::assertNull($this->reportOf($result)->keeping($kept)->kept);
     }
 
     public function testAKeptResultWithItsFindingsUnderOtherKeysFallsBackToTheLine(): void
