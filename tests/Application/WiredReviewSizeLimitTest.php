@@ -46,6 +46,21 @@ final class WiredReviewSizeLimitTest extends KernelTestCase
         $this->limitsFor('        review_size_limit: 0');
     }
 
+    public function testANonNumberLimitStopsBootWithAPlainMessage(): void
+    {
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/must be a positive whole number of characters of diff/');
+
+        $this->limitsFor('        review_size_limit: abc');
+    }
+
+    public function testAProjectDeclaredAsANamedListEntryKeepsItsOwnLimit(): void
+    {
+        $yaml = "projects:\n    - name: alpha\n      tiers:\n          strong: { provider: anthropic, model: big }\n      review_size_limit: 41\n";
+
+        self::assertSame(['alpha' => 41], $this->limitsOf($yaml));
+    }
+
     protected function setUp(): void
     {
         $this->containers = self::compiledContainers();
@@ -71,6 +86,15 @@ final class WiredReviewSizeLimitTest extends KernelTestCase
     private function limitsFor(string $line): array
     {
         $yaml = "projects:\n    alpha:\n        tiers:\n            strong: { provider: anthropic, model: big }\n".('' === $line ? '' : $line."\n");
+
+        return $this->limitsOf($yaml);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function limitsOf(string $yaml): array
+    {
         file_put_contents($this->file, $yaml);
         $_SERVER['INTAKT_CONFIG'] = $this->file;
         self::ensureKernelShutdown();
