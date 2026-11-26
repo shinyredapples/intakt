@@ -57,9 +57,15 @@ final readonly class ReviewersAgree
             && $this->words($reported->text) === $this->words($finding->text);
     }
 
-    // Case stays, because code names differ by case (`$total` and `$Total` are two variables); only white space is not part of the words.
+    // Case stays, because code names differ by case (`$total` and `$Total` are two variables); white space collapses only in the prose, because a code span between backticks quotes a literal (`"A B"` and `"A  B"` are two strings), and an unclosed backtick stays prose.
     private function words(string $text): string
     {
-        return trim((string) preg_replace('/\s+/u', ' ', $text));
+        $parts = preg_split('/(`[^`]*`)/u', $text, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [$text];
+
+        return trim(implode('', array_map(
+            static fn (string $part, int $at): string => 1 === $at % 2 ? $part : (string) preg_replace('/\s+/u', ' ', $part),
+            $parts,
+            array_keys($parts),
+        )));
     }
 }

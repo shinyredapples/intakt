@@ -44,6 +44,30 @@ final class ReviewersAgreeTest extends TestCase
         self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($lower), $this->changes($upper)], [$lower, $upper]));
     }
 
+    public function testFindingsThatDifferOnlyInTheWhiteSpaceInsideACodeSpanAreNotShared(): void
+    {
+        $single = new Finding('A', Severity::P1, 'src/Labels.php', 12, null, 'The check rejects `"A B"`.', FixableBy::Builder, false, null, null);
+        $double = new Finding('B', Severity::P1, 'src/Labels.php', 12, null, 'The check rejects `"A  B"`.', FixableBy::Builder, false, null, null);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($single), $this->changes($double)], [$single, $double]));
+    }
+
+    public function testFindingsThatDifferOnlyInTheWhiteSpaceOfTheProseAroundACodeSpanAreStillShared(): void
+    {
+        $tight = new Finding('A', Severity::P1, 'src/Labels.php', 12, null, 'The check rejects `"A  B"` here.', FixableBy::Builder, false, null, null);
+        $loose = new Finding('B', Severity::P1, 'src/Labels.php', 12, null, " The check\n rejects  `\"A  B\"`\t here. ", FixableBy::Builder, false, null, null);
+
+        self::assertSame([$tight], new ReviewersAgree()->sharedIn([$this->changes($tight), $this->changes($loose)], [$tight]));
+    }
+
+    public function testAFindingWithSeveralCodeSpansIsSharedOnlyWhenEverySpanMatchesExactly(): void
+    {
+        $first = new Finding('A', Severity::P1, 'src/Labels.php', 12, null, 'Use `a b` instead of `c d`.', FixableBy::Builder, false, null, null);
+        $second = new Finding('B', Severity::P1, 'src/Labels.php', 12, null, 'Use `a b` instead of `c  d`.', FixableBy::Builder, false, null, null);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($first), $this->changes($second)], [$first, $second]));
+    }
+
     public function testTwoUnrelatedDefectsReportedAtOneLineAreNotShared(): void
     {
         $authorization = new Finding('A', Severity::P1, 'src/Endpoint.php', 12, null, 'The endpoint is missing an access check.', FixableBy::Builder, false, null, null);
