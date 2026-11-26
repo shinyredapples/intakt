@@ -9,10 +9,12 @@ final readonly class ReadableLines
 {
     /**
      * @param array<int, array{int, string}> $headings
+     * @param array<int, string>             $paragraph
      */
     private function __construct(
         public array $headings,
         public ?string $openFence,
+        private array $paragraph,
     ) {
     }
 
@@ -21,55 +23,63 @@ final readonly class ReadableLines
      */
     public static function of(array $lines): self
     {
-        $headings = [];
-        $fence = null;
-        $paragraph = [];
+        $read = new self([], null, []);
 
         foreach ($lines as $number => $line) {
-            if (null !== $fence) {
-                $fence = self::closes($line, $fence) ? null : $fence;
-
-                continue;
-            }
-
-            $level = [] === $paragraph ? null : self::underlineOf($line);
-
-            if (null !== $level) {
-                $headings[array_key_first($paragraph)] = [$level, trim(implode("\n", array_map(trim(...), $paragraph)))];
-                $paragraph = [];
-
-                continue;
-            }
-
-            $fence = self::opening($line);
-            $heading = null === $fence ? self::headingOf($line) : null;
-
-            if (null !== $heading) {
-                $headings[$number] = $heading;
-            }
-
-            $paragraph = null === $fence && null === $heading ? self::paragraphAfter($paragraph, $number, $line) : [];
+            $read = $read->after($number, $line);
         }
 
-        return new self($headings, $fence);
+        return $read;
+    }
+
+    private function after(int $number, string $line): self
+    {
+        if (null !== $this->openFence) {
+            return $this->closes($line, $this->openFence) ? clone($this, ['openFence' => null]) : $this;
+        }
+
+        $first = array_key_first($this->paragraph);
+
+        return null !== $first && $this->isUnderline($line) ? $this->underlined($first, $line) : $this->opened($number, $line);
     }
 
     // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
-    private static function closes(string $line, string $fence): bool
+    private function closes(string $line, string $fence): bool
     {
         return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
     }
 
-    private static function underlineOf(string $line): ?int
+    private function isUnderline(string $line): bool
     {
-        if (1 !== preg_match('/^ {0,3}(=+|-+)[ \t]*$/', $line, $match)) {
-            return null;
-        }
-
-        return '=' === $match[1][0] ? 1 : 2;
+        return 1 === preg_match('/^ {0,3}(?:=+|-+)[ \t]*$/', $line);
     }
 
-    private static function opening(string $line): ?string
+    // The heading starts at the paragraph's first line, because a section cut before it must not leave the heading's text behind.
+    private function underlined(int $first, string $line): self
+    {
+        $level = '=' === ltrim($line)[0] ? 1 : 2;
+
+        return new self($this->headings + [$first => [$level, trim(implode("\n", array_map(trim(...), $this->paragraph)))]], null, []);
+    }
+
+    private function opened(int $number, string $line): self
+    {
+        $fence = $this->opening($line);
+
+        if (null !== $fence) {
+            return new self($this->headings, $fence, []);
+        }
+
+        $heading = $this->headingOf($line);
+
+        if (null !== $heading) {
+            return new self($this->headings + [$number => $heading], null, []);
+        }
+
+        return new self($this->headings, null, $this->paragraphAfter($this->paragraph, $number, $line));
+    }
+
+    private function opening(string $line): ?string
     {
         if (1 !== preg_match('/^ {0,3}(`{3,}|~{3,})(.*)$/', $line, $match)) {
             return null;
@@ -82,7 +92,7 @@ final readonly class ReadableLines
     /**
      * @return ?array{int, string}
      */
-    private static function headingOf(string $line): ?array
+    private function headingOf(string $line): ?array
     {
         return 1 === preg_match('/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? [strlen($heading[1]), $heading[2] ?? ''] : null;
     }
@@ -92,13 +102,13 @@ final readonly class ReadableLines
      *
      * @return array<int, string>
      */
-    private static function paragraphAfter(array $paragraph, int $number, string $line): array
+    private function paragraphAfter(array $paragraph, int $number, string $line): array
     {
-        if ('' === trim($line) || self::endsParagraph($line)) {
+        if ('' === trim($line) || $this->endsParagraph($line)) {
             return [];
         }
 
-        // A tab moves to the next multiple of four columns, so up to three spaces and a tab indent as far as four spaces.
+        // Up to three spaces and a tab start indented code like four spaces, because a tab moves to the next multiple of four columns.
         if ([] === $paragraph && 1 === preg_match('/^(?: {0,3}\t| {4})/', $line)) {
             return [];
         }
@@ -106,8 +116,8 @@ final readonly class ReadableLines
         return $paragraph + [$number => $line];
     }
 
-    // A list item's text and a thematic break are no paragraph a later underline could turn into a heading.
-    private static function endsParagraph(string $line): bool
+    // A list item line and a thematic break start no paragraph, because CommonMark reads a `---` below them as a thematic break, not as an underline.
+    private function endsParagraph(string $line): bool
     {
         return 1 === preg_match('/^ {0,3}(?:([-*_])(?:[ \t]*\1){2,}[ \t]*$|(?:[-+*]|\d{1,9}[.)])(?:[ \t]|$))/', $line);
     }
