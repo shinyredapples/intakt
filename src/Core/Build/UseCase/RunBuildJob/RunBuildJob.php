@@ -125,7 +125,7 @@ final readonly class RunBuildJob
             $reachedRunner = true;
             $outcome = $this->outcomeOfRunning($spec);
         } catch (JobRefused $failure) {
-            // A job the runner refused never started: the cause belongs to the build that holds the branch's job id.
+            // Cleared, because a job the runner refused never started, so the cause belongs to the build that holds the branch's job id.
             $reachedRunner = false;
 
             throw $failure;
