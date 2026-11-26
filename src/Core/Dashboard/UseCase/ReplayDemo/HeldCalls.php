@@ -57,8 +57,8 @@ final readonly class HeldCalls
     private function anEarlierPlayHolds(string $call, Recording $recording): bool
     {
         $rounds = array_diff(
-            self::roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => $call === self::callOf($event->payload)),
-            self::roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewStarted === $event->kind),
+            $this->roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => $call === self::callOf($event->payload)),
+            $this->roundsOf($recording, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewStarted === $event->kind),
         );
 
         return array_any($this->payloads, static fn (string $payload): bool => $call === self::callOf($payload)
@@ -71,7 +71,7 @@ final readonly class HeldCalls
      *
      * @return list<string>
      */
-    private static function roundsOf(Recording $recording, Closure $matches): array
+    private function roundsOf(Recording $recording, Closure $matches): array
     {
         $rounds = array_map(static fn (RecordedLedgerEvent $event): ?string => $matches($event) ? self::stringOf($event->payload, 'round') : null, $recording->events);
 
