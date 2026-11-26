@@ -48,7 +48,7 @@ final class SystemFreeSpaceReaderTest extends TestCase
 
     public function testAnInodeReadThatIsStoppedByASignalIsUnreadable(): void
     {
-        $folder = (string) getenv('TMPDIR').'/disk-signal-'.bin2hex(random_bytes(8));
+        $folder = getenv('TMPDIR').'/disk-signal-'.bin2hex(random_bytes(8));
         mkdir($folder);
         file_put_contents($folder.'/df', "#!/bin/sh\nkill -TERM \"\$\$\"\n");
         chmod($folder.'/df', 0700);
