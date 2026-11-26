@@ -74,7 +74,7 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
     {
         $updates = new PublishedLiveEvents();
         $marks = new ReplayMarks(new MarkAnsweringQueries(ReplayMark::Replay));
-        $replays = new ReplaysRecording($this->ledger, $updates, new MockClock('2026-11-20T09:00:00+00:00'), new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::judged($this->ledger, $marks));
+        $replays = new ReplaysRecording($this->ledger, $updates, new MockClock('2026-11-20T09:00:00+00:00'), new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::judged($this->ledger, $marks), TourCaptionsOn::replayedRows($this->ledger));
 
         $replays->replay($recording, 1000.0);
     }

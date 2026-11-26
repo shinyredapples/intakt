@@ -21,6 +21,7 @@ use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -45,6 +46,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(DemoRefusal::class)]
 #[CoversClass(PlayDemoRun::class)]
 #[UsesClass(ReplaysRecording::class)]
+#[UsesClass(ReplayIsRefused::class)]
 #[UsesClass(RecordingFormat::class)]
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
@@ -105,6 +107,16 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertStringContainsString('target="demo-play-'.$second.'"', $later[0]);
         self::assertStringContainsString(DemoRefusal::AnotherPlayFirst->sentence(), $later[0]);
         self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testAModelCallAnotherReviewHoldsShowsThePlainRefusalAndNotTheEarlierPlay(): void
+    {
+        self::assertSame(DemoRefusal::Refused, DemoRefusal::of(ReplayIsRefused::becauseAnotherReviewHoldsCall('call-1')));
+    }
+
+    public function testAModelCallAnEarlierPlayHoldsPointsAtTheEarlierPlay(): void
+    {
+        self::assertSame(DemoRefusal::AnotherPlayFirst, DemoRefusal::of(ReplayIsRefused::becauseTheLedgerHoldsCall('call-1')));
     }
 
     public function testAPlayKeepsItsSignThroughTheQueueSoItsRefusalReachesItsOwnBox(): void
@@ -314,7 +326,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     {
         $marks = new ReplayMarks($this->marks);
         $captions = TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, $locks ?? new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, $locks ?? new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks), TourCaptionsOn::replayedRows($this->ledger));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $marks, $this->marks, $captions, $recording, $composeService);
     }

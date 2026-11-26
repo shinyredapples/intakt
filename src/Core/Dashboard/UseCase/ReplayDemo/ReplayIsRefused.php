@@ -46,6 +46,12 @@ final class ReplayIsRefused extends RuntimeException
 
     public static function becauseTheLedgerHoldsCall(string $call): self
     {
-        return new self(sprintf('The ledger already holds model call %s of this recording, so it is not replayed.', $call), self::ANOTHER_PLAY);
+        return new self(sprintf('The ledger already holds model call %s of this recording from an earlier replay, so it is not replayed again.', $call), self::ANOTHER_PLAY);
+    }
+
+    // Without a code, because the row that holds the call is no earlier Play and the refused Play's page must not point at a run that may never have played.
+    public static function becauseAnotherReviewHoldsCall(string $call): self
+    {
+        return new self(sprintf('Model call %s of this recording is already used by another review in the ledger, so it is not replayed.', $call));
     }
 }

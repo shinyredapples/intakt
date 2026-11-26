@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -38,6 +39,7 @@ final readonly class ReplaysRecording
         private ReplayMarks $marks,
         private TourCaptionUpdates $captions,
         private ReplayedJudgedState $judged,
+        private ReplayedReviewRows $rows,
     ) {
     }
 
@@ -100,9 +102,18 @@ final readonly class ReplaysRecording
             $call = LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null;
 
             if (null !== $call && in_array($call, $held, true)) {
-                throw ReplayIsRefused::becauseTheLedgerHoldsCall($call);
+                throw in_array($call, $this->callsOfEarlierPlays(), true) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
             }
         }
+    }
+
+    // Read only once a call collides, because it reads the whole ledger; the demo project's rows are the ones earlier Plays wrote.
+    /**
+     * @return list<string>
+     */
+    private function callsOfEarlierPlays(): array
+    {
+        return array_values(array_filter(array_map(static fn (RecordedEvent $row): ?string => self::callOf($row->event->payload), $this->rows->ofProject(CreateDemoProjectCommand::NAME))));
     }
 
     // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.

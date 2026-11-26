@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\DemoTour;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -48,6 +49,11 @@ final class TourCaptionsOn
     public static function judged(Ledger $ledger, ReplayMarks $marks, RoundUpdates $rounds = new RecordedRoundUpdates()): ReplayedJudgedState
     {
         return new ReplayedJudgedState(self::pages($ledger, $marks), $rounds);
+    }
+
+    public static function replayedRows(Ledger $ledger): ReplayedReviewRows
+    {
+        return new ReplayedReviewRows($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())));
     }
 
     private static function pages(Ledger $ledger, ReplayMarks $marks): LedgerReviewPages
