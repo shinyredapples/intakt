@@ -111,18 +111,15 @@ final readonly class RunBuildJob
         $model = $this->modelFor($job);
         $clone = new JobInput($this->folder($job->clone), self::CLONE);
         // Prepared before the prompt file exists and outside the try, so a job that cannot be prepared leaves no prompt behind and never reads a stop cause.
-        $id = $job->jobId();
         $command = $this->commandOf($job, $model);
-        $egress = JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts()));
-        $limits = new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS);
         $prompt = $this->promptFileFor($job);
-        $spec = new JobSpec($id, $job->image, $command, [$clone, new JobInput($prompt, self::PROMPT)], $limits, $egress);
 
         $cause = null;
         $refused = false;
 
         try {
-            $outcome = $this->outcomeOfRunning($spec);
+            // The prompt's input is built inside the try, because a refused input must still remove the prompt file and, like a refused job, never reads the cause.
+            $outcome = $this->outcomeOfRunning($this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT)));
         } catch (JobRefused $failure) {
             $refused = true;
 
@@ -173,6 +170,13 @@ final readonly class RunBuildJob
         $this->filesystem->appendToFile($file, $this->prompts->textFor($job->brief));
 
         return $file;
+    }
+
+    private function specOf(BuildJob $job, JobCommand $command, JobInput ...$inputs): JobSpec
+    {
+        $egress = JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts()));
+
+        return new JobSpec($job->jobId(), $job->image, $command, $inputs, new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
     }
 
     private function outcomeOfRunning(JobSpec $spec): BuildJobOutcome

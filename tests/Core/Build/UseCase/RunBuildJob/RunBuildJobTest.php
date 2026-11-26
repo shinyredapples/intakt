@@ -94,6 +94,10 @@ final class RunBuildJobTest extends TestCase
 
     private ?BuildStopCause $stopWhileRunning = null;
 
+    private ?string $promptFolder = null;
+
+    private string $workingDirectory = '';
+
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
     {
         $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "log\n"]))->run($this->job());
@@ -435,6 +439,24 @@ final class RunBuildJobTest extends TestCase
         self::assertSame([], glob($this->folder.'/prompts/*'));
     }
 
+    public function testAPromptInputTheJobRefusesLeavesNoPromptFileAndKeepsTheRecordedStopCause(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        chdir($this->folder);
+        $this->promptFolder = 'relative-prompts';
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the relative prompt input was accepted');
+        } catch (JobRefused) {
+        }
+
+        self::assertSame([], glob($this->folder.'/relative-prompts/*'));
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
     public function testAStopCauseIsForgottenEvenWhenRemovingThePromptFails(): void
     {
         $runner = self::createStub(JobRunner::class);
@@ -521,10 +543,12 @@ final class RunBuildJobTest extends TestCase
         $this->stops = new RecordedBuildStops();
         $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->folder.'/clone');
+        $this->workingDirectory = (string) getcwd();
     }
 
     protected function tearDown(): void
     {
+        chdir($this->workingDirectory);
         new Filesystem()->remove($this->folder);
     }
 
@@ -555,6 +579,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->folder.'/prompts', $this->stops);
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->promptFolder ?? $this->folder.'/prompts', $this->stops);
     }
 }
