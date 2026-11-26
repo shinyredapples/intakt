@@ -176,7 +176,7 @@ final readonly class RunBuildJob
     {
         $egress = JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts()));
 
-        return new JobSpec($job->jobId(), $job->image, $command, $inputs, new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
+        return new JobSpec($job->jobId(), $job->image, $command, array_values($inputs), new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
     }
 
     private function outcomeOfRunning(JobSpec $spec): BuildJobOutcome
