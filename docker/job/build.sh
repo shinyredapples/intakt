@@ -186,14 +186,35 @@ else
     kill -s KILL -- "-$session" 2>/dev/null
 fi
 
+# A folder the builder left may hold folders it took the permissions away from, which a recursive removal cannot empty, so each folder in it gets them back first.
+# Folders only, because a file there may be a hard link to a file elsewhere, whose mode chmod would change too; find follows no link, which chmod would.
+# Each folder is changed before find reads it, so one it may not read is opened afterwards.
+restore_folders() {
+    find "$1" -type d -exec chmod u+rwx -- {} \;
+}
+
 # The builder can write to the output folder too, and take its permissions away, so its access is restored before the log is written again.
 # chmod follows a link, so a link the builder left is removed below without being touched.
 chmod u+rwx -- "$output"
-# A named pipe or a link in the log's place would make the first append wait or write elsewhere, so the log is started again, without what the builder replaced.
-if [ ! -f "$log" ] || [ -L "$log" ]; then
+# A named pipe or a link in the log's place would make the first append wait or write elsewhere, and a log the script may not write would fail it, so the log is started again, without what the builder replaced.
+if [ ! -f "$log" ] || [ -L "$log" ] || [ ! -w "$log" ]; then
+    if [ -d "$log" ] && [ ! -L "$log" ]; then
+        restore_folders "$log"
+    fi
     rm -rf -- "$log"
+    # A removal that did not remove leaves the pipe or the link in place, and the append below would wait on it or write through it, so the place is checked and not the removal's status; -e is false for a link to nothing.
+    if [ -e "$log" ] || [ -L "$log" ]; then
+        echo 'the build log could not be started again' >&2
+        exit 3
+    fi
 fi
-printf 'claude exited with %d\n' "$status" >> "$log"
+# Every later line goes to the log, and a redirection that fails skips its command, the bundle's too, so a log that cannot be written ends the job with the code the orchestrator reads as no result instead of a build without commits.
+# The reason goes to the job's standard error, the only log left to write, for whoever reads the container's log; the runner keeps none of it, because the builder can write there too,
+# and refuses an output that holds anything but files, so the build's outcome carries the runner's own reason instead, which names what stands in the log's place.
+if ! printf 'claude exited with %d\n' "$status" >> "$log"; then
+    echo 'the build log could not be started again' >&2
+    exit 3
+fi
 if [ "$cut" -eq 0 ]; then
     printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
 fi
@@ -242,7 +263,7 @@ fi
 # Only what this script writes after the session is handed back.
 for planted in "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"; do
     if [ -d "$planted" ] && [ ! -L "$planted" ]; then
-        chmod -R u+rwx -- "$planted"
+        restore_folders "$planted"
     fi
 done
 rm -rf -- "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"
