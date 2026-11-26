@@ -11,7 +11,7 @@ use Symfony\Component\Process\Process;
 // PHP reads free bytes itself but has no call for free inodes, so those come from df.
 final readonly class SystemFreeSpaceReader implements FreeSpaceReader
 {
-    // Long enough for a slow network mount, short enough that a hung one does not stall the step that asked.
+    // Short, so a hung mount does not stall the step that asked, but long enough for a slow network mount to answer.
     private const int TIMEOUT_SECONDS = 10;
 
     #[Override]
@@ -41,7 +41,7 @@ final readonly class SystemFreeSpaceReader implements FreeSpaceReader
     // A file system such as btrfs reports a total of 0 because it allocates inodes as it goes.
     public static function freeInodesOf(string $output, string $folder): ?int
     {
-        $lines = preg_split('/\R/', trim($output)) ?: [];
+        $lines = explode("\n", trim($output));
         if (2 !== count($lines) || 1 !== preg_match('/^\s*(\d+)\s+(\d+)\s*$/', $lines[1], $counts)) {
             throw new FreeSpaceUnreadable($folder, 'df printed no inode counts');
         }

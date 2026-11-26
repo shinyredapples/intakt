@@ -42,10 +42,12 @@ final class DiskConfigurationTest extends TestCase
     #[DataProvider('refusedFloors')]
     public function testAFloorThatIsNotAPositiveWholeNumberIsRefusedAtBootNamingTheKey(string $key, mixed $value): void
     {
-        $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('intakt.disk.'.$key);
-
-        $this->processed(['disk' => [$key => $value]]);
+        try {
+            $this->processed(['disk' => [$key => $value]]);
+            self::fail('The floor was accepted.');
+        } catch (InvalidConfigurationException $refused) {
+            self::assertStringContainsString('"intakt.disk.'.$key.'"', $refused->getMessage());
+        }
     }
 
     public function testAnUnknownDiskSettingIsRefused(): void

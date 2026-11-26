@@ -65,7 +65,7 @@ final class FlooredDiskSpaceTest extends TestCase
 
     public function testAHoldClearsOnceTheReaderReportsSpaceAboveTheFloorAgain(): void
     {
-        $reader = $this->createStub(FreeSpaceReader::class);
+        $reader = self::createStub(FreeSpaceReader::class);
         $reader->method('freeBytes')->willReturn(self::MIN_BYTES - 1, self::MIN_BYTES, self::MIN_BYTES, self::MIN_BYTES);
         $reader->method('freeInodes')->willReturn(self::MIN_INODES - 1, self::MIN_INODES);
         $disk = new FlooredDiskSpace($reader, self::MIN_BYTES, self::MIN_INODES);
@@ -77,7 +77,7 @@ final class FlooredDiskSpaceTest extends TestCase
 
     public function testAReaderThatCannotMeasureTheDiskRaisesFreeSpaceUnreadable(): void
     {
-        $reader = $this->createStub(FreeSpaceReader::class);
+        $reader = self::createStub(FreeSpaceReader::class);
         $reader->method('freeBytes')->willThrowException(new FreeSpaceUnreadable('/data', 'no such folder'));
         $disk = new FlooredDiskSpace($reader, self::MIN_BYTES, self::MIN_INODES);
 
@@ -88,7 +88,7 @@ final class FlooredDiskSpaceTest extends TestCase
 
     public function testAnInodeReadThatTimesOutPropagatesTheProcessTimeoutException(): void
     {
-        $reader = $this->createStub(FreeSpaceReader::class);
+        $reader = self::createStub(FreeSpaceReader::class);
         $reader->method('freeBytes')->willReturn(self::MIN_BYTES);
         $reader->method('freeInodes')->willThrowException(new ProcessTimedOutException(new Process(['df']), ProcessTimedOutException::TYPE_GENERAL));
         $disk = new FlooredDiskSpace($reader, self::MIN_BYTES, self::MIN_INODES);
@@ -100,7 +100,7 @@ final class FlooredDiskSpaceTest extends TestCase
 
     private function diskReading(int $freeBytes, ?int $freeInodes): FlooredDiskSpace
     {
-        $reader = $this->createStub(FreeSpaceReader::class);
+        $reader = self::createStub(FreeSpaceReader::class);
         $reader->method('freeBytes')->willReturn($freeBytes);
         $reader->method('freeInodes')->willReturn($freeInodes);
 
