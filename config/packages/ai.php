@@ -119,7 +119,7 @@ return static function (ContainerConfigurator $container): void {
             }
 
             if (is_array($project) && array_key_exists(ReviewSizeLimitConfiguration::KEY, $project)) {
-                // A list entry with a name attribute is keyed by that name once the projects tree resolves it.
+                // The projects tree keys a list entry by its name attribute, so the limit must be filed under that name or it would be lost and read as the default.
                 $limitKey = is_int($name) && is_string($project['name'] ?? null) ? $project['name'] : $name;
                 $sizeLimits[$limitKey] = [ReviewSizeLimitConfiguration::KEY => $project[ReviewSizeLimitConfiguration::KEY]];
                 unset($project[ReviewSizeLimitConfiguration::KEY]);
