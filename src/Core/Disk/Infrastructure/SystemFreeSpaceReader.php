@@ -6,6 +6,7 @@ namespace Intakt\Core\Disk\Infrastructure;
 
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Override;
+use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Process;
 
 // PHP reads free bytes itself but has no call for free inodes, so those come from df.
@@ -30,7 +31,12 @@ final readonly class SystemFreeSpaceReader implements FreeSpaceReader
     public function freeInodes(string $folder): ?int
     {
         $df = new Process(['df', '--output=itotal,iavail', '--', $folder], null, ['LC_ALL' => 'C'], null, self::TIMEOUT_SECONDS);
-        $df->run();
+        try {
+            $df->run();
+        } catch (ProcessSignaledException $signaled) {
+            throw new FreeSpaceUnreadable($folder, 'df was stopped by a signal', $signaled);
+        }
+
         if (!$df->isSuccessful()) {
             throw new FreeSpaceUnreadable($folder, sprintf('df exited with %d: %s', $df->getExitCode() ?? -1, trim($df->getErrorOutput())));
         }

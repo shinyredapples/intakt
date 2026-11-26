@@ -1,6 +1,6 @@
 # Disk floors
 
-Intakt holds new work on a folder whose disk is close to full, so a checkout or a state write does not fail half-way on a full disk. The module is `src/Core/Disk/`.
+Callers can ask whether a folder's disk is close to full and hold new work there, so a checkout or a state write does not fail half-way on a full disk. The module is `src/Core/Disk/`.
 
 ## The check
 

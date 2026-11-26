@@ -25,7 +25,11 @@ final class SystemFreeSpaceReaderTest extends TestCase
     {
         $free = new SystemFreeSpaceReader()->freeInodes(__DIR__);
 
-        self::assertTrue(null === $free || $free >= 0);
+        if (null === $free) {
+            self::markTestSkipped('This file system reports no inode count.');
+        }
+
+        self::assertGreaterThan(0, $free);
     }
 
     public function testTheFreeBytesOfAFolderThatDoesNotExistAreUnreadable(): void
@@ -40,6 +44,25 @@ final class SystemFreeSpaceReaderTest extends TestCase
         $this->expectException(FreeSpaceUnreadable::class);
 
         new SystemFreeSpaceReader()->freeInodes($this->missingFolder());
+    }
+
+    public function testAnInodeReadThatIsStoppedByASignalIsUnreadable(): void
+    {
+        $folder = (string) getenv('TMPDIR').'/disk-signal-'.bin2hex(random_bytes(8));
+        mkdir($folder);
+        file_put_contents($folder.'/df', "#!/bin/sh\nkill -TERM \"\$\$\"\n");
+        chmod($folder.'/df', 0700);
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$folder);
+
+        try {
+            $this->expectException(FreeSpaceUnreadable::class);
+            new SystemFreeSpaceReader()->freeInodes($folder);
+        } finally {
+            putenv('PATH='.$path);
+            unlink($folder.'/df');
+            rmdir($folder);
+        }
     }
 
     public function testAnInodeReportWithFreeInodesIsReadFromItsSecondLine(): void

@@ -40,6 +40,10 @@ Deleting a conversation never touches the ledger. For a red head, the ledger hol
 
 In the container image, all of this lives in `/app/var/data`, which you must mount as a volume: the image declares none, so without one your data is lost with the container (see [Running the container image](../reference/user-manual.md#running-the-container-image)).
 
+## When the disk runs low
+
+Intakt can pause new work when a disk runs low on space or on files (inodes), so a checkout or a save does not fail half-way. The pause clears on its own once space is back, and work already running is not cut. The two limits are `disk.min_free_bytes` and `disk.min_free_inodes` in the config file. The check exists, but no work step asks it yet.
+
 ## Backing up
 
 Back up the data volume. Two ways:

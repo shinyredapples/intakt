@@ -31,7 +31,7 @@ codex: { model: gpt-6.2-sol, effort: high }
 # A scheduled task deletes older ones every ten minutes, never one whose review round is still open (a round whose judging failed, or whose upper wait ran out, counts as finished); the ledger is never touched.
 retention:
     conversation_days: 30
-# Optional: below these free bytes or free inodes of a folder, Intakt holds new work there until space is back (defaults 2147483648 bytes and 100000 inodes, each a whole number of at least 1).
+# Optional: settings of the disk check (no work step calls it yet; the next part wires it in). Below these free bytes or free inodes of a folder, Intakt holds new work there until space is back (defaults 2147483648 bytes and 100000 inodes, each a whole number of at least 1).
 disk:
     min_free_bytes: 2147483648
     min_free_inodes: 100000
