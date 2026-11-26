@@ -87,9 +87,17 @@ final class GateReportKeptResultTest extends TestCase
 
     public function testAKeptResultWithTheOkKeyTwiceFalseThenTrueIsNotKept(): void
     {
-        $kept = '{"gate":"dashes","ok":false,"ok":true,"findings":["notes.md:1 U+2014"],"omitted":0}';
+        $kept = '{"gate":"dashes","ok":false,"ok":true,"findings":[],"omitted":0}';
 
-        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+        self::assertNull($this->reportOf(GateResult::passed('dashes'))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultWithAnEmptyObjectIsNotKeptBecauseItIsNotCanonical(): void
+    {
+        $result = GateResult::failedBecause('dashes', 'notes.md:1');
+        $kept = substr($result->toFullJson(), 0, -1).',"note":{}}';
+
+        self::assertNull($this->reportOf($result)->keeping($kept)->kept);
     }
 
     public function testAKeptResultWithTheOkKeyTwiceTrueThenFalseIsNotKept(): void
