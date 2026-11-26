@@ -391,6 +391,36 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame(120, $out->secondsUntilAnAccountIsFree);
     }
 
+    // Forced order: the first account's pin is stored for 5 more seconds when the call begins, so the call never sends to it, and the second account's 3600-second reset is not saved; the wait is the first account's, as it would be had the second window been saved.
+    public function testAPinnedCallWaitsForAnUntriedAccountsStoredPinWhenTheLimitedAccountsLongerResetIsNotSaved(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            public bool $refuses = false;
+
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return !$this->refuses && parent::save($item);
+            }
+        };
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $pins->coolDown($this->deepinfra(Account::DEFAULT), 5);
+        $pool->refuses = true;
+        $requests = 0;
+        $first = $this->answering(static function () use (&$requests): never {
+            ++$requests;
+
+            throw new RateLimitExceededException(1);
+        });
+        $second = $this->answering(static fn (): never => throw new RateLimitExceededException(3600));
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame([0, 5], [$requests, $out->secondsUntilAnAccountIsFree]);
+    }
+
     // Forced order: the pin's save succeeds and the clock then runs past the whole reset before the call reads, so only the one-second typed minimum is left, not the full reset again.
     public function testAPinWhoseWindowAlreadyRanOutBeforeTheReadWaitsOnlyTheMinimumNotTheWholeResetAgain(): void
     {

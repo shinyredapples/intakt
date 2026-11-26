@@ -205,7 +205,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
     }
 
-    // Per account the longer of what its limit still has to run and the window now stored for it, because another worker can have extended a window that this call's own limit names shorter; null when no account of the call recorded a limit.
+    // Per limited account the longer of what its limit still has to run and the window now stored for it, because another worker can have extended a window that this call's own limit names shorter. An account the call never sent to counts with its stored wait above zero, as in outOfAccounts(), so the wait does not depend on whether a limited account's window was saved. Null when no account of the call recorded a limit.
     /**
      * @param array<string, int> $waits
      */
@@ -213,14 +213,18 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     {
         $now = $this->clock->now()->getTimestamp();
         $named = [];
+        $stored = [];
         foreach (array_keys($this->platforms) as $name) {
-            $left = $failures->limitedWait(new Account($this->provider, $name), $now);
+            $account = new Account($this->provider, $name);
+            $left = $failures->limitedWait($account, $now);
             if (null !== $left) {
                 $named[] = max($left, $waits[$name] ?? 0);
+            } elseif (!$failures->wasTried($account) && ($waits[$name] ?? 0) > 0) {
+                $stored[] = $waits[$name];
             }
         }
 
-        return [] === $named ? null : min($named);
+        return [] === $named ? null : min([...$named, ...$stored]);
     }
 
     // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
