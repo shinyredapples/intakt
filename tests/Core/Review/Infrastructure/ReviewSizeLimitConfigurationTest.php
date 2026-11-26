@@ -9,24 +9,38 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
-use Symfony\Component\Config\Definition\Processor;
 
 #[CoversClass(ReviewSizeLimitConfiguration::class)]
 final class ReviewSizeLimitConfigurationTest extends TestCase
 {
     public function testAProjectWithoutTheSettingGetsTodaysLimitOf200000Characters(): void
     {
-        self::assertSame(['alpha' => 200000], ReviewSizeLimitConfiguration::limitsOf($this->processed([])));
+        self::assertSame(['alpha' => 200000], ReviewSizeLimitConfiguration::limitsOf(['alpha'], []));
     }
 
     public function testAProjectWithItsOwnLimitKeepsThatValue(): void
     {
-        self::assertSame(['alpha' => 350000], ReviewSizeLimitConfiguration::limitsOf($this->processed(['review_size_limit' => 350000])));
+        self::assertSame(['alpha' => 350000], ReviewSizeLimitConfiguration::limitsOf(['alpha'], ['alpha' => 350000]));
     }
 
     public function testALimitOfOneCharacterIsAllowed(): void
     {
-        self::assertSame(['alpha' => 1], ReviewSizeLimitConfiguration::limitsOf($this->processed(['review_size_limit' => 1])));
+        self::assertSame(['alpha' => 1], ReviewSizeLimitConfiguration::limitsOf(['alpha'], ['alpha' => 1]));
+    }
+
+    public function testAProjectKeyedByZeroKeepsItsLimit(): void
+    {
+        self::assertSame([0 => 43], ReviewSizeLimitConfiguration::limitsOf([0], [0 => 43]));
+    }
+
+    public function testABooleanNameIsKeyedAsTheProjectsTreeKeysIt(): void
+    {
+        self::assertSame(1, ReviewSizeLimitConfiguration::keyOf('outer', true));
+    }
+
+    public function testAnEntryWithoutAUsableNameIsKeyedByItsOuterKey(): void
+    {
+        self::assertSame('outer', ReviewSizeLimitConfiguration::keyOf('outer', null));
     }
 
     #[DataProvider('invalidLimits')]
@@ -35,7 +49,7 @@ final class ReviewSizeLimitConfigurationTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
         $this->expectExceptionMessageMatches('/review_size_limit\) must be a positive whole number of characters of diff/');
 
-        $this->processed(['review_size_limit' => $value]);
+        ReviewSizeLimitConfiguration::limitsOf(['alpha'], ['alpha' => $value]);
     }
 
     /**
@@ -51,18 +65,5 @@ final class ReviewSizeLimitConfigurationTest extends TestCase
         yield 'list' => [[1]];
         yield 'null' => [null];
         yield 'boolean' => [true];
-    }
-
-    /**
-     * @param array<string, mixed> $section
-     *
-     * @return array<string, array{review_size_limit: int}>
-     */
-    private function processed(array $section): array
-    {
-        /** @var array{projects: array<string, array{review_size_limit: int}>} $configuration */
-        $configuration = new Processor()->processConfiguration(new ReviewSizeLimitConfiguration(), [['projects' => ['alpha' => $section]]]);
-
-        return $configuration['projects'];
     }
 }

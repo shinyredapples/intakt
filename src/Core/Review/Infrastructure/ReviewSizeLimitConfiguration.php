@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Infrastructure;
 use Intakt\Core\Review\Contract\ReviewSizeLimit;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
+use Symfony\Component\Config\Definition\Processor;
 
 // Its own tree because the projects tree of the AI module refuses keys it does not know.
 final class ReviewSizeLimitConfiguration implements ConfigurationInterface
@@ -27,12 +28,36 @@ final class ReviewSizeLimitConfiguration implements ConfigurationInterface
     }
 
     /**
-     * @param array<string, array{review_size_limit: int}> $projects
-     *
-     * @return array<string, int>
+     * The key the projects tree gives an entry: its name attribute whenever that is set (a float exported as text, a boolean as 0 or 1), else the outer key.
      */
-    public static function limitsOf(array $projects): array
+    public static function keyOf(int|string $outerKey, mixed $nameAttribute): int|string
     {
-        return array_map(static fn (array $project): int => $project[self::KEY], $projects);
+        return match (true) {
+            is_float($nameAttribute) => var_export($nameAttribute, true),
+            is_bool($nameAttribute) => (int) $nameAttribute,
+            is_int($nameAttribute), is_string($nameAttribute) => $nameAttribute,
+            default => $outerKey,
+        };
+    }
+
+    /**
+     * Each limit is validated alone under a fixed key, so no project name can change how the tree reads the others.
+     *
+     * @param list<int|string>      $projectKeys keys of the configured projects, as the projects tree gives them
+     * @param array<int|string, mixed> $written  the limits as written, by the same keys
+     *
+     * @return array<int|string, int>
+     */
+    public static function limitsOf(array $projectKeys, array $written): array
+    {
+        $limits = [];
+        foreach ($projectKeys as $key) {
+            $section = array_key_exists($key, $written) ? [self::KEY => $written[$key]] : [];
+            /** @var array{projects: array<string, array{review_size_limit: int}>} $processed */
+            $processed = new Processor()->processConfiguration(new self(), [['projects' => ['project' => $section]]]);
+            $limits[$key] = $processed['projects']['project'][self::KEY];
+        }
+
+        return $limits;
     }
 }

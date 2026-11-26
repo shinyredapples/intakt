@@ -87,6 +87,21 @@ final class WiredReviewSizeLimitTest extends KernelTestCase
         yield 'list entry with a float name' => ['  - name: 1.5', ['1.5' => 43]];
     }
 
+    public function testABooleanNameKeepsItsLimitBesideAProjectNamedLikeItsOuterKey(): void
+    {
+        $tiers = "    tiers:\n      strong: { provider: anthropic, model: big }\n";
+        $yaml = "projects:\n  alias:\n    name: true\n".$tiers."    review_size_limit: 43\n  other:\n    name: alias\n".$tiers;
+
+        self::assertSame([1 => 43, 'alias' => 200000], $this->limitsOf($yaml));
+    }
+
+    public function testAProjectNamedZeroWithAValidLimitBoots(): void
+    {
+        $yaml = "projects:\n  alias:\n    name: 0\n    tiers:\n      strong: { provider: anthropic, model: big }\n    build: {}\n    review_size_limit: 43\n";
+
+        self::assertSame([0 => 43], $this->limitsOf($yaml));
+    }
+
     public function testAnInvalidLimitOfAProjectNamedByItsAttributeStopsBoot(): void
     {
         $this->expectException(LoaderLoadException::class);

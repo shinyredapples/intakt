@@ -119,14 +119,8 @@ return static function (ContainerConfigurator $container): void {
             }
 
             if (is_array($project) && array_key_exists(ReviewSizeLimitConfiguration::KEY, $project)) {
-                // The projects tree renames an entry to its name attribute whenever that is set, whatever the outer key, and exports a float name as text; the limit must be filed under the same key or it would be lost and read as the default.
-                $attribute = $project['name'] ?? null;
-                $limitKey = match (true) {
-                    is_float($attribute) => var_export($attribute, true),
-                    is_int($attribute), is_string($attribute) => $attribute,
-                    default => $name,
-                };
-                $sizeLimits[$limitKey] = [ReviewSizeLimitConfiguration::KEY => $project[ReviewSizeLimitConfiguration::KEY]];
+                // Filed under the key the projects tree gives the entry, or it would be lost and read as the default.
+                $sizeLimits[ReviewSizeLimitConfiguration::keyOf($name, $project['name'] ?? null)] = $project[ReviewSizeLimitConfiguration::KEY];
                 unset($project[ReviewSizeLimitConfiguration::KEY]);
                 $contentProjects[$name] = $project;
             }
@@ -184,11 +178,7 @@ return static function (ContainerConfigurator $container): void {
     /** @var array<string, array{image: string}> $projectReviewJobs */
     $projectReviewJobs = new Processor()->processConfiguration(new ReviewJobConfiguration(), [['projects' => $reviewJobs]])['projects'];
     // A project without the setting reads the default, so every configured project has a limit.
-    $sizeLimits = array_replace(array_fill_keys(array_keys($projects), []), $sizeLimits);
-    /** @var array<string, array{review_size_limit: int}> $projectSizeLimits */
-    $projectSizeLimits = new Processor()->processConfiguration(new ReviewSizeLimitConfiguration(), [['projects' => $sizeLimits]])['projects'];
-    // Every written limit is validated above, but only a configured project keeps one, so the parameter never names a project that does not exist.
-    $projectSizeLimits = array_intersect_key($projectSizeLimits, $projects);
+    $projectSizeLimits = ReviewSizeLimitConfiguration::limitsOf(array_keys($projects), $sizeLimits);
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
     /** @var array<string, array{repository: string, base: string, task: string, github?: string, eligibility_label: string}> $projectWatches */
@@ -369,7 +359,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
     $container->parameters()->set(ReviewServices::PROJECT_FILE, $projectsFile);
-    $container->parameters()->set(ReviewServices::SIZE_LIMITS, ReviewSizeLimitConfiguration::limitsOf($projectSizeLimits));
+    $container->parameters()->set(ReviewServices::SIZE_LIMITS, $projectSizeLimits);
     $container->parameters()->set(ReviewServices::JOB_IMAGES, ReviewJobConfiguration::imagesOf($projectReviewJobs));
     $container->parameters()->set(BuildServices::ROUTING, array_map(static fn (array $project): array => $project['build'], $projectBuilds));
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
