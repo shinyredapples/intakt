@@ -110,7 +110,7 @@ final readonly class RunBuildJob
         $prompt = $this->promptFileFor($job);
 
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
+            return $this->outcomeOfRunning($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)]));
         } finally {
             $this->filesystem->remove($prompt);
         }
@@ -163,14 +163,17 @@ final readonly class RunBuildJob
         );
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
+    private function outcomeOfRunning(JobSpec $spec): BuildJobOutcome
     {
         try {
-            return $this->jobs->run($spec);
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
+            $result = $this->jobs->run($spec);
+        } catch (JobOutputRefused $refusal) {
+            // No result, because the job wrote what the runner refuses to read; the runner's reason is the log, because the job's own log is part of what was refused,
+            // as when the script cannot remove what the builder left in the build log's place, and the job's standard error is the builder's to write too.
+            return new BuildJobOutcome(BuildVerdict::NoResult, log: sprintf("no result: the runner refused the job's output: %s\n", $refusal->getMessage()));
         }
+
+        return $this->outcomeOf($result);
     }
 
     // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
@@ -179,12 +182,8 @@ final readonly class RunBuildJob
         return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
     }
 
-    private function outcomeOf(?JobResult $result): BuildJobOutcome
+    private function outcomeOf(JobResult $result): BuildJobOutcome
     {
-        if (!$result instanceof JobResult) {
-            return new BuildJobOutcome(BuildVerdict::NoResult);
-        }
-
         $log = $result->output->contents(self::LOG) ?? '';
 
         return match ($result->end->cause) {

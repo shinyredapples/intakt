@@ -327,6 +327,16 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
     }
 
+    public function testABuildLogFolderTheRunnerRefusesIsNoResultWithTheRunnersReasonAsItsLog(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile('build.log'));
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: ".JobOutputRefused::notAPlainFile('build.log')->getMessage()."\n"], [$outcome->verdict, $outcome->log]);
+    }
+
     protected function setUp(): void
     {
         $this->gatesAtOnce = new GatesAtOnce(12, 1);

@@ -209,7 +209,8 @@ if [ ! -f "$log" ] || [ -L "$log" ] || [ ! -w "$log" ]; then
     fi
 fi
 # Every later line goes to the log, and a redirection that fails skips its command, the bundle's too, so a log that cannot be written ends the job with the code the orchestrator reads as no result instead of a build without commits.
-# The reason goes to the job's standard error, the only log left to write; the runner keeps none of it, and refuses an output that holds anything but files.
+# The reason goes to the job's standard error, the only log left to write, for whoever reads the container's log; the runner keeps none of it, because the builder can write there too,
+# and refuses an output that holds anything but files, so the build's outcome carries the runner's own reason instead, which names what stands in the log's place.
 if ! printf 'claude exited with %d\n' "$status" >> "$log"; then
     echo 'the build log could not be started again' >&2
     exit 3
