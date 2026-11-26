@@ -24,7 +24,7 @@ use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 #[UsesClass(Evidence::class)]
 final class ReviewerAnswerTest extends TestCase
 {
-    // Taken from main before the answer document existed, because the schema the reviewers get must not change with it; only the gate_gap marker was added since, on purpose.
+    // Taken from main before the answer document existed, because the schema the reviewers get must not change with it; only the gate_gap marker, and then the title and kind, were added since, on purpose.
     private const string SCHEMA_FROM_MAIN = __DIR__.'/fixtures/verdict-schema.json';
 
     public function testTheVerdictJsonSchemaMatchesTheOneTakenFromMain(): void
