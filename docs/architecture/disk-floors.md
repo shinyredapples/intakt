@@ -19,7 +19,7 @@ The hold is measured on every call and never stored, so it clears by itself on t
 `FreeSpaceReader` (`src/Core/Disk/Infrastructure/FreeSpaceReader.php`) is the small interface the check reads through, so tests set the readings. The production reader is `SystemFreeSpaceReader`:
 
 - Free bytes come from PHP's `disk_free_space()`. A folder that does not exist, or whose file system cannot be read, raises `FreeSpaceUnreadable`.
-- Free inodes come from `df --output=itotal,iavail -- <folder>` (GNU coreutils), run through Symfony Process with `LC_ALL=C` and a 10 second timeout. A non-zero exit (a missing folder, a missing `df`) or output that is not one header line and one line of two whole numbers raises `FreeSpaceUnreadable`. A file system that reports a total of 0 inodes (btrfs allocates them as it goes) has no inode floor, and only its bytes are checked.
+- Free inodes come from `df --output=itotal,iavail -- <folder>` (GNU coreutils), run through Symfony Process with `LC_ALL=C` and a 10 second timeout. A non-zero exit (a missing folder, a missing `df`), a `df` stopped by a signal, or output that is not one header line and one line of two whole numbers raises `FreeSpaceUnreadable`. A file system that reports a total of 0 inodes (btrfs allocates them as it goes) has no inode floor, and only its bytes are checked.
 - An inode read that times out is not caught: the check propagates Symfony Process's `ProcessTimedOutException`, so a caller sees a hung mount as the timeout it is.
 
 `FreeSpaceUnreadable` (`src/Core/Disk/Contract/FreeSpaceUnreadable.php`) names the folder and the reason. The check never treats an unreadable disk as having room.
@@ -38,6 +38,6 @@ A value that is not a whole number of at least 1, or an unknown key under `disk`
 ## Tests
 
 - `tests/Core/Disk/Infrastructure/FlooredDiskSpaceTest.php`: held below each floor, not held at it, clearing when the readings rise, `FreeSpaceUnreadable` and the process timeout passing through.
-- `tests/Core/Disk/Infrastructure/SystemFreeSpaceReaderTest.php`: real readings of an existing folder, a missing folder, and the parsing of `df`'s output.
+- `tests/Core/Disk/Infrastructure/SystemFreeSpaceReaderTest.php`: real readings of an existing folder, a missing folder, a `df` stopped by a signal, and the parsing of `df`'s output.
 - `tests/Core/Disk/Infrastructure/DiskConfigurationTest.php`: defaults, boundaries and refused values.
 - `tests/Core/Disk/DiskSpaceOnTheContainerTest.php`: the wired container, with `tests/Core/Disk/ControlledFreeSpaceReader.php` in place of the disk, holding at each floor and resuming above it.

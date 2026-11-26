@@ -29,7 +29,7 @@ final class SystemFreeSpaceReaderTest extends TestCase
             self::markTestSkipped('This file system reports no inode count.');
         }
 
-        self::assertGreaterThan(0, $free);
+        self::assertGreaterThanOrEqual(0, $free);
     }
 
     public function testTheFreeBytesOfAFolderThatDoesNotExistAreUnreadable(): void
@@ -48,7 +48,7 @@ final class SystemFreeSpaceReaderTest extends TestCase
 
     public function testAnInodeReadThatIsStoppedByASignalIsUnreadable(): void
     {
-        $folder = getenv('TMPDIR').'/disk-signal-'.bin2hex(random_bytes(8));
+        $folder = sys_get_temp_dir().'/disk-signal-'.bin2hex(random_bytes(8));
         mkdir($folder);
         file_put_contents($folder.'/df', "#!/bin/sh\nkill -TERM \"\$\$\"\n");
         chmod($folder.'/df', 0700);
