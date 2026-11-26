@@ -239,6 +239,20 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\nFollow-ups\n2. Keep the earlier note\n---\n\nMore.", $body);
     }
 
+    public function testAnOrderedItemStartingAtOneInsideAParagraphEndsItSoHyphensAreAThematicBreak(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\nFollow-ups\n1. Keep\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\nShown.\n\nFollow-ups\n1. Keep\n---\n\nMore.\n\n".self::LINES, $body);
+    }
+
+    public function testAnOrderedItemBelowAWrappedOrderedItemIsAnItemSoHyphensDoNotSplitTheList(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n1. E1: the test\n   passes\n2. E2: shown\n---\n\n## Follow-ups\n\nNone.");
+
+        self::assertSame("## Evidence\n\n1. E1: the test\n   passes\n2. E2: shown\n---\n\n".self::LINES."\n\n## Follow-ups\n\nNone.", $body);
+    }
+
     public function testACrlfBodyWithASetextEvidenceHeadingGetsTheResultsUnderIt(): void
     {
         $body = new RegressionEvidence($this->runs())->addedTo("Evidence\r\n--------\r\n\r\nShown.\r\n\r\n## Next");
