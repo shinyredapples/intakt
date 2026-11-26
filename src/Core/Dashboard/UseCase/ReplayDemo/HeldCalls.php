@@ -14,7 +14,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 final readonly class HeldCalls
 {
     /**
-     * @param list<string> $payloads
+     * @param list<string>  $payloads
      * @param list<?string> $startedRounds
      */
     public function __construct(private array $payloads, private array $startedRounds)
