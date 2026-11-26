@@ -10,6 +10,7 @@ use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\OutageWatch;
+use Intakt\Core\Budget\Domain\ReplayedDisk;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
@@ -70,7 +71,7 @@ final readonly class RolledBackReplay
         $measured = new DoctrineMeasuredUse($this->entities, $clock, $events, $accountLock);
         $holds = new DoctrineHolds($this->entities, $clock);
         $events->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger, $accountLock)->noticeOnce(...));
-        $guard = new BudgetGuard($holds, new CeilingStartGuard($measured, $clock, $this->ceilings), new OutageWatch($measured, $clock, $events), $this->halts);
+        $guard = new BudgetGuard($holds, new CeilingStartGuard($measured, $clock, $this->ceilings), new OutageWatch($measured, $clock, $events), $this->halts, new ReplayedDisk());
 
         return new DayReplay($measured, $holds, $guard);
     }

@@ -17,6 +17,7 @@ enum StartDecision: string
     case FailureBackedOff = 'failure-backed-off';
     case Draining = 'draining';
     case Halted = 'halted';
+    case DiskLow = 'disk-low';
 
     public function admits(): bool
     {

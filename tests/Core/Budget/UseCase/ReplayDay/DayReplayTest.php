@@ -14,6 +14,7 @@ use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\OutageWatch;
+use Intakt\Core\Budget\Domain\ReplayedDisk;
 use Intakt\Core\Budget\UseCase\ReplayDay\DayReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
@@ -33,6 +34,7 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 #[UsesClass(BudgetGuard::class)]
 #[UsesClass(CeilingStartGuard::class)]
 #[UsesClass(OutageWatch::class)]
+#[UsesClass(ReplayedDisk::class)]
 #[UsesClass(SharedHold::class)]
 #[UsesClass(StartDecision::class)]
 #[UsesClass(Account::class)]
@@ -88,7 +90,7 @@ final class DayReplayTest extends TestCase
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
         $readings = new ReadingsInMemory($clock);
         $holds = new HoldsInMemory($clock);
-        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()), new HaltsInMemory());
+        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()), new HaltsInMemory(), new ReplayedDisk());
         $this->replay = new DayReplay($readings, $holds, $guard);
     }
 

@@ -20,7 +20,11 @@ use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Watchdog\Contract\CommitName;
 use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
+use Intakt\Core\Disk\Contract\DiskFloor;
+use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Domain\FloorCheck;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
+use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Watchdog\HaltsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -33,6 +37,9 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 #[CoversClass(SharedHold::class)]
 #[UsesClass(CeilingStartGuard::class)]
 #[UsesClass(OutageWatch::class)]
+#[UsesClass(FloorCheck::class)]
+#[UsesClass(DiskHeld::class)]
+#[UsesClass(DiskFloor::class)]
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(StartDecision::class)]
 #[UsesClass(Account::class)]
@@ -49,6 +56,7 @@ final class BudgetGuardTest extends TestCase
     private ReadingsInMemory $readings;
     private HoldsInMemory $holds;
     private HaltsInMemory $halts;
+    private FreeSpaceInMemory $space;
     private BudgetGuard $guard;
 
     /** @var list<string> */
@@ -169,6 +177,48 @@ final class BudgetGuardTest extends TestCase
         self::assertSame(StartDecision::Halted, $this->guard->decideMerge());
     }
 
+    public function testAStartIsRefusedBelowTheBytesFloorAndAdmittedOnceSpaceIsBack(): void
+    {
+        $this->space->leave(999, 500);
+        self::assertSame(StartDecision::DiskLow, $this->guard->decide($this->claude('main'), 0));
+
+        $this->space->leave(1000, 500);
+        self::assertSame(StartDecision::Start, $this->guard->decide($this->claude('main'), 0));
+    }
+
+    public function testAStartIsRefusedBelowTheInodesFloorAndAdmittedOnceSpaceIsBack(): void
+    {
+        $this->space->leave(5000, 99);
+        self::assertSame(StartDecision::DiskLow, $this->guard->decide($this->claude('main'), 0));
+
+        $this->space->leave(5000, 100);
+        self::assertSame(StartDecision::Start, $this->guard->decide($this->claude('main'), 0));
+    }
+
+    public function testAMergeIsHeldBelowAFloorToo(): void
+    {
+        $this->space->leave(5000, 99);
+
+        self::assertSame(StartDecision::DiskLow, $this->guard->decideMerge());
+    }
+
+    public function testAHaltStillWinsOverALowDisk(): void
+    {
+        $this->space->leave(1, 1);
+        $this->halts->halt('acme/shop');
+
+        self::assertSame(StartDecision::Halted, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::Halted, $this->guard->decideMerge());
+    }
+
+    public function testALowDiskWinsOverAHoldAndACooldown(): void
+    {
+        $this->hold(SharedHold::Pause, '+15 minutes');
+        $this->space->leave(1, 1);
+
+        self::assertSame(StartDecision::DiskLow, $this->guard->decide($this->claude('main'), 0));
+    }
+
     public function testAWatchdogHaltWinsOverADrain(): void
     {
         $this->hold(SharedHold::Drain, '+15 minutes');
@@ -238,7 +288,8 @@ final class BudgetGuardTest extends TestCase
         });
         $ceilings = new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
         $this->halts = new HaltsInMemory();
-        $this->guard = new BudgetGuard($this->holds, $ceilings, new OutageWatch($this->readings, $this->clock, $events), $this->halts);
+        $this->space = new FreeSpaceInMemory(5000, 500);
+        $this->guard = new BudgetGuard($this->holds, $ceilings, new OutageWatch($this->readings, $this->clock, $events), $this->halts, new FloorCheck($this->space, '/var/intakt', 1000, 100));
         foreach ([$this->claude('main'), $this->claude('team'), new Account(Provider::Anthropic, 'main')] as $account) {
             $this->readLow($account);
         }

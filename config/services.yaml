@@ -32,6 +32,12 @@ parameters:
     !php/const Intakt\Core\Git\Contract\GitServices::BRANCH_ARCHIVE_DIRECTORY: '%kernel.project_dir%/var/data/branch-archive'
     # The orchestrator's own private key, under var/data because that is where the image keeps its volume; it is never mounted into a job.
     !php/const Intakt\Core\Git\Contract\GitServices::SIGNING_KEY: '%kernel.project_dir%/var/data/keys/signing_key'
+    # The folder whose free space gates new work: it holds the mirrors, the job folders, the build clones and the database, so a full one fails every start and every state write.
+    !php/const Intakt\Core\Disk\Contract\DiskServices::WATCHED_DIRECTORY: '%kernel.project_dir%/var'
+    # New work is held below this many free bytes (at least 1; 1 GiB), because a checkout or a state write that meets a full disk fails mid-step.
+    !php/const Intakt\Core\Disk\Contract\DiskServices::FREE_BYTES_FLOOR: 1073741824
+    # New work is held below this many free inodes (at least 1), because one checkout per reviewed head can use up inodes long before bytes.
+    !php/const Intakt\Core\Disk\Contract\DiskServices::FREE_INODES_FLOOR: 10000
     # The port the Caddyfile listens on when SERVER_PORT is unset, so the doctor's web server check asks where the server is.
     env(SERVER_PORT): '7781'
 
@@ -55,6 +61,14 @@ services:
 
     # Wired here, because a Domain class carries no container attributes; its ceiling guard is wired in config/packages/ai.php.
     Intakt\Core\Budget\Contract\StartGuard: '@Intakt\Core\Budget\Domain\BudgetGuard'
+
+    # Wired here, because a Domain class carries no container attributes.
+    Intakt\Core\Disk\Domain\FloorCheck:
+        arguments:
+            $folder: '%intakt.disk.watched_directory%'
+            $bytesFloor: '%intakt.disk.free_bytes_floor%'
+            $inodesFloor: '%intakt.disk.free_inodes_floor%'
+    Intakt\Core\Disk\Contract\DiskHeadroom: '@Intakt\Core\Disk\Domain\FloorCheck'
 
     # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.
     Symfony\Component\Lock\Store\FlockStore:

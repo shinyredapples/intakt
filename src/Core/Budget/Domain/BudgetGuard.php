@@ -9,6 +9,8 @@ use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\DiskHeld;
 use Intakt\Core\Watchdog\Contract\Halts;
 use Override;
 
@@ -19,10 +21,11 @@ final readonly class BudgetGuard implements StartGuard
         private CeilingStartGuard $ceilings,
         private OutageWatch $outages,
         private Halts $halts,
+        private DiskHeadroom $disk,
     ) {
     }
 
-    // A watchdog halt wins over every hold, because only the owner lifts it; any standing card refuses, since a start names no project yet.
+    // A watchdog halt wins over every hold, because only the owner lifts it; any standing card refuses, since a start names no project yet. A full disk comes next, because no other hold frees it and a start would fail mid-step; work already running never asks again.
     #[Override]
     public function decide(Account $account, int $callsRunning): StartDecision
     {
@@ -31,6 +34,7 @@ final readonly class BudgetGuard implements StartGuard
 
         return match (true) {
             $this->isHalted() => StartDecision::Halted,
+            $this->isDiskHeld() => StartDecision::DiskLow,
             $shared instanceof SharedHold => $shared->decision(),
             $this->holds->isCoolingDown($account) => StartDecision::CoolingDown,
             default => $this->ceilings->decide($account, $callsRunning),
@@ -45,9 +49,19 @@ final readonly class BudgetGuard implements StartGuard
             return StartDecision::Halted;
         }
 
+        // A merge calls no model but writes the mirror and the ledger, which fail mid-step on a full disk.
+        if ($this->isDiskHeld()) {
+            return StartDecision::DiskLow;
+        }
+
         $holding = array_find($this->holds->sharedInEffect(), static fn (SharedHold $hold): bool => $hold->holdsMerges());
 
         return $holding?->decision() ?? StartDecision::Start;
+    }
+
+    private function isDiskHeld(): bool
+    {
+        return $this->disk->held() instanceof DiskHeld;
     }
 
     private function isHalted(): bool
