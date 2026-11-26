@@ -232,6 +232,20 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("Summary.\n\n***\nEvidence\n---\n\nShown.\n\n".self::LINES."\n\n## Next", $body);
     }
 
+    public function testAnOrderedItemNotStartingAtOneInsideAParagraphIsTextSoHyphensUnderlineIt(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\nShown.\n\nFollow-ups\n2. Keep the earlier note\n---\n\nMore.");
+
+        self::assertSame("## Evidence\n\nShown.\n\n".self::LINES."\n\nFollow-ups\n2. Keep the earlier note\n---\n\nMore.", $body);
+    }
+
+    public function testACrlfBodyWithASetextEvidenceHeadingGetsTheResultsUnderIt(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Evidence\r\n--------\r\n\r\nShown.\r\n\r\n## Next");
+
+        self::assertStringContainsString("Shown.\n\n".self::LINES."\n\n## Next", str_replace("\r\n", "\n", $body));
+    }
+
     private function runs(): RegressionRuns
     {
         return new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed);
