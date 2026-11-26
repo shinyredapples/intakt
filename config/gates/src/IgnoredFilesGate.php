@@ -31,16 +31,16 @@ final readonly class IgnoredFilesGate implements Gate
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }
 
+    private function findingFor(string $path): string
+    {
+        return $path.': tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore';
+    }
+
     /**
      * @return list<string>
      */
     private function paths(string $output): array
     {
         return array_values(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path));
-    }
-
-    private function findingFor(string $path): string
-    {
-        return $path.': tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore';
     }
 }
