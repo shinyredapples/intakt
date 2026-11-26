@@ -33,6 +33,7 @@ final class OptionalProjectMemory implements ProjectMemory
     {
         try {
             return $this->memory->relevantTo($query);
+            // Boundary: logs any read failure and returns no memory, because project memory is optional and must never fail the review.
         } catch (Throwable $failure) {
             $this->explain($query->project, $failure);
         }
@@ -45,6 +46,7 @@ final class OptionalProjectMemory implements ProjectMemory
     {
         try {
             return $this->memory->settledOn($query);
+            // Boundary: logs any read failure and returns no settled memory, because project memory is optional and must never fail the review.
         } catch (Throwable $failure) {
             $this->explain($query->project, $failure);
         }
@@ -52,7 +54,7 @@ final class OptionalProjectMemory implements ProjectMemory
         return SettledMemory::none();
     }
 
-    // Boundary: logs any read failure and lets the caller return no memory, because project memory is optional and must never fail the review.
+    // A missing embedding model is a set-up choice, so it gets one info line per start; any other failure is a warning with its trace.
     private function explain(string $project, Throwable $failure): void
     {
         if ($failure instanceof ProjectMemoryNeedsEmbeddingModel) {
