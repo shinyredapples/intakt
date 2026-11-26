@@ -6,7 +6,6 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\SameCause;
-use InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
@@ -53,11 +52,12 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
 
         $sameCause = new SameCause();
         foreach ($strings as $finding => $cause) {
-            try {
-                $sameCause = $sameCause->withStored((string) $finding, $cause);
-            } catch (InvalidArgumentException $refused) {
-                throw new UnexpectedValueException(sprintf('A stored "%s" holds a link it refuses: %s', $type, $refused->getMessage()), 0, $refused);
+            $refusal = SameCause::refusalOfStored((string) $finding, $cause);
+            if (null !== $refusal) {
+                throw new UnexpectedValueException(sprintf('A stored "%s" holds a link it refuses: %s', $type, $refusal));
             }
+
+            $sameCause = $sameCause->withStored((string) $finding, $cause);
         }
 
         return $sameCause;

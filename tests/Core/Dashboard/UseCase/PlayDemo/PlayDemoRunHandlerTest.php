@@ -21,6 +21,7 @@ use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -45,6 +46,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(DemoRefusal::class)]
 #[CoversClass(PlayDemoRun::class)]
 #[UsesClass(ReplaysRecording::class)]
+#[UsesClass(ReplayIsRefused::class)]
 #[UsesClass(RecordingFormat::class)]
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
@@ -105,6 +107,21 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertStringContainsString('target="demo-play-'.$second.'"', $later[0]);
         self::assertStringContainsString(DemoRefusal::AnotherPlayFirst->sentence(), $later[0]);
         self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testAModelCallAnotherReviewHoldsShowsItsOwnRefusalAndNotTheEarlierPlay(): void
+    {
+        self::assertSame(DemoRefusal::CallUsedElsewhere, DemoRefusal::of(ReplayIsRefused::becauseAnotherReviewHoldsCall('call-1')));
+    }
+
+    public function testTheRefusalOfAModelCallAnotherReviewHoldsSaysThatAnotherReviewUsedTheCall(): void
+    {
+        self::assertSame('Another review in the ledger already used a model call of the demo recording, so the run was not played. The install log names the call.', DemoRefusal::CallUsedElsewhere->sentence());
+    }
+
+    public function testAModelCallAnEarlierPlayHoldsPointsAtTheEarlierPlay(): void
+    {
+        self::assertSame(DemoRefusal::AnotherPlayFirst, DemoRefusal::of(ReplayIsRefused::becauseTheLedgerHoldsCall('call-1')));
     }
 
     public function testAPlayKeepsItsSignThroughTheQueueSoItsRefusalReachesItsOwnBox(): void
