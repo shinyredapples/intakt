@@ -9,12 +9,16 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
+use Throwable;
+use UnexpectedValueException;
 
 // Serial because the tests set process-wide variables.
 #[CoversClass(ProviderKeySource::class)]
@@ -122,6 +126,25 @@ final class ProviderKeySourceTest extends TestCase
         )->isSet(self::NAME));
     }
 
+    public function testAVaultWhoseRevealThrowsABareRuntimeExceptionCountsTheKeyAsMissing(): void
+    {
+        self::assertFalse($this->source(vault: $this->vaultRevealThrowing(new RuntimeException('no key')))->isSet(self::NAME));
+    }
+
+    public function testAVaultWhoseRevealThrowsASubclassOfRuntimeExceptionLetsItPassThrough(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+
+        $this->source(vault: $this->vaultRevealThrowing(new UnexpectedValueException('a bug')))->isSet(self::NAME);
+    }
+
+    public function testAVaultWhoseRevealThrowsALogicExceptionLetsItPassThrough(): void
+    {
+        $this->expectException(LogicException::class);
+
+        $this->source(vault: $this->vaultRevealThrowing(new LogicException('a bug')))->isSet(self::NAME);
+    }
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/provider-key-source-'.bin2hex(random_bytes(6));
@@ -132,6 +155,15 @@ final class ProviderKeySourceTest extends TestCase
         unset($_SERVER[self::NAME], $_ENV[self::NAME]);
         putenv(self::NAME);
         new Filesystem()->remove($this->directory);
+    }
+
+    private function vaultRevealThrowing(Throwable $failure): SodiumVault
+    {
+        $vault = self::createStub(SodiumVault::class);
+        $vault->method('list')->willReturn([self::NAME => null]);
+        $vault->method('reveal')->willThrowException($failure);
+
+        return $vault;
     }
 
     /**
