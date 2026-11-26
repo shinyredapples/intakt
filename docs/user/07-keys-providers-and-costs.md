@@ -48,7 +48,7 @@ Each reviewer names a tier. So one changed line moves every reviewer on that tie
 
 ## When a build runs long
 
-A build went past its allowance but keeps fixing tests. It may go on while it makes progress. Two limits stop it even then: the runaway ceiling for one build, and the per-task total across its continuations. A stopped build keeps the commits it made, and they are checked and pushed like any other.
+A build went past its allowance but keeps fixing tests. It may go on while it makes progress. Two limits are meant to stop it even then: the runaway ceiling for one build, and the per-task total across its continuations. A build stopped by either keeps the commits it made, and they are checked and pushed like any other.
 
 Planned: Intakt does not watch a running build for these limits yet. Today a build ends when its session's time runs out, and it keeps its commits the same way.
 

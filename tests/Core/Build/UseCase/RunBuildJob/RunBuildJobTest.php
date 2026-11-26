@@ -31,6 +31,7 @@ use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputRefused;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -45,6 +46,7 @@ use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJob::class)]
@@ -381,6 +383,47 @@ final class RunBuildJobTest extends TestCase
         self::assertNull($this->stops->causeFor($this->job()));
     }
 
+    public function testARefusedJobLeavesTheCauseOfTheBuildThatHoldsTheBranch(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec): never {
+            throw JobRefused::alreadyRunning($spec->id);
+        });
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the refusal was not passed on');
+        } catch (JobRefused) {
+        }
+
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAStopCauseIsForgottenEvenWhenRemovingThePromptFails(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec): never {
+            $this->stops->record($this->job(), BuildStopCause::NoProgress);
+
+            throw new RuntimeException('engine gone');
+        });
+        $filesystem = new class extends Filesystem {
+            public function remove(string|iterable $files): void
+            {
+                throw new IOException('prompt cleanup failed');
+            }
+        };
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), $filesystem)->run($this->job());
+            self::fail('the cleanup failure was not passed on');
+        } catch (IOException) {
+        }
+
+        self::assertNull($this->stops->causeFor($this->job()));
+    }
+
     public function testAStopCauseOfAnotherBranchIsNotCarried(): void
     {
         $this->stops->record(new BuildJob('demo', $this->folder.'/clone', 'other', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'img'), BuildStopCause::PerTaskTotal);
@@ -425,11 +468,11 @@ final class RunBuildJobTest extends TestCase
         return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', new Decisions(), null), $tier, 'intakt-job-demo:1');
     }
 
-    private function useCase(JobRunner $runner, ResolvedModel $model): RunBuildJob
+    private function useCase(JobRunner $runner, ResolvedModel $model, ?Filesystem $filesystem = null): RunBuildJob
     {
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops);
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops);
     }
 }

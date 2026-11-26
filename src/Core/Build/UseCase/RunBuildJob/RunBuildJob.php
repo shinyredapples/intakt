@@ -109,12 +109,22 @@ final readonly class RunBuildJob
         $clone = $this->folder($job->clone);
         $prompt = $this->promptFileFor($job);
 
+        $cause = null;
+        $refused = false;
+
         try {
             $outcome = $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
+        } catch (JobRefused $failure) {
+            $refused = true;
+
+            throw $failure;
         } finally {
+            // Read before the prompt is removed and also when the job failed, so a cause never reaches the branch's next build.
+            // Not read for a refused job: it never started, and the cause belongs to the build that holds the branch's job id.
+            if (!$refused) {
+                $cause = $this->stops->causeFor($job);
+            }
             $this->filesystem->remove($prompt);
-            // Read also when the job failed, so a cause recorded for it never reaches the branch's next build.
-            $cause = $this->stops->causeFor($job);
         }
 
         return $outcome->stoppedFor($cause);
