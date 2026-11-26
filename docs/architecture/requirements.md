@@ -82,7 +82,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `bash`, `mktemp`, `mkdir`, `chmod`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | creating the restored Composer cache folder when the cache missed and making it readable by the engines' uid 1000 user, running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
 | `bash`, `git`, `mktemp`, `rm` | `image-needed.sh` (the `image` job, and the `journeys` job's decision step, which also runs `git diff --quiet` on the journeys' test code) | deciding from the pull request's diff whether the app image is needed | yes |
-| `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `upgrade-needed.sh` (the `image` job) | deciding from the pull request's diff whether the upgrade check is needed | yes |
+| `bash` 4 or later, `git`, `mktemp`, `rm` | `upgrade-needed.sh` (the `image` job) | deciding from the pull request's diff whether the upgrade check is needed; it reads the paths NUL-separated (`git diff -z`, `git grep -z`) and compares them in a bash associative array | yes |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp`, `env` and `composer` (above); it runs `composer install` without `GH_TOKEN` in its environment, so only the command it then runs gets the token.
 

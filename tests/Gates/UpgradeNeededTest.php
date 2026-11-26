@@ -25,6 +25,24 @@ final class UpgradeNeededTest extends SandboxTestCase
         yield 'an unmapped class' => ['src/Core/One/Domain/Plain.php', "<?php\nfinal class Plain {}\n", 'no'];
         yield 'a guide page' => ['docs/guide/your-data.md', '# Your data', 'no'];
         yield 'composer.json alone' => ['composer.json', '{}', 'no'];
+        yield 'a migration with a non-ASCII name' => ['migrations/Versión1.php', '<?php', 'yes'];
+        yield 'a script of the image with a tab in its name' => ["docker/entry\tpoint.sh", '#!/bin/bash', 'yes'];
+        yield 'a script of the image with a newline in its name' => ["docker/entry\npoint.sh", '#!/bin/bash', 'yes'];
+        yield 'a mapped class with a non-ASCII name' => ['src/Core/Two/Domain/Récord.php', self::MAPPED_CLASS, 'yes'];
+        yield 'a mapped class with a newline in its name' => ["src/Core/Two/Domain/Re\ncord.php", self::MAPPED_CLASS, 'yes'];
+        yield 'a guide page with a non-ASCII name' => ['docs/guide/café.md', '# Café', 'no'];
+        yield 'a guide page whose name has a watched folder after a newline' => ["docs/guide/a\ndocker/b.md", '# A', 'no'];
+    }
+
+    public function testAMigrationRenamedOutOfItsFolderStillNeedsTheCheck(): void
+    {
+        $sandbox = $this->sandboxWithAMappedClass();
+        $sandbox->write('migrations/Version1.php', '<?php');
+        $sandbox->commitAll('chore: add a migration');
+
+        $sandbox->git('mv', 'migrations/Version1.php', 'Version1.php');
+
+        self::assertSame('yes', $this->answer($sandbox));
     }
 
     #[DataProvider('changes')]
