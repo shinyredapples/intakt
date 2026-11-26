@@ -94,8 +94,8 @@ final readonly class ReadableLines
 
     /**
      * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string} $state
-     * @param ?array{int, string}                                                                  $paragraph
-     * @param ?array{string, ?string}                                                              $html
+     * @param ?array{int, string}                                                                                    $paragraph
+     * @param ?array{string, ?string}                                                                                $html
      *
      * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string}
      */
