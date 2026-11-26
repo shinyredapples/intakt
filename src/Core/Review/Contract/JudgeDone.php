@@ -30,6 +30,8 @@ final readonly class JudgeDone
         public P1Keys $p1Keys = new P1Keys(),
         // True when the fallback for an answer that cannot be read stood in for the judge (it acts on every P1 and P2 and marks no P3), so the dashboard counts no fallback's marks as the judge's calls; null on a row written before it was recorded.
         public ?bool $fallback = null,
+        // Whether plain code or a model call marked the round, so every reader can tell which path ran; a model call by default, because before it was recorded every round with a finding left after the quote check asked the model.
+        public VerdictPath $path = VerdictPath::ModelCall,
     ) {
     }
 }

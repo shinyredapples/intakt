@@ -76,6 +76,15 @@ final readonly class JudgedRounds
         return $this->findings->reportedIn($round);
     }
 
+    // Null for a reviewer whose verdict is not stored, so the caller can tell it from one that gave a verdict.
+    /**
+     * @return list<?Verdict>
+     */
+    public function verdictsOf(ReviewRound $round): array
+    {
+        return array_map($this->verdicts->ofReviewer(...), $round->reviewers());
+    }
+
     public function changeOf(ReviewRound $round): string
     {
         return $this->change->of($round->diff(), $round->checkoutRoot());

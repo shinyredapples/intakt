@@ -28,6 +28,7 @@ final readonly class JudgedFindings
         public JudgeNotes $notes,
         // True when the fallback for an answer that cannot be read stands in for the judge, taken from the judgement that chose it, because the marks cannot tell: a fallback over P1 and P2 findings alone marks every one.
         public bool $fallback,
+        public VerdictPath $path,
     ) {
     }
 
@@ -52,7 +53,7 @@ final readonly class JudgedFindings
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => self::deferred($finding, $marks[$finding->id] ?? null)));
         $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => self::rejected($finding, $marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings), $judgement->fallback());
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings), $judgement->fallback(), $judgement->path());
     }
 
     private static function actedOn(Finding $finding, ?Mark $mark): bool

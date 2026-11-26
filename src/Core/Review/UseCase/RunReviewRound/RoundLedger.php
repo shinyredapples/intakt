@@ -156,6 +156,7 @@ final readonly class RoundLedger
             $votes,
             $this->p1KeysOf($round, $judged),
             $judged->fallback,
+            $judged->path,
         ));
     }
 

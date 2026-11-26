@@ -32,7 +32,9 @@ use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
+use Intakt\Core\Review\Domain\ReviewersAgree;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
@@ -85,6 +87,7 @@ use Throwable;
 #[UsesClass(DiffPaths::class)]
 #[UsesClass(Paths::class)]
 #[CoversClass(CausesInOneHunk::class)]
+#[UsesClass(ReviewersAgree::class)]
 #[CoversClass(DiffHunks::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(DroppedFinding::class)]
@@ -488,6 +491,62 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
     }
 
+    // D4 of #862: the failing judge proves the order, because any model call ends the test before judge_done is written.
+    public function testARoundWhoseReviewersAllApproveIsRecordedInPlainCodeWithoutAModelCall(): void
+    {
+        $round = $this->roundOf(new VerdictPerRole([]));
+        [$first, $second] = $this->reviewerIdsOf($round);
+
+        $this->fixture->judge(new FailingJudge(new RuntimeException('The model was asked.')))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => [], 'follow_ups' => []]], $this->judgeCalls());
+        self::assertSame([$first => 'approve', $second => 'approve'], $payload['votes']);
+        self::assertSame('plain_code', $payload['path']);
+    }
+
+    public function testARoundWhoseEveryBlockingFindingIsSharedIsRecordedInPlainCodeWithEveryOneActed(): void
+    {
+        $round = $this->roundOf(new VerdictPerRole([
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->atLine('A', Severity::P1, 3)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->atLine('B', Severity::P2, 3)], [], []),
+        ]));
+        [$first, $second] = $this->reviewerIdsOf($round);
+
+        $this->fixture->judge(new FailingJudge(new RuntimeException('The model was asked.')))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
+        self::assertSame([$first => 'changes', $second => 'changes'], $payload['votes']);
+        self::assertSame('plain_code', $payload['path']);
+        self::assertFalse($payload['fallback']);
+    }
+
+    public function testARoundWhereOneReviewerApprovesAndOneRequestsChangesAsksTheModel(): void
+    {
+        $round = $this->completedRound();
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        self::assertSame(1, $judge->calls);
+        self::assertSame('model_call', $this->judgeDonePayloads()[0]['path']);
+    }
+
+    public function testARoundWhoseBlockingFindingsAreNotSharedAsksTheModel(): void
+    {
+        $round = $this->roundOf(new VerdictPerRole([
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->atLine('A', Severity::P1, 3)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->atLine('B', Severity::P1, 7)], [], []),
+        ]));
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        self::assertSame(1, $judge->calls);
+        self::assertSame('model_call', $this->judgeDonePayloads()[0]['path']);
+    }
+
     public function testAJudgedRoundDeliveredAgainAsksTheJudgeNothingAndRecordsNoSecondJudgeDone(): void
     {
         $round = $this->completedRound();
@@ -515,7 +574,7 @@ final class JudgeRoundTest extends KernelTestCase
 
     public function testAFindingQuotingANameAbsentFromTheChangeNeverReachesTheJudge(): void
     {
-        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
+        $round = $this->roundTheReviewersDisagreeOn([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
         $judge = new ScriptedJudgement(new Judgement([]));
 
         $this->fixture->judge($judge)($this->judgingOf($round));
@@ -529,7 +588,7 @@ final class JudgeRoundTest extends KernelTestCase
     public function testAFindingWithoutAQuoteAndASymbolAbsentFromTheChangeReachesTheJudge(): void
     {
         $finding = new Finding('A', Severity::P1, 'src/Thing.php', 1, 'grepName', 'The command is built from user input.', FixableBy::Builder, false, null, null);
-        $round = $this->roundReporting([$finding]);
+        $round = $this->roundTheReviewersDisagreeOn([$finding]);
         $judge = new ScriptedJudgement(new Judgement([]));
 
         $this->fixture->judge($judge)($this->judgingOf($round));
@@ -608,7 +667,7 @@ final class JudgeRoundTest extends KernelTestCase
 
     public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
     {
-        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
+        $round = $this->roundTheReviewersDisagreeOn([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
 
@@ -641,7 +700,7 @@ final class JudgeRoundTest extends KernelTestCase
 
     public function testTheLinkThatWouldStretchAChainFurtherThanFiveLinesIsNotAppliedToTheRecordedEntries(): void
     {
-        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 1), $this->atLine('B', Severity::P2, 5), $this->atLine('C', Severity::P2, 9)]);
+        $round = $this->roundTheReviewersDisagreeOn([$this->atLine('A', Severity::P2, 1), $this->atLine('B', Severity::P2, 5), $this->atLine('C', Severity::P2, 9)]);
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1'), new JudgedFinding('F3', Mark::Act, 'F2')])))($this->judgingOf($round));
 
@@ -789,7 +848,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true, 'fallback' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true, 'fallback' => true, 'path' => true]), $this->judgeDonePayloads());
     }
 
     /**
@@ -855,5 +914,33 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
 
         return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    // The second reviewer approves, so the reviewers disagree and the model is asked even about findings a lone reviewer would have marked in plain code.
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundTheReviewersDisagreeOn(array $findings): ReviewRound
+    {
+        return $this->roundOf(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+    }
+
+    private function roundOf(VerdictPerRole $verdicts): ReviewRound
+    {
+        $round = $this->fixture->start(2);
+
+        foreach ($this->fixture->bus->messages as $message) {
+            $this->fixture->deliver($message, $verdicts);
+        }
+
+        return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function reviewerIdsOf(ReviewRound $round): array
+    {
+        return array_map(static fn (RoundReviewer $reviewer): string => $reviewer->id()->toRfc4122(), $round->reviewers());
     }
 }

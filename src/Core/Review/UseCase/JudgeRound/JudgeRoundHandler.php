@@ -16,6 +16,7 @@ use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
+use Intakt\Core\Review\Domain\ReviewersAgree;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -94,9 +95,9 @@ final readonly class JudgeRoundHandler
      */
     private function judgementOf(ReviewRound $round, array $findings): Judgement
     {
-        // Nothing to mark, so the model is not paid for an empty answer.
-        if ([] === $findings) {
-            return new Judgement([]);
+        // Nothing to mark, or nothing a model could change (D4 of #862), so the model is not paid for an answer plain code can give.
+        if ([] === $findings || new ReviewersAgree()->over($this->rounds->verdictsOf($round), $findings)) {
+            return Judgement::inPlainCode($findings);
         }
 
         try {

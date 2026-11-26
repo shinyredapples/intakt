@@ -14,6 +14,9 @@ final readonly class Judgement
     // Private and set only by the fallback, so the answer schema (public properties) and the deserializer leave it out and a model can never claim it.
     private bool $fallback;
 
+    // Private for the same reason, so a model's answer is always recorded as a model call.
+    private VerdictPath $path;
+
     /**
      * @param list<JudgedFinding> $marks
      */
@@ -22,6 +25,16 @@ final readonly class Judgement
         public array $marks,
     ) {
         $this->fallback = false;
+        $this->path = VerdictPath::ModelCall;
+    }
+
+    // Every blocking finding is act and none is linked to another, because the reviewers agree on each (ReviewersAgree) and a P1 or P2 reaches the act list whatever a model would mark it.
+    /**
+     * @param list<Finding> $findings
+     */
+    public static function inPlainCode(array $findings): self
+    {
+        return clone (self::everyBlockingFindingActs($findings), ['fallback' => false, 'path' => VerdictPath::PlainCode]);
     }
 
     // Every blocking finding is act, because a judge that cannot be read must never drop one; a P3 gets no mark and so never reaches the builder.
@@ -41,7 +54,12 @@ final readonly class Judgement
         return $this->fallback;
     }
 
-    // Keeps whether this is the fallback, because a check that rewrites the marks must not turn the fallback into the judge's answer.
+    public function path(): VerdictPath
+    {
+        return $this->path;
+    }
+
+    // Keeps whether this is the fallback and its path, because a check that rewrites the marks must not turn the fallback into the judge's answer.
     /**
      * @param list<JudgedFinding> $marks
      */
