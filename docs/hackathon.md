@@ -6,7 +6,7 @@ what was achieved inside that window, and what comes next. Development continues
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/roadmap-dark.svg" width="600" height="350">
-    <img src="assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard; we are here, with the octopus: M5 Demo, the hackathon release, 22 Nov; next: M6 Runs alongside (beside the build loop), M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="600" height="350" loading="lazy">
+    <img src="assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard, M5 Demo (the hackathon release, 22 Nov); we are here, with the octopus: M6 Reviewer for the loop (reviews the build loop's changes); next: M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="600" height="350" loading="lazy">
   </picture>
 </p>
 
@@ -96,8 +96,8 @@ to 2026-11-13, as listed in [the journey](journey.md): 773 closed issues (counte
 Development continues. The next milestones, from [the plan](plan.md) and the
 [GitHub milestones](https://github.com/shinyredapples/intakt/milestones):
 
-- **M6 Runs alongside (the shadow phase):** Intakt runs beside the build loop that developed it, takes the place of
-  one of its reviewers on pull requests on GitHub, and its verdict counts.
+- **M6 Reviewer for the loop:** Intakt reviews the build loop's changes, takes the place of one of the loop's
+  reviewers on pull requests on GitHub, and its verdict counts.
 - **M7 Builder half:** Intakt builds a task from an issue to a pull request.
 - **M8 Switch:** Intakt runs its own loop.
 

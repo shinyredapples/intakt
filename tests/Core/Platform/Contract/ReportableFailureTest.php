@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Platform\Contract;
 
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
@@ -34,6 +36,8 @@ final class ReportableFailureTest extends TestCase
         yield 'glob cannot be evaluated' => [new GlobCannotBeEvaluated('src/**', 'too deep')];
         yield 'round not next' => [RoundNotNext::for(3, 1)];
         yield 'repository not found' => [RepositoryNotFound::at('missing')];
+        yield 'repository attributes refused' => [RepositoryAttributesRefused::at('info/attributes')];
+        yield 'job event not recorded' => [JobEventNotRecorded::for('job_started', 'disk full')];
     }
 
     #[DataProvider('expectedFailures')]

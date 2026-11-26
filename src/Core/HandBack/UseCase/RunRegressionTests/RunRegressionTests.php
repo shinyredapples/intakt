@@ -95,8 +95,8 @@ final readonly class RunRegressionTests implements RegressionTests
 
         try {
             $headRun = $this->ranOn($job, $repository, RegressionCheckout::head($accepted->head, $tests));
+            // Boundary: records a head run that cannot be prepared or run as no result after a passed base, because that base already shows the test proves nothing and must not be discarded; otherwise rethrows.
         } catch (Throwable $failure) {
-            // A base that passed already shows the test proves nothing, so a head run that cannot be prepared or run must not discard it.
             if (RegressionRun::Passed !== $baseRun) {
                 throw $failure;
             }

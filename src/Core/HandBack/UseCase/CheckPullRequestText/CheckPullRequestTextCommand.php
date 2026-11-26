@@ -9,9 +9,9 @@ use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextRound;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\Contract\PullRequestTextTask;
+use Intakt\Core\HandBack\Contract\PullRequestTextTaskRefused;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use Intakt\Core\Platform\Contract\ReportableFailure;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -32,7 +32,7 @@ final readonly class CheckPullRequestTextCommand
     {
         try {
             $result = $this->resultOf($input, $this->read($input->task), $this->bodyOf($this->read($input->pullRequestText)));
-        } catch (InvalidArgumentException|ReportableFailure $failure) {
+        } catch (PullRequestTextFileUnreadable|PullRequestTextTaskRefused|ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -50,7 +50,7 @@ final readonly class CheckPullRequestTextCommand
         try {
             return $this->filesystem->readFile($path);
         } catch (IOException) {
-            throw new InvalidArgumentException(sprintf('the file "%s" cannot be read', $path));
+            throw new PullRequestTextFileUnreadable(sprintf('the file "%s" cannot be read', $path));
         }
     }
 

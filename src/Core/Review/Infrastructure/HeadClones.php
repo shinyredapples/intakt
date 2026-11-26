@@ -8,11 +8,12 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\CommitId;
-use RuntimeException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 // A clone of its own for each review job, because the round's checkout is a git worktree, whose .git file the job's script refuses.
 final readonly class HeadClones
@@ -32,7 +33,6 @@ final readonly class HeadClones
     /**
      * @throws ProcessFailedException
      * @throws RepositoryAttributesRefused
-     * @throws RuntimeException
      */
     public function cloneAt(string $checkout, CommitId $head): string
     {
@@ -48,10 +48,10 @@ final readonly class HeadClones
             // Only for the fetch, because HardenedGit allows no protocol at all and the fetch reads the round's checkout by its path.
             $this->run(new GitCall($fetch->command, $fetch->directory, $fetch->environment->with(GIT_ALLOW_PROTOCOL: 'file')));
             $this->run($this->hardened->call($clone, '-c', 'core.autocrlf=false', '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $head->hash));
-        } catch (RuntimeException $failed) {
-            $this->remove($clone);
 
-            throw $failed;
+            // Boundary: any failure, also an unexpected one, must remove the partial clone before it ends the job.
+        } catch (Throwable $failed) {
+            $this->removeAfter($clone, $failed);
         }
 
         return $clone;
@@ -66,7 +66,6 @@ final readonly class HeadClones
     /**
      * @throws ProcessFailedException
      * @throws RepositoryAttributesRefused
-     * @throws RuntimeException
      */
     private function objectFormatOf(string $checkout): string
     {
@@ -75,10 +74,21 @@ final readonly class HeadClones
 
     /**
      * @throws ProcessFailedException
-     * @throws RuntimeException
      */
     private function run(GitCall $call): string
     {
         return new Process([...$call->command], $call->directory, [...$call->environment], null, self::GIT_SECONDS)->mustRun()->getOutput();
+    }
+
+    // The failure that ended the clone is rethrown even when the removal fails too, because it is the cause the job must report.
+    private function removeAfter(string $clone, Throwable $failed): never
+    {
+        try {
+            $this->remove($clone);
+        } catch (IOException) {
+            throw $failed;
+        }
+
+        throw $failed;
     }
 }
