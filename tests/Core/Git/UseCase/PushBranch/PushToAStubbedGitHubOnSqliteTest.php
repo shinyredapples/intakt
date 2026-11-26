@@ -48,7 +48,9 @@ final class PushToAStubbedGitHubOnSqliteTest extends KernelTestCase
     {
         $this->github->openPulls = [['number' => 7, 'head' => ['ref' => PushScenario::BRANCH], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]']]];
 
-        $pushed = $this->scenario->pushThrough($this->github->opener(), $this->ledger)->push($this->scenario->request());
+        $push = $this->scenario->pushThrough($this->github->opener(), $this->ledger);
+        $pushed = $push->push($this->scenario->request());
+        $push->openChange($this->scenario->request());
 
         self::assertInstanceOf(PushedBranch::class, $pushed);
         self::assertSame($pushed->head, $this->scenario->remoteTip());

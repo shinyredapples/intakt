@@ -15,10 +15,9 @@ use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\Git\Contract\UnsignedCommitRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Plugin\Forge\Contract\ChangeText;
-use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 
-// The signed push of the checked head through the Git module's contract, because only the orchestrator's signature may reach the remote branch.
+// The signed push of the checked head through the Git module's contract, because only the orchestrator's signature may reach the remote branch; the text goes along because PullRequestStep opens the pull request of exactly this request.
 final readonly class PushStep
 {
     public function __construct(
@@ -31,7 +30,7 @@ final readonly class PushStep
     {
         try {
             $outcome = $this->branches->push($this->pushOf($request, $accepted, $text));
-        } catch (BuildCheckoutFailed|BranchNotPushed|UnsignedCommitRefused|ChangeTextHoldsSecret|ForgeWriteFailed $failure) {
+        } catch (BuildCheckoutFailed|BranchNotPushed|UnsignedCommitRefused|ForgeWriteFailed $failure) {
             return $failure->getMessage();
         }
 

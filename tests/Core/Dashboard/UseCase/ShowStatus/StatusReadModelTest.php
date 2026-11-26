@@ -225,7 +225,7 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
     }
 
-    public function testATaskThatWentThroughThePushShowsItsPushStepPassed(): void
+    public function testATaskThatWentThroughThePullRequestShowsItsPullRequestStepPassed(): void
     {
         foreach (BuildStep::cases() as $step) {
             $this->ledger->passBuildStep('alpha', '12', $step->value);
@@ -233,7 +233,7 @@ final class StatusReadModelTest extends TestCase
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
-        self::assertSame([['task' => '12', 'step' => 'push', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+        self::assertSame([['task' => '12', 'step' => 'pull_request', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
     }
 
     public function testATaskThatStoppedAtThePushShowsThePushStepAndItsFailure(): void
@@ -292,7 +292,7 @@ final class StatusReadModelTest extends TestCase
      */
     public static function malformedBuildSteps(): iterable
     {
-        yield 'an unknown step' => [['project' => 'alpha', 'task' => '12', 'step' => 'pull_request', 'outcome' => 'passed', 'failure' => null]];
+        yield 'an unknown step' => [['project' => 'alpha', 'task' => '12', 'step' => 'merge', 'outcome' => 'passed', 'failure' => null]];
         yield 'an unknown outcome' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'skipped', 'failure' => null]];
         yield 'a failed step without its failure' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => null]];
         yield 'a passed step with a failure' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'passed', 'failure' => 'git fetch failed']];

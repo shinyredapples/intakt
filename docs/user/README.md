@@ -65,6 +65,8 @@ Text that is not a comment does not count: a string, a line indented under a YAM
 
 A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
+`intakt:build:task` runs its steps in this order and stops at the first one that fails: task, mirror, clone, build job, hand-back check, pre-push check, push, pull request. The pull request step opens or updates the branch's pull request under Intakt's GitHub App after the push; when GitHub refuses it, the branch stays pushed and the task page and `intakt:status` show `pull_request` as the failed step with GitHub's reason ([building one task](../reference/user-manual.md#building-one-task)).
+
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
 A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part ([bug tasks](../reference/user-manual.md#bug-tasks)).

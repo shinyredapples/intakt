@@ -227,10 +227,10 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame(2, $this->browser->request('GET', '/')->filter('#board-octopus img[src*="octopus-asleep-"]')->count());
     }
 
-    public function testATaskWhosePushPassedWithNoCardShowsTheAsleepOctopus(): void
+    public function testATaskWhosePullRequestStepPassedWithNoCardShowsTheAsleepOctopus(): void
     {
-        $this->ledger->passBuildStep('alpha', 'task-7', 'pre_push_check');
         $this->ledger->passBuildStep('alpha', 'task-7', 'push');
+        $this->ledger->passBuildStep('alpha', 'task-7', 'pull_request');
 
         self::assertSame(2, $this->browser->request('GET', '/')->filter('#board-octopus img[src*="octopus-asleep-"]')->count());
     }
@@ -263,7 +263,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
     public function testAProjectWithOnlyFinishedBuildWorkCanBeChosenInTheFilterWhileAnotherProjectWorks(): void
     {
-        $this->ledger->passBuildStep('build-only', '42', 'push');
+        $this->ledger->passBuildStep('build-only', '42', 'pull_request');
         $this->ledger->startRound('round-1', 'reviewing');
 
         $page = $this->browser->request('GET', '/');

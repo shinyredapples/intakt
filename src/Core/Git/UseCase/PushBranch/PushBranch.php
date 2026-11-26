@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\PushBranch;
 
+use Closure;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
@@ -39,10 +40,29 @@ final readonly class PushBranch implements BranchPush
     #[NoDiscard('a merge-main outcome has to go back to the builder, and a refused push to its caller')]
     public function push(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
+        return $this->locked($request, $this->pushed(...));
+    }
+
+    // The same lock as the push, so no push of the branch runs between the read of the remote branch and the pull request write.
+    #[Override]
+    public function openChange(BranchPushRequest $request): ChangeId
+    {
+        return $this->locked($request, $this->changeOfPushed(...));
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(BranchPushRequest): T $work
+     *
+     * @return T
+     */
+    private function locked(BranchPushRequest $request, Closure $work): mixed
+    {
         $lock = $this->lockedBranch($request);
 
         try {
-            $outcome = $this->pushed($request);
+            $outcome = $work($request);
             // Boundary: releases the branch lock on any failure and rethrows it, because a lock left held would refuse the branch's later pushes until it expires.
         } catch (Throwable $failure) {
             $this->releaseAfter($lock);
@@ -78,13 +98,31 @@ final readonly class PushBranch implements BranchPush
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
 
-        $notLanded = $this->notLanded($request, $head, $main);
+        return $this->notLanded($request, $head, $main) ?? new PushedBranch($head);
+    }
 
-        if (null !== $notLanded) {
-            return $notLanded;
+    // Signed again rather than taken from the caller, because the signature is deterministic and only a head this use case pushed may get a pull request.
+    private function changeOfPushed(BranchPushRequest $request): ChangeId
+    {
+        $this->refuseRewrittenRemote($request);
+        $main = $this->mainOf($request->repository);
+        $head = $this->signed->of($request->repository, $request->accepted, $main);
+
+        if (!$this->records->hasPushed($request, $head)) {
+            throw BranchNotPushed::because(sprintf('this head of %s is not pushed yet, so no pull request is opened', $request->branch));
         }
 
-        return new PushedBranch($head, $this->openedChange($request, $head, $main));
+        $this->refuseAMovedBranch($request, $head, $this->remoteTip($request));
+
+        return $this->openedChange($request, $head, $main);
+    }
+
+    // Refused before the pull request is written, because a late retry of an earlier head must not overwrite the text of the head that replaced it.
+    private function refuseAMovedBranch(BranchPushRequest $request, string $head, ?string $remoteTip): void
+    {
+        if ($remoteTip !== $head) {
+            throw BranchNotPushed::because(sprintf('the remote branch %s moved since this head was pushed', $request->branch));
+        }
     }
 
     // The failure of the push is what its caller needs, and a lock left held expires with its time to live.
@@ -148,8 +186,9 @@ final readonly class PushBranch implements BranchPush
         $remoteTip = $this->remoteTip($request);
 
         if ($this->records->hasPushed($request, $head)) {
-            // Refused before the pull request step, because a late retry of an earlier head must not overwrite the text of the head that replaced it.
-            return $remoteTip === $head ? null : throw BranchNotPushed::because(sprintf('the remote branch %s moved since this head was pushed', $request->branch));
+            $this->refuseAMovedBranch($request, $head, $remoteTip);
+
+            return null;
         }
 
         // Not when the remote already holds this signed head: a crash after the push left only its record missing, and a main that conflicts since cannot take the push back.

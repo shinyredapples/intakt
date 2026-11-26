@@ -62,6 +62,7 @@ final readonly class BuildTask
         private PullRequestTextCheck $textChecks,
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
+        private PullRequestStep $pullRequests,
         private Ledger $ledger,
         private PushRemoteCheck $remoteCheck,
         private LockFactory $locks,
@@ -159,7 +160,8 @@ final readonly class BuildTask
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
                 BuildStep::PrePushCheck => $this->prePushCheck($request, $task, $results),
-                BuildStep::Push => $this->push($request, $results),
+                BuildStep::Push => $this->pushStep($request, $results, $this->pushes),
+                BuildStep::PullRequest => $this->pushStep($request, $results, $this->pullRequests),
             };
 
             // A local of this run, never a property, because a worker keeps the service between runs.
@@ -277,20 +279,20 @@ final readonly class BuildTask
     /**
      * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
      */
-    private function push(BuildTaskRequest $request, array $results): ?string
+    private function pushStep(BuildTaskRequest $request, array $results, PushStep|PullRequestStep $step): ?string
     {
         $accepted = $results[BuildStep::HandBackCheck->value] ?? null;
         $text = $this->textIn($results);
 
-        // Never otherwise, because the push runs only after a hand-back check that accepted the head.
+        // Never otherwise, because the push and the pull request run only after a hand-back check that accepted the head.
         if (!$accepted instanceof AcceptedHandBack) {
-            throw new LogicException('the push runs only after an accepted hand-back');
+            throw new LogicException('the push and the pull request run only after an accepted hand-back');
         }
 
         $runs = $results[BuildStep::PrePushCheck->value] ?? null;
         $changeText = $this->changeTextOf($text, $runs instanceof RegressionRuns ? $runs : null);
 
-        return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
+        return $changeText instanceof ChangeText ? $step->failureOf($request, $accepted, $changeText) : $changeText;
     }
 
     private function questionIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null $result): ?BuildQuestion

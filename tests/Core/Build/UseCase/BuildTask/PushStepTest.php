@@ -32,7 +32,6 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
-use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -61,7 +60,6 @@ use Throwable;
 #[UsesClass(BranchNotPushed::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(UnsignedCommitRefused::class)]
-#[UsesClass(ChangeTextHoldsSecret::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(AcceptedHandBack::class)]
@@ -85,6 +83,13 @@ final class PushStepTest extends TestCase
         self::assertNull($failure);
         self::assertNotNull($this->scenario->remoteTip($this->forge));
         self::assertSame(['G', 'G'], array_map(static fn (string $line): string => explode(' ', $line)[0], explode("\n", $this->scenario->signatureMarks($this->forge))));
+    }
+
+    public function testThePushOpensNoPullRequest(): void
+    {
+        $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
+
+        self::assertSame(0, $this->scenario->changes->calls);
     }
 
     public function testAPushTheLocalGitForgeRefusesGivesTheRecordedReasonAsTheFailure(): void
@@ -121,18 +126,11 @@ final class PushStepTest extends TestCase
         self::assertSame('The commit abc is not signed by the orchestrator\'s key (it has no signature), so nothing is pushed.', $failure);
     }
 
-    public function testAChangeTextHoldingASecretGivesTheRefusalAsTheFailure(): void
+    public function testAForgeThatRefusesTheBranchBeforeThePushGivesItsMessageAsTheFailure(): void
     {
-        $failure = $this->stepOf($this->pushThrowing(ChangeTextHoldsSecret::inTheText()))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->pushThrowing(new ForgeWriteFailed('the branch has an open pull request another account opened')))->failureOf($this->request(), $this->accepted(), $this->text());
 
-        self::assertSame('The pull request text trips the secret scan, so no pull request is opened or updated.', $failure);
-    }
-
-    public function testAForgeWriteThatFailsGivesItsMessageAsTheFailure(): void
-    {
-        $failure = $this->stepOf($this->pushThrowing(new ForgeWriteFailed('the forge refused the pull request')))->failureOf($this->request(), $this->accepted(), $this->text());
-
-        self::assertSame('the forge refused the pull request', $failure);
+        self::assertSame('the branch has an open pull request another account opened', $failure);
     }
 
     public function testAMirrorThatCannotBeNamedGivesItsMessageAndPushesNothing(): void

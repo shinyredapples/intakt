@@ -131,14 +131,14 @@ final readonly class LedgerReviewPages
         return $started;
     }
 
-    // A task is in flight while its latest step passed short of the push, because a build run stops at its first failed step and ends with its push, so either leaves the task at rest (#2732).
+    // A task is in flight while its latest step passed short of the last step, because a build run stops at its first failed step and ends with its pull request step, so either leaves the task at rest (#2732).
     /**
      * @return list<BuildTask>
      */
     private function tasks(RecordedEvents $events): array
     {
         return array_map(
-            static fn (array $step): BuildTask => new BuildTask($step['project'], $step['task'], BuildStepOutcome::Passed->value === $step['outcome'] && BuildStep::Push->value !== $step['step']),
+            static fn (array $step): BuildTask => new BuildTask($step['project'], $step['task'], BuildStepOutcome::Passed->value === $step['outcome'] && array_last(BuildStep::cases())->value !== $step['step']),
             $this->buildSteps->in($events),
         );
     }
