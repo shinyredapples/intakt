@@ -19,6 +19,7 @@ enum DemoRefusal
     case Stopped;
     case AnotherPlayFirst;
     case Busy;
+    case CallUsedElsewhere;
 
     public static function of(Throwable $failure): self
     {
@@ -28,6 +29,7 @@ enum DemoRefusal
             $failure instanceof ReplayStopped => self::Stopped,
             $failure instanceof ReplayIsRefused && $failure->meansTheReplayLockIsBusy() => self::Busy,
             $failure instanceof ReplayIsRefused && $failure->meansAnotherPlayCameFirst() => self::AnotherPlayFirst,
+            $failure instanceof ReplayIsRefused && $failure->meansAnotherReviewUsedACall() => self::CallUsedElsewhere,
             $failure instanceof ReplayIsRefused => self::Refused,
             default => throw $failure,
         };
@@ -42,6 +44,7 @@ enum DemoRefusal
             self::Stopped => 'The replay stopped before it ended. The install log names the reason.',
             self::AnotherPlayFirst => 'An earlier Play has already played the run. Follow it in the review list.',
             self::Busy => 'Another Play or a demo removal is running. Wait until it has ended, reload the page and press Play again.',
+            self::CallUsedElsewhere => 'Another review in the ledger already used a model call of the demo recording, so the run was not played. The install log names the call.',
         };
     }
 }
