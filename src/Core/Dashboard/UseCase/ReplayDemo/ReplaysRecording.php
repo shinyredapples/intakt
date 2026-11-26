@@ -96,15 +96,28 @@ final readonly class ReplaysRecording
     // A call's settled usage names only the call, so a replayed call ID the ledger already holds would make another project's usage count as the demo's and go with it on removal.
     private function refuseCallsTheLedgerHolds(Recording $recording): void
     {
+        $call = $this->firstCallTheLedgerHolds($recording);
+
+        if (null === $call) {
+            return;
+        }
+
+        throw in_array($call, $this->callsOfEarlierPlays(), true) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
+    }
+
+    private function firstCallTheLedgerHolds(Recording $recording): ?string
+    {
         $held = array_map(static fn (RecordedEvent $row): ?string => self::callOf($row->event->payload), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false));
 
         foreach ($recording->events as $event) {
             $call = LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null;
 
             if (null !== $call && in_array($call, $held, true)) {
-                throw in_array($call, $this->callsOfEarlierPlays(), true) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
+                return $call;
             }
         }
+
+        return null;
     }
 
     // Read only once a call collides, because it reads the whole ledger; the demo project's rows are the ones earlier Plays wrote.
@@ -113,7 +126,9 @@ final readonly class ReplaysRecording
      */
     private function callsOfEarlierPlays(): array
     {
-        return array_values(array_filter(array_map(static fn (RecordedEvent $row): ?string => self::callOf($row->event->payload), $this->rows->ofProject(CreateDemoProjectCommand::NAME))));
+        $calls = array_map(static fn (RecordedEvent $row): ?string => self::callOf($row->event->payload), $this->rows->ofProject(CreateDemoProjectCommand::NAME));
+
+        return array_values(array_filter($calls, static fn (?string $call): bool => null !== $call));
     }
 
     // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.
