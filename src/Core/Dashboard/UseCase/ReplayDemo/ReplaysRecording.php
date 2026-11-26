@@ -91,38 +91,9 @@ final readonly class ReplaysRecording
         }
     }
 
-    // A call's settled usage names only the call, so a replayed call ID the ledger already holds would make another project's usage count as the demo's and go with it on removal.
     private function refuseCallsTheLedgerHolds(Recording $recording): void
     {
-        $held = array_map(static fn (RecordedEvent $row): string => $row->event->payload, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false));
-        $calls = array_map(self::callOf(...), $held);
-
-        foreach ($recording->events as $event) {
-            $call = LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null;
-
-            if (null !== $call && in_array($call, $calls, true)) {
-                throw $this->anEarlierPlayHolds($held, $call, $recording) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
-            }
-        }
-    }
-
-    // Only the demo project's row of the call in a round of this recording is an earlier Play of it, because another recording replayed before may reuse the call ID under its own rounds.
-    /**
-     * @param list<string> $held
-     */
-    private function anEarlierPlayHolds(array $held, string $call, Recording $recording): bool
-    {
-        $rounds = array_map(static fn (RecordedLedgerEvent $event): ?string => $call === self::callOf($event->payload) ? self::roundOf($event->payload) : null, $recording->events);
-
-        foreach ($held as $payload) {
-            $round = self::roundOf($payload);
-
-            if ($call === self::callOf($payload) && CreateDemoProjectCommand::NAME === self::stringOf($payload, 'project') && null !== $round && in_array($round, $rounds, true)) {
-                return true;
-            }
-        }
-
-        return false;
+        new HeldCalls(array_map(static fn (RecordedEvent $row): string => $row->event->payload, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false)))->refuseThoseOf($recording);
     }
 
     // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.
@@ -224,11 +195,6 @@ final readonly class ReplaysRecording
     private static function roundOf(string $payload): ?string
     {
         return self::stringOf($payload, 'round');
-    }
-
-    private static function callOf(string $payload): ?string
-    {
-        return self::stringOf($payload, 'call');
     }
 
     private static function stringOf(string $payload, string $key): ?string

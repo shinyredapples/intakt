@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\HeldCalls;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
@@ -31,6 +32,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(ReplaysRecording::class)]
 #[CoversClass(ReplayIsRefused::class)]
 #[CoversClass(ReplayStopped::class)]
+#[CoversClass(HeldCalls::class)]
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
 #[UsesClass(RecordingFormat::class)]
