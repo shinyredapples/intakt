@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-// A place alternates a position in a line of history with the merged parent (lane) it came from, so fragments on one parent keep their order while fragments from different parents of one merge have none.
+// A place is the position of the first-parent commit that added a fragment, because only that line says which change reached the branch later.
 final readonly class HighlightOrder
 {
-    private const array UNCOMMITTED = [PHP_INT_MAX];
+    private const int UNCOMMITTED = PHP_INT_MAX;
 
     /**
-     * @param array<string, list<int>> $places
+     * @param array<string, int> $places
      */
     public function __construct(
         private array $places = [],
@@ -19,44 +19,17 @@ final readonly class HighlightOrder
 
     public function compare(string $a, string $b): int
     {
-        $placeOfA = $this->placeOf($a);
-        $placeOfB = $this->placeOf($b);
-        $differing = $this->firstDifferenceOf($placeOfA, $placeOfB);
-
-        return null === $differing ? strnatcmp($a, $b) : $placeOfA[$differing] <=> $placeOfB[$differing];
+        // Within one place the names only fix where rows go on the page, because two fragments there that set the same row stop the assembly.
+        return $this->placeOf($a) <=> $this->placeOf($b) ?: strnatcmp($a, $b);
     }
 
     public function knowsWhichCameFirst(string $a, string $b): bool
     {
-        $differing = $this->firstDifferenceOf($this->placeOf($a), $this->placeOf($b));
-
-        return null !== $differing && 0 === $differing % 2;
+        return $this->placeOf($a) !== $this->placeOf($b);
     }
 
-    /**
-     * @return list<int>
-     */
-    private function placeOf(string $name): array
+    private function placeOf(string $name): int
     {
         return $this->places[$name] ?? self::UNCOMMITTED;
-    }
-
-    /**
-     * @param list<int> $a
-     * @param list<int> $b
-     */
-    private function firstDifferenceOf(array $a, array $b): ?int
-    {
-        foreach ($a as $index => $step) {
-            if (!array_key_exists($index, $b)) {
-                return null;
-            }
-
-            if ($step !== $b[$index]) {
-                return $index;
-            }
-        }
-
-        return null;
     }
 }

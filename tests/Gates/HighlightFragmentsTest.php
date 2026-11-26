@@ -27,7 +27,11 @@ final class HighlightFragmentsTest extends SandboxTestCase
 {
     private const string LAYOUT = "# Highlights\n\nIntro.\n\n## Tooling\n\n| Feature | Status | Where |\n|---|---|---|\n\n## PHP 8.5 in use\n";
 
-    private const string UNORDERED_CLOCK = 'docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md both set row "Clock" of section "Tooling", but git history does not say which came first: add them in separate commits, or assemble in a clone with the full history';
+    private const string UNORDERED_CLOCK = 'docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md set row "Clock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
+
+    private const string UNORDERED_LOCK = 'docs/highlights.d/2022-lock-done.md and docs/highlights.d/2832-lock.md set row "Lock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
+
+    private const string UNORDERED_SHORT_LOCK = 'docs/highlights.d/20-lock-done.md and docs/highlights.d/90-lock.md set row "Lock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
 
     private Sandbox $sandbox;
 
@@ -44,12 +48,15 @@ final class HighlightFragmentsTest extends SandboxTestCase
         );
     }
 
-    public function testFragmentsApplyInTheNaturalOrderOfTheirNumbers(): void
+    public function testFragmentsWithoutHistoryWhoseRowsDifferAllAssemble(): void
     {
         $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Later | planned | T10 (#10) |\n");
         $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Earlier | planned | T2 (#2) |\n");
 
-        self::assertStringContainsString("| Earlier | planned | T2 (#2) |\n| Later | planned | T10 (#10) |\n", $this->assembled()->text);
+        $assembly = $this->assembled();
+
+        self::assertSame([], $assembly->findings);
+        self::assertStringContainsString("| Earlier | planned | T2 (#2) |\n| Later | planned | T10 (#10) |\n", $assembly->text);
     }
 
     public function testALaterRowWithTheSameFirstCellReplacesTheEarlierOneInPlace(): void
@@ -104,13 +111,13 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertStringContainsString("|---|---|---|\n| Clock | done | T2 (#900) |\n\n", $this->assembled()->text);
     }
 
-    public function testFragmentsAMergeOfMainBringsInApplyInTheOrderTheyWereMergedIntoMain(): void
+    public function testAMainFastForwardedToABranchThatMergedMainRefusesTwoFragmentsForOneRow(): void
     {
         $this->sandbox->startRepository();
         $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
         $this->sandbox->git('branch', 'train');
-        $this->mergeFragment('2832-lock.md', "## Tooling\n| Lock | planned | T2 (#2832) |\n");
-        $this->mergeFragment('2022-lock-done.md', "## Tooling\n| Lock | done | T2 (#2022) |\n");
+        $this->mergeFragment('2832-lock.md', "## Tooling\n| Lock | planned | T2 (#2832) |\n", 'main');
+        $this->mergeFragment('2022-lock-done.md', "## Tooling\n| Lock | done | T2 (#2022) |\n", 'main');
         $this->sandbox->git('checkout', '--quiet', 'train');
         $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'main');
         $this->sandbox->git('checkout', '--quiet', 'main');
@@ -118,26 +125,76 @@ final class HighlightFragmentsTest extends SandboxTestCase
 
         $assembly = $this->assembled();
 
-        self::assertSame([], $assembly->findings);
-        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Lock | done | T2 (#2022) |\n\n", $assembly->text);
+        self::assertSame('', $assembly->text);
+        self::assertSame([self::UNORDERED_LOCK], $assembly->findings);
     }
 
-    public function testAFragmentAMergeRestoresAfterTheMergedSideDeletedItAppliesAfterTheRowsOfThatSide(): void
+    public function testANestedMergeThatBringsTwoFragmentsForOneRowFailsTheAssembly(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('branch', 'train');
+        $this->sandbox->git('checkout', '--quiet', '-b', 'mid');
+        $this->mergeFragment('2832-lock.md', "## Tooling\n| Lock | planned | T2 (#2832) |\n", 'mid');
+        $this->mergeFragment('2022-lock-done.md', "## Tooling\n| Lock | done | T2 (#2022) |\n", 'mid');
+        $this->sandbox->git('checkout', '--quiet', 'train');
+        $this->commitFragment('5-other.md', "## Tooling\n| Other | done | T5 (#5) |\n");
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'mid');
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'train');
+
+        $assembly = $this->assembled();
+
+        self::assertSame('', $assembly->text);
+        self::assertSame([self::UNORDERED_LOCK], $assembly->findings);
+    }
+
+    public function testAFragmentAMergeRestoresNextToAnotherForTheSameRowFailsTheAssembly(): void
     {
         $this->sandbox->startRepository();
         $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
         $this->sandbox->git('checkout', '--quiet', '-b', 'side');
-        $this->commitFragment('2832-restored.md', "## Tooling\n| Clock | restored by merge | T2 (#2832) |\n");
-        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/2832-restored.md');
-        $this->commitFragment('2022-side.md', "## Tooling\n| Clock | from side | T2 (#2022) |\n");
+        $this->commitFragment('2832-lock.md', "## Tooling\n| Lock | planned | T2 (#2832) |\n");
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/2832-lock.md');
+        $this->commitFragment('2022-lock-done.md', "## Tooling\n| Lock | done | T2 (#2022) |\n");
         $this->sandbox->git('checkout', '--quiet', 'main');
         $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-commit', 'side');
-        $this->commitFragment('2832-restored.md', "## Tooling\n| Clock | restored by merge | T2 (#2832) |\n");
+        $this->commitFragment('2832-lock.md', "## Tooling\n| Lock | planned | T2 (#2832) |\n");
+
+        self::assertSame([self::UNORDERED_LOCK], $this->assembled()->findings);
+    }
+
+    public function testAMergeThatKeepsAFragmentMainDeletedNextToItsReplacementFailsTheAssembly(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('90-lock.md', "## Tooling\n| Lock | planned | T1 (#90) |\n");
+        $this->sandbox->git('branch', 'side');
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/90-lock.md');
+        $this->sandbox->commitAll('remove the old row on main');
+        $this->sandbox->git('checkout', '--quiet', 'side');
+        $this->commitFragment('90-lock.md', "## Tooling\n| Lock | planned | T2 (#90) |\n");
+        $this->commitFragment('20-lock-done.md', "## Tooling\n| Lock | done | T2 (#20) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-commit', 'side');
+        $this->sandbox->git('checkout', 'side', '--', 'docs/highlights.d/90-lock.md');
+        $this->sandbox->commitAll('merge and keep both side fragments');
+
+        self::assertSame([self::UNORDERED_SHORT_LOCK], $this->assembled()->findings);
+    }
+
+    public function testAFragmentDeletedAndAddedAgainOnTheBranchAppliesWhereItWasAddedAgain(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('5-clock.md', "## Tooling\n| Clock | done | T2 (#5) |\n");
+        $this->commitFragment('6-clock-planned.md', "## Tooling\n| Clock | planned | T2 (#6) |\n");
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/5-clock.md');
+        $this->sandbox->commitAll('remove the clock row');
+        $this->commitFragment('5-clock.md', "## Tooling\n| Clock | done | T2 (#5) |\n");
 
         $assembly = $this->assembled();
 
         self::assertSame([], $assembly->findings);
-        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Clock | restored by merge | T2 (#2832) |\n\n", $assembly->text);
+        self::assertStringContainsString("|---|---|---|\n| Clock | done | T2 (#5) |\n\n", $assembly->text);
     }
 
     public function testFragmentsFromTwoMergedParentsOfOneMergeThatSetTheSameRowFailTheAssembly(): void
@@ -176,7 +233,7 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Earlier | planned | T2 (#2) |\n| Later | planned | T10 (#10) |\n", $assembly->text);
     }
 
-    public function testFragmentsOneMergedParentOfAnOctopusMergeAddedInTurnApplyInThatParentsOrder(): void
+    public function testAnOctopusMergeThatBringsTwoFragmentsForOneRowFromOneParentFailsTheAssembly(): void
     {
         $this->sandbox->startRepository();
         $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
@@ -189,29 +246,63 @@ final class HighlightFragmentsTest extends SandboxTestCase
         $this->sandbox->git('checkout', '--quiet', 'main');
         $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'left', 'right');
 
-        $assembly = $this->assembled();
-
-        self::assertSame([], $assembly->findings);
-        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Lock | done | T2 (#20) |\n| Clock | done | T3 (#30) |\n", $assembly->text);
+        self::assertSame([self::UNORDERED_SHORT_LOCK], $this->assembled()->findings);
     }
 
-    public function testAFragmentAnOctopusMergeAddsItselfAppliesAfterTheRowsOfEveryMergedParent(): void
+    public function testAnOctopusMergeWhoseParentsAddedTwoFragmentsInOppositeOrdersFailsTheAssembly(): void
     {
         $this->sandbox->startRepository();
         $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
         $this->sandbox->git('branch', 'right');
         $this->sandbox->git('checkout', '--quiet', '-b', 'left');
-        $this->commitFragment('900-lock.md', "## Tooling\n| Lock | planned | T2 (#900) |\n");
+        $this->commitFragment('90-lock.md', "## Tooling\n| Lock | planned | T2 (#90) |\n");
+        $this->commitFragment('20-lock-done.md', "## Tooling\n| Lock | done | T2 (#20) |\n");
         $this->sandbox->git('checkout', '--quiet', 'right');
-        $this->commitFragment('800-clock.md', "## Tooling\n| Clock | planned | T3 (#800) |\n");
+        $this->commitFragment('20-lock-done.md', "## Tooling\n| Lock | done | T2 (#20) |\n");
+        $this->commitFragment('90-lock.md', "## Tooling\n| Lock | planned | T2 (#90) |\n");
         $this->sandbox->git('checkout', '--quiet', 'main');
-        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-commit', 'left', 'right');
-        $this->commitFragment('5-both-done.md', "## Tooling\n| Lock | done | T2 (#5) |\n| Clock | done | T3 (#5) |\n");
+        $this->sandbox->git('commit', '--quiet', '--allow-empty', '-m', 'advance main');
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'left', 'right');
+
+        self::assertSame([self::UNORDERED_SHORT_LOCK], $this->assembled()->findings);
+    }
+
+    public function testAFragmentAddedAfterATieSetsTheRowWithoutAFinding(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->commitFragment('7-clock-final.md', "## Tooling\n| Clock | final | T7 (#7) |\n");
 
         $assembly = $this->assembled();
 
         self::assertSame([], $assembly->findings);
-        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Lock | done | T2 (#5) |\n| Clock | done | T3 (#5) |\n", $assembly->text);
+        self::assertStringContainsString("|---|---|---|\n| Clock | final | T7 (#7) |\n\n", $assembly->text);
+    }
+
+    public function testAnUncommittedFragmentSettlesATieOfCommittedOnes(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/7-clock-final.md', "## Tooling\n| Clock | final | T7 (#7) |\n");
+
+        $assembly = $this->assembled();
+
+        self::assertSame([], $assembly->findings);
+        self::assertStringContainsString("|---|---|---|\n| Clock | final | T7 (#7) |\n\n", $assembly->text);
+    }
+
+    public function testThreeFragmentsAtOnePlaceForOneRowAreNamedInOneFinding(): void
+    {
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/30-latest.md', "## Tooling\n| Clock | final | T30 (#30) |\n");
+
+        self::assertSame(
+            ['docs/highlights.d/2-earlier.md, docs/highlights.d/10-later.md and docs/highlights.d/30-latest.md set row "Clock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment'],
+            $this->assembled()->findings,
+        );
     }
 
     public function testTwoUncommittedFragmentsThatSetTheSameRowFailTheAssembly(): void
@@ -242,7 +333,7 @@ final class HighlightFragmentsTest extends SandboxTestCase
         $this->sandbox->write('docs/highlights.d/2-earlier.md', "## PHP 8.5 in use\n- The pipe operator: `a.php` (planned).\n");
 
         self::assertSame(
-            ['docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md both set row "- The pipe operator: `a.php`" of section "PHP 8.5 in use", but git history does not say which came first: add them in separate commits, or assemble in a clone with the full history'],
+            ['docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md set row "- The pipe operator: `a.php`" of section "PHP 8.5 in use" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment'],
             $this->assembled()->findings,
         );
     }
@@ -320,7 +411,7 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
     }
 
-    public function testFragmentsAddedInOneCommitWhoseRowsDoNotOverlapApplyInTheNaturalOrderOfTheirNumbers(): void
+    public function testFragmentsAddedInOneCommitWhoseRowsDoNotOverlapAllAssemble(): void
     {
         $this->sandbox->startRepository();
         $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Later | planned | T10 (#10) |\n");
@@ -495,11 +586,11 @@ final class HighlightFragmentsTest extends SandboxTestCase
         $this->sandbox->commitAll('docs(highlights): add '.$name);
     }
 
-    private function mergeFragment(string $name, string $rows): void
+    private function mergeFragment(string $name, string $rows, string $into): void
     {
         $this->sandbox->git('checkout', '--quiet', '-b', 'issue-'.$name);
         $this->commitFragment($name, $rows);
-        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->sandbox->git('checkout', '--quiet', $into);
         $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'issue-'.$name);
     }
 }

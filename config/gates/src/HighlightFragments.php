@@ -147,7 +147,7 @@ final readonly class HighlightFragments
     {
         $fragments = array_values(array_filter($names, static fn (string $name): bool => 1 === preg_match(self::FRAGMENT_NAME, $name)));
 
-        // A later change replaces an earlier one's row whatever their issue numbers, so fragments apply in the order they reached the branch; an uncommitted fragment is the newest.
+        // A later change replaces an earlier one's row whatever their issue numbers, so fragments apply in the order their first-parent commits reached the branch; an uncommitted fragment is the newest.
         usort($fragments, $order->compare(...));
 
         return $fragments;
@@ -171,17 +171,24 @@ final readonly class HighlightFragments
      */
     private function unorderedRowFindings(array $rowsByFragment, HighlightOrder $order): array
     {
-        // Fragments without a distinct place in history would otherwise fall back to their numbers, and an older change could silently replace a newer row.
+        // Fragments that share a place would otherwise fall back to an order history does not give, and an older change could silently replace a newer row.
         $setBy = [];
-        $findings = [];
 
         foreach ($rowsByFragment as $name => $rows) {
             foreach ($this->rowKeysOf($rows) as [$section, $key]) {
-                $earlier = array_find($setBy[$section][$key] ?? [], static fn (string $other): bool => !$order->knowsWhichCameFirst($other, $name));
-                $setBy[$section][$key][] = $name;
+                $latest = $setBy[$section][$key] ?? [];
 
-                if (null !== $earlier) {
-                    $findings[] = self::DIRECTORY.'/'.$earlier.' and '.self::DIRECTORY.'/'.$name.' both set row "'.$key.'" of section "'.$section.'", but git history does not say which came first: add them in separate commits, or assemble in a clone with the full history';
+                // A fragment at a later place sets the row's final value, so a tie before it does not matter.
+                $setBy[$section][$key] = [] !== $latest && !$order->knowsWhichCameFirst($latest[0], $name) ? [...$latest, $name] : [$name];
+            }
+        }
+
+        $findings = [];
+
+        foreach ($setBy as $section => $keys) {
+            foreach ($keys as $key => $names) {
+                if (count($names) > 1) {
+                    $findings[] = $this->listOf($names).' set row "'.$key.'" of section "'.$section.'" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
                 }
             }
         }
@@ -205,6 +212,17 @@ final readonly class HighlightFragments
         }
 
         return $keys;
+    }
+
+    /**
+     * @param non-empty-list<string> $names
+     */
+    private function listOf(array $names): string
+    {
+        $files = array_map(static fn (string $name): string => self::DIRECTORY.'/'.$name, $names);
+        $last = array_pop($files);
+
+        return [] === $files ? $last : implode(', ', $files).' and '.$last;
     }
 
     /**
