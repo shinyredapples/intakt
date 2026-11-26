@@ -343,24 +343,38 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
     }
 
-    public function testABuildLogFolderTheRunnerRefusesIsNoResultWithTheRunnersReasonAsItsLog(): void
+    public function testABuildLogFolderTheRunnerRefusesIsNoResultWithTheOrchestratorsFixedReasonAsItsLog(): void
     {
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile('build.log'));
 
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
-        self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: ".JobOutputRefused::notAPlainFile('build.log')->getMessage()."\n"], [$outcome->verdict, $outcome->log]);
+        self::assertSame([BuildVerdict::NoResult, "no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n"], [$outcome->verdict, $outcome->log]);
     }
 
-    public function testARefusedOutputNameWithControlCharactersStaysOnTheOneLineOfItsReason(): void
+    #[TestWith(["\n"])]
+    #[TestWith(["\r"])]
+    #[TestWith(["\u{0085}"])]
+    #[TestWith(["\u{2028}"])]
+    #[TestWith(["\u{2029}"])]
+    public function testARefusedOutputNameWithALineBreakNeverReachesTheLog(string $lineBreak): void
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile("invalid\nFORGED_LOG_LINE\e[2K"));
+        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile('invalid'.$lineBreak.'FORGED_LOG_LINE'));
 
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
-        self::assertSame([1, 1, false], [substr_count($outcome->log, "\n"), substr_count($outcome->log, 'invalid\nFORGED_LOG_LINE\033[2K'), str_contains($outcome->log, "\e")]);
+        self::assertSame(["no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n", 1], [$outcome->log, count(preg_split('/\R/u', rtrim($outcome->log, "\n")) ?: [])]);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputAddsNoSecondLineEndToALogThatEndsInOne(): void
+    {
+        $output = OutputFiles::of(['build.log' => "builder text\n"]);
+
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("builder text\nno result: the build script could not clear the job's output\n", $outcome->log);
     }
 
     protected function setUp(): void

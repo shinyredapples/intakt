@@ -167,9 +167,9 @@ final readonly class RunBuildJob
     {
         try {
             $result = $this->jobs->run($spec);
-        } catch (JobOutputRefused $refusal) {
-            // No result, with the runner's reason as the log, because the job's own log is part of what was refused and its standard error is the builder's to write too.
-            return new BuildJobOutcome(BuildVerdict::NoResult, log: sprintf("no result: the runner refused the job's output: %s\n", addcslashes($refusal->getMessage(), "\0..\37\177")));
+        } catch (JobOutputRefused) {
+            // A fixed reason of the orchestrator's own: the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
+            return new BuildJobOutcome(BuildVerdict::NoResult, log: "no result: the job's output held an entry that is not a plain file or could not be read, or too many entries or bytes\n");
         }
 
         return $this->outcomeOf($result);
