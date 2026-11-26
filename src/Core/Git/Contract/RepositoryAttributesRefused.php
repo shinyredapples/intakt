@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Contract;
 
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use RuntimeException;
 
-final class RepositoryAttributesRefused extends RuntimeException
+final class RepositoryAttributesRefused extends RuntimeException implements ReportableFailure
 {
     public static function at(string $file): self
     {

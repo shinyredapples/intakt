@@ -83,6 +83,12 @@ A build or a review stops before it makes its checkout, with an error such as `n
 - **Why:** the server is busy, or GitHub answers slowly: about once a minute a load of the board checks the GitHub App connection and can wait up to 15 seconds for it, also when the server's own figures look fine.
 - **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts, the hub and the forge. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the server's figures, and `php bin/console intakt:doctor` runs the forge check and says what to fix.
 
+## A check before a push stops with one error line
+
+- **What you see:** `intakt:check:run` or `intakt:hand-back:check` prints a single error line and exits with 1, with no stack trace.
+- **Why:** either the project's mirror holds an `info/attributes` file (git reads it on top of every other attributes source and nothing switches it off), or, for `intakt:check:run`, the ledger could not record a job event.
+- **What to do:** for the first, remove the file named in the message from the mirror and run the command again. For the second, read the reason in the message (for example a full disk) and run the command again once it is fixed.
+
 ## Docker says the container is unhealthy
 
 - **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
