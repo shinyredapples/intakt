@@ -119,8 +119,7 @@ final readonly class RunBuildJob
 
             throw $failure;
         } finally {
-            // Read before the prompt is removed and also when the job failed, so a cause never reaches the branch's next build.
-            // Not read for a refused job: it never started, and the cause belongs to the build that holds the branch's job id.
+            // Read before the prompt is removed and also when the job failed, so a cause never reaches the branch's next build, but not for a refused job, because it never started and the cause belongs to the build that holds the branch's job id.
             if (!$refused) {
                 $cause = $this->stops->causeFor($job);
             }

@@ -409,6 +409,9 @@ final class RunBuildJobTest extends TestCase
             throw new RuntimeException('engine gone');
         });
         $filesystem = new class extends Filesystem {
+            /**
+             * @param string|iterable<mixed> $files
+             */
             public function remove(string|iterable $files): void
             {
                 throw new IOException('prompt cleanup failed');
