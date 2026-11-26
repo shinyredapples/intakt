@@ -23,6 +23,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - `declare(strict_types=1)`: enforced by `bin/check` (`cs`).
 - No `else` after a jump: enforced by `bin/check` (`cs`).
 - No nested `try`: enforced by `bin/check` (`phpstan`).
+- A catch in `src/` names the failures it expects (a library's own exception base or a domain exception; one a user should read implements `ReportableFailure`), never `Exception`, `Error`, `RuntimeException`, `LogicException` or `InvalidArgumentException`; `Throwable` only at a failure boundary that rethrows or records the failure, with a `// Boundary: <what it protects>` line directly above the catch: enforced by `bin/check` (`phpstan`).
 - At most three parameters, unless a vendor method's signature fixes more; constructors are exempt (they hold dependencies or a value's fields): enforced by `bin/check` (`phpstan`).
 - No flag parameters: enforced by `bin/check` (`phpstan`).
 - Constructor first, then public, protected and private methods: enforced by `bin/check` (`cs`).
