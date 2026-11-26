@@ -15,6 +15,7 @@ interface DiskHeadroom
     // The nearest folder of the destination that exists is read, because a checkout may land on another file system than the watched folder.
     /**
      * @throws NewWorkHeld
+     * @throws FreeSpaceUnreadable
      */
     public function admitWorkAt(string $destination): void;
 }

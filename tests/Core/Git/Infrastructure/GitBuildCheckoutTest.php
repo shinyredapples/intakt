@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\Infrastructure;
 
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
@@ -17,6 +19,7 @@ use Intakt\Core\Git\UseCase\MakeBuildClone\BranchNameRefused;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\TakeCheckedHead\TakeCheckedHead;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Tests\Core\Disk\DiskUnreadable;
 use Intakt\Tests\Core\Disk\DiskWithRoom;
 use Intakt\Tests\Core\Git\PregMatchThatThrows;
 use Intakt\Tests\Core\Git\RecordingClock;
@@ -33,6 +36,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(GitBuildCheckout::class)]
 #[UsesClass(BranchHead::class)]
+#[UsesClass(FreeSpaceUnreadable::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
@@ -86,6 +90,24 @@ final class GitBuildCheckoutTest extends TestCase
         $this->checkout(new Filesystem())->makeClone('alpha', 'main', $this->mirrors.'-clone');
     }
 
+    public function testADiskThatCannotBeMeasuredFailsTheMirrorUpdateWithItsReason(): void
+    {
+        $this->expectException(BuildCheckoutFailed::class);
+        $this->expectExceptionMessageIsOrContains('could not be read');
+
+        $this->checkout(new Filesystem(), new DiskUnreadable())->updateMirror('alpha', $this->remote->path);
+    }
+
+    public function testADiskThatCannotBeMeasuredFailsTheCloneWithItsReason(): void
+    {
+        $this->checkout(new Filesystem())->updateMirror('alpha', $this->remote->path);
+
+        $this->expectException(BuildCheckoutFailed::class);
+        $this->expectExceptionMessageIsOrContains('could not be read');
+
+        $this->checkout(new Filesystem(), new DiskUnreadable())->makeClone('alpha', 'feat/task', $this->mirrors.'-clone');
+    }
+
     public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheMirrorUpdate(): void
     {
         $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
@@ -136,14 +158,14 @@ final class GitBuildCheckoutTest extends TestCase
         return $filesystem;
     }
 
-    private function checkout(Filesystem $filesystem): GitBuildCheckout
+    private function checkout(Filesystem $filesystem, DiskHeadroom $disk = new DiskWithRoom()): GitBuildCheckout
     {
         $mirrors = new Mirrors($this->mirrors);
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
         return new GitBuildCheckout(
-            new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), $mirrors, new DiskWithRoom()),
-            new MakeBuildClone(new HardenedGit(), $filesystem, $mirrors, new DiskWithRoom()),
+            new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), $mirrors, $disk),
+            new MakeBuildClone(new HardenedGit(), $filesystem, $mirrors, $disk),
             $mirrors,
             new TakeCheckedHead(new HardenedGit(), $mirrors),
         );

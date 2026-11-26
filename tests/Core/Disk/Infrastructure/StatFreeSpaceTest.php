@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Disk\Infrastructure;
 
 use Closure;
-use Intakt\Core\Disk\Infrastructure\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Disk\Infrastructure\StatFreeSpace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

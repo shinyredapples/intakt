@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Disk\Infrastructure;
 
 use Intakt\Core\Disk\Contract\FreeSpaceReader;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Override;
 use Symfony\Component\Process\Process;
 
