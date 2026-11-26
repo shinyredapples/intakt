@@ -222,7 +222,7 @@ final class RegressionEvidenceTest extends TestCase
     {
         $body = new RegressionEvidence($this->runs())->addedTo("<pre>\n\n## Evidence\n</script>\n\n## Evidence\nShown.");
 
-        self::assertSame("<pre>\n\n## Evidence\n</script>\n\n## Evidence\nShown.\n\n".self::LINES, $body);
+        self::assertSame("<pre>\n\n## Evidence\n</script>\n\n## Evidence\nShown.\n</pre>\n\n".self::LINES, $body);
     }
 
     public function testAnEvidenceHeadingInsideAnHtmlCommentIsNotTheEvidenceSection(): void
@@ -286,6 +286,20 @@ final class RegressionEvidenceTest extends TestCase
         $body = new RegressionEvidence($this->runs())->addedTo("Text.\n\n<TEXTAREA>\nExample.");
 
         self::assertSame("Text.\n\n<TEXTAREA>\nExample.\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testATextareaBlockEndedByAPreEndTagStillGetsItsOwnEndTagBeforeTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n<textarea>\nExample.\n</pre>");
+
+        self::assertSame("## Evidence\n<textarea>\nExample.\n</pre>\n</textarea>\n\n".self::LINES, $body);
+    }
+
+    public function testATextareaBlockClosedByItsOwnEndTagIsNotClosedAgain(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n<textarea>x</textarea>\nExample.");
+
+        self::assertSame("## Evidence\n<textarea>x</textarea>\nExample.\n\n".self::LINES, $body);
     }
 
     public function testAnOpenProcessingInstructionAtTheEndIsClosedBeforeTheResultsAreAdded(): void

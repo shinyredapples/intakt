@@ -20,23 +20,27 @@ final readonly class ReadableLines
     public function scanned(array $lines): array
     {
         $headings = [];
-        $state = ['fence' => null, 'html' => null, 'paragraph' => null];
+        $state = ['fence' => null, 'html' => null, 'paragraph' => null, 'element' => null];
 
         foreach ($lines as $number => $line) {
             [$state, $heading] = $this->step($line, $number, $state);
+
+            if (null !== $state['element'] && false !== stripos($line, $state['element'])) {
+                $state['element'] = null;
+            }
 
             if (null !== $heading) {
                 $headings[$heading[0]] = [$heading[1], $heading[2]];
             }
         }
 
-        return [$headings, $state['fence'] ?? $state['html'][1] ?? null];
+        return [$headings, $state['fence'] ?? $state['html'][1] ?? $state['element']];
     }
 
     /**
-     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string} $state
      *
-     * @return array{0: array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}, 1: ?array{int, int, string}}
+     * @return array{0: array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string}, 1: ?array{int, int, string}}
      */
     private function step(string $line, int $number, array $state): array
     {
@@ -70,9 +74,9 @@ final readonly class ReadableLines
     }
 
     /**
-     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string} $state
      *
-     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}
+     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string}
      */
     private function htmlAfter(string $line, array $state): array
     {
@@ -89,21 +93,21 @@ final readonly class ReadableLines
     }
 
     /**
-     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string} $state
      * @param ?array{int, string}                                                                  $paragraph
      * @param ?array{string, ?string}                                                              $html
      *
-     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}
+     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string}
      */
     private function withParagraph(array $state, ?array $paragraph, ?array $html = null): array
     {
-        return ['fence' => $state['fence'], 'html' => $html, 'paragraph' => $paragraph];
+        return ['fence' => $state['fence'], 'html' => $html, 'paragraph' => $paragraph, 'element' => $state['element']];
     }
 
     /**
-     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string} $state
      *
-     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}
+     * @return array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string}
      */
     private function continued(array $state, string $line): array
     {
@@ -117,9 +121,9 @@ final readonly class ReadableLines
     }
 
     /**
-     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}} $state
+     * @param array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string} $state
      *
-     * @return array{0: array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}}, 1: ?array{int, int, string}}
+     * @return array{0: array{fence: ?string, html: ?array{string, ?string}, paragraph: ?array{int, string}, element: ?string}, 1: ?array{int, int, string}}
      */
     private function blockAt(string $line, int $number, array $state): array
     {
@@ -127,7 +131,7 @@ final readonly class ReadableLines
         $fence = $this->opening($line);
 
         if (null !== $fence) {
-            return [['fence' => $fence, 'html' => null, 'paragraph' => null], null];
+            return [['fence' => $fence, 'html' => null, 'paragraph' => null, 'element' => $state['element']], null];
         }
 
         $atx = $this->headingOf($line);
@@ -149,7 +153,10 @@ final readonly class ReadableLines
         $end = $this->htmlEnd($line, $paragraph);
 
         if (null !== $end) {
-            return [$this->htmlAfter($line, $this->withParagraph($state, null, $end)), null];
+            // The HTML element outlives the Markdown block when another end tag ends the block, so its own end tag is tracked apart.
+            $element = 1 === preg_match('#^</(?:pre|script|style|textarea)>$#', $end[1] ?? '') ? $end[1] : $state['element'];
+
+            return [$this->htmlAfter($line, [...$this->withParagraph($state, null, $end), 'element' => $element]), null];
         }
 
         $text = trim($line);
