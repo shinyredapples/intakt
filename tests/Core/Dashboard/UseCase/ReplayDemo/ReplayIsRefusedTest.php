@@ -41,6 +41,16 @@ final class ReplayIsRefusedTest extends TestCase
         self::assertFalse(ReplayIsRefused::becauseAnotherReviewHoldsCall('call-1')->meansAnotherPlayCameFirst());
     }
 
+    public function testAModelCallAnotherReviewHoldsMeansAnotherReviewUsedACall(): void
+    {
+        self::assertTrue(ReplayIsRefused::becauseAnotherReviewHoldsCall('call-1')->meansAnotherReviewUsedACall());
+    }
+
+    public function testAModelCallAnEarlierPlayHoldsDoesNotMeanAnotherReviewUsedACall(): void
+    {
+        self::assertFalse(ReplayIsRefused::becauseTheLedgerHoldsCall('call-1')->meansAnotherReviewUsedACall());
+    }
+
     public function testAModelCallAnotherReviewHoldsDoesNotMeanTheLockIsBusy(): void
     {
         self::assertFalse(ReplayIsRefused::becauseAnotherReviewHoldsCall('call-1')->meansTheReplayLockIsBusy());

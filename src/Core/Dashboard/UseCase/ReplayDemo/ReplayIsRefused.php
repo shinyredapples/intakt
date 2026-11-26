@@ -14,9 +14,17 @@ final class ReplayIsRefused extends RuntimeException
     // The code of a busy replay lock, which `intakt:demo:remove` takes as well, so the refused Play's page cannot claim that a run exists.
     private const int LOCK_BUSY = 2;
 
+    // The code of a model call another review already used, so the refused Play's page says so without pointing at a run that may never have played.
+    private const int CALL_USED_ELSEWHERE = 3;
+
     public function meansAnotherPlayCameFirst(): bool
     {
         return self::ANOTHER_PLAY === $this->getCode();
+    }
+
+    public function meansAnotherReviewUsedACall(): bool
+    {
+        return self::CALL_USED_ELSEWHERE === $this->getCode();
     }
 
     public function meansTheReplayLockIsBusy(): bool
@@ -49,9 +57,8 @@ final class ReplayIsRefused extends RuntimeException
         return new self(sprintf('The ledger already holds model call %s of this recording from an earlier replay, so it is not replayed again.', $call), self::ANOTHER_PLAY);
     }
 
-    // Without a code, because the row that holds the call is no earlier Play and the refused Play's page must not point at a run that may never have played.
     public static function becauseAnotherReviewHoldsCall(string $call): self
     {
-        return new self(sprintf('Model call %s of this recording is already used by another review in the ledger, so it is not replayed.', $call));
+        return new self(sprintf('Model call %s of this recording is already used by another review in the ledger, so it is not replayed.', $call), self::CALL_USED_ELSEWHERE);
     }
 }

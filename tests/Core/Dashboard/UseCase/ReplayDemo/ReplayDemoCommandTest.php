@@ -219,7 +219,7 @@ final class ReplayDemoCommandTest extends TestCase
     private function tester(string $composeService, ReplayMark $demoProject = ReplayMark::Replay): CommandTester
     {
         $marks = new ReplayMarks(new MarkAnsweringQueries($demoProject));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::judged($this->ledger, $marks), TourCaptionsOn::replayedRows($this->ledger));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::judged($this->ledger, $marks));
         $application = new Application();
         $application->addCommand(new ReplayDemoCommand($replays, $this->format, new Filesystem(), $composeService));
 

@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
-use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
@@ -39,7 +38,6 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ReplayMark::class)]
-#[UsesClass(ReplayedReviewRows::class)]
 final class ReplaysRecordingTest extends TestCase
 {
     private const string ROUND = '0196a000-0000-7000-8000-000000000001';
@@ -154,7 +152,7 @@ final class ReplaysRecordingTest extends TestCase
         $again = new ClockedLiveUpdates($this->clock, $this->ledger);
 
         try {
-            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()), TourCaptionsOn::replayedRows($this->ledger))->replay($this->recordedRun(), 1.0);
+            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()))->replay($this->recordedRun(), 1.0);
         } catch (ReplayIsRefused) {
         }
 
@@ -426,15 +424,49 @@ final class ReplaysRecordingTest extends TestCase
         self::assertFalse($this->refusal()->meansAnotherPlayCameFirst());
     }
 
-    public function testAModelCallAnEarlierPlayWroteUnderTheDemoProjectMeansAnotherPlayCameFirst(): void
+    public function testAModelCallAnEarlierPlayOfThisRecordingWroteUnderTheDemoProjectMeansAnotherPlayCameFirst(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"'.CreateDemoProjectCommand::NAME.'","tier":"standard","round":"'.self::ROUND.'"}'));
+
+        $refused = $this->refusal();
+
+        self::assertTrue($refused->meansAnotherPlayCameFirst());
+        self::assertCount(1, $this->appended());
+    }
+
+    public function testAModelCallTheDemoProjectHoldsInARoundOfAnotherRecordingIsNoEarlierPlay(): void
     {
         $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"earlier-round","project":"'.CreateDemoProjectCommand::NAME.'","reviewers":1,"change":"sample-change","number":1}'));
         $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"'.CreateDemoProjectCommand::NAME.'","tier":"standard","round":"earlier-round"}'));
 
         $refused = $this->refusal();
 
-        self::assertTrue($refused->meansAnotherPlayCameFirst());
+        self::assertFalse($refused->meansAnotherPlayCameFirst());
+        self::assertTrue($refused->meansAnotherReviewUsedACall());
         self::assertCount(2, $this->appended());
+    }
+
+    public function testARecordingSharingAModelCallWithAnotherRecordingPlayedBeforeIsNoEarlierPlay(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        try {
+            $this->replays()->replay($this->recording([
+                $this->row(LedgerEventKind::ReviewStarted, '{"round":"another-round","project":"sample","reviewers":1,"change":"another-change","number":1}', 0),
+                $this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"sample","tier":"standard","round":"another-round"}', 1),
+            ]), 1.0);
+            self::fail('A recording whose model call another recording played was replayed.');
+        } catch (ReplayIsRefused $refused) {
+            self::assertFalse($refused->meansAnotherPlayCameFirst());
+            self::assertTrue($refused->meansAnotherReviewUsedACall());
+        }
+    }
+
+    public function testPlayingTheSameRecordingTwiceMeansAnotherPlayCameFirst(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertTrue($this->refusal()->meansAnotherPlayCameFirst());
     }
 
     public function testARecordingOfAnotherRoundIsReplayedBesideAnEarlierReplay(): void
@@ -501,7 +533,7 @@ final class ReplaysRecordingTest extends TestCase
 
     private function replays(): ReplaysRecording
     {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()), TourCaptionsOn::replayedRows($this->ledger));
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()));
     }
 
     private function refusal(): ReplayIsRefused

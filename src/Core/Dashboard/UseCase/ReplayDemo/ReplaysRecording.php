@@ -9,7 +9,6 @@ use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
-use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -39,7 +38,6 @@ final readonly class ReplaysRecording
         private ReplayMarks $marks,
         private TourCaptionUpdates $captions,
         private ReplayedJudgedState $judged,
-        private ReplayedReviewRows $rows,
     ) {
     }
 
@@ -96,39 +94,35 @@ final readonly class ReplaysRecording
     // A call's settled usage names only the call, so a replayed call ID the ledger already holds would make another project's usage count as the demo's and go with it on removal.
     private function refuseCallsTheLedgerHolds(Recording $recording): void
     {
-        $call = $this->firstCallTheLedgerHolds($recording);
-
-        if (null === $call) {
-            return;
-        }
-
-        throw in_array($call, $this->callsOfEarlierPlays(), true) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
-    }
-
-    private function firstCallTheLedgerHolds(Recording $recording): ?string
-    {
-        $held = array_map(static fn (RecordedEvent $row): ?string => self::callOf($row->event->payload), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false));
+        $held = array_map(static fn (RecordedEvent $row): string => $row->event->payload, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false));
+        $calls = array_map(self::callOf(...), $held);
 
         foreach ($recording->events as $event) {
             $call = LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null;
 
-            if (null !== $call && in_array($call, $held, true)) {
-                return $call;
+            if (null !== $call && in_array($call, $calls, true)) {
+                throw self::anEarlierPlayHolds($held, $call, $recording) ? ReplayIsRefused::becauseTheLedgerHoldsCall($call) : ReplayIsRefused::becauseAnotherReviewHoldsCall($call);
+            }
+        }
+    }
+
+    // Only the demo project's row of the call in a round of this recording is an earlier Play of it, because another recording replayed before may reuse the call ID under its own rounds.
+    /**
+     * @param list<string> $held
+     */
+    private static function anEarlierPlayHolds(array $held, string $call, Recording $recording): bool
+    {
+        $rounds = array_map(static fn (RecordedLedgerEvent $event): ?string => $call === self::callOf($event->payload) ? self::roundOf($event->payload) : null, $recording->events);
+
+        foreach ($held as $payload) {
+            $round = self::roundOf($payload);
+
+            if ($call === self::callOf($payload) && CreateDemoProjectCommand::NAME === self::stringOf($payload, 'project') && null !== $round && in_array($round, $rounds, true)) {
+                return true;
             }
         }
 
-        return null;
-    }
-
-    // Read only once a call collides, because it reads the whole ledger; the demo project's rows are the ones earlier Plays wrote.
-    /**
-     * @return list<string>
-     */
-    private function callsOfEarlierPlays(): array
-    {
-        $calls = array_map(static fn (RecordedEvent $row): ?string => self::callOf($row->event->payload), $this->rows->ofProject(CreateDemoProjectCommand::NAME));
-
-        return array_values(array_filter($calls, static fn (?string $call): bool => null !== $call));
+        return false;
     }
 
     // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.

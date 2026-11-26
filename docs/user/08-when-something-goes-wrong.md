@@ -109,9 +109,9 @@ Before you press anything, `/demo` already says when the run cannot play: instea
 
 You press **Play the demo run**, the page comes back with "The demo run is starting" above the title, and then that line changes to "The demo run did not play." with a reason.
 
-- **What you see:** that line, with a short reason such as "The demo recording could not be read.", "Another Play or a demo removal is running." or "An earlier Play has already played the run."
-- **Why:** the reason says it. The details, with file names, are only in the install's log.
-- **What to do:** fix what the reason names. If another Play or a removal is running, wait until it has ended, reload the page and press Play again. If an earlier Play has already played the run, follow it in the review list. If you removed the demo project with `intakt:demo:remove`, press Play again: it creates the project again. If the page still shows the completed run after a removal, reload it. A page that opened after the refusal does not show it.
+- **What you see:** that line, with a short reason such as "The demo recording could not be read.", "Another Play or a demo removal is running.", "An earlier Play has already played the run." or "Another review in the ledger already used a model call of the demo recording."
+- **Why:** the reason says it. The details, with file names, are only in the install's log. The model call reason means a review in your ledger, of another project or of another recording you played, already has a model call id that this recording uses; the demo run did not play, so the review list has no run of it.
+- **What to do:** fix what the reason names. If another Play or a removal is running, wait until it has ended, reload the page and press Play again. If an earlier Play has already played the run, follow it in the review list. If another review used a model call of the recording, the log names the call; this recording cannot play on this ledger, so install a recording made with other model calls. If you removed the demo project with `intakt:demo:remove`, press Play again: it creates the project again. If the page still shows the completed run after a removal, reload it. A page that opened after the refusal does not show it.
 
 ## A page says "The form token is missing or wrong"
 

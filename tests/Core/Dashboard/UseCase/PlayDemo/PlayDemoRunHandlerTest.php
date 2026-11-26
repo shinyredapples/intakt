@@ -109,9 +109,14 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
-    public function testAModelCallAnotherReviewHoldsShowsThePlainRefusalAndNotTheEarlierPlay(): void
+    public function testAModelCallAnotherReviewHoldsShowsItsOwnRefusalAndNotTheEarlierPlay(): void
     {
-        self::assertSame(DemoRefusal::Refused, DemoRefusal::of(ReplayIsRefused::becauseAnotherReviewHoldsCall('call-1')));
+        self::assertSame(DemoRefusal::CallUsedElsewhere, DemoRefusal::of(ReplayIsRefused::becauseAnotherReviewHoldsCall('call-1')));
+    }
+
+    public function testTheRefusalOfAModelCallAnotherReviewHoldsSaysThatAnotherReviewUsedTheCall(): void
+    {
+        self::assertSame('Another review in the ledger already used a model call of the demo recording, so the run was not played. The install log names the call.', DemoRefusal::CallUsedElsewhere->sentence());
     }
 
     public function testAModelCallAnEarlierPlayHoldsPointsAtTheEarlierPlay(): void
@@ -326,7 +331,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     {
         $marks = new ReplayMarks($this->marks);
         $captions = TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, $locks ?? new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks), TourCaptionsOn::replayedRows($this->ledger));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, $locks ?? new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $marks, $this->marks, $captions, $recording, $composeService);
     }
