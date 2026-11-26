@@ -27,9 +27,7 @@ final class ReviewSizeLimitConfiguration implements ConfigurationInterface
         return $tree;
     }
 
-    /**
-     * The key the projects tree gives an entry: its name attribute whenever that is set (a float exported as text, a boolean as 0 or 1), else the outer key.
-     */
+    // The limit must be filed under the key the projects tree gives the entry, or it is lost and read as the default: its name attribute whenever that is set (a float exported as text, a boolean as 0 or 1), else the outer key.
     public static function keyOf(int|string $outerKey, mixed $nameAttribute): int|string
     {
         return match (true) {
@@ -40,11 +38,10 @@ final class ReviewSizeLimitConfiguration implements ConfigurationInterface
         };
     }
 
+    // Each limit is validated alone under a fixed key, so no project name can change how the tree reads the others.
     /**
-     * Each limit is validated alone under a fixed key, so no project name can change how the tree reads the others.
-     *
-     * @param list<int|string>      $projectKeys keys of the configured projects, as the projects tree gives them
-     * @param array<int|string, mixed> $written  the limits as written, by the same keys
+     * @param list<int|string>         $projectKeys
+     * @param array<int|string, mixed> $written
      *
      * @return array<int|string, int>
      */
