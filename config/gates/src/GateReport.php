@@ -69,6 +69,18 @@ final readonly class GateReport
     }
 
     /**
+     * @param array<array-key, mixed> $report
+     */
+    private static function isEncodedAs(array $report, string $line): bool
+    {
+        try {
+            return $line === json_encode($report, GateResult::JSON_FLAGS);
+        } catch (JsonException) {
+            return false;
+        }
+    }
+
+    /**
      * @return array{findings: array<mixed>, omitted: mixed}
      */
     private function shownOf(string $line): array
@@ -108,18 +120,6 @@ final readonly class GateReport
         }
 
         return '...'.$end;
-    }
-
-    /**
-     * @param array<array-key, mixed> $report
-     */
-    private static function isEncodedAs(array $report, string $line): bool
-    {
-        try {
-            return $line === json_encode($report, GateResult::JSON_FLAGS);
-        } catch (JsonException) {
-            return false;
-        }
     }
 
     /**
