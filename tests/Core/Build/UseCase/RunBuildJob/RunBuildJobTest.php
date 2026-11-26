@@ -305,7 +305,23 @@ final class RunBuildJobTest extends TestCase
 
         $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
 
-        self::assertSame([BuildVerdict::NoResult, null, null, "log\n"], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText, $outcome->log]);
+        self::assertSame([BuildVerdict::NoResult, null, null], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText]);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputEndsItsLogWithTheOrchestratorsOwnReason(): void
+    {
+        $output = OutputFiles::of(['build.log' => 'builder text']);
+
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("builder text\nno result: the build script could not clear the job's output\n", $outcome->log);
+    }
+
+    public function testAJobWhoseScriptCouldNotClearTheOutputAndLeftNoLogStillSaysWhy(): void
+    {
+        $outcome = $this->runBuilds(OutputFiles::of([]), end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
+
+        self::assertSame("no result: the build script could not clear the job's output\n", $outcome->log);
     }
 
     public function testAJobThatExitedWithAnotherFailingCodeIsStillReadFromItsOutput(): void
@@ -335,6 +351,16 @@ final class RunBuildJobTest extends TestCase
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
         self::assertSame([BuildVerdict::NoResult, "no result: the runner refused the job's output: ".JobOutputRefused::notAPlainFile('build.log')->getMessage()."\n"], [$outcome->verdict, $outcome->log]);
+    }
+
+    public function testARefusedOutputNameWithControlCharactersStaysOnTheOneLineOfItsReason(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::notAPlainFile("invalid\nFORGED_LOG_LINE\e[2K"));
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame([1, 1, false], [substr_count($outcome->log, "\n"), substr_count($outcome->log, 'invalid\nFORGED_LOG_LINE\033[2K'), str_contains($outcome->log, "\e")]);
     }
 
     protected function setUp(): void

@@ -169,7 +169,7 @@ final readonly class RunBuildJob
             $result = $this->jobs->run($spec);
         } catch (JobOutputRefused $refusal) {
             // No result, with the runner's reason as the log, because the job's own log is part of what was refused and its standard error is the builder's to write too.
-            return new BuildJobOutcome(BuildVerdict::NoResult, log: sprintf("no result: the runner refused the job's output: %s\n", $refusal->getMessage()));
+            return new BuildJobOutcome(BuildVerdict::NoResult, log: sprintf("no result: the runner refused the job's output: %s\n", addcslashes($refusal->getMessage(), "\0..\37\177")));
         }
 
         return $this->outcomeOf($result);
@@ -190,9 +190,15 @@ final readonly class RunBuildJob
             JobCause::TimedOut => new BuildJobOutcome(BuildVerdict::TimedOut, log: $log),
             // The builder cannot set the script's exit code, so the one code that says its files may still be in the output is trusted; what a build hands back is read from the output only.
             JobCause::Exited => self::OUTPUT_NOT_CLEARED === $result->end->exitCode
-                ? new BuildJobOutcome(BuildVerdict::NoResult, log: $log)
+                ? new BuildJobOutcome(BuildVerdict::NoResult, log: self::withLineEnd($log)."no result: the build script could not clear the job's output\n")
                 : $this->handedBack($result->output, $log),
         };
+    }
+
+    // The builder's last line may lack its end, and the trusted line that follows must stand on a line of its own.
+    private static function withLineEnd(string $log): string
+    {
+        return '' === $log || str_ends_with($log, "\n") ? $log : $log."\n";
     }
 
     private function handedBack(JobOutput $output, string $log): BuildJobOutcome
