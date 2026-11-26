@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Closure;
+use Intakt\Core\Disk\Contract\DiskHeadroom;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
@@ -37,6 +38,7 @@ final readonly class LocalChangeReview
     public function __construct(
         private Panels $panels,
         private ChangeReviews $reviews,
+        private DiskHeadroom $disk,
         private CleanupOnStop $onStop = new CleanupOnStop(),
     ) {
     }
@@ -47,6 +49,7 @@ final readonly class LocalChangeReview
         $forge = $this->forgeFor($input);
         $change = $forge->change(new ChangeId($input->change));
         $request = $this->requestFor($input, $change);
+        $this->disk->admitWorkAt($forge->snapshotFolder());
 
         return $forge->withSnapshotOf($change->commits->head, fn (string $snapshot): ChangeReview => $this->onStop->during(
             static fn () => $forge->removeSnapshot($snapshot),
@@ -90,6 +93,7 @@ final readonly class LocalChangeReview
     private function start(LocalGitForge $forge, ReviewChangeInput $input, Change $change): QueuedRound
     {
         $request = $this->requestFor($input, $change);
+        $this->disk->admitWorkAt($forge->snapshotFolder());
         $snapshot = $forge->keepSnapshotOf($change->commits->head);
 
         try {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+
 use Doctrine\DBAL\DriverManager;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
@@ -1577,7 +1579,7 @@ final class BuildTaskTest extends TestCase
 
     private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
     {
-        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
+        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors, new DiskWithRoom()), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
     }
 
     private function mirrorUpdate(Mirrors $mirrors, PersistingStoreInterface $locks): UpdateMirror

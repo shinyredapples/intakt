@@ -158,9 +158,15 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $this->commitFrom($this->read(['show-ref', '--verify', '--hash', 'refs/heads/'.$this->repository->baseBranch]));
     }
 
+    // Public, so a caller can hold the review on a full disk before the snapshot is made there.
+    public function snapshotFolder(): string
+    {
+        return sys_get_temp_dir();
+    }
+
     private function addWorktree(CommitId $head, string $prefix): string
     {
-        $directory = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(8));
+        $directory = $this->snapshotFolder().'/'.$prefix.bin2hex(random_bytes(8));
         $this->read([...self::SNAPSHOT_AS_COMMITTED, 'worktree', 'add', '--detach', '--quiet', $directory, $head->hash]);
 
         // Resolved because a worker started elsewhere reads the stored path from its own working directory.

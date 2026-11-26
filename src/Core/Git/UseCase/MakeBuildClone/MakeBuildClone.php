@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
@@ -26,10 +28,12 @@ final readonly class MakeBuildClone
         private HardenedGit $hardened,
         private Filesystem $filesystem,
         private Mirrors $mirrors,
+        private DiskHeadroom $disk,
     ) {
     }
 
     /**
+     * @throws NewWorkHeld
      * @throws ProjectNameRefused
      * @throws BranchNameRefused
      * @throws BuildCloneNotMade
@@ -43,6 +47,7 @@ final readonly class MakeBuildClone
         $task = $this->taskRef($mirror, $main, $branch->name);
         $source = $this->verifiedSource($mirror, $branch->source, $directory);
         $format = $this->objectFormatOf($mirror, $directory);
+        $this->disk->admitWorkAt($directory);
         $this->reserve($directory);
 
         try {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
@@ -178,7 +180,7 @@ final class StartReviewToolTest extends TestCase
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
-        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
+        return new StartReviewTool(new LocalChangeReview($panels, $reviews, new DiskWithRoom()));
     }
 
     private function gateway(): ClientGateway

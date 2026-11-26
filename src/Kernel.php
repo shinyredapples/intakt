@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt;
 
+use Intakt\Core\Disk\Infrastructure\DiskFloorsPass;
 use Intakt\Core\Mcp\Infrastructure\AuthorizeToolCallsPass;
 use Intakt\Core\Server\Infrastructure\ProcessSettings;
 use Intakt\Core\Server\Infrastructure\ProfileOnlyRequestMeasuresPass;
@@ -43,6 +44,7 @@ final class Kernel extends BaseKernel
         $container->addCompilerPass(new AuthorizeToolCallsPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
         // At 10, because autoconfiguration (100) must have tagged the collectors and FrameworkBundle's ProfilerPass (0) reads the tags afterwards.
         $container->addCompilerPass(new ProfileOnlyRequestMeasuresPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
+        $container->addCompilerPass(new DiskFloorsPass());
     }
 
     protected function build(ContainerBuilder $container): void

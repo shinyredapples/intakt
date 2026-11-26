@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\Infrastructure;
 
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
@@ -142,7 +144,7 @@ final class GitBuildCheckoutTest extends TestCase
 
         return new GitBuildCheckout(
             new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), $mirrors),
-            new MakeBuildClone(new HardenedGit(), $filesystem, $mirrors),
+            new MakeBuildClone(new HardenedGit(), $filesystem, $mirrors, new DiskWithRoom()),
             $mirrors,
             new TakeCheckedHead(new HardenedGit(), $mirrors),
         );

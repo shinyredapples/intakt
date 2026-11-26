@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
+use Intakt\Core\Disk\Domain\FloorCheck;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
@@ -47,6 +53,9 @@ use Symfony\Component\Process\Process;
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(GitCall::class)]
+#[UsesClass(FloorCheck::class)]
+#[UsesClass(DiskHeld::class)]
+#[UsesClass(NewWorkHeld::class)]
 final class MakeBuildCloneCommandTest extends TestCase
 {
     private string $mirrors;
@@ -209,6 +218,19 @@ final class MakeBuildCloneCommandTest extends TestCase
         $this->commandReadingTasksWith($filesystem)->execute(['project' => 'alpha', 'branch' => 'feat/task', 'directory' => $this->clone, '--task' => $this->mirrors.'-task.md']);
     }
 
+    public function testACloneBelowAFloorSaysWhichFloorAndWhereExitsWithOneAndMakesNoClone(): void
+    {
+        $this->givenTheProjectHasAMirror();
+        $tester = $this->commandReadingTasksWith(new Filesystem(), new FloorCheck(new FreeSpaceInMemory(10, 10 ** 6), '/unused', 1000, 100));
+
+        $tester->execute(['project' => 'alpha', 'branch' => 'feat/task', 'directory' => $this->clone]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        // A narrow terminal also breaks the path inside a word, so the comparison drops all whitespace.
+        self::assertStringContainsString('newworkisheld:10freebytesin'.dirname($this->clone).',belowthefloorof1000', (string) preg_replace('/\s+/', '', $tester->getDisplay()));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
     protected function setUp(): void
     {
         $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
@@ -271,10 +293,10 @@ final class MakeBuildCloneCommandTest extends TestCase
         return $tester;
     }
 
-    private function commandReadingTasksWith(Filesystem $taskFiles): CommandTester
+    private function commandReadingTasksWith(Filesystem $taskFiles, DiskHeadroom $disk = new DiskWithRoom()): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), $taskFiles));
+        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors), $disk), $taskFiles));
 
         return new CommandTester($application->find('intakt:build:clone'));
     }

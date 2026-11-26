@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
@@ -207,12 +209,12 @@ final class DemoReviewCommandTest extends TestCase
 
     private function whenTheDemoRuns(ChangeReviews $reviews, string $ownerToken = 'demo-token', ?Panels $panels = null): CommandTester
     {
-        return $this->whenTheDemoIsRun($this->demo($this->sample->path, new LocalChangeReview($panels ?? $this->onePanel(), $reviews), $ownerToken));
+        return $this->whenTheDemoIsRun($this->demo($this->sample->path, new LocalChangeReview($panels ?? $this->onePanel(), $reviews, new DiskWithRoom()), $ownerToken));
     }
 
     private function whenTheDemoRunsOn(?string $repository): CommandTester
     {
-        return $this->whenTheDemoIsRun($this->demo($repository, new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve)), 'demo-token'));
+        return $this->whenTheDemoIsRun($this->demo($repository, new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve), new DiskWithRoom()), 'demo-token'));
     }
 
     private function report(): ReviewReport

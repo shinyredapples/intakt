@@ -23,17 +23,16 @@ final readonly class StatFreeSpace implements FreeSpaceReader
         return (int) $free;
     }
 
-    // PHP has no call for inodes, so the file system's own tool reports them.
+    // PHP has no call for inodes, so the file system's own tool reports them; a total of 0 means the file system keeps no count (Btrfs, for one), so inodes cannot run out there.
     #[Override]
     public function freeInodes(string $folder): int
     {
-        $stat = new Process(['stat', '--file-system', '--format=%d', $folder], null, null, null, self::STAT_SECONDS);
+        $stat = new Process(['stat', '--file-system', '--format=%d %c', $folder], null, null, null, self::STAT_SECONDS);
         $stat->run();
-        $output = trim($stat->getOutput());
-        if (!$stat->isSuccessful() || 1 !== preg_match('/^\d+$/', $output)) {
+        if (!$stat->isSuccessful() || 1 !== preg_match('/^(\d+) (\d+)$/', trim($stat->getOutput()), $counts)) {
             throw FreeSpaceUnreadable::of($folder, 'inodes');
         }
 
-        return (int) $output;
+        return '0' === $counts[2] ? PHP_INT_MAX : (int) $counts[1];
     }
 }

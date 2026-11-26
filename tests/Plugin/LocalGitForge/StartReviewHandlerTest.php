@@ -26,6 +26,13 @@ use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\CleanupOnStop;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\StartReviewHandler;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
+use Intakt\Core\Disk\Contract\DiskFloor;
+use Intakt\Core\Disk\Contract\DiskHeadroom;
+use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
+use Intakt\Core\Disk\Domain\FloorCheck;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -40,6 +47,9 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(NameStatusParser::class)]
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(CleanupOnStop::class)]
+#[UsesClass(FloorCheck::class)]
+#[UsesClass(DiskHeld::class)]
+#[UsesClass(NewWorkHeld::class)]
 final class StartReviewHandlerTest extends TestCase
 {
     private TemporaryRepository $repository;
@@ -148,6 +158,33 @@ final class StartReviewHandlerTest extends TestCase
         }
     }
 
+    public function testAStartBelowAFloorMakesNoSnapshotAndStartsOnceSpaceIsBack(): void
+    {
+        $started = [];
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('start')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$started): string {
+            $started[] = $request->checkoutRoot;
+
+            return 'round-1';
+        });
+        $space = new FreeSpaceInMemory(10, 10 ** 6);
+        $handler = new StartReviewHandler($this->review($reviews, new FloorCheck($space, '/unused', 1000, 100)));
+
+        try {
+            $handler($this->startOf(null));
+            self::fail('The review started below the bytes floor.');
+        } catch (NewWorkHeld $held) {
+            self::assertSame(DiskFloor::Bytes, $held->held->floor);
+            self::assertSame([sys_get_temp_dir()], array_unique($space->asked));
+        }
+
+        self::assertSame([], $started);
+        $space->leave(5000, 10 ** 6);
+        $handler($this->startOf(null));
+        self::assertCount(1, $started);
+        $this->removeSnapshot($started[0]);
+    }
+
     protected function setUp(): void
     {
         $this->repository = new TemporaryRepository();
@@ -176,12 +213,12 @@ final class StartReviewHandlerTest extends TestCase
         new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
     }
 
-    private function review(ChangeReviews $reviews): LocalChangeReview
+    private function review(ChangeReviews $reviews, DiskHeadroom $disk = new DiskWithRoom()): LocalChangeReview
     {
         $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
-        return new LocalChangeReview($panels, $reviews);
+        return new LocalChangeReview($panels, $reviews, $disk);
     }
 }

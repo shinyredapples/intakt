@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -126,7 +128,7 @@ final class StartReviewAtHeadHandlerTest extends TestCase
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
-        return new LocalChangeReview($panels, $reviews);
+        return new LocalChangeReview($panels, $reviews, new DiskWithRoom());
     }
 
     private function startAt(string $head): StartReviewAtHead

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+
 use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -116,7 +118,7 @@ final class ReviewChangeCommandTest extends TestCase
     public function testTheFormatOptionNamesItsValuesOnceInTheHelp(): void
     {
         $application = new Application();
-        $application->addCommand(new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Blocked)), $this->report()));
+        $application->addCommand(new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Blocked), new DiskWithRoom()), $this->report()));
         $tester = new CommandTester($application->find('help'));
         $tester->execute(['command_name' => 'intakt:review']);
 
@@ -209,7 +211,7 @@ final class ReviewChangeCommandTest extends TestCase
         $snapshot = '';
         $exit = null;
         $reviews = self::createStub(ChangeReviews::class);
-        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $reviews), $this->report());
+        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $reviews, new DiskWithRoom()), $this->report());
         $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($command, $signal, &$snapshot, &$exit): ChangeReview {
             $snapshot = $request->checkoutRoot;
             $exit = $command->handleSignal($signal);
@@ -227,7 +229,7 @@ final class ReviewChangeCommandTest extends TestCase
     // One test for a PHP with and without signal support rather than a skipped one, because the tests gate fails on a skip and the CI image has no pcntl.
     public function testItListensForTheStopSignalsOnlyWherePhpCanHandleThem(): void
     {
-        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve)), $this->report());
+        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve), new DiskWithRoom()), $this->report());
 
         $expected = SignalRegistry::isSupported() ? [constant('SIGINT'), constant('SIGTERM')] : [];
 
@@ -350,7 +352,7 @@ final class ReviewChangeCommandTest extends TestCase
      */
     private function whenTheCommandRuns(ChangeReviews $reviews, array $input = [], ?Panels $panels = null): CommandTester
     {
-        return $this->whenTheCommandIsRun(new ReviewChangeCommand(new LocalChangeReview($panels ?? $this->onePanel(), $reviews), $this->report()), $input);
+        return $this->whenTheCommandIsRun(new ReviewChangeCommand(new LocalChangeReview($panels ?? $this->onePanel(), $reviews, new DiskWithRoom()), $this->report()), $input);
     }
 
     /**

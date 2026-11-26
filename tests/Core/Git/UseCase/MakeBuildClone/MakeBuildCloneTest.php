@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Disk\Contract\DiskFloor;
+use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
+use Intakt\Core\Disk\Domain\FloorCheck;
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
@@ -39,6 +45,9 @@ use Symfony\Component\Process\Process;
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(GitCall::class)]
+#[UsesClass(FloorCheck::class)]
+#[UsesClass(DiskHeld::class)]
+#[UsesClass(NewWorkHeld::class)]
 final class MakeBuildCloneTest extends TestCase
 {
     private string $mirrors;
@@ -142,6 +151,46 @@ final class MakeBuildCloneTest extends TestCase
         }
     }
 
+    public function testACloneBelowTheBytesFloorIsHeldAndMadeOnceSpaceIsBack(): void
+    {
+        $this->givenTheMirror();
+        $space = new FreeSpaceInMemory(10, 10 ** 6);
+        $clones = new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors), new FloorCheck($space, '/unused', 1000, 100));
+
+        try {
+            $clones->make('alpha', new TaskBranch('feat/task'), $this->clone);
+            self::fail('The clone was made below the bytes floor.');
+        } catch (NewWorkHeld $held) {
+            self::assertSame(DiskFloor::Bytes, $held->held->floor);
+            self::assertDirectoryDoesNotExist($this->clone);
+        }
+
+        $space->leave(5000, 10 ** 6);
+        $clones->make('alpha', new TaskBranch('feat/task'), $this->clone);
+        self::assertDirectoryExists($this->clone.'/.git');
+    }
+
+    public function testACloneBelowTheInodesFloorIsHeldThoughBytesArePlenty(): void
+    {
+        $this->givenTheMirror();
+        $clones = new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors), new FloorCheck(new FreeSpaceInMemory(10 ** 12, 99), '/unused', 1000, 100));
+
+        $this->expectExceptionObject(new NewWorkHeld(new DiskHeld(DiskFloor::Inodes, dirname($this->clone), 99, 100)));
+
+        $clones->make('alpha', new TaskBranch('feat/task'), $this->clone);
+    }
+
+    public function testTheFreeSpaceIsReadWhereTheCloneLandsNotInTheWatchedFolder(): void
+    {
+        $this->givenTheMirror();
+        $space = new FreeSpaceInMemory(5000, 500);
+        $clone = $this->clone.'/not/yet/made';
+
+        new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors), new FloorCheck($space, '/unused', 1000, 100))->make('alpha', new TaskBranch('feat/task'), $clone);
+
+        self::assertSame([dirname($this->clone)], array_values(array_unique($space->asked)));
+    }
+
     public function testAProjectNameThatIsNotASafePathSegmentIsRefused(): void
     {
         $this->expectException(ProjectNameRefused::class);
@@ -210,7 +259,7 @@ final class MakeBuildCloneTest extends TestCase
         $racing = new FilesystemThatLetsAnotherCloneInFirst($this->buildClones(), 'feat/winner', $this->clone);
 
         try {
-            new MakeBuildClone(new HardenedGit(), $racing, new Mirrors($this->mirrors))->make('alpha', new TaskBranch('feat/loser'), $this->clone);
+            new MakeBuildClone(new HardenedGit(), $racing, new Mirrors($this->mirrors), new DiskWithRoom())->make('alpha', new TaskBranch('feat/loser'), $this->clone);
             self::fail('the build clone was made in a folder another clone already owns');
         } catch (BuildCloneNotMade $refused) {
             self::assertStringContainsString('the folder already exists', $refused->getMessage());
@@ -444,7 +493,7 @@ final class MakeBuildCloneTest extends TestCase
 
     private function buildClones(): MakeBuildClone
     {
-        return new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors));
+        return new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors), new DiskWithRoom());
     }
 
     /**

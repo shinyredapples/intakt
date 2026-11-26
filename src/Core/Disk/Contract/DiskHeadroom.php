@@ -11,4 +11,10 @@ interface DiskHeadroom
 {
     #[NoDiscard]
     public function held(): ?DiskHeld;
+
+    // The nearest folder of the destination that exists is read, because a checkout may land on another file system than the watched folder.
+    /**
+     * @throws NewWorkHeld
+     */
+    public function admitWorkAt(string $destination): void;
 }

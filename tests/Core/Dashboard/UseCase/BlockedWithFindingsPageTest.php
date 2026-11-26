@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Tests\Core\Disk\DiskWithRoom;
+
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
@@ -137,7 +139,7 @@ final class BlockedWithFindingsPageTest extends WebTestCase
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn($this->panel());
         $application = new Application();
-        $application->addCommand(new ReviewChangeCommand(new LocalChangeReview($panels, $this->reviewChange()), new ReviewReport(StoredSerializerFactory::create())));
+        $application->addCommand(new ReviewChangeCommand(new LocalChangeReview($panels, $this->reviewChange(), new DiskWithRoom()), new ReviewReport(StoredSerializerFactory::create())));
         $tester = new CommandTester($application->find('intakt:review'));
 
         try {

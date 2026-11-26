@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Disk\Domain;
 
 use Intakt\Core\Disk\Contract\DiskFloor;
 use Intakt\Core\Disk\Contract\DiskHeld;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Domain\FloorCheck;
 use Intakt\Core\Disk\Domain\FloorRefused;
 use Intakt\Tests\Core\Disk\FreeSpaceInMemory;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(FloorCheck::class)]
 #[CoversClass(FloorRefused::class)]
+#[CoversClass(NewWorkHeld::class)]
 #[UsesClass(DiskHeld::class)]
 #[UsesClass(DiskFloor::class)]
 final class FloorCheckTest extends TestCase
@@ -64,6 +66,38 @@ final class FloorCheckTest extends TestCase
         new FloorCheck($space, '/var/intakt', 1000, 100)->held();
 
         self::assertSame(['/var/intakt', '/var/intakt'], $space->asked);
+    }
+
+    public function testWorkAtADestinationIsHeldWithTheFolderThatWasRead(): void
+    {
+        $this->expectExceptionObject(new NewWorkHeld(new DiskHeld(DiskFloor::Inodes, sys_get_temp_dir(), 99, 100)));
+
+        new FloorCheck(new FreeSpaceInMemory(10 ** 12, 99), '/var/intakt', 1000, 100)->admitWorkAt(sys_get_temp_dir());
+    }
+
+    public function testWorkAtADestinationThatDoesNotExistYetReadsItsNearestExistingFolder(): void
+    {
+        $space = new FreeSpaceInMemory(5000, 500);
+
+        new FloorCheck($space, '/var/intakt', 1000, 100)->admitWorkAt(sys_get_temp_dir().'/intakt-missing-'.bin2hex(random_bytes(4)).'/clone');
+
+        self::assertSame([sys_get_temp_dir(), sys_get_temp_dir()], $space->asked);
+    }
+
+    public function testWorkAtADestinationIsAdmittedOnceSpaceIsBack(): void
+    {
+        $space = new FreeSpaceInMemory(10, 500);
+        $check = new FloorCheck($space, '/var/intakt', 1000, 100);
+
+        try {
+            $check->admitWorkAt(sys_get_temp_dir());
+            self::fail('Work was admitted below the bytes floor.');
+        } catch (NewWorkHeld) {
+            $space->leave(1000, 100);
+        }
+
+        $check->admitWorkAt(sys_get_temp_dir());
+        $this->addToAssertionCount(1);
     }
 
     #[DataProvider('floorsBelowOne')]

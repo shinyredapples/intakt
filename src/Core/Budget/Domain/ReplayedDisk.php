@@ -16,4 +16,9 @@ final readonly class ReplayedDisk implements DiskHeadroom
     {
         return null;
     }
+
+    #[Override]
+    public function admitWorkAt(string $destination): void
+    {
+    }
 }
