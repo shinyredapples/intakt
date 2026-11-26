@@ -27,12 +27,21 @@ final class ReviewersAgreeTest extends TestCase
         self::assertSame([$bug, $same], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($same)], [$bug, $same]));
     }
 
-    public function testTheSameWordsWithOtherCaseAndSpacingAreStillShared(): void
+    public function testTheSameWordsWithOtherSpacingAreStillShared(): void
     {
         $bug = $this->at('A', Severity::P1, 3);
-        $same = new Finding('B', Severity::P1, 'src/A.php', 3, null, "  text OF\n a. ", FixableBy::Builder, false, null, null);
+        $spaced = new Finding('B', Severity::P1, 'src/A.php', 3, null, '  '.str_replace(' ', "\n ", $bug->text).' ', FixableBy::Builder, false, null, null);
 
-        self::assertSame([$bug], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($same)], [$bug]));
+        self::assertNotSame($bug->text, $spaced->text);
+        self::assertSame([$bug], new ReviewersAgree()->sharedIn([$this->changes($bug), $this->changes($spaced)], [$bug]));
+    }
+
+    public function testFindingsWhoseWordsDifferOnlyInCaseAreNotShared(): void
+    {
+        $lower = new Finding('A', Severity::P1, 'src/Totals.php', 12, null, 'The calculation ignores `$total`.', FixableBy::Builder, false, null, null);
+        $upper = new Finding('B', Severity::P1, 'src/Totals.php', 12, null, 'The calculation ignores `$Total`.', FixableBy::Builder, false, null, null);
+
+        self::assertSame([], new ReviewersAgree()->sharedIn([$this->changes($lower), $this->changes($upper)], [$lower, $upper]));
     }
 
     public function testTwoUnrelatedDefectsReportedAtOneLineAreNotShared(): void

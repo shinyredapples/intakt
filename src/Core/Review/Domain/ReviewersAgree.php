@@ -57,8 +57,9 @@ final readonly class ReviewersAgree
             && $this->words($reported->text) === $this->words($finding->text);
     }
 
+    // Case stays, because code names differ by case (`$total` and `$Total` are two variables); only white space is not part of the words.
     private function words(string $text): string
     {
-        return mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $text)));
+        return trim((string) preg_replace('/\s+/u', ' ', $text));
     }
 }
