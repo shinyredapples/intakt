@@ -71,7 +71,7 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 
 ## Nothing new starts, and the disk is nearly full
 
-Intakt holds new work when the disk has less than 1 GiB or fewer than 10,000 inodes free (one checkout per reviewed head can use up inodes long before bytes). Running work finishes.
+Intakt is built to hold new work when the disk has less than 1 GiB or fewer than 10,000 inodes free (one checkout per reviewed head can use up inodes long before bytes). Running work finishes.
 
 1. Run `df -h var` and `df -i var` in the install folder.
 2. Free space or inodes, for example by deleting old build folders under `var/jobs`.

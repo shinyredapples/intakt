@@ -240,7 +240,7 @@ The state of a round and of each reviewer is stored in the database, and so are 
 
 ## When the disk runs low
 
-Intakt does not start new work (a build, a review, a merge) while the folder it writes to has too little free space. The folder is `var/` in the install. Two floors apply, and either one holds work: free bytes (1 GiB by default) and free inodes (10,000 by default). Work already running is not cut. Intakt reads the disk again at each start, so work resumes by itself once space is back above both floors.
+Intakt's start decision refuses new work (a build, a review, a merge) while the folder it writes to has too little free space. No live step consults that decision yet, so the pause takes effect once a step does. The folder is `var/` in the install. Two floors apply, and either one holds work: free bytes (1 GiB by default) and free inodes (10,000 by default). Work already running is not cut. Intakt reads the disk again at each start, so work resumes by itself once space is back above both floors.
 
 To change a floor, set `intakt.disk.free_bytes_floor` (bytes) or `intakt.disk.free_inodes_floor` (inodes) under `parameters:` in `config/services.yaml`, then run `php bin/console cache:clear`. Each must be a whole number of at least 1; Intakt refuses to start with anything else. `intakt.disk.watched_directory` names the folder that is read. The decision reads `disk-low`; showing it on the Status page comes later. See [Disk floors](../architecture/disk-floors.md).
 

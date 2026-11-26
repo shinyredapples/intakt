@@ -11,6 +11,8 @@ Before new work starts, Intakt reads the free bytes and free inodes of the folde
 - `StatFreeSpace` (Infrastructure) reads bytes with `disk_free_space()` and inodes with `stat --file-system --format=%d` through Symfony Process ([requirements](requirements.md)). A folder or tool that cannot be read throws `FreeSpaceUnreadable`, so the start fails visibly instead of passing a disk it could not measure.
 - `BudgetGuard` asks `DiskHeadroom` after the watchdog halt (only the owner lifts a halt) and before the shared holds, for `decide()` and `decideMerge()`, because a merge writes the mirror and the ledger. A replayed day uses `ReplayedDisk`, which never holds.
 
+No step or merge consults `StartGuard` yet (see [Measured use](measured-use.md)), so the hold is in the decision and its tests, and not yet a pause of live work.
+
 ## Settings
 
 `config/services.yaml` holds `intakt.disk.watched_directory` (`var/`, where the mirrors, job folders, clones and database live), `intakt.disk.free_bytes_floor` (1 GiB) and `intakt.disk.free_inodes_floor` (10,000). See [When the disk runs low](../reference/user-manual.md#when-the-disk-runs-low).
