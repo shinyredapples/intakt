@@ -9,8 +9,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Disk\Contract\DiskFloor;
 use Intakt\Core\Disk\Contract\DiskHeadroom;
 use Intakt\Core\Disk\Contract\DiskHeld;
-use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Contract\FreeSpaceReader;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Domain\FloorCheck;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -193,8 +193,8 @@ final class StartReviewHandlerTest extends TestCase
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('start')->willReturn('round-1');
         $repository = (string) realpath($this->repository->path);
-        $space = new class ($repository) implements FreeSpaceReader {
-            public function __construct(private readonly string $repository)
+        $space = new readonly class($repository) implements FreeSpaceReader {
+            public function __construct(private string $repository)
             {
             }
 
