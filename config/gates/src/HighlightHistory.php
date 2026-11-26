@@ -62,7 +62,7 @@ final readonly class HighlightHistory
         // A folder committed under a fragment's name would otherwise lend its place to a fragment written there again.
         foreach (explode("\n", $output) as $line) {
             if (str_starts_with($line, 'blob ')) {
-                $files[] = substr($line, \strlen('blob '));
+                $files[] = substr($line, strlen('blob '));
             }
         }
 
