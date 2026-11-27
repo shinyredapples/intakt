@@ -94,3 +94,26 @@
   .reviewer-faces { justify-content: flex-start; }
   .verdict-card .verdict-words { font-size: var(--t21); }
 }
+
+/* A finding's own page. */
+.finding-head .kicker { margin: 0; font-size: var(--t13); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.finding-head .finding-place { margin: var(--s4) 0 0; overflow-wrap: anywhere; }
+.finding-section { margin-top: var(--s24); }
+.finding-words { white-space: pre-line; overflow-wrap: anywhere; }
+.finding-head code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
+.finding-reporters { display: grid; gap: var(--s12); margin: 0 0 var(--s12); padding: 0; list-style: none; }
+.finding-reporters .card, .finding-judge { display: flex; align-items: center; gap: var(--s12); overflow-wrap: anywhere; }
+.finding-reporters .who-name, .finding-judge .who-name { font-weight: 700; }
+.file-map { display: grid; gap: var(--s24); grid-template-columns: minmax(0, 1fr); }
+.file-map-file { margin: 0; }
+.file-map-file figcaption { overflow-wrap: anywhere; }
+.file-map-lines { display: grid; gap: var(--s8); margin: var(--s12) 0 var(--s8); padding: 0; list-style: none; }
+.file-map-line { height: 10px; border-radius: var(--r-chip); background: var(--tint); }
+.file-map-line.marked { background: var(--primary); height: 14px; }
+.file-map-mark { margin: 0; font-weight: 700; }
+.file-map-quotes h3 { margin: 0 0 var(--s8); font-size: var(--t15); }
+.file-map-quotes ul { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s8); }
+.file-map-quotes code { overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (min-width: 1024px) { .file-map:has(.file-map-quotes):has(.file-map-file) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); } }
+.finding-back { margin-top: var(--s24); }
+.finding-back a { display: inline-flex; align-items: center; min-height: 44px; }

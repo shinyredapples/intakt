@@ -5,9 +5,11 @@ declare(strict_types=1);
 return [
     'Core/Ai',
     'Core/Bench',
+    'Core/BranchCleanup',
     'Core/Budget',
     'Core/Build',
     'Core/Dashboard',
+    'Core/Disk',
     'Core/Git',
     'Core/HandBack',
     'Core/Job',

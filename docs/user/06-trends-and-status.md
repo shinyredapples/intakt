@@ -4,7 +4,7 @@
 
 ## A week later
 
-Intakt has reviewed a dozen of your changes. A colleague asks whether the second reviewer earns its keep, and how long a review really takes. You could scroll through every review page. Or you open **Trends** in the menu, and Intakt has already counted.
+Intakt has reviewed a dozen of your changes. A colleague asks whether the second reviewer earns its keep, and how long a review really takes. You could scroll through every review page. Or you open **History** in the menu and its **Trends** sub-tab, and Intakt has already counted.
 
 ## What Trends shows
 
@@ -25,7 +25,7 @@ A tile appears only when there is a figure for it, never as a made-up 0. Point a
 ## The charts answer three questions
 
 1. **Which reviewer finds what?** *Catches by reviewer* has one small chart per reviewer role, with a bar per urgency. The number in brackets counts the findings only that reviewer reported. This is the answer to your colleague.
-2. **What does the owl keep?** *Checked findings* counts the findings kept to fix, merged as duplicates, deferred and rejected.
+2. **What does the owl keep?** *Checked findings* counts the findings kept to fix, merged as duplicates, deferred and rejected. Only the owl's own calls count: a pass where the owl's answer could not be read is left out, because Intakt then put every P1 and P2 on the to-fix list itself and left the P3 findings unmarked, which is not a rejection. Passes from before Intakt wrote this down are left out too.
 3. **How busy were you?** *Passes and cost per day* appears once reviews ran on 3 or more days.
 
 Each chart carries a chip that says whether its figures are counted or estimated.
@@ -45,7 +45,7 @@ Click a round to open its review page. A queued pull request has no link until i
 
 ## History: what changed and who changed it
 
-Open `/history` to read the ledger as a list, newest first. Each row says who made the change, what it was, the project and the time. Where a value changed, the row shows it before and after; an expiry shows when the change has one. A secret never shows, only its fingerprint. The project filter at the top shows one project or all, and a reviewer's step counts for the project of its review; a row that belongs to no project shows under every project. Add `?project=` and a project name to the address to open the page with that project chosen; choose **All projects** to see every row again.
+Open `/history` to read the ledger as a table, newest first. Two sub-tabs above it, **Ledger** and **Trends**, switch between this page and Trends; press Tab to reach them and Enter to open one. Each row has the time, the source (who made the change), what it was and its project, the change, and until when it holds. Where a value changed, the Change column shows it before and after; an expiry shows in the Until column when the change has one. A secret never shows, only its fingerprint. Above the table, press a chip (such as **By Intakt** or **Limits**) to see only that kind, or type in **Filter by text**. The project filter at the top shows one project or all, and a reviewer's step counts for the project of its review; a row that belongs to no project shows under every project. Add `?project=` and a project name to the address to open the page with that project chosen; choose **All projects** to clear only the project filter, while a chip or text you chose still applies. On a phone the top bar has no project filter, so the row of chips holds its own **Project** picker, which keeps your choice for the next page like the top bar's; the chips and the text box work too, and each row lists its details one under the other.
 
 ## Now: what is running right now
 

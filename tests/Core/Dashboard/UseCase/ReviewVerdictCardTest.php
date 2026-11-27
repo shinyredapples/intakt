@@ -100,16 +100,16 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         );
     }
 
-    public function testEachFindingRowOpensTheFindingInTheFullRecord(): void
+    public function testEachFindingRowOpensTheFindingsPageWhichAnswers(): void
     {
         $this->givenAChangesRoundWith(['F1' => 'act', 'F2' => 'act']);
         $this->browser->disableReboot();
 
         $targets = $this->browser->request('GET', '/reviews/round-1')->filter('.to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
 
-        self::assertSame(['/reviews/round-1/record#round-round-1-finding-F1', '/reviews/round-1/record#round-round-1-finding-F2'], $targets);
-        $record = $this->browser->request('GET', '/reviews/round-1/record');
-        self::assertCount(2, $record->filter('li.finding-card#round-round-1-finding-F1, li.finding-card#round-round-1-finding-F2'));
+        self::assertSame(['/reviews/round-1/findings/F1', '/reviews/round-1/findings/F2'], $targets);
+        $headlines = array_map(fn (string $target): string => $this->browser->request('GET', $target)->filter('.finding-head h1')->text(), $targets);
+        self::assertSame(['Text of F1.', 'Text of F2.'], $headlines);
     }
 
     public function testAFileWhoseNameEndsInAColonAndDigitsIsShownWholeWithoutAnInventedLine(): void

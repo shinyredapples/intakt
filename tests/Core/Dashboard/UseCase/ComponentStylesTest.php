@@ -218,6 +218,30 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/flex:\s*1\b/', $rules['.srow .ctl .select'] ?? '');
     }
 
+    public function testOnPhonesTheHistoryLedgerStacksEachShownRowWithItsHeaderOnlyClipped(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/clip-path:\s*inset\(50%\)/', $rules['.ledger.history thead'] ?? '');
+        self::assertMatchesRegularExpression('/display:\s*grid;\s*grid-template-columns:\s*minmax\(0, 1fr\)/', $rules['.ledger.history tr:not([hidden], [data-filtered-out])'] ?? '');
+    }
+
+    public function testOnPhonesTheFiltersBarPadsItsBlockByTheFocusRingWidthPlusOffset(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/overflow-x:\s*auto/', $rules['.filters'] ?? '');
+        self::assertMatchesRegularExpression('/padding-block:\s*var\(--s4\)/', $rules['.filters'] ?? '');
+    }
+
+    public function testOnPhonesTheFiltersBarPadsItsInlineEdgesByTheFocusRingWidthPlusOffsetAndKeepsItsAlignment(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/padding-inline:\s*var\(--s4\)/', $rules['.filters'] ?? '');
+        self::assertMatchesRegularExpression('/margin-inline:\s*calc\(-1 \* var\(--s4\)\)/', $rules['.filters'] ?? '');
+    }
+
     public function testNoPaddingMarginOrGapHoldsARawLengthOf4PxOrMore(): void
     {
         preg_match_all('/(?:padding|margin|gap)(?:-[a-z]+)?:\s*([^;}]+)/', (string) preg_replace('~/\*.*?\*/~s', '', $this->componentSheet()), $declarations);

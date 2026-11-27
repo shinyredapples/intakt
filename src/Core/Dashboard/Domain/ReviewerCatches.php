@@ -84,7 +84,7 @@ final readonly class ReviewerCatches
     {
         $reported = $round->findingsByReviewer;
 
-        if (!$round->judgedAt instanceof DateTimeImmutable || !$round->findingTextRecorded || !$round->everyFindingRecorded || null === $reported || null === $round->severitiesByReviewer) {
+        if (!$round->judgedAt instanceof DateTimeImmutable || !$round->findingTextRecorded || !$round->everyFindingRecorded || null === $reported || null === $round->severitiesByReviewer || [] !== array_diff_key($reported, $round->severitiesByReviewer)) {
             return false;
         }
 

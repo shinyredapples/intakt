@@ -1,0 +1,6 @@
+{#- The Ledger and Trends pages as sub-tabs of one place, as the mock's History page lays them out; current is "ledger" or "trends". -#}
+{% set routes = 'Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes' %}
+<nav class="subtabs" aria-label="History views">
+    <a href="{{ path(constant(routes ~ '::SHOW_HISTORY')) }}"{% if current == 'ledger' %} aria-current="page"{% endif %}>Ledger</a>
+    <a href="{{ path(constant(routes ~ '::SHOW_TRENDS')) }}"{% if current == 'trends' %} aria-current="page"{% endif %}>Trends</a>
+</nav>

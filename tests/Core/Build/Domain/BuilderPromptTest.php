@@ -88,11 +88,11 @@ final class BuilderPromptTest extends TestCase
         self::assertSame(1, substr_count($prompt, 'This task is a bug.'));
     }
 
-    public function testTheTestFirstInstructionLetsOnlyTheTaskItselfWaiveTheTestForABugATestCannotReproduce(): void
+    public function testTheTestFirstInstructionNamesThePrePushRuleAndSendsAnIrreproducibleBugToAnUnlabeledTask(): void
     {
         $prompt = $this->promptFor(new BuildBrief($this->plant(1), new Decisions(), null, TaskKind::Bug));
 
-        self::assertStringContainsString('Only when the task itself says the bug cannot be reproduced by a test, write no regression test and give the Evidence the other tasks give; never decide this on your own.', $prompt);
+        self::assertStringContainsString('A head without such a test, or whose test also passes on the base, is refused before the push. A bug that no test can reproduce belongs in a task without the bug label; never decide that on your own.', $prompt);
     }
 
     public function testTheTestFirstInstructionComesAfterTheDecisionsOutsideTheTaskFence(): void

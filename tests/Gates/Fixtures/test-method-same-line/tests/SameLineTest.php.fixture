@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class SameLineTest extends TestCase
+{
+    public function testOne(): void { self::assertSame(1, 1); } public function testTwo(): void { self::assertSame(2, 2); }
+}

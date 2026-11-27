@@ -8,6 +8,7 @@ use Closure;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -34,6 +35,7 @@ use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\LatestRoundStatus;
 use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Panel;
@@ -42,10 +44,12 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\VerdictIdentity;
+use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\BootRecord;
@@ -74,6 +78,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\StatusMirrors;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\VerdictsWithdrawalRefused;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
@@ -89,7 +94,11 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\RoundStatusLabel;
+use Intakt\Plugin\Forge\Contract\RoundStatusMirror;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Core\Watcher\UseCase\AdmitHeads\RecordedChecks;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
@@ -133,6 +142,10 @@ use Symfony\Component\Messenger\Exception\HandlerFailedException;
 #[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
+#[CoversClass(StatusMirrors::class)]
+#[UsesClass(RoundStatusMirror::class)]
+#[UsesClass(RoundStatusLabel::class)]
+#[UsesClass(StoredLatestRoundStatus::class)]
 #[UsesClass(WatchPullRequests::class)]
 #[UsesClass(DoctrineInstallWideFailures::class)]
 #[UsesClass(ItemFailureRecord::class)]
@@ -189,6 +202,11 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     // Read from its own ledger, because the in-memory one reads nothing back.
     private ?Ledger $openings = null;
     private ?ChangeAuthorship $authorship = null;
+    private RecordedStatusLabels $statusLabels;
+    private LatestRoundStatus $latest;
+    private ReviewStatus $roundStatus = ReviewStatus::InReview;
+    /** @var list<string> */
+    private array $unreadableRounds = [];
 
     public function testANewHeadWithPendingCiStartsNoRound(): void
     {
@@ -458,6 +476,104 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tick();
 
         self::assertSame(['review:full'], [...$this->queries->identitiesAsked[0]->round->start->labels]);
+    }
+
+    // Evidence E1 of #3944 over the recorded listing, because a build has no forge access and the owner checks the live pull request after merge.
+    public function testThePullRequestWhoseRoundATickQueuesCarriesTheInReviewLabelAfterThatTick(): void
+    {
+        $before = $this->statusLabels->on('7');
+
+        $this->startRoundOnGreenHead();
+
+        self::assertSame([[], ['status:in-review']], [$before, $this->statusLabels->on('7')]);
+    }
+
+    public function testAnOpenPullRequestWithoutARoundGetsNoStatusLabel(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([[], 0], [$this->statusLabels->on('1'), $this->statusLabels->writes]);
+    }
+
+    public function testAnUnchangedPullRequestWhoseReconcileFailedIsReconciledAgainOnTheNextPass(): void
+    {
+        $this->statusLabels->readsToFail = 1;
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tickFailingWith('The labels of 7 could not be read.');
+        $failed = $this->statusLabels->on('7');
+
+        $this->tick();
+
+        self::assertSame([[], ['status:in-review'], 1], [$failed, $this->statusLabels->on('7'), $this->listing->conditionalAnswers]);
+    }
+
+    public function testAPullRequestWhoseHeadIsNotDueTakesTheStatusOfItsStoredRoundOnTheNextPass(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->roundStatus = ReviewStatus::WaitingOnYou;
+
+        $this->tick();
+
+        self::assertSame([['status:waiting-on-you'], 2, 1], [$this->statusLabels->on('7'), $this->statusLabels->writes, $this->listing->conditionalAnswers]);
+    }
+
+    // Over Review's own store, because only it knows whether the publication of a judged round ran.
+    public function testAJudgedRoundWhosePublicationHasNotRunStaysInReviewUntilTheNextPassAfterItsPublication(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->latest = new StoredLatestRoundStatus($fixture->transactions());
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change(RoundFixture::CHANGE, self::GREEN, '2026-11-02T09:00:00Z'));
+        $roundId = $this->judgedRound($fixture);
+        $this->tick();
+        $judged = $this->statusLabels->on(RoundFixture::CHANGE);
+        $rounds = $fixture->transactions();
+        $rounds->recordPublication($rounds->stored($roundId));
+
+        $this->tick();
+
+        self::assertSame([['status:in-review'], ['status:waiting-on-you'], 2], [$judged, $this->statusLabels->on(RoundFixture::CHANGE), $this->statusLabels->writes]);
+    }
+
+    public function testWhenTheRoundLookupOfTheFirstOfTwoOpenPullRequestsFailsTheSecondStillGetsItsLabelAndTheFirstFailureSurfaces(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->unreadableRounds = ['7'];
+
+        try {
+            $this->tick();
+            self::fail('The failed round lookup was swallowed.');
+        } catch (RuntimeException $failure) {
+            self::assertSame('The rounds of 7 cannot be read.', $failure->getMessage());
+        }
+
+        $logged = array_find($this->logger->logged, static fn (array $line): bool => 'The status label of {change} of {project} was not reconciled: {reason}' === $line[0]);
+        self::assertSame([['status:in-review'], '7', 'alpha'], [$this->statusLabels->on('8'), $logged[1]['change'] ?? null, $logged[1]['project'] ?? null]);
+    }
+
+    public function testWhenTheLabelsReadOfTheFirstOfTwoOpenPullRequestsFailsTheSecondStillGetsItsLabelAndTheTickReportsTheFailure(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->statusLabels->readsToFail = 1;
+
+        $this->tickFailingWith('The labels of 7 could not be read.');
+
+        self::assertSame([[], ['status:in-review']], [$this->statusLabels->on('7'), $this->statusLabels->on('8')]);
+    }
+
+    public function testATickWhoseHeadStepAndStatusPassBothFailReportsTheHeadFailure(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->unreadableRounds = ['7'];
+        $this->useLedger(new InMemoryLedger(0));
+
+        $this->tickExpectingFailure();
+
+        $logged = array_find($this->logger->logged, static fn (array $line): bool => 'The status pass of {project} failed after its head step failed: {reason}' === $line[0]);
+        self::assertSame(['alpha', 'The rounds of 7 cannot be read.'], [$logged[1]['project'] ?? null, $logged[1]['reason'] ?? null]);
     }
 
     public function testAGreenHeadSeenAgainOnASecondTickStartsNoSecondRound(): void
@@ -1527,7 +1643,25 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->locks = new BeforeChangeLockStore();
         $this->logger = new RecordingLogger();
         $this->steering = new Labels();
+        $this->statusLabels = new RecordedStatusLabels();
+        $latest = self::createStub(LatestRoundStatus::class);
+        $latest->method('of')->willReturnCallback(fn (): ReviewStatus => $this->roundStatus);
+        $this->latest = $latest;
         $this->handler = $this->handler();
+    }
+
+    private function judgedRound(RoundFixture $fixture): string
+    {
+        $vendor = new VerdictPerRole([]);
+        $roundId = $fixture->startFor(RoundFixture::CHANGE, $fixture->bus, 2);
+        foreach ($fixture->bus->messages as $message) {
+            $fixture->deliver($message, $vendor);
+        }
+        foreach ($fixture->judgings() as $judging) {
+            $fixture->judge($vendor)($judging);
+        }
+
+        return $roundId;
     }
 
     private function moveFromGreenToNextGreenAndBack(): void
@@ -1631,6 +1765,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         });
     }
 
+    private function tickFailingWith(string $reason): void
+    {
+        try {
+            $this->tick();
+            self::fail('The failed status reconcile was swallowed.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame($reason, $failure->getMessage());
+        }
+    }
+
     private function tickExpectingFailure(): void
     {
         try {
@@ -1682,7 +1826,24 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
         $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        $statuses = new StatusMirrors($find, new StartedRounds($this->roundLookups(), $pending, new DiscardedRounds($this->commands, $logger)), new RoundStatusMirror($this->latest, new LockFactory(new InMemoryStore()), $logger, $this->statusLabels), $logger);
+
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle), $statuses);
+    }
+
+    // Each lookup goes to the stored rounds except one of a change the test made unreadable, because the decisions need one pull request's lookup to fail alone.
+    private function roundLookups(): EntityManagerInterface
+    {
+        $repository = self::createStub(EntityRepository::class);
+        $repository->method('count')->willReturnCallback(function (array $criteria): int {
+            $change = $criteria['change'] ?? null;
+
+            return is_string($change) && in_array($change, $this->unreadableRounds, true) ? throw new RuntimeException('The rounds of '.$change.' cannot be read.') : $this->entities->getRepository(StartedRound::class)->count(['project' => $criteria['project'] ?? null, 'change' => $change]);
+        });
+        $lookups = self::createStub(EntityManagerInterface::class);
+        $lookups->method('getRepository')->willReturn($repository);
+
+        return $lookups;
     }
 
     private function panel(): Panel

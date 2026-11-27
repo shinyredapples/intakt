@@ -29,7 +29,7 @@ final class CiJourneysJobTest extends TestCase
 
     public function testTheJourneysJobRunsOnlyBehindTheForkGuard(): void
     {
-        self::assertSame("github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'", $this->job()['if'] ?? null);
+        self::assertSame("\${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}", $this->job()['if'] ?? null);
     }
 
     public function testTheJourneysJobRunsWhereTheCheckJobRuns(): void

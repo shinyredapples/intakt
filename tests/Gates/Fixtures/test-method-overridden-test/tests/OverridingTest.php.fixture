@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Override;
+
+final class OverridingTest extends RowsTestCase
+{
+    /** @return list<list<int>> */
+    public static function testRows(): array
+    {
+        return [[1]];
+    }
+
+    #[Override]
+    public function testTheRowsAreRead(int $row = 1): void
+    {
+        self::assertSame(1, $row);
+    }
+}

@@ -74,6 +74,12 @@ final readonly class Review
         return $latest->isJudged() || $latest->hasEnded() ? null : $latest;
     }
 
+    // Null when the round belongs to another review or is not judged yet, so a finding's page never shows a stranger's finding or one without the judge's call.
+    public function judgedRound(string $round): ?ReviewedRound
+    {
+        return array_find($this->rounds, static fn (ReviewedRound $candidate): bool => $candidate->round === $round && $candidate->isJudged());
+    }
+
     // Null before the first judge's call, because only a judged round has findings to carry forward.
     public function lastJudgedRound(): ?ReviewedRound
     {

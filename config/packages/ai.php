@@ -22,11 +22,15 @@ use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
+use Intakt\Core\BranchCleanup\Contract\BranchCleanupServices;
+use Intakt\Core\BranchCleanup\Infrastructure\BranchCleanupConfiguration;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Infrastructure\BudgetConfiguration;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Infrastructure\BuildRoutingConfiguration;
+use Intakt\Core\Disk\Contract\DiskServices;
+use Intakt\Core\Disk\Infrastructure\DiskConfiguration;
 use Intakt\Core\Git\Contract\GitServices;
 use Intakt\Core\Git\Infrastructure\ProtectedPathsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
@@ -36,6 +40,7 @@ use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
 use Intakt\Core\Review\Infrastructure\RetentionConfiguration;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
+use Intakt\Core\Review\Infrastructure\ReviewSizeLimitConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
@@ -86,12 +91,23 @@ return static function (ContainerConfigurator $container): void {
     // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the mode tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
     $reviewJobs = [];
+    $sizeLimits = [];
     $modes = [];
     $watches = [];
     $builds = [];
     $protectedPaths = [];
+    $branchCleanups = [];
     if (is_array($contentProjects)) {
         foreach ($contentProjects as $name => $project) {
+            // Both spellings, because the design writes keep-branches and the cleanup tree normalizes either to the underscored key.
+            foreach (['clean_other_branches', 'clean-other-branches', 'keep_branches', 'keep-branches'] as $cleanupKey) {
+                if (is_array($project) && array_key_exists($cleanupKey, $project)) {
+                    $branchCleanups[$name][$cleanupKey] = $project[$cleanupKey];
+                    unset($project[$cleanupKey]);
+                    $contentProjects[$name] = $project;
+                }
+            }
+
             if (is_array($project) && array_key_exists('protected_paths', $project)) {
                 $protectedPaths[$name] = ['protected_paths' => $project['protected_paths']];
                 unset($project['protected_paths']);
@@ -101,6 +117,13 @@ return static function (ContainerConfigurator $container): void {
             if (is_array($project) && array_key_exists('review', $project)) {
                 $reviews[$name] = $project['review'];
                 unset($project['review']);
+                $contentProjects[$name] = $project;
+            }
+
+            if (is_array($project) && array_key_exists(ReviewSizeLimitConfiguration::KEY, $project)) {
+                // Filed under the key the projects tree gives the entry, or it would be lost and read as the default.
+                $sizeLimits[ReviewSizeLimitConfiguration::keyOf($name, $project['name'] ?? null)] = $project[ReviewSizeLimitConfiguration::KEY];
+                unset($project[ReviewSizeLimitConfiguration::KEY]);
                 $contentProjects[$name] = $project;
             }
 
@@ -148,6 +171,11 @@ return static function (ContainerConfigurator $container): void {
     unset($contents['retention']);
     /** @var array{retention: array{conversation_days: int|string}} $retentionSettings */
     $retentionSettings = new Processor()->processConfiguration(new RetentionConfiguration(), [$retention]);
+    // The disk floors guard the installation's own folders, so they sit beside the projects as well.
+    $disk = array_key_exists('disk', $contents) ? ['disk' => $contents['disk']] : [];
+    unset($contents['disk']);
+    /** @var array{disk: array{min_free_bytes: int, min_free_inodes: int}} $diskSettings */
+    $diskSettings = new Processor()->processConfiguration(new DiskConfiguration(), [$disk]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
@@ -156,12 +184,16 @@ return static function (ContainerConfigurator $container): void {
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     /** @var array<string, array{image: string}> $projectReviewJobs */
     $projectReviewJobs = new Processor()->processConfiguration(new ReviewJobConfiguration(), [['projects' => $reviewJobs]])['projects'];
+    // A project without the setting reads the default, so every configured project has a limit.
+    $projectSizeLimits = ReviewSizeLimitConfiguration::limitsOf(array_keys($projects), $sizeLimits);
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
     /** @var array<string, array{repository: string, base: string, task: string, github?: string, eligibility_label: string}> $projectWatches */
     $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     /** @var array<string, array{protected_paths: list<string>}> $projectProtectedPaths */
     $projectProtectedPaths = new Processor()->processConfiguration(new ProtectedPathsConfiguration(), [['projects' => $protectedPaths]])['projects'];
+    /** @var array<string, array{clean_other_branches: bool, keep_branches: list<string>}> $projectBranchCleanups */
+    $projectBranchCleanups = new Processor()->processConfiguration(new BranchCleanupConfiguration(), [['projects' => $branchCleanups]])['projects'];
     // A project without a build section routes by the defaults, so every configured project has rules.
     $builds = array_replace(array_fill_keys(array_keys($projects), []), $builds);
     /** @var array<string, array{build: array{tier: string, sensitive_paths: list<string>, escalate_on: list<string>}}> $projectBuilds */
@@ -334,15 +366,19 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
     $container->parameters()->set(ReviewServices::PROJECT_FILE, $projectsFile);
+    $container->parameters()->set(ReviewServices::SIZE_LIMITS, $projectSizeLimits);
     $container->parameters()->set(ReviewServices::JOB_IMAGES, ReviewJobConfiguration::imagesOf($projectReviewJobs));
     $container->parameters()->set(BuildServices::ROUTING, array_map(static fn (array $project): array => $project['build'], $projectBuilds));
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
+    $container->parameters()->set(BranchCleanupServices::PROJECTS, $projectBranchCleanups);
     $container->parameters()->set(GitServices::PROTECTED_PATHS, array_map(static fn (array $project): array => $project['protected_paths'], $projectProtectedPaths));
     $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
     $container->parameters()->set(BudgetServices::PRICE_DATE, $ceilings['budget']['price_date']);
     $container->parameters()->set(ReviewServices::CONVERSATION_DAYS, RetentionConfiguration::daysOf($retentionSettings['retention']['conversation_days']));
+    $container->parameters()->set(DiskServices::MIN_FREE_BYTES, $diskSettings['disk']['min_free_bytes']);
+    $container->parameters()->set(DiskServices::MIN_FREE_INODES, $diskSettings['disk']['min_free_inodes']);
     $container->parameters()->set(GitHubForgeServices::RESERVE_PERCENT, $githubSettings['github']['reserve_percent']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)

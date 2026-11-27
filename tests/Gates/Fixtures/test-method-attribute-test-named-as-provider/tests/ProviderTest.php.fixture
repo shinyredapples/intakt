@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
+
+final class ProviderTest extends TestCase
+{
+    /** @return list<list<int>> */
+    #[Test]
+    public static function works(): array
+    {
+        self::assertSame('works', __FUNCTION__);
+
+        return [[1]];
+    }
+
+    #[DataProvider('works')]
+    private function helper(int $row): void
+    {
+        self::assertGreaterThan(0, $row);
+    }
+}
