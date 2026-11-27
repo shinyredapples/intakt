@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
+
+final class StaticSentenceTest extends TestCase
+{
+    /** @return list<int> */
+    #[Test]
+    public static function works(): array
+    {
+        self::assertSame('works', __FUNCTION__);
+
+        return [];
+    }
+}
