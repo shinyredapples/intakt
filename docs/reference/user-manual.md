@@ -516,12 +516,14 @@ A provider whose variables are not all set (empty counts as not set, and so does
 
 ### More than one account of a provider
 
-A provider can have several accounts, for example a personal and a team API key. List them under `accounts:` in `config/intakt.yaml`, in the order Intakt tries them (see `config/intakt.example.yaml`):
+A provider can have several accounts, for example a personal and a team API key. List them under `accounts:` in `config/intakt.yaml`, in your order of preference (see `config/intakt.example.yaml`):
 
 ```yaml
 accounts:
     anthropic: [default, team]
 ```
+
+Before each model call Intakt ranks the provider's accounts by measured room: an account at its five-hour or weekly ceiling (or cooling down) is left out, the others rank by the window that resets soonest, an account whose last reading is older than 30 minutes or missing after every account with a recent reading, and a paid account (an API key) after every subscription account; your order breaks a tie. When every account is left out, no call is sent and the reviewer waits for the earliest reset (at most one day). A call refused after it started still moves on to the next ranked account.
 
 The account `default` reads the variables in the table above. Any other account reads the same variables with its name in capitals appended: `team` reads `ANTHROPIC_API_KEY_TEAM` (for `openai_compatible`, `OPENAI_COMPATIBLE_BASE_URL_TEAM` and `OPENAI_COMPATIBLE_API_KEY_TEAM`; for `claude_code`, `CLAUDE_CODE_OAUTH_TOKEN_TEAM`, with its own folder `var/claude-code-team/`). A name starts with a lowercase letter and holds only lowercase letters, digits and underscores, and is listed once; anything else stops Intakt from starting. A provider you do not list has its `default` account only. An account whose variables are not all set is switched off with a line such as `Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.`; the provider is switched off only when none of its accounts is set.
 

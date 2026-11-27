@@ -55,14 +55,14 @@ The task is one sentence saying what the branch should do. The reviewers read a 
 
 ## Several keys of one provider
 
-A team often has more than one key per provider, say a personal and a team key. List them under `accounts:` in the order Intakt tries them:
+A team often has more than one key per provider, say a personal and a team key. List them under `accounts:` in your order of preference:
 
 ```yaml
 accounts:
     anthropic: [default, team]
 ```
 
-The `team` account reads `ANTHROPIC_API_KEY_TEAM`. When one account hits a rate limit, the reviewer moves to the next.
+The `team` account reads `ANTHROPIC_API_KEY_TEAM`. Before each model call Intakt looks at how much room each subscription account has left, from the usage it last measured for that account alone. An account at its five-hour or weekly ceiling is left out while another account has room, and the call goes to the account whose window resets soonest. An account without a recent reading (older than 30 minutes, or none) is tried only after every account with a recent reading, and an API-key account only after every subscription account with room. Your order breaks a tie. When every account is at a ceiling, no call starts and the reviewer waits for the earliest reset. When a call is refused after it started, for example by a rate limit, the reviewer moves to the next account as before.
 
 Run `php bin/console intakt:team` to see each account once with its state and the roles it serves, as Developer or reviewer.
 
