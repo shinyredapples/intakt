@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('../../../../bin/journey-check', import.meta.url));
-const { STEP_TIMEOUT_MS, OUTCOME, RECORDED_FINDING, JOURNEYS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, press, report, exitCode } = createRequire(import.meta.url)(script);
+const { STEP_TIMEOUT_MS, OUTCOME, RECORDED_FINDING, JOURNEYS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, press, seeRoleSince, report, exitCode } = createRequire(import.meta.url)(script);
 
 // The runner's port, as the maintainer chose for the check's stand-in servers.
 const PORT = 7781;
@@ -242,3 +242,59 @@ test('a verdict seen on the review page right before the page leaves and returns
 
     await assert.rejects(steps[3].run(page, origin), /the page moved on to http:\/\/localhost\/reviews\/r1 while http:\/\/localhost\/reviews\/r1 was looked at/);
 });
+
+// Forces the order: the demo page loads with HTTP 500, then a later visit of /demo is answered HTTP 200 and cancelled before it replaces the document.
+test('a visit of /demo answered HTTP 200 but cancelled after a load that answered HTTP 500 fails step 3', async (t) => {
+    const soon = globalThis.setTimeout;
+    t.mock.method(globalThis, 'setTimeout', (callback) => soon(callback, 10));
+    const origin = 'http://localhost';
+    const page = new EventEmitter();
+    let at = `${origin}/setup?step=5`;
+    const request = () => ({ redirectedFrom: () => null, isNavigationRequest: () => true, headers: () => ({}) });
+    const answer = (req, code) => page.emit('response', { url: () => `${origin}/demo`, status: () => code, frame: () => page, request: () => req });
+    const locator = {
+        filter: () => locator,
+        first: () => locator,
+        click: async () => {
+            const loaded = request();
+            answer(loaded, 500);
+            at = `${origin}/demo`;
+            page.emit('framenavigated', page);
+            page.emit('requestfinished', loaded);
+            const cancelled = request();
+            answer(cancelled, 200);
+            page.emit('requestfailed', cancelled);
+        },
+        waitFor: async () => {},
+    };
+    Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
+    const { steps } = JOURNEYS[0];
+    await steps[1].run(page, origin);
+
+    await assert.rejects(steps[2].run(page, origin), /it led to http:\/\/localhost\/demo \(HTTP 500\)/);
+});
+
+// Forces the order with a stand-in clock: the review page is reached, then the step's time runs out before the look starts, or the look matches only after it ran out.
+for (const [when, clock, error] of [
+    ['before the look starts', [0, 1001], /the step's 1000 ms ran out before the look on http:\/\/localhost\/reviews\/r1 could start/],
+    ['while the look runs', [0, 500, 1001], /the match on http:\/\/localhost\/reviews\/r1 came after the step's 1000 ms/],
+]) {
+    test(`a deadline that ends ${when} fails the look on the review page`, async (t) => {
+        const times = [...clock];
+        t.mock.method(performance, 'now', () => times.length > 1 ? times.shift() : times[0]);
+        const origin = 'http://localhost';
+        const page = new EventEmitter();
+        let at = `${origin}/setup?step=5`;
+        const visit = (path) => { at = origin + path; page.emit('framenavigated', page); };
+        const locator = {
+            filter: () => locator,
+            first: () => locator,
+            click: async () => { visit('/demo'); visit('/reviews/r1'); },
+            waitFor: async () => {},
+        };
+        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
+        await JOURNEYS[0].steps[1].run(page, origin);
+
+        await assert.rejects(seeRoleSince('/demo', 'heading', 'Changes needed', 1000).run(page, origin), error);
+    });
+}

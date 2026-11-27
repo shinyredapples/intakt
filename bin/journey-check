@@ -228,21 +228,34 @@ function watch(page) {
     trail.changed();
   };
   // An answer without content (204, 205) leaves the document in place, so it never stands for the page at that address.
+  // An answer counts only once its request finished: a visit cancelled after its answer arrived never replaced the document, so its status must not stand for the page that did load.
+  const answers = new Map();
   const answered = (response) => {
     if (!isOfMainFrame(page, response) || !suppliedThePage(response.request()) || [204, 205].includes(response.status())) return;
-    recordStatus(trail.statuses, withoutFragment(response.url()), response.status());
+    answers.set(response.request(), { address: withoutFragment(response.url()), code: response.status() });
+  };
+  const finished = (request) => {
+    const answer = answers.get(request);
+    if (answer === undefined) return;
+    answers.delete(request);
+    recordStatus(trail.statuses, answer.address, answer.code);
     trail.changed();
   };
+  const failed = (request) => answers.delete(request);
   trail.stop = () => {
     page.off('framenavigated', visited);
     page.off('response', answered);
+    page.off('requestfinished', finished);
+    page.off('requestfailed', failed);
   };
   page.on('framenavigated', visited);
   page.on('response', answered);
+  page.on('requestfinished', finished);
+  page.on('requestfailed', failed);
   TRAILS.set(page, trail);
 }
 
-// Only answers that supplied the page come here, so the latest one for an address is the one the page shows.
+// Only finished answers that supplied the page come here, so the latest one for an address is the one the page shows.
 function recordStatus(statuses, address, code) {
   statuses.set(address, code);
 }
@@ -323,7 +336,11 @@ function seeRoleSince(pathOnSite, role, name, timeout = STEP_TIMEOUT_MS) {
       if (trail === undefined) throw new Error(`no press came before ${pathOnSite}`);
       const deadline = performance.now() + timeout;
       const { review, visits } = await waitForReviewPage(page, address, pathOnSite, timeout);
-      await seeRole(role, name, Math.max(1, Math.round(deadline - performance.now()))).run(page);
+      // The locator's own timeout is only an upper bound, so the deadline is checked before the look starts and again once it matched.
+      const left = deadline - performance.now();
+      if (left <= 0) throw new Error(`the step's ${timeout} ms ran out before the look on ${originAndPath(review)} could start`);
+      await seeRole(role, name, Math.max(1, Math.round(left))).run(page);
+      if (performance.now() > deadline) throw new Error(`the match on ${originAndPath(review)} came after the step's ${timeout} ms`);
       expectReviewPagesSince(page, address, pathOnSite);
       // Turbo names the address it is on again after a page load, so only another address counts as a move.
       if ([...trail.visits.slice(visits), withoutFragment(page.url())].some((where) => where !== review)) {

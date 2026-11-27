@@ -92,7 +92,7 @@ final readonly class InstallWalk
         $address = escapeshellarg(InstallCheck::ADDRESS);
         $results[] = $this->step(self::DEMO, 'node '.escapeshellarg($this->checkout.'/bin/install-check-demo').' '.$address.' '.escapeshellarg($this->logs), $clone);
         $results[] = $this->step(self::UI, 'node bin/ui-check '.$address, $clone);
-        // Because the first journey presses the button that plays the demo run, which /setup offers again only once the run the demo step played is removed.
+        // Because the first journey presses the button that plays the demo run, which the wizard's last step /setup?step=5 offers again only once the run the demo step played is removed.
         $removal = $this->step(self::REMOVAL, 'docker compose exec -T intakt php bin/console intakt:demo:remove', $clone);
         $results[] = $removal;
         $results[] = match (true) {

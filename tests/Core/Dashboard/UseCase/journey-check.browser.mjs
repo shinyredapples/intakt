@@ -353,7 +353,7 @@ test('the first journey passes when the button posts as Turbo does, the answer r
         return response.writeHead(200, { 'content-type': 'text/html' }).end(pages[request.url] ?? pages[request.url.split('?')[0]] ?? '');
     });
     const pages = demoSite();
-    const post = 'fetch(\'/demo\', { method: \'POST\', headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => { history.pushState({}, \'\', answer.url); location.assign(\'/reviews/r1\'); })';
+    const post = 'fetch(\'/demo\', { method: \'POST\', headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => answer.text().then(() => { history.pushState({}, \'\', answer.url); location.assign(\'/reviews/r1\'); }))';
     pages['/setup?step=5'] = `<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>See a real review</h1><button onclick="${post}">Play the demo run</button></main></body></html>`;
     await new Promise((resolve) => server.listen(0, 'localhost', resolve));
     try {
