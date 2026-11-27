@@ -100,7 +100,7 @@ final readonly class HistoryRow
         return null !== $actor || LedgerEventKind::ReviewerStopRequested === $kind ? HistorySource::Dashboard : HistorySource::Intakt;
     }
 
-    // A row without an actor shows where it came from: the dashboard's Stop shows Dashboard, every other row Intakt.
+    // A row without an actor names where it came from, so the dashboard's Stop, listed under From the dashboard, does not say Intakt in its Who.
     private static function unnamedActorOf(HistorySource $source): string
     {
         return HistorySource::Dashboard === $source ? self::DASHBOARD_ACTOR : self::UNNAMED_ACTOR;
