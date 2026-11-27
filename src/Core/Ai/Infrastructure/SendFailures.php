@@ -32,6 +32,11 @@ final class SendFailures
     private array $unreachable = [];
 
     /**
+     * @var array<string, int>
+     */
+    private array $limitedUntil = [];
+
+    /**
      * @var WeakMap<Throwable, array<string, true>>
      */
     private WeakMap $seen;
@@ -78,6 +83,20 @@ final class SendFailures
     public function isEveryTriedLimited(): bool
     {
         return array_all(array_keys($this->tried), fn ($key) => is_a($this->failures[$key] ?? '', RateLimitExceededException::class, true));
+    }
+
+    // A number only, never the provider's text: when the limit this account failed with ends, after the minimum, the default and the cap were applied, kept by the call because the stores can fail to save it and because a window that ended since is no wait.
+    public function limitedUntil(Account $account, int $timestamp): void
+    {
+        $this->limitedUntil[$account->key()] = $timestamp;
+    }
+
+    // Null when the account did not fail with a limit in this call; at least a second otherwise, because a limit that ended since the save still ends the call with a typed wait.
+    public function limitedWait(Account $account, int $now): ?int
+    {
+        $until = $this->limitedUntil[$account->key()] ?? null;
+
+        return null === $until ? null : max(1, $until - $now);
     }
 
     // Kept apart from the account errors, because a transport error cools no account down.

@@ -25,7 +25,7 @@ A tile appears only when there is a figure for it, never as a made-up 0. Point a
 ## The charts answer three questions
 
 1. **Which reviewer finds what?** *Catches by reviewer* has one small chart per reviewer role, with a bar per urgency. The number in brackets counts the findings only that reviewer reported. This is the answer to your colleague.
-2. **What does the owl keep?** *Checked findings* counts the findings kept to fix, merged as duplicates, deferred and rejected.
+2. **What does the owl keep?** *Checked findings* counts the findings kept to fix, merged as duplicates, deferred and rejected. Only the owl's own calls count: a pass where the owl's answer could not be read is left out, because Intakt then put every P1 and P2 on the to-fix list itself and left the P3 findings unmarked, which is not a rejection. Passes from before Intakt wrote this down are left out too.
 3. **How busy were you?** *Passes and cost per day* appears once reviews ran on 3 or more days.
 
 Each chart carries a chip that says whether its figures are counted or estimated.

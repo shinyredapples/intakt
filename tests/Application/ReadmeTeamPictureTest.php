@@ -10,20 +10,20 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class ReadmeTeamPictureTest extends TestCase
 {
-    private const array ROLES = ['Tech lead', 'Developer', 'Code reviewer', 'Judge', 'Security engineer', 'Designer', 'AI engineer', 'Maintainer'];
+    private const array ROLES = ['Tech lead', 'Developer', 'Code reviewer', 'Judge', 'Security engineer', 'Designer', 'AI engineer', 'Maintainer', 'Technical writer'];
 
     public function testTheTeamPictureServesTheDarkImageForADarkColorScheme(): void
     {
         $picture = $this->picture();
 
-        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark\.webp" width="760" height="116">/', $picture));
+        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark\.webp" width="760" height="109">/', $picture));
         self::assertFileExists($this->root().'/docs/assets/team-dark.webp');
     }
 
     // One sharp file per theme, shown at 760 px: phones that skip a srcset would otherwise stretch a 760 px file and blur it.
     public function testTheTeamPictureDimensionsMatchTheImageFilesTheyDescribe(): void
     {
-        foreach (['light' => 113, 'dark' => 116] as $theme => $height) {
+        foreach (['light' => 106, 'dark' => 109] as $theme => $height) {
             $image = getimagesize($this->root().'/docs/assets/team-'.$theme.'.webp');
 
             self::assertIsArray($image);
@@ -41,7 +41,7 @@ final class ReadmeTeamPictureTest extends TestCase
         self::assertFileExists($this->root().'/docs/assets/team-light.webp');
     }
 
-    public function testTheTeamPictureAltNamesTheOctopusAndAllEightRoles(): void
+    public function testTheTeamPictureAltNamesTheOctopusAndAllNineRoles(): void
     {
         $alt = $this->imgAttribute('alt');
 
@@ -75,7 +75,7 @@ final class ReadmeTeamPictureTest extends TestCase
         self::assertIsInt($screenshot, 'The README shows the review page on its first screen.');
         $picture = (int) strpos($readme, '<picture>', $screenshot);
         $release = (int) strpos($readme, '## Status');
-        $line = 'Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer';
+        $line = 'Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer, Maintainer and Technical writer';
 
         self::assertGreaterThan($screenshot, $picture);
         self::assertLessThan($release, $picture);

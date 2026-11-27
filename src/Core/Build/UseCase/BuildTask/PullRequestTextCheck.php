@@ -11,7 +11,7 @@ use Intakt\Core\HandBack\Contract\PullRequestTextRound;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
 use Intakt\Core\HandBack\Contract\PullRequestTextTask;
-use InvalidArgumentException;
+use Intakt\Core\HandBack\Contract\PullRequestTextTaskRefused;
 
 // Counted on the project's mirror and the task's branch, as a person's run of the round names them, so both count toward one task.
 final readonly class PullRequestTextCheck
@@ -27,7 +27,7 @@ final readonly class PullRequestTextCheck
     {
         try {
             $result = $this->round->route(PullRequestTextTask::resolved($this->checkout->mirrorOf($request->project), $request->branch), $taskText, $body);
-        } catch (BuildCheckoutFailed|InvalidArgumentException|PullRequestTextRoundNotRecorded $failure) {
+        } catch (BuildCheckoutFailed|PullRequestTextTaskRefused|PullRequestTextRoundNotRecorded $failure) {
             return $failure->getMessage();
         }
 

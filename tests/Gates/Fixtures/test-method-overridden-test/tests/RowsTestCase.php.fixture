@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+abstract class RowsTestCase extends TestCase
+{
+    #[DataProvider('testRows')]
+    public function testTheRowsAreRead(int $row = 0): void
+    {
+        self::assertGreaterThan(0, $row);
+    }
+}

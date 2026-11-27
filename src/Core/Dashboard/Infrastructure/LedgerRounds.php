@@ -445,7 +445,8 @@ final class LedgerRounds
         $severities = $this->severitiesByReviewer[$round->round] ?? [];
         $rated = array_filter($severities, static fn (?array $rated): bool => null !== $rated);
 
-        return count($rated) === count($reported) ? $round->withFindingsByReviewer($reported)->withSeveritiesByReviewer($rated) : $round->withFindingsByReviewer($reported);
+        // A reviewer's row written before severities were recorded leaves out only that reviewer's severities, so the finding page still shows what the others gave.
+        return [] === $rated && [] !== $reported ? $round->withFindingsByReviewer($reported) : $round->withFindingsByReviewer($reported)->withSeveritiesByReviewer($rated);
     }
 
     private function endedOrRunning(ReviewedRound $round): ReviewedRound

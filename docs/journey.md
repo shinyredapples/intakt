@@ -320,6 +320,10 @@ timeline
 Counted: from the issues the GitHub API lists, by each issue's milestone.
 <!-- journey:end milestones -->
 
+Like the merge counts, this table is the recording of 2026-11-22, with the milestone names GitHub showed that day. M5
+Demo has closed since then, and M6 is now **Reviewer for the loop**: Intakt's review takes the place of one of the build
+loop's reviewers ([the plan](plan.md)).
+
 M3 and M4 finished eleven days early. M5 grew from 8 planned tasks to 292 counted issues: on 2026-11-03 every quality and
 robustness issue a demo visitor could hit moved into it.
 
