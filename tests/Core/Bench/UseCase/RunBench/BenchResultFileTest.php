@@ -58,7 +58,7 @@ final class BenchResultFileTest extends TestCase
 
         $provenance = new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES)->read();
         self::assertSame($provenance->intaktVersion, $result['intakt_version']);
-        self::assertSame(['reviewer' => hash('sha256', ReviewerPrompt::INSTRUCTIONS), 'judge' => hash('sha256', JudgePrompt::INSTRUCTIONS)], $result['prompts']);
+        self::assertSame(['reviewer' => new HashedReviewPrompts()->hashes()->reviewer, 'judge' => hash('sha256', JudgePrompt::INSTRUCTIONS)], $result['prompts']);
         self::assertSame($provenance->benchRepositoryHash, $result['bench_repository']);
         self::assertSame('alpha', $result['project']);
     }
