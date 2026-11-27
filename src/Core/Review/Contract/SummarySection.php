@@ -39,7 +39,6 @@ final readonly class SummarySection
         return implode("\n", array_column(array_slice($lines, $start, null === $end ? null : $end + 1), 0));
     }
 
-    // Each line with its heading level, its title and whether it is paragraph text a setext underline can turn into a heading.
     /**
      * @return list<array{string, int, string, bool}>
      */
@@ -50,30 +49,58 @@ final readonly class SummarySection
         $fence = null;
 
         foreach (false === $split ? [] : $split as $line) {
+            $before = $fence;
+            $fence = $this->fenceAfter($fence, $line);
             // A heading inside a code block is code, so it never opens or closes the section.
-            if (null !== $fence) {
-                $fence = $this->closes($fence, $line) ? null : $fence;
-                $lines[] = [$line, 0, '', false];
-            } elseif (1 === preg_match(self::FENCE_OPENS, $line, $opening)) {
-                $fence = $opening[1];
-                $lines[] = [$line, 0, '', false];
-            } elseif ([] !== $lines && array_last($lines)[3] && 1 === preg_match(self::SETEXT, $line, $underline)) {
-                $text = array_pop($lines)[0];
-                $lines[] = [$text, '=' === $underline[1][0] ? 1 : 2, trim($text), false];
-                $lines[] = [$line, 0, '', false];
-            } else {
-                [$level, $title] = $this->headingOf($line);
-                $lines[] = [$line, $level, $title, 0 === $level && '' !== trim($line)];
+            $lines[] = null === $before && null === $fence ? $this->lineOf($line) : [$line, 0, '', false];
+        }
+
+        return $this->withSetextHeadings($lines);
+    }
+
+    // The fence a line leaves open, so the lines from an opening fence to its closing one count as code.
+    private function fenceAfter(?string $fence, string $line): ?string
+    {
+        if (null !== $fence) {
+            return $this->closes($fence, $line) ? null : $fence;
+        }
+
+        return 1 === preg_match(self::FENCE_OPENS, $line, $opening) ? $opening[1] : null;
+    }
+
+    // Because a shorter fence inside a longer one is code, as in CommonMark (https://spec.commonmark.org/0.31.2/#fenced-code-blocks).
+    private function closes(string $fence, string $line): bool
+    {
+        return 1 === preg_match(self::FENCE_CLOSES, $line, $closing) && $closing[1][0] === $fence[0] && strlen($closing[1]) >= strlen($fence);
+    }
+
+    // Paragraph text is marked, because only such a line becomes a heading when a setext underline follows it.
+    /**
+     * @return array{string, int, string, bool}
+     */
+    private function lineOf(string $line): array
+    {
+        [$level, $title] = $this->headingOf($line);
+
+        return [$line, $level, $title, 0 === $level && '' !== trim($line)];
+    }
+
+    /**
+     * @param list<array{string, int, string, bool}> $lines
+     *
+     * @return list<array{string, int, string, bool}>
+     */
+    private function withSetextHeadings(array $lines): array
+    {
+        foreach ($lines as $index => $line) {
+            if (0 < $index && $lines[$index - 1][3] && 1 === preg_match(self::SETEXT, $line[0], $underline)) {
+                $text = $lines[$index - 1][0];
+                $lines[$index - 1] = [$text, '=' === $underline[1][0] ? 1 : 2, trim($text), false];
+                $lines[$index] = [$line[0], 0, '', false];
             }
         }
 
         return $lines;
-    }
-
-    // As CommonMark closes a fence: the same character, at least as many, and nothing after them but spaces.
-    private function closes(string $fence, string $line): bool
-    {
-        return 1 === preg_match(self::FENCE_CLOSES, $line, $closing) && $closing[1][0] === $fence[0] && strlen($closing[1]) >= strlen($fence);
     }
 
     // Level 0 for a line that is no heading, so callers compare levels without a null check.
