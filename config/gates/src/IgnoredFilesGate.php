@@ -73,7 +73,7 @@ final readonly class IgnoredFilesGate implements Gate
 
     private function escapedByte(string $byte): string
     {
-        $code = ord($byte);
+        $code = ord($byte[0]);
 
         return $code < 0x20 || $code >= 0x7F ? sprintf('\%03o', $code) : $byte;
     }
