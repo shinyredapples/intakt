@@ -1049,5 +1049,25 @@ a.lane:hover { background: var(--tint-2); }
   .split > .side li { align-items: center; min-height: 48px; padding: 0; }
   .split > .side li a { display: inline-flex; align-items: center; min-height: 44px; }
 }
+/* DESIGN.md, Account names and List row: each account a full-width row between hairlines, no box; its kind is secondary text. Below 1101 px the roles it serves go under its name, as in the mock. */
+.acct { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--s32); align-items: start; padding: var(--s24) 0; border-bottom: 1px solid var(--hairline); }
+.acct:first-of-type { border-top: 1px solid var(--hairline); }
+.acct-name { margin: 0; font-size: var(--t17); overflow-wrap: anywhere; }
+.acct-kind { margin: var(--s4) 0 calc(var(--s8) + 2px); color: var(--muted); font-size: var(--t13); overflow-wrap: anywhere; }
+.acct-roles { margin: 0; overflow-wrap: anywhere; }
+#accounts-h { margin-bottom: var(--s16); }
+.roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s8); }
+.role { padding: calc(var(--s12) + 2px) var(--s16); border-radius: var(--r-card); background: var(--tint); }
+.role h3 { margin: 0 0 var(--s4); font-size: var(--t15); overflow-wrap: anywhere; }
+.role .meta span { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .acct { grid-template-columns: minmax(0, 1fr); gap: var(--s16); }
+}
+@media (min-width: 1500px) {
+  .split > .side .roles { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .acct { gap: var(--s12); }
+}
 /* The line beside a button the connection controller holds: what it waits for, then why and what to do. */
 .held-note { margin: var(--s8) 0 0; color: var(--muted); font-size: var(--t15); }
