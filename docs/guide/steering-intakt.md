@@ -24,9 +24,8 @@ flowchart LR
 | `class:core`, `feature`, `tooling`, `process` | what kind of work it is; Intakt proposes one when it is missing |
 | `model:strong`, `standard`, `light` | the AI model it starts on; Intakt can still move it up if it struggles |
 | `plan:required`, `plan:skip` | the Tech lead writes a plan for your approval first, or skips it |
-| `review:full` | all the Code reviewers, specialists included, on every round, even for small changes |
+| `review:full` | all the Code reviewers, specialists included, on every round, even for small changes (not the Technical writer) |
 | `review:<role>` | adds a specialist reviewer, for example `review:security` |
-| `review:technical_writer` | the Technical writer also reads changed reference and technical pages, not only the user guide, these guides and the README; a change with no changed page under `docs/` and no README still gets none |
 | `keep` | on a closed pull request: don't delete its branch |
 | `hands-off` | you work on this issue or pull request yourself: Intakt stays off it |
 | `take-over` | Intakt works on an issue or pull request it did not create |
@@ -45,6 +44,8 @@ Every issue or pull request has one driver: Intakt or you. Two labels switch it 
 Until `take-over` is built, outside work is handled this way ([contributor guide](../../CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled)):
 - An issue from someone without write access is not built as it stands. A maintainer opens a task of their own from it, with the issue's text copied between `<!-- external -->` and `<!-- /external -->`.
 - A pull request from someone without write access, in a repository Intakt watches, is reviewed once CI on its head is green, with no label needed. When that repository's CI skips its jobs on a fork's pull request, as Intakt's own CI does, the skipped jobs count as green, so the review follows the approved run. The review only reads it (its code is never started), and a maintainer merges it by hand.
+
+The Technical writer has its own trigger, the label `review:technical_writer` on a pull request: with it, the writer also reads changed reference and technical pages, not only the user guide, these guides and the README. A change with no changed page under `docs/` and no README still gets no writer, label or not, and `review:full` does not add it.
 
 Until a dashboard button exists, the labels are the control.
 

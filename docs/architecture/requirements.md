@@ -204,7 +204,7 @@ With the tree's `.gitattributes` replaced by the empty tree, the attributes file
 
 Tools that start `git` themselves get the same protection from the environment: the gitleaks gates pass it, so gitleaks's `git log -p` reads no replacement object or graft and applies no attribute.
 
-Not covered: settings that only change how git formats what it prints (`diff.noprefix`, `diff.srcPrefix`, `diff.dstPrefix`, `diff.algorithm`, `core.abbrev`) are left as the repository sets them; a patch stays a correct patch, and the gates read paths with `-z` and hashes and subjects with `--format`.
+Not covered: settings that only change how git formats what it prints (`diff.noprefix`, `diff.srcPrefix`, `diff.dstPrefix`, `diff.algorithm`, `core.abbrev`) are left as the repository sets them, except that the local git forge's patch passes `--src-prefix=a/ --dst-prefix=b/`, because the Technical writer's part of the diff is cut by its `a/` and `b/` headers; a patch stays a correct patch, and the gates read paths with `-z` and hashes and subjects with `--format`.
 
 Tests, each first showing that the command runs (or the replacement, attribute or setting applies) without hardening:
 
