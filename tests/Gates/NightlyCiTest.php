@@ -102,6 +102,31 @@ final class NightlyCiTest extends SandboxTestCase
         self::assertSame("base=parent\nneeded=yes\nimage=yes\n", $this->decide('image', 'upgrade', $event));
     }
 
+    /** @return iterable<string, array{string, bool}> */
+    public static function dispatchRefs(): iterable
+    {
+        yield 'a topic branch' => ['refs/heads/topic', false];
+        yield 'main' => ['refs/heads/main', true];
+    }
+
+    #[DataProvider('dispatchRefs')]
+    public function testARunOnDemandStartsTheFullRunJobsOnMainOnly(string $ref, bool $runs): void
+    {
+        $atoms = [
+            'cancelled()' => 'false',
+            'failure()' => 'false',
+            "needs.main.outputs.full != 'false'" => 'true',
+            "needs.changes.result == 'success'" => 'true',
+            'github.event.pull_request.head.repo.full_name == github.repository' => 'false',
+            "github.event_name != 'pull_request'" => 'true',
+            "github.ref == 'refs/heads/main'" => 'refs/heads/main' === $ref ? 'true' : 'false',
+        ];
+
+        foreach (['check', 'journeys', 'changes', 'persistence', 'image'] as $name) {
+            self::assertSame($runs, $this->holds($this->workflow()['jobs'][$name]['if'] ?? '', $atoms), $name);
+        }
+    }
+
     public function testAFailedRunOpensTheIssueWhenNoneIsOpen(): void
     {
         $sandbox = $this->sandboxWithIssues([
@@ -161,6 +186,30 @@ final class NightlyCiTest extends SandboxTestCase
         self::assertTrue($result->succeeded(), $result->errors);
 
         return (string) file_get_contents($sandbox->root.'/output');
+    }
+
+    /** @param array<string, string> $atoms */
+    private function holds(string $condition, array $atoms): bool
+    {
+        $expression = (string) preg_replace('/\s+/', ' ', strtr(trim($condition, '${} '), $atoms));
+        self::assertMatchesRegularExpression('/\A(?:true|false|!|\(|\)|&&|\|\|| )+\z/', $expression, $condition);
+        // Applied in this order because GitHub binds ! before && before ||, so an || waits while an && touches either side.
+        $reductions = [
+            '/!true/' => 'false',
+            '/!false/' => 'true',
+            '/\((true|false)\)/' => '$1',
+            '/true && (true|false)/' => '$1',
+            '/false && (?:true|false)/' => 'false',
+            '/(?<!&& )true \|\| (?:true|false)(?! &&)/' => 'true',
+            '/(?<!&& )false \|\| (true|false)(?! &&)/' => '$1',
+        ];
+        do {
+            $before = $expression;
+            $expression = (string) preg_replace(array_keys($reductions), array_values($reductions), $expression);
+        } while ($expression !== $before);
+        self::assertContains($expression, ['true', 'false'], $condition);
+
+        return 'true' === $expression;
     }
 
     /** @param list<array<string, mixed>> $issues */

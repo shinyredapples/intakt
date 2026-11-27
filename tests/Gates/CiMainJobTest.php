@@ -22,7 +22,7 @@ final class CiMainJobTest extends SandboxTestCase
 
     private const string TREE = '0123456789012345678901234567890123456789';
 
-    private const string GUARD = "(github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request')";
+    private const string GUARD = "(github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main'))";
 
     public function testTheMainJobRunsOnAPushOnlyAndOnlyReadsActions(): void
     {
