@@ -243,13 +243,16 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
         $events = new PublishedLiveEvents();
-        $other = null;
-        $failed = false;
+        // Filled once the workers exist, because the stub must be in the container before the cards read it.
+        $meanwhile = new stdClass();
+        $meanwhile->other = null;
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'model-a'));
-        $tiers->method('projects')->willReturnCallback(function () use (&$other, &$failed): ProjectNames {
-            if (!$failed && $other instanceof LiveProjectCards) {
-                $failed = true;
+        $tiers->method('projects')->willReturnCallback(function () use ($meanwhile): ProjectNames {
+            $other = $meanwhile->other;
+            $meanwhile->other = null;
+
+            if ($other instanceof LiveProjectCards) {
                 $this->ledger->startRound('round-2', 'beta');
                 $other->publishLatest();
 
@@ -260,7 +263,7 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         });
         self::getContainer()->set(TierResolver::class, $tiers);
         $holder = $this->cardsOfAnotherWorker($events, new NullLogger());
-        $other = $this->cardsOfAnotherWorker($events, new NullLogger());
+        $meanwhile->other = $this->cardsOfAnotherWorker($events, new NullLogger());
 
         $holder->publishLatest();
 
