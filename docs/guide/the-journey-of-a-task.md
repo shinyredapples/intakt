@@ -67,7 +67,7 @@ When it completes a change, it hands back two things, and nothing else leaves th
 - **the change itself**, as commits in a sealed package (a git *bundle*);
 - **a short description** for the pull request: a summary, the evidence (for example test output), and any new packages it needs.
 
-If it cannot go on without a decision from you, it hands back **a question** instead: the question, its choices and its recommendation. A question comes first: when it leaves one, no package is sent, almost whatever else it did (a build that runs out of memory or time is handled first). Intakt then parks the task: it stores the question and stops the build there, without checking or pushing anything. (Planned: showing the question on the dashboard and going on once you answer.)
+If it cannot go on without a decision from you, it hands back **a question** instead: the question, its choices and its recommendation. A question comes first: when it leaves one, no package is sent, almost whatever else it did (a build that runs out of memory or time is handled first). Intakt then parks the task: it stores the question and stops the build there, without checking or pushing anything. The task's page on the dashboard shows the question. (Planned: going on once you answer.)
 
 Before it finishes, it runs a **self-check**: no merge commits, nothing that looks like a password or key, description not too long. Catching those itself is much cheaper than being refused afterwards.
 

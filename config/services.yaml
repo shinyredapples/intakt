@@ -196,6 +196,8 @@ when@test:
         - { resource: '../tests/Plugin/GitHubWorkSource/services.yaml', ignore_errors: not_found }
         # The team roster under a public test name, so a test proves the accounts and states it reads from the config file before a page uses it.
         - { resource: '../tests/Core/Dashboard/services.yaml', ignore_errors: not_found }
+        # Disk readings a test sets, and the disk check under a public test name, so a test proves the floors the container binds hold and release work.
+        - { resource: '../tests/Core/Disk/services.yaml', ignore_errors: not_found }
     services:
         # The development definition above, through its anchor, so an opted-in test profile keeps messenger also with APP_DEBUG=0.
         data_collector.messenger: *messenger_data_collector

@@ -51,20 +51,40 @@ final readonly class BuildQuestion
         }
 
         $data = self::decoded($text);
-        $question = self::textOf($data['question'] ?? null);
 
-        if ('' === $question) {
-            throw QuestionRefused::emptyQuestion();
+        return self::accepted($data['question'] ?? null, $data['choices'] ?? null, $data['recommendation'] ?? null);
+    }
+
+    // Null for texts the rule would refuse or trim, or that no accepted hand-back could hold, because only an accepted question is ever stored and it is stored trimmed.
+    public static function fromStored(mixed $question, mixed $choices, mixed $recommendation): ?self
+    {
+        try {
+            $accepted = self::accepted($question, $choices, $recommendation);
+        } catch (QuestionRefused) {
+            return null;
         }
 
-        $choices = self::choicesOf($data['choices'] ?? null);
-        $recommendation = self::textOf($data['recommendation'] ?? null);
-
-        if (!in_array($recommendation, $choices, true)) {
-            throw QuestionRefused::recommendationNotAChoice();
+        // The shortest hand-back that holds the texts, because all of them came out of one hand-back and one over the limit is refused; a text that is no UTF-8 never came out of JSON.
+        try {
+            $shortest = self::shortestHandBackOf($accepted);
+        } catch (JsonException) {
+            return null;
         }
 
-        return new self($question, $choices, $recommendation);
+        if (strlen($shortest) > self::MAX_BYTES) {
+            return null;
+        }
+
+        return [$question, $choices, $recommendation] === [$accepted->question, $accepted->choices, $accepted->recommendation] ? $accepted : null;
+    }
+
+    /**
+     * @throws JsonException
+     */
+    // Escaped only where JSON must escape, because a hand-back may write every other character as it is.
+    private static function shortestHandBackOf(self $question): string
+    {
+        return json_encode(['question' => $question->question, 'choices' => $question->choices, 'recommendation' => $question->recommendation], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS);
     }
 
     /**
@@ -90,6 +110,27 @@ final readonly class BuildQuestion
             static fn (array $string): string => str_starts_with($string[0], '"\u0000') && str_ends_with($string[0], ':') ? '"\u0001'.substr($string[0], 7) : $string[0],
             $text,
         ) ?? $text;
+    }
+
+    /**
+     * @throws QuestionRefused
+     */
+    private static function accepted(mixed $givenQuestion, mixed $givenChoices, mixed $givenRecommendation): self
+    {
+        $question = self::textOf($givenQuestion);
+
+        if ('' === $question) {
+            throw QuestionRefused::emptyQuestion();
+        }
+
+        $choices = self::choicesOf($givenChoices);
+        $recommendation = self::textOf($givenRecommendation);
+
+        if (!in_array($recommendation, $choices, true)) {
+            throw QuestionRefused::recommendationNotAChoice();
+        }
+
+        return new self($question, $choices, $recommendation);
     }
 
     private static function textOf(mixed $value): string

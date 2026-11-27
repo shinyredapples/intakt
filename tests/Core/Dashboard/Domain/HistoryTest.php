@@ -47,6 +47,19 @@ final class HistoryTest extends TestCase
         self::assertSame([null, 'alpha', 'alpha'], array_map(static fn (HistoryRow $row): ?string => $row->project, $history->rows));
     }
 
+    public function testAnEventThatNamesAnEmptyProjectStaysWithoutAProjectWhenItsRoundStartNamesOne(): void
+    {
+        $round = Uuid::v7()->toRfc4122();
+
+        $history = History::of(new RecordedEvents([
+            $this->event(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha'], $this->noon()),
+            $this->event(LedgerEventKind::OwnerAsked, ['round' => $round, 'project' => ''], $this->noon()),
+            $this->event(LedgerEventKind::OwnerAsked, ['round' => $round, 'project' => '  '], $this->noon()),
+        ]));
+
+        self::assertSame([null, null, 'alpha'], array_map(static fn (HistoryRow $row): ?string => $row->project, $history->rows));
+    }
+
     public function testTheProjectsOfAHistoryAreThoseItsRowsNameEachOnceAfterTheRoundJoin(): void
     {
         $round = Uuid::v7()->toRfc4122();
