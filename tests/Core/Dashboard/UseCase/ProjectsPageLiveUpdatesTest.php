@@ -76,6 +76,9 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
     // Runs inside the first publish, so while the worker that publishes holds the lock.
     private ?Closure $whilePublishing = null;
 
+    // Set once the workers exist, because the stub must be in the container before the cards read it; the first read publishes through it and then fails.
+    private ?LiveProjectCards $yieldingWorker = null;
+
     /**
      * @var list<Update>
      */
@@ -243,14 +246,11 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
         $events = new PublishedLiveEvents();
-        // Filled once the workers exist, because the stub must be in the container before the cards read it.
-        $meanwhile = new stdClass();
-        $meanwhile->other = null;
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'model-a'));
-        $tiers->method('projects')->willReturnCallback(function () use ($meanwhile): ProjectNames {
-            $other = $meanwhile->other;
-            $meanwhile->other = null;
+        $tiers->method('projects')->willReturnCallback(function (): ProjectNames {
+            $other = $this->yieldingWorker;
+            $this->yieldingWorker = null;
 
             if ($other instanceof LiveProjectCards) {
                 $this->ledger->startRound('round-2', 'beta');
@@ -263,7 +263,7 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         });
         self::getContainer()->set(TierResolver::class, $tiers);
         $holder = $this->cardsOfAnotherWorker($events, new NullLogger());
-        $meanwhile->other = $this->cardsOfAnotherWorker($events, new NullLogger());
+        $this->yieldingWorker = $this->cardsOfAnotherWorker($events, new NullLogger());
 
         $holder->publishLatest();
 
