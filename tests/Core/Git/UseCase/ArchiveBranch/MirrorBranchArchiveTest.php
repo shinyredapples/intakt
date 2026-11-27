@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Git\UseCase\ArchiveBranch;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Git\Contract\ArchivedBranch;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchNotArchived;
@@ -259,7 +260,7 @@ final class MirrorBranchArchiveTest extends TestCase
     private function mirror(): void
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->root.'/mirrors'))->update('alpha', $this->remote->path);
+        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->root.'/mirrors'), self::createStub(DiskSpace::class))->update('alpha', $this->remote->path);
     }
 
     private function archiver(): MirrorBranchArchive

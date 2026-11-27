@@ -1,0 +1,146 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
+
+use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
+use Intakt\Core\Disk\Infrastructure\FreeSpaceReader;
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
+use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Tests\Core\Disk\ControlledFreeSpaceReader;
+use Intakt\Tests\Core\Git\RecordingClock;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Process;
+
+#[CoversClass(UpdateMirror::class)]
+#[CoversClass(MirrorNotUpdated::class)]
+#[UsesClass(Mirrors::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(NetworkGit::class)]
+#[UsesClass(GitCall::class)]
+#[UsesClass(FlooredDiskSpace::class)]
+#[UsesClass(DiskHold::class)]
+#[UsesClass(FreeSpaceUnreadable::class)]
+#[UsesClass(ControlledFreeSpaceReader::class)]
+final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
+{
+    private const int BYTES = 1000;
+
+    private const int INODES = 100;
+
+    private string $mirrors;
+
+    private TemporaryRepository $remote;
+
+    private ControlledFreeSpaceReader $reader;
+
+    public function testAFirstMirrorUpdateBelowTheByteFloorIsHeldAndLeavesNoMirror(): void
+    {
+        $this->reader->report(self::BYTES - 1, self::INODES);
+
+        $failure = $this->heldUpdate();
+
+        self::assertSame(sprintf('the mirror at %s/alpha.git was not updated: the disk of %1$s holds new work: %d free bytes, below the floor of %d', $this->mirrors, self::BYTES - 1, self::BYTES), $failure->getMessage());
+        self::assertSame(['.', '..'], scandir($this->mirrors));
+    }
+
+    public function testAMirrorUpdateBelowTheInodeFloorIsHeldAndFetchesNothing(): void
+    {
+        $path = $this->update();
+        $before = $this->remote->objectAt('main');
+        $this->remote->commitFile('b.txt', 'two');
+        $this->reader->report(self::BYTES, self::INODES - 1);
+
+        $failure = $this->heldUpdate();
+
+        self::assertStringEndsWith(sprintf('%d free inodes, below the floor of %d', self::INODES - 1, self::INODES), $failure->getMessage());
+        self::assertSame($before, $this->mainOf($path));
+    }
+
+    public function testAHeldMirrorUpdateGoesAheadOnceTheReadingsAreAtTheFloors(): void
+    {
+        $this->reader->report(self::BYTES - 1, self::INODES);
+        $this->heldUpdate();
+        $this->reader->report(self::BYTES, self::INODES);
+
+        $path = $this->update();
+
+        self::assertSame($this->remote->objectAt('main'), $this->mainOf($path));
+    }
+
+    public function testAMirrorUpdateWhoseDiskCannotBeReadFailsAsMirrorNotUpdatedWithTheReason(): void
+    {
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeBytes')->willThrowException(new FreeSpaceUnreadable($this->mirrors, 'the file system is gone'));
+
+        try {
+            $this->updateReadingThrough($reader);
+            self::fail('The update went ahead on a disk it could not read.');
+        } catch (MirrorNotUpdated $failure) {
+            self::assertStringEndsWith(sprintf('The free space of %s cannot be read: the file system is gone.', $this->mirrors), $failure->getMessage());
+            self::assertInstanceOf(FreeSpaceUnreadable::class, $failure->getPrevious());
+        }
+
+        self::assertSame(['.', '..'], scandir($this->mirrors));
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-held-mirrors-'.bin2hex(random_bytes(6));
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+        $this->reader = new ControlledFreeSpaceReader();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->mirrors);
+        $this->remote->remove();
+    }
+
+    private function heldUpdate(): MirrorNotUpdated
+    {
+        try {
+            $this->update();
+        } catch (MirrorNotUpdated $held) {
+            return $held;
+        }
+
+        self::fail('The update went ahead below a disk floor.');
+    }
+
+    private function update(): string
+    {
+        return $this->updateReadingThrough($this->reader);
+    }
+
+    private function updateReadingThrough(FreeSpaceReader $reader): string
+    {
+        $network = new NetworkGit(new RecordingClock(), new NullLogger());
+        $disk = new FlooredDiskSpace($reader, self::BYTES, self::INODES);
+
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $disk)->update('alpha', $this->remote->path);
+    }
+
+    private function mainOf(string $mirror): string
+    {
+        $process = new Process(['git', 'rev-parse', 'refs/heads/main'], $mirror, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false]);
+        $process->mustRun();
+
+        return trim($process->getOutput());
+    }
+}

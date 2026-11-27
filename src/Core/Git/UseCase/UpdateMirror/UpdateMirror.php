@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\DiskSpace;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\GitCommand;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -37,6 +40,7 @@ final readonly class UpdateMirror
         private Filesystem $filesystem,
         private LockFactory $locks,
         private Mirrors $mirrors,
+        private DiskSpace $disk,
     ) {
     }
 
@@ -53,6 +57,7 @@ final readonly class UpdateMirror
     {
         $path = $this->mirrors->pathOf($project);
         $remote = $this->fromMirrorsDirectory($remote);
+        $this->holdBelowTheDiskFloors($path);
 
         if ($this->isMirror($path)) {
             $this->fill($path, $remote);
@@ -73,6 +78,22 @@ final readonly class UpdateMirror
         }
 
         return Path::makeAbsolute($remote, $this->mirrors->directory);
+    }
+
+    private function holdBelowTheDiskFloors(string $path): void
+    {
+        // Made first, because the free space of a folder that does not exist cannot be read.
+        $this->filesystem->mkdir($this->mirrors->directory);
+
+        try {
+            $hold = $this->disk->holdAt($this->mirrors->directory);
+        } catch (FreeSpaceUnreadable $unreadable) {
+            throw MirrorNotUpdated::at($path, $unreadable->getMessage(), $unreadable);
+        }
+
+        if ($hold instanceof DiskHold) {
+            throw MirrorNotUpdated::at($path, $hold->reason());
+        }
     }
 
     private function isMirror(string $path): bool
@@ -114,7 +135,6 @@ final readonly class UpdateMirror
 
     private function createMirror(string $project, string $remote, string $path): void
     {
-        $this->filesystem->mkdir($this->mirrors->directory);
         $attempts = [];
         $staging = '';
 
