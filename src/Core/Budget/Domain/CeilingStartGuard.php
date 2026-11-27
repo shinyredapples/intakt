@@ -43,6 +43,19 @@ final readonly class CeilingStartGuard
         };
     }
 
+    // A reading older than the probe interval counts as unknown, and so does an account without a current reading.
+    public function roomOf(Account $account): AccountRoom
+    {
+        $uses = $this->currentUsesOf($account);
+        $atCeiling = $this->windowAtCeiling($uses, 0.0);
+        $trusted = [] !== $uses && array_all($uses, static fn (WindowUse $use): bool => $use->ageInSeconds <= self::TRUSTED_FOR_SECONDS);
+        $resets = null === $atCeiling ? array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses) : [$uses[$atCeiling->value]->usage->resetsAt];
+        $known = array_filter($resets, static fn (?DateTimeImmutable $resetsAt): bool => $resetsAt instanceof DateTimeImmutable);
+        usort($known, static fn (DateTimeImmutable $one, DateTimeImmutable $other): int => $one <=> $other);
+
+        return new AccountRoom($atCeiling, array_first($known), $trusted);
+    }
+
     /**
      * @return array<string, WindowUse>
      */
@@ -76,7 +89,16 @@ final readonly class CeilingStartGuard
      */
     private function reachesCeiling(array $uses, float $margin): bool
     {
-        return array_any($uses, fn (WindowUse $use, string $window): bool => $use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin));
+        return $this->windowAtCeiling($uses, $margin) instanceof UsageWindow;
+    }
+
+    // The weekly window first, because it is the one that lasts longer when both are at their ceiling.
+    /**
+     * @param array<string, WindowUse> $uses
+     */
+    private function windowAtCeiling(array $uses, float $margin): ?UsageWindow
+    {
+        return array_find([UsageWindow::Weekly, UsageWindow::FiveHour], fn (UsageWindow $window): bool => isset($uses[$window->value]) && $uses[$window->value]->usage->usedPercent >= $this->ceilingOf($window, $uses, $margin));
     }
 
     /**

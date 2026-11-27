@@ -14,6 +14,9 @@ use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\AccountRanking;
+use Intakt\Core\Budget\Contract\LeftOutAccount;
+use Intakt\Core\Budget\Contract\RankedAccounts;
 use LogicException;
 use Override;
 use Psr\Log\LoggerInterface;
@@ -46,6 +49,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         private ClockInterface $clock,
         private LoggerInterface $logger,
         private PinnedProviderCooldowns $pinnedCooldowns,
+        private ?AccountRanking $ranking = null,
     ) {
         $this->modelWaits = new ModelWaits($provider, array_keys($platforms), $cooldowns, $pinnedCooldowns);
     }
@@ -56,9 +60,10 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $failures = new SendFailures();
         $routerProvider = $this->modelWaits->routerProviderOf($model);
         $waits = $this->waits($routerProvider);
-        $free = $this->freeAccounts($waits, $failures, $routerProvider);
+        $ranked = $this->rankedFreeAccounts($waits);
+        $free = $this->freeAccounts($ranked->inOrder, $failures, $routerProvider);
         if ([] === $free) {
-            throw $this->outOfAccounts($waits, $failures);
+            throw [] === $ranked->leftOut ? $this->outOfAccounts($waits, $failures) : $this->outOfRoom($ranked);
         }
 
         $this->recordSwitch($free);
@@ -93,24 +98,46 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->modelWaits->perAccount($routerProvider);
     }
 
+    // The accounts with no cooldown, ranked by measured room at this start; without a ranking they keep the owner's order.
     /**
      * @param array<string, int> $waits
-     *
-     * @return array<string, AccountPlatform>
      */
-    private function freeAccounts(array $waits, SendFailures $failures, ?string $routerProvider): array
+    private function rankedFreeAccounts(array $waits): RankedAccounts
     {
-        $free = [];
-
-        foreach ($this->platforms as $name => $platform) {
+        $accounts = [];
+        foreach (array_keys($this->platforms) as $name) {
             if (0 === $waits[$name]) {
-                $account = new Account($this->provider, $name);
-                // Every free account is read again right before it sends, the first one too, because the read that found it free was made before the scan read the accounts after it and before an earlier account was tried.
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $this->pinnedOf($account, $routerProvider), $this->modelWaits);
+                $accounts[] = new Account($this->provider, $name);
             }
         }
 
+        return $this->ranking?->rank($accounts) ?? new RankedAccounts($accounts, []);
+    }
+
+    /**
+     * @param list<Account> $ranked
+     *
+     * @return array<string, AccountPlatform>
+     */
+    private function freeAccounts(array $ranked, SendFailures $failures, ?string $routerProvider): array
+    {
+        $free = [];
+
+        foreach ($ranked as $account) {
+            // Every free account is read again right before it sends, the first one too, because the read that found it free was made before the scan read the accounts after it and before an earlier account was tried.
+            $free[$account->name] = new AccountPlatform($account, $this->platforms[$account->name], $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $this->pinnedOf($account, $routerProvider), $this->modelWaits);
+        }
+
         return $free;
+    }
+
+    // Every account without a cooldown is left out of the ranking, so nothing is sent; the wait is the soonest reset of those, a second at least and a day at most.
+    private function outOfRoom(RankedAccounts $ranked): Throwable
+    {
+        $now = $this->clock->now()->getTimestamp();
+        $waits = array_map(static fn (LeftOutAccount $left): int => null === $left->resetsAt ? AccountCooldowns::LONGEST_SECONDS : max(1, $left->resetsAt->getTimestamp() - $now), $ranked->leftOut);
+
+        return new EveryAccountCoolingDown($this->provider, min(AccountCooldowns::LONGEST_SECONDS, ...$waits));
     }
 
     private function pinnedOf(Account $account, ?string $routerProvider): ?PinnedProvider
@@ -142,7 +169,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return;
         }
 
-        $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
+        $this->logger->info('Account {next} of {provider} ranks before account {first} by measured room, so the call goes to it.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
     // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
