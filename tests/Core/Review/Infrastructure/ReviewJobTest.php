@@ -35,6 +35,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -278,6 +279,27 @@ final class ReviewJobTest extends TestCase
         } catch (ReviewJobFailure $failure) {
             self::assertSame(ReviewJobStage::AfterTheCli, $failure->stage);
             self::assertSame([100, 20], [$failure->usage[0]->getPromptTokens(), $failure->usage[0]->getCompletionTokens()]);
+        }
+    }
+
+    // As a killed CLI leaves it: no result event, one event per content block that repeats its message's usage, and a last line cut off mid-write.
+    #[DataProvider('endsWithoutAnExitLine')]
+    public function testAJobKilledBeforeItsResultKeepsTheUsageOfEachMessageOnce(JobEnd $end): void
+    {
+        $output = OutputFiles::of([ReviewJob::LOG => '', ReviewJob::ANSWER => implode("\n", [
+            '{"type":"system","subtype":"init"}',
+            '{"type":"assistant","message":{"id":"msg_1","content":[{"type":"text","text":"Reading"}],"usage":{"input_tokens":100,"output_tokens":20,"cache_read_input_tokens":40}}}',
+            '{"type":"assistant","message":{"id":"msg_1","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"'.ReviewJob::CHECKOUT.'/src/Cart.php"}}],"usage":{"input_tokens":100,"output_tokens":20,"cache_read_input_tokens":40}}}',
+            '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"<?php"}]}}',
+            '{"type":"assistant","message":{"id":"msg_2","content":[{"type":"text","text":"The cart"}],"usage":{"input_tokens":300,"output_tokens":7}}}',
+            '{"type":"assistant","message":{"id":"msg_3","content":[{"type":"te',
+        ])]);
+
+        try {
+            (void) $this->reviews(new JobResult($end, $output))->run($this->request());
+            self::fail('A job that was cut off was taken as an answer.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame([[100, 20, 40], [300, 7, null]], array_map(static fn (TokenUsageInterface $usage): array => [$usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getCachedTokens()], $failure->usage));
         }
     }
 

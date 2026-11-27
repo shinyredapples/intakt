@@ -54,13 +54,15 @@ final readonly class ReviewJobAnswer
         return new self($text, Provider::ClaudeCode === $provider ? $claudeCode->readFiles() : [], $usage);
     }
 
-    // Apart from read(), because a CLI that failed reports what it spent and answers nothing.
+    // Apart from read(), because a CLI that failed reports what it spent and answers nothing; its last line may be cut off, because a CLI killed by its time or memory limit stops mid-write, and every line before it must still be an event.
     /**
+     * @param (Closure(string): string)|null $redacted
+     *
      * @return list<TokenUsageInterface>
      */
-    public static function usageIn(Provider $provider, string $output): array
+    public static function usageIn(Provider $provider, string $output, ?Closure $redacted = null): array
     {
-        return self::usageOf($provider, self::events($output) ?? []);
+        return self::usageOf($provider, self::redacted(self::events(self::withoutCutLastLine($output)) ?? [], $redacted));
     }
 
     /**
@@ -71,15 +73,41 @@ final readonly class ReviewJobAnswer
     {
         $events = [];
 
-        foreach (array_filter(explode("\n", $output), static fn (string $line): bool => '' !== trim($line)) as $line) {
-            $event = json_decode($line, true);
-            if (!is_array($event) || array_is_list($event)) {
+        foreach (self::linesOf($output) as $line) {
+            $event = self::eventOf($line);
+            if (null === $event) {
                 return null;
             }
             $events[] = $event;
         }
 
         return $events;
+    }
+
+    private static function withoutCutLastLine(string $output): string
+    {
+        $lines = self::linesOf($output);
+        $last = array_pop($lines);
+
+        return null === $last || null !== self::eventOf($last) ? $output : implode("\n", $lines);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function linesOf(string $output): array
+    {
+        return array_values(array_filter(explode("\n", $output), static fn (string $line): bool => '' !== trim($line)));
+    }
+
+    /**
+     * @return array<mixed>|null
+     */
+    private static function eventOf(string $line): ?array
+    {
+        $event = json_decode($line, true);
+
+        return is_array($event) && !array_is_list($event) ? $event : null;
     }
 
     // After decoding, because JSON may escape any character of a value, and before anything else reads the events.

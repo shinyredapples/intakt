@@ -196,13 +196,13 @@ final readonly class ReviewJob
      */
     private function usageIn(ReviewJobRequest $request, JobOutput $output): array
     {
-        return ReviewJobAnswer::usageIn($request->model->provider, $output->contents(self::ANSWER) ?? '');
+        return ReviewJobAnswer::usageIn($request->model->provider, $output->contents(self::ANSWER) ?? '', fn (string $text): string => $this->withoutLogin($request, $text));
     }
 
     private function answered(ReviewJobRequest $request, JobOutput $output): ReviewJobAnswer
     {
         $provider = $request->model->provider;
-        $status = $this->cliStatusIn($provider, $output) ?? throw ReviewJobFailure::withoutCliExit($provider, $this->usageIn($request, $output));
+        $status = $this->cliStatusIn($request, $output) ?? throw ReviewJobFailure::withoutCliExit($provider, $this->usageIn($request, $output));
 
         if (0 !== $status) {
             throw ReviewJobFailure::cliFailed($provider, $status, $this->usageIn($request, $output));
@@ -221,9 +221,9 @@ final readonly class ReviewJob
     }
 
     // The last such line, because the script writes it after the CLI ended, and the CLI's own errors in the log come before it.
-    private function cliStatusIn(Provider $provider, JobOutput $output): ?int
+    private function cliStatusIn(ReviewJobRequest $request, JobOutput $output): ?int
     {
-        preg_match_all('/^'.preg_quote($provider->value, '/').' exited with (\d+)$/m', $output->contents(self::LOG) ?? '', $exits);
+        preg_match_all('/^'.preg_quote($request->model->provider->value, '/').' exited with (\d+)$/m', $this->withoutLogin($request, $output->contents(self::LOG) ?? ''), $exits);
         $status = array_last($exits[1]);
 
         return null === $status ? null : (int) $status;

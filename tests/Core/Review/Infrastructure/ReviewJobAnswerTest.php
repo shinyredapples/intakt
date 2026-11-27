@@ -197,6 +197,34 @@ final class ReviewJobAnswerTest extends TestCase
         self::assertSame([4, 700, 39500], [$usage[0]->getPromptTokens(), $usage[0]->getCompletionTokens(), $usage[0]->getCachedTokens()]);
     }
 
+    public function testAFinalResultsUsageStandsForTheMessagesBeforeIt(): void
+    {
+        $output = implode("\n", [
+            '{"type":"assistant","message":{"id":"msg_1","usage":{"input_tokens":100,"output_tokens":20}}}',
+            '{"type":"result","is_error":false,"result":"fine","usage":{"input_tokens":120,"output_tokens":30}}',
+        ]);
+
+        $usage = ReviewJobAnswer::usageIn(Provider::ClaudeCode, $output);
+
+        self::assertCount(1, $usage);
+        self::assertSame([120, 30], [$usage[0]->getPromptTokens(), $usage[0]->getCompletionTokens()]);
+    }
+
+    public function testOnlyTheLastLineMayBeCutOffWhereUsageIsRead(): void
+    {
+        $message = '{"type":"assistant","message":{"id":"msg_1","usage":{"input_tokens":100,"output_tokens":20}}}';
+
+        self::assertCount(1, ReviewJobAnswer::usageIn(Provider::ClaudeCode, $message."\n".'{"type":"assis'));
+        self::assertSame([], ReviewJobAnswer::usageIn(Provider::ClaudeCode, '{"type":"assis'."\n".$message));
+    }
+
+    public function testACutOffLastLineStillRefusesTheAnswer(): void
+    {
+        $this->expectException(ReviewJobFailure::class);
+
+        (void) ReviewJobAnswer::read(Provider::ClaudeCode, '{"type":"result","is_error":false,"result":"fine"}'."\n".'{"type":"assis');
+    }
+
     public function testAnEmptyUsageBlockCountsAsNoUsageReported(): void
     {
         self::assertSame([], ReviewJobAnswer::read(Provider::ClaudeCode, '{"type":"result","is_error":false,"result":"fine","usage":{}}')->usage);

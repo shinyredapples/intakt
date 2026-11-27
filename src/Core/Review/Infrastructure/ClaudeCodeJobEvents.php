@@ -55,7 +55,7 @@ final readonly class ClaudeCodeJobEvents
         return $files;
     }
 
-    // The usage of the final result, read by the same extractor as for the CLI in the app's own process, because that result covers every turn of the run.
+    // The usage of the final result, read by the same extractor as for the CLI in the app's own process, because that result covers every turn of the run; without one, the usage of each assistant message, because a CLI killed by its time or memory limit never writes its result.
     /**
      * @return list<TokenUsageInterface>
      */
@@ -63,7 +63,24 @@ final readonly class ClaudeCodeJobEvents
     {
         $result = $this->lastResult();
 
-        return ReportedUsage::in(new TokenUsageExtractor(), null === $result ? [] : [$result]);
+        return ReportedUsage::in(new TokenUsageExtractor(), null === $result ? $this->messageUsage() : [$result]);
+    }
+
+    // Each message id once, and its last event, because the CLI writes one event per content block of a message and repeats the message's usage on each.
+    /**
+     * @return list<array{usage: mixed}>
+     */
+    private function messageUsage(): array
+    {
+        $usage = [];
+        foreach ($this->events as $event) {
+            $message = 'assistant' === ($event[self::TYPE] ?? null) ? $event['message'] ?? null : null;
+            if (is_array($message) && is_string($message['id'] ?? null) && array_key_exists('usage', $message)) {
+                $usage[$message['id']] = ['usage' => $message['usage']];
+            }
+        }
+
+        return array_values($usage);
     }
 
     /**
